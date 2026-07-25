@@ -1,0 +1,323 @@
+{% extends "base.html" %}
+{% block title %}首页{% endblock %}
+{% block extra_style %}
+    <style>
+        .hero-bg {
+            background: transparent;
+            position: relative; overflow: hidden;
+        }
+        .hero-bg::before {
+            content: '';
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            background: radial-gradient(ellipse at center top, rgba(244, 208, 63, 0.04), transparent 60%);
+            pointer-events: none;
+        }
+        .glow-text { text-shadow: 0 0 20px rgba(244, 208, 63, 0.35), 0 0 40px rgba(244, 208, 63, 0.2); }
+        .section-fade { opacity: 0; transform: translateY(28px); transition: opacity 0.5s ease, transform 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
+        .section-fade.visible { opacity: 1; transform: translateY(0); }
+        .feature-icon {
+            width: 52px; height: 52px; display: flex; align-items: center; justify-content: center;
+            background: rgba(244, 208, 63, 0.1);
+            backdrop-filter: blur(16px) saturate(180%) brightness(106%);
+            -webkit-backdrop-filter: blur(16px) saturate(180%) brightness(106%);
+            border: 1px solid rgba(244, 208, 63, 0.2);
+            border-radius: 16px !important;
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 4px 16px rgba(0, 0, 0, 0.2);
+            position: relative;
+            overflow: hidden;
+        }
+        .highlight-card {
+            background: rgba(12, 28, 18, 0.38);
+            backdrop-filter: blur(32px) saturate(220%) brightness(108%);
+            -webkit-backdrop-filter: blur(32px) saturate(220%) brightness(108%);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 24px !important;
+            box-shadow:
+                0 12px 40px rgba(0, 0, 0, 0.35),
+                inset 0 1px 0 rgba(255, 255, 255, 0.12),
+                inset 0 -1px 0 rgba(0, 0, 0, 0.1);
+            position: relative; overflow: hidden;
+            transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+        }
+        .highlight-card::after {
+            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 50%; border-radius: 24px 24px 0 0; pointer-events: none;
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0) 100%);
+        }
+        .highlight-card:hover {
+            border-color: rgba(244, 208, 63, 0.3);
+            transform: translateY(-4px);
+            box-shadow:
+                0 20px 56px rgba(0, 0, 0, 0.4),
+                0 0 30px rgba(244, 208, 63, 0.08),
+                inset 0 1px 0 rgba(255, 255, 255, 0.14);
+        }
+        .highlight-card-top-bar {
+            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+            background: linear-gradient(90deg, #f4d03f, #d4a827);
+            border-radius: 24px 24px 0 0;
+            z-index: 1;
+        }
+        @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+        .float-animation { animation: float 3s ease-in-out infinite; }
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 20px rgba(244, 208, 63, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.08); }
+            50% { box-shadow: 0 0 36px rgba(244, 208, 63, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1); }
+        }
+        .pulse-glow { animation: pulse-glow 2.4s ease-in-out infinite; }
+        .glass-footer {
+            background: rgba(7, 18, 12, 0.55);
+            backdrop-filter: blur(32px) saturate(200%);
+            -webkit-backdrop-filter: blur(32px) saturate(200%);
+            border-top: 1px solid rgba(244, 208, 63, 0.1);
+        }
+    </style>
+{% endblock %}
+{% block nav %}
+<!-- 首页顶部横幅导航 (桌面端) -->
+<div class="bg-forest-900/95 border-b border-forest-700/50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2">
+        <div class="hidden lg:flex items-center justify-center gap-1 text-sm">
+            <a href="#features" class="px-4 py-1.5 text-cream/70 hover:text-gold-400 rounded-lg hover:bg-forest-800/30 transition-colors">
+                特色玩法
+            </a>
+            <a href="#modintros" class="px-4 py-1.5 text-cream/70 hover:text-gold-400 rounded-lg hover:bg-forest-800/30 transition-colors">
+                模组介绍
+            </a>
+            <a href="#philosophy" class="px-4 py-1.5 text-cream/70 hover:text-gold-400 rounded-lg hover:bg-forest-800/30 transition-colors">
+                服务器理念
+            </a>
+            <a href="#contact" class="px-4 py-1.5 text-cream/70 hover:text-gold-400 rounded-lg hover:bg-forest-800/30 transition-colors">
+                加入我们
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block content %}
+    <!-- Hero Section -->
+    <section class="hero-bg min-h-screen flex items-center justify-center relative">
+        <div class="max-w-5xl mx-auto px-6 text-center relative z-10 pt-20 lg:pt-24">
+            <div class="float-animation mb-8">
+                <div class="w-20 h-20 sm:w-24 sm:h-24 mx-auto bg-gradient-to-br from-gold-400 to-gold-500 rounded-2xl flex items-center justify-center pulse-glow">
+                    <i data-lucide="mountain" class="w-10 h-10 sm:w-12 sm:h-12 text-forest-900"></i>
+                </div>
+            </div>
+            <h1 class="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-black mb-4 sm:mb-6 glow-text">
+                <span class="text-gold-400">滨海小镇</span>
+            </h1>
+            <p class="text-lg sm:text-xl md:text-2xl text-cream/90 mb-3 sm:mb-4 font-medium">
+                超强社交 × 超多地形 × 超强体验
+            </p>
+            <p class="text-base sm:text-lg text-cream/60 mb-8 sm:mb-12 max-w-2xl mx-auto">
+                Minecraft Java 1.20.1 Fabric 模组服务器
+            </p>
+            <div class="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center">
+                <a href="#contact" class="btn-primary px-6 sm:px-8 py-3 sm:py-4 rounded-xl text-base sm:text-lg inline-flex items-center justify-center gap-2">
+                    <i data-lucide="gamepad-2" class="w-5 h-5"></i>
+                    加入服务器
+                </a>
+                <a href="{{ url_for('community.community_page') }}" class="btn-secondary px-6 sm:px-8 py-3 sm:py-4 rounded-xl text-base sm:text-lg inline-flex items-center justify-center gap-2">
+                    <i data-lucide="message-circle" class="w-5 h-5"></i>
+                    社区活动
+                </a>
+                <a href="#features" class="btn-secondary px-6 sm:px-8 py-3 sm:py-4 rounded-xl text-base sm:text-lg inline-flex items-center justify-center gap-2">
+                    <i data-lucide="sparkles" class="w-5 h-5"></i>
+                    探索特色
+                </a>
+            </div>
+            <div class="mt-12 sm:mt-16 flex items-center justify-center gap-4 sm:gap-8 text-cream/50 text-xs sm:text-sm">
+                <div class="flex items-center gap-2"><i data-lucide="users" class="w-4 h-4"></i><span>社交为核心</span></div>
+                <div class="hidden sm:flex items-center gap-2"><i data-lucide="map" class="w-4 h-4"></i><span>丰富地形</span></div>
+                <div class="flex items-center gap-2"><i data-lucide="heart" class="w-4 h-4"></i><span>休闲养老</span></div>
+            </div>
+        </div>
+        <div class="absolute bottom-6 sm:bottom-10 left-1/2 -translate-x-1/2 animate-bounce hidden sm:block">
+            <i data-lucide="chevron-down" class="w-6 h-6 sm:w-8 sm:h-8 text-gold-400/50"></i>
+        </div>
+    </section>
+
+    <!-- Social Features Section -->
+    <section id="features" class="py-16 sm:py-20 lg:py-24">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-10 sm:mb-12 lg:mb-16 section-fade">
+                <span class="inline-block px-3 sm:px-4 py-1 bg-gold-400/10 text-gold-400 rounded-full text-xs sm:text-sm font-medium mb-3 sm:mb-4">社交畅联，互动无界</span>
+                <h2 class="text-2xl sm:text-3xl lg:text-4xl font-bold mb-3 sm:mb-4">社交畅联</h2>
+                <p class="text-cream/60 max-w-2xl mx-auto text-sm sm:text-base">在这里，朋友与社交才是最珍贵的宝藏</p>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+                <div class="pixel-card rounded-xl p-5 sm:p-6 section-fade">
+                    <div class="feature-icon mb-4"><i data-lucide="mic" class="w-6 h-6 text-gold-400"></i></div>
+                    <h3 class="text-lg font-bold mb-2">语音畅聊</h3>
+                    <p class="text-cream/60 text-sm leading-relaxed">内置超便捷语音系统，游戏中能随时语音交流，甚至能来场欢乐 K 歌，和伙伴告别打字繁琐！</p>
+                </div>
+                <div class="pixel-card rounded-xl p-5 sm:p-6 section-fade">
+                    <div class="feature-icon mb-4"><i data-lucide="shield-check" class="w-6 h-6 text-gold-400"></i></div>
+                    <h3 class="text-lg font-bold mb-2">领地系统</h3>
+                    <p class="text-cream/60 text-sm leading-relaxed">进服就可以直接圈地，没有经济系统！做自己的管理员，让熊孩子望而却步，保护自己的领地！</p>
+                </div>
+                <div class="pixel-card rounded-xl p-5 sm:p-6 section-fade">
+                    <div class="feature-icon mb-4"><i data-lucide="satellite" class="w-6 h-6 text-gold-400"></i></div>
+                    <h3 class="text-lg font-bold mb-2">卫星地图</h3>
+                    <p class="text-cream/60 text-sm leading-relaxed">点击链接进入卫星地图，开始偷窥服务器的建筑！</p>
+                </div>
+                <div class="pixel-card rounded-xl p-5 sm:p-6 section-fade">
+                    <div class="feature-icon mb-4"><i data-lucide="message-circle" class="w-6 h-6 text-gold-400"></i></div>
+                    <h3 class="text-lg font-bold mb-2">群服互通</h3>
+                    <p class="text-cream/60 text-sm leading-relaxed">专业机器人实现 QQ 群与游戏内消息双向实时转发，不管在游戏还是群聊，都能和小伙伴随时互动。</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Mod Introductions Section -->
+    <section id="modintros" class="py-16 sm:py-20 lg:py-24">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-10 sm:mb-12 lg:mb-16 section-fade">
+                <span class="inline-block px-3 sm:px-4 py-1 bg-gold-400/10 text-gold-400 rounded-full text-xs sm:text-sm font-medium mb-3 sm:mb-4">精彩内容</span>
+                <h2 class="text-2xl sm:text-3xl lg:text-4xl font-bold mb-3 sm:mb-4">模组介绍</h2>
+                <p class="text-cream/60 max-w-2xl mx-auto text-sm sm:text-base">服务器精选模组一览，感受丰富玩法的魅力</p>
+                {% if user and user.is_admin %}
+                <div class="mt-4 sm:mt-6"><a href="{{ url_for('admin.manage_mod_intros') }}" class="inline-flex items-center gap-2 text-sm text-gold-400/70 hover:text-gold-400 transition-colors"><i data-lucide="settings" class="w-4 h-4"></i>管理模组介绍</a></div>
+                {% endif %}
+            </div>
+            {% if mod_intros %}
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+                {% for intro in mod_intros %}
+                <div class="pixel-card rounded-xl p-5 sm:p-6 section-fade">
+                    <div class="feature-icon mb-4"><i data-lucide="{{ intro.icon or 'box' }}" class="w-6 h-6 text-gold-400"></i></div>
+                    <h3 class="text-lg font-bold mb-3">{{ intro.title }}</h3>
+                    <p class="text-cream/60 text-sm leading-relaxed whitespace-pre-wrap">{{ intro.content }}</p>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="text-center py-10 sm:py-12 pixel-card rounded-xl max-w-lg mx-auto section-fade">
+                <i data-lucide="package" class="w-10 h-10 sm:w-12 sm:h-12 text-cream/30 mx-auto mb-4"></i>
+                <p class="text-cream/60">暂无模组介绍</p>
+                {% if user and user.is_admin %}<p class="text-cream/40 text-sm mt-2">点击上方的「管理模组介绍」添加</p>{% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </section>
+
+    <!-- Philosophy Section -->
+    <section id="philosophy" class="py-16 sm:py-20 lg:py-24 relative overflow-hidden">
+        <div class="absolute inset-0 opacity-5">
+            <div class="absolute top-1/4 left-1/4 w-64 sm:w-96 h-64 sm:h-96 bg-gold-400 rounded-full blur-3xl"></div>
+            <div class="absolute bottom-1/4 right-1/4 w-64 sm:w-96 h-64 sm:h-96 bg-forest-600 rounded-full blur-3xl"></div>
+        </div>
+        <div class="max-w-4xl mx-auto px-4 sm:px-6 relative z-10">
+            <div class="text-center mb-10 sm:mb-12 lg:mb-16 section-fade">
+                <span class="inline-block px-3 sm:px-4 py-1 bg-gold-400/10 text-gold-400 rounded-full text-xs sm:text-sm font-medium mb-3 sm:mb-4">服务器理念</span>
+                <h2 class="text-2xl sm:text-3xl lg:text-4xl font-bold mb-3 sm:mb-4">你的另一个游戏世界</h2>
+            </div>
+            <div class="space-y-6 sm:space-y-8 text-center section-fade">
+                <p class="text-lg sm:text-xl text-cream/90 leading-relaxed max-w-3xl mx-auto">
+                    我们都明白，单人模式下，这些好玩的模组也能带来乐趣。可在这虚拟方块世界里，<strong class="text-gold-400 text-2xl">朋友与社交才是最珍贵的宝藏</strong>。
+                </p>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mt-8 sm:mt-10">
+                    <div class="pixel-card rounded-xl p-5 sm:p-6">
+                        <div class="w-12 h-12 mx-auto mb-4 bg-gold-400/20 rounded-full flex items-center justify-center">
+                            <i data-lucide="castle" class="w-6 h-6 text-gold-400"></i>
+                        </div>
+                        <h3 class="text-base font-bold mb-2">冰雪城堡派对</h3>
+                        <p class="text-cream/60 text-sm">在冰雪城堡举办派对，身边围坐一同欢笑的好友</p>
+                    </div>
+                    <div class="pixel-card rounded-xl p-5 sm:p-6">
+                        <div class="w-12 h-12 mx-auto mb-4 bg-gold-400/20 rounded-full flex items-center justify-center">
+                            <i data-lucide="flag" class="w-6 h-6 text-gold-400"></i>
+                        </div>
+                        <h3 class="text-base font-bold mb-2">终点欢呼</h3>
+                        <p class="text-cream/60 text-sm">驾驶亲手打造的座驾冲过终点，有人为你欢呼喝彩</p>
+                    </div>
+                    <div class="pixel-card rounded-xl p-5 sm:p-6">
+                        <div class="w-12 h-12 mx-auto mb-4 bg-gold-400/20 rounded-full flex items-center justify-center">
+                            <i data-lucide="wine" class="w-6 h-6 text-gold-400"></i>
+                        </div>
+                        <h3 class="text-base font-bold mb-2">共饮分享</h3>
+                        <p class="text-cream/60 text-sm">酿造出香醇美酒，与挚友共饮分享这份喜悦</p>
+                    </div>
+                </div>
+                <p class="text-lg sm:text-xl text-gold-400 font-medium">
+                    将这些奇妙有趣的瞬间分享给朋友，才是滨海小镇真正的魅力所在。
+                </p>
+            </div>
+            <div class="h-px bg-gradient-to-r from-transparent via-gold-400/30 to-transparent my-10 sm:my-12"></div>
+            <div class="space-y-4 sm:space-y-6 sm:text-lg leading-relaxed text-cream/80 section-fade">
+                <p>这里没有强制任务，没有日常打卡，更没有"该做什么"的束缚。我们是朋友间成长起来的小天地，主打休闲生存与养老娱乐。</p>
+                <p>想探索未知？广阔世界等你冒险！想安静放松？随时上线，随心所欲。</p>
+                <p class="font-medium text-cream">无聊？不如创造你的小目标：</p>
+                <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 text-sm">
+                    <div class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-gold-400"></i><span>圈一片心仪的领地</span></div>
+                    <div class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-gold-400"></i><span>造一辆狂飙的赛车</span></div>
+                    <div class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-gold-400"></i><span>搭一架翱翔的飞机</span></div>
+                    <div class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-gold-400"></i><span>拍一张绝美风景</span></div>
+                    <div class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-gold-400"></i><span>做一桌美味佳肴</span></div>
+                    <div class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-gold-400"></i><span>酿一壶神奇药酒</span></div>
+                </div>
+                <p class="text-gold-400 font-medium">你的每份创意，我们都会用心记录。</p>
+                <p>服务器会持续更新模组与玩法，只为提供更多有趣的选择——而非必须完成的任务。</p>
+                <div class="bg-forest-900/50 rounded-xl p-5 sm:p-6 border border-gold-400/20">
+                    <p class="text-lg sm:text-xl font-bold text-gold-400 mb-2">记住：这里只是你的另一个游戏世界。</p>
+                    <p>没有主线，不必追赶。想玩就玩，想歇就歇。<strong>做你想做的</strong>，就是这里的唯一规则。</p>
+                </div>
+                <p class="text-center text-lg sm:text-xl font-medium text-cream">欢迎加入，开启你的滨海小镇！</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Contact Section -->
+    <section id="contact" class="py-16 sm:py-20 lg:py-24">
+        <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+            <div class="section-fade">
+                <span class="inline-block px-3 sm:px-4 py-1 bg-gold-400/10 text-gold-400 rounded-full text-xs sm:text-sm font-medium mb-3 sm:mb-4">联系我们</span>
+                <h2 class="text-2xl sm:text-3xl lg:text-4xl font-bold mb-3 sm:mb-4">加入我们</h2>
+                <p class="text-cream/60 mb-8 sm:mb-12 text-sm sm:text-base">点击链接加入群聊，直接和服务器的伙伴沟通吧！</p>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 section-fade">
+                <a href="https://qun.qq.com/universal-share/share?ac=1&authKey=rMtk0BTqbTh2Dx%2BwtNX3GwhYs4NEZDPuKTO0UBHc6X2r55iPkda3lmuA9Styubor&busi_data=eyJncm91cENvZGUiOiI1OTY3OTQxMTIiLCJ0b2tlbiI6IkNUajRvZ0NJQ1dzQ3lZb0FBSzdRSElFQXdqOWZaZy9QSFRlajhuMGpIeUU5bkNyQnA1WGloQW0zcFVReXJpakoiLCJ1aW4iOiIzODQ2NDE1NDczIn0%3D&data=U8tnRnk8Yo1OQFedRkDUVccnyfIRXgZja1nQxv60UTRAphySRL7G3XPXtqrubu0Th2TJ4Q_l-BgqRjikCRI5_Q&svctype=4&tempid=h5_group_info" target="_blank" rel="noopener noreferrer" class="pixel-card rounded-xl p-6 sm:p-8 flex flex-col items-center gap-3 sm:gap-4 hover:no-underline">
+                    <div class="w-14 h-14 sm:w-16 sm:h-16 bg-blue-500/20 rounded-full flex items-center justify-center">
+                        <i data-lucide="message-square" class="w-7 h-7 sm:w-8 sm:h-8 text-blue-400"></i>
+                    </div>
+                    <h3 class="text-lg sm:text-xl font-bold">加入 QQ 群</h3>
+                    <p class="text-cream/60 text-sm">群聊群：Minecraft基建项目部</p>
+                    <span class="text-blue-400 font-medium text-sm">点击加入群聊 →</span>
+                </a>
+                <a href="https://103.45.130.80:59474" target="_blank" rel="noopener noreferrer" class="pixel-card rounded-xl p-6 sm:p-8 flex flex-col items-center gap-3 sm:gap-4 hover:no-underline">
+                    <div class="w-14 h-14 sm:w-16 sm:h-16 bg-green-500/20 rounded-full flex items-center justify-center">
+                        <i data-lucide="globe" class="w-7 h-7 sm:w-8 sm:h-8 text-green-400"></i>
+                    </div>
+                    <h3 class="text-lg sm:text-xl font-bold">查看卫星地图</h3>
+                    <p class="text-cream/60 text-sm">探索服务器的建筑与地形</p>
+                    <span class="text-green-400 font-medium text-sm">点击查看地图 →</span>
+                </a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="glass-footer border-t border-forest-700/50 py-8 sm:py-10 lg:py-12">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex flex-col sm:flex-row items-center justify-between gap-4 sm:gap-6">
+                <div class="flex items-center gap-3">
+                    <div class="w-9 h-9 sm:w-10 sm:h-10 bg-gold-400 rounded-lg flex items-center justify-center">
+                        <i data-lucide="compass" class="w-5 h-5 sm:w-6 sm:h-6 text-forest-900"></i>
+                    </div>
+                    <span class="text-lg sm:text-xl font-bold text-gold-400">滨海小镇</span>
+                </div>
+                <div class="flex items-center gap-4 sm:gap-6 text-cream/50 text-xs sm:text-sm">
+                    <span>Minecraft Java 1.20.1</span>
+                    <span class="hidden sm:inline">|</span>
+                    <span>Fabric 模组服务器</span>
+                </div>
+                <div class="text-cream/50 text-xs sm:text-sm">© 2024 滨海小镇. 保留所有权利.</div>
+                <a href="/docs" class="text-cream/50 hover:text-gold-400 text-xs sm:text-sm transition-colors flex items-center gap-1">
+                    <i data-lucide="book-open" class="w-4 h-4"></i>
+                    关于官网
+                </a>
+            </div>
+        </div>
+    </footer>
+{% endblock %}
+{% block extra_script %}
+{% endblock %}

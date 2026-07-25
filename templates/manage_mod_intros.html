@@ -1,0 +1,171 @@
+{% extends "base.html" %}
+{% block title %}管理模组介绍{% endblock %}
+{% block extra_style %}
+    <style>
+        .btn-danger-outline {
+            background: rgba(239, 68, 68, 0.14);
+            backdrop-filter: blur(16px) saturate(160%);
+            -webkit-backdrop-filter: blur(16px) saturate(160%);
+            border: 1px solid rgba(239, 68, 68, 0.35);
+            border-radius: 14px !important;
+            color: #fca5a5; font-weight: 500;
+            transition: transform 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.1), inset 0 1px 0 rgba(255,255,255,0.08);
+        }
+        .btn-danger-outline:hover {
+            border-color: rgba(239, 68, 68, 0.6);
+            background: rgba(239, 68, 68, 0.2);
+            color: #fecaca;
+            transform: translateY(-1px);
+            box-shadow: 0 8px 24px rgba(239, 68, 68, 0.16), inset 0 1px 0 rgba(255,255,255,0.12);
+        }
+        .intro-card {
+            background: rgba(12, 28, 18, 0.38);
+            backdrop-filter: blur(32px) saturate(220%) brightness(108%);
+            -webkit-backdrop-filter: blur(32px) saturate(220%) brightness(108%);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 22px !important;
+            transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+            box-shadow:
+                0 12px 40px rgba(0, 0, 0, 0.35),
+                inset 0 1px 0 rgba(255, 255, 255, 0.12),
+                inset 0 -1px 0 rgba(0, 0, 0, 0.1);
+            position: relative;
+            overflow: hidden;
+        }
+        .intro-card::after {
+            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 50%; border-radius: 22px 22px 0 0; pointer-events: none;
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0) 100%);
+        }
+        .intro-card:hover {
+            border-color: rgba(244, 208, 63, 0.28);
+            transform: translateY(-3px);
+            box-shadow:
+                0 20px 56px rgba(0, 0, 0, 0.4),
+                0 0 30px rgba(244, 208, 63, 0.06),
+                inset 0 1px 0 rgba(255, 255, 255, 0.14);
+        }
+        .intro-icon {
+            background: rgba(244, 208, 63, 0.12);
+            border: 1px solid rgba(244, 208, 63, 0.18);
+            border-radius: 14px !important;
+            backdrop-filter: blur(12px) saturate(160%);
+            -webkit-backdrop-filter: blur(12px) saturate(160%);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 4px 12px rgba(0, 0, 0, 0.15);
+            position: relative;
+            overflow: hidden;
+        }
+    </style>
+{% endblock %}
+{% block content %}
+    <section class="page-container py-12">
+        <div class="max-w-6xl mx-auto px-6">
+            <div class="flex items-center justify-between mb-8">
+                <div>
+                    <h1 class="text-3xl font-bold mb-2">模组介绍管理</h1>
+                    <p class="text-cream/60">管理首页展示的模组介绍卡片（共 {{ mod_intros|length }} 个）</p>
+                </div>
+            </div>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+            {% for category, message in messages %}
+            <div class="mb-4 p-4 rounded-lg text-sm flex items-center gap-2
+                        {% if category == 'error' %}bg-red-900/30 border border-red-500/30 text-red-300
+                        {% else %}bg-green-900/30 border border-green-500/30 text-green-300{% endif %}">
+                <i data-lucide="{% if category == 'error' %}alert-circle{% else %}check-circle{% endif %}" class="w-5 h-5 flex-shrink-0"></i>
+                {{ message }}
+            </div>
+            {% endfor %}
+            {% endif %}
+            {% endwith %}
+
+            <div class="pixel-card rounded-xl p-6 mb-8">
+                <h2 class="text-xl font-bold mb-4 flex items-center gap-2">
+                    <i data-lucide="plus-circle" class="w-5 h-5 text-gold-400"></i>添加新模组介绍
+                </h2>
+                <form method="POST" action="{{ url_for('admin.add_mod_intro') }}" class="grid md:grid-cols-5 gap-4">
+                    <div class="md:col-span-1">
+                        <label class="block text-sm font-medium mb-2 text-cream/80">图标名称</label>
+                        <input type="text" name="icon" value="box" class="input-field w-full px-4 py-3 rounded-lg" placeholder="如: mountain">
+                        <p class="text-xs text-cream/40 mt-1">Lucide 图标名</p>
+                    </div>
+                    <div class="md:col-span-1">
+                        <label class="block text-sm font-medium mb-2 text-cream/80">标题</label>
+                        <input type="text" name="title" required maxlength="50" class="input-field w-full px-4 py-3 rounded-lg" placeholder="模组名称">
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="block text-sm font-medium mb-2 text-cream/80">介绍内容</label>
+                        <textarea name="content" required rows="2" maxlength="300" class="input-field w-full px-4 py-3 rounded-lg resize-none" placeholder="简要描述模组功能..."></textarea>
+                    </div>
+                    <div class="md:col-span-1">
+                        <button type="submit" class="btn-primary w-full py-3 rounded-lg font-bold flex items-center justify-center gap-2 mt-8">
+                            <i data-lucide="plus" class="w-4 h-4"></i>添加
+                        </button>
+                    </div>
+                </form>
+
+                <div class="mt-4 p-3 bg-forest-800/50 rounded-lg">
+                    <p class="text-xs text-cream/50 mb-2">常用图标名称参考：</p>
+                    <div class="flex flex-wrap gap-2">
+                        {% for icon in ['mountain', 'snowflake', 'building-2', 'sofa', 'chef-hat', 'grape', 'store', 'circle-dot', 'pickaxe', 'car', 'camera', 'backpack', 'box', 'gem', 'sparkles', 'zap', 'shield', 'globe'] %}
+                        <span class="text-xs text-cream/40 bg-forest-700/50 px-2 py-1 rounded">{{ icon }}</span>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="space-y-4">
+                {% for intro in mod_intros %}
+                <div class="intro-card rounded-xl p-5">
+                    <form method="POST" action="{{ url_for('admin.edit_mod_intro', intro_id=intro.id) }}" class="grid md:grid-cols-5 gap-4 items-start">
+                        <div class="md:col-span-1">
+                            <div class="intro-icon w-12 h-12 rounded-lg flex items-center justify-center mb-2">
+                                <i data-lucide="{{ intro.icon or 'box' }}" class="w-6 h-6 text-gold-400"></i>
+                            </div>
+                            <input type="text" name="icon" value="{{ intro.icon }}" class="input-field w-full px-3 py-2 rounded-lg text-sm">
+                        </div>
+                        <div class="md:col-span-1">
+                            <label class="block text-xs text-cream/50 mb-1">标题</label>
+                            <input type="text" name="title" value="{{ intro.title }}" required maxlength="50" class="input-field w-full px-3 py-2 rounded-lg text-sm">
+                        </div>
+                        <div class="md:col-span-2">
+                            <label class="block text-xs text-cream/50 mb-1">内容</label>
+                            <textarea name="content" required rows="2" maxlength="300" class="input-field w-full px-3 py-2 rounded-lg text-sm resize-none">{{ intro.content }}</textarea>
+                        </div>
+                        <div class="md:col-span-1 flex flex-col gap-2">
+                            <button type="submit" class="btn-primary w-full py-3 rounded-lg text-sm font-bold flex items-center justify-center gap-1 mt-4">
+                                <i data-lucide="check" class="w-3 h-3"></i>保存
+                            </button>
+                        </div>
+                    </form>
+                    <div class="mt-3 pt-3 border-t border-forest-700/50 flex justify-between items-center">
+                        <span class="text-xs text-cream/40">ID: {{ intro.id }} · 创建于 {{ intro.created_at }}</span>
+                        <form method="POST" action="{{ url_for('admin.delete_mod_intro', intro_id=intro.id) }}" onsubmit="return confirm('确定要删除「{{ intro.title }}」吗？');">
+                            <button type="submit" class="btn-danger-outline px-3 py-1 rounded-lg text-xs flex items-center gap-1">
+                                <i data-lucide="trash-2" class="w-3 h-3"></i>删除
+                            </button>
+                        </form>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            {% if not mod_intros %}
+            <div class="text-center py-16 pixel-card rounded-xl">
+                <i data-lucide="package" class="w-16 h-16 text-cream/30 mx-auto mb-4"></i>
+                <p class="text-cream/60">还没有模组介绍</p>
+                <p class="text-cream/40 text-sm mt-2">使用上方的表单添加第一个模组介绍</p>
+            </div>
+            {% endif %}
+
+            <div class="mt-8 text-center">
+                <a href="{{ url_for('main.home') }}" class="btn-secondary px-6 py-3 rounded-xl inline-flex items-center gap-2">
+                    <i data-lucide="arrow-left" class="w-5 h-5"></i>返回首页
+                </a>
+            </div>
+        </div>
+    </section>
+{% endblock %}

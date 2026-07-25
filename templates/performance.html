@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+{% block title %}服务器状态{% endblock %}
+{% block content %}
+    <section class="page-container py-12">
+        <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="text-center mb-10">
+                <h1 class="text-3xl font-bold mb-3">服务器状态</h1>
+                <p class="text-cream/60">实时查看服务器运行状态</p>
+            </div>
+
+            <!-- 系统信息卡片 -->
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                <div class="pixel-card rounded-xl p-5 text-center">
+                    <i data-lucide="server" class="w-8 h-8 text-gold-400 mx-auto mb-3"></i>
+                    <div class="text-cream/60 text-sm mb-1">操作系统</div>
+                    <div id="sys-os" class="text-lg font-bold text-cream">--</div>
+                </div>
+                <div class="pixel-card rounded-xl p-5 text-center">
+                    <i data-lucide="clock" class="w-8 h-8 text-gold-400 mx-auto mb-3"></i>
+                    <div class="text-cream/60 text-sm mb-1">运行时间</div>
+                    <div id="sys-uptime" class="text-lg font-bold text-cream">--</div>
+                </div>
+                <div class="pixel-card rounded-xl p-5 text-center">
+                    <i data-lucide="cpu" class="w-8 h-8 text-gold-400 mx-auto mb-3"></i>
+                    <div class="text-cream/60 text-sm mb-1">CPU使用率</div>
+                    <div class="text-2xl font-bold" id="cpu-usage">--%</div>
+                </div>
+                <div class="pixel-card rounded-xl p-5 text-center">
+                    <i data-lucide="thermometer" class="w-8 h-8 text-gold-400 mx-auto mb-3"></i>
+                    <div class="text-cream/60 text-sm mb-1">CPU温度</div>
+                    <div class="text-2xl font-bold" id="cpu-temp">--</div>
+                </div>
+            </div>
+
+            <!-- CPU进度条 -->
+            <div class="pixel-card rounded-xl p-6 mb-6">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-cream/80 font-medium">CPU 负载</span>
+                    <span id="cpu-usage-text" class="text-gold-400 font-bold">--%</span>
+                </div>
+                <div class="h-4 bg-forest-700/50 rounded-full overflow-hidden">
+                    <div id="cpu-bar" class="h-full bg-gradient-to-r from-green-500 to-green-400 transition-all duration-500 rounded-full" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <!-- 内存信息 -->
+            <div class="pixel-card rounded-xl p-6">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-cream/80 font-medium">
+                        <i data-lucide="hard-drive" class="w-4 h-4 inline mr-2 text-gold-400"></i>内存使用
+                    </span>
+                    <span id="mem-text" class="text-cream/60 text-sm">--</span>
+                </div>
+                <div class="h-4 bg-forest-700/50 rounded-full overflow-hidden">
+                    <div id="mem-bar" class="h-full bg-gradient-to-r from-blue-500 to-blue-400 transition-all duration-500 rounded-full" style="width: 0%"></div>
+                </div>
+                <div class="grid grid-cols-3 gap-4 mt-4 text-center">
+                    <div>
+                        <div class="text-cream/60 text-xs mb-1">总内存</div>
+                        <div id="mem-total" class="font-bold text-cream">--</div>
+                    </div>
+                    <div>
+                        <div class="text-cream/60 text-xs mb-1">已用</div>
+                        <div id="mem-used" class="font-bold text-cream">--</div>
+                    </div>
+                    <div>
+                        <div class="text-cream/60 text-xs mb-1">可用</div>
+                        <div id="mem-available" class="font-bold text-cream">--</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 最后更新时间 -->
+            <div class="text-center text-cream/40 text-sm mt-6" id="last-update">
+                最后更新: --
+            </div>
+        </div>
+    </section>
+
+    <script>
+        let refreshTimer = null;
+        const apiUrl = "{{ url_for('api_monitoring.api_performance') }}";
+
+        function formatBytes(bytes) {
+            if (bytes === null || bytes === undefined) return '--';
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+            return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+        }
+
+        function updateData(data) {
+            document.getElementById('last-update').textContent = '最后更新: ' + data.timestamp;
+
+            // 系统信息
+            if (data.system) {
+                document.getElementById('sys-os').textContent = data.system.os;
+                document.getElementById('sys-uptime').textContent = data.system.uptime;
+            }
+
+            // CPU使用率
+            if (data.cpu_usage !== null && data.cpu_usage !== undefined) {
+                document.getElementById('cpu-usage').textContent = data.cpu_usage + '%';
+                document.getElementById('cpu-usage-text').textContent = data.cpu_usage + '%';
+                const cpuBar = document.getElementById('cpu-bar');
+                cpuBar.style.width = Math.min(data.cpu_usage, 100) + '%';
+                if (data.cpu_usage > 80) {
+                    cpuBar.className = 'h-full bg-gradient-to-r from-red-500 to-red-400 transition-all duration-500 rounded-full';
+                } else if (data.cpu_usage > 50) {
+                    cpuBar.className = 'h-full bg-gradient-to-r from-yellow-500 to-yellow-400 transition-all duration-500 rounded-full';
+                } else {
+                    cpuBar.className = 'h-full bg-gradient-to-r from-green-500 to-green-400 transition-all duration-500 rounded-full';
+                }
+            }
+
+            // CPU温度
+            if (data.cpu_temp !== null && data.cpu_temp !== undefined) {
+                const tempEl = document.getElementById('cpu-temp');
+                tempEl.textContent = data.cpu_temp + '°C';
+                if (data.cpu_temp > 80) {
+                    tempEl.className = 'text-2xl font-bold text-red-400';
+                } else if (data.cpu_temp > 60) {
+                    tempEl.className = 'text-2xl font-bold text-yellow-400';
+                } else {
+                    tempEl.className = 'text-2xl font-bold text-green-400';
+                }
+            } else {
+                document.getElementById('cpu-temp').textContent = 'N/A';
+            }
+
+            // 内存信息
+            if (data.memory) {
+                document.getElementById('mem-total').textContent = formatBytes(data.memory.total);
+                document.getElementById('mem-used').textContent = formatBytes(data.memory.used);
+                document.getElementById('mem-available').textContent = formatBytes(data.memory.available);
+                document.getElementById('mem-text').textContent =
+                    formatBytes(data.memory.used) + ' / ' + formatBytes(data.memory.total) +
+                    ' (' + data.memory.usage + '%)';
+
+                const memBar = document.getElementById('mem-bar');
+                memBar.style.width = Math.min(data.memory.usage, 100) + '%';
+                if (data.memory.usage > 80) {
+                    memBar.className = 'h-full bg-gradient-to-r from-red-500 to-red-400 transition-all duration-500 rounded-full';
+                } else if (data.memory.usage > 50) {
+                    memBar.className = 'h-full bg-gradient-to-r from-yellow-500 to-yellow-400 transition-all duration-500 rounded-full';
+                } else {
+                    memBar.className = 'h-full bg-gradient-to-r from-blue-500 to-blue-400 transition-all duration-500 rounded-full';
+                }
+            }
+        }
+
+        function fetchData() {
+            fetch(apiUrl)
+                .then(res => res.json())
+                .then(updateData)
+                .catch(err => console.error('获取性能数据失败:', err));
+        }
+
+        // 页面加载时立即获取数据并启动定时刷新
+        fetchData();
+        refreshTimer = setInterval(fetchData, 5000);
+    </script>
+{% endblock %}

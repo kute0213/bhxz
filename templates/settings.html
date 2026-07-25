@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+{% block title %}账户设置{% endblock %}
+{% block extra_style %}
+    <style>
+        .tab-btn {
+            background: rgba(255, 255, 255, 0.04);
+            backdrop-filter: blur(12px) saturate(150%);
+            -webkit-backdrop-filter: blur(12px) saturate(150%);
+            border: 1px solid rgba(244, 208, 63, 0.12);
+            border-radius: 12px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .tab-btn.active {
+            background: rgba(244, 208, 63, 0.15);
+            backdrop-filter: blur(16px) saturate(180%);
+            -webkit-backdrop-filter: blur(16px) saturate(180%);
+            border-color: rgba(244, 208, 63, 0.5);
+            color: #f4d03f;
+            box-shadow: 0 4px 16px rgba(244, 208, 63, 0.08), inset 0 1px 0 rgba(255,255,255,0.06);
+        }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; animation: tabFade 0.45s cubic-bezier(0.4, 0, 0.2, 1); }
+        @keyframes tabFade { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+{% endblock %}
+{% block content %}
+    <section class="page-container py-12">
+        <div class="max-w-3xl mx-auto px-6">
+            <div class="text-center mb-10">
+                <div class="w-16 h-16 mx-auto bg-gold-400/20 rounded-full flex items-center justify-center mb-4">
+                    <i data-lucide="user-cog" class="w-8 h-8 text-gold-400"></i>
+                </div>
+                <h1 class="text-3xl font-bold mb-2">账户设置</h1>
+                <p class="text-cream/60">管理你的账户信息</p>
+                <div class="mt-4 flex items-center justify-center gap-2">
+                    <div class="w-10 h-10 bg-gold-400/20 rounded-full flex items-center justify-center text-lg font-bold text-gold-400">
+                        {{ user.username[0] }}
+                    </div>
+                    <span class="text-lg font-medium">{{ user.username }}</span>
+                    {% if user.is_admin %}<span class="text-xs bg-red-500/20 text-red-300 px-2 py-0.5 rounded">服主</span>{% endif %}
+                </div>
+            </div>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+            {% for category, message in messages %}
+            <div class="mb-6 p-4 rounded-lg text-sm flex items-center gap-2
+                        {% if category == 'error' %}bg-red-900/30 border border-red-500/30 text-red-300
+                        {% else %}bg-green-900/30 border border-green-500/30 text-green-300{% endif %}">
+                <i data-lucide="{% if category == 'error' %}alert-circle{% else %}check-circle{% endif %}" class="w-5 h-5 flex-shrink-0"></i>
+                {{ message }}
+            </div>
+            {% endfor %}
+            {% endif %}
+            {% endwith %}
+
+            <div class="flex gap-2 mb-6 border-b border-forest-700 pb-2">
+                <button class="tab-btn active px-4 py-2 rounded-lg text-sm font-medium transition-all border-2 border-transparent" data-tab="username">
+                    <i data-lucide="user" class="w-4 h-4 inline mr-1"></i>修改用户名
+                </button>
+                <button class="tab-btn px-4 py-2 rounded-lg text-sm font-medium transition-all border-2 border-transparent" data-tab="password">
+                    <i data-lucide="lock" class="w-4 h-4 inline mr-1"></i>修改密码
+                </button>
+                <button class="tab-btn px-4 py-2 rounded-lg text-sm font-medium transition-all border-2 border-transparent" data-tab="delete">
+                    <i data-lucide="trash-2" class="w-4 h-4 inline mr-1"></i>注销账号
+                </button>
+            </div>
+
+            <div id="tab-username" class="tab-content active">
+                <div class="pixel-card rounded-xl p-6">
+                    <h2 class="text-xl font-bold mb-4 flex items-center gap-2">
+                        <i data-lucide="user" class="w-5 h-5 text-gold-400"></i>修改用户名
+                    </h2>
+                    <p class="text-cream/60 text-sm mb-6">更改你的显示名称，修改后需要重新登录才能完全生效。</p>
+                    <form method="POST" action="{{ url_for('main.change_username') }}" class="space-y-5">
+                        <div>
+                            <label class="block text-sm font-medium mb-2 text-cream/80">当前用户名</label>
+                            <input type="text" value="{{ user.username }}" disabled class="input-field w-full px-4 py-3 rounded-lg opacity-50">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2 text-cream/80">新用户名</label>
+                            <input type="text" name="new_username" required maxlength="20" class="input-field w-full px-4 py-3 rounded-lg" placeholder="2-20 个字符">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2 text-cream/80">当前密码</label>
+                            <input type="password" name="current_password" required class="input-field w-full px-4 py-3 rounded-lg" placeholder="请输入当前密码确认身份">
+                        </div>
+                        <button type="submit" class="btn-primary w-full py-3 rounded-lg font-bold">
+                            确认修改
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <div id="tab-password" class="tab-content">
+                <div class="pixel-card rounded-xl p-6">
+                    <h2 class="text-xl font-bold mb-4 flex items-center gap-2">
+                        <i data-lucide="lock" class="w-5 h-5 text-gold-400"></i>修改密码
+                    </h2>
+                    <p class="text-cream/60 text-sm mb-6">定期更换密码可以提高账户安全性。</p>
+                    <form method="POST" action="{{ url_for('main.change_password') }}" class="space-y-5">
+                        <div>
+                            <label class="block text-sm font-medium mb-2 text-cream/80">当前密码</label>
+                            <input type="password" name="current_password" required class="input-field w-full px-4 py-3 rounded-lg" placeholder="请输入当前密码">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2 text-cream/80">新密码</label>
+                            <input type="password" name="new_password" required minlength="6" class="input-field w-full px-4 py-3 rounded-lg" placeholder="至少 6 位">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2 text-cream/80">确认新密码</label>
+                            <input type="password" name="confirm_password" required minlength="6" class="input-field w-full px-4 py-3 rounded-lg" placeholder="再次输入新密码">
+                        </div>
+                        <button type="submit" class="btn-primary w-full py-3 rounded-lg font-bold">
+                            确认修改
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <div id="tab-delete" class="tab-content">
+                <div class="pixel-card rounded-xl p-6 border-red-500/30">
+                    <h2 class="text-xl font-bold mb-4 flex items-center gap-2 text-red-400">
+                        <i data-lucide="trash-2" class="w-5 h-5"></i>注销账号
+                    </h2>
+                    <div class="bg-red-900/20 border border-red-500/30 rounded-lg p-4 mb-6">
+                        <p class="text-red-300 text-sm font-medium mb-2">⚠️ 重要提示：</p>
+                        <ul class="text-red-300/80 text-sm space-y-1 list-disc list-inside">
+                            <li>注销后，你的账户将被永久删除，无法恢复</li>
+                            <li>你发布的所有留言和附件将被一并删除</li>
+                            <li>此操作不可撤销，请谨慎操作</li>
+                        </ul>
+                    </div>
+                    <form method="POST" action="{{ url_for('main.delete_account') }}" class="space-y-5" onsubmit="return confirm('确定要注销账号吗？此操作不可撤销！');">
+                        <div>
+                            <label class="block text-sm font-medium mb-2 text-cream/80">请输入用户名确认</label>
+                            <input type="text" name="confirm_username" required class="input-field w-full px-4 py-3 rounded-lg" placeholder="输入你的用户名以确认注销">
+                        </div>
+                        <button type="submit" class="btn-danger w-full py-3 rounded-lg font-bold">
+                            确认注销账号
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </section>
+{% endblock %}
+{% block extra_script %}
+    <script>
+        const tabBtns = document.querySelectorAll('.tab-btn');
+        const tabContents = document.querySelectorAll('.tab-content');
+
+        function switchTab(tabName) {
+            tabBtns.forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.tab === tabName);
+            });
+            tabContents.forEach(content => {
+                content.classList.toggle('active', content.id === 'tab-' + tabName);
+            });
+        }
+
+        tabBtns.forEach(btn => {
+            btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+        });
+
+        {% if tab %}
+        switchTab('{{ tab }}');
+        {% endif %}
+    </script>
+{% endblock %}

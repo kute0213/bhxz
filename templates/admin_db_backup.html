@@ -1,0 +1,275 @@
+{% extends "base.html" %}
+{% block title %}数据库备份{% endblock %}
+{% block content %}
+    <section class="page-container py-12">
+        <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="mb-8">
+                <a href="{{ url_for('admin.admin_page') }}" class="text-gold-400 hover:text-gold-300 text-sm mb-2 inline-block">
+                    <i data-lucide="arrow-left" class="w-4 h-4 inline mr-1"></i>返回管理中心
+                </a>
+                <h1 class="text-2xl font-bold">数据库优化与备份</h1>
+                <p class="text-cream/60 text-sm mt-1">自动优化数据库、清理过期数据、定时备份</p>
+            </div>
+
+            <!-- 数据库状态卡片 -->
+            <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+                <div class="pixel-card rounded-xl p-5">
+                    <div class="flex items-center gap-3 mb-2">
+                        <div class="w-10 h-10 bg-gold-400/20 rounded-lg flex items-center justify-center">
+                            <i data-lucide="database" class="w-5 h-5 text-gold-400"></i>
+                        </div>
+                        <div>
+                            <div class="text-xs text-cream/50">数据库大小</div>
+                            <div id="db-size" class="text-xl font-bold">{{ '%.2f MB'|format(db_size / 1024 / 1024) if db_size else 'N/A' }}</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="pixel-card rounded-xl p-5">
+                    <div class="flex items-center gap-3 mb-2">
+                        <div class="w-10 h-10 bg-blue-400/20 rounded-lg flex items-center justify-center">
+                            <i data-lucide="clock" class="w-5 h-5 text-blue-400"></i>
+                        </div>
+                        <div>
+                            <div class="text-xs text-cream/50">定时备份</div>
+                            <div class="text-xl font-bold">每天 03:00</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="pixel-card rounded-xl p-5">
+                    <div class="flex items-center gap-3 mb-2">
+                        <div class="w-10 h-10 bg-green-400/20 rounded-lg flex items-center justify-center">
+                            <i data-lucide="save" class="w-5 h-5 text-green-400"></i>
+                        </div>
+                        <div>
+                            <div class="text-xs text-cream/50">备份总数</div>
+                            <div id="backup-count" class="text-xl font-bold">{{ backups|length }}</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 操作区 -->
+            <div class="pixel-card rounded-xl p-6 mb-8">
+                <h2 class="text-lg font-bold mb-4 flex items-center gap-2">
+                    <i data-lucide="zap" class="w-5 h-5 text-gold-400"></i>
+                    一键优化与备份
+                </h2>
+                <p class="text-cream/60 text-sm mb-4">
+                    点击按钮后将执行以下操作：<br>
+                    1. 清理过期日志（超过配置上限的访问日志、命令日志、定时任务日志）<br>
+                    2. 执行 CHECKPOINT，合并 WAL 文件到主数据库（减小文件大小）<br>
+                    3. 完整备份数据库文件到 <code class="bg-forest-900/50 px-1.5 py-0.5 rounded text-xs">backups/db/</code> 目录<br>
+                    4. 自动清理超出保留数量的旧备份
+                </p>
+
+                <!-- 进度条 -->
+                <div id="progress-section" class="mb-4 hidden">
+                    <div class="flex justify-between text-sm mb-1">
+                        <span id="progress-message" class="text-cream/70">准备中...</span>
+                        <span id="progress-percent" class="text-gold-400 font-medium">0%</span>
+                    </div>
+                    <div class="w-full h-3 bg-forest-900/60 rounded-full overflow-hidden">
+                        <div id="progress-bar" class="h-full bg-gradient-to-r from-gold-500 to-gold-400 transition-all duration-300 ease-out rounded-full" style="width: 0%"></div>
+                    </div>
+                </div>
+
+                <button id="btn-start-backup" class="px-6 py-3 bg-gold-500 hover:bg-gold-400 text-forest-900 font-bold rounded-xl transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]">
+                    <i data-lucide="rocket" class="w-5 h-5 inline mr-2"></i>
+                    立即优化并备份
+                </button>
+            </div>
+
+            <!-- 备份历史 -->
+            <div class="pixel-card rounded-xl p-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-lg font-bold flex items-center gap-2">
+                        <i data-lucide="history" class="w-5 h-5 text-gold-400"></i>
+                        备份历史
+                    </h2>
+                    <button id="btn-refresh-list" class="text-sm text-cream/60 hover:text-cream transition-colors">
+                        <i data-lucide="refresh-cw" class="w-4 h-4 inline mr-1"></i>刷新
+                    </button>
+                </div>
+
+                <div id="backup-list" class="space-y-2">
+                    {% for b in backups %}
+                    <div class="flex items-center justify-between p-3 rounded-lg bg-forest-900/40 border border-cream/5">
+                        <div class="flex items-center gap-3 min-w-0">
+                            <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0
+                                        {% if b.status == 'success' %}bg-green-500/20
+                                        {% elif b.status == 'failed' %}bg-red-500/20
+                                        {% else %}bg-blue-500/20{% endif %}">
+                                <i data-lucide="{% if b.status == 'success' %}check-circle{% elif b.status == 'failed' %}x-circle{% else %}loader{% endif %}"
+                                   class="w-5 h-5
+                                          {% if b.status == 'success' %}text-green-400
+                                          {% elif b.status == 'failed' %}text-red-400
+                                          {% else %}text-blue-400{% endif %}"></i>
+                            </div>
+                            <div class="min-w-0">
+                                <div class="font-medium text-sm truncate">{{ b.backup_name }}</div>
+                                <div class="text-xs text-cream/50 flex flex-wrap gap-x-3 gap-y-0.5">
+                                    <span>{{ b.backup_type if b.backup_type == 'scheduled' else '手动' }}</span>
+                                    <span>{{ b.started_at }}</span>
+                                    {% if b.size_bytes %}<span>{{ '%.2f MB'|format(b.size_bytes / 1024 / 1024) }}</span>{% endif %}
+                                    {% if b.duration_seconds %}<span>{{ '%.1fs'|format(b.duration_seconds) }}</span>{% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex-shrink-0">
+                            <span class="px-2 py-1 text-xs rounded-full
+                                        {% if b.status == 'success' %}bg-green-500/20 text-green-300 border border-green-400/20
+                                        {% elif b.status == 'failed' %}bg-red-500/20 text-red-300 border border-red-400/20
+                                        {% else %}bg-blue-500/20 text-blue-300 border border-blue-400/20{% endif %}">
+                                {% if b.status == 'success' %}成功
+                                {% elif b.status == 'failed' %}失败
+                                {% else %}进行中{% endif %}
+                            </span>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-12 text-cream/40">
+                        <i data-lucide="inbox" class="w-12 h-12 mx-auto mb-3 opacity-30"></i>
+                        <p>暂无备份记录</p>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <script>
+        (function () {
+            const btnStart = document.getElementById('btn-start-backup');
+            const progressSection = document.getElementById('progress-section');
+            const progressBar = document.getElementById('progress-bar');
+            const progressPercent = document.getElementById('progress-percent');
+            const progressMessage = document.getElementById('progress-message');
+            const btnRefreshList = document.getElementById('btn-refresh-list');
+            const backupList = document.getElementById('backup-list');
+            const backupCount = document.getElementById('backup-count');
+            let pollTimer = null;
+
+            function formatSize(bytes) {
+                if (!bytes) return 'N/A';
+                return (bytes / 1024 / 1024).toFixed(2) + ' MB';
+            }
+
+            function renderBackupList(backups) {
+                if (!backups || !backups.length) {
+                    backupList.innerHTML = `
+                        <div class="text-center py-12 text-cream/40">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-12 h-12 mx-auto mb-3 opacity-30"><polyline points="22 12 16 12 14 15 10 15 8 12 2 12"></polyline><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"></path></svg>
+                            <p>暂无备份记录</p>
+                        </div>`;
+                    backupCount.textContent = '0';
+                    return;
+                }
+                backupCount.textContent = backups.length;
+                backupList.innerHTML = backups.map(function (b) {
+                    const isSuccess = b.status === 'success';
+                    const isFailed = b.status === 'failed';
+                    const statusClass = isSuccess ? 'green' : (isFailed ? 'red' : 'blue');
+                    const icon = isSuccess ? 'check-circle' : (isFailed ? 'x-circle' : 'loader');
+                    const statusText = isSuccess ? '成功' : (isFailed ? '失败' : '进行中');
+                    const typeText = b.backup_type === 'scheduled' ? '定时' : '手动';
+                    const sizeStr = b.size_bytes ? formatSize(b.size_bytes) : '';
+                    const durStr = b.duration_seconds ? b.duration_seconds.toFixed(1) + 's' : '';
+                    return `
+                    <div class="flex items-center justify-between p-3 rounded-lg bg-forest-900/40 border border-cream/5">
+                        <div class="flex items-center gap-3 min-w-0">
+                            <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 bg-${statusClass}-500/20">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5 text-${statusClass}-400">
+                                    ${icon === 'check-circle' ? '<path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline>' :
+                                      icon === 'x-circle' ? '<circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line>' :
+                                      '<line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line>'}
+                                </svg>
+                            </div>
+                            <div class="min-w-0">
+                                <div class="font-medium text-sm truncate">${b.backup_name}</div>
+                                <div class="text-xs text-cream/50 flex flex-wrap gap-x-3 gap-y-0.5">
+                                    <span>${typeText}</span>
+                                    <span>${b.started_at || ''}</span>
+                                    ${sizeStr ? `<span>${sizeStr}</span>` : ''}
+                                    ${durStr ? `<span>${durStr}</span>` : ''}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex-shrink-0">
+                            <span class="px-2 py-1 text-xs rounded-full bg-${statusClass}-500/20 text-${statusClass}-300 border border-${statusClass}-400/20">
+                                ${statusText}
+                            </span>
+                        </div>
+                    </div>`;
+                }).join('');
+            }
+
+            function refreshList() {
+                fetch('/admin/api/db-backup/list')
+                    .then(r => r.json())
+                    .then(data => {
+                        renderBackupList(data.backups || []);
+                    })
+                    .catch(() => {});
+            }
+
+            function pollProgress() {
+                fetch('/admin/api/db-backup/progress')
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.in_progress) {
+                            progressBar.style.width = data.percent + '%';
+                            progressPercent.textContent = data.percent + '%';
+                        } else {
+                            // 备份完成
+                            clearInterval(pollTimer);
+                            pollTimer = null;
+                            progressBar.style.width = '100%';
+                            progressPercent.textContent = '100%';
+                            setTimeout(() => {
+                                progressSection.classList.add('hidden');
+                                btnStart.disabled = false;
+                                btnStart.innerHTML = '<i data-lucide="rocket" class="w-5 h-5 inline mr-2"></i>立即优化并备份';
+                                if (window.lucide) lucide.createIcons();
+                                refreshList();
+                            }, 1500);
+                        }
+                    })
+                    .catch(() => {});
+            }
+
+            btnStart.addEventListener('click', function () {
+                if (btnStart.disabled) return;
+
+                btnStart.disabled = true;
+                btnStart.innerHTML = '<i data-lucide="loader" class="w-5 h-5 inline mr-2 animate-spin"></i>启动中...';
+                if (window.lucide) lucide.createIcons();
+
+                fetch('/admin/api/db-backup/start', { method: 'POST' })
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.success) {
+                            progressSection.classList.remove('hidden');
+                            progressBar.style.width = '5%';
+                            progressPercent.textContent = '5%';
+                            progressMessage.textContent = '准备备份...';
+                            // 开始轮询进度
+                            pollTimer = setInterval(pollProgress, 1000);
+                        } else {
+                            btnStart.disabled = false;
+                            btnStart.innerHTML = '<i data-lucide="rocket" class="w-5 h-5 inline mr-2"></i>立即优化并备份';
+                            if (window.lucide) lucide.createIcons();
+                            alert(data.message || '启动失败');
+                        }
+                    })
+                    .catch(() => {
+                        btnStart.disabled = false;
+                        btnStart.innerHTML = '<i data-lucide="rocket" class="w-5 h-5 inline mr-2"></i>立即优化并备份';
+                        if (window.lucide) lucide.createIcons();
+                        alert('网络错误，请重试');
+                    });
+            });
+
+            btnRefreshList.addEventListener('click', refreshList);
+        })();
+    </script>
+{% endblock %}

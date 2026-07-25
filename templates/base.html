@@ -1,0 +1,1194 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}{% endblock %} - 滨海小镇</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='9') }}">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        forest: { 900: '#0d1b0f', 800: '#1a2f1a', 700: '#1a472a', 600: '#2d5a3d' },
+                        gold: { 400: '#f4d03f', 500: '#d4a827' },
+                        cream: '#e8e4d9',
+                    },
+                    fontFamily: { sans: ['Noto Sans SC', 'sans-serif'] },
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Noto Sans SC', sans-serif;
+            color: #e8e4d9;
+            background: #07120c;
+            position: relative;
+            min-height: 100vh;
+            overflow-x: clip;
+            overscroll-behavior-y: none;
+        }
+
+        /* 磨砂玻璃动态背景 - 性能优化版 */
+        .bg-orbs { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
+        .bg-orb {
+            position: absolute; border-radius: 50%; filter: blur(60px);
+            will-change: transform;
+        }
+        .bg-orb-1 { width: 500px; height: 500px; background: radial-gradient(circle, rgba(26, 71, 42, 0.85), transparent 70%); top: -100px; left: -100px; animation: orbFloat1 30s ease-in-out infinite; }
+        .bg-orb-2 { width: 600px; height: 600px; background: radial-gradient(circle, rgba(45, 90, 61, 0.75), transparent 70%); bottom: -150px; right: -120px; animation: orbFloat2 35s ease-in-out infinite; }
+        .bg-orb-3 { width: 400px; height: 400px; background: radial-gradient(circle, rgba(244, 208, 63, 0.28), transparent 70%); top: 35%; left: 45%; animation: orbFloat3 28s ease-in-out infinite; }
+
+        @keyframes orbFloat1 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(60px, 40px) scale(1.1); } }
+        @keyframes orbFloat2 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(-50px,-40px) scale(1.15); } }
+        @keyframes orbFloat3 { 0%,100% { transform: translate(-50%,0) scale(1); } 50% { transform: translate(-50%,-60px) scale(0.95); } }
+
+        /* 磨砂玻璃卡片 - 强磨砂质感 */
+        .pixel-card {
+            background: rgba(12, 28, 18, 0.38);
+            backdrop-filter: blur(32px) saturate(220%) brightness(108%);
+            -webkit-backdrop-filter: blur(32px) saturate(220%) brightness(108%);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 24px !important;
+            position: relative;
+            box-shadow:
+                0 12px 40px rgba(0, 0, 0, 0.35),
+                inset 0 1px 0 rgba(255, 255, 255, 0.12),
+                inset 0 -1px 0 rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+            overflow: hidden;
+        }
+        .pixel-card::after {
+            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 50%; border-radius: 24px 24px 0 0; pointer-events: none;
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0) 100%);
+        }
+        .pixel-card:hover {
+            border-color: rgba(244, 208, 63, 0.25);
+            transform: translateY(-4px);
+            box-shadow:
+                0 20px 56px rgba(0, 0, 0, 0.4),
+                0 0 30px rgba(244, 208, 63, 0.08),
+                inset 0 1px 0 rgba(255, 255, 255, 0.16);
+        }
+
+        /* 磨砂玻璃按钮 */
+        .btn-primary {
+            background: rgba(244, 208, 63, 0.14);
+            backdrop-filter: blur(20px) saturate(180%) brightness(106%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%) brightness(106%);
+            border: 1px solid rgba(244, 208, 63, 0.35);
+            border-radius: 14px !important;
+            color: #f4d03f; font-weight: 700;
+            position: relative;
+            transition: transform 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+            box-shadow: 0 6px 20px rgba(244, 208, 63, 0.1), inset 0 1px 0 rgba(255,255,255,0.12);
+            overflow: hidden;
+        }
+        .btn-primary::after {
+            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 50%; border-radius: 14px 14px 0 0; pointer-events: none;
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0) 100%);
+        }
+        .btn-primary:hover {
+            background: rgba(244, 208, 63, 0.26);
+            border-color: rgba(244, 208, 63, 0.55);
+            transform: translateY(-2px);
+            box-shadow: 0 10px 28px rgba(244, 208, 63, 0.16), inset 0 1px 0 rgba(255,255,255,0.16);
+        }
+        .btn-primary:active { transform: translateY(0); }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.04);
+            backdrop-filter: blur(20px) saturate(180%) brightness(106%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%) brightness(106%);
+            border: 1px solid rgba(244, 208, 63, 0.18);
+            border-radius: 14px !important;
+            color: #e8e4d9; font-weight: 500;
+            position: relative;
+            transition: transform 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255,255,255,0.08);
+            overflow: hidden;
+        }
+        .btn-secondary::after {
+            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 50%; border-radius: 14px 14px 0 0; pointer-events: none;
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0) 100%);
+        }
+        .btn-secondary:hover {
+            background: rgba(244, 208, 63, 0.1);
+            border-color: rgba(244, 208, 63, 0.4);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255,255,255,0.12);
+        }
+        .btn-secondary:active { transform: translateY(0); }
+
+        .btn-danger {
+            background: rgba(239, 68, 68, 0.12);
+            backdrop-filter: blur(20px) saturate(180%) brightness(106%);
+            -webkit-backdrop-filter: blur(20px) saturate(180%) brightness(106%);
+            border: 1px solid rgba(239, 68, 68, 0.35);
+            border-radius: 14px !important;
+            color: #fca5a5; font-weight: 700;
+            position: relative;
+            transition: transform 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+            box-shadow: 0 6px 20px rgba(239, 68, 68, 0.1), inset 0 1px 0 rgba(255,255,255,0.1);
+            overflow: hidden;
+        }
+        .btn-danger::after {
+            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 50%; border-radius: 14px 14px 0 0; pointer-events: none;
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0) 100%);
+        }
+        .btn-danger:hover {
+            background: rgba(239, 68, 68, 0.24);
+            border-color: rgba(239, 68, 68, 0.55);
+            transform: translateY(-2px);
+            box-shadow: 0 10px 28px rgba(239, 68, 68, 0.16), inset 0 1px 0 rgba(255,255,255,0.14);
+        }
+        .btn-danger:active { transform: translateY(0); }
+
+        /* 磨砂玻璃输入框 */
+        .input-field {
+            background: rgba(6, 16, 10, 0.35);
+            backdrop-filter: blur(16px) saturate(180%) brightness(106%);
+            -webkit-backdrop-filter: blur(16px) saturate(180%) brightness(106%);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 14px !important;
+            color: #e8e4d9;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+            box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+        .input-field:focus {
+            border-color: rgba(244, 208, 63, 0.45);
+            outline: none;
+            box-shadow: 0 0 0 4px rgba(244, 208, 63, 0.1), inset 0 2px 8px rgba(0, 0, 0, 0.25);
+        }
+        .input-field::placeholder { color: rgba(232, 228, 217, 0.3); }
+
+        /* 玻璃导航栏 */
+        .glass-nav {
+            background: rgba(8, 20, 14, 0.45);
+            backdrop-filter: blur(36px) saturate(220%) brightness(108%);
+            -webkit-backdrop-filter: blur(36px) saturate(220%) brightness(108%);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+        }
+
+        /* 玻璃移动端菜单 */
+        .mobile-menu {
+            background: rgba(8, 20, 14, 0.6);
+            backdrop-filter: blur(36px) saturate(200%) brightness(108%);
+            -webkit-backdrop-filter: blur(36px) saturate(200%) brightness(108%);
+            border-left: 1px solid rgba(255, 255, 255, 0.08);
+            transform: translateX(100%);
+            transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            border-radius: 28px 0 0 28px;
+            box-shadow: -12px 0 40px rgba(0, 0, 0, 0.4);
+        }
+        .mobile-menu.active { transform: translateX(0); }
+        .mobile-menu-overlay {
+            opacity: 0; visibility: hidden;
+            transition: opacity 0.4s ease, visibility 0.4s ease;
+            backdrop-filter: blur(12px) saturate(150%);
+            -webkit-backdrop-filter: blur(12px) saturate(150%);
+            background: rgba(0, 0, 0, 0.5);
+        }
+        .mobile-menu-overlay.active { opacity: 1; visibility: visible; }
+
+        /* 页面过渡动画 - 从下往上淡入 */
+        .page-content {
+            opacity: 0;
+            transform: translateY(16px);
+            transition: opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1),
+                        transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .page-content.page-ready {
+            opacity: 1;
+            transform: translateY(0);
+        }
+        body.page-leaving .page-content {
+            opacity: 0;
+            transform: translateY(-8px);
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+
+        /* 过渡遮罩 - 渐入渐出 */
+        .page-transition-overlay {
+            position: fixed; inset: 0; z-index: 9999;
+            background: #07120c;
+            opacity: 0; pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+        body.page-leaving .page-transition-overlay {
+            opacity: 1; pointer-events: all;
+        }
+
+        .page-container { min-height: calc(100vh - 80px); }
+
+        /* 玻璃表格行 hover */
+        .glass-table-row:hover {
+            background: rgba(244, 208, 63, 0.06);
+        }
+
+        /* 滚动渐入动画 */
+        .section-fade {
+            opacity: 0; transform: translateY(24px);
+            transition: opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1), transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .section-fade.visible { opacity: 1; transform: translateY(0); }
+
+        /* 玻璃光晕效果 */
+        .glass-shine {
+            position: relative; overflow: hidden;
+            border-radius: inherit;
+        }
+        .glass-shine::after {
+            content: ''; position: absolute; top: 0; left: -100%; width: 100%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.05), transparent);
+            transition: left 0.7s ease;
+            pointer-events: none;
+        }
+        .glass-shine:hover::after { left: 100%; }
+
+        /* 自定义弹窗 - 放大居中动画 */
+        .modal-overlay {
+            position: fixed; inset: 0; z-index: 1000;
+            background: rgba(0, 0, 0, 0);
+            backdrop-filter: blur(0px);
+            -webkit-backdrop-filter: blur(0px);
+            display: flex; align-items: center; justify-content: center;
+            opacity: 0; visibility: hidden;
+            transition: opacity 0.3s ease, visibility 0.3s ease, background 0.3s ease;
+        }
+        .modal-overlay.active {
+            opacity: 1; visibility: visible;
+            background: rgba(0, 0, 0, 0.55);
+            backdrop-filter: blur(16px) saturate(160%);
+            -webkit-backdrop-filter: blur(16px) saturate(160%);
+        }
+
+        .modal-box {
+            background: rgba(12, 28, 18, 0.55);
+            backdrop-filter: blur(36px) saturate(220%) brightness(108%);
+            -webkit-backdrop-filter: blur(36px) saturate(220%) brightness(108%);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 28px !important;
+            position: relative;
+            box-shadow:
+                0 24px 80px rgba(0, 0, 0, 0.5),
+                0 0 60px rgba(244, 208, 63, 0.06),
+                inset 0 1px 0 rgba(255, 255, 255, 0.14),
+                inset 0 -1px 0 rgba(0, 0, 0, 0.1);
+            max-width: 90vw;
+            width: 440px;
+            transform-origin: center center;
+            transform: scale(0.25) translateY(30px);
+            opacity: 0;
+            transition: transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1),
+                        opacity 0.3s ease;
+            overflow: hidden;
+        }
+        .modal-box::after {
+            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 50%; border-radius: 28px 28px 0 0; pointer-events: none;
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0) 100%);
+        }
+        .modal-overlay.active .modal-box {
+            transform: scale(1) translateY(0);
+            opacity: 1;
+        }
+
+        .modal-header {
+            padding: 24px 28px 18px;
+            border-bottom: 1px solid rgba(244, 208, 63, 0.1);
+            display: flex; align-items: center; gap: 14px;
+        }
+        .modal-icon {
+            width: 50px; height: 50px;
+            border-radius: 14px;
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0;
+        }
+        .modal-icon.warning {
+            background: rgba(239, 68, 68, 0.18);
+            color: #fca5a5;
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(239, 68, 68, 0.25);
+        }
+        .modal-icon.info {
+            background: rgba(244, 208, 63, 0.18);
+            color: #f4d03f;
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(244, 208, 63, 0.25);
+        }
+        .modal-icon.success {
+            background: rgba(34, 197, 94, 0.18);
+            color: #86efac;
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(34, 197, 94, 0.25);
+        }
+        .modal-title {
+            font-size: 19px; font-weight: 700; color: #e8e4d9;
+        }
+        .modal-body {
+            padding: 24px 28px;
+            color: rgba(232, 228, 217, 0.82);
+            font-size: 15px;
+            line-height: 1.7;
+        }
+        .modal-footer {
+            padding: 18px 28px 24px;
+            border-top: 1px solid rgba(244, 208, 63, 0.1);
+            display: flex; gap: 12px; justify-content: flex-end;
+        }
+        .modal-footer .btn-primary,
+        .modal-footer .btn-secondary {
+            padding: 11px 26px;
+            border-radius: 14px;
+            font-size: 14px;
+        }
+
+        /* Toast 提示动画 */
+        .toast-container {
+            position: fixed; top: 80px; left: 50%; transform: translateX(-50%);
+            z-index: 1100;
+            display: flex; flex-direction: column; gap: 10px;
+            pointer-events: none;
+        }
+        .toast {
+            background: rgba(12, 28, 18, 0.6);
+            backdrop-filter: blur(28px) saturate(200%) brightness(108%);
+            -webkit-backdrop-filter: blur(28px) saturate(200%) brightness(108%);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 16px !important;
+            padding: 14px 24px;
+            color: #e8e4d9;
+            font-size: 14px;
+            position: relative;
+            display: flex; align-items: center; gap: 12px;
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+            transform: translateY(-20px) scale(0.9);
+            opacity: 0;
+            transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1),
+                        opacity 0.3s ease;
+            pointer-events: auto;
+            overflow: hidden;
+        }
+        .toast.show {
+            transform: translateY(0) scale(1);
+            opacity: 1;
+        }
+        .toast.success { border-color: rgba(34, 197, 94, 0.3); }
+        .toast.success i { color: #86efac; }
+        .toast.error { border-color: rgba(239, 68, 68, 0.3); }
+        .toast.error i { color: #fca5a5; }
+        .toast.warning { border-color: rgba(244, 208, 63, 0.3); }
+        .toast.warning i { color: #f4d03f; }
+
+        /* 图片加载淡入 */
+        img {
+            animation: imgFadeIn 0.5s ease;
+        }
+        @keyframes imgFadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        /* 徽章脉冲动画 */
+        .badge-pulse {
+            animation: badgePulse 2s ease-in-out infinite;
+        }
+        @keyframes badgePulse {
+            0%, 100% { box-shadow: 0 0 0 0 currentColor; opacity: 1; }
+            50% { box-shadow: 0 0 0 6px transparent; opacity: 0.8; }
+        }
+
+        /* 鼠标跟随光晕 */
+        .mouse-glow {
+            position: fixed;
+            width: 500px; height: 500px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(244, 208, 63, 0.07), transparent 65%);
+            pointer-events: none;
+            z-index: 0;
+            transform: translate3d(-250px, -250px, 0);
+            will-change: transform;
+            mix-blend-mode: screen;
+        }
+
+        /* 减少动画偏好 */
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+            .section-fade { opacity: 1 !important; transform: none !important; }
+            .bg-orb { animation: none !important; }
+            .mouse-glow { display: none !important; }
+        }
+
+        /* 性能优化 - 离屏内容延迟渲染 */
+        .pixel-card, .highlight-card, .intro-card {
+            content-visibility: auto;
+            contain-intrinsic-size: 0 300px;
+        }
+
+        /* 上传进度条 */
+        .upload-progress-wrapper {
+            display: none;
+            margin-top: 8px;
+        }
+        .upload-progress-wrapper.active {
+            display: block;
+        }
+        .upload-progress-bar {
+            width: 100%;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.06);
+            border-radius: 3px;
+            overflow: hidden;
+            position: relative;
+        }
+        .upload-progress-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, #f4d03f, #d4a827);
+            border-radius: 3px;
+            transition: width 0.2s ease;
+            position: relative;
+        }
+        .upload-progress-fill::after {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+            animation: progressShine 1.5s ease-in-out infinite;
+        }
+        @keyframes progressShine {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(100%); }
+        }
+        .upload-progress-text {
+            font-size: 11px;
+            color: rgba(232, 228, 217, 0.5);
+            margin-top: 4px;
+            display: flex;
+            justify-content: space-between;
+        }
+    </style>
+    {% block extra_style %}{% endblock %}
+</head>
+<body>
+    <!-- 鼠标跟随光晕 -->
+    <div class="mouse-glow" id="mouse-glow"></div>
+
+    <!-- 动态背景 -->
+    <div class="bg-orbs">
+        <div class="bg-orb bg-orb-1"></div>
+        <div class="bg-orb bg-orb-2"></div>
+        <div class="bg-orb bg-orb-3"></div>
+    </div>
+
+    <!-- 页面过渡遮罩 -->
+    <div class="page-transition-overlay"></div>
+
+    <!-- 移动端菜单遮罩层 -->
+    <div class="mobile-menu-overlay fixed inset-0 bg-black/40 z-50" id="mobile-overlay"></div>
+
+    <!-- 自定义弹窗 -->
+    <div class="modal-overlay" id="custom-modal">
+        <div class="modal-box" id="modal-box">
+            <div class="modal-header">
+                <div class="modal-icon" id="modal-icon">
+                    <i data-lucide="alert-circle" class="w-5 h-5"></i>
+                </div>
+                <div class="modal-title" id="modal-title">提示</div>
+            </div>
+            <div class="modal-body" id="modal-body">
+                内容
+            </div>
+            <div class="modal-footer" id="modal-footer">
+                <button class="btn-secondary" id="modal-cancel-btn">取消</button>
+                <button class="btn-primary" id="modal-confirm-btn">确定</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast 容器 -->
+    <div class="toast-container" id="toast-container"></div>
+
+    <!-- 移动端侧边菜单 -->
+    <nav class="mobile-menu fixed top-0 right-0 h-full w-72 z-50 shadow-2xl" id="mobile-menu">
+        <div class="p-6">
+            <!-- 移动端菜单头部 -->
+            <div class="flex items-center justify-between mb-8">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-gold-400 rounded-lg flex items-center justify-center">
+                        <i data-lucide="compass" class="w-6 h-6 text-forest-900"></i>
+                    </div>
+                    <span class="text-xl font-bold text-gold-400">滨海小镇</span>
+                </div>
+                <button class="text-cream/60 hover:text-cream p-2" id="mobile-close-btn">
+                    <i data-lucide="x" class="w-6 h-6"></i>
+                </button>
+            </div>
+
+            <!-- 移动端用户信息 -->
+            {% if user %}
+            <div class="pixel-card rounded-xl p-4 mb-6">
+                <div class="flex items-center gap-3 mb-3">
+                    <div class="w-12 h-12 bg-gold-400/20 rounded-full flex items-center justify-center text-lg font-bold text-gold-400">
+                        {{ user.username[0] }}
+                    </div>
+                    <div>
+                        <div class="font-bold text-gold-400">{{ user.username }}</div>
+                        {% if user.is_admin %}<span class="text-xs bg-red-500/20 text-red-300 px-2 py-0.5 rounded">服主</span>{% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- 移动端导航链接 -->
+            <div class="space-y-2">
+                <a href="{{ url_for('main.home') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors">
+                    <i data-lucide="home" class="w-5 h-5"></i>
+                    <span>首页</span>
+                </a>
+                <a href="{{ url_for('community.community_page') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors">
+                    <i data-lucide="message-circle" class="w-5 h-5"></i>
+                    <span>社区活动</span>
+                </a>
+                <a href="{{ url_for('main.performance_page') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors">
+                    <i data-lucide="activity" class="w-5 h-5"></i>
+                    <span>服务器状态</span>
+                </a>
+                {% if user %}
+                <a href="{{ url_for('main.settings') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors">
+                    <i data-lucide="settings" class="w-5 h-5"></i>
+                    <span>账户设置</span>
+                </a>
+                {% if user and user.is_admin %}
+                <a href="{{ url_for('admin.admin_page') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors">
+                    <i data-lucide="settings-2" class="w-5 h-5"></i>
+                    <span>管理中心</span>
+                </a>
+                {% endif %}
+                {% endif %}
+            </div>
+
+            <!-- 移动端底部按钮 -->
+            <div class="mt-8 space-y-3">
+                {% if user %}
+                <a href="{{ url_for('main.logout') }}" class="flex items-center justify-center gap-2 w-full px-4 py-3 rounded-lg text-red-300 border border-red-500/20 hover:bg-red-500/10 transition-colors">
+                    <i data-lucide="log-out" class="w-5 h-5"></i>
+                    <span>退出登录</span>
+                </a>
+                {% else %}
+                <a href="{{ url_for('main.login') }}" class="flex items-center justify-center gap-2 w-full px-4 py-3 rounded-lg btn-secondary">
+                    <i data-lucide="log-in" class="w-5 h-5"></i>
+                    <span>登录</span>
+                </a>
+                <a href="{{ url_for('main.register') }}" class="flex items-center justify-center gap-2 w-full px-4 py-3 rounded-lg btn-primary">
+                    <i data-lucide="user-plus" class="w-5 h-5"></i>
+                    <span>注册</span>
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+
+    <!-- 主导航栏 -->
+    <nav class="glass-nav sticky top-0 z-40">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16 lg:h-20">
+                <!-- Logo 区域 -->
+                <a href="{{ url_for('main.home') }}" class="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+                    <div class="w-9 h-9 sm:w-10 sm:h-10 bg-gold-400 rounded-lg flex items-center justify-center">
+                        <i data-lucide="compass" class="w-5 h-5 sm:w-6 sm:h-6 text-forest-900"></i>
+                    </div>
+                    <span class="text-lg sm:text-xl font-bold text-gold-400 hidden xs:inline">滨海小镇</span>
+                </a>
+
+                <!-- 桌面端导航 (lg+) -->
+                <div class="hidden lg:flex items-center gap-6">
+                    <a href="{{ url_for('main.home') }}" class="text-cream/80 hover:text-gold-400 text-sm font-medium transition-colors px-3 py-2 rounded-lg hover:bg-gold-400/5">
+                        首页
+                    </a>
+                    <a href="{{ url_for('community.community_page') }}" class="text-cream/80 hover:text-gold-400 text-sm font-medium transition-colors px-3 py-2 rounded-lg hover:bg-gold-400/5">
+                        社区活动
+                    </a>
+                    <a href="{{ url_for('main.performance_page') }}" class="text-cream/80 hover:text-gold-400 text-sm font-medium transition-colors px-3 py-2 rounded-lg hover:bg-gold-400/5">
+                        服务器状态
+                    </a>
+                    {% if user and user.is_admin %}
+                    <a href="{{ url_for('admin.admin_page') }}" class="text-cream/80 hover:text-gold-400 text-sm font-medium transition-colors px-3 py-2 rounded-lg hover:bg-gold-400/5">
+                        管理中心
+                    </a>
+                    {% endif %}
+                </div>
+
+                <!-- 桌面端用户区域 (lg+) -->
+                <div class="hidden lg:flex items-center gap-4 pl-6 border-l border-gold-400/10">
+                    {% if user %}
+                    <div class="flex items-center gap-3">
+                        <div class="w-8 h-8 bg-gold-400/20 rounded-full flex items-center justify-center text-sm font-bold text-gold-400">
+                            {{ user.username[0] }}
+                        </div>
+                        <span class="text-cream/80 text-sm">
+                            <span class="text-gold-400 font-medium">{{ user.username }}</span>
+                            {% if user.is_admin %}<span class="text-xs bg-red-500/20 text-red-300 px-2 py-0.5 rounded ml-1">服主</span>{% endif %}
+                        </span>
+                    </div>
+                    <a href="{{ url_for('main.settings') }}" class="text-cream/60 hover:text-gold-400 text-sm transition-colors">
+                        <i data-lucide="settings" class="w-5 h-5"></i>
+                    </a>
+                    <a href="{{ url_for('main.logout') }}" class="text-red-300 hover:text-red-400 text-sm transition-colors">
+                        退出
+                    </a>
+                    {% else %}
+                    <a href="{{ url_for('main.login') }}" class="text-cream/80 hover:text-gold-400 text-sm font-medium transition-colors">
+                        登录
+                    </a>
+                    <a href="{{ url_for('main.register') }}" class="btn-primary px-5 py-2.5 rounded-lg text-sm font-bold">
+                        注册
+                    </a>
+                    {% endif %}
+                </div>
+
+                <!-- 平板端用户区域 (md-lg) -->
+                <div class="hidden md:flex lg:hidden items-center gap-3">
+                    {% if user %}
+                    <div class="flex items-center gap-2">
+                        <div class="w-8 h-8 bg-gold-400/20 rounded-full flex items-center justify-center text-sm font-bold text-gold-400">
+                            {{ user.username[0] }}
+                        </div>
+                        <span class="text-gold-400 text-sm font-medium hidden sm:inline">{{ user.username }}</span>
+                    </div>
+                    <a href="{{ url_for('main.settings') }}" class="text-cream/60 hover:text-gold-400 transition-colors p-1">
+                        <i data-lucide="settings" class="w-5 h-5"></i>
+                    </a>
+                    <a href="{{ url_for('main.logout') }}" class="text-red-300 hover:text-red-400 text-sm">退出</a>
+                    {% else %}
+                    <a href="{{ url_for('main.login') }}" class="btn-secondary px-3 py-1.5 rounded-lg text-sm">登录</a>
+                    <a href="{{ url_for('main.register') }}" class="btn-primary px-3 py-1.5 rounded-lg text-sm font-bold">注册</a>
+                    {% endif %}
+                </div>
+
+                <!-- 移动端菜单按钮 -->
+                <button class="md:hidden text-cream/80 hover:text-gold-400 p-2 -mr-2" id="mobile-menu-btn">
+                    <i data-lucide="menu" class="w-6 h-6"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- 平板端快捷导航 (md-lg) -->
+        <div class="hidden md:block lg:hidden border-t border-gold-400/5">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 flex items-center gap-1 overflow-x-auto">
+                <a href="{{ url_for('main.home') }}" class="flex-shrink-0 px-3 py-1.5 text-sm text-cream/70 hover:text-gold-400 rounded-lg hover:bg-gold-400/5 transition-colors">
+                    首页
+                </a>
+                <a href="{{ url_for('community.community_page') }}" class="flex-shrink-0 px-3 py-1.5 text-sm text-cream/70 hover:text-gold-400 rounded-lg hover:bg-gold-400/5 transition-colors">
+                    社区活动
+                </a>
+                <a href="{{ url_for('main.performance_page') }}" class="flex-shrink-0 px-3 py-1.5 text-sm text-cream/70 hover:text-gold-400 rounded-lg hover:bg-gold-400/5 transition-colors">
+                    服务器状态
+                </a>
+                {% if user and user.is_admin %}
+                <a href="{{ url_for('admin.admin_page') }}" class="flex-shrink-0 px-3 py-1.5 text-sm text-cream/70 hover:text-gold-400 rounded-lg hover:bg-gold-400/5 transition-colors">
+                    管理中心
+                </a>
+                {% endif %}
+            </div>
+        </div>
+    </nav>
+
+    {% block nav %}{% endblock %}
+
+    <main class="page-content">
+    {% block content %}{% endblock %}
+    </main>
+
+    <script>
+        lucide.createIcons();
+
+        // 移动端菜单控制
+        const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+        const mobileCloseBtn = document.getElementById('mobile-close-btn');
+        const mobileMenu = document.getElementById('mobile-menu');
+        const mobileOverlay = document.getElementById('mobile-overlay');
+
+        function openMobileMenu() {
+            mobileMenu.classList.add('active');
+            mobileOverlay.classList.add('active');
+            document.body.style.overflow = 'hidden';
+        }
+
+        function closeMobileMenu() {
+            mobileMenu.classList.remove('active');
+            mobileOverlay.classList.remove('active');
+            document.body.style.overflow = '';
+        }
+
+        if (mobileMenuBtn) {
+            mobileMenuBtn.addEventListener('click', openMobileMenu);
+        }
+        if (mobileCloseBtn) {
+            mobileCloseBtn.addEventListener('click', closeMobileMenu);
+        }
+        if (mobileOverlay) {
+            mobileOverlay.addEventListener('click', closeMobileMenu);
+        }
+
+        // 点击移动菜单中的链接后关闭菜单
+        document.querySelectorAll('#mobile-menu a').forEach(link => {
+            link.addEventListener('click', closeMobileMenu);
+        });
+
+        // ESC 键关闭菜单
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeMobileMenu();
+            }
+        });
+
+        // 页面加载/跳转过渡动画
+        (function() {
+            var pageContent = document.querySelector('main.page-content');
+
+            // 页面加载完成时触发入场动画
+            function triggerEnter() {
+                if (pageContent) {
+                    requestAnimationFrame(function() {
+                        pageContent.classList.add('page-ready');
+                    });
+                }
+            }
+
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', triggerEnter);
+            } else {
+                triggerEnter();
+            }
+
+            // 页面离开动画
+            document.addEventListener('click', function(e) {
+                var link = e.target.closest('a[href]');
+                if (!link) return;
+
+                var href = link.getAttribute('href');
+                if (!href || href.startsWith('#') || href.startsWith('http') ||
+                    href.startsWith('javascript:') || href.startsWith('mailto:') ||
+                    link.target === '_blank' || link.hasAttribute('download')) return;
+
+                if (e.ctrlKey || e.metaKey) return;
+
+                e.preventDefault();
+                document.body.classList.add('page-leaving');
+
+                setTimeout(function() {
+                    window.location.href = href;
+                }, 350);
+            });
+
+            // 浏览器后退时重新触发入场动画
+            window.addEventListener('pageshow', function(e) {
+                if (e.persisted && pageContent) {
+                    pageContent.classList.remove('page-ready');
+                    requestAnimationFrame(function() {
+                        pageContent.classList.add('page-ready');
+                    });
+                }
+            });
+        })();
+
+        // ============================================
+        // 附件上传进度条
+        // ============================================
+        (function initUploadProgress() {
+            document.addEventListener('submit', function(e) {
+                var form = e.target;
+                if (!form || !form.enctype || form.enctype.toLowerCase() !== 'multipart/form-data') return;
+
+                var fileInputs = form.querySelectorAll('input[type="file"]');
+                var hasFiles = false;
+                fileInputs.forEach(function(input) {
+                    if (input.files && input.files.length > 0) hasFiles = true;
+                });
+                if (!hasFiles) return;
+
+                // 找到或创建进度条
+                var wrapper = form.querySelector('.upload-progress-wrapper');
+                if (!wrapper) {
+                    wrapper = document.createElement('div');
+                    wrapper.className = 'upload-progress-wrapper';
+                    wrapper.innerHTML = '<div class="upload-progress-bar"><div class="upload-progress-fill"></div></div><div class="upload-progress-text"><span class="upload-percent">0%</span><span class="upload-status">上传中...</span></div>';
+                    var submitBtn = form.querySelector('button[type="submit"], input[type="submit"]');
+                    if (submitBtn && submitBtn.parentElement) {
+                        submitBtn.parentElement.insertBefore(wrapper, submitBtn.nextSibling);
+                    } else {
+                        form.appendChild(wrapper);
+                    }
+                }
+                var fill = wrapper.querySelector('.upload-progress-fill');
+                var percentEl = wrapper.querySelector('.upload-percent');
+                var statusEl = wrapper.querySelector('.upload-status');
+                var submitBtn = form.querySelector('button[type="submit"], input[type="submit"]');
+
+                wrapper.classList.add('active');
+                fill.style.width = '0%';
+                percentEl.textContent = '0%';
+                statusEl.textContent = '上传中...';
+                if (submitBtn) {
+                    submitBtn.disabled = true;
+                    submitBtn.style.opacity = '0.6';
+                }
+
+                e.preventDefault();
+                e.stopPropagation();
+
+                var formData = new FormData(form);
+                var xhr = new XMLHttpRequest();
+
+                xhr.upload.addEventListener('progress', function(ev) {
+                    if (ev.lengthComputable) {
+                        var pct = Math.round((ev.loaded / ev.total) * 100);
+                        fill.style.width = pct + '%';
+                        percentEl.textContent = pct + '%';
+                        if (pct >= 100) {
+                            statusEl.textContent = '处理中...';
+                        }
+                    }
+                });
+
+                xhr.addEventListener('load', function() {
+                    fill.style.width = '100%';
+                    percentEl.textContent = '100%';
+                    statusEl.textContent = '完成';
+                    // 延迟后跟随重定向
+                    setTimeout(function() {
+                        window.location.href = xhr.getResponseHeader('X-Redirect') || window.location.href;
+                    }, 300);
+                });
+
+                xhr.addEventListener('error', function() {
+                    statusEl.textContent = '上传失败';
+                    fill.style.background = '#ef4444';
+                    if (submitBtn) {
+                        submitBtn.disabled = false;
+                        submitBtn.style.opacity = '';
+                    }
+                    setTimeout(function() {
+                        wrapper.classList.remove('active');
+                        fill.style.background = '';
+                    }, 2000);
+                });
+
+                xhr.addEventListener('abort', function() {
+                    statusEl.textContent = '已取消';
+                    if (submitBtn) {
+                        submitBtn.disabled = false;
+                        submitBtn.style.opacity = '';
+                    }
+                });
+
+                xhr.open(form.method.toUpperCase(), form.action, true);
+                xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+                xhr.send(formData);
+            }, true);
+        })();
+
+        // ============================================
+        // 自定义弹窗系统 - 放大居中动画
+        // ============================================
+        var CustomModal = (function() {
+            var modal = document.getElementById('custom-modal');
+            var modalBox = document.getElementById('modal-box');
+            var modalIcon = document.getElementById('modal-icon');
+            var modalTitle = document.getElementById('modal-title');
+            var modalBody = document.getElementById('modal-body');
+            var modalFooter = document.getElementById('modal-footer');
+            var cancelBtn = document.getElementById('modal-cancel-btn');
+            var confirmBtn = document.getElementById('modal-confirm-btn');
+
+            var currentCallback = null;
+            var currentTrigger = null;
+
+            function setIcon(type) {
+                var iconMap = {
+                    'warning': 'alert-triangle',
+                    'info': 'info',
+                    'success': 'check-circle',
+                    'error': 'x-circle',
+                    'question': 'help-circle'
+                };
+                var iconName = iconMap[type] || 'info';
+                modalIcon.className = 'modal-icon ' + type;
+                modalIcon.innerHTML = '<i data-lucide="' + iconName + '" class="w-5 h-5"></i>';
+                if (window.lucide) {
+                    lucide.createIcons({ root: modalIcon });
+                }
+            }
+
+            function open(options) {
+                options = options || {};
+                var title = options.title || '提示';
+                var content = options.content || '';
+                var type = options.type || 'info';
+                var showCancel = options.showCancel !== false;
+                var confirmText = options.confirmText || '确定';
+                var cancelText = options.cancelText || '取消';
+                var callback = options.callback || null;
+                var trigger = options.trigger || null;
+
+                currentCallback = callback;
+                currentTrigger = trigger;
+
+                modalTitle.textContent = title;
+                modalBody.textContent = content;
+                setIcon(type);
+
+                confirmBtn.textContent = confirmText;
+                cancelBtn.textContent = cancelText;
+                cancelBtn.style.display = showCancel ? '' : 'none';
+
+                if (trigger) {
+                    var rect = trigger.getBoundingClientRect();
+                    var modalRect = modalBox.getBoundingClientRect();
+                    var centerX = rect.left + rect.width / 2;
+                    var centerY = rect.top + rect.height / 2;
+
+                    var startX = centerX - (window.innerWidth / 2);
+                    var startY = centerY - (window.innerHeight / 2);
+
+                    var scaleX = rect.width / 420;
+                    var scaleY = rect.height / 200;
+                    var startScale = Math.min(scaleX, scaleY, 0.5);
+
+                    modalBox.style.transform = 'translate(' + startX + 'px, ' + startY + 'px) scale(' + startScale + ')';
+                    modalBox.style.opacity = '0';
+
+                    modal.offsetHeight;
+
+                    modal.classList.add('active');
+                    document.body.style.overflow = 'hidden';
+
+                    requestAnimationFrame(function() {
+                        modalBox.style.transform = '';
+                        modalBox.style.opacity = '';
+                    });
+                } else {
+                    modal.classList.add('active');
+                    document.body.style.overflow = 'hidden';
+                }
+            }
+
+            function close(result) {
+                modal.classList.remove('active');
+                document.body.style.overflow = '';
+
+                setTimeout(function() {
+                    if (currentCallback) {
+                        currentCallback(result);
+                        currentCallback = null;
+                    }
+                    currentTrigger = null;
+                }, 300);
+            }
+
+            if (confirmBtn) {
+                confirmBtn.addEventListener('click', function() {
+                    close(true);
+                });
+            }
+            if (cancelBtn) {
+                cancelBtn.addEventListener('click', function() {
+                    close(false);
+                });
+            }
+            if (modal) {
+                modal.addEventListener('click', function(e) {
+                    if (e.target === modal) {
+                        close(false);
+                    }
+                });
+            }
+
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape' && modal && modal.classList.contains('active')) {
+                    close(false);
+                }
+                if (e.key === 'Enter' && modal && modal.classList.contains('active')) {
+                    close(true);
+                }
+            });
+
+            return {
+                open: open,
+                close: close,
+                alert: function(message, options) {
+                    options = options || {};
+                    open({
+                        title: options.title || '提示',
+                        content: message,
+                        type: options.type || 'info',
+                        showCancel: false,
+                        confirmText: options.confirmText || '确定',
+                        trigger: options.trigger || null,
+                        callback: options.callback || null
+                    });
+                },
+                confirm: function(message, options) {
+                    options = options || {};
+                    open({
+                        title: options.title || '确认',
+                        content: message,
+                        type: options.type || 'warning',
+                        showCancel: true,
+                        confirmText: options.confirmText || '确定',
+                        cancelText: options.cancelText || '取消',
+                        trigger: options.trigger || null,
+                        callback: options.callback || null
+                    });
+                }
+            };
+        })();
+
+        // ============================================
+        // Toast 提示系统
+        // ============================================
+        var Toast = (function() {
+            var container = document.getElementById('toast-container');
+
+            function show(message, type, duration) {
+                type = type || 'info';
+                duration = duration || 3000;
+
+                var toast = document.createElement('div');
+                toast.className = 'toast ' + type;
+
+                var iconMap = {
+                    'success': 'check-circle',
+                    'error': 'x-circle',
+                    'warning': 'alert-triangle',
+                    'info': 'info'
+                };
+                var iconName = iconMap[type] || 'info';
+
+                toast.innerHTML = '<i data-lucide="' + iconName + '" class="w-5 h-5"></i><span>' + message + '</span>';
+
+                container.appendChild(toast);
+                if (window.lucide) {
+                    lucide.createIcons({ root: toast });
+                }
+
+                requestAnimationFrame(function() {
+                    toast.classList.add('show');
+                });
+
+                setTimeout(function() {
+                    toast.classList.remove('show');
+                    setTimeout(function() {
+                        toast.remove();
+                    }, 400);
+                }, duration);
+            }
+
+            return {
+                show: show,
+                success: function(msg, duration) { show(msg, 'success', duration); },
+                error: function(msg, duration) { show(msg, 'error', duration); },
+                warning: function(msg, duration) { show(msg, 'warning', duration); },
+                info: function(msg, duration) { show(msg, 'info', duration); }
+            };
+        })();
+
+        (function initCustomConfirm() {
+            function processForm(form) {
+                var onsubmit = form.getAttribute('onsubmit');
+                if (!onsubmit || onsubmit.indexOf('confirm(') === -1) return;
+
+                var match = onsubmit.match(/confirm\(['"](.+?)['"]\)/);
+                var message = match ? match[1] : '确定要执行此操作吗？';
+
+                form.removeAttribute('onsubmit');
+
+                form.addEventListener('submit', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    var submitBtn = form.querySelector('button[type="submit"], input[type="submit"]');
+
+                    CustomModal.confirm(message, {
+                        trigger: submitBtn,
+                        callback: function(result) {
+                            if (result) {
+                                form.submit();
+                            }
+                        }
+                    });
+                }, true);
+            }
+
+            function processLink(link) {
+                var onclick = link.getAttribute('onclick');
+                if (!onclick || onclick.indexOf('confirm(') === -1) return;
+
+                var match = onclick.match(/confirm\(['"](.+?)['"]\)/);
+                var message = match ? match[1] : '确定要执行此操作吗？';
+
+                link.removeAttribute('onclick');
+
+                link.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    CustomModal.confirm(message, {
+                        trigger: link,
+                        callback: function(result) {
+                            if (result) {
+                                window.location.href = link.href;
+                            }
+                        }
+                    });
+                }, true);
+            }
+
+            function scan(root) {
+                if (root.matches && root.matches('form[onsubmit*="confirm("]')) processForm(root);
+                if (root.matches && root.matches('a[onclick*="confirm("]')) processLink(root);
+                root.querySelectorAll && root.querySelectorAll('form[onsubmit*="confirm("]').forEach(processForm);
+                root.querySelectorAll && root.querySelectorAll('a[onclick*="confirm("]').forEach(processLink);
+            }
+
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', function() {
+                    scan(document.body);
+                });
+            } else {
+                scan(document.body);
+            }
+
+            var observer = new MutationObserver(function(mutations) {
+                mutations.forEach(function(m) {
+                    m.addedNodes.forEach(function(node) {
+                        if (node.nodeType === 1) scan(node);
+                    });
+                });
+            });
+
+            if (document.body) {
+                observer.observe(document.body, { childList: true, subtree: true });
+            }
+        })();
+    </script>
+
+    <script src="{{ url_for('static', filename='js/main.js', v='9') }}"></script>
+    {% block extra_script %}{% endblock %}
+</body>
+</html>

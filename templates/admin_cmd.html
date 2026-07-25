@@ -1,0 +1,234 @@
+{% extends "base.html" %}
+{% block title %}CMD 控制台{% endblock %}
+{% block content %}
+<section class="page-container py-12">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="text-center mb-8 sm:mb-10">
+            <h1 class="text-2xl sm:text-3xl font-bold mb-3">CMD 控制台</h1>
+            <p class="text-cream/60 text-sm sm:text-base">快捷命令、脚本自动化、实时终端</p>
+        </div>
+
+        <!-- 顶部操作栏 -->
+        <div class="flex flex-wrap gap-3 mb-6 justify-center sm:justify-start">
+            <button
+                id="open-terminal-btn"
+                class="px-5 py-2.5 bg-gold-400 text-forest-900 font-bold rounded-lg hover:bg-gold-500 transition-colors flex items-center gap-2"
+            >
+                <i data-lucide="terminal" class="w-5 h-5"></i>
+                实时终端
+            </button>
+            <button
+                id="add-cmd-btn"
+                class="px-5 py-2.5 bg-forest-700/60 border border-cream/10 text-cream rounded-lg hover:bg-forest-600/60 transition-colors flex items-center gap-2"
+            >
+                <i data-lucide="plus" class="w-5 h-5 text-gold-400"></i>
+                添加快捷命令
+            </button>
+            <a
+                href="{{ url_for('cmd.cmd_editor_page') }}"
+                class="px-5 py-2.5 bg-purple-600/30 border border-purple-400/30 text-purple-200 rounded-lg hover:bg-purple-600/40 transition-colors flex items-center gap-2"
+            >
+                <i data-lucide="code-2" class="w-5 h-5"></i>
+                脚本编辑器
+            </a>
+            <a
+                href="{{ url_for('scheduled.scheduled_page') }}"
+                class="px-5 py-2.5 bg-blue-600/30 border border-blue-400/30 text-blue-200 rounded-lg hover:bg-blue-600/40 transition-colors flex items-center gap-2"
+            >
+                <i data-lucide="calendar-clock" class="w-5 h-5"></i>
+                定时任务
+            </a>
+        </div>
+
+        <!-- 快捷命令列表 -->
+        <div>
+            <h2 class="text-lg font-bold mb-4 flex items-center gap-2">
+                <i data-lucide="zap" class="w-5 h-5 text-gold-400"></i>
+                快捷命令
+            </h2>
+            <div id="preset-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <!-- JS 动态渲染 -->
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- 终端弹窗 -->
+<div id="terminal-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4" style="background:rgba(0,0,0,0.75);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);">
+    <div id="terminal-modal-content" class="pixel-card rounded-2xl w-full max-w-4xl h-[70vh] flex flex-col overflow-hidden terminal-fade-in" style="position:relative;">
+        <!-- 顶部渐变条 -->
+        <div style="height:3px;background:linear-gradient(90deg,#f4d03f,#d4a827);flex-shrink:0;"></div>
+        <!-- 标题栏（可拖拽） -->
+        <div class="terminal-title-bar flex items-center justify-between px-5 py-3 cursor-move select-none flex-shrink-0" style="background:rgba(0,0,0,0.2);">
+            <div class="flex items-center gap-3">
+                <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background:rgba(244,208,63,0.15);">
+                    <i data-lucide="terminal" class="w-4 h-4 text-gold-400"></i>
+                </div>
+                <div>
+                    <div class="font-bold text-sm">实时终端</div>
+                    <div class="flex items-center gap-2 text-xs text-cream/50">
+                        <span class="terminal-status-dot w-2 h-2 rounded-full bg-emerald-400"></span>
+                        <span class="terminal-status-text">就绪</span>
+                        <span class="text-cream/30">·</span>
+                        <span>ESC 关闭</span>
+                    </div>
+                </div>
+            </div>
+            <button id="terminal-close-btn" class="p-1.5 text-cream/50 hover:text-cream hover:bg-cream/10 rounded-lg transition-colors">
+                <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+        </div>
+        <!-- 输出区 -->
+        <div
+            id="terminal-output"
+            class="flex-1 bg-black/60 p-4 overflow-y-auto font-mono text-xs sm:text-sm whitespace-pre-wrap min-h-0"
+            style="color:#4ade80;line-height:1.6;"
+        ></div>
+        <!-- 输入区 -->
+        <div class="p-3 border-t border-cream/10 flex gap-2 flex-shrink-0" style="background:rgba(0,0,0,0.3);">
+            <div class="flex-1 flex items-center bg-black/40 border border-cream/10 rounded-lg px-3 focus-within:border-gold-400/50 transition-colors">
+                <span class="text-emerald-400 text-xs mr-1 select-none">$</span>
+                <input
+                    id="terminal-input"
+                    type="text"
+                    class="flex-1 bg-transparent py-2 text-cream placeholder-cream/30 focus:outline-none font-mono text-sm"
+                    placeholder="输入命令... (Ctrl+L 清屏, ↑↓ 历史)"
+                />
+            </div>
+            <button
+                id="terminal-run-btn"
+                class="px-4 py-2 bg-gold-400 text-forest-900 font-bold rounded-lg hover:bg-gold-500 transition-all duration-150 active:scale-95 flex items-center gap-2 flex-shrink-0"
+            >
+                <i data-lucide="send" class="w-4 h-4"></i>
+            </button>
+            <button
+                id="terminal-clear-btn"
+                class="px-3 py-2 bg-cream/10 text-cream/70 rounded-lg hover:bg-cream/20 transition-all duration-150 active:scale-95 flex items-center gap-2 flex-shrink-0"
+                title="清屏 (Ctrl+L)"
+            >
+                <i data-lucide="trash-2" class="w-4 h-4"></i>
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- 添加/编辑命令弹窗 -->
+<div id="cmd-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+    <div class="pixel-card rounded-xl p-6 w-full max-w-md">
+        <h3 id="cmd-modal-title" class="text-xl font-bold mb-4">添加快捷命令</h3>
+        <form id="cmd-form">
+            <input type="hidden" id="cmd-form-id" value="" />
+            <div class="mb-4">
+                <label class="block text-sm text-cream/70 mb-1">名称</label>
+                <input
+                    type="text"
+                    id="cmd-form-name"
+                    class="w-full bg-black/30 border border-cream/10 rounded-lg px-4 py-2 text-cream placeholder-cream/30 focus:outline-none focus:border-gold-400/50"
+                    placeholder="例如：查看磁盘空间"
+                    required
+                />
+            </div>
+            <div class="mb-4">
+                <label class="block text-sm text-cream/70 mb-1">类型</label>
+                <select
+                    id="cmd-form-type"
+                    class="w-full bg-black/30 border border-cream/10 rounded-lg px-4 py-2 text-cream focus:outline-none focus:border-gold-400/50"
+                >
+                    <option value="cmd">CMD 命令（服务端执行）</option>
+                    <option value="script">MiniScript 脚本（前端执行）</option>
+                </select>
+            </div>
+            <div class="mb-4">
+                <label class="block text-sm text-cream/70 mb-1">内容</label>
+                <textarea
+                    id="cmd-form-command"
+                    class="w-full bg-black/30 border border-cream/10 rounded-lg px-4 py-2 text-cream placeholder-cream/30 focus:outline-none focus:border-gold-400/50 font-mono text-sm"
+                    placeholder="CMD 命令或 MiniScript 代码"
+                    rows="5"
+                    required
+                ></textarea>
+            </div>
+            <div class="mb-4">
+                <label class="block text-sm text-cream/70 mb-1">描述（可选）</label>
+                <input
+                    type="text"
+                    id="cmd-form-desc"
+                    class="w-full bg-black/30 border border-cream/10 rounded-lg px-4 py-2 text-cream placeholder-cream/30 focus:outline-none focus:border-gold-400/50"
+                    placeholder="简短描述"
+                />
+            </div>
+            <div class="mb-6">
+                <label class="block text-sm text-cream/70 mb-1">排序</label>
+                <input
+                    type="number"
+                    id="cmd-form-sort"
+                    class="w-full bg-black/30 border border-cream/10 rounded-lg px-4 py-2 text-cream placeholder-cream/30 focus:outline-none focus:border-gold-400/50"
+                    value="0"
+                />
+            </div>
+            <div class="flex gap-3">
+                <button
+                    type="button"
+                    id="cmd-modal-cancel"
+                    class="flex-1 py-2 bg-cream/10 text-cream rounded-lg hover:bg-cream/20 transition-colors"
+                >
+                    取消
+                </button>
+                <button
+                    type="submit"
+                    class="flex-1 py-2 bg-gold-400 text-forest-900 font-bold rounded-lg hover:bg-gold-500 transition-colors"
+                >
+                    保存
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+    /* 终端弹窗动画 */
+    .terminal-fade-in {
+        animation: terminalFadeIn 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    }
+    .terminal-fade-out {
+        animation: terminalFadeOut 0.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    }
+    @keyframes terminalFadeIn {
+        from { opacity: 0; transform: translateY(20px) scale(0.97); }
+        to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    @keyframes terminalFadeOut {
+        from { opacity: 1; transform: translateY(0) scale(1); }
+        to   { opacity: 0; transform: translateY(10px) scale(0.98); }
+    }
+    /* 弹窗遮罩淡入 */
+    .modal-backdrop-fade {
+        animation: backdropFade 0.25s ease forwards;
+    }
+    @keyframes backdropFade {
+        from { opacity: 0; }
+        to   { opacity: 1; }
+    }
+    /* CmdModal 动画 */
+    #cmd-modal-root .cmd-modal-enter {
+        animation: cmdModalEnter 0.22s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    }
+    #cmd-modal-root .cmd-modal-leave {
+        animation: cmdModalLeave 0.18s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    }
+    @keyframes cmdModalEnter {
+        from { opacity: 0; transform: translateY(14px) scale(0.96); }
+        to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    @keyframes cmdModalLeave {
+        from { opacity: 1; transform: translateY(0) scale(1); }
+        to   { opacity: 0; transform: translateY(8px) scale(0.98); }
+    }
+</style>
+
+<script src="{{ url_for('static', filename='js/cmd/modal.js', v='1') }}"></script>
+<script src="{{ url_for('static', filename='js/cmd/script.js', v='1') }}"></script>
+<script src="{{ url_for('static', filename='js/cmd/terminal.js', v='1') }}"></script>
+<script src="{{ url_for('static', filename='js/cmd/presets.js', v='1') }}"></script>
+<script src="{{ url_for('static', filename='js/cmd/main.js', v='1') }}"></script>
+{% endblock %}

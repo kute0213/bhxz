@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}注册{% endblock %}
+{% block content %}
+    <section class="page-container flex items-center justify-center py-12">
+        <div class="max-w-md w-full mx-6">
+            <div class="pixel-card rounded-xl p-8">
+                <div class="text-center mb-8">
+                    <div class="w-16 h-16 mx-auto bg-gold-400/20 rounded-full flex items-center justify-center mb-4">
+                        <i data-lucide="user-plus" class="w-8 h-8 text-gold-400"></i>
+                    </div>
+                    <h1 class="text-2xl font-bold mb-2">创建账户</h1>
+                    <p class="text-cream/60 text-sm">加入服务器社区，分享你的创意</p>
+                </div>
+
+                {% if error %}
+                <div class="mb-6 p-4 bg-red-900/30 border border-red-500/30 rounded-lg text-red-300 text-sm">
+                    <i data-lucide="alert-circle" class="w-4 h-4 inline mr-1"></i>{{ error }}
+                </div>
+                {% endif %}
+
+                <form method="POST" class="space-y-5">
+                    <div>
+                        <label class="block text-sm font-medium mb-2 text-cream/80">用户名</label>
+                        <input type="text" name="username" required minlength="2" maxlength="20" class="input-field w-full px-4 py-3 rounded-lg" placeholder="2-20 个字符">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-2 text-cream/80">密码</label>
+                        <input type="password" name="password" required minlength="6" class="input-field w-full px-4 py-3 rounded-lg" placeholder="至少 6 位">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-2 text-cream/80">确认密码</label>
+                        <input type="password" name="confirm" required minlength="6" class="input-field w-full px-4 py-3 rounded-lg" placeholder="再次输入密码">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-2 text-cream/80">群内验证码</label>
+                        <input type="text" name="verify_code" required class="input-field w-full px-4 py-3 rounded-lg" placeholder="请输入群内验证码">
+                        <p class="mt-2 text-xs text-cream/50">
+                            <i data-lucide="info" class="w-3 h-3 inline mr-1"></i>
+                            为防止非小镇玩家捣乱，注册需输入群内验证码，可在 QQ 群公告中获取
+                        </p>
+                    </div>
+                    <button type="submit" class="btn-primary w-full py-3 rounded-lg font-bold">注册</button>
+                </form>
+
+                <div class="mt-6 pt-6 border-t border-forest-700 text-center">
+                    <p class="text-sm text-cream/60">
+                        已有账户？ <a href="{{ url_for('main.login') }}" class="text-gold-400 hover:text-gold-500 font-medium">立即登录</a>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+{% endblock %}

@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}页面未找到{% endblock %}
+{% block content %}
+    <section class="page-container flex items-center justify-center">
+        <div class="text-center px-6">
+            <div class="w-24 h-24 mx-auto bg-gold-400/10 rounded-full flex items-center justify-center mb-8">
+                <i data-lucide="compass" class="w-12 h-12 text-gold-400 opacity-50"></i>
+            </div>
+            <h1 class="text-6xl font-black text-gold-400 mb-4">404</h1>
+            <p class="text-xl text-cream mb-2">你迷路啦</p>
+            <p class="text-cream/60 mb-8">这里没有你要找的页面</p>
+            <a href="{{ url_for('main.home') }}" class="btn-primary px-8 py-3 rounded-xl font-bold inline-flex items-center gap-2">
+                <i data-lucide="home" class="w-5 h-5"></i>返回首页
+            </a>
+        </div>
+    </section>
+{% endblock %}

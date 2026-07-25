@@ -1,0 +1,217 @@
+{% extends "base.html" %}
+{% block title %}文档中心{% endblock %}
+{% block content %}
+<section class="page-container py-12">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="text-center mb-8">
+            <h1 class="text-2xl sm:text-3xl font-bold mb-3">文档中心</h1>
+            <p class="text-cream/60 text-sm">项目文档与使用说明</p>
+        </div>
+
+        <div class="flex flex-col lg:flex-row gap-6">
+            <!-- 侧边栏 -->
+            <aside class="lg:w-64 flex-shrink-0">
+                <div class="pixel-card rounded-xl p-4 lg:sticky lg:top-6">
+                    <h2 class="text-sm font-bold text-cream/70 mb-3 px-2">文档列表</h2>
+                    <ul id="docs-sidebar" class="space-y-1">
+                        <li class="text-cream/40 text-sm px-3 py-2">加载中...</li>
+                    </ul>
+                </div>
+            </aside>
+
+            <!-- 内容区 -->
+            <div class="flex-1 min-w-0">
+                <div class="pixel-card rounded-xl p-6 sm:p-8 lg:p-10">
+                    <div id="docs-content" class="prose-docs">
+                        <p class="text-cream/50 text-center py-12">选择左侧文档开始阅读</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<style>
+.prose-docs h1 { font-size: 1.75rem; font-weight: 700; color: #f5e6c8; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid rgba(245,230,200,0.1); }
+.prose-docs h2 { font-size: 1.4rem; font-weight: 600; color: #f5e6c8; margin-top: 2rem; margin-bottom: 0.75rem; }
+.prose-docs h3 { font-size: 1.15rem; font-weight: 600; color: #d4b878; margin-top: 1.5rem; margin-bottom: 0.5rem; }
+.prose-docs h4 { font-size: 1rem; font-weight: 600; color: #d4b878; margin-top: 1rem; margin-bottom: 0.5rem; }
+.prose-docs p { color: rgba(245,230,200,0.8); line-height: 1.8; margin-bottom: 1rem; }
+.prose-docs ul, .prose-docs ol { color: rgba(245,230,200,0.8); line-height: 1.8; margin-bottom: 1rem; padding-left: 1.5rem; }
+.prose-docs li { margin-bottom: 0.25rem; }
+.prose-docs code { background: rgba(0,0,0,0.3); padding: 0.15rem 0.4rem; border-radius: 0.25rem; font-size: 0.875rem; color: #d4b878; font-family: monospace; }
+.prose-docs pre { background: rgba(0,0,0,0.4); border: 1px solid rgba(245,230,200,0.1); border-radius: 0.5rem; padding: 1rem; overflow-x: auto; margin-bottom: 1rem; }
+.prose-docs pre code { background: none; padding: 0; color: #a8d8a8; font-size: 0.85rem; line-height: 1.6; }
+.prose-docs table { width: 100%; border-collapse: collapse; margin-bottom: 1rem; }
+.prose-docs th { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 2px solid rgba(245,230,200,0.15); color: #f5e6c8; font-weight: 600; font-size: 0.9rem; }
+.prose-docs td { padding: 0.5rem 0.75rem; border-bottom: 1px solid rgba(245,230,200,0.08); color: rgba(245,230,200,0.7); font-size: 0.9rem; }
+.prose-docs blockquote { border-left: 3px solid rgba(212,184,120,0.5); padding-left: 1rem; margin: 1rem 0; color: rgba(245,230,200,0.6); }
+.prose-docs a { color: #d4b878; text-decoration: underline; }
+.prose-docs hr { border: none; border-top: 1px solid rgba(245,230,200,0.1); margin: 2rem 0; }
+.prose-docs strong { color: #f5e6c8; font-weight: 600; }
+.docs-sidebar-item { display: block; padding: 0.5rem 0.75rem; border-radius: 0.5rem; color: rgba(245,230,200,0.6); font-size: 0.9rem; cursor: pointer; transition: all 0.2s; }
+.docs-sidebar-item:hover { background: rgba(245,230,200,0.05); color: rgba(245,230,200,0.9); }
+.docs-sidebar-item.active { background: rgba(212,184,120,0.15); color: #d4b878; font-weight: 600; }
+</style>
+
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script>
+(function () {
+    const sidebar = document.getElementById('docs-sidebar');
+    const content = document.getElementById('docs-content');
+    let currentDoc = null;
+
+    // --------------------------------------------------------
+    // 配置 marked.js：为标题生成 id 锚点
+    // 规则与 GitHub slugger 兼容，并保留中文字符：
+    //   - 转小写
+    //   - 去除标点 (.) ; : , ! ? ( ) （） / \
+    //   - 空格转 -
+    //   - 合并多个连字号
+    // 这样 [页面布局](#1-页面布局) 可对应到 ## 1. 页面布局 的 id="1-页面布局"
+    // --------------------------------------------------------
+    function slugify(text) {
+        // 去 HTML 标签
+        text = String(text).replace(/<[^>]+>/g, '');
+        // 转小写
+        text = text.toLowerCase();
+        // 去除常见标点（中英文）
+        text = text.replace(/[.,;:!?\(\)（）\/\\]/g, '');
+        // 空白转连字号
+        text = text.replace(/\s+/g, '-');
+        // 合并多个连字号
+        text = text.replace(/-+/g, '-');
+        // 去首尾连字号
+        text = text.replace(/^-+|-+$/g, '');
+        return text;
+    }
+
+    // 用于记录已用 id，避免重复
+    const usedIds = {};
+    function uniqueId(base) {
+        let id = base;
+        let n = 2;
+        while (usedIds[id]) {
+            id = base + '-' + n;
+            n++;
+        }
+        usedIds[id] = true;
+        return id;
+    }
+
+    // marked v5+ 使用 renderer 扩展为标题添加 id
+    const renderer = {
+        heading({ text, depth }) {
+            const raw = text;
+            const slug = uniqueId(slugify(raw));
+            return `<h${depth} id="${slug}">${text}</h${depth}>\n`;
+        }
+    };
+    marked.use({ renderer });
+
+    // 加载文档列表
+    fetch('/docs/api/list')
+        .then(r => r.json())
+        .then(data => {
+            if (!data.docs || data.docs.length === 0) {
+                sidebar.innerHTML = '<li class="text-cream/40 text-sm px-3 py-2">暂无文档</li>';
+                return;
+            }
+            sidebar.innerHTML = data.docs.map(doc =>
+                '<li><span class="docs-sidebar-item" data-filename="' + doc.filename + '">' + escapeHtml(doc.title) + '</span></li>'
+            ).join('');
+
+            sidebar.querySelectorAll('.docs-sidebar-item').forEach(item => {
+                item.addEventListener('click', () => loadDoc(item.dataset.filename, item));
+            });
+
+            // 默认加载第一个文档
+            const first = sidebar.querySelector('.docs-sidebar-item');
+            if (first) loadDoc(first.dataset.filename, first);
+        })
+        .catch(err => {
+            sidebar.innerHTML = '<li class="text-red-400 text-sm px-3 py-2">加载失败</li>';
+        });
+
+    function loadDoc(filename, item) {
+        if (currentDoc === filename) return;
+        currentDoc = filename;
+
+        // 高亮当前
+        sidebar.querySelectorAll('.docs-sidebar-item').forEach(el => el.classList.remove('active'));
+        if (item) item.classList.add('active');
+
+        content.innerHTML = '<p class="text-cream/50 text-center py-12">加载中...</p>';
+
+        fetch('/docs/api/content/' + filename)
+            .then(r => r.json())
+            .then(data => {
+                if (data.error) {
+                    content.innerHTML = '<p class="text-red-400 text-center py-12">' + escapeHtml(data.error) + '</p>';
+                    return;
+                }
+                // 重置 id 缓存（不同文档可能有相同标题）
+                for (const k in usedIds) delete usedIds[k];
+                const html = marked.parse(data.content);
+                content.innerHTML = html;
+
+                // 处理 URL hash（首次加载或刷新时若 URL 带 #锚点）
+                if (location.hash) {
+                    const target = content.querySelector(
+                        '[id="' + decodeURIComponent(location.hash.slice(1)) + '"]'
+                    );
+                    if (target) setTimeout(() => target.scrollIntoView({ behavior: 'smooth' }), 50);
+                } else {
+                    content.scrollIntoView({ behavior: 'smooth' });
+                }
+            })
+            .catch(err => {
+                content.innerHTML = '<p class="text-red-400 text-center py-12">加载失败: ' + escapeHtml(err.message) + '</p>';
+            });
+    }
+
+    // --------------------------------------------------------
+    // 处理文档内本页链接点击（[xxx](#锚点)）
+    // - 阻止浏览器默认跳转
+    // - 手动滚动到对应 id 的元素
+    // - 更新 URL hash（不触发页面刷新）
+    // --------------------------------------------------------
+    content.addEventListener('click', function (e) {
+        const link = e.target.closest('a[href^="#"]');
+        if (!link) return;
+
+        const href = link.getAttribute('href');
+        // 仅处理 #xxx 形式（排除纯 #）
+        if (href === '#' || href.length < 2) return;
+
+        // 跳过页面过渡动画拦截（base.html 中 # 开头的链接本就跳过）
+        const hash = href.slice(1);
+        // 标题 id 可能含中文，浏览器编码后的 hash 需 decodeURIComponent
+        const target = content.querySelector('[id="' + hash + '"]') ||
+                       content.querySelector('[id="' + decodeURIComponent(hash) + '"]');
+        if (target) {
+            e.preventDefault();
+            // 更新 URL hash 但不触发 hashchange 事件循环
+            history.replaceState(null, '', '#' + hash);
+            target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            // 移动焦点以便键盘可访问
+            target.setAttribute('tabindex', '-1');
+            target.focus({ preventScroll: true });
+        }
+    });
+
+    // 监听浏览器后退/前进产生的 hashchange
+    window.addEventListener('hashchange', function () {
+        if (!location.hash || !currentDoc) return;
+        const target = content.querySelector('[id="' + decodeURIComponent(location.hash.slice(1)) + '"]');
+        if (target) target.scrollIntoView({ behavior: 'smooth' });
+    });
+
+    function escapeHtml(str) {
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
+    }
+})();
+</script>
+{% endblock %}

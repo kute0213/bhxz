@@ -1,0 +1,4 @@
+Flask>=3.0.0
+cheroot>=10.0.0
+psutil>=5.9.0
+duckdb>=1.0.0

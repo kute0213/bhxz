@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block title %}定时任务管理{% endblock %}
+{% block content %}
+<section class="page-container py-12">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="text-center mb-8 sm:mb-10">
+            <h1 class="text-2xl sm:text-3xl font-bold mb-3">定时任务管理</h1>
+            <p class="text-cream/60 text-sm sm:text-base">设置定时执行的 CMD 命令，支持间隔执行、每日定时、一次性执行</p>
+        </div>
+
+        <!-- 顶部操作栏 -->
+        <div class="flex flex-wrap gap-3 mb-6 justify-center sm:justify-start">
+            <a href="{{ url_for('cmd.cmd_page') }}"
+               class="px-5 py-2.5 bg-forest-700/60 border border-cream/10 text-cream rounded-lg hover:bg-forest-600/60 transition-colors flex items-center gap-2">
+                <i data-lucide="arrow-left" class="w-5 h-5"></i>
+                返回 CMD 控制台
+            </a>
+            <button id="create-task-btn"
+                    class="px-5 py-2.5 bg-gold-400 text-forest-900 font-bold rounded-lg hover:bg-gold-500 transition-colors flex items-center gap-2">
+                <i data-lucide="plus" class="w-5 h-5"></i>
+                创建定时任务
+            </button>
+            <button id="view-logs-btn"
+                    class="px-5 py-2.5 bg-purple-600/30 border border-purple-400/30 text-purple-200 rounded-lg hover:bg-purple-600/40 transition-colors flex items-center gap-2">
+                <i data-lucide="scroll-text" class="w-5 h-5"></i>
+                执行日志
+            </button>
+        </div>
+
+        <!-- 任务列表 -->
+        <div id="task-list-container" class="space-y-4">
+            <!-- 由 JS 动态填充 -->
+        </div>
+
+        <!-- 空状态 -->
+        <div id="empty-state" class="hidden text-center py-16">
+            <i data-lucide="calendar-clock" class="w-16 h-16 text-cream/20 mx-auto mb-4"></i>
+            <p class="text-cream/40">暂无定时任务，点击「创建定时任务」开始</p>
+        </div>
+    </div>
+</section>
+
+<!-- 创建/编辑任务模态框 -->
+<div id="task-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4"
+     style="background: rgba(0,0,0,0.6);">
+    <div class="bg-forest-800 border border-cream/10 rounded-xl shadow-2xl w-full max-w-lg p-6">
+        <h2 id="task-modal-title" class="text-xl font-bold mb-6">创建定时任务</h2>
+        <form id="task-form" class="space-y-4">
+            <input type="hidden" id="task-id" value="">
+            <div>
+                <label class="block text-sm font-medium text-cream/70 mb-1">任务名称</label>
+                <input type="text" id="task-name" required
+                       class="w-full px-3 py-2 bg-forest-900/60 border border-cream/10 rounded-lg text-cream focus:border-gold-400 focus:outline-none"
+                       placeholder="如：每日备份">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-cream/70 mb-1">执行命令</label>
+                <textarea id="task-command" required rows="3"
+                          class="w-full px-3 py-2 bg-forest-900/60 border border-cream/10 rounded-lg text-cream focus:border-gold-400 focus:outline-none font-mono text-sm"
+                          placeholder="如：echo 'Hello World'"></textarea>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-cream/70 mb-1">调度类型</label>
+                <select id="task-schedule-type"
+                        class="w-full px-3 py-2 bg-forest-900/60 border border-cream/10 rounded-lg text-cream focus:border-gold-400 focus:outline-none">
+                    <option value="interval">间隔执行（每 N 秒/分钟/小时）</option>
+                    <option value="daily">每日定时（指定时间）</option>
+                    <option value="once">一次性执行（指定时间）</option>
+                </select>
+            </div>
+            <div id="interval-config">
+                <label class="block text-sm font-medium text-cream/70 mb-1">执行间隔（秒）</label>
+                <div class="flex gap-2">
+                    <input type="number" id="task-interval" value="3600" min="1"
+                           class="flex-1 px-3 py-2 bg-forest-900/60 border border-cream/10 rounded-lg text-cream focus:border-gold-400 focus:outline-none">
+                    <button type="button" data-interval="60" class="quick-interval px-3 py-2 bg-forest-700/60 border border-cream/10 rounded-lg text-xs text-cream/70 hover:bg-forest-600/60">1分</button>
+                    <button type="button" data-interval="3600" class="quick-interval px-3 py-2 bg-forest-700/60 border border-cream/10 rounded-lg text-xs text-cream/70 hover:bg-forest-600/60">1时</button>
+                    <button type="button" data-interval="86400" class="quick-interval px-3 py-2 bg-forest-700/60 border border-cream/10 rounded-lg text-xs text-cream/70 hover:bg-forest-600/60">1天</button>
+                </div>
+            </div>
+            <div id="time-config" class="hidden">
+                <label class="block text-sm font-medium text-cream/70 mb-1" id="time-label">执行时间</label>
+                <input type="datetime-local" id="task-execute-at"
+                       class="w-full px-3 py-2 bg-forest-900/60 border border-cream/10 rounded-lg text-cream focus:border-gold-400 focus:outline-none">
+            </div>
+            <div class="flex gap-3 pt-4">
+                <button type="submit"
+                        class="flex-1 px-4 py-2.5 bg-gold-400 text-forest-900 font-bold rounded-lg hover:bg-gold-500 transition-colors">
+                    保存
+                </button>
+                <button type="button" id="task-modal-cancel"
+                        class="px-4 py-2.5 bg-forest-700/60 border border-cream/10 text-cream rounded-lg hover:bg-forest-600/60 transition-colors">
+                    取消
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- 执行日志模态框 -->
+<div id="logs-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4"
+     style="background: rgba(0,0,0,0.6);">
+    <div class="bg-forest-800 border border-cream/10 rounded-xl shadow-2xl w-full max-w-3xl max-h-[80vh] flex flex-col">
+        <div class="flex items-center justify-between p-6 pb-4 border-b border-cream/10">
+            <h2 class="text-xl font-bold">执行日志</h2>
+            <button id="logs-modal-close" class="text-cream/60 hover:text-cream">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+        </div>
+        <div id="logs-content" class="overflow-y-auto p-6 space-y-3 flex-1">
+            <!-- 由 JS 动态填充 -->
+        </div>
+        <div id="logs-pagination" class="flex items-center justify-center gap-2 p-4 border-t border-cream/10">
+            <!-- 分页控件 -->
+        </div>
+    </div>
+</div>
+
+<!-- 输出详情模态框 -->
+<div id="output-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4"
+     style="background: rgba(0,0,0,0.6);">
+    <div class="bg-forest-800 border border-cream/10 rounded-xl shadow-2xl w-full max-w-3xl max-h-[80vh] flex flex-col">
+        <div class="flex items-center justify-between p-6 pb-4 border-b border-cream/10">
+            <h2 class="text-xl font-bold">执行输出</h2>
+            <button id="output-modal-close" class="text-cream/60 hover:text-cream">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+        </div>
+        <div class="overflow-auto p-6 flex-1">
+            <pre id="output-content" class="text-sm text-cream/80 font-mono whitespace-pre-wrap break-all"></pre>
+        </div>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/cmd/scheduled.js') }}"></script>
+{% endblock %}
