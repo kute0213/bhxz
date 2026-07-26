@@ -13,3 +13,4 @@ from routes.cmd import script     # noqa: E402,F401  （含 _admin_check，需�
 from routes.cmd import pages      # noqa: E402,F401
 from routes.cmd import commands   # noqa: E402,F401
 from routes.cmd import execution  # noqa: E402,F401
+from routes.cmd import scripts    # noqa: E402,F401

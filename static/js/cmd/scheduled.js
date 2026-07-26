@@ -208,49 +208,81 @@ window.ScheduledCore = (function () {
     }
 
     // ------------------------------------------------------------------
-    // 从快捷命令选择：加载已有快捷命令列表填充下拉框
+    // 从快捷命令/脚本选择：加载已有快捷命令和脚本列表填充下拉框
     // ------------------------------------------------------------------
 
-    // 拉取 /admin/cmd/commands 列表并填充下拉框，返回 Promise
+    // 拉取快捷命令和脚本列表并填充下拉框，返回 Promise
     function loadPresets() {
-        return fetch('/admin/cmd/commands')
-            .then(function (r) { return r.json(); })
-            .then(function (data) {
+        return Promise.all([
+            fetch('/admin/cmd/commands').then(function (r) { return r.json(); }),
+            fetch('/admin/cmd/scripts').then(function (r) { return r.json(); }).catch(function () { return { scripts: [] }; })
+        ])
+            .then(function (results) {
+                var cmdData = results[0];
+                var scriptData = results[1];
                 if (!taskPresetSelect) return;
+
                 // 保留首个「-- 手动输入 --」选项，清空其余
                 taskPresetSelect.innerHTML = '<option value="">-- 手动输入 --</option>';
-                var commands = data.commands || [];
-                commands.forEach(function (cmd) {
-                    var opt = document.createElement('option');
-                    opt.value = cmd.id;
-                    // 在名称后追加描述前缀提示，便于用户辨识脚本类命令
-                    var isScript = cmd.description && cmd.description.indexOf('[脚本]') === 0;
-                    opt.textContent = cmd.name + (isScript ? '（脚本）' : '');
-                    // 通过 dataset 携带完整数据，避免后续二次请求
-                    opt.dataset.name = cmd.name || '';
-                    opt.dataset.command = cmd.command || '';
-                    opt.dataset.description = cmd.description || '';
-                    taskPresetSelect.appendChild(opt);
+
+                // 添加脚本分组
+                var scripts = scriptData.scripts || [];
+                if (scripts.length > 0) {
+                    var scriptGroup = document.createElement('optgroup');
+                    scriptGroup.label = '脚本（文件系统）';
+                    scripts.forEach(function (s) {
+                        var opt = document.createElement('option');
+                        opt.value = 'script:' + s.filename;
+                        opt.textContent = s.name + '（脚本）';
+                        opt.dataset.name = s.name || '';
+                        opt.dataset.command = s.filename || '';
+                        opt.dataset.type = 'script';
+                        opt.dataset.isFileScript = '1';
+                        scriptGroup.appendChild(opt);
+                    });
+                    taskPresetSelect.appendChild(scriptGroup);
+                }
+
+                // 添加 Shell 命令分组（排除脚本类型）
+                var allCommands = cmdData.commands || [];
+                var shellCommands = allCommands.filter(function (c) {
+                    return !(c.description && c.description.indexOf('[脚本]') === 0);
                 });
+                if (shellCommands.length > 0) {
+                    var cmdGroup = document.createElement('optgroup');
+                    cmdGroup.label = '快捷命令（Shell）';
+                    shellCommands.forEach(function (cmd) {
+                        var opt = document.createElement('option');
+                        opt.value = 'cmd:' + cmd.id;
+                        opt.textContent = cmd.name;
+                        opt.dataset.name = cmd.name || '';
+                        opt.dataset.command = cmd.command || '';
+                        opt.dataset.type = 'shell';
+                        cmdGroup.appendChild(opt);
+                    });
+                    taskPresetSelect.appendChild(cmdGroup);
+                }
             })
             .catch(function (err) {
                 // 加载失败时静默处理，不影响手动输入
-                console.error('加载快捷命令列表失败:', err);
+                console.error('加载预设列表失败:', err);
             });
     }
 
-    // 选择某个快捷命令后自动填充表单：command / name / task_type
-    function onPresetSelect(cmdId) {
-        if (!cmdId) return;
+    // 选择某个预设后自动填充表单：command / name / task_type
+    function onPresetSelect(value) {
+        if (!value) return;
         // 优先从 option dataset 取数据，避免重复请求
-        var opt = taskPresetSelect.querySelector('option[value="' + cmdId + '"]');
+        var opt = taskPresetSelect.querySelector('option[value="' + escapeSelector(value) + '"]');
         if (!opt) return;
 
         var name = opt.dataset.name || '';
         var command = opt.dataset.command || '';
-        var description = opt.dataset.description || '';
+        var type = opt.dataset.type || 'shell';
+        var isFileScript = opt.dataset.isFileScript === '1';
 
         // 填充命令内容
+        // 如果是文件脚本，command 存的是文件名
         taskCommandInput.value = command;
 
         // 仅在名称为空时自动填充，避免覆盖用户已输入的名称
@@ -259,13 +291,14 @@ window.ScheduledCore = (function () {
             nameInput.value = name;
         }
 
-        // 根据描述前缀判断任务类型
-        if (description.indexOf('[脚本]') === 0) {
-            taskTypeSelect.value = 'script';
-        } else {
-            taskTypeSelect.value = 'shell';
-        }
+        // 设置任务类型
+        taskTypeSelect.value = type;
         toggleTaskTypeConfig();
+    }
+
+    function escapeSelector(str) {
+        // CSS 选择器转义，用于包含特殊字符的 value
+        return str.replace(/([!"#$%&'()*+,.\/:;<=>?@\[\\\]^`{|}~])/g, '\\$1');
     }
 
     // ------------------------------------------------------------------

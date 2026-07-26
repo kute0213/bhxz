@@ -7,6 +7,13 @@
 ## [未发布]
 
 ### 新增
+- 脚本文件系统：MiniScript 脚本从数据库移到 `scripts/` 目录，每个脚本一个独立 `.py` 文件，文件头注释存储名称和描述元数据
+- 脚本管理服务（`services/script_manager.py`）：增删改查、文件名安全检查、元数据解析
+- 脚本文件 API（`/admin/cmd/scripts`）：列表、获取、保存、删除
+- 编辑器可折叠侧边栏：左侧显示脚本文件列表，支持展开/收起（localStorage 记忆状态）、点击打开、新建脚本
+- CMD 控制台首页分开展示「脚本」和「快捷命令」两个区块
+- 定时任务从文件系统读取脚本内容执行，`command` 字段存储文件名
+- 一次性迁移脚本 `migrate_scripts_to_files.py`：将数据库中脚本类命令迁移到文件系统
 - 前端实时 Python 语法检查（`editor-highlight.js` 新增 `registerDiagnostics` / `checkPythonSyntax`）：检查括号匹配、缩进一致性、冒号缺失、续行符错误、未闭合字符串，编辑器内实时显示错误波浪线
 - 定时任务「从快捷命令选择」功能：创建/编辑定时任务时可直接从已有快捷命令列表中选择，自动填充命令内容和任务类型
 - 代码结构重组：6 个大文件拆分为包结构（`core/db/`、`services/monitoring/`、`routes/community/`、`routes/admin/`、`routes/cmd/`、`routes/scheduled/`）

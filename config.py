@@ -3,6 +3,7 @@ import os
 APP_ROOT = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(APP_ROOT, 'site.duckdb')
 UPLOAD_DIR = os.path.join(APP_ROOT, 'uploads')
+SCRIPTS_DIR = os.path.join(APP_ROOT, 'scripts')
 ALLOWED_EXTENSIONS = None
 MAX_CONTENT_LENGTH = 100 * 1024 * 1024
 SECRET_KEY = 'mc_server_site_random_secret_key_2024'
@@ -81,3 +82,4 @@ SCRIPT_EXECUTOR_POOL_SIZE = 2
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(BACKUP_DIR, exist_ok=True)
+os.makedirs(SCRIPTS_DIR, exist_ok=True)

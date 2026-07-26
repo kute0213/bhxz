@@ -157,8 +157,13 @@ class TaskScheduler:
 
         try:
             if task_type == 'script':
-                # MiniScript 脚本任务：定时模式执行（非交互）
-                success, output, exit_code = self._execute_script_task(task['command'])
+                # MiniScript 脚本任务：从文件系统读取脚本内容再执行
+                from services.script_manager import get_script
+                script_info = get_script(task['command'])
+                if not script_info:
+                    raise Exception(f"脚本文件不存在: {task['command']}")
+                # 用脚本内容执行
+                success, output, exit_code = self._execute_script_task(script_info['content'])
             else:
                 # 默认 shell 命令任务
                 result = subprocess.run(
