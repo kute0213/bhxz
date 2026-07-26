@@ -105,9 +105,9 @@
 │           ├── terminal.js       #       终端弹窗（SSE 流式输出 + 拖拽 + 动画 + 固定尺寸滚动）
 │           ├── presets.js        #       快捷命令管理（增删改查，按 [脚本] 前缀区分类型）
 │           ├── editor.js         #       脚本编辑器核心（Monaco 初始化、工具栏、输出面板）
-│           ├── editor-highlight.js  #    编辑器语法高亮 / 补全 / 主题（拆分自 editor.js）
+│           ├── editor-highlight.js  #    编辑器语法高亮 / 补全 / 主题 / 实时语法诊断（拆分自 editor.js）
 │           ├── editor-sse.js     #       编辑器 SSE 执行 / 事件分发 / 强制终止（拆分自 editor.js）
-│           ├── scheduled.js      #       定时任务管理核心（任务列表/创建/编辑/启停/触发）
+│           ├── scheduled.js      #       定时任务管理核心（任务列表/创建/编辑/启停/触发/从快捷命令选择）
 │           ├── scheduled-logs.js #       定时任务执行日志查看（拆分自 scheduled.js）
 │           └── main.js           #       主入口（整合各模块 + 后端 SSE 脚本执行）
 │
@@ -322,9 +322,9 @@ CMD 控制台提供实时终端、快捷命令管理、专业脚本编辑器（M
 | 终端弹窗 | [terminal.js](file:///workspace/static/js/cmd/terminal.js) | SSE 流式输出、命令历史（↑↓）、清屏快捷键、脚本运行中止按钮 |
 | 快捷命令 | [presets.js](file:///workspace/static/js/cmd/presets.js) | 增删改查一键命令（CMD / 脚本两种类型，按 `[脚本]` 前缀区分） |
 | 脚本编辑器核心 | [editor.js](file:///workspace/static/js/cmd/editor.js) | Monaco 初始化、工具栏绑定、输出面板管理 |
-| 编辑器高亮 | [editor-highlight.js](file:///workspace/static/js/cmd/editor-highlight.js) | Monaco Python 语法高亮、代码补全、自定义主题（拆分自 editor.js） |
+| 编辑器高亮 | [editor-highlight.js](file:///workspace/static/js/cmd/editor-highlight.js) | Monaco Python 语法高亮、代码补全、自定义主题、**前端实时语法诊断**（拆分自 editor.js） |
 | 编辑器 SSE | [editor-sse.js](file:///workspace/static/js/cmd/editor-sse.js) | SSE 执行、事件分发、强制终止（拆分自 editor.js） |
-| 定时任务核心 | [scheduled.js](file:///workspace/static/js/cmd/scheduled.js) | 任务列表/创建/编辑/启停/触发/状态轮询，暴露 `window.ScheduledCore` |
+| 定时任务核心 | [scheduled.js](file:///workspace/static/js/cmd/scheduled.js) | 任务列表/创建/编辑/启停/触发/状态轮询、**从已有快捷命令选择填充**，暴露 `window.ScheduledCore` |
 | 定时任务日志 | [scheduled-logs.js](file:///workspace/static/js/cmd/scheduled-logs.js) | 执行日志查看（分页/详情），暴露 `window.ScheduledLogs.openLogsModal`（拆分自 scheduled.js） |
 | 主入口 | [main.js](file:///workspace/static/js/cmd/main.js) | 整合各模块、通过后端 SSE API 执行脚本、交互事件处理 |
 | 页内弹窗 | [modal.js](file:///workspace/static/js/cmd/modal.js) | 替代原生 alert/prompt/confirm，返回 Promise 支持 async/await |
@@ -594,4 +594,4 @@ server {
 
 ## 更新日志
 
-项目的版本变更历史详见 [CHANGELOG.md](file:///workspace/CHANGELOG.md)。
+项目的版本变更历史详见 [docs/CHANGELOG.md](file:///workspace/docs/CHANGELOG.md)。

@@ -26,6 +26,7 @@ window.CmdModal = (function () {
     let actionsEl = null;
 
     let pending = null; // { resolve, type }
+    let closeTimer = null; // close() 的超时 fallback 定时器
 
     function build() {
         if (root) return;
@@ -115,6 +116,11 @@ window.CmdModal = (function () {
     // --------------------------------------------------------
     function show() {
         build();
+        // 清除上次 close() 的超时 fallback，防止新弹窗被旧定时器隐藏
+        if (closeTimer) {
+            clearTimeout(closeTimer);
+            closeTimer = null;
+        }
         root.style.display = 'flex';
         // 重启动画
         container.classList.remove('cmd-modal-leave');
@@ -130,6 +136,11 @@ window.CmdModal = (function () {
 
     function close() {
         if (!root) return;
+        // 清除已有的定时器，避免重复
+        if (closeTimer) {
+            clearTimeout(closeTimer);
+            closeTimer = null;
+        }
         container.classList.remove('cmd-modal-enter');
         container.classList.add('cmd-modal-leave');
 
@@ -148,7 +159,10 @@ window.CmdModal = (function () {
         container.addEventListener('animationend', onEnd);
 
         // 超时 fallback：300ms 后强制关闭，防止动画未定义导致弹窗无法关闭
-        setTimeout(finish, 300);
+        closeTimer = setTimeout(function () {
+            closeTimer = null;
+            finish();
+        }, 300);
     }
 
     // --------------------------------------------------------

@@ -166,19 +166,267 @@ window.ScriptEditorHighlight = (function () {
     }
 
     // ----------------------------------------------------------------
-    // 状态栏错误标记（前端不再做实时语法诊断，状态恒为"语法正确"）
-    // 后端执行时会通过 SSE error 事件回传错误，由 editor-sse.js 处理
+    // 状态栏错误标记：根据前端实时诊断结果展示「语法正确」或「N 个错误」
+    // 后端执行时仍会通过 SSE error 事件回传运行时错误，由 editor-sse.js 处理
     // ----------------------------------------------------------------
     function updateStatusBadge(errorCount) {
         const badge = document.getElementById('editor-status-errors');
         if (!badge) return;
         if (!errorCount || errorCount === 0) {
-            badge.textContent = '语法检查由后端执行';
+            badge.textContent = '语法正确';
             badge.className = 'px-2.5 py-1 rounded-md text-xs font-medium bg-emerald-500/15 text-emerald-300 border border-emerald-500/20';
         } else {
             badge.textContent = errorCount + ' 个错误';
             badge.className = 'px-2.5 py-1 rounded-md text-xs font-medium bg-red-500/15 text-red-300 border border-red-500/20';
         }
+    }
+
+    // ----------------------------------------------------------------
+    // 注册实时语法诊断：监听编辑器内容变化，使用 Monaco markers 系统
+    // 在编辑器内显示错误波浪线与悬停提示，并同步更新状态栏徽章
+    // ----------------------------------------------------------------
+    function registerDiagnostics(editor) {
+        const model = editor.getModel();
+        let checkTimeout = null;
+
+        function runCheck() {
+            const markers = checkPythonSyntax(model.getValue());
+            monaco.editor.setModelMarkers(model, 'python-lint', markers);
+            updateStatusBadge(markers.length);
+        }
+
+        model.onDidChangeContent(function () {
+            if (checkTimeout) clearTimeout(checkTimeout);
+            // 防抖：避免连续输入时频繁触发，300ms 静默后检查一次
+            checkTimeout = setTimeout(runCheck, 300);
+        });
+
+        // 初始检查
+        runCheck();
+    }
+
+    // ----------------------------------------------------------------
+    // 轻量级 Python 语法检查器
+    // 仅检查常见语法错误，不做完整解析：
+    //   1. 括号匹配（()、[]、{}）
+    //   2. 缩进错误（同一行混合使用空格与 Tab）
+    //   3. 复合语句（if/for/while/def/class 等）后冒号缺失
+    //   4. 行尾续行符错误（反斜杠后非空）
+    //   5. 未闭合的字符串（单/双引号、三引号）
+    // 注意：字符串字面量内的内容不会被检查；多行括号表达式中的冒号检查会跳过
+    // ----------------------------------------------------------------
+    function checkPythonSyntax(code) {
+        const markers = [];
+        if (!code) return markers;
+
+        const lines = code.split('\n');
+        // 括号栈：记录未闭合的开括号位置 {char, line, col}
+        const bracketStack = [];
+        // 字符串状态：null | '"' | "'" | '"""' | "'''"
+        let inString = null;
+        // 多行字符串起始位置，用于未闭合时报错定位
+        let stringStart = null;
+
+        // 复合语句关键字：必须以冒号结尾
+        const compoundKeywords = [
+            'if', 'elif', 'else', 'for', 'while', 'def',
+            'class', 'try', 'except', 'finally', 'with',
+        ];
+
+        // 工具：向 markers 推入一条单行错误
+        function pushMarker(line, startCol, endCol, msg, severity) {
+            markers.push({
+                startLineNumber: line,
+                startColumn: startCol,
+                endLineNumber: line,
+                endColumn: endCol,
+                message: msg,
+                severity: severity,
+            });
+        }
+
+        // 工具：在已知本行所有字符串均已闭合的前提下，查找行内注释 # 的位置
+        function findCommentIndex(line) {
+            let str = null;
+            let k = 0;
+            while (k < line.length) {
+                const c = line[k];
+                if (str) {
+                    if (c === '\\') { k += 2; continue; }
+                    if (line.substring(k, k + 3) === str) { str = null; k += 3; continue; }
+                    if (c === str) { str = null; k++; continue; }
+                    k++;
+                    continue;
+                }
+                if (c === '"' || c === "'") {
+                    const triple = line.substring(k, k + 3);
+                    if (triple === '"""' || triple === "'''") { str = triple; k += 3; continue; }
+                    str = c; k++; continue;
+                }
+                if (c === '#') return k;
+                k++;
+            }
+            return -1;
+        }
+
+        for (let i = 0; i < lines.length; i++) {
+            const line = lines[i];
+            const lineNum = i + 1;
+            // 本行起始时是否处于多行字符串内
+            const wasInString = !!inString;
+
+            // ---- 字符级扫描：括号 / 字符串 / 续行符 ----
+            let j = 0;
+            while (j < line.length) {
+                const ch = line[j];
+
+                if (inString) {
+                    // 三引号字符串内：仅查找结束三引号
+                    if (inString === '"""' || inString === "'''") {
+                        if (line.substring(j, j + 3) === inString) {
+                            inString = null;
+                            j += 3;
+                            continue;
+                        }
+                        j++;
+                        continue;
+                    }
+                    // 单/双引号字符串内：处理转义与结束符
+                    if (ch === '\\') { j += 2; continue; }
+                    if (ch === inString) { inString = null; j++; continue; }
+                    j++;
+                    continue;
+                }
+
+                // 注释开始：跳过本行剩余内容
+                if (ch === '#') break;
+
+                // 字符串开始
+                if (ch === '"' || ch === "'") {
+                    const triple = line.substring(j, j + 3);
+                    if (triple === '"""' || triple === "'''") {
+                        inString = triple;
+                        stringStart = { line: lineNum, col: j + 1 };
+                        j += 3;
+                        continue;
+                    }
+                    inString = ch;
+                    stringStart = { line: lineNum, col: j + 1 };
+                    j++;
+                    continue;
+                }
+
+                // 开括号入栈
+                if (ch === '(' || ch === '[' || ch === '{') {
+                    bracketStack.push({ char: ch, line: lineNum, col: j + 1 });
+                    j++;
+                    continue;
+                }
+                // 闭括号匹配
+                if (ch === ')' || ch === ']' || ch === '}') {
+                    const top = bracketStack.length ? bracketStack[bracketStack.length - 1] : null;
+                    const expected = top ? { '(': ')', '[': ']', '{': '}' }[top.char] : null;
+                    if (top && expected === ch) {
+                        bracketStack.pop();
+                    } else {
+                        pushMarker(
+                            lineNum, j + 1, j + 2,
+                            '语法错误：括号不匹配，发现多余的 "' + ch + '"',
+                            monaco.MarkerSeverity.Error
+                        );
+                    }
+                    j++;
+                    continue;
+                }
+
+                // 行尾续行符：反斜杠后必须紧跟行尾（仅空白）
+                if (ch === '\\') {
+                    const rest = line.substring(j + 1);
+                    if (rest.trim() === '') {
+                        j = line.length;  // 正常续行，结束本行扫描
+                        continue;
+                    }
+                    pushMarker(
+                        lineNum, j + 1, j + 2,
+                        '语法错误：续行符 "\\" 后面必须紧跟行尾',
+                        monaco.MarkerSeverity.Error
+                    );
+                    j++;
+                    continue;
+                }
+
+                j++;
+            }
+
+            // 处于多行字符串内的行：跳过缩进与冒号检查
+            if (wasInString) continue;
+            // 本行开始了未闭合的多行字符串：跳过冒号检查（字符串内容不参与语法判断）
+            if (inString) continue;
+            // 行尾有未闭合括号：可能在多行表达式中，跳过冒号检查
+            if (bracketStack.length > 0) continue;
+
+            // ---- 缩进检查：行首是否同时包含空格和 Tab ----
+            let indent = '';
+            for (let k = 0; k < line.length; k++) {
+                if (line[k] === ' ' || line[k] === '\t') indent += line[k];
+                else break;
+            }
+            if (indent.indexOf(' ') !== -1 && indent.indexOf('\t') !== -1) {
+                pushMarker(
+                    lineNum, 1, indent.length + 1,
+                    '缩进警告：同一行混合使用了空格和 Tab',
+                    monaco.MarkerSeverity.Warning
+                );
+            }
+
+            // ---- 冒号缺失检查 ----
+            // 截取行内注释之前的代码部分
+            const commentIdx = findCommentIndex(line);
+            const codeEnd = commentIdx >= 0 ? commentIdx : line.length;
+            const codePart = line.substring(indent.length, codeEnd).replace(/\s+$/, '');
+            if (!codePart) continue;
+            // 续行结尾：跳过冒号检查
+            if (codePart.charAt(codePart.length - 1) === '\\') continue;
+
+            // 提取首个单词（按空白或左括号分割，兼容 if(x): 形式）
+            const firstWord = codePart.split(/[\s(]/)[0];
+            if (compoundKeywords.indexOf(firstWord) === -1) continue;
+
+            if (codePart.charAt(codePart.length - 1) !== ':') {
+                const col = indent.length + codePart.length;
+                pushMarker(
+                    lineNum, col + 1, col + 2,
+                    '语法错误：' + firstWord + ' 语句末尾缺少冒号 ":"',
+                    monaco.MarkerSeverity.Error
+                );
+            }
+        }
+
+        // ---- 文件结束：未闭合的括号 ----
+        bracketStack.forEach(function (b) {
+            const closeChar = { '(': ')', '[': ']', '{': '}' }[b.char];
+            pushMarker(
+                b.line, b.col, b.col + 1,
+                '语法错误：未闭合的 "' + b.char + '"，缺少对应的 "' + closeChar + '"',
+                monaco.MarkerSeverity.Error
+            );
+        });
+
+        // ---- 文件结束：未闭合的字符串 ----
+        if (inString && stringStart) {
+            const endLine = lines.length;
+            const endCol = (lines[lines.length - 1] || '').length + 1;
+            markers.push({
+                startLineNumber: stringStart.line,
+                startColumn: stringStart.col,
+                endLineNumber: endLine,
+                endColumn: endCol,
+                message: '语法错误：未闭合的字符串 ' + inString,
+                severity: monaco.MarkerSeverity.Error,
+            });
+        }
+
+        return markers;
     }
 
     return {
@@ -188,6 +436,7 @@ window.ScriptEditorHighlight = (function () {
         registerTheme: registerTheme,
         registerCompletion: registerCompletion,
         registerHover: registerHover,
+        registerDiagnostics: registerDiagnostics,
         updateStatusBadge: updateStatusBadge,
     };
 })();

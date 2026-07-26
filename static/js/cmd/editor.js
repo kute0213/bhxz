@@ -84,7 +84,8 @@ window.ScriptEditor = (function () {
 
         bindToolbar();
         bindShortcuts();
-        HLmod.updateStatusBadge(0);
+        // 注册前端实时语法诊断：监听内容变化、设置 markers、更新状态栏徽章
+        HLmod.registerDiagnostics(editor);
 
         // 状态栏：光标位置
         editor.onDidChangeCursorPosition(function (e) {

@@ -30,6 +30,7 @@ window.ScheduledCore = (function () {
     var taskTypeSelect = document.getElementById('task-type');
     var taskCommandLabel = document.getElementById('task-command-label');
     var taskCommandInput = document.getElementById('task-command');
+    var taskPresetSelect = document.getElementById('task-preset-select');
     var intervalConfig = document.getElementById('interval-config');
     var timeConfig = document.getElementById('time-config');
     var timeLabel = document.getElementById('time-label');
@@ -64,6 +65,10 @@ window.ScheduledCore = (function () {
         taskForm.addEventListener('submit', handleTaskSubmit);
         scheduleTypeSelect.addEventListener('change', toggleScheduleConfig);
         taskTypeSelect.addEventListener('change', toggleTaskTypeConfig);
+        // 从快捷命令选择：自动填充 command / name / task_type
+        taskPresetSelect.addEventListener('change', function () {
+            onPresetSelect(taskPresetSelect.value);
+        });
         logsModalClose.addEventListener('click', function () { logsModal.classList.add('hidden'); });
         outputModalClose.addEventListener('click', function () { outputModal.classList.add('hidden'); });
 
@@ -200,6 +205,67 @@ window.ScheduledCore = (function () {
             taskCommandLabel.textContent = '执行命令';
             taskCommandInput.placeholder = "如：echo 'Hello World'";
         }
+    }
+
+    // ------------------------------------------------------------------
+    // 从快捷命令选择：加载已有快捷命令列表填充下拉框
+    // ------------------------------------------------------------------
+
+    // 拉取 /admin/cmd/commands 列表并填充下拉框，返回 Promise
+    function loadPresets() {
+        return fetch('/admin/cmd/commands')
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (!taskPresetSelect) return;
+                // 保留首个「-- 手动输入 --」选项，清空其余
+                taskPresetSelect.innerHTML = '<option value="">-- 手动输入 --</option>';
+                var commands = data.commands || [];
+                commands.forEach(function (cmd) {
+                    var opt = document.createElement('option');
+                    opt.value = cmd.id;
+                    // 在名称后追加描述前缀提示，便于用户辨识脚本类命令
+                    var isScript = cmd.description && cmd.description.indexOf('[脚本]') === 0;
+                    opt.textContent = cmd.name + (isScript ? '（脚本）' : '');
+                    // 通过 dataset 携带完整数据，避免后续二次请求
+                    opt.dataset.name = cmd.name || '';
+                    opt.dataset.command = cmd.command || '';
+                    opt.dataset.description = cmd.description || '';
+                    taskPresetSelect.appendChild(opt);
+                });
+            })
+            .catch(function (err) {
+                // 加载失败时静默处理，不影响手动输入
+                console.error('加载快捷命令列表失败:', err);
+            });
+    }
+
+    // 选择某个快捷命令后自动填充表单：command / name / task_type
+    function onPresetSelect(cmdId) {
+        if (!cmdId) return;
+        // 优先从 option dataset 取数据，避免重复请求
+        var opt = taskPresetSelect.querySelector('option[value="' + cmdId + '"]');
+        if (!opt) return;
+
+        var name = opt.dataset.name || '';
+        var command = opt.dataset.command || '';
+        var description = opt.dataset.description || '';
+
+        // 填充命令内容
+        taskCommandInput.value = command;
+
+        // 仅在名称为空时自动填充，避免覆盖用户已输入的名称
+        var nameInput = document.getElementById('task-name');
+        if (nameInput && !nameInput.value) {
+            nameInput.value = name;
+        }
+
+        // 根据描述前缀判断任务类型
+        if (description.indexOf('[脚本]') === 0) {
+            taskTypeSelect.value = 'script';
+        } else {
+            taskTypeSelect.value = 'shell';
+        }
+        toggleTaskTypeConfig();
     }
 
     // ------------------------------------------------------------------
@@ -352,6 +418,10 @@ window.ScheduledCore = (function () {
         document.getElementById('task-type').value = 'shell';
         document.getElementById('task-interval').value = 3600;
         document.getElementById('task-execute-at').value = '';
+        // 重置快捷命令选择为「手动输入」
+        if (taskPresetSelect) taskPresetSelect.value = '';
+        // 加载已有快捷命令列表（不阻塞模态框打开）
+        loadPresets();
         toggleScheduleConfig();
         toggleTaskTypeConfig();
         taskModal.classList.remove('hidden');
@@ -383,6 +453,10 @@ window.ScheduledCore = (function () {
                     executeAtInput.value = dt;
                 }
 
+                // 重置快捷命令选择为「手动输入」（编辑场景下用户已填好命令内容）
+                if (taskPresetSelect) taskPresetSelect.value = '';
+                // 加载已有快捷命令列表（供用户参考选择）
+                loadPresets();
                 toggleScheduleConfig();
                 toggleTaskTypeConfig();
                 taskModal.classList.remove('hidden');

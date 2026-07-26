@@ -7,6 +7,32 @@
 ## [未发布]
 
 ### 新增
+- 前端实时 Python 语法检查（`editor-highlight.js` 新增 `registerDiagnostics` / `checkPythonSyntax`）：检查括号匹配、缩进一致性、冒号缺失、续行符错误、未闭合字符串，编辑器内实时显示错误波浪线
+- 定时任务「从快捷命令选择」功能：创建/编辑定时任务时可直接从已有快捷命令列表中选择，自动填充命令内容和任务类型
+- 代码结构重组：6 个大文件拆分为包结构（`core/db/`、`services/monitoring/`、`routes/community/`、`routes/admin/`、`routes/cmd/`、`routes/scheduled/`）
+- 前端模块化拆分：`base.html` 拆分为 `base.css` + `base.js`；`editor.js` 拆分为 `editor-highlight.js` + `editor-sse.js`；`scheduled.js` 拆分出 `scheduled-logs.js`
+
+### 修复
+- 修复编辑器保存弹窗闪退：`CmdModal` 单例连续弹窗时，旧 `close()` 的 300ms 超时 `setTimeout` 会隐藏新弹窗。新增 `closeTimer` 在 `show()` 时清除旧定时器
+
+### 变更
+- 更新日志文件从项目根目录移至 `docs/CHANGELOG.md`
+
+### 重构（代码结构优化）
+- **`core/database.py`**(526行) → `core/db/` 包（`connection.py` + `schema.py`）
+- **`services/monitoring.py`**(404行) → `services/monitoring/` 包（`cpu.py` + `memory.py` + `system.py`）
+- **`routes/community.py`**(476行) → `routes/community/` 包（`pages` + `polls` + `board` + `helpers`）
+- **`routes/admin.py`**(385行) → `routes/admin/` 包（`pages` + `users` + `mod_intros` + `logs` + `backup`）
+- **`routes/cmd.py`**(383行) → `routes/cmd/` 包（`pages` + `commands` + `execution` + `script`）
+- **`routes/scheduled.py`**(369行) → `routes/scheduled/` 包（`tasks` + `logs`）
+- **`templates/base.html`**(1194行) → 提取 `static/css/base.css` + `static/js/base.js`
+- **`static/js/cmd/editor.js`**(607行) → 拆分 `editor-highlight.js` + `editor-sse.js`
+- **`static/js/cmd/scheduled.js`**(593行) → 拆分 `scheduled-logs.js`
+- **executor 稳定性**：阶梯式终止（SIGTERM→SIGKILL）防止僵尸进程
+- **SSE 稳定性**：短轮询替代长 wait，客户端断开时及时退出
+- **scheduler 异常隔离**：单任务失败不影响调度循环
+
+### 新增（MiniScript 后端化）
 - MiniScript 后端 Python 执行引擎（`services/miniscript/`，独立子进程 + AST 沙箱 + 管道通信）
 - 脚本定时执行功能：`scheduled_tasks` 表新增 `task_type` 字段（`shell` / `script`，默认 `shell`），调度器按类型分发到 `subprocess.run` 或 `ScriptExecutor`
 - 数据库优化备份功能（手动触发 + 自动清理旧备份，备份写入 `./backups/db/`）
