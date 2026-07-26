@@ -2,7 +2,7 @@
 
 from flask import Blueprint, request, jsonify, abort
 from core.auth import login_required, get_current_user
-from core.database import get_db
+from core.db import get_db
 
 admin_api_bp = Blueprint('api_admin', __name__, url_prefix='/api/admin')
 

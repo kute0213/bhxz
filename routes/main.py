@@ -4,7 +4,7 @@ import os
 from datetime import datetime
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash, jsonify, send_from_directory, abort
 from core.auth import login_required, get_current_user
-from core.database import get_db
+from core.db import get_db
 from config import REGISTER_VERIFY_CODE, UPLOAD_DIR
 from services.monitoring import get_cpu_usage, get_cpu_temperature, get_memory_info, get_system_info
 from services.ip import get_client_ip

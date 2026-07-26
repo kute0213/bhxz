@@ -1,11 +1,25 @@
 /**
- * 定时任务管理页面逻辑
+ * scheduled.js — 定时任务管理页面逻辑（核心：任务 CRUD / 启停 / 触发 / 状态轮询）
+ *
+ * 由原 scheduled.js 拆分而来，本文件负责：
+ *   - 任务列表加载与渲染
+ *   - 创建/编辑/删除/启停/立即触发任务
+ *   - 自动刷新任务执行状态
+ *   - 调度类型 / 任务类型切换
+ *   - 模态框（任务编辑）事件绑定
+ *
+ * 暴露：window.ScheduledCore
+ *      escapeHtml：HTML 转义工具（供 scheduled-logs.js 复用）
+ *
+ * 配套文件（在本文件之后加载）：
+ *   - scheduled-logs.js → window.ScheduledLogs（执行日志查看）
+ *      日志相关按钮通过 window.ScheduledLogs.openLogsModal 调用
  */
 
-(function () {
+window.ScheduledCore = (function () {
     'use strict';
 
-    // DOM 引用
+    // DOM 引用（任务管理相关；日志/输出模态框的关闭逻辑也在此处理）
     var createBtn = document.getElementById('create-task-btn');
     var viewLogsBtn = document.getElementById('view-logs-btn');
     var taskModal = document.getElementById('task-modal');
@@ -13,6 +27,9 @@
     var taskModalCancel = document.getElementById('task-modal-cancel');
     var taskModalTitle = document.getElementById('task-modal-title');
     var scheduleTypeSelect = document.getElementById('task-schedule-type');
+    var taskTypeSelect = document.getElementById('task-type');
+    var taskCommandLabel = document.getElementById('task-command-label');
+    var taskCommandInput = document.getElementById('task-command');
     var intervalConfig = document.getElementById('interval-config');
     var timeConfig = document.getElementById('time-config');
     var timeLabel = document.getElementById('time-label');
@@ -22,9 +39,6 @@
     var outputModalClose = document.getElementById('output-modal-close');
     var taskListContainer = document.getElementById('task-list-container');
     var emptyState = document.getElementById('empty-state');
-
-    var currentLogsPage = 1;
-    var currentLogsTaskId = null;
 
     // 自动刷新相关
     var AUTO_REFRESH_INTERVAL = 15000;  // 15 秒刷新一次状态
@@ -44,10 +58,12 @@
 
     function bindEvents() {
         createBtn.addEventListener('click', openCreateModal);
-        viewLogsBtn.addEventListener('click', function () { openLogsModal(null); });
+        // 查看日志：交给 scheduled-logs.js 处理
+        viewLogsBtn.addEventListener('click', function () { window.ScheduledLogs.openLogsModal(null); });
         taskModalCancel.addEventListener('click', closeTaskModal);
         taskForm.addEventListener('submit', handleTaskSubmit);
         scheduleTypeSelect.addEventListener('change', toggleScheduleConfig);
+        taskTypeSelect.addEventListener('change', toggleTaskTypeConfig);
         logsModalClose.addEventListener('click', function () { logsModal.classList.add('hidden'); });
         outputModalClose.addEventListener('click', function () { outputModal.classList.add('hidden'); });
 
@@ -174,6 +190,18 @@
         }
     }
 
+    // 根据任务类型切换「执行命令」区域的标签和占位符
+    function toggleTaskTypeConfig() {
+        var type = taskTypeSelect.value;
+        if (type === 'script') {
+            taskCommandLabel.textContent = '脚本代码（Python 语法）';
+            taskCommandInput.placeholder = "如：print('Hello World')\nfor i in range(3):\n    print(i)";
+        } else {
+            taskCommandLabel.textContent = '执行命令';
+            taskCommandInput.placeholder = "如：echo 'Hello World'";
+        }
+    }
+
     // ------------------------------------------------------------------
     // 任务列表
     // ------------------------------------------------------------------
@@ -213,7 +241,7 @@
                 else if (action === 'delete') deleteTask(id);
                 else if (action === 'toggle') toggleTask(id);
                 else if (action === 'trigger') triggerTask(id);
-                else if (action === 'logs') openLogsModal(id);
+                else if (action === 'logs') window.ScheduledLogs.openLogsModal(id);
             });
         });
 
@@ -247,6 +275,11 @@
             ? '<span class="px-2 py-0.5 text-xs rounded-full bg-green-500/20 text-green-300 border border-green-400/20">启用</span>'
             : '<span class="px-2 py-0.5 text-xs rounded-full bg-red-500/20 text-red-300 border border-red-400/20">禁用</span>';
 
+        // 任务类型徽章：shell / script
+        var taskTypeBadge = (t.task_type === 'script')
+            ? '<span class="px-2 py-0.5 text-xs rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-400/20">脚本</span>'
+            : '<span class="px-2 py-0.5 text-xs rounded-full bg-slate-500/20 text-slate-300 border border-slate-400/20">Shell</span>';
+
         var toggleIcon = t.is_enabled ? 'pause' : 'play';
         var toggleText = t.is_enabled ? '禁用' : '启用';
 
@@ -256,6 +289,7 @@
                     '<div class="flex items-center gap-2 mb-2 flex-wrap">' +
                         '<h3 class="font-bold text-lg truncate">' + escapeHtml(t.name) + '</h3>' +
                         statusBadge +
+                        taskTypeBadge +
                     '</div>' +
                     '<div class="text-sm text-cream/50 mb-2 font-mono truncate">' + escapeHtml(t.command) + '</div>' +
                     '<div class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-cream/40">' +
@@ -315,9 +349,11 @@
         document.getElementById('task-name').value = '';
         document.getElementById('task-command').value = '';
         document.getElementById('task-schedule-type').value = 'interval';
+        document.getElementById('task-type').value = 'shell';
         document.getElementById('task-interval').value = 3600;
         document.getElementById('task-execute-at').value = '';
         toggleScheduleConfig();
+        toggleTaskTypeConfig();
         taskModal.classList.remove('hidden');
     }
 
@@ -333,6 +369,7 @@
                 document.getElementById('task-name').value = task.name;
                 document.getElementById('task-command').value = task.command;
                 document.getElementById('task-schedule-type').value = task.schedule_type;
+                document.getElementById('task-type').value = task.task_type || 'shell';
                 document.getElementById('task-interval').value = task.interval_seconds || 3600;
 
                 var executeAtInput = document.getElementById('task-execute-at');
@@ -347,6 +384,7 @@
                 }
 
                 toggleScheduleConfig();
+                toggleTaskTypeConfig();
                 taskModal.classList.remove('hidden');
             });
     }
@@ -362,6 +400,7 @@
         var name = document.getElementById('task-name').value.trim();
         var command = document.getElementById('task-command').value.trim();
         var scheduleType = document.getElementById('task-schedule-type').value;
+        var taskType = document.getElementById('task-type').value;
         var intervalSeconds = parseInt(document.getElementById('task-interval').value) || 3600;
         var executeAt = document.getElementById('task-execute-at').value;
 
@@ -378,6 +417,7 @@
             name: name,
             command: command,
             schedule_type: scheduleType,
+            task_type: taskType,
             interval_seconds: intervalSeconds,
             execute_at: executeAt,
         };
@@ -456,102 +496,6 @@
     }
 
     // ------------------------------------------------------------------
-    // 执行日志
-    // ------------------------------------------------------------------
-
-    function openLogsModal(taskId) {
-        currentLogsTaskId = taskId;
-        currentLogsPage = 1;
-        logsModal.classList.remove('hidden');
-        loadLogs();
-    }
-
-    function loadLogs() {
-        var url;
-        if (currentLogsTaskId) {
-            url = '/admin/cmd/scheduled/tasks/' + currentLogsTaskId + '/logs?page=' + currentLogsPage;
-        } else {
-            url = '/admin/cmd/scheduled/logs?page=' + currentLogsPage;
-        }
-
-        fetch(url)
-            .then(function (r) { return r.json(); })
-            .then(function (data) {
-                renderLogs(data.logs || [], data.page, data.total_pages);
-            });
-    }
-
-    function renderLogs(logs, page, totalPages) {
-        var content = document.getElementById('logs-content');
-        var pagination = document.getElementById('logs-pagination');
-
-        if (!logs.length) {
-            content.innerHTML = '<p class="text-center text-cream/40 py-8">暂无执行日志</p>';
-            pagination.innerHTML = '';
-            return;
-        }
-
-        content.innerHTML = logs.map(function (log) {
-            var statusColor = log.success ? 'green' : 'red';
-            var statusText = log.success ? '成功' : '失败';
-            var outputPreview = (log.output || '').substring(0, 100);
-            if (log.output && log.output.length > 100) outputPreview += '...';
-
-            return '<div class="bg-forest-900/40 border border-cream/5 rounded-lg p-3">' +
-                '<div class="flex items-center justify-between mb-2">' +
-                    '<div class="flex items-center gap-2 text-sm">' +
-                        '<span class="px-2 py-0.5 text-xs rounded-full bg-' + statusColor + '-500/20 text-' + statusColor + '-300 border border-' + statusColor + '-400/20">' + statusText + '</span>' +
-                        '<span class="text-cream/60 font-mono text-xs">' + escapeHtml(log.task_name || 'N/A') + '</span>' +
-                    '</div>' +
-                    '<span class="text-xs text-cream/40">' + log.started_at + ' (' + (log.duration_seconds || 0).toFixed(1) + 's)</span>' +
-                '</div>' +
-                '<div class="text-xs text-cream/40 font-mono truncate mb-1">' + escapeHtml(log.command) + '</div>' +
-                (outputPreview ? '<div class="text-xs text-cream/50 font-mono truncate">> ' + escapeHtml(outputPreview) + '</div>' : '') +
-                '<button data-log-id="' + log.id + '" class="view-output-btn mt-2 text-xs text-gold-400 hover:text-gold-300">查看完整输出</button>' +
-            '</div>';
-        }).join('');
-
-        // 绑定查看输出
-        content.querySelectorAll('.view-output-btn').forEach(function (btn) {
-            btn.addEventListener('click', function () {
-                var logId = parseInt(btn.dataset.logId);
-                showOutput(logId);
-            });
-        });
-
-        // 分页
-        if (totalPages > 1) {
-            var buttons = '';
-            if (page > 1) {
-                buttons += '<button class="logs-page-btn px-3 py-1 text-xs bg-forest-700/60 border border-cream/10 rounded hover:bg-forest-600/60" data-page="' + (page - 1) + '">上一页</button>';
-            }
-            buttons += '<span class="text-xs text-cream/50">' + page + ' / ' + totalPages + '</span>';
-            if (page < totalPages) {
-                buttons += '<button class="logs-page-btn px-3 py-1 text-xs bg-forest-700/60 border border-cream/10 rounded hover:bg-forest-600/60" data-page="' + (page + 1) + '">下一页</button>';
-            }
-            pagination.innerHTML = buttons;
-
-            pagination.querySelectorAll('.logs-page-btn').forEach(function (btn) {
-                btn.addEventListener('click', function () {
-                    currentLogsPage = parseInt(btn.dataset.page);
-                    loadLogs();
-                });
-            });
-        } else {
-            pagination.innerHTML = '';
-        }
-    }
-
-    function showOutput(logId) {
-        fetch('/admin/cmd/scheduled/logs/' + logId)
-            .then(function (r) { return r.json(); })
-            .then(function (data) {
-                document.getElementById('output-content').textContent = data.output || '(无输出)';
-                outputModal.classList.remove('hidden');
-            });
-    }
-
-    // ------------------------------------------------------------------
     // 工具
     // ------------------------------------------------------------------
 
@@ -562,4 +506,8 @@
                   .replace(/>/g, '&gt;')
                   .replace(/"/g, '&quot;');
     }
+
+    return {
+        escapeHtml: escapeHtml,
+    };
 })();

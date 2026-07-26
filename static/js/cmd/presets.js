@@ -3,8 +3,10 @@
  *
  * 功能：
  *   - 增删改查一键命令
- *   - 运行普通 CMD 命令
- *   - 运行 MiniScript 脚本
+ *   - 运行普通 CMD 命令（前端通过 SSE 流式执行）
+ *   - 运行 Python 脚本（通过后端 SSE API /admin/cmd/run-script 执行）
+ *
+ * 类型判断：description 字段以 `[脚本]` 前缀标识为脚本类型，否则为 CMD 命令。
  */
 
 window.CmdPresets = (function () {

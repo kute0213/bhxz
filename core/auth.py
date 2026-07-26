@@ -1,6 +1,6 @@
 from functools import wraps
 from flask import session, redirect, url_for, request, abort, g
-from core.database import get_db
+from core.db import get_db
 
 
 def allowed_file(filename):

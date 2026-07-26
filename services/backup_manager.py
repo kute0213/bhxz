@@ -97,7 +97,7 @@ class BackupManager:
 
     def list_backups(self, limit=20):
         """列出备份历史记录。"""
-        from core.database import get_db
+        from core.db import get_db
         conn = get_db()
         try:
             rows = conn.execute(
@@ -113,7 +113,7 @@ class BackupManager:
 
     def _create_backup_record(self, backup_type):
         """创建备份记录（状态为 running）。"""
-        from core.database import get_db
+        from core.db import get_db
         now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         backup_name = datetime.now().strftime(BACKUP_FILENAME_FORMAT)
         backup_path = os.path.join(BACKUP_DIR, backup_name)
@@ -137,7 +137,7 @@ class BackupManager:
 
     def _update_backup_record(self, backup_id, **kwargs):
         """更新备份记录。"""
-        from core.database import get_db
+        from core.db import get_db
         conn = get_db()
         try:
             fields = ', '.join(f'{k} = ?' for k in kwargs.keys())
@@ -278,7 +278,7 @@ class BackupManager:
         if MAX_BACKUPS <= 0:
             return
 
-        from core.database import get_db
+        from core.db import get_db
         conn = get_db()
         try:
             # 获取所有备份，按时间倒序

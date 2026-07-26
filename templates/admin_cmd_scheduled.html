@@ -54,7 +54,15 @@
                        placeholder="如：每日备份">
             </div>
             <div>
-                <label class="block text-sm font-medium text-cream/70 mb-1">执行命令</label>
+                <label class="block text-sm font-medium text-cream/70 mb-1">任务类型</label>
+                <select id="task-type"
+                        class="w-full px-3 py-2 bg-forest-900/60 border border-cream/10 rounded-lg text-cream focus:border-gold-400 focus:outline-none">
+                    <option value="shell">Shell 命令（执行系统命令）</option>
+                    <option value="script">Python 脚本（后端子进程执行）</option>
+                </select>
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-cream/70 mb-1" id="task-command-label">执行命令</label>
                 <textarea id="task-command" required rows="3"
                           class="w-full px-3 py-2 bg-forest-900/60 border border-cream/10 rounded-lg text-cream focus:border-gold-400 focus:outline-none font-mono text-sm"
                           placeholder="如：echo 'Hello World'"></textarea>
@@ -132,5 +140,6 @@
     </div>
 </div>
 
-<script src="{{ url_for('static', filename='js/cmd/scheduled.js') }}"></script>
+<script src="{{ url_for('static', filename='js/cmd/scheduled.js', v='2') }}"></script>
+<script src="{{ url_for('static', filename='js/cmd/scheduled-logs.js', v='2') }}"></script>
 {% endblock %}

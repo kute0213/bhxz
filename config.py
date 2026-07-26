@@ -63,5 +63,21 @@ BACKUP_CLEAN_LOGS = True
 # 数据库优化时是否执行 CHECKPOINT （将 WAL 合并到主文件，减少文件大小）
 BACKUP_CHECKPOINT = True
 
+# ---------------------------------------------------------------------------
+# MiniScript 脚本执行引擎配置
+# ---------------------------------------------------------------------------
+
+# 脚本默认执行超时（秒），超时后子进程被强制终止
+SCRIPT_DEFAULT_TIMEOUT = 30
+
+# 脚本最大允许执行超时（秒），脚本内 set_timeout() 不能超过此值
+SCRIPT_MAX_TIMEOUT = 300
+
+# 脚本最大循环迭代次数（防止死循环）
+SCRIPT_MAX_LOOP_ITER = 100000
+
+# 脚本执行器并发数量限制（同时运行的脚本子进程数）
+SCRIPT_EXECUTOR_POOL_SIZE = 2
+
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(BACKUP_DIR, exist_ok=True)

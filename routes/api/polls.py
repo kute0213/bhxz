@@ -2,7 +2,7 @@
 
 from flask import Blueprint, jsonify
 from core.auth import get_current_user
-from core.database import get_db
+from core.db import get_db
 
 polls_bp = Blueprint('api_polls', __name__, url_prefix='/api')
 

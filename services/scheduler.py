@@ -9,14 +9,16 @@ import os
 import subprocess
 import threading
 import time
+import traceback
 from concurrent.futures import ThreadPoolExecutor
 
 from config import (
     TASK_SCHEDULER_INTERVAL,
     TASK_EXECUTION_TIMEOUT,
     TASK_EXECUTOR_POOL_SIZE,
+    SCRIPT_DEFAULT_TIMEOUT,
 )
-from core.database import get_db
+from core.db import get_db
 
 
 class TaskScheduler:
@@ -69,26 +71,45 @@ class TaskScheduler:
     # ------------------------------------------------------------------
 
     def _run_loop(self):
+        """调度器主循环。
+
+        单次 _tick() 抛出的任何异常都被吞掉并记录，
+        绝不影响后续调度周期——这是调度器高可用的关键。
+        """
         while not self._stop_event.is_set():
             try:
                 self._tick()
             except Exception as e:
-                print(f'[Scheduler] 调度异常: {e}', flush=True)
+                print(
+                    f'[Scheduler] 调度异常: {e}\n{traceback.format_exc()}',
+                    flush=True,
+                )
             self._stop_event.wait(TASK_SCHEDULER_INTERVAL)
 
     def _tick(self):
-        """扫描到期任务并提交执行。"""
+        """扫描到期任务并提交执行。
+
+        数据库异常被隔离，不会冒泡到 _run_loop 导致整轮跳过；
+        单个任务提交失败也不会影响其他任务。
+        """
         now = datetime.datetime.now()
         now_str = now.strftime('%Y-%m-%d %H:%M:%S')
 
-        conn = get_db()
         try:
-            tasks = conn.execute(
-                "SELECT * FROM scheduled_tasks WHERE is_enabled = 1 AND next_run_at <= ?",
-                (now_str,),
-            ).fetchall()
-        finally:
-            conn.close()
+            conn = get_db()
+            try:
+                tasks = conn.execute(
+                    "SELECT * FROM scheduled_tasks WHERE is_enabled = 1 AND next_run_at <= ?",
+                    (now_str,),
+                ).fetchall()
+            finally:
+                conn.close()
+        except Exception as e:
+            print(
+                f'[Scheduler] 扫描到期任务失败: {e}\n{traceback.format_exc()}',
+                flush=True,
+            )
+            return
 
         for task in tasks:
             task_id = task['id']
@@ -97,51 +118,129 @@ class TaskScheduler:
                     continue
                 self._running_tasks.add(task_id)
 
-            self._executor.submit(self._execute_task, dict(task))
+            try:
+                self._executor.submit(self._execute_task, dict(task))
+            except Exception as e:
+                # 线程池已关闭 / 拒绝提交：回滚 _running_tasks 状态，避免任务卡死
+                print(
+                    f'[Scheduler] 提交任务 #{task_id} 失败: {e}',
+                    flush=True,
+                )
+                with self._running_lock:
+                    self._running_tasks.discard(task_id)
 
     # ------------------------------------------------------------------
     # 任务执行
     # ------------------------------------------------------------------
 
     def _execute_task(self, task: dict):
-        """在子线程中执行单个定时任务。"""
+        """在子线程中执行单个定时任务。
+
+        任何异常（执行 / 日志 / 调度更新）都被吞掉并记录，
+        确保单个任务的失败不影响线程池中其他任务，也不影响调度主循环。
+        """
         task_id = task['id']
         started_at = datetime.datetime.now()
         started_str = started_at.strftime('%Y-%m-%d %H:%M:%S')
 
-        print(f"[Scheduler] 执行任务 #{task_id} '{task['name']}': {task['command']}", flush=True)
+        task_type = task.get('task_type') or 'shell'
+        print(
+            f"[Scheduler] 执行任务 #{task_id} '{task['name']}' "
+            f"(type={task_type}): {task['command']}",
+            flush=True,
+        )
 
         success = False
         output = ''
         exit_code = None
+        finished_at = None
 
         try:
-            result = subprocess.run(
-                task['command'],
-                shell=True,
-                cwd=os.getcwd(),
-                capture_output=True,
-                text=True,
-                timeout=TASK_EXECUTION_TIMEOUT,
-            )
-            output = (result.stdout or '') + (result.stderr or '')
-            exit_code = result.returncode
-            success = result.returncode == 0
+            if task_type == 'script':
+                # MiniScript 脚本任务：定时模式执行（非交互）
+                success, output, exit_code = self._execute_script_task(task['command'])
+            else:
+                # 默认 shell 命令任务
+                result = subprocess.run(
+                    task['command'],
+                    shell=True,
+                    cwd=os.getcwd(),
+                    capture_output=True,
+                    text=True,
+                    timeout=TASK_EXECUTION_TIMEOUT,
+                )
+                output = (result.stdout or '') + (result.stderr or '')
+                exit_code = result.returncode
+                success = result.returncode == 0
         except subprocess.TimeoutExpired:
             output = f'执行超时（>{TASK_EXECUTION_TIMEOUT}秒）'
         except Exception as e:
-            output = f'执行异常: {e}'
-        finally:
-            finished_at = datetime.datetime.now()
-            duration = (finished_at - started_at).total_seconds()
-            self._log_task_result(
-                task, output, exit_code, success,
-                started_str, finished_at.strftime('%Y-%m-%d %H:%M:%S'),
-                duration,
+            # 任何执行异常都视为任务失败，但继续走收尾流程（记录日志）
+            output = f'执行异常: {e}\n{traceback.format_exc()}'
+            print(
+                f'[Scheduler] 任务 #{task_id} 执行异常: {e}',
+                flush=True,
             )
-            self._update_task_schedule(task, finished_at)
-            with self._running_lock:
-                self._running_tasks.discard(task_id)
+        finally:
+            # 收尾阶段独立 try：日志/调度更新失败不能阻止 _running_tasks 清理
+            try:
+                finished_at = datetime.datetime.now()
+                duration = (finished_at - started_at).total_seconds()
+                self._log_task_result(
+                    task, output, exit_code, success,
+                    started_str, finished_at.strftime('%Y-%m-%d %H:%M:%S'),
+                    duration,
+                )
+                self._update_task_schedule(task, finished_at)
+            except Exception as e:
+                print(
+                    f'[Scheduler] 任务 #{task_id} 收尾失败: {e}\n'
+                    f'{traceback.format_exc()}',
+                    flush=True,
+                )
+            finally:
+                # 关键：无论收尾是否成功，必须从 _running_tasks 移除，
+                # 否则该任务将永远无法被再次调度
+                with self._running_lock:
+                    self._running_tasks.discard(task_id)
+
+    def _execute_script_task(self, code: str):
+        """执行 MiniScript 脚本任务（定时模式，非交互）。
+
+        alert/prompt/confirm 在非交互模式下会降级处理：
+        - prompt/confirm 返回 None，脚本继续执行
+        - 输出通过 output 事件收集
+
+        Returns:
+            (success, output, exit_code) 三元组
+        """
+        # 局部导入，避免在调度器初始化时引入子进程模块
+        from services.miniscript import ScriptExecutor
+
+        executor = ScriptExecutor()
+        output_lines = []
+        has_error = False
+
+        try:
+            for event_type, data in executor.execute(
+                code, interactive=False, timeout=SCRIPT_DEFAULT_TIMEOUT
+            ):
+                if event_type == 'output':
+                    output_lines.append(data.get('text', ''))
+                elif event_type == 'error':
+                    has_error = True
+                    output_lines.append(f'[错误] {data.get("message", "")}')
+                elif event_type == 'done':
+                    break
+                # 其他事件（如 prompt/confirm/alert）在非交互模式下忽略
+        except Exception as e:
+            has_error = True
+            output_lines.append(f'[错误] 脚本执行异常: {e}')
+
+        success = not has_error
+        output = '\n'.join(output_lines)
+        exit_code = 0 if success else 1
+        return success, output, exit_code
 
     def _log_task_result(self, task, output, exit_code, success,
                          started_str, finished_str, duration):
@@ -247,13 +346,17 @@ class TaskScheduler:
 
     def trigger_now(self, task_id: int):
         """手动触发某个任务立即执行。"""
-        conn = get_db()
         try:
-            task = conn.execute(
-                "SELECT * FROM scheduled_tasks WHERE id = ?", (task_id,)
-            ).fetchone()
-        finally:
-            conn.close()
+            conn = get_db()
+            try:
+                task = conn.execute(
+                    "SELECT * FROM scheduled_tasks WHERE id = ?", (task_id,)
+                ).fetchone()
+            finally:
+                conn.close()
+        except Exception as e:
+            print(f'[Scheduler] 触发查询失败 #{task_id}: {e}', flush=True)
+            return False
 
         if not task:
             return False
@@ -263,7 +366,14 @@ class TaskScheduler:
                 return False
             self._running_tasks.add(task_id)
 
-        self._executor.submit(self._execute_task, dict(task))
+        try:
+            self._executor.submit(self._execute_task, dict(task))
+        except Exception as e:
+            # 线程池已关闭 / 拒绝提交：回滚状态
+            print(f'[Scheduler] 触发提交失败 #{task_id}: {e}', flush=True)
+            with self._running_lock:
+                self._running_tasks.discard(task_id)
+            return False
         return True
 
 

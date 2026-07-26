@@ -3,7 +3,7 @@ import socket
 from flask import Flask, render_template, abort
 
 from config import SECRET_KEY, MAX_CONTENT_LENGTH
-from core.database import init_db
+from core.db import init_db
 from core.middleware import log_access
 from routes.main import main_bp
 from routes.community import community_bp

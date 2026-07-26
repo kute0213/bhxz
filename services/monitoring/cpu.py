@@ -1,6 +1,11 @@
+"""CPU 使用率与温度采集。"""
+
 import os
 import time
 
+from services.monitoring.system import _psutil_available
+
+# 温度缓存（避免频繁读取 sysfs / sensors）
 _temp_cache = {'value': None, 'time': 0}
 TEMP_CACHE_TTL = 3
 
@@ -20,14 +25,6 @@ def _avg_valid_temps(temps):
     if not valid:
         return None
     return sum(valid) / len(valid)
-
-
-def _psutil_available():
-    try:
-        import psutil
-        return psutil
-    except ImportError:
-        return None
 
 
 def get_cpu_usage():
@@ -263,142 +260,3 @@ def get_cpu_temperature():
     _temp_cache['value'] = result
     _temp_cache['time'] = now
     return result
-
-
-def get_memory_info():
-    psutil = _psutil_available()
-    if psutil:
-        try:
-            mem = psutil.virtual_memory()
-            return {
-                'total': mem.total,
-                'used': mem.used,
-                'available': mem.available,
-                'usage': round(mem.percent, 1)
-            }
-        except Exception:
-            pass
-
-    if os.name == 'posix':
-        try:
-            with open('/proc/meminfo', 'r') as f:
-                lines = f.readlines()
-            mem_info = {}
-            for line in lines:
-                if line.startswith('MemTotal:'):
-                    mem_info['total'] = int(line.split()[1]) * 1024
-                elif line.startswith('MemAvailable:'):
-                    mem_info['available'] = int(line.split()[1]) * 1024
-            if 'total' in mem_info and 'available' in mem_info:
-                used = mem_info['total'] - mem_info['available']
-                return {
-                    'total': mem_info['total'],
-                    'used': used,
-                    'available': mem_info['available'],
-                    'usage': round((used / mem_info['total']) * 100, 1)
-                }
-        except Exception:
-            return None
-
-    if os.name == 'nt':
-        try:
-            import ctypes
-
-            class MEMORYSTATUSEX(ctypes.Structure):
-                _fields_ = [
-                    ("dwLength", ctypes.c_ulong),
-                    ("dwMemoryLoad", ctypes.c_ulong),
-                    ("ullTotalPhys", ctypes.c_ulonglong),
-                    ("ullAvailPhys", ctypes.c_ulonglong),
-                    ("ullTotalPageFile", ctypes.c_ulonglong),
-                    ("ullAvailPageFile", ctypes.c_ulonglong),
-                    ("ullTotalVirtual", ctypes.c_ulonglong),
-                    ("ullAvailVirtual", ctypes.c_ulonglong),
-                    ("ullAvailExtendedVirtual", ctypes.c_ulonglong),
-                ]
-
-            mem_status = MEMORYSTATUSEX()
-            mem_status.dwLength = ctypes.sizeof(MEMORYSTATUSEX)
-            ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(mem_status))
-
-            total = mem_status.ullTotalPhys
-            available = mem_status.ullAvailPhys
-            used = total - available
-            return {
-                'total': total,
-                'used': used,
-                'available': available,
-                'usage': round((used / total) * 100, 1)
-            }
-        except Exception:
-            return None
-
-    return None
-
-
-def get_system_info():
-    psutil = _psutil_available()
-    if psutil:
-        try:
-            import platform
-            boot_time = psutil.boot_time()
-            uptime = time.time() - boot_time
-            days = int(uptime // 86400)
-            hours = int((uptime % 86400) // 3600)
-            minutes = int((uptime % 3600) // 60)
-            return {
-                'os': platform.system() + ' ' + platform.release(),
-                'uptime': f'{days}天 {hours}小时 {minutes}分钟',
-                'uptime_seconds': uptime
-            }
-        except Exception:
-            pass
-
-    if os.name == 'posix':
-        try:
-            os_name = 'Linux'
-            try:
-                with open('/etc/os-release', 'r') as f:
-                    for line in f:
-                        if line.startswith('PRETTY_NAME='):
-                            os_name = line.strip().split('=', 1)[1].strip('"')
-                            break
-            except Exception:
-                pass
-
-            with open('/proc/uptime', 'r') as f:
-                uptime = float(f.read().split()[0])
-            days = int(uptime // 86400)
-            hours = int((uptime % 86400) // 3600)
-            minutes = int((uptime % 3600) // 60)
-            return {
-                'os': os_name,
-                'uptime': f'{days}天 {hours}小时 {minutes}分钟',
-                'uptime_seconds': uptime
-            }
-        except Exception:
-            return None
-
-    if os.name == 'nt':
-        try:
-            import platform
-            import ctypes
-
-            class FILETIME(ctypes.Structure):
-                _fields_ = [("dwLowDateTime", ctypes.c_ulong), ("dwHighDateTime", ctypes.c_ulong)]
-
-            ticks = ctypes.windll.kernel32.GetTickCount64()
-            uptime = ticks / 1000.0
-
-            days = int(uptime // 86400)
-            hours = int((uptime % 86400) // 3600)
-            minutes = int((uptime % 3600) // 60)
-            return {
-                'os': platform.system() + ' ' + platform.release(),
-                'uptime': f'{days}天 {hours}小时 {minutes}分钟',
-                'uptime_seconds': uptime
-            }
-        except Exception:
-            return None
-
-    return None

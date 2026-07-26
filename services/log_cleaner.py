@@ -12,7 +12,7 @@ from config import (
     MAX_TASK_LOGS,
     LOG_CLEANUP_INTERVAL,
 )
-from core.database import get_db
+from core.db import get_db
 
 
 # 各日志表与其上限的映射

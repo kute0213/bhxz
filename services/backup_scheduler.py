@@ -84,7 +84,7 @@ class BackupScheduler:
 
     def _already_backed_up_today(self):
         """检查今天是否已经有成功的定时备份。"""
-        from core.database import get_db
+        from core.db import get_db
         today = datetime.date.today().strftime('%Y-%m-%d')
         conn = get_db()
         try:

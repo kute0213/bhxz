@@ -12,7 +12,7 @@ import time
 import datetime
 from typing import Iterator
 
-from core.database import get_db
+from core.db import get_db
 
 
 def run_command_stream(command: str, cwd: str = None, timeout: int = 300) -> Iterator[dict]:

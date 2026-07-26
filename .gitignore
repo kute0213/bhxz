@@ -44,3 +44,6 @@ ssl/
 # 系统
 .DS_Store
 Thumbs.db
+
+# Trae spec 文档
+.trae/

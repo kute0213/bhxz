@@ -8,7 +8,7 @@ import queue
 import threading
 import datetime
 
-from core.database import get_db
+from core.db import get_db
 
 
 class AsyncLogWriter:

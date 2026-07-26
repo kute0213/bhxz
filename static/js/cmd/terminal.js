@@ -53,15 +53,19 @@ window.CmdTerminal = (function () {
         if (!modal) return;
 
         // 创建"中止脚本"按钮（添加到标题栏，默认隐藏）
+        // 点击后调用后端 /admin/cmd/abort-script 终止正在执行的脚本
         if (titleBar) {
             abortBtn = document.createElement('button');
             abortBtn.className = 'px-2.5 py-1 bg-red-500/80 text-white text-xs font-bold rounded-lg hover:bg-red-500 transition-colors flex items-center gap-1';
             abortBtn.style.display = 'none';
             abortBtn.innerHTML = '<i data-lucide="square" class="w-3 h-3"></i> 中止';
             abortBtn.addEventListener('click', function () {
-                if (window.MiniScript) {
-                    if (window.MiniScript.abort) MiniScript.abort();
-                    if (window.MiniScript.clearAllTimers) MiniScript.clearAllTimers();
+                // 优先调用 main.js 暴露的中止函数（会同时切断前端 SSE 连接）
+                if (typeof window.__abortCmdScript === 'function') {
+                    window.__abortCmdScript();
+                } else {
+                    // 降级：直接调用后端 abort API
+                    fetch('/admin/cmd/abort-script', { method: 'POST' }).catch(function () { /* ignore */ });
                 }
                 scriptRunning = false;
                 if (abortBtn) abortBtn.style.display = 'none';

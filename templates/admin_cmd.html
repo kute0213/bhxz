@@ -135,7 +135,7 @@
                     class="w-full bg-black/30 border border-cream/10 rounded-lg px-4 py-2 text-cream focus:outline-none focus:border-gold-400/50"
                 >
                     <option value="cmd">CMD 命令（服务端执行）</option>
-                    <option value="script">MiniScript 脚本（前端执行）</option>
+                    <option value="script">Python 脚本（后端 SSE 执行）</option>
                 </select>
             </div>
             <div class="mb-4">
@@ -143,7 +143,7 @@
                 <textarea
                     id="cmd-form-command"
                     class="w-full bg-black/30 border border-cream/10 rounded-lg px-4 py-2 text-cream placeholder-cream/30 focus:outline-none focus:border-gold-400/50 font-mono text-sm"
-                    placeholder="CMD 命令或 MiniScript 代码"
+                    placeholder="CMD 命令或 Python 脚本代码"
                     rows="5"
                     required
                 ></textarea>
@@ -227,8 +227,7 @@
 </style>
 
 <script src="{{ url_for('static', filename='js/cmd/modal.js', v='1') }}"></script>
-<script src="{{ url_for('static', filename='js/cmd/script.js', v='1') }}"></script>
-<script src="{{ url_for('static', filename='js/cmd/terminal.js', v='1') }}"></script>
-<script src="{{ url_for('static', filename='js/cmd/presets.js', v='1') }}"></script>
-<script src="{{ url_for('static', filename='js/cmd/main.js', v='1') }}"></script>
+<script src="{{ url_for('static', filename='js/cmd/terminal.js', v='2') }}"></script>
+<script src="{{ url_for('static', filename='js/cmd/presets.js', v='2') }}"></script>
+<script src="{{ url_for('static', filename='js/cmd/main.js', v='2') }}"></script>
 {% endblock %}

@@ -33,6 +33,15 @@
                 <span id="editor-run-btn-text">运行</span>
             </button>
             <button
+                id="editor-abort-btn"
+                class="px-4 py-2 bg-red-500/80 text-white font-bold rounded-lg hover:bg-red-500 transition-colors flex items-center gap-2 text-sm"
+                title="强制终止正在运行的脚本"
+                style="display:none;"
+            >
+                <i data-lucide="square" class="w-4 h-4"></i>
+                <span>强制终止</span>
+            </button>
+            <button
                 id="editor-save-btn"
                 class="px-4 py-2 bg-forest-700/60 border border-cream/10 text-cream rounded-lg hover:bg-forest-600/60 transition-colors flex items-center gap-2 text-sm"
                 title="保存为快捷命令 (Ctrl+S)"
@@ -141,8 +150,9 @@
 
 <!-- CMD 模块依赖 -->
 <script src="{{ url_for('static', filename='js/cmd/modal.js', v='1') }}"></script>
-<script src="{{ url_for('static', filename='js/cmd/script.js', v='1') }}"></script>
-<script src="{{ url_for('static', filename='js/cmd/editor.js', v='1') }}"></script>
+<script src="{{ url_for('static', filename='js/cmd/editor-highlight.js', v='10') }}"></script>
+<script src="{{ url_for('static', filename='js/cmd/editor-sse.js', v='10') }}"></script>
+<script src="{{ url_for('static', filename='js/cmd/editor.js', v='10') }}"></script>
 
 <script>
     // 从模板注入初始代码（编辑已有命令时）
@@ -154,7 +164,7 @@
         paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs' }
     });
     require(['vs/editor/editor.main'], function () {
-        window.MiniScriptEditor.init(__initialCode, __editingCmdId);
+        window.ScriptEditor.init(__initialCode, __editingCmdId);
         if (window.lucide) lucide.createIcons();
     });
 
@@ -162,7 +172,7 @@
     var clearBtn2 = document.getElementById('editor-clear-output-btn-2');
     if (clearBtn2) {
         clearBtn2.addEventListener('click', function () {
-            window.MiniScriptEditor.clearOutput();
+            window.ScriptEditor.clearOutput();
         });
     }
 

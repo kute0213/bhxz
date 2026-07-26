@@ -1,24 +1,13 @@
-"""定时任务管理路由。
-
-提供定时任务的 CRUD、启用/禁用、手动触发、执行日志查看等接口。
-"""
+"""定时任务 CRUD 路由：列表、创建、更新、删除、启停、触发、状态查询。"""
 
 import datetime
-from flask import (
-    Blueprint, render_template, request, jsonify, abort,
-)
-from core.auth import login_required, get_current_user
-from core.database import get_db
+
+from flask import render_template, request, jsonify
+
+from core.auth import login_required
+from core.db import get_db
 from services.scheduler import scheduler, TaskScheduler
-
-scheduled_bp = Blueprint('scheduled', __name__)
-
-
-def _admin_check():
-    user = get_current_user()
-    if not user or not user['is_admin']:
-        abort(403)
-    return user
+from routes.scheduled import scheduled_bp, _admin_check
 
 
 # ---------------------------------------------------------------------------
@@ -63,12 +52,16 @@ def create_task():
     schedule_type = (data.get('schedule_type') or 'interval').strip()
     interval_seconds = int(data.get('interval_seconds') or 3600)
     execute_at = (data.get('execute_at') or '').strip()
+    task_type = (data.get('task_type') or 'shell').strip()
 
     if not name or not command:
         return jsonify({'success': False, 'message': '名称和命令不能为空'}), 400
 
     if schedule_type not in ('interval', 'daily', 'once'):
         return jsonify({'success': False, 'message': '无效的调度类型'}), 400
+
+    if task_type not in ('shell', 'script'):
+        return jsonify({'success': False, 'message': '无效的任务类型'}), 400
 
     if schedule_type == 'daily' and not execute_at:
         return jsonify({'success': False, 'message': '每日任务需要指定执行时间'}), 400
@@ -86,10 +79,10 @@ def create_task():
     cursor.execute(
         "INSERT INTO scheduled_tasks "
         "(name, command, schedule_type, interval_seconds, execute_at, "
-        " is_enabled, next_run_at, created_at) "
-        "VALUES (?, ?, ?, ?, ?, 1, ?, ?)",
+        " is_enabled, next_run_at, created_at, task_type) "
+        "VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?)",
         (name, command, schedule_type, interval_seconds,
-         execute_at or None, next_run, now),
+         execute_at or None, next_run, now, task_type),
     )
     conn.commit()
     task_id = cursor.lastrowid
@@ -113,12 +106,16 @@ def update_task(task_id):
     schedule_type = (data.get('schedule_type') or 'interval').strip()
     interval_seconds = int(data.get('interval_seconds') or 3600)
     execute_at = (data.get('execute_at') or '').strip()
+    task_type = (data.get('task_type') or 'shell').strip()
 
     if not name or not command:
         return jsonify({'success': False, 'message': '名称和命令不能为空'}), 400
 
     if schedule_type not in ('interval', 'daily', 'once'):
         return jsonify({'success': False, 'message': '无效的调度类型'}), 400
+
+    if task_type not in ('shell', 'script'):
+        return jsonify({'success': False, 'message': '无效的任务类型'}), 400
 
     conn = get_db()
     existing = conn.execute(
@@ -135,9 +132,10 @@ def update_task(task_id):
 
     conn.execute(
         "UPDATE scheduled_tasks SET name = ?, command = ?, schedule_type = ?, "
-        "interval_seconds = ?, execute_at = ?, next_run_at = ? WHERE id = ?",
+        "interval_seconds = ?, execute_at = ?, next_run_at = ?, task_type = ? "
+        "WHERE id = ?",
         (name, command, schedule_type, interval_seconds,
-         execute_at or None, next_run, task_id),
+         execute_at or None, next_run, task_type, task_id),
     )
     conn.commit()
     conn.close()
@@ -224,91 +222,6 @@ def trigger_task(task_id):
     return jsonify({'success': True, 'message': '任务已触发'})
 
 
-# ---------------------------------------------------------------------------
-# 执行日志
-# ---------------------------------------------------------------------------
-
-@scheduled_bp.route('/admin/cmd/scheduled/tasks/<int:task_id>/logs')
-@login_required
-def task_logs(task_id):
-    """获取某个任务的执行日志。"""
-    _admin_check()
-    page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 20, type=int)
-    per_page = min(per_page, 100)
-    offset = (page - 1) * per_page
-
-    conn = get_db()
-    total = conn.execute(
-        "SELECT COUNT(*) AS c FROM scheduled_task_logs WHERE task_id = ?",
-        (task_id,),
-    ).fetchone()['c']
-    total_pages = (total + per_page - 1) // per_page
-
-    logs = conn.execute(
-        "SELECT * FROM scheduled_task_logs WHERE task_id = ? "
-        "ORDER BY id DESC LIMIT ? OFFSET ?",
-        (task_id, per_page, offset),
-    ).fetchall()
-    logs = [dict(l) for l in logs]
-    conn.close()
-
-    return jsonify({
-        'logs': logs,
-        'page': page,
-        'total_pages': total_pages,
-        'total': total,
-    })
-
-
-@scheduled_bp.route('/admin/cmd/scheduled/logs')
-@login_required
-def all_task_logs():
-    """获取所有任务执行日志。"""
-    _admin_check()
-    page = request.args.get('page', 1, type=int)
-    per_page = request.args.get('per_page', 20, type=int)
-    per_page = min(per_page, 100)
-    offset = (page - 1) * per_page
-
-    conn = get_db()
-    total = conn.execute(
-        "SELECT COUNT(*) AS c FROM scheduled_task_logs"
-    ).fetchone()['c']
-    total_pages = (total + per_page - 1) // per_page
-
-    logs = conn.execute(
-        "SELECT * FROM scheduled_task_logs ORDER BY id DESC LIMIT ? OFFSET ?",
-        (per_page, offset),
-    ).fetchall()
-    logs = [dict(l) for l in logs]
-    conn.close()
-
-    return jsonify({
-        'logs': logs,
-        'page': page,
-        'total_pages': total_pages,
-        'total': total,
-    })
-
-
-@scheduled_bp.route('/admin/cmd/scheduled/logs/<int:log_id>')
-@login_required
-def task_log_detail(log_id):
-    """获取单条执行日志详情（含完整输出）。"""
-    _admin_check()
-    conn = get_db()
-    log = conn.execute(
-        "SELECT * FROM scheduled_task_logs WHERE id = ?", (log_id,)
-    ).fetchone()
-    conn.close()
-
-    if not log:
-        return jsonify({'success': False, 'message': '日志不存在'}), 404
-
-    return jsonify(dict(log))
-
-
 @scheduled_bp.route('/admin/cmd/scheduled/status')
 @login_required
 def tasks_status():
@@ -331,8 +244,7 @@ def tasks_status():
     """).fetchall()
 
     # 一次性查询最近 10 分钟内的执行数量（用于显示活动状态）
-    import datetime as _dt
-    since = (_dt.datetime.now() - _dt.timedelta(minutes=10)).strftime('%Y-%m-%d %H:%M:%S')
+    since = (datetime.datetime.now() - datetime.timedelta(minutes=10)).strftime('%Y-%m-%d %H:%M:%S')
     recent_counts = conn.execute("""
         SELECT task_id, COUNT(*) AS c
         FROM scheduled_task_logs
@@ -356,5 +268,5 @@ def tasks_status():
     return jsonify({
         'status': status_map,
         'recent': recent_map,
-        'now': _dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+        'now': datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
     })
