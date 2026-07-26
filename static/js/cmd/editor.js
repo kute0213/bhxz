@@ -3,7 +3,7 @@
  *
  * 功能：
  *   - Monaco Editor 初始化与配置
- *   - 工具栏事件绑定（运行/保存/格式化/清空/示例）
+ *   - 工具栏事件绑定（运行/保存/格式化/清空）
  *   - 快捷键绑定（Ctrl+Enter 运行、Ctrl+S 保存）
  *   - 输出面板可折叠（展开/收起，localStorage 记忆）
  *   - 脚本自动保存（防抖 2 秒）
@@ -140,7 +140,6 @@ window.ScriptEditor = (function () {
         document.getElementById('editor-save-btn').addEventListener('click', saveScript);
         document.getElementById('editor-clear-output-btn').addEventListener('click', clearOutput);
         document.getElementById('editor-format-btn').addEventListener('click', formatCode);
-        document.getElementById('editor-example-btn').addEventListener('click', toggleExamples);
 
         // 强制终止按钮（运行时显示，默认隐藏）
         const abortBtn = document.getElementById('editor-abort-btn');
@@ -148,35 +147,6 @@ window.ScriptEditor = (function () {
             abortBtn.addEventListener('click', SSE().abortScript);
             abortBtn.style.display = 'none';
         }
-
-        // 示例列表
-        const exList = document.getElementById('editor-example-list');
-        if (exList) {
-            Object.keys(HL().EXAMPLES).forEach(function (name) {
-                const item = document.createElement('button');
-                item.className = 'block w-full text-left px-4 py-2 text-sm text-cream/80 hover:bg-gold-400/10 hover:text-gold-400 transition-colors';
-                item.textContent = name;
-                item.addEventListener('click', function () {
-                    if (window.CmdModal && window.CmdModal.confirm) {
-                        window.CmdModal.confirm('加载示例', '将用示例代码替换当前内容，确定继续吗？').then(function (ok) {
-                            if (ok) {
-                                editor.setValue(HL().EXAMPLES[name]);
-                                exList.classList.add('hidden');
-                            }
-                        });
-                    } else if (confirm('将用示例代码替换当前内容，确定继续吗？')) {
-                        editor.setValue(HL().EXAMPLES[name]);
-                        exList.classList.add('hidden');
-                    }
-                });
-                exList.appendChild(item);
-            });
-        }
-    }
-
-    function toggleExamples() {
-        const exList = document.getElementById('editor-example-list');
-        if (exList) exList.classList.toggle('hidden');
     }
 
     function bindShortcuts() {

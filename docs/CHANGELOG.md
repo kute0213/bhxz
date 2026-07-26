@@ -6,16 +6,22 @@
 
 ## [未发布]
 
+### 变更
+- 脚本编辑器布局重构：输出面板移至左侧、Monaco 编辑器移至右侧，桌面端横向撑满视口（无滚动），屏幕过小时降级为竖向滚动
+- 输出面板折叠方向改为横向收起（宽度收为 44px 窄条，仅保留展开按钮）
+- 删除脚本编辑器示例区域：移除工具栏「示例」按钮、下拉列表、`EXAMPLES` 数据与 `toggleExamples` 函数
+
+### 修复
+- 修复 `/admin/logs` 页面 500 错误：模板中 `url_for('api.api_logs_refresh')` 端点名错误，实际蓝图名为 `api_admin`，改为 `url_for('api_admin.api_logs_refresh')`
+
 ### 新增
 - 脚本自动保存：编辑已有脚本时防抖 2 秒自动保存，工具栏四态状态指示器（已修改/保存中/已保存/保存失败）
 - 可折叠输出面板：编辑器输出区支持展开/收起，折叠状态 localStorage 记忆
 - 脚本文件系统：MiniScript 脚本从数据库移到 `scripts/` 目录，每个脚本一个独立 `.py` 文件，文件头注释存储名称和描述元数据
 - 脚本管理服务（`services/script_manager.py`）：增删改查、文件名安全检查、元数据解析
 - 脚本文件 API（`/admin/cmd/scripts`）：列表、获取、保存、删除
-- 编辑器可折叠侧边栏：左侧显示脚本文件列表，支持展开/收起（localStorage 记忆状态）、点击打开、新建脚本
 - CMD 控制台首页分开展示「脚本」和「快捷命令」两个区块
 - 定时任务从文件系统读取脚本内容执行，`command` 字段存储文件名
-- 一次性迁移脚本 `migrate_scripts_to_files.py`：将数据库中脚本类命令迁移到文件系统
 - 前端实时 Python 语法检查（`editor-highlight.js` 新增 `registerDiagnostics` / `checkPythonSyntax`）：检查括号匹配、缩进一致性、冒号缺失、续行符错误、未闭合字符串，编辑器内实时显示错误波浪线
 - 定时任务「从快捷命令选择」功能：创建/编辑定时任务时可直接从已有快捷命令列表中选择，自动填充命令内容和任务类型
 - 代码结构重组：6 个大文件拆分为包结构（`core/db/`、`services/monitoring/`、`routes/community/`、`routes/admin/`、`routes/cmd/`、`routes/scheduled/`）
@@ -23,6 +29,11 @@
 
 ### 修复
 - 修复编辑器保存弹窗闪退：`CmdModal` 单例连续弹窗时，旧 `close()` 的 300ms 超时 `setTimeout` 会隐藏新弹窗。新增 `closeTimer` 在 `show()` 时清除旧定时器
+
+### 删除
+- 脚本安全检测功能（`services/miniscript/sandbox.py` 及 `validate_script` 调用）
+- 一次性迁移脚本 `migrate_scripts_to_files.py`、`migrate_sqlite_to_duckdb.py`
+- 编辑器可折叠侧边栏（脚本文件列表），改为直接通过 URL `?file=xxx.py` 打开
 
 ### 变更
 - 更新日志文件从项目根目录移至 `docs/CHANGELOG.md`

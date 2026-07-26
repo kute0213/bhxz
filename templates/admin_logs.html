@@ -303,7 +303,7 @@
         // 自动刷新功能
         let refreshTimer = null;
         let currentPage = {{ page }};
-        const refreshApiUrl = "{{ url_for('api.api_logs_refresh') }}";
+        const refreshApiUrl = "{{ url_for('api_admin.api_logs_refresh') }}";
 
         function refreshLogs() {
             fetch(`${refreshApiUrl}?page=${currentPage}`)

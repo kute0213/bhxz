@@ -1,20 +1,20 @@
 {% extends "base.html" %}
 {% block title %}脚本编辑器{% endblock %}
 {% block content %}
-<section class="page-container py-4 sm:py-6">
-    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <!-- 顶部标题与返回 -->
-        <div class="flex items-center justify-between mb-3">
+<section class="page-container py-3 sm:py-4">
+    <div class="max-w-[1600px] mx-auto px-3 sm:px-4 lg:px-6">
+        <!-- 顶部标题与返回（紧凑） -->
+        <div class="flex items-center justify-between mb-2">
             <div class="flex items-center gap-3">
                 <a href="{{ url_for('cmd.cmd_page') }}" class="p-2 -ml-2 text-cream/60 hover:text-gold-400 transition-colors rounded-lg hover:bg-cream/5" title="返回 CMD 控制台">
                     <i data-lucide="arrow-left" class="w-5 h-5"></i>
                 </a>
-                <div class="w-10 h-10 bg-gold-400/15 rounded-lg flex items-center justify-center">
+                <div class="w-9 h-9 bg-gold-400/15 rounded-lg flex items-center justify-center">
                     <i data-lucide="code-2" class="w-5 h-5 text-gold-400"></i>
                 </div>
                 <div>
-                    <h1 id="editor-title" class="text-xl sm:text-2xl font-bold">脚本编辑器</h1>
-                    <p class="text-cream/50 text-xs">语法高亮 · 代码补全 · 实时错误诊断 · Ctrl+Enter 运行</p>
+                    <h1 id="editor-title" class="text-lg sm:text-xl font-bold">脚本编辑器</h1>
+                    <p class="text-cream/50 text-xs hidden sm:block">语法高亮 · 代码补全 · Ctrl+Enter 运行 · Ctrl+S 保存</p>
                 </div>
             </div>
             <div id="editor-status-errors" class="px-2.5 py-1 rounded-md text-xs font-medium bg-emerald-500/15 text-emerald-300 border border-emerald-500/20">
@@ -22,83 +22,67 @@
             </div>
         </div>
 
-        <!-- 主体区域：工具栏 + 编辑器 + 输出面板 -->
-        <div class="flex flex-col" style="height: calc(100vh - 140px); min-height: 520px;">
-            <!-- 工具栏 -->
-            <div class="pixel-card rounded-xl p-3 mb-4 flex flex-wrap items-center gap-2 flex-shrink-0">
-                <button
-                    id="editor-run-btn"
-                    class="px-4 py-2 bg-gold-400 text-forest-900 font-bold rounded-lg hover:bg-gold-500 transition-colors flex items-center gap-2 text-sm"
-                    title="运行脚本 (Ctrl+Enter)"
-                >
-                    <i id="editor-run-btn-icon" data-lucide="play" class="w-4 h-4"></i>
-                    <span id="editor-run-btn-text">运行</span>
-                </button>
-                <button
-                    id="editor-abort-btn"
-                    class="px-4 py-2 bg-red-500/80 text-white font-bold rounded-lg hover:bg-red-500 transition-colors flex items-center gap-2 text-sm"
-                    title="强制终止正在运行的脚本"
-                    style="display:none;"
-                >
-                    <i data-lucide="square" class="w-4 h-4"></i>
-                    <span>强制终止</span>
-                </button>
-                <button
-                    id="editor-save-btn"
-                    class="px-4 py-2 bg-forest-700/60 border border-cream/10 text-cream rounded-lg hover:bg-forest-600/60 transition-colors flex items-center gap-2 text-sm"
-                    title="保存脚本 (Ctrl+S)"
-                >
-                    <i data-lucide="save" class="w-4 h-4 text-gold-400"></i>
-                    <span>保存脚本</span>
-                </button>
-                <!-- 自动保存状态指示器 -->
-                <div class="flex items-center gap-1.5 text-xs text-cream/40">
-                    <span id="save-status-indicator" class="w-2 h-2 rounded-full" style="background:#6b7280;transition:background 0.2s;"></span>
-                    <span id="save-status-text">就绪</span>
-                </div>
-                <button
-                    id="editor-format-btn"
-                    class="px-3 py-2 bg-cream/5 border border-cream/10 text-cream/80 rounded-lg hover:bg-cream/10 transition-colors flex items-center gap-2 text-sm"
-                    title="格式化代码 (Shift+Alt+F)"
-                >
-                    <i data-lucide="align-left" class="w-4 h-4"></i>
-                    <span class="hidden sm:inline">格式化</span>
-                </button>
-                <button
-                    id="editor-clear-output-btn"
-                    class="px-3 py-2 bg-cream/5 border border-cream/10 text-cream/80 rounded-lg hover:bg-cream/10 transition-colors flex items-center gap-2 text-sm"
-                    title="清空输出"
-                >
-                    <i data-lucide="trash-2" class="w-4 h-4"></i>
-                    <span class="hidden sm:inline">清空输出</span>
-                </button>
-                <div class="relative">
-                    <button
-                        id="editor-example-btn"
-                        class="px-3 py-2 bg-cream/5 border border-cream/10 text-cream/80 rounded-lg hover:bg-cream/10 transition-colors flex items-center gap-2 text-sm"
-                        title="示例代码"
-                    >
-                        <i data-lucide="lightbulb" class="w-4 h-4 text-gold-400"></i>
-                        <span class="hidden sm:inline">示例</span>
-                    </button>
-                    <div id="editor-example-list" class="hidden absolute right-0 top-full mt-2 pixel-card rounded-lg p-1 z-50 w-48 max-h-72 overflow-y-auto">
-                    </div>
-                </div>
-                <div class="flex-1"></div>
-                <div id="editor-cursor-pos" class="text-xs text-cream/40 font-mono hidden sm:block">行 1, 列 1</div>
+        <!-- 工具栏（紧凑，单行） -->
+        <div class="pixel-card rounded-xl p-2 mb-2 flex flex-wrap items-center gap-2 flex-shrink-0">
+            <button
+                id="editor-run-btn"
+                class="px-3 py-1.5 bg-gold-400 text-forest-900 font-bold rounded-lg hover:bg-gold-500 transition-colors flex items-center gap-2 text-sm"
+                title="运行脚本 (Ctrl+Enter)"
+            >
+                <i id="editor-run-btn-icon" data-lucide="play" class="w-4 h-4"></i>
+                <span id="editor-run-btn-text">运行</span>
+            </button>
+            <button
+                id="editor-abort-btn"
+                class="px-3 py-1.5 bg-red-500/80 text-white font-bold rounded-lg hover:bg-red-500 transition-colors flex items-center gap-2 text-sm"
+                title="强制终止正在运行的脚本"
+                style="display:none;"
+            >
+                <i data-lucide="square" class="w-4 h-4"></i>
+                <span>强制终止</span>
+            </button>
+            <button
+                id="editor-save-btn"
+                class="px-3 py-1.5 bg-forest-700/60 border border-cream/10 text-cream rounded-lg hover:bg-forest-600/60 transition-colors flex items-center gap-2 text-sm"
+                title="保存脚本 (Ctrl+S)"
+            >
+                <i data-lucide="save" class="w-4 h-4 text-gold-400"></i>
+                <span>保存</span>
+            </button>
+            <!-- 自动保存状态指示器 -->
+            <div class="flex items-center gap-1.5 text-xs text-cream/40">
+                <span id="save-status-indicator" class="w-2 h-2 rounded-full" style="background:#6b7280;transition:background 0.2s;"></span>
+                <span id="save-status-text">就绪</span>
             </div>
+            <button
+                id="editor-format-btn"
+                class="px-3 py-1.5 bg-cream/5 border border-cream/10 text-cream/80 rounded-lg hover:bg-cream/10 transition-colors flex items-center gap-2 text-sm"
+                title="格式化代码 (Shift+Alt+F)"
+            >
+                <i data-lucide="align-left" class="w-4 h-4"></i>
+                <span class="hidden sm:inline">格式化</span>
+            </button>
+            <button
+                id="editor-clear-output-btn"
+                class="px-3 py-1.5 bg-cream/5 border border-cream/10 text-cream/80 rounded-lg hover:bg-cream/10 transition-colors flex items-center gap-2 text-sm"
+                title="清空输出"
+            >
+                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                <span class="hidden sm:inline">清空</span>
+            </button>
+            <div class="flex-1"></div>
+            <div id="editor-cursor-pos" class="text-xs text-cream/40 font-mono hidden md:block">行 1, 列 1</div>
+        </div>
 
-            <!-- Monaco 编辑器（占主要空间） -->
-            <div class="pixel-card rounded-xl overflow-hidden relative flex-1 min-h-0 mb-4">
-                <div id="monaco-editor" class="absolute inset-0"></div>
-            </div>
-
-            <!-- 输出面板（可折叠） -->
-            <div id="output-panel" class="pixel-card rounded-xl overflow-hidden flex flex-col flex-shrink-0" style="transition: height 0.25s ease;">
-                <div class="flex items-center justify-between px-4 py-2.5 border-b border-cream/10 flex-shrink-0" style="background:rgba(0,0,0,0.2);">
+        <!-- 主体：左侧输出面板 + 右侧编辑器（横向布局） -->
+        <!-- 撑满视口剩余空间；屏幕过小时降级为竖向滚动 -->
+        <div id="editor-workspace" class="flex flex-col lg:flex-row gap-2 lg:gap-3">
+            <!-- 左侧：输出面板（可折叠） -->
+            <div id="output-panel" class="pixel-card rounded-xl overflow-hidden flex flex-col flex-shrink-0 lg:flex-shrink lg:w-[360px] xl:w-[420px] 2xl:w-[480px]" style="transition: width 0.25s ease, height 0.25s ease;">
+                <div class="flex items-center justify-between px-3 py-2 border-b border-cream/10 flex-shrink-0" style="background:rgba(0,0,0,0.2);">
                     <div class="flex items-center gap-2">
                         <button id="output-toggle-btn" class="text-cream/50 hover:text-cream transition-colors p-1" title="收起/展开输出">
-                            <i id="output-toggle-icon" data-lucide="chevron-down" class="w-4 h-4"></i>
+                            <i id="output-toggle-icon" data-lucide="chevron-left" class="w-4 h-4"></i>
                         </button>
                         <i data-lucide="terminal" class="w-4 h-4 text-gold-400"></i>
                         <span class="text-sm font-bold">输出</span>
@@ -107,9 +91,14 @@
                         <i data-lucide="x" class="w-4 h-4"></i>
                     </button>
                 </div>
-                <div id="editor-output-wrapper" class="bg-black/40 overflow-y-auto font-mono text-xs sm:text-sm whitespace-pre-wrap" style="color:#4ade80;line-height:1.6; height: 200px;">
-                    <div id="editor-output" class="p-4"></div>
+                <div id="editor-output-wrapper" class="bg-black/40 overflow-y-auto font-mono text-xs sm:text-sm whitespace-pre-wrap" style="color:#4ade80;line-height:1.6; flex: 1 1 0; min-height: 120px;">
+                    <div id="editor-output" class="p-3"></div>
                 </div>
+            </div>
+
+            <!-- 右侧：Monaco 编辑器（占主要空间） -->
+            <div class="pixel-card rounded-xl overflow-hidden relative flex-1 min-h-0 min-w-0">
+                <div id="monaco-editor" class="absolute inset-0"></div>
             </div>
         </div>
     </div>
@@ -119,20 +108,45 @@
     /* Monaco 字体加载 */
     @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap');
 
-    /* 输出面板折叠样式 */
-    #output-panel.collapsed #editor-output-wrapper { display: none; }
-    #output-panel.collapsed { border-bottom: none; }
-    #output-toggle-icon { transition: transform 0.25s ease; }
-    #output-panel.collapsed #output-toggle-icon { transform: rotate(-90deg); }
+    /* 编辑器主体撑满视口（桌面端无滚动；移动端竖向可滚动） */
+    #editor-workspace {
+        height: calc(100vh - 170px);
+        min-height: 360px;
+    }
+    @media (max-width: 1023px) {
+        /* 小屏：允许内容滚动，输出区固定高度 */
+        #editor-workspace {
+            height: auto;
+            min-height: 520px;
+        }
+        #output-panel {
+            height: 220px;
+        }
+        #editor-output-wrapper {
+            flex: 1 1 0;
+        }
+    }
 
-    /* 示例下拉菜单动画 */
-    #editor-example-list:not(.hidden) {
-        animation: dropdownFade 0.15s ease forwards;
+    /* 输出面板折叠样式（横向折叠：宽度收为窄条） */
+    #output-panel.collapsed {
+        width: 44px !important;
+        height: 100% !important;
     }
-    @keyframes dropdownFade {
-        from { opacity: 0; transform: translateY(-4px); }
-        to   { opacity: 1; transform: translateY(0); }
+    #output-panel.collapsed #editor-output-wrapper { display: none; }
+    #output-panel.collapsed .border-b { border-bottom: none; }
+    #output-panel.collapsed #editor-clear-output-btn-2 { display: none; }
+    #output-panel.collapsed > div:first-child {
+        flex-direction: column;
+        align-items: center;
+        padding: 6px 4px;
+        gap: 6px;
+        height: 100%;
+        justify-content: flex-start;
     }
+    #output-panel.collapsed #editor-clear-output-btn-2,
+    #output-panel.collapsed span { display: none !important; }
+    #output-panel.collapsed #output-toggle-icon { transform: rotate(180deg); }
+    #output-toggle-icon { transition: transform 0.25s ease; }
 
     /* 输出面板滚动条美化 */
     #editor-output::-webkit-scrollbar { width: 8px; height: 8px; }
@@ -162,9 +176,9 @@
 
 <!-- CMD 模块依赖 -->
 <script src="{{ url_for('static', filename='js/cmd/modal.js', v='2') }}"></script>
-<script src="{{ url_for('static', filename='js/cmd/editor-highlight.js', v='11') }}"></script>
+<script src="{{ url_for('static', filename='js/cmd/editor-highlight.js', v='12') }}"></script>
 <script src="{{ url_for('static', filename='js/cmd/editor-sse.js', v='10') }}"></script>
-<script src="{{ url_for('static', filename='js/cmd/editor.js', v='12') }}"></script>
+<script src="{{ url_for('static', filename='js/cmd/editor.js', v='13') }}"></script>
 
 <script>
     // 从模板注入初始代码
@@ -199,14 +213,5 @@
             window.ScriptEditor.clearOutput();
         });
     }
-
-    // 点击外部关闭示例下拉
-    document.addEventListener('click', function (e) {
-        var exList = document.getElementById('editor-example-list');
-        var exBtn = document.getElementById('editor-example-btn');
-        if (exList && !exList.contains(e.target) && e.target !== exBtn && !exBtn.contains(e.target)) {
-            exList.classList.add('hidden');
-        }
-    });
 </script>
 {% endblock %}

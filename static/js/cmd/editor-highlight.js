@@ -4,7 +4,6 @@
  * 由 editor.js 拆分而来，提供：
  *   - 内置函数元数据（BUILTINS，与后端 builtins.py 对齐）
  *   - Python 关键字（KEYWORDS）
- *   - 示例代码（EXAMPLES）
  *   - 自定义深色主题 pythonDark
  *   - 代码补全与悬浮提示注册
  *   - 状态栏错误标记
@@ -45,17 +44,6 @@ window.ScriptEditorHighlight = (function () {
         'lambda', 'nonlocal', 'not', 'or', 'pass', 'raise', 'return', 'try',
         'while', 'with', 'yield', 'match', 'case'
     ];
-
-    // 示例代码（供工具栏"示例"下拉使用）
-    const EXAMPLES = {
-        'Hello World': '# 第一个脚本\necho("Hello, World!")',
-        '循环与列表': 'nums = [1, 2, 3, 4, 5]\ntotal = 0\nfor n in nums:\n    total += n\necho(f"总和: {total}")',
-        '条件判断': 'age = 18\nif age >= 18:\n    echo("成年人")\nelif age >= 13:\n    echo("青少年")\nelse:\n    echo("儿童")',
-        '交互输入': 'name = prompt("用户信息", "请输入你的名字：", "匿名")\nalert("欢迎", f"你好, {name}!")',
-        '执行 CMD': '# 执行服务端命令并获取输出\noutput = cmd("ls -la")\necho(output)',
-        '读取文件': 'content = file_read("/etc/hostname")\necho(content)',
-        '数据库查询': 'rows = db_query("SELECT id, name FROM users LIMIT 5")\nfor row in rows:\n    echo(row)',
-    };
 
     // ----------------------------------------------------------------
     // 自定义深色主题（与站点深绿金色风格匹配），语言沿用内置 python
@@ -432,7 +420,6 @@ window.ScriptEditorHighlight = (function () {
     return {
         BUILTINS: BUILTINS,
         KEYWORDS: KEYWORDS,
-        EXAMPLES: EXAMPLES,
         registerTheme: registerTheme,
         registerCompletion: registerCompletion,
         registerHover: registerHover,

@@ -310,7 +310,7 @@ python app.py
 
 ### CMD 控制台与 MiniScript（管理员）
 
-CMD 控制台提供实时终端、快捷命令管理、专业脚本编辑器（Monaco）与定时任务管理。MiniScript 是一种 **Python 子集脚本语言**，由后端执行引擎在独立 Python 子进程中运行，通过 SSE 流式回流输出，不影响 Flask 主服务。支持完整 Python 语法、AST 沙箱校验、文件/数据库访问、交互弹窗、强制终止等。
+CMD 控制台提供实时终端、快捷命令管理、专业脚本编辑器（Monaco）与定时任务管理。MiniScript 是一种 **Python 子集脚本语言**，由后端执行引擎在独立 Python 子进程中运行，通过 SSE 流式回流输出，不影响 Flask 主服务。支持完整 Python 语法、文件/数据库访问、交互弹窗、强制终止等。
 
 > **完整的脚本语法、内置函数参考、安全限制、执行模式、实用示例与常见问题，请参阅 [CMD 控制台使用说明](file:///workspace/docs/cmd-guide.md)。**
 
@@ -320,7 +320,7 @@ CMD 控制台提供实时终端、快捷命令管理、专业脚本编辑器（M
 |------|------|------|
 | 终端弹窗 | [terminal.js](file:///workspace/static/js/cmd/terminal.js) | SSE 流式输出、命令历史（↑↓）、清屏快捷键、脚本运行中止按钮 |
 | 快捷命令 | [presets.js](file:///workspace/static/js/cmd/presets.js) | 增删改查一键命令（CMD / 脚本两种类型，按 `[脚本]` 前缀区分） |
-| 脚本编辑器核心 | [editor.js](file:///workspace/static/js/cmd/editor.js) | Monaco 初始化、工具栏绑定、可折叠输出面板、**自动保存**（防抖 2 秒，状态指示器） |
+| 脚本编辑器核心 | [editor.js](file:///workspace/static/js/cmd/editor.js) | Monaco 初始化、工具栏绑定、左侧可折叠输出面板、**自动保存**（防抖 2 秒，状态指示器） |
 | 编辑器高亮 | [editor-highlight.js](file:///workspace/static/js/cmd/editor-highlight.js) | Monaco Python 语法高亮、代码补全、自定义主题、**前端实时语法诊断**（拆分自 editor.js） |
 | 编辑器 SSE | [editor-sse.js](file:///workspace/static/js/cmd/editor-sse.js) | SSE 执行、事件分发、强制终止（拆分自 editor.js） |
 | 定时任务核心 | [scheduled.js](file:///workspace/static/js/cmd/scheduled.js) | 任务列表/创建/编辑/启停/触发/状态轮询、**从已有快捷命令选择填充**，暴露 `window.ScheduledCore` |
