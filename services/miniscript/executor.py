@@ -5,7 +5,6 @@
 - 父进程从管道读取事件并 yield 给调用方
 - 超时后向子进程发送 terminate() 强制终止
 - 支持 abort() 强制终止
-- 脚本执行前先调用 sandbox.validate_script() 校验安全性
 """
 
 import os
@@ -16,7 +15,6 @@ import multiprocessing
 
 from config import SCRIPT_DEFAULT_TIMEOUT, SCRIPT_MAX_TIMEOUT, SCRIPT_MAX_LOOP_ITER
 
-from services.miniscript.sandbox import validate_script
 from services.miniscript.runner import run_script
 
 
@@ -49,16 +47,7 @@ class ScriptExecutor:
             执行器会将其转发给子进程。若调用方未调用 send()（如使用 for 循环），
             则 response 为 None，脚本会收到 None 作为交互结果。
         """
-        # 1. 沙箱安全校验
-        errors = validate_script(code)
-        if errors:
-            yield ('error', {
-                'message': '脚本安全校验失败:\n' + '\n'.join(errors)
-            })
-            yield ('done', {})
-            return
-
-        # 2. 确定超时
+        # 1. 确定超时
         if timeout is None:
             timeout = SCRIPT_DEFAULT_TIMEOUT
         timeout = min(int(timeout), SCRIPT_MAX_TIMEOUT)
@@ -67,7 +56,7 @@ class ScriptExecutor:
 
         max_loop_iter = SCRIPT_MAX_LOOP_ITER
 
-        # 3. 创建管道与子进程
+        # 2. 创建管道与子进程
         parent_conn, child_conn = multiprocessing.Pipe()
         proc = multiprocessing.Process(
             target=run_script,
@@ -102,7 +91,7 @@ class ScriptExecutor:
         except Exception:
             pass
 
-        # 4. 主事件循环
+        # 3. 主事件循环
         try:
             while True:
                 # 检查终止请求

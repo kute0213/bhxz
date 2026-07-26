@@ -33,9 +33,8 @@
 │   ├── log_writer.py             #   异步日志写入器（队列 + 后台线程批量写入）
 │   ├── backup_manager.py         #   数据库备份管理器（CHECKPOINT + 文件复制 + 旧备份清理）
 │   ├── backup_scheduler.py       #   每日定时备份调度器（默认凌晨 3:00）
-│   └── miniscript/               #   MiniScript 后端执行引擎（独立子进程 + AST 沙箱）
-│       ├── __init__.py           #     包入口，导出 ScriptExecutor / validate_script
-│       ├── sandbox.py            #     AST 语法白名单校验器（拒绝 exec/eval/dunder 等）
+│   └── miniscript/               #   MiniScript 后端执行引擎（独立子进程执行）
+│       ├── __init__.py           #     包入口，导出 ScriptExecutor
 │       ├── builtins.py           #     内置函数工厂（echo/cmd/file_*/db_*/alert/prompt/confirm）
 │       ├── runner.py             #     子进程入口（exec 执行脚本 + 管道通信 + 超时看门狗）
 │       └── executor.py           #     ScriptExecutor 类（multiprocessing + Pipe + abort）
@@ -104,7 +103,7 @@
 │           ├── modal.js          #       页内弹窗系统（替代原生 alert/prompt/confirm）
 │           ├── terminal.js       #       终端弹窗（SSE 流式输出 + 拖拽 + 动画 + 固定尺寸滚动）
 │           ├── presets.js        #       快捷命令管理（增删改查，按 [脚本] 前缀区分类型）
-│           ├── editor.js         #       脚本编辑器核心（Monaco 初始化、工具栏、输出面板）
+│           ├── editor.js         #       脚本编辑器核心（Monaco 初始化、工具栏、可折叠输出面板、自动保存）
 │           ├── editor-highlight.js  #    编辑器语法高亮 / 补全 / 主题 / 实时语法诊断（拆分自 editor.js）
 │           ├── editor-sse.js     #       编辑器 SSE 执行 / 事件分发 / 强制终止（拆分自 editor.js）
 │           ├── scheduled.js      #       定时任务管理核心（任务列表/创建/编辑/启停/触发/从快捷命令选择）
@@ -321,13 +320,13 @@ CMD 控制台提供实时终端、快捷命令管理、专业脚本编辑器（M
 |------|------|------|
 | 终端弹窗 | [terminal.js](file:///workspace/static/js/cmd/terminal.js) | SSE 流式输出、命令历史（↑↓）、清屏快捷键、脚本运行中止按钮 |
 | 快捷命令 | [presets.js](file:///workspace/static/js/cmd/presets.js) | 增删改查一键命令（CMD / 脚本两种类型，按 `[脚本]` 前缀区分） |
-| 脚本编辑器核心 | [editor.js](file:///workspace/static/js/cmd/editor.js) | Monaco 初始化、工具栏绑定、输出面板管理 |
+| 脚本编辑器核心 | [editor.js](file:///workspace/static/js/cmd/editor.js) | Monaco 初始化、工具栏绑定、可折叠输出面板、**自动保存**（防抖 2 秒，状态指示器） |
 | 编辑器高亮 | [editor-highlight.js](file:///workspace/static/js/cmd/editor-highlight.js) | Monaco Python 语法高亮、代码补全、自定义主题、**前端实时语法诊断**（拆分自 editor.js） |
 | 编辑器 SSE | [editor-sse.js](file:///workspace/static/js/cmd/editor-sse.js) | SSE 执行、事件分发、强制终止（拆分自 editor.js） |
 | 定时任务核心 | [scheduled.js](file:///workspace/static/js/cmd/scheduled.js) | 任务列表/创建/编辑/启停/触发/状态轮询、**从已有快捷命令选择填充**，暴露 `window.ScheduledCore` |
 | 定时任务日志 | [scheduled-logs.js](file:///workspace/static/js/cmd/scheduled-logs.js) | 执行日志查看（分页/详情），暴露 `window.ScheduledLogs.openLogsModal`（拆分自 scheduled.js） |
 | 主入口 | [main.js](file:///workspace/static/js/cmd/main.js) | 整合各模块、通过后端 SSE API 执行脚本、交互事件处理 |
-| 页内弹窗 | [modal.js](file:///workspace/static/js/cmd/modal.js) | 替代原生 alert/prompt/confirm，返回 Promise 支持 async/await |
+| 页内弹窗 | [modal.js](file:///workspace/static/js/cmd/modal.js) | 替代原生 alert/prompt/confirm，返回 Promise 支持 async/await，**修复连续弹窗闪退**（清理残留 animationend 监听器） |
 
 > **前端模块化拆分**：`editor.js` 拆分为 `editor.js`（核心）+ `editor-highlight.js`（高亮）+ `editor-sse.js`（SSE）；`scheduled.js` 拆分为 `scheduled.js`（任务管理）+ `scheduled-logs.js`（日志查看）。模板按依赖顺序加载：核心文件 → 高亮 → SSE → 入口。`base.html` 的内联 CSS / JS 已分别提取至 `static/css/base.css` 和 `static/js/base.js`。
 
@@ -393,10 +392,9 @@ data: [DONE]
 
 #### MiniScript 后端执行引擎
 
-基于 Python `ast` 模块的语法白名单校验 + 独立子进程执行的脚本引擎，位于 [services/miniscript/](file:///workspace/services/miniscript/)。脚本在独立 Python 子进程中运行，通过管道回传输出，不影响 Flask 主服务。
+基于独立子进程执行的脚本引擎，位于 [services/miniscript/](file:///workspace/services/miniscript/)。脚本在独立 Python 子进程中运行，通过管道回传输出，不影响 Flask 主服务。
 
 **核心特性**：
-- **AST 沙箱校验**：执行前用 `validate_script()` 校验代码安全性，拒绝 `exec`/`eval`/`compile`/`__import__` 等危险调用、双下划线属性访问（如 `__class__`）、`global`/`nonlocal` 声明
 - **完整 Python 语法**：支持控制流、函数、类、异常处理、`import` 标准库、推导式、f-string、装饰器等
 - **独立进程隔离**：使用 `multiprocessing.Process` 启动子进程，超时/异常不影响 Flask 主服务
 - **管道通信**：父子进程通过 `multiprocessing.Pipe` 通信，事件流式回流
@@ -406,10 +404,7 @@ data: [DONE]
 **公共 API**：
 
 ```python
-from services.miniscript import ScriptExecutor, validate_script
-
-# 安全校验
-errors = validate_script(code)  # 返回错误消息列表，空列表表示通过
+from services.miniscript import ScriptExecutor
 
 # 执行脚本（生成器模式，流式 yield 事件）
 executor = ScriptExecutor()

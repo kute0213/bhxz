@@ -5,7 +5,8 @@
  *   - Monaco Editor 初始化与配置
  *   - 工具栏事件绑定（运行/保存/格式化/清空/示例）
  *   - 快捷键绑定（Ctrl+Enter 运行、Ctrl+S 保存）
- *   - 侧边栏脚本列表（可展开/收起）
+ *   - 输出面板可折叠（展开/收起，localStorage 记忆）
+ *   - 脚本自动保存（防抖 2 秒）
  *   - 脚本文件保存到文件系统
  *   - 输出面板
  *
@@ -27,8 +28,10 @@ window.ScriptEditor = (function () {
     let editor = null;          // Monaco Editor 实例
     let editingCmdId = null;    // 当前编辑的数据库快捷命令 ID（兼容旧模式）
     let editingFilename = null; // 当前编辑的脚本文件名（文件系统模式）
-    let scriptsCache = [];      // 脚本列表缓存
-    let sidebarCollapsed = false; // 侧边栏收起状态
+
+    // 自动保存相关
+    let autoSaveTimer = null;   // 防抖定时器
+    let autoSaveEnabled = false; // 是否启用自动保存
 
     // 高亮 / SSE 模块的快捷访问（运行时解析，避免加载顺序耦合）
     function HL() { return window.ScriptEditorHighlight; }
@@ -101,8 +104,16 @@ window.ScriptEditor = (function () {
         // 更新标题
         updateEditorTitle();
 
-        // 初始化侧边栏
-        initSidebar();
+        // 初始化输出面板折叠
+        initOutputToggle();
+        // 初始化自动保存
+        initAutoSave();
+
+        // 如果是打开已有文件，启用自动保存
+        if (editingFilename) {
+            autoSaveEnabled = true;
+            updateSaveStatus('saved');
+        }
     }
 
     // ==================================================================
@@ -185,215 +196,90 @@ window.ScriptEditor = (function () {
     }
 
     // ==================================================================
-    // 侧边栏功能
+    // 输出面板折叠
     // ==================================================================
-    function initSidebar() {
-        // 从 localStorage 恢复收起状态
-        const savedState = localStorage.getItem('editor-sidebar-collapsed');
-        if (savedState === 'true') {
-            sidebarCollapsed = true;
+    function initOutputToggle() {
+        const panel = document.getElementById('output-panel');
+        const toggleBtn = document.getElementById('output-toggle-btn');
+        if (!panel || !toggleBtn) return;
+
+        // 从 localStorage 恢复折叠状态（默认展开）
+        const collapsed = localStorage.getItem('editor-output-collapsed') === 'true';
+        if (collapsed) {
+            panel.classList.add('collapsed');
         }
 
-        // 应用初始状态
-        applySidebarState();
-
-        // 绑定折叠按钮
-        const toggleBtn = document.getElementById('sidebar-toggle-btn');
-        if (toggleBtn) {
-            toggleBtn.addEventListener('click', toggleSidebar);
-        }
-
-        // 绑定新建按钮
-        const newBtn = document.getElementById('sidebar-new-btn');
-        if (newBtn) {
-            newBtn.addEventListener('click', createNewScript);
-        }
-
-        // 加载脚本列表
-        loadScriptList();
-    }
-
-    function toggleSidebar() {
-        sidebarCollapsed = !sidebarCollapsed;
-        applySidebarState();
-        // 保存到 localStorage
-        localStorage.setItem('editor-sidebar-collapsed', sidebarCollapsed ? 'true' : 'false');
-        // 通知 Monaco 重新布局
-        setTimeout(function () {
-            if (editor) editor.layout();
-        }, 260);
-    }
-
-    function applySidebarState() {
-        const sidebar = document.getElementById('sidebar');
-        const toggleBtn = document.getElementById('sidebar-toggle-btn');
-        if (!sidebar) return;
-
-        if (sidebarCollapsed) {
-            sidebar.classList.add('sidebar-collapsed');
-            sidebar.classList.remove('sidebar-expanded');
-            if (toggleBtn) {
-                toggleBtn.title = '展开侧边栏';
-            }
-        } else {
-            sidebar.classList.remove('sidebar-collapsed');
-            sidebar.classList.add('sidebar-expanded');
-            if (toggleBtn) {
-                toggleBtn.title = '收起侧边栏';
-            }
-        }
-    }
-
-    function loadScriptList() {
-        fetch('/admin/cmd/scripts')
-            .then(function (r) { return r.json(); })
-            .then(function (data) {
-                scriptsCache = data.scripts || [];
-                renderScriptList();
-            })
-            .catch(function (err) {
-                console.error('加载脚本列表失败:', err);
-            });
-    }
-
-    function renderScriptList() {
-        const listEl = document.getElementById('sidebar-script-list');
-        if (!listEl) return;
-
-        if (!scriptsCache || scriptsCache.length === 0) {
-            listEl.innerHTML = '<div class="sidebar-empty">暂无脚本<br>点击下方新建</div>';
-            return;
-        }
-
-        listEl.innerHTML = scriptsCache.map(function (s) {
-            const isActive = s.filename === editingFilename;
-            return `
-                <div class="sidebar-script-item ${isActive ? 'active' : ''}" data-filename="${escapeHtml(s.filename)}" title="${escapeHtml(s.description || s.name)}">
-                    <i data-lucide="file-code" class="w-4 h-4 script-icon"></i>
-                    <span class="script-name">${escapeHtml(s.name)}</span>
-                    <button class="delete-btn" data-filename="${escapeHtml(s.filename)}" title="删除脚本">
-                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
-                    </button>
-                </div>
-            `;
-        }).join('');
-
-        if (window.lucide && window.lucide.createIcons) {
-            window.lucide.createIcons();
-        }
-
-        // 绑定点击事件
-        listEl.querySelectorAll('.sidebar-script-item').forEach(function (item) {
-            item.addEventListener('click', function (e) {
-                // 如果点击的是删除按钮，不触发打开
-                if (e.target.closest('.delete-btn')) return;
-                const filename = item.dataset.filename;
-                if (filename) openScript(filename);
-            });
-        });
-
-        // 绑定删除按钮
-        listEl.querySelectorAll('.delete-btn').forEach(function (btn) {
-            btn.addEventListener('click', function (e) {
-                e.stopPropagation();
-                const filename = btn.dataset.filename;
-                if (filename) deleteScript(filename);
-            });
+        toggleBtn.addEventListener('click', function () {
+            panel.classList.toggle('collapsed');
+            const isCollapsed = panel.classList.contains('collapsed');
+            localStorage.setItem('editor-output-collapsed', isCollapsed ? 'true' : 'false');
+            // 通知 Monaco 重新布局（编辑器高度变化）
+            setTimeout(function () {
+                if (editor) editor.layout();
+            }, 260);
         });
     }
 
-    function openScript(filename) {
-        // 检查是否有未保存的更改（简单提示）
-        // TODO: 可以用 Monaco 的 isDirty 来更精确判断
-
-        fetch('/admin/cmd/scripts/' + encodeURIComponent(filename))
-            .then(function (r) { return r.json(); })
-            .then(function (data) {
-                if (data.script && data.script.content != null) {
-                    editor.setValue(data.script.content);
-                    editingFilename = filename;
-                    editingCmdId = null;
-                    updateEditorTitle();
-                    // 更新列表高亮
-                    renderScriptList();
-                    // 更新 URL（不刷新页面）
-                    history.replaceState(null, '', '?file=' + encodeURIComponent(filename));
-                } else {
-                    appendOutput('[加载失败] ' + (data.message || '未知错误'), 'error');
-                }
-            })
-            .catch(function (err) {
-                appendOutput('[网络错误] ' + err.message, 'error');
-            });
+    // ==================================================================
+    // 自动保存
+    // ==================================================================
+    function initAutoSave() {
+        if (!editor) return;
+        editor.onDidChangeModelContent(function () {
+            // 只有编辑已有文件且启用自动保存时才触发
+            if (editingFilename && autoSaveEnabled) {
+                scheduleAutoSave();
+            }
+        });
     }
 
-    function deleteScript(filename) {
-        const confirmMsg = '确定删除脚本 "' + filename + '" 吗？此操作不可恢复。';
-        let doDelete = false;
+    function scheduleAutoSave() {
+        // 更新状态指示器为"已修改"
+        updateSaveStatus('modified');
+        if (autoSaveTimer) clearTimeout(autoSaveTimer);
+        autoSaveTimer = setTimeout(function () {
+            doAutoSave();
+        }, 2000);
+    }
 
-        if (window.CmdModal && window.CmdModal.confirm) {
-            window.CmdModal.confirm('删除脚本', confirmMsg).then(function (ok) {
-                if (ok) doDeleteRequest();
+    async function doAutoSave() {
+        if (!editingFilename) return;
+        updateSaveStatus('saving');
+        appendOutput('[正在保存...]', 'info');
+        const code = editor.getValue();
+        try {
+            const resp = await fetch('/admin/cmd/scripts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ filename: editingFilename, content: code })
             });
-        } else if (confirm(confirmMsg)) {
-            doDeleteRequest();
-        }
-
-        function doDeleteRequest() {
-            fetch('/admin/cmd/scripts/' + encodeURIComponent(filename), {
-                method: 'DELETE',
-            })
-                .then(function (r) { return r.json(); })
-                .then(function (data) {
-                    if (data.success) {
-                        appendOutput('[已删除] ' + filename, 'info');
-                        // 如果删除的是当前编辑的文件，清空状态
-                        if (editingFilename === filename) {
-                            editingFilename = null;
-                            updateEditorTitle();
-                            history.replaceState(null, '', window.location.pathname);
-                        }
-                        loadScriptList();
-                    } else {
-                        appendOutput('[删除失败] ' + (data.message || '未知错误'), 'error');
-                    }
-                })
-                .catch(function (err) {
-                    appendOutput('[网络错误] ' + err.message, 'error');
-                });
+            const result = await resp.json();
+            if (result.success) {
+                updateSaveStatus('saved');
+                appendOutput('[已保存] ' + editingFilename, 'info');
+            } else {
+                updateSaveStatus('error');
+                appendOutput('[自动保存失败] ' + (result.message || '未知错误'), 'error');
+            }
+        } catch (err) {
+            updateSaveStatus('error');
+            appendOutput('[自动保存失败] ' + err.message, 'error');
         }
     }
 
-    function createNewScript() {
-        let name = '';
-        let description = '';
-
-        if (window.CmdModal && window.CmdModal.prompt) {
-            window.CmdModal.prompt('新建脚本', '请输入脚本名称：', '')
-                .then(function (n) {
-                    if (!n) return;
-                    name = n;
-                    return window.CmdModal.prompt('描述（可选）', '请输入简短描述：', '');
-                })
-                .then(function (d) {
-                    description = d || '';
-                    doCreate();
-                });
-        } else {
-            name = prompt('请输入脚本名称：', '');
-            if (!name) return;
-            description = prompt('描述（可选）：', '') || '';
-            doCreate();
-        }
-
-        function doCreate() {
-            const content = '# ' + name + '\n# ' + description + '\n\necho("Hello, MiniScript!")\n';
-            editor.setValue(content);
-            editingFilename = null;
-            editingCmdId = null;
-            updateEditorTitle();
-            appendOutput('[新建脚本] ' + name + '（编辑后按 Ctrl+S 保存）', 'info');
-        }
+    function updateSaveStatus(status) {
+        const indicator = document.getElementById('save-status-indicator');
+        const text = document.getElementById('save-status-text');
+        if (!indicator) return;
+        const statusMap = {
+            'modified': { color: '#fbbf24', text: '已修改' },
+            'saving': { color: '#60a5fa', text: '保存中...' },
+            'saved': { color: '#4ade80', text: '已保存' },
+            'error': { color: '#f87171', text: '保存失败' },
+        };
+        const s = statusMap[status] || statusMap.saved;
+        indicator.style.background = s.color;
+        if (text) text.textContent = s.text;
     }
 
     // ==================================================================
@@ -406,27 +292,21 @@ window.ScriptEditor = (function () {
             return;
         }
 
-        // 如果已有文件名，直接保存
+        // 已有文件名：直接保存
         if (editingFilename) {
             await doSave(editingFilename, code);
             return;
         }
 
-        // 新脚本：需要输入名称
-        let name;
-        let description;
-
+        // 新脚本：只弹一次 prompt 输入名称
+        let name = '';
         if (window.CmdModal && window.CmdModal.prompt) {
             name = await window.CmdModal.prompt('保存脚本', '请输入脚本名称：', '');
-            if (!name) return;
-            description = await window.CmdModal.prompt('描述（可选）', '请输入简短描述：', '');
         } else {
             name = prompt('请输入脚本名称：', '');
-            if (!name) return;
-            description = prompt('描述（可选）：', '') || '';
         }
-
-        await doSave(null, code, name, description);
+        if (!name) return;
+        await doSave(null, code, name);
     }
 
     async function doSave(filename, content, name, description) {
@@ -449,16 +329,18 @@ window.ScriptEditor = (function () {
             if (result.success && result.script) {
                 editingFilename = result.script.filename;
                 editingCmdId = null;
+                autoSaveEnabled = true; // 保存成功后启用自动保存
                 updateEditorTitle();
                 // 更新 URL
                 history.replaceState(null, '', '?file=' + encodeURIComponent(result.script.filename));
-                // 刷新列表
-                loadScriptList();
+                updateSaveStatus('saved');
                 appendOutput('[已保存] ' + result.script.filename, 'info');
             } else {
+                updateSaveStatus('error');
                 appendOutput('[保存失败] ' + (result.message || '未知错误'), 'error');
             }
         } catch (err) {
+            updateSaveStatus('error');
             appendOutput('[网络错误] ' + err.message, 'error');
         }
     }
@@ -514,16 +396,6 @@ window.ScriptEditor = (function () {
     }
 
     // ==================================================================
-    // 工具函数
-    // ==================================================================
-    function escapeHtml(str) {
-        if (!str) return '';
-        const div = document.createElement('div');
-        div.textContent = str;
-        return div.innerHTML;
-    }
-
-    // ==================================================================
     // 公共 API（保持与原 editor.js 接口兼容）
     // ==================================================================
     return {
@@ -533,11 +405,5 @@ window.ScriptEditor = (function () {
         // 以下为拆分后供 editor-sse.js 使用的内部辅助
         getEditor: function () { return editor; },
         _updateRunButton: _updateRunButton,
-        // 侧边栏相关
-        loadScriptList: loadScriptList,
-        openScript: openScript,
-        toggleSidebar: toggleSidebar,
-        saveCurrentScript: saveScript,
-        createNewScript: createNewScript,
     };
 })();

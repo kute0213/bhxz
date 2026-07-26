@@ -27,6 +27,7 @@ window.CmdModal = (function () {
 
     let pending = null; // { resolve, type }
     let closeTimer = null; // close() 的超时 fallback 定时器
+    let animEndHandler = null; // 当前 animationend 监听器引用（修复连续弹窗闪退）
 
     function build() {
         if (root) return;
@@ -121,6 +122,11 @@ window.CmdModal = (function () {
             clearTimeout(closeTimer);
             closeTimer = null;
         }
+        // 移除上次 close() 残留的 animationend 监听器，防止新弹窗 enter 动画结束时被旧监听器隐藏
+        if (animEndHandler && container) {
+            container.removeEventListener('animationend', animEndHandler);
+            animEndHandler = null;
+        }
         root.style.display = 'flex';
         // 重启动画
         container.classList.remove('cmd-modal-leave');
@@ -141,6 +147,11 @@ window.CmdModal = (function () {
             clearTimeout(closeTimer);
             closeTimer = null;
         }
+        // 移除旧的监听器，防止重复绑定
+        if (animEndHandler) {
+            container.removeEventListener('animationend', animEndHandler);
+            animEndHandler = null;
+        }
         container.classList.remove('cmd-modal-enter');
         container.classList.add('cmd-modal-leave');
 
@@ -150,13 +161,15 @@ window.CmdModal = (function () {
             done = true;
             container.classList.remove('cmd-modal-leave');
             root.style.display = 'none';
+            // 清理监听器引用
+            if (animEndHandler) {
+                container.removeEventListener('animationend', animEndHandler);
+                animEndHandler = null;
+            }
         };
 
-        const onEnd = function () {
-            finish();
-            container.removeEventListener('animationend', onEnd);
-        };
-        container.addEventListener('animationend', onEnd);
+        animEndHandler = function () { finish(); };
+        container.addEventListener('animationend', animEndHandler);
 
         // 超时 fallback：300ms 后强制关闭，防止动画未定义导致弹窗无法关闭
         closeTimer = setTimeout(function () {
