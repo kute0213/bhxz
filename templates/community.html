@@ -248,16 +248,7 @@
                                 <label class="flex items-center gap-1.5 text-cream/50 text-xs cursor-pointer hover:text-gold-400 transition-colors">
                                     <i data-lucide="paperclip" class="w-3.5 h-3.5"></i>
                                     <span>添加附件</span>
-                                    <input type="file" name="attachments" multiple class="hidden" onchange="
-                                        var names = Array.from(this.files).map(f => f.name);
-                                        var list = document.getElementById('file-list-{{ topic.id }}');
-                                        if (names.length > 0) {
-                                            list.innerHTML = names.map(n => '<span class=\"bg-forest-700 px-2 py-0.5 rounded text-cream/80 text-xs\">' + n + '</span>').join('');
-                                            list.classList.remove('hidden');
-                                        } else {
-                                            list.classList.add('hidden');
-                                        }
-                                    ">
+                                    <input type="file" name="attachments" multiple class="hidden" onchange="updateFileList(this, 'file-list-{{ topic.id }}')">
                                 </label>
                                 <span class="text-cream/30 text-xs ml-auto">支持上传多个附件</span>
                             </div>
@@ -300,6 +291,20 @@
             form.classList.toggle('hidden');
             if (!form.classList.contains('hidden')) {
                 form.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
+        function updateFileList(input, listId) {
+            const list = document.getElementById(listId);
+            if (!list) return;
+            const names = Array.from(input.files).map(function (f) { return f.name; });
+            if (names.length > 0) {
+                list.innerHTML = names.map(function (n) {
+                    return '<span class="bg-forest-700 px-2 py-0.5 rounded text-cream/80 text-xs">' + n + '</span>';
+                }).join('');
+                list.classList.remove('hidden');
+            } else {
+                list.innerHTML = '';
+                list.classList.add('hidden');
             }
         }
     </script>

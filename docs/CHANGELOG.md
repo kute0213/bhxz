@@ -6,6 +6,11 @@
 
 ## [未发布]
 
+### 修复
+- **修复留言板附件选择显示异常与多文件上传失效**：
+  - `templates/community.html`：将内联 `onchange` 中的复杂 JavaScript 提取为 `updateFileList(input, listId)` 函数，避免 HTML 属性中 `"` 转义错误导致 `<input>` 标签提前关闭、按钮文本显示为 JS 代码碎片的问题
+  - 选择文件后现在正确显示文件名列表，支持单次选择多个文件并全部上传
+
 ### 重构
 - **终端（CMD 命令提示符）与 MiniScript 彻底重构**：
   - 前端提取 `static/js/cmd/terminal-core.js`：统一 ANSI 解析、SSE 连接管理（含断线重连 / 心跳看门狗 / 待发送队列）、命令历史、输入发送，供 `terminal.js` 弹窗与 `editor-terminal.js` 内嵌终端复用
