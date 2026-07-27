@@ -102,7 +102,7 @@ def community_page():
             for r in reply_rows:
                 r_dict = dict(r)
                 r_dict.pop('rn', None)
-                # 解析附件：兼容 JSON 数组格式和旧的字符串格式
+                # 解析附件
                 if r_dict.get('attachment'):
                     try:
                         parsed = json.loads(r_dict['attachment'])

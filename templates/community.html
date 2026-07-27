@@ -219,28 +219,12 @@
                                     {% endif %}
                                 </div>
                                 <p class="text-cream/80 text-sm leading-relaxed whitespace-pre-wrap">{{ reply.content }}</p>
-                                {% set attachment_list = reply.attachment if reply.attachment else [] %}
-                                {% if attachment_list %}
+                                {% if reply.attachment %}
                                 <div class="mt-2 flex flex-wrap items-center gap-2 bg-forest-800/50 rounded-lg px-3 py-2">
                                     <i data-lucide="paperclip" class="w-4 h-4 text-gold-400 flex-shrink-0"></i>
-                                    {% for att in attachment_list %}
-                                    {# 兼容新格式（字典）和旧格式（字符串） #}
-                                    {% set att_filename = att.filename if att is mapping else att %}
-                                    {% set att_name = att.original_name if att is mapping else (att.split('_', 1)[1] if '_' in att else att) %}
-                                    {% set att_type = att.file_type if att is mapping else (att.rsplit('.', 1)[-1] if '.' in att else '') %}
-                                    <a href="{{ url_for('community.download_attachment', filename=att_filename) }}" class="text-gold-400 hover:text-gold-300 text-sm truncate max-w-[200px] flex items-center gap-1" target="_blank">
-                                        {% if att_type in ['png', 'jpg', 'jpeg', 'gif', 'webp'] %}
-                                        <i data-lucide="image" class="w-3.5 h-3.5"></i>
-                                        {% elif att_type in ['pdf'] %}
-                                        <i data-lucide="file-text" class="w-3.5 h-3.5"></i>
-                                        {% elif att_type in ['zip', 'rar', '7z'] %}
-                                        <i data-lucide="archive" class="w-3.5 h-3.5"></i>
-                                        {% elif att_type in ['mp4', 'mp3', 'wav'] %}
-                                        <i data-lucide="play-circle" class="w-3.5 h-3.5"></i>
-                                        {% else %}
-                                        <i data-lucide="file" class="w-3.5 h-3.5"></i>
-                                        {% endif %}
-                                        {{ att_name }}
+                                    {% for att in reply.attachment %}
+                                    <a href="{{ url_for('community.download_attachment', filename=att) }}" class="text-gold-400 hover:text-gold-300 text-sm truncate max-w-[200px]" target="_blank">
+                                        {{ att.split('_', 1)[1] if '_' in att else att }}
                                     </a>
                                     {% if not loop.last %}<span class="text-cream/30">·</span>{% endif %}
                                     {% endfor %}
@@ -253,7 +237,7 @@
 
                         <!-- 回复表单 -->
                         {% if user %}
-                        <form method="POST" action="{{ url_for('community.reply_board', topic_id=topic.id) }}" enctype="multipart/form-data" class="space-y-2 reply-form" data-max-files="5" data-max-size-mb="100">
+                        <form method="POST" action="{{ url_for('community.reply_board', topic_id=topic.id) }}" enctype="multipart/form-data" class="space-y-2">
                             <div class="flex gap-2">
                                 <textarea name="content" required rows="2" maxlength="2000" class="input-field flex-1 px-4 py-2 rounded-lg text-sm" placeholder="写下你的留言..."></textarea>
                                 <button type="submit" class="btn-primary px-4 py-2 rounded-lg text-sm font-bold self-end">
@@ -264,15 +248,20 @@
                                 <label class="flex items-center gap-1.5 text-cream/50 text-xs cursor-pointer hover:text-gold-400 transition-colors">
                                     <i data-lucide="paperclip" class="w-3.5 h-3.5"></i>
                                     <span>添加附件</span>
-                                    <input type="file" name="attachments" multiple class="hidden" accept=".png,.jpg,.jpeg,.gif,.webp,.pdf,.txt,.zip,.rar,.7z,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.mp4,.mp3,.wav"
-                                           onchange="handleAttachmentChange(this)">
+                                    <input type="file" name="attachments" multiple class="hidden" onchange="
+                                        var names = Array.from(this.files).map(f => f.name);
+                                        var list = document.getElementById('file-list-{{ topic.id }}');
+                                        if (names.length > 0) {
+                                            list.innerHTML = names.map(n => '<span class=\"bg-forest-700 px-2 py-0.5 rounded text-cream/80 text-xs\">' + n + '</span>').join('');
+                                            list.classList.remove('hidden');
+                                        } else {
+                                            list.classList.add('hidden');
+                                        }
+                                    ">
                                 </label>
-                                <span class="file-name text-cream/40 text-xs truncate max-w-[300px]"></span>
-                                <span class="text-cream/30 text-xs ml-auto">最多 5 个 · 每文件最大 100MB</span>
+                                <span class="text-cream/30 text-xs ml-auto">支持上传多个附件</span>
                             </div>
-                            <!-- 附件预览区域 -->
-                            <div class="attachment-preview flex flex-wrap gap-2 hidden"></div>
-                            <div class="attachment-error text-red-400 text-xs hidden"></div>
+                            <div id="file-list-{{ topic.id }}" class="flex flex-wrap gap-1 hidden"></div>
                         </form>
                         {% else %}
                         <div class="text-center py-3 bg-forest-900/50 rounded-lg">
@@ -299,109 +288,6 @@
     </section>
 
     <script>
-        // 附件上传处理：预览、数量限制、大小限制
-        function handleAttachmentChange(input) {
-            const form = input.closest('.reply-form');
-            const preview = form.querySelector('.attachment-preview');
-            const errorDiv = form.querySelector('.attachment-error');
-            const fileNameSpan = form.querySelector('.file-name');
-            const maxFiles = parseInt(form.dataset.maxFiles || '5');
-            const maxSizeMB = parseInt(form.dataset.maxSizeMb || '100');
-            const maxSizeBytes = maxSizeMB * 1024 * 1024;
-            const allowedTypes = ['png','jpg','jpeg','gif','webp','pdf','txt','zip','rar','7z','doc','docx','xls','xlsx','ppt','pptx','mp4','mp3','wav'];
-
-            preview.innerHTML = '';
-            errorDiv.textContent = '';
-            errorDiv.classList.add('hidden');
-
-            const files = Array.from(input.files);
-
-            // 数量限制
-            if (files.length > maxFiles) {
-                errorDiv.textContent = `最多只能上传 ${maxFiles} 个文件`;
-                errorDiv.classList.remove('hidden');
-                input.value = '';
-                fileNameSpan.textContent = '';
-                return;
-            }
-
-            const validFiles = [];
-            for (const file of files) {
-                const ext = file.name.split('.').pop().toLowerCase();
-                // 类型检查
-                if (!allowedTypes.includes(ext)) {
-                    errorDiv.textContent = `不支持的文件类型: .${ext}`;
-                    errorDiv.classList.remove('hidden');
-                    input.value = '';
-                    fileNameSpan.textContent = '';
-                    preview.innerHTML = '';
-                    return;
-                }
-                // 大小检查
-                if (file.size > maxSizeBytes) {
-                    errorDiv.textContent = `文件 ${file.name} 超过 ${maxSizeMB}MB 限制`;
-                    errorDiv.classList.remove('hidden');
-                    input.value = '';
-                    fileNameSpan.textContent = '';
-                    preview.innerHTML = '';
-                    return;
-                }
-                validFiles.push(file);
-            }
-
-            // 更新文件名显示
-            fileNameSpan.textContent = validFiles.map(f => f.name).join(', ');
-
-            // 生成预览
-            if (validFiles.length > 0) {
-                preview.classList.remove('hidden');
-                validFiles.forEach(file => {
-                    const ext = file.name.split('.').pop().toLowerCase();
-                    const isImage = ['png','jpg','jpeg','gif','webp'].includes(ext);
-                    const sizeStr = file.size > 1024 * 1024
-                        ? (file.size / 1024 / 1024).toFixed(1) + 'MB'
-                        : (file.size / 1024).toFixed(1) + 'KB';
-
-                    const item = document.createElement('div');
-                    item.className = 'bg-forest-800/50 rounded-lg p-2 flex flex-col items-center gap-1';
-
-                    if (isImage) {
-                        const img = document.createElement('img');
-                        img.src = URL.createObjectURL(file);
-                        img.className = 'w-16 h-16 object-cover rounded';
-                        img.onload = () => URL.revokeObjectURL(img.src);
-                        item.appendChild(img);
-                    } else {
-                        const iconWrap = document.createElement('div');
-                        iconWrap.className = 'w-16 h-16 flex items-center justify-center';
-                        const icon = document.createElement('i');
-                        icon.dataset.lucide = 'file';
-                        icon.className = 'w-8 h-8 text-cream/40';
-                        iconWrap.appendChild(icon);
-                        item.appendChild(iconWrap);
-                    }
-
-                    const nameSpan = document.createElement('span');
-                    nameSpan.className = 'text-xs text-cream/80 truncate max-w-[80px]';
-                    nameSpan.textContent = file.name;
-                    item.appendChild(nameSpan);
-
-                    const sizeSpan = document.createElement('span');
-                    sizeSpan.className = 'text-xs text-cream/40';
-                    sizeSpan.textContent = sizeStr;
-                    item.appendChild(sizeSpan);
-
-                    preview.appendChild(item);
-                });
-                // 刷新 lucide 图标
-                if (window.lucide) {
-                    window.lucide.createIcons({ nodes: preview.querySelectorAll('[data-lucide]') });
-                }
-            } else {
-                preview.classList.add('hidden');
-            }
-        }
-
         function togglePollForm() {
             const form = document.getElementById('poll-form');
             form.classList.toggle('hidden');
