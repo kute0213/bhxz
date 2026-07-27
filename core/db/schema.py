@@ -297,12 +297,15 @@ def init_db():
     except Exception as e:
         print(f'[DB] 迁移 scripts 表失败: {e}', flush=True)
 
-    # ---- 默认管理员（使用 INSERT OR IGNORE 防止重复插入） ----
-    cursor.execute(
-        "INSERT OR IGNORE INTO users (username, password_hash, is_admin, created_at) VALUES (?, ?, ?, ?)",
-        ('服主', hashlib.sha256('admin1324'.encode('utf-8')).hexdigest(), 1, datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
-    )
-    conn.commit()
+    # ---- 默认管理员（仅在系统中没有任何管理员时才创建） ----
+    cursor.execute("SELECT COUNT(*) AS c FROM users WHERE is_admin = 1")
+    admin_row = cursor.fetchone()
+    if admin_row and admin_row[0] == 0:
+        cursor.execute(
+            "INSERT OR IGNORE INTO users (username, password_hash, is_admin, created_at) VALUES (?, ?, ?, ?)",
+            ('服主', hashlib.sha256('admin1324'.encode('utf-8')).hexdigest(), 1, datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+        )
+        conn.commit()
 
     # ---- 默认模组介绍（仅在表为空时批量插入，使用 INSERT OR IGNORE） ----
     cursor.execute("SELECT COUNT(*) AS c FROM mod_intros")
