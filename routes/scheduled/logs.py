@@ -18,19 +18,21 @@ def task_logs(task_id):
     offset = (page - 1) * per_page
 
     conn = get_db()
-    total = conn.execute(
-        "SELECT COUNT(*) AS c FROM scheduled_task_logs WHERE task_id = ?",
-        (task_id,),
-    ).fetchone()['c']
-    total_pages = (total + per_page - 1) // per_page
+    try:
+        total = conn.execute(
+            "SELECT COUNT(*) AS c FROM scheduled_task_logs WHERE task_id = ?",
+            (task_id,),
+        ).fetchone()['c']
+        total_pages = (total + per_page - 1) // per_page
 
-    logs = conn.execute(
-        "SELECT * FROM scheduled_task_logs WHERE task_id = ? "
-        "ORDER BY id DESC LIMIT ? OFFSET ?",
-        (task_id, per_page, offset),
-    ).fetchall()
-    logs = [dict(l) for l in logs]
-    conn.close()
+        logs = conn.execute(
+            "SELECT * FROM scheduled_task_logs WHERE task_id = ? "
+            "ORDER BY id DESC LIMIT ? OFFSET ?",
+            (task_id, per_page, offset),
+        ).fetchall()
+        logs = [dict(l) for l in logs]
+    finally:
+        conn.close()
 
     return jsonify({
         'logs': logs,
@@ -51,17 +53,19 @@ def all_task_logs():
     offset = (page - 1) * per_page
 
     conn = get_db()
-    total = conn.execute(
-        "SELECT COUNT(*) AS c FROM scheduled_task_logs"
-    ).fetchone()['c']
-    total_pages = (total + per_page - 1) // per_page
+    try:
+        total = conn.execute(
+            "SELECT COUNT(*) AS c FROM scheduled_task_logs"
+        ).fetchone()['c']
+        total_pages = (total + per_page - 1) // per_page
 
-    logs = conn.execute(
-        "SELECT * FROM scheduled_task_logs ORDER BY id DESC LIMIT ? OFFSET ?",
-        (per_page, offset),
-    ).fetchall()
-    logs = [dict(l) for l in logs]
-    conn.close()
+        logs = conn.execute(
+            "SELECT * FROM scheduled_task_logs ORDER BY id DESC LIMIT ? OFFSET ?",
+            (per_page, offset),
+        ).fetchall()
+        logs = [dict(l) for l in logs]
+    finally:
+        conn.close()
 
     return jsonify({
         'logs': logs,
@@ -77,10 +81,12 @@ def task_log_detail(log_id):
     """获取单条执行日志详情（含完整输出）。"""
     _admin_check()
     conn = get_db()
-    log = conn.execute(
-        "SELECT * FROM scheduled_task_logs WHERE id = ?", (log_id,)
-    ).fetchone()
-    conn.close()
+    try:
+        log = conn.execute(
+            "SELECT * FROM scheduled_task_logs WHERE id = ?", (log_id,)
+        ).fetchone()
+    finally:
+        conn.close()
 
     if not log:
         return jsonify({'success': False, 'message': '日志不存在'}), 404

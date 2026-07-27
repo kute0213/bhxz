@@ -1,25 +1,21 @@
 """日志自动清除服务。
 
 后台线程定期检查各日志表的记录数量，超过上限时自动删除最旧的记录。
+支持热重载：通过 config.get_config_value() 读取最新配置。
 """
 
 import threading
 import time
 
-from config import (
-    MAX_ACCESS_LOGS,
-    MAX_CMD_LOGS,
-    MAX_TASK_LOGS,
-    LOG_CLEANUP_INTERVAL,
-)
+from config import get_config_value
 from core.db import get_db
 
 
-# 各日志表与其上限的映射
-_LOG_TABLES = [
-    ('access_logs', MAX_ACCESS_LOGS),
-    ('cmd_run_logs', MAX_CMD_LOGS),
-    ('scheduled_task_logs', MAX_TASK_LOGS),
+# 各日志表与其上限的映射（动态读取配置，支持热重载）
+_LOG_TABLE_CONFIGS = [
+    ('access_logs', 'MAX_ACCESS_LOGS'),
+    ('cmd_run_logs', 'MAX_CMD_LOGS'),
+    ('scheduled_task_logs', 'MAX_TASK_LOGS'),
 ]
 
 
@@ -57,9 +53,21 @@ class LogCleaner:
         if self._thread:
             self._thread.join(timeout=5)
 
+    def _get_cleanup_interval(self) -> int:
+        """获取当前日志清理间隔（秒）。"""
+        return get_config_value('LOG_CLEANUP_INTERVAL', 300)
+
+    def _get_log_tables(self):
+        """获取日志表与上限的映射（支持热重载）。"""
+        result = []
+        for table, key in _LOG_TABLE_CONFIGS:
+            max_count = get_config_value(key, 500)
+            result.append((table, max_count))
+        return result
+
     def _run_loop(self):
         # 启动时先等待一个间隔，避免与初始化竞争
-        while not self._stop_event.wait(LOG_CLEANUP_INTERVAL):
+        while not self._stop_event.wait(self._get_cleanup_interval()):
             try:
                 self._clean_all()
             except Exception as e:
@@ -69,7 +77,7 @@ class LogCleaner:
         """检查所有日志表并清理超限记录。"""
         conn = get_db()
         try:
-            for table, max_count in _LOG_TABLES:
+            for table, max_count in self._get_log_tables():
                 self._clean_table(conn, table, max_count)
             conn.commit()
         finally:

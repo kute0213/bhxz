@@ -56,27 +56,26 @@ def reply_board(topic_id):
         return _respond('内容长度应为1-2000字符', 'error')
 
     conn = get_db()
-    topic = conn.execute("SELECT id, is_active FROM board_topics WHERE id = ?", (topic_id,)).fetchone()
-    if not topic or not topic['is_active']:
-        conn.close()
-        return _respond('留言板不存在或已关闭', 'error')
-
-    # 处理多附件上传
-    attachment_files = request.files.getlist('attachments')
     attachment_names = []
-    for file in attachment_files:
-        if file and file.filename:
-            safe_prefix = secrets.token_hex(8)
-            clean_name = secure_filename(file.filename) or 'file'
-            safe_name = safe_prefix + '_' + clean_name
-            save_path = os.path.join(UPLOAD_DIR, safe_name)
-            file.save(save_path)
-            attachment_names.append(safe_name)
-
-    # 存储为JSON数组
-    attachment_filename = json.dumps(attachment_names) if attachment_names else None
-
     try:
+        topic = conn.execute("SELECT id, is_active FROM board_topics WHERE id = ?", (topic_id,)).fetchone()
+        if not topic or not topic['is_active']:
+            return _respond('留言板不存在或已关闭', 'error')
+
+        # 处理多附件上传
+        attachment_files = request.files.getlist('attachments')
+        for file in attachment_files:
+            if file and file.filename:
+                safe_prefix = secrets.token_hex(8)
+                clean_name = secure_filename(file.filename) or 'file'
+                safe_name = safe_prefix + '_' + clean_name
+                save_path = os.path.join(UPLOAD_DIR, safe_name)
+                file.save(save_path)
+                attachment_names.append(safe_name)
+
+        # 存储为JSON数组
+        attachment_filename = json.dumps(attachment_names) if attachment_names else None
+
         now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         conn.execute(
             "INSERT INTO board_replies (topic_id, user_id, content, attachment, created_at) VALUES (?, ?, ?, ?, ?)",
@@ -85,7 +84,10 @@ def reply_board(topic_id):
         conn.commit()
         return _respond('回复成功', 'success')
     except Exception:
-        conn.rollback()
+        try:
+            conn.rollback()
+        except Exception:
+            pass
         # 数据库写入失败时清理已上传的附件
         for fname in attachment_names:
             filepath = os.path.join(UPLOAD_DIR, fname)
@@ -146,11 +148,9 @@ def delete_board_reply(reply_id):
     try:
         reply = conn.execute("SELECT * FROM board_replies WHERE id = ?", (reply_id,)).fetchone()
         if not reply:
-            conn.close()
             abort(404)
 
         if not user['is_admin'] and reply['user_id'] != user['id']:
-            conn.close()
             abort(403)
 
         # 删除附件文件（兼容JSON数组和单个字符串）
@@ -173,7 +173,10 @@ def delete_board_reply(reply_id):
         conn.commit()
         return _respond('回复已删除', 'success')
     except Exception:
-        conn.rollback()
+        try:
+            conn.rollback()
+        except Exception:
+            pass
         return _respond('删除失败', 'error')
     finally:
         conn.close()

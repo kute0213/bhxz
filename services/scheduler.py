@@ -143,40 +143,63 @@ class TaskScheduler:
         started_at = datetime.datetime.now()
         started_str = started_at.strftime('%Y-%m-%d %H:%M:%S')
 
-        task_type = task.get('task_type') or 'shell'
-        print(
-            f"[Scheduler] 执行任务 #{task_id} '{task['name']}' "
-            f"(type={task_type}): {task['command']}",
-            flush=True,
-        )
+        task_type = 'shell'
 
         success = False
         output = ''
         exit_code = None
         finished_at = None
+        # 实际执行的命令内容，用于日志记录（保持与执行内容一致）
+        executed_command = task.get('command') or ''
 
         try:
-            if task_type == 'script':
-                # MiniScript 脚本任务：从文件系统读取脚本内容再执行
-                from services.script_manager import get_script
-                script_info = get_script(task['command'])
-                if not script_info:
-                    raise Exception(f"脚本文件不存在: {task['command']}")
-                # 用脚本内容执行
-                success, output, exit_code = self._execute_script_task(script_info['content'])
-            else:
-                # 默认 shell 命令任务
-                result = subprocess.run(
-                    task['command'],
-                    shell=True,
-                    cwd=os.getcwd(),
-                    capture_output=True,
-                    text=True,
-                    timeout=TASK_EXECUTION_TIMEOUT,
-                )
-                output = (result.stdout or '') + (result.stderr or '')
-                exit_code = result.returncode
-                success = result.returncode == 0
+            # 优先从 cmd_commands 表读取最新命令内容
+            # （确保快捷命令更新后任务也用最新版本）
+            command_id = task.get('command_id')
+            cmd_content = None
+            if command_id:
+                try:
+                    conn = get_db()
+                    try:
+                        cmd_row = conn.execute(
+                            "SELECT command FROM cmd_commands WHERE id = ?",
+                            (command_id,),
+                        ).fetchone()
+                        if cmd_row:
+                            cmd_content = cmd_row['command']
+                    finally:
+                        conn.close()
+                except Exception as e:
+                    print(
+                        f'[Scheduler] 任务 #{task_id} 读取快捷命令失败: {e}',
+                        flush=True,
+                    )
+
+            # 决定任务类型（强制为 shell）
+            if not cmd_content:
+                # 回退到 command 字段（任务创建时的快照）
+                cmd_content = task.get('command') or ''
+
+            # 记录实际执行的命令
+            executed_command = cmd_content
+
+            print(
+                f"[Scheduler] 执行任务 #{task_id} '{task['name']}': "
+                f"{executed_command}",
+                flush=True,
+            )
+
+            result = subprocess.run(
+                cmd_content,
+                shell=True,
+                cwd=os.getcwd(),
+                capture_output=True,
+                text=True,
+                timeout=TASK_EXECUTION_TIMEOUT,
+            )
+            output = (result.stdout or '') + (result.stderr or '')
+            exit_code = result.returncode
+            success = result.returncode == 0
         except subprocess.TimeoutExpired:
             output = f'执行超时（>{TASK_EXECUTION_TIMEOUT}秒）'
         except Exception as e:
@@ -192,7 +215,7 @@ class TaskScheduler:
                 finished_at = datetime.datetime.now()
                 duration = (finished_at - started_at).total_seconds()
                 self._log_task_result(
-                    task, output, exit_code, success,
+                    task, executed_command, output, exit_code, success,
                     started_str, finished_at.strftime('%Y-%m-%d %H:%M:%S'),
                     duration,
                 )
@@ -209,50 +232,22 @@ class TaskScheduler:
                 with self._running_lock:
                     self._running_tasks.discard(task_id)
 
-    def _execute_script_task(self, code: str):
-        """执行 MiniScript 脚本任务（定时模式，非交互）。
-
-        alert/prompt/confirm 在非交互模式下会降级处理：
-        - prompt/confirm 返回 None，脚本继续执行
-        - 输出通过 output 事件收集
-
-        Returns:
-            (success, output, exit_code) 三元组
-        """
-        # 局部导入，避免在调度器初始化时引入子进程模块
-        from services.miniscript import ScriptExecutor
-
-        executor = ScriptExecutor()
-        output_lines = []
-        has_error = False
-
-        try:
-            for event_type, data in executor.execute(
-                code, interactive=False, timeout=SCRIPT_DEFAULT_TIMEOUT
-            ):
-                if event_type == 'output':
-                    output_lines.append(data.get('text', ''))
-                elif event_type == 'error':
-                    has_error = True
-                    output_lines.append(f'[错误] {data.get("message", "")}')
-                elif event_type == 'done':
-                    break
-                # 其他事件（如 prompt/confirm/alert）在非交互模式下忽略
-        except Exception as e:
-            has_error = True
-            output_lines.append(f'[错误] 脚本执行异常: {e}')
-
-        success = not has_error
-        output = '\n'.join(output_lines)
-        exit_code = 0 if success else 1
-        return success, output, exit_code
-
-    def _log_task_result(self, task, output, exit_code, success,
+    def _log_task_result(self, task, executed_command, output, exit_code, success,
                          started_str, finished_str, duration):
-        """记录任务执行结果到数据库。"""
+        """记录任务执行结果到数据库。
+
+        Args:
+            executed_command: 实际执行的命令内容（保持与执行内容一致，
+                              避免日志记录的是任务创建时的旧快照）
+        """
         # 截断过长的输出
         if len(output) > 10000:
             output = output[:10000] + '\n...(输出已截断)'
+
+        # 截断过长的命令内容，避免日志膨胀
+        log_command = executed_command or task.get('command') or ''
+        if len(log_command) > 2000:
+            log_command = log_command[:2000] + '\n...(命令已截断)'
 
         conn = get_db()
         try:
@@ -262,7 +257,7 @@ class TaskScheduler:
                 " started_at, finished_at, duration_seconds) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (
-                    task['id'], task['name'], task['command'],
+                    task['id'], task['name'], log_command,
                     output, exit_code, success,
                     started_str, finished_str, duration,
                 ),
@@ -305,11 +300,16 @@ class TaskScheduler:
 
     @staticmethod
     def _calc_next_run(task: dict, base: datetime.datetime) -> str:
-        """根据任务类型计算下次执行时间。"""
+        """根据任务类型计算下次执行时间（执行后调用，用于安排下一次）。
+
+        注意：'once' 类型在执行后返回 None（自动禁用）。
+        创建任务时的初始执行时间请使用 calc_initial_next_run。
+        """
         schedule_type = task['schedule_type']
 
         if schedule_type == 'once':
-            return None  # 一次性任务不需要下次执行时间
+            # 一次性任务执行后不再安排下次
+            return None
 
         if schedule_type == 'interval':
             seconds = task['interval_seconds'] or 3600
@@ -319,9 +319,23 @@ class TaskScheduler:
         if schedule_type == 'daily':
             execute_at = task['execute_at'] or '00:00'
             try:
-                hour, minute = map(int, execute_at.split(':'))
+                hour, minute = map(int, execute_at.split(':')[:2])
             except (ValueError, AttributeError):
-                hour, minute = 0, 0
+                # 格式无效时返回 None 而非静默降级为 0:00
+                print(
+                    f'[Scheduler] 任务 #{task.get("id", "?")} execute_at 格式无效: {execute_at!r}，'
+                    f'跳过调度',
+                    flush=True,
+                )
+                return None
+            if not (0 <= hour <= 23 and 0 <= minute <= 59):
+                # 时间值越界也视为无效
+                print(
+                    f'[Scheduler] 任务 #{task.get("id", "?")} execute_at 时间越界: {execute_at!r}，'
+                    f'跳过调度',
+                    flush=True,
+                )
+                return None
             next_time = base.replace(hour=hour, minute=minute, second=0, microsecond=0)
             if next_time <= base:
                 next_time += datetime.timedelta(days=1)
@@ -334,8 +348,45 @@ class TaskScheduler:
     @staticmethod
     def calc_initial_next_run(schedule_type: str, interval_seconds: int = 3600,
                               execute_at: str = None) -> str:
-        """创建任务时计算初始下次执行时间。"""
+        """创建/更新/启用任务时计算初始下次执行时间。
+
+        对于 'once' 类型，使用 execute_at 作为初始执行时间；
+        若 execute_at 为空或已过期，返回 None（任务无法调度）。
+        """
         now = datetime.datetime.now()
+
+        if schedule_type == 'once':
+            # 一次性任务：使用 execute_at 作为初始执行时间
+            if not execute_at:
+                return None
+            # 兼容 "YYYY-MM-DD HH:MM:SS" 和 "HH:MM" 两种格式
+            try:
+                # 尝试完整日期时间格式
+                target = datetime.datetime.strptime(
+                    execute_at, '%Y-%m-%d %H:%M:%S'
+                )
+            except ValueError:
+                try:
+                    # 尝试日期时间无秒格式
+                    target = datetime.datetime.strptime(
+                        execute_at, '%Y-%m-%d %H:%M'
+                    )
+                except ValueError:
+                    try:
+                        # 仅时间格式（今日或明日）
+                        hour, minute = map(int, execute_at.split(':')[:2])
+                        target = now.replace(
+                            hour=hour, minute=minute, second=0, microsecond=0
+                        )
+                        if target <= now:
+                            target += datetime.timedelta(days=1)
+                    except (ValueError, AttributeError):
+                        return None
+            # 过去时间不再调度，避免重新启用已执行过的 once 任务时立即触发
+            if target <= now:
+                return None
+            return target.strftime('%Y-%m-%d %H:%M:%S')
+
         return TaskScheduler._calc_next_run(
             {
                 'schedule_type': schedule_type,

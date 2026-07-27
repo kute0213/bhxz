@@ -47,6 +47,7 @@
         <h2 id="task-modal-title" class="text-xl font-bold mb-6">创建定时任务</h2>
         <form id="task-form" class="space-y-4">
             <input type="hidden" id="task-id" value="">
+            <input type="hidden" id="task-command-id" value="">
             <div>
                 <label class="block text-sm font-medium text-cream/70 mb-1">任务名称</label>
                 <input type="text" id="task-name" required
@@ -54,26 +55,12 @@
                        placeholder="如：每日备份">
             </div>
             <div>
-                <label class="block text-sm font-medium text-cream/70 mb-1">任务类型</label>
-                <select id="task-type"
+                <label class="block text-sm font-medium text-cream/70 mb-1">选择快捷命令</label>
+                <select id="task-preset-select" required
                         class="w-full px-3 py-2 bg-forest-900/60 border border-cream/10 rounded-lg text-cream focus:border-gold-400 focus:outline-none">
-                    <option value="shell">Shell 命令（执行系统命令）</option>
-                    <option value="script">Python 脚本（后端子进程执行）</option>
+                    <option value="">-- 请选择 --</option>
                 </select>
-            </div>
-            <div id="preset-select-wrapper">
-                <label class="block text-sm font-medium text-cream/70 mb-1">从快捷命令选择（可选）</label>
-                <select id="task-preset-select"
-                        class="w-full px-3 py-2 bg-forest-900/60 border border-cream/10 rounded-lg text-cream focus:border-gold-400 focus:outline-none">
-                    <option value="">-- 手动输入 --</option>
-                    <!-- 由 JS 动态加载快捷命令 -->
-                </select>
-            </div>
-            <div>
-                <label class="block text-sm font-medium text-cream/70 mb-1" id="task-command-label">执行命令</label>
-                <textarea id="task-command" required rows="3"
-                          class="w-full px-3 py-2 bg-forest-900/60 border border-cream/10 rounded-lg text-cream focus:border-gold-400 focus:outline-none font-mono text-sm"
-                          placeholder="如：echo 'Hello World'"></textarea>
+                <p id="selected-script-info" class="text-xs text-cream/40 mt-1"></p>
             </div>
             <div>
                 <label class="block text-sm font-medium text-cream/70 mb-1">调度类型</label>
@@ -148,6 +135,7 @@
     </div>
 </div>
 
-<script src="{{ url_for('static', filename='js/cmd/scheduled.js', v='3') }}"></script>
+<script src="{{ url_for('static', filename='js/cmd/modal.js', v='4') }}"></script>
+<script src="{{ url_for('static', filename='js/cmd/scheduled.js', v='5') }}"></script>
 <script src="{{ url_for('static', filename='js/cmd/scheduled-logs.js', v='2') }}"></script>
 {% endblock %}

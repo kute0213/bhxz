@@ -56,9 +56,6 @@ window.CmdPresets = (function () {
         if (cancelBtn) {
             cancelBtn.addEventListener('click', closeModal);
         }
-        if (modal) {
-            modal.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
-        }
         if (form) {
             form.addEventListener('submit', handleSubmit);
         }
@@ -99,7 +96,7 @@ window.CmdPresets = (function () {
 
         scriptListContainer.innerHTML = scripts.map(s => {
             return `
-            <div class="pixel-card rounded-xl p-4" data-script-filename="${escapeHtml(s.filename)}">
+            <div class="pixel-card rounded-xl p-4" data-script-id="${s.id}">
                 <div class="flex items-start justify-between gap-2 mb-2">
                     <div class="flex-1 min-w-0">
                         <div class="flex items-center gap-2 mb-1">
@@ -107,7 +104,7 @@ window.CmdPresets = (function () {
                             <span class="text-[10px] bg-purple-500/20 text-purple-300 px-1.5 py-0.5 rounded">脚本</span>
                         </div>
                         ${s.description ? `<p class="text-cream/50 text-xs truncate">${escapeHtml(s.description)}</p>` : ''}
-                        <p class="text-cream/30 text-[10px] mt-1">${escapeHtml(s.filename)} · ${formatSize(s.size)}</p>
+                        <p class="text-cream/30 text-[10px] mt-1">${s.script_type === 'shell' ? 'Shell 命令' : 'MiniScript 脚本'}</p>
                     </div>
                     <div class="flex gap-1 flex-shrink-0">
                         <button class="script-editor-btn p-1.5 text-cream/50 hover:text-purple-300 transition-colors" title="在编辑器中打开">
@@ -131,46 +128,57 @@ window.CmdPresets = (function () {
         // 绑定编辑按钮
         scriptListContainer.querySelectorAll('.script-editor-btn').forEach(btn => {
             btn.addEventListener('click', () => {
-                const filename = btn.closest('[data-script-filename]').dataset.scriptFilename;
-                if (filename) {
-                    window.location.href = '/admin/cmd/editor?file=' + encodeURIComponent(filename);
+                const id = btn.closest('[data-script-id]').dataset.scriptId;
+                if (id) {
+                    window.location.href = '/admin/cmd/editor?id=' + encodeURIComponent(id);
                 }
             });
         });
 
         // 绑定删除按钮
         scriptListContainer.querySelectorAll('.script-delete-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const filename = btn.closest('[data-script-filename]').dataset.scriptFilename;
-                if (!confirm('确定删除脚本 "' + filename + '"？')) return;
-                fetch('/admin/cmd/scripts/' + encodeURIComponent(filename), { method: 'DELETE' })
-                    .then(r => r.json())
-                    .then(r => { if (r.success) load(); else alert(r.message); })
-                    .catch(err => alert('网络错误: ' + err.message));
+            btn.addEventListener('click', async () => {
+                const id = btn.closest('[data-script-id]').dataset.scriptId;
+                const script = scripts.find(s => String(s.id) === String(id));
+                if (!script) return;
+                const ok = await window.CmdModal.confirm('删除脚本', '确定删除脚本 "' + script.name + '"？');
+                if (!ok) return;
+                try {
+                    const r = await fetch('/admin/cmd/scripts/' + id, { method: 'DELETE' });
+                    const data = await r.json();
+                    if (data.success) {
+                        load();
+                    } else {
+                        window.CmdModal.alert('删除失败', data.message || '未知错误');
+                    }
+                } catch (err) {
+                    window.CmdModal.alert('网络错误', err.message);
+                }
             });
         });
 
         // 绑定运行按钮
         scriptListContainer.querySelectorAll('.script-run-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const filename = btn.closest('[data-script-filename]').dataset.scriptFilename;
-                const script = scripts.find(s => s.filename === filename);
+            btn.addEventListener('click', async () => {
+                const id = btn.closest('[data-script-id]').dataset.scriptId;
+                const script = scripts.find(s => String(s.id) === String(id));
                 if (!script) return;
 
-                // 先获取脚本内容再运行
-                fetch('/admin/cmd/scripts/' + encodeURIComponent(filename))
-                    .then(r => r.json())
-                    .then(data => {
-                        if (data.script && onRunScript) {
-                            onRunScript({
-                                name: data.script.name,
-                                command: data.script.content,
-                                description: data.script.description,
-                                isFileScript: true,
-                            });
-                        }
-                    })
-                    .catch(err => alert('加载脚本失败: ' + err.message));
+                try {
+                    const r = await fetch('/admin/cmd/scripts/' + id);
+                    const data = await r.json();
+                    if (data.script && onRunScript) {
+                        onRunScript({
+                            id: data.script.id,
+                            name: data.script.name,
+                            command: data.script.content,
+                            description: data.script.description,
+                            isFileScript: true,
+                        });
+                    }
+                } catch (err) {
+                    window.CmdModal.alert('加载失败', '加载脚本失败: ' + err.message);
+                }
             });
         });
     }
@@ -231,13 +239,23 @@ ${escapeHtml(cmd.command)}
         });
 
         listContainer.querySelectorAll('.cmd-delete-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
+            btn.addEventListener('click', async () => {
                 const id = parseInt(btn.closest('[data-cmd-id]').dataset.cmdId);
-                if (!confirm('确定删除这个快捷命令？')) return;
-                fetch('/admin/cmd/commands/' + id + '/delete', { method: 'POST' })
-                    .then(r => r.json())
-                    .then(r => { if (r.success) load(); else alert(r.message); })
-                    .catch(err => alert('网络错误: ' + err.message));
+                const cmd = commands.find(c => c.id === id);
+                if (!cmd) return;
+                const ok = await window.CmdModal.confirm('删除快捷命令', '确定删除 "' + cmd.name + '"？');
+                if (!ok) return;
+                try {
+                    const r = await fetch('/admin/cmd/commands/' + id + '/delete', { method: 'POST' });
+                    const data = await r.json();
+                    if (data.success) {
+                        load();
+                    } else {
+                        window.CmdModal.alert('删除失败', data.message || '未知错误');
+                    }
+                } catch (err) {
+                    window.CmdModal.alert('网络错误', err.message);
+                }
             });
         });
 
@@ -270,7 +288,7 @@ ${escapeHtml(cmd.command)}
         modal.classList.add('hidden');
     }
 
-    function handleSubmit(e) {
+    async function handleSubmit(e) {
         e.preventDefault();
         const id = formId.value;
         const type = formType.value;
@@ -292,20 +310,22 @@ ${escapeHtml(cmd.command)}
         const url = id ? '/admin/cmd/commands/' + id : '/admin/cmd/commands';
         const method = id ? 'PUT' : 'POST';
 
-        fetch(url, {
-            method: method,
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(data)
-        }).then(r => r.json()).then(result => {
+        try {
+            const r = await fetch(url, {
+                method: method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+            const result = await r.json();
             if (result.success) {
                 closeModal();
                 load();
             } else {
-                alert(result.message || '保存失败');
+                window.CmdModal.alert('保存失败', result.message || '未知错误');
             }
-        }).catch(err => {
-            alert('网络错误: ' + err.message);
-        });
+        } catch (err) {
+            window.CmdModal.alert('网络错误', err.message);
+        }
     }
 
     function escapeHtml(str) {

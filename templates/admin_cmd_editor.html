@@ -74,31 +74,39 @@
             <div id="editor-cursor-pos" class="text-xs text-cream/40 font-mono hidden md:block">行 1, 列 1</div>
         </div>
 
-        <!-- 主体：左侧输出面板 + 右侧编辑器（横向布局） -->
+        <!-- 主体：左侧编辑器 + 右侧终端（横向布局） -->
         <!-- 撑满视口剩余空间；屏幕过小时降级为竖向滚动 -->
         <div id="editor-workspace" class="flex flex-col lg:flex-row gap-2 lg:gap-3">
-            <!-- 左侧：输出面板（可折叠） -->
-            <div id="output-panel" class="pixel-card rounded-xl overflow-hidden flex flex-col flex-shrink-0 lg:flex-shrink lg:w-[360px] xl:w-[420px] 2xl:w-[480px]" style="transition: width 0.25s ease, height 0.25s ease;">
-                <div class="flex items-center justify-between px-3 py-2 border-b border-cream/10 flex-shrink-0" style="background:rgba(0,0,0,0.2);">
-                    <div class="flex items-center gap-2">
-                        <button id="output-toggle-btn" class="text-cream/50 hover:text-cream transition-colors p-1" title="收起/展开输出">
-                            <i id="output-toggle-icon" data-lucide="chevron-left" class="w-4 h-4"></i>
-                        </button>
-                        <i data-lucide="terminal" class="w-4 h-4 text-gold-400"></i>
-                        <span class="text-sm font-bold">输出</span>
-                    </div>
-                    <button id="editor-clear-output-btn-2" class="text-cream/40 hover:text-cream/80 transition-colors p-1" title="清空">
-                        <i data-lucide="x" class="w-4 h-4"></i>
-                    </button>
-                </div>
-                <div id="editor-output-wrapper" class="bg-black/40 overflow-y-auto font-mono text-xs sm:text-sm whitespace-pre-wrap" style="color:#4ade80;line-height:1.6; flex: 1 1 0; min-height: 120px;">
-                    <div id="editor-output" class="p-3"></div>
-                </div>
+            <!-- 左侧：Monaco 编辑器（占主要空间） -->
+            <div class="pixel-card rounded-xl overflow-hidden relative flex-1 min-h-0 min-w-0 order-2 lg:order-1">
+                <div id="monaco-editor" class="absolute inset-0"></div>
             </div>
 
-            <!-- 右侧：Monaco 编辑器（占主要空间） -->
-            <div class="pixel-card rounded-xl overflow-hidden relative flex-1 min-h-0 min-w-0">
-                <div id="monaco-editor" class="absolute inset-0"></div>
+            <!-- 右侧：终端面板（可折叠） -->
+            <div id="output-panel" class="pixel-card rounded-xl overflow-hidden flex flex-col flex-shrink-0 lg:flex-shrink lg:w-[420px] xl:w-[480px] 2xl:w-[560px] order-1 lg:order-2" style="transition: width 0.25s ease, height 0.25s ease;">
+                <div class="flex items-center justify-between px-3 py-2 border-b border-cream/10 flex-shrink-0" style="background:rgba(0,0,0,0.3);">
+                    <div class="flex items-center gap-2">
+                        <button id="output-toggle-btn" class="text-cream/50 hover:text-cream transition-colors p-1" title="收起/展开终端">
+                            <i id="output-toggle-icon" data-lucide="chevron-right" class="w-4 h-4"></i>
+                        </button>
+                        <i data-lucide="terminal" class="w-4 h-4 text-purple-400"></i>
+                        <span class="text-sm font-bold">终端</span>
+                    </div>
+                    <button id="editor-clear-output-btn-2" class="text-cream/40 hover:text-cream/80 transition-colors p-1" title="清空终端">
+                        <i data-lucide="trash-2" class="w-4 h-4"></i>
+                    </button>
+                </div>
+                <div id="editor-output-wrapper" class="bg-black/60 overflow-y-auto font-mono text-xs sm:text-sm flex-1 min-h-0" style="line-height:1.55;">
+                    <div id="editor-output" class="p-3"></div>
+                </div>
+                <!-- 终端输入行 -->
+                <div id="terminal-input-row" class="flex items-center gap-2 px-3 py-2 border-t border-cream/10 bg-black/40 flex-shrink-0">
+                    <span id="terminal-prompt" class="text-purple-400 text-xs font-bold shrink-0">$</span>
+                    <input id="terminal-input" type="text" placeholder="输入命令，回车执行…"
+                        class="flex-1 bg-transparent text-cream placeholder-cream/30 outline-none font-mono text-xs sm:text-sm"
+                        style="caret-color: #c084fc;"
+                        autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+                </div>
             </div>
         </div>
     </div>
@@ -133,6 +141,7 @@
         height: 100% !important;
     }
     #output-panel.collapsed #editor-output-wrapper { display: none; }
+    #output-panel.collapsed #terminal-input-row { display: none; }
     #output-panel.collapsed .border-b { border-bottom: none; }
     #output-panel.collapsed #editor-clear-output-btn-2 { display: none; }
     #output-panel.collapsed > div:first-child {
@@ -175,20 +184,26 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/loader.min.js"></script>
 
 <!-- CMD 模块依赖 -->
-<script src="{{ url_for('static', filename='js/cmd/modal.js', v='2') }}"></script>
+<script src="{{ url_for('static', filename='js/cmd/modal.js', v='4') }}"></script>
 <script src="{{ url_for('static', filename='js/cmd/editor-highlight.js', v='12') }}"></script>
-<script src="{{ url_for('static', filename='js/cmd/editor-sse.js', v='10') }}"></script>
-<script src="{{ url_for('static', filename='js/cmd/editor.js', v='13') }}"></script>
+<script src="{{ url_for('static', filename='js/cmd/editor-sse.js', v='12') }}"></script>
+<script src="{{ url_for('static', filename='js/cmd/editor-terminal.js', v='3') }}"></script>
+<script src="{{ url_for('static', filename='js/cmd/editor.js', v='15') }}"></script>
 
 <script>
     // 从模板注入初始代码
-    // 优先使用文件系统脚本，兼容旧的数据库命令
+    // 优先使用统一脚本系统，兼容旧模式
     var __initialCode = '';
-    var __editingFilename = null;
+    var __editingScript = null;
     var __editingCmdId = null;
     {% if editing_script %}
         __initialCode = {{ editing_script.content | tojson | safe }};
-        __editingFilename = {{ editing_script.filename | tojson | safe }};
+        __editingScript = {
+            id: {{ editing_script.id | tojson | safe }},
+            name: {{ editing_script.name | tojson | safe }},
+            script_type: {{ editing_script.script_type | tojson | safe }},
+            description: {{ editing_script.description | tojson | safe }},
+        };
     {% elif editing_cmd %}
         __initialCode = {{ editing_cmd.command | tojson | safe }};
         __editingCmdId = {{ editing_cmd.id | tojson | safe }};
@@ -200,8 +215,8 @@
     });
     require(['vs/editor/editor.main'], function () {
         window.ScriptEditor.init(__initialCode, {
+            script: __editingScript,
             cmdId: __editingCmdId,
-            filename: __editingFilename,
         });
         if (window.lucide) lucide.createIcons();
     });

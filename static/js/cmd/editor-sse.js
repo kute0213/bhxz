@@ -34,7 +34,17 @@ window.ScriptEditorSse = (function () {
 
         setRunning(true);
         window.ScriptEditor.clearOutput();
-        window.ScriptEditor.appendOutput('[开始运行]', 'info');
+
+        // 显示运行命令行（终端风格）
+        const scriptName = window.ScriptEditor.getCurrentFilename
+            ? window.ScriptEditor.getCurrentFilename()
+            : 'script';
+        const runCmd = '▶ 运行: ' + scriptName;
+        if (window.TerminalPanel) {
+            window.TerminalPanel.appendCommandLine(runCmd);
+        } else {
+            window.ScriptEditor.appendOutput('$ ' + runCmd, 'info');
+        }
 
         // 使用 AbortController 以便在用户点击"强制终止"时切断前端连接
         currentFetchController = new AbortController();
@@ -91,6 +101,12 @@ window.ScriptEditorSse = (function () {
                 buffer = buffer.slice(idx + 2);
                 handleSseRawEvent(rawEvent);
             }
+        }
+
+        // 处理流结束时缓冲区中残留的最后一个事件
+        // （后端可能在最后一个事件后未补 \n\n）
+        if (buffer.trim()) {
+            handleSseRawEvent(buffer);
         }
     }
 

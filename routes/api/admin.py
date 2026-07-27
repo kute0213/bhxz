@@ -16,20 +16,22 @@ def api_logs_refresh():
         abort(403)
 
     conn = get_db()
-    page = request.args.get('page', 1, type=int)
-    per_page = 50
-    offset = (page - 1) * per_page
+    try:
+        page = request.args.get('page', 1, type=int)
+        per_page = 50
+        offset = (page - 1) * per_page
 
-    total = conn.execute("SELECT COUNT(*) AS c FROM access_logs").fetchone()['c']
-    total_pages = (total + per_page - 1) // per_page
+        total = conn.execute("SELECT COUNT(*) AS c FROM access_logs").fetchone()['c']
+        total_pages = (total + per_page - 1) // per_page
 
-    logs = conn.execute("""
-        SELECT * FROM access_logs
-        ORDER BY id DESC
-        LIMIT ? OFFSET ?
-    """, (per_page, offset)).fetchall()
-    logs = [dict(log) for log in logs]
-    conn.close()
+        logs = conn.execute("""
+            SELECT * FROM access_logs
+            ORDER BY id DESC
+            LIMIT ? OFFSET ?
+        """, (per_page, offset)).fetchall()
+        logs = [dict(log) for log in logs]
+    finally:
+        conn.close()
 
     return jsonify({
         'logs': logs,

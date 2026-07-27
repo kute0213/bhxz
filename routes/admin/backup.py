@@ -18,30 +18,34 @@ def db_backup_page():
     if not user or not user['is_admin']:
         abort(403)
 
+    from config import MAX_BACKUPS
+
     conn = get_db()
-
-    # 数据库文件大小
-    db_size = 0
     try:
-        if os.path.exists(DB_PATH):
-            db_size = os.path.getsize(DB_PATH)
-    except Exception:
-        pass
+        # 数据库文件大小
+        db_size = 0
+        try:
+            if os.path.exists(DB_PATH):
+                db_size = os.path.getsize(DB_PATH)
+        except Exception:
+            pass
 
-    # 最近 20 条备份记录
-    backup_rows = conn.execute("""
-        SELECT * FROM db_backups
-        ORDER BY id DESC
-        LIMIT 20
-    """).fetchall()
-    backups = [dict(b) for b in backup_rows]
-    conn.close()
+        # 最近 20 条备份记录
+        backup_rows = conn.execute("""
+            SELECT * FROM db_backups
+            ORDER BY id DESC
+            LIMIT 20
+        """).fetchall()
+        backups = [dict(b) for b in backup_rows]
+    finally:
+        conn.close()
 
     return render_template(
         'admin_db_backup.html',
         user=user,
         db_size=db_size,
         backups=backups,
+        max_backups=MAX_BACKUPS,
     )
 
 
@@ -101,12 +105,52 @@ def api_db_backup_list():
         return jsonify({'success': False, 'message': '无权限'}), 403
 
     conn = get_db()
-    rows = conn.execute("""
-        SELECT * FROM db_backups
-        ORDER BY id DESC
-        LIMIT 20
-    """).fetchall()
-    backups = [dict(b) for b in rows]
-    conn.close()
+    try:
+        rows = conn.execute("""
+            SELECT * FROM db_backups
+            ORDER BY id DESC
+            LIMIT 20
+        """).fetchall()
+        backups = [dict(b) for b in rows]
+    finally:
+        conn.close()
 
     return jsonify({'backups': backups})
+
+
+@admin_bp.route('/admin/api/db-backup/<int:backup_id>/delete', methods=['POST', 'DELETE'])
+@login_required
+def api_db_backup_delete(backup_id):
+    """删除指定备份（文件 + 记录）。"""
+    user = get_current_user()
+    if not user or not user['is_admin']:
+        return jsonify({'success': False, 'message': '无权限'}), 403
+
+    from config import BACKUP_DIR
+
+    conn = get_db()
+    try:
+        row = conn.execute(
+            "SELECT * FROM db_backups WHERE id = ?", (backup_id,)
+        ).fetchone()
+        if not row:
+            return jsonify({'success': False, 'message': '备份记录不存在'}), 404
+
+        backup = dict(row)
+        backup_path = backup.get('backup_path')
+
+        # 删除文件
+        if backup_path:
+            try:
+                if os.path.exists(backup_path):
+                    os.remove(backup_path)
+            except Exception as e:
+                print(f'[Backup] 删除备份文件失败 {backup_path}: {e}', flush=True)
+
+        # 删除数据库记录
+        conn.execute("DELETE FROM db_backups WHERE id = ?", (backup_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+    return jsonify({'success': True, 'message': '备份已删除'})

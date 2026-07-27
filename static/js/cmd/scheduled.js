@@ -27,10 +27,8 @@ window.ScheduledCore = (function () {
     var taskModalCancel = document.getElementById('task-modal-cancel');
     var taskModalTitle = document.getElementById('task-modal-title');
     var scheduleTypeSelect = document.getElementById('task-schedule-type');
-    var taskTypeSelect = document.getElementById('task-type');
-    var taskCommandLabel = document.getElementById('task-command-label');
-    var taskCommandInput = document.getElementById('task-command');
     var taskPresetSelect = document.getElementById('task-preset-select');
+    var selectedScriptInfo = document.getElementById('selected-script-info');
     var intervalConfig = document.getElementById('interval-config');
     var timeConfig = document.getElementById('time-config');
     var timeLabel = document.getElementById('time-label');
@@ -64,8 +62,7 @@ window.ScheduledCore = (function () {
         taskModalCancel.addEventListener('click', closeTaskModal);
         taskForm.addEventListener('submit', handleTaskSubmit);
         scheduleTypeSelect.addEventListener('change', toggleScheduleConfig);
-        taskTypeSelect.addEventListener('change', toggleTaskTypeConfig);
-        // 从快捷命令选择：自动填充 command / name / task_type
+        // 选择脚本/命令
         taskPresetSelect.addEventListener('change', function () {
             onPresetSelect(taskPresetSelect.value);
         });
@@ -77,17 +74,6 @@ window.ScheduledCore = (function () {
             btn.addEventListener('click', function () {
                 document.getElementById('task-interval').value = btn.dataset.interval;
             });
-        });
-
-        // 点击遮罩关闭模态框
-        taskModal.addEventListener('click', function (e) {
-            if (e.target === taskModal) closeTaskModal();
-        });
-        logsModal.addEventListener('click', function (e) {
-            if (e.target === logsModal) logsModal.classList.add('hidden');
-        });
-        outputModal.addEventListener('click', function (e) {
-            if (e.target === outputModal) outputModal.classList.add('hidden');
         });
 
         // ESC 关闭所有打开的模态框
@@ -155,14 +141,15 @@ window.ScheduledCore = (function () {
                 return;
             }
 
-            var color = st.last_success ? 'green' : 'red';
+            // 使用完整的 Tailwind 类名（不要动态拼接，避免被 purge 清除）
+            var badgeClass = st.last_success
+                ? 'px-1.5 py-0.5 text-xs rounded-full bg-green-500/20 text-green-300 border border-green-400/20'
+                : 'px-1.5 py-0.5 text-xs rounded-full bg-red-500/20 text-red-300 border border-red-400/20';
             var text = st.last_success ? '成功' : '失败';
             var recent = (recentMap[t.id] || 0) > 0
                 ? ' · <span class="text-blue-300">活动中</span>' : '';
             badge.innerHTML =
-                '<span class="px-1.5 py-0.5 text-xs rounded-full bg-' + color +
-                '-500/20 text-' + color + '-300 border border-' + color +
-                '-400/20">' + text + '</span>' +
+                '<span class="' + badgeClass + '">' + text + '</span>' +
                 '<span class="text-xs text-cream/40 ml-2">' +
                 (st.last_started_at || '') + ' (' +
                 (st.last_duration || 0).toFixed(1) + 's)</span>' + recent;
@@ -195,105 +182,83 @@ window.ScheduledCore = (function () {
         }
     }
 
-    // 根据任务类型切换「执行命令」区域的标签和占位符
-    function toggleTaskTypeConfig() {
-        var type = taskTypeSelect.value;
-        if (type === 'script') {
-            taskCommandLabel.textContent = '脚本代码（Python 语法）';
-            taskCommandInput.placeholder = "如：print('Hello World')\nfor i in range(3):\n    print(i)";
-        } else {
-            taskCommandLabel.textContent = '执行命令';
-            taskCommandInput.placeholder = "如：echo 'Hello World'";
-        }
-    }
-
     // ------------------------------------------------------------------
-    // 从快捷命令/脚本选择：加载已有快捷命令和脚本列表填充下拉框
+    // 从已保存脚本/命令选择
     // ------------------------------------------------------------------
 
-    // 拉取快捷命令和脚本列表并填充下拉框，返回 Promise
-    function loadPresets() {
-        return Promise.all([
-            fetch('/admin/cmd/commands').then(function (r) { return r.json(); }),
-            fetch('/admin/cmd/scripts').then(function (r) { return r.json(); }).catch(function () { return { scripts: [] }; })
-        ])
-            .then(function (results) {
-                var cmdData = results[0];
-                var scriptData = results[1];
+    function loadPresets(selectedCommandId) {
+        // 定时任务只能执行快捷命令（来自 cmd_commands 表）
+        return fetch('/admin/cmd/commands')
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
                 if (!taskPresetSelect) return;
 
-                // 保留首个「-- 手动输入 --」选项，清空其余
-                taskPresetSelect.innerHTML = '<option value="">-- 手动输入 --</option>';
+                taskPresetSelect.innerHTML = '<option value="">-- 请选择 --</option>';
 
-                // 添加脚本分组
-                var scripts = scriptData.scripts || [];
-                if (scripts.length > 0) {
-                    var scriptGroup = document.createElement('optgroup');
-                    scriptGroup.label = '脚本（文件系统）';
-                    scripts.forEach(function (s) {
+                var commands = data.commands || [];
+
+                if (commands.length > 0) {
+                    var shGroup = document.createElement('optgroup');
+                    shGroup.label = '快捷命令';
+                    commands.forEach(function (c) {
                         var opt = document.createElement('option');
-                        opt.value = 'script:' + s.filename;
-                        opt.textContent = s.name + '（脚本）';
-                        opt.dataset.name = s.name || '';
-                        opt.dataset.command = s.filename || '';
-                        opt.dataset.type = 'script';
-                        opt.dataset.isFileScript = '1';
-                        scriptGroup.appendChild(opt);
+                        opt.value = 'command_id:' + c.id;
+                        opt.textContent = c.name + (c.description ? '（' + c.description + '）' : '');
+                        opt.dataset.id = c.id;
+                        opt.dataset.name = c.name || '';
+                        opt.dataset.description = c.description || '';
+                        opt.dataset.command = c.command || '';
+                        opt.dataset.type = 'shell';
+                        if (selectedCommandId && String(c.id) === String(selectedCommandId)) {
+                            opt.selected = true;
+                        }
+                        shGroup.appendChild(opt);
                     });
-                    taskPresetSelect.appendChild(scriptGroup);
+                    taskPresetSelect.appendChild(shGroup);
                 }
 
-                // 添加 Shell 命令分组（排除脚本类型）
-                var allCommands = cmdData.commands || [];
-                var shellCommands = allCommands.filter(function (c) {
-                    return !(c.description && c.description.indexOf('[脚本]') === 0);
-                });
-                if (shellCommands.length > 0) {
-                    var cmdGroup = document.createElement('optgroup');
-                    cmdGroup.label = '快捷命令（Shell）';
-                    shellCommands.forEach(function (cmd) {
-                        var opt = document.createElement('option');
-                        opt.value = 'cmd:' + cmd.id;
-                        opt.textContent = cmd.name;
-                        opt.dataset.name = cmd.name || '';
-                        opt.dataset.command = cmd.command || '';
-                        opt.dataset.type = 'shell';
-                        cmdGroup.appendChild(opt);
-                    });
-                    taskPresetSelect.appendChild(cmdGroup);
+                // 如果有选中的命令，触发 onPresetSelect
+                if (selectedCommandId) {
+                    onPresetSelect(taskPresetSelect.value);
                 }
             })
             .catch(function (err) {
-                // 加载失败时静默处理，不影响手动输入
-                console.error('加载预设列表失败:', err);
+                console.error('加载快捷命令列表失败:', err);
             });
     }
 
-    // 选择某个预设后自动填充表单：command / name / task_type
     function onPresetSelect(value) {
-        if (!value) return;
-        // 优先从 option dataset 取数据，避免重复请求
+        if (!value) {
+            if (selectedScriptInfo) selectedScriptInfo.textContent = '';
+            var commandIdInput = document.getElementById('task-command-id');
+            if (commandIdInput) commandIdInput.value = '';
+            return;
+        }
+
         var opt = taskPresetSelect.querySelector('option[value="' + escapeSelector(value) + '"]');
         if (!opt) return;
 
         var name = opt.dataset.name || '';
-        var command = opt.dataset.command || '';
-        var type = opt.dataset.type || 'shell';
-        var isFileScript = opt.dataset.isFileScript === '1';
+        var commandId = opt.dataset.id || '';
+        var desc = opt.dataset.description || '';
+        var cmdText = opt.dataset.command || '';
 
-        // 填充命令内容
-        // 如果是文件脚本，command 存的是文件名
-        taskCommandInput.value = command;
-
-        // 仅在名称为空时自动填充，避免覆盖用户已输入的名称
+        // 填充名称（仅在为空时）
         var nameInput = document.getElementById('task-name');
         if (nameInput && !nameInput.value) {
             nameInput.value = name;
         }
 
-        // 设置任务类型
-        taskTypeSelect.value = type;
-        toggleTaskTypeConfig();
+        // 存储 command_id
+        var commandIdInput = document.getElementById('task-command-id');
+        if (commandIdInput) {
+            commandIdInput.value = commandId;
+        }
+
+        // 显示选中信息
+        if (selectedScriptInfo) {
+            selectedScriptInfo.textContent = '已选择: ' + name + ' (Shell 命令' + (desc ? ' · ' + desc : '') + ')';
+        }
     }
 
     function escapeSelector(str) {
@@ -374,7 +339,7 @@ window.ScheduledCore = (function () {
             ? '<span class="px-2 py-0.5 text-xs rounded-full bg-green-500/20 text-green-300 border border-green-400/20">启用</span>'
             : '<span class="px-2 py-0.5 text-xs rounded-full bg-red-500/20 text-red-300 border border-red-400/20">禁用</span>';
 
-        // 任务类型徽章：shell / script
+        // 任务类型徽章
         var taskTypeBadge = (t.task_type === 'script')
             ? '<span class="px-2 py-0.5 text-xs rounded-full bg-indigo-500/20 text-indigo-300 border border-indigo-400/20">脚本</span>'
             : '<span class="px-2 py-0.5 text-xs rounded-full bg-slate-500/20 text-slate-300 border border-slate-400/20">Shell</span>';
@@ -390,7 +355,6 @@ window.ScheduledCore = (function () {
                         statusBadge +
                         taskTypeBadge +
                     '</div>' +
-                    '<div class="text-sm text-cream/50 mb-2 font-mono truncate">' + escapeHtml(t.command) + '</div>' +
                     '<div class="flex flex-wrap gap-x-4 gap-y-1 text-xs text-cream/40">' +
                         '<span><i data-lucide="repeat" class="w-3 h-3 inline -mt-0.5"></i> ' + typeLabel + '</span>' +
                         '<span><i data-lucide="clock" class="w-3 h-3 inline -mt-0.5"></i> ' + intervalDesc + '</span>' +
@@ -445,18 +409,14 @@ window.ScheduledCore = (function () {
     function openCreateModal() {
         taskModalTitle.textContent = '创建定时任务';
         document.getElementById('task-id').value = '';
+        document.getElementById('task-command-id').value = '';
         document.getElementById('task-name').value = '';
-        document.getElementById('task-command').value = '';
         document.getElementById('task-schedule-type').value = 'interval';
-        document.getElementById('task-type').value = 'shell';
         document.getElementById('task-interval').value = 3600;
         document.getElementById('task-execute-at').value = '';
-        // 重置快捷命令选择为「手动输入」
-        if (taskPresetSelect) taskPresetSelect.value = '';
-        // 加载已有快捷命令列表（不阻塞模态框打开）
+        if (selectedScriptInfo) selectedScriptInfo.textContent = '';
         loadPresets();
         toggleScheduleConfig();
-        toggleTaskTypeConfig();
         taskModal.classList.remove('hidden');
     }
 
@@ -469,29 +429,25 @@ window.ScheduledCore = (function () {
 
                 taskModalTitle.textContent = '编辑定时任务';
                 document.getElementById('task-id').value = task.id;
+                document.getElementById('task-command-id').value = task.command_id || '';
                 document.getElementById('task-name').value = task.name;
-                document.getElementById('task-command').value = task.command;
                 document.getElementById('task-schedule-type').value = task.schedule_type;
-                document.getElementById('task-type').value = task.task_type || 'shell';
                 document.getElementById('task-interval').value = task.interval_seconds || 3600;
 
+                // 先调用 toggleScheduleConfig 设置 input 类型和清空值，
+                // 再用任务原有 execute_at 覆盖（否则会被 toggle 清空）
+                toggleScheduleConfig();
                 var executeAtInput = document.getElementById('task-execute-at');
                 if (task.schedule_type === 'daily' && task.execute_at) {
                     executeAtInput.type = 'time';
                     executeAtInput.value = task.execute_at;
                 } else if (task.schedule_type === 'once' && task.execute_at) {
                     executeAtInput.type = 'datetime-local';
-                    // 转换格式: "2024-01-01 12:00:00" -> "2024-01-01T12:00"
                     var dt = task.execute_at.replace(' ', 'T').substring(0, 16);
                     executeAtInput.value = dt;
                 }
 
-                // 重置快捷命令选择为「手动输入」（编辑场景下用户已填好命令内容）
-                if (taskPresetSelect) taskPresetSelect.value = '';
-                // 加载已有快捷命令列表（供用户参考选择）
-                loadPresets();
-                toggleScheduleConfig();
-                toggleTaskTypeConfig();
+                loadPresets(task.command_id);
                 taskModal.classList.remove('hidden');
             });
     }
@@ -500,31 +456,31 @@ window.ScheduledCore = (function () {
         taskModal.classList.add('hidden');
     }
 
-    function handleTaskSubmit(e) {
+    async function handleTaskSubmit(e) {
         e.preventDefault();
 
         var id = document.getElementById('task-id').value;
+        var commandId = document.getElementById('task-command-id').value;
         var name = document.getElementById('task-name').value.trim();
-        var command = document.getElementById('task-command').value.trim();
         var scheduleType = document.getElementById('task-schedule-type').value;
-        var taskType = document.getElementById('task-type').value;
         var intervalSeconds = parseInt(document.getElementById('task-interval').value) || 3600;
         var executeAt = document.getElementById('task-execute-at').value;
 
+        // 必须选择一个快捷命令
+        if (!commandId) {
+            window.CmdModal.alert('请选择', '请先选择一个快捷命令');
+            return;
+        }
+
         // 转换执行时间格式
-        if (scheduleType === 'daily' && executeAt) {
-            // time input -> "HH:MM"
-            executeAt = executeAt;
-        } else if (scheduleType === 'once' && executeAt) {
-            // datetime-local -> "YYYY-MM-DD HH:MM:SS"
+        if (scheduleType === 'once' && executeAt) {
             executeAt = executeAt.replace('T', ' ') + ':00';
         }
 
         var payload = {
             name: name,
-            command: command,
+            command_id: parseInt(commandId),
             schedule_type: scheduleType,
-            task_type: taskType,
             interval_seconds: intervalSeconds,
             execute_at: executeAt,
         };
@@ -534,63 +490,73 @@ window.ScheduledCore = (function () {
             ? '/admin/cmd/scheduled/tasks/' + id
             : '/admin/cmd/scheduled/tasks';
 
-        fetch(url, {
-            method: method,
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-        })
-            .then(function (r) { return r.json(); })
-            .then(function (data) {
-                if (data.success) {
-                    closeTaskModal();
-                    loadTasks();
-                } else {
-                    alert(data.message || '操作失败');
-                }
-            })
-            .catch(function (err) {
-                alert('请求失败: ' + err);
+        try {
+            var r = await fetch(url, {
+                method: method,
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
             });
+            var data = await r.json();
+            if (data.success) {
+                closeTaskModal();
+                loadTasks();
+            } else {
+                window.CmdModal.alert('操作失败', data.message || '操作失败');
+            }
+        } catch (err) {
+            window.CmdModal.alert('请求失败', '请求失败: ' + err);
+        }
     }
 
     // ------------------------------------------------------------------
     // 任务操作
     // ------------------------------------------------------------------
 
-    function deleteTask(id) {
-        if (!confirm('确定删除此定时任务？')) return;
-        fetch('/admin/cmd/scheduled/tasks/' + id + '/delete', { method: 'POST' })
-            .then(function (r) { return r.json(); })
-            .then(function (data) {
-                if (data.success) loadTasks();
-                else alert(data.message || '删除失败');
-            });
+    async function deleteTask(id) {
+        var ok = await window.CmdModal.confirm('删除定时任务', '确定删除此定时任务？');
+        if (!ok) return;
+        try {
+            var r = await fetch('/admin/cmd/scheduled/tasks/' + id + '/delete', { method: 'POST' });
+            var data = await r.json();
+            if (data.success) {
+                loadTasks();
+            } else {
+                window.CmdModal.alert('删除失败', data.message || '删除失败');
+            }
+        } catch (err) {
+            window.CmdModal.alert('请求失败', '请求失败: ' + err);
+        }
     }
 
-    function toggleTask(id) {
-        fetch('/admin/cmd/scheduled/tasks/' + id + '/toggle', { method: 'POST' })
-            .then(function (r) { return r.json(); })
-            .then(function (data) {
-                if (data.success) loadTasks();
-                else alert(data.message || '操作失败');
-            });
+    async function toggleTask(id) {
+        try {
+            var r = await fetch('/admin/cmd/scheduled/tasks/' + id + '/toggle', { method: 'POST' });
+            var data = await r.json();
+            if (data.success) {
+                loadTasks();
+            } else {
+                window.CmdModal.alert('操作失败', data.message || '操作失败');
+            }
+        } catch (err) {
+            window.CmdModal.alert('请求失败', '请求失败: ' + err);
+        }
     }
 
-    function triggerTask(id) {
-        fetch('/admin/cmd/scheduled/tasks/' + id + '/trigger', { method: 'POST' })
-            .then(function (r) { return r.json(); })
-            .then(function (data) {
-                if (data.success) {
-                    // 显示「活动中」状态并轮询刷新
-                    showTaskRunning(id);
-                    // 立即拉一次状态，2 秒后再拉一次（命令通常很快完成）
-                    setTimeout(loadStatus, 500);
-                    setTimeout(loadStatus, 2000);
-                    setTimeout(loadStatus, 5000);
-                } else {
-                    alert(data.message || '触发失败');
-                }
-            });
+    async function triggerTask(id) {
+        try {
+            var r = await fetch('/admin/cmd/scheduled/tasks/' + id + '/trigger', { method: 'POST' });
+            var data = await r.json();
+            if (data.success) {
+                showTaskRunning(id);
+                setTimeout(loadStatus, 500);
+                setTimeout(loadStatus, 2000);
+                setTimeout(loadStatus, 5000);
+            } else {
+                window.CmdModal.alert('触发失败', data.message || '触发失败');
+            }
+        } catch (err) {
+            window.CmdModal.alert('请求失败', '请求失败: ' + err);
+        }
     }
 
     function showTaskRunning(taskId) {
@@ -611,7 +577,8 @@ window.ScheduledCore = (function () {
         return str.replace(/&/g, '&amp;')
                   .replace(/</g, '&lt;')
                   .replace(/>/g, '&gt;')
-                  .replace(/"/g, '&quot;');
+                  .replace(/"/g, '&quot;')
+                  .replace(/'/g, '&#39;');
     }
 
     return {

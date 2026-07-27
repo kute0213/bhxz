@@ -1,6 +1,11 @@
-"""数据库连接层 —— DuckDB 连接、游标、行对象的兼容封装。"""
+"""数据库连接层 —— DuckDB 连接、游标、行对象的兼容封装。
+
+由于 DuckDB 在 Windows 上多进程/多连接文件锁问题较严重，
+这里采用单例共享连接 + 线程锁的方式，确保同一时间只有一个线程在写数据库。
+"""
 
 import duckdb
+import threading
 
 from config import DB_PATH
 
@@ -75,13 +80,10 @@ class DuckDBCursor:
         # 检测 INSERT 语句，尝试获取 lastrowid
         sql_stripped = sql.strip().upper()
         if sql_stripped.startswith('INSERT INTO'):
-            # 从 INSERT 语句中提取表名
             try:
-                # INSERT INTO table_name ...
                 parts = sql_stripped.split()
                 if len(parts) >= 3:
                     table_name = parts[2].strip('`"[]')
-                    # 尝试通过序列获取 last id
                     seq_name = f'{table_name}_id_seq'
                     try:
                         row = self._duckdb_conn.execute(
@@ -90,7 +92,6 @@ class DuckDBCursor:
                         if row and row[0] is not None:
                             self._lastrowid = int(row[0])
                     except Exception:
-                        # 没有序列的表，用 MAX(id)
                         try:
                             row = self._duckdb_conn.execute(
                                 f'SELECT MAX(id) FROM {table_name}'
@@ -173,8 +174,6 @@ class DuckDBConnection:
         self._duckdb_conn = duckdb.connect(database=path, read_only=False)
         self._row_factory = None
         self._cursor = DuckDBCursor(self)
-        # DuckDB 默认启用外键约束，但不支持 ON DELETE CASCADE
-        # 级联删除由应用层代码负责处理
 
     @property
     def row_factory(self):
@@ -185,7 +184,6 @@ class DuckDBConnection:
         if value is None:
             self._row_factory = None
         else:
-            # DuckDBRow 构造器是 (description, values)
             self._row_factory = value
 
     def cursor(self):
@@ -199,7 +197,6 @@ class DuckDBConnection:
 
     def executescript(self, script):
         """执行多条 SQL 语句（用 ; 分隔）。"""
-        # DuckDB 不直接支持 executescript，逐条执行
         statements = _split_sql_script(script)
         for stmt in statements:
             stmt = stmt.strip()
@@ -210,9 +207,12 @@ class DuckDBConnection:
     def commit(self):
         try:
             self._duckdb_conn.commit()
-        except Exception:
-            # DuckDB 自动提交模式下可能不需要显式 commit
-            pass
+        except Exception as e:
+            try:
+                self._duckdb_conn.rollback()
+            except Exception:
+                pass
+            raise
 
     def rollback(self):
         try:
@@ -221,16 +221,18 @@ class DuckDBConnection:
             pass
 
     def close(self):
-        try:
-            self._duckdb_conn.close()
-        except Exception:
-            pass
+        # 单例连接不真正关闭，由应用退出时统一处理
+        pass
 
     def __enter__(self):
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.close()
+        # 单例连接不关闭，只做一次 commit
+        try:
+            self.commit()
+        except Exception:
+            pass
         return False
 
 
@@ -260,14 +262,93 @@ def _split_sql_script(script):
 
 
 # ---------------------------------------------------------------------------
-# 公共 API
+# 单例连接 + 线程锁（解决 Windows 文件占用问题）
 # ---------------------------------------------------------------------------
 
-def get_db():
-    """获取数据库连接（独立连接，带行工厂）。
+_conn = None
+_conn_lock = threading.RLock()  # 可重入锁，支持嵌套调用
+_init_lock = threading.Lock()
 
-    DuckDB 支持多连接并发访问，每次调用返回独立连接。
+
+def get_db():
+    """获取数据库连接（单例共享，自动加锁）。
+
+    用法一（推荐，自动提交/回滚）：
+        with get_db() as conn:
+            conn.execute(...)
+
+    用法二（直接调用，用完记得 commit）：
+        conn = get_db()
+        conn.execute(...)
+        conn.commit()
     """
-    conn = DuckDBConnection(DB_PATH)
-    conn.row_factory = _row_factory_duckdbrow
-    return conn
+    global _conn
+    if _conn is None:
+        with _init_lock:
+            if _conn is None:
+                _conn = DuckDBConnection(DB_PATH)
+                _conn.row_factory = _row_factory_duckdbrow
+    return _ThreadSafeConnection(_conn, _conn_lock)
+
+
+class _ThreadSafeConnection:
+    """线程安全的连接包装器。
+
+    - 直接调用方法时自动获取/释放锁（每次调用单独加锁）
+    - with 语句块内持有锁，适合批量操作
+    """
+
+    def __init__(self, inner_conn, lock):
+        self._inner = inner_conn
+        self._lock = lock
+
+    # ---- with 语句支持 ----
+    def __enter__(self):
+        self._lock.acquire()
+        return self._inner
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        try:
+            if exc_type is None:
+                self._inner.commit()
+            else:
+                self._inner.rollback()
+        finally:
+            self._lock.release()
+        return False
+
+    # ---- 代理方法（每次调用单独加锁） ----
+    def execute(self, sql, params=None):
+        with self._lock:
+            return self._inner.execute(sql, params)
+
+    def executemany(self, sql, seq_of_params):
+        with self._lock:
+            return self._inner.executemany(sql, seq_of_params)
+
+    def executescript(self, script):
+        with self._lock:
+            return self._inner.executescript(script)
+
+    def commit(self):
+        with self._lock:
+            return self._inner.commit()
+
+    def rollback(self):
+        with self._lock:
+            return self._inner.rollback()
+
+    def close(self):
+        # 单例连接不真正关闭
+        pass
+
+    def cursor(self):
+        return self._inner.cursor()
+
+    @property
+    def row_factory(self):
+        return self._inner.row_factory
+
+    @row_factory.setter
+    def row_factory(self, value):
+        self._inner.row_factory = value

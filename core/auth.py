@@ -37,11 +37,13 @@ def get_current_user():
         return g._current_user
 
     conn = get_db()
-    user = conn.execute(
-        "SELECT id, username, is_admin FROM users WHERE id = ?",
-        (session['user_id'],),
-    ).fetchone()
-    conn.close()
+    try:
+        user = conn.execute(
+            "SELECT id, username, is_admin FROM users WHERE id = ?",
+            (session['user_id'],),
+        ).fetchone()
+    finally:
+        conn.close()
 
     user_dict = dict(user) if user else None
     g._current_user = user_dict

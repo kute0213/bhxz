@@ -19,13 +19,15 @@ def admin_users():
         abort(403)
 
     conn = get_db()
-    users_list = conn.execute("""
-        SELECT id, username, is_admin, created_at
-        FROM users
-        ORDER BY id DESC
-    """).fetchall()
-    users_list = [dict(u) for u in users_list]
-    conn.close()
+    try:
+        users_list = conn.execute("""
+            SELECT id, username, is_admin, created_at
+            FROM users
+            ORDER BY id DESC
+        """).fetchall()
+        users_list = [dict(u) for u in users_list]
+    finally:
+        conn.close()
 
     return render_template('admin_users.html', user=user, users_list=users_list)
 
@@ -42,15 +44,22 @@ def admin_toggle_admin(user_id):
         return redirect(url_for('admin.admin_users'))
 
     conn = get_db()
-    target = conn.execute("SELECT id, is_admin FROM users WHERE id = ?", (user_id,)).fetchone()
-    if not target:
-        conn.close()
-        abort(404)
+    try:
+        target = conn.execute("SELECT id, is_admin FROM users WHERE id = ?", (user_id,)).fetchone()
+        if not target:
+            abort(404)
 
-    new_status = 0 if target['is_admin'] else 1
-    conn.execute("UPDATE users SET is_admin = ? WHERE id = ?", (new_status, user_id))
-    conn.commit()
-    conn.close()
+        new_status = 0 if target['is_admin'] else 1
+        conn.execute("UPDATE users SET is_admin = ? WHERE id = ?", (new_status, user_id))
+        conn.commit()
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        raise
+    finally:
+        conn.close()
     return redirect(url_for('admin.admin_users'))
 
 

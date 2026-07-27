@@ -17,11 +17,13 @@ def home():
     user = get_current_user()
 
     conn = get_db()
-    mod_intros = conn.execute(
-        "SELECT * FROM mod_intros ORDER BY id ASC"
-    ).fetchall()
-    mod_intros = [dict(r) for r in mod_intros]
-    conn.close()
+    try:
+        mod_intros = conn.execute(
+            "SELECT * FROM mod_intros ORDER BY id ASC"
+        ).fetchall()
+        mod_intros = [dict(r) for r in mod_intros]
+    finally:
+        conn.close()
 
     return render_template(
         'index.html',
@@ -51,7 +53,6 @@ def register():
         try:
             existing = conn.execute("SELECT id FROM users WHERE username = ?", (username,)).fetchone()
             if existing:
-                conn.close()
                 return render_template('register.html', error='该用户名已被注册')
 
             password_hash = hashlib.sha256(password.encode('utf-8')).hexdigest()
@@ -60,14 +61,14 @@ def register():
                 (username, password_hash, datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
             )
             conn.commit()
-            conn.close()
         except Exception:
-            conn.rollback()
             try:
-                conn.close()
+                conn.rollback()
             except Exception:
                 pass
             return render_template('register.html', error='注册失败，请稍后重试')
+        finally:
+            conn.close()
         return redirect(url_for('main.login', registered=1))
 
     return render_template('register.html')
@@ -288,5 +289,11 @@ def delete_account():
 
 @main_bp.route('/performance')
 def performance_page():
+    """服务器性能监控页面（仅管理员可访问）。"""
     user = get_current_user()
+    # 鉴权：未登录跳转登录页，非管理员 403
+    if not user:
+        return redirect(url_for('main.login', next=request.path))
+    if not user.get('is_admin'):
+        abort(403)
     return render_template('performance.html', user=user)

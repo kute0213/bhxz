@@ -1,0 +1,412 @@
+{% extends "base.html" %}
+{% block title %}系统设置{% endblock %}
+{% block content %}
+    <section class="page-container py-12">
+        <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="mb-8">
+                <a href="{{ url_for('admin.admin_page') }}" class="text-gold-400 hover:text-gold-300 text-sm mb-2 inline-block">
+                    <i data-lucide="arrow-left" class="w-4 h-4 inline mr-1"></i>返回管理中心
+                </a>
+                <h1 class="text-2xl font-bold">系统设置</h1>
+                <p class="text-cream/60 text-sm mt-1">在线编辑系统配置，修改后立即生效（热重载）</p>
+            </div>
+
+            <!-- 操作栏 -->
+            <div class="flex items-center justify-between mb-6">
+                <div class="flex items-center gap-3">
+                    <span id="save-status" class="text-sm text-cream/60">所有更改将自动保存</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <button id="btn-reset-all" class="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-300 text-sm rounded-lg transition-colors border border-red-500/30">
+                        <i data-lucide="rotate-ccw" class="w-4 h-4 inline mr-1"></i>重置所有
+                    </button>
+                    <button id="btn-save" class="px-4 py-2 bg-gold-500 hover:bg-gold-400 text-forest-900 font-bold text-sm rounded-lg transition-colors">
+                        <i data-lucide="save" class="w-4 h-4 inline mr-1"></i>保存更改
+                    </button>
+                </div>
+            </div>
+
+            <!-- 设置分类容器 -->
+            <div id="settings-container" class="space-y-6">
+                <!-- 设置项将通过 JS 动态渲染 -->
+            </div>
+        </div>
+    </section>
+
+    <!-- 确认对话框 -->
+    <div id="confirm-modal" class="fixed inset-0 bg-black/60 z-50 hidden items-center justify-center">
+        <div class="bg-forest-800 border border-cream/20 rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
+            <h3 id="confirm-title" class="text-lg font-bold mb-2">确认操作</h3>
+            <p id="confirm-message" class="text-cream/70 text-sm mb-6">确定要执行此操作吗？</p>
+            <div class="flex items-center justify-end gap-2">
+                <button id="confirm-cancel" class="px-4 py-2 text-cream/70 hover:text-cream text-sm transition-colors">取消</button>
+                <button id="confirm-ok" class="px-4 py-2 bg-red-500 hover:bg-red-400 text-white text-sm rounded-lg transition-colors">确认</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        (function () {
+            const settingsContainer = document.getElementById('settings-container');
+            const saveStatus = document.getElementById('save-status');
+            const btnSave = document.getElementById('btn-save');
+            const btnResetAll = document.getElementById('btn-reset-all');
+            const confirmModal = document.getElementById('confirm-modal');
+            const confirmTitle = document.getElementById('confirm-title');
+            const confirmMessage = document.getElementById('confirm-message');
+            const confirmOk = document.getElementById('confirm-ok');
+            const confirmCancel = document.getElementById('confirm-cancel');
+
+            let originalValues = {};
+            let dirty = false;
+
+            // 格式化显示值
+            function formatValue(value, type) {
+                if (type === 'bool') return value ? '开启' : '关闭';
+                if (value === null || value === undefined || value === '') return '(未设置)';
+                return String(value);
+            }
+
+            // 获取当前输入的值
+            function getInputValue(input) {
+                if (input.type === 'checkbox') {
+                    return input.checked;
+                }
+                if (input.type === 'time') {
+                    return input.value;
+                }
+                return input.value;
+            }
+
+            // 设置输入的值
+            function setInputValue(input, value, type) {
+                if (type === 'bool') {
+                    input.checked = !!value;
+                } else {
+                    input.value = value !== null && value !== undefined ? String(value) : '';
+                }
+            }
+
+            // 判断值是否改变
+            function isChanged(key, currentValue, type) {
+                const original = originalValues[key];
+                if (original === undefined) return false;
+                if (type === 'bool') return currentValue !== original;
+                return String(currentValue) !== String(original);
+            }
+
+            // 渲染设置项
+            function renderSettings(data) {
+                settingsContainer.innerHTML = '';
+
+                const categories = data.categories || {};
+                for (const [category, items] of Object.entries(categories)) {
+                    const card = document.createElement('div');
+                    card.className = 'pixel-card rounded-xl overflow-hidden';
+
+                    // 分类标题
+                    const header = document.createElement('div');
+                    header.className = 'px-6 py-4 border-b border-cream/10 bg-forest-900/30';
+                    header.innerHTML = `
+                        <h2 class="text-lg font-bold flex items-center gap-2">
+                            <i data-lucide="settings" class="w-5 h-5 text-gold-400"></i>
+                            ${category}
+                        </h2>
+                    `;
+                    card.appendChild(header);
+
+                    // 设置项列表
+                    const body = document.createElement('div');
+                    body.className = 'divide-y divide-cream/5';
+
+                    items.forEach(function (item) {
+                        const row = document.createElement('div');
+                        row.className = 'px-6 py-4';
+                        row.setAttribute('data-key', item.key);
+
+                        let inputHtml = '';
+                        if (item.type === 'bool') {
+                            inputHtml = `
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" class="sr-only peer" data-type="bool">
+                                    <div class="w-11 h-6 bg-forest-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-gold-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
+                                </label>
+                            `;
+                        } else if (item.type === 'time') {
+                            inputHtml = `
+                                <input type="time" class="px-3 py-2 bg-forest-900/60 border border-cream/20 rounded-lg text-sm focus:outline-none focus:border-gold-400 transition-colors" style="width: 120px;">
+                            `;
+                        } else {
+                            const typeAttr = item.type === 'int' ? 'type="number" step="1"' : (item.type === 'float' ? 'type="number" step="0.01"' : 'type="text"');
+                            inputHtml = `
+                                <input ${typeAttr} class="px-3 py-2 bg-forest-900/60 border border-cream/20 rounded-lg text-sm focus:outline-none focus:border-gold-400 transition-colors" style="width: 200px;">
+                            `;
+                        }
+
+                        const valueLabel = item.is_custom
+                            ? `<span class="text-xs text-gold-400">● 已自定义</span>`
+                            : `<span class="text-xs text-cream/40">默认值</span>`;
+
+                        row.innerHTML = `
+                            <div class="flex items-center justify-between gap-4">
+                                <div class="min-w-0 flex-1">
+                                    <div class="flex items-center gap-2">
+                                        <span class="font-medium text-sm">${item.label}</span>
+                                        ${valueLabel}
+                                    </div>
+                                    <div class="text-xs text-cream/50 mt-0.5">${item.description}</div>
+                                    <div class="text-xs text-cream/30 mt-0.5">默认值: <code class="bg-forest-900/40 px-1.5 py-0.5 rounded">${formatValue(item.default, item.type)}</code></div>
+                                </div>
+                                <div class="flex items-center gap-2 flex-shrink-0">
+                                    ${inputHtml}
+                                    <button class="btn-reset-item p-1.5 text-cream/40 hover:text-red-400 transition-colors" title="恢复默认值">
+                                        <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+
+                        body.appendChild(row);
+
+                        // 设置输入值
+                        const input = row.querySelector('input');
+                        if (input) {
+                            setInputValue(input, item.value, item.type);
+                            input.dataset.key = item.key;
+                            input.dataset.type = item.type;
+                            input.dataset.default = item.default;
+
+                            input.addEventListener('input', function () {
+                                const key = this.dataset.key;
+                                const type = this.dataset.type;
+                                const value = getInputValue(this);
+                                if (isChanged(key, value, type)) {
+                                    this.classList.add('border-gold-400');
+                                    markDirty();
+                                } else {
+                                    this.classList.remove('border-gold-400');
+                                }
+                            });
+
+                            input.addEventListener('change', function () {
+                                const key = this.dataset.key;
+                                const type = this.dataset.type;
+                                const value = getInputValue(this);
+                                if (isChanged(key, value, type)) {
+                                    markDirty();
+                                }
+                            });
+                        }
+
+                        // 绑定重置按钮
+                        const resetBtn = row.querySelector('.btn-reset-item');
+                        if (resetBtn) {
+                            resetBtn.addEventListener('click', function () {
+                                const row = this.closest('[data-key]');
+                                const key = row.dataset.key;
+                                const input = row.querySelector('input');
+                                const defaultVal = input.dataset.default;
+                                const type = input.dataset.type;
+
+                                setInputValue(input, defaultVal, type);
+                                input.classList.remove('border-gold-400');
+
+                                // 如果有自定义值，发送重置请求
+                                if (originalValues[key] !== undefined) {
+                                    fetch('/admin/api/settings/' + encodeURIComponent(key) + '/reset', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' }
+                                    }).then(() => {
+                                        delete originalValues[key];
+                                        markDirty();
+                                        loadSettings(); // 重新加载
+                                    });
+                                }
+                            });
+                        }
+                    });
+
+                    card.appendChild(body);
+                    settingsContainer.appendChild(card);
+                }
+
+                // 更新原始值记录
+                originalValues = {};
+                (data.settings || []).forEach(function (s) {
+                    originalValues[s.key] = s.value;
+                });
+
+                if (window.lucide) lucide.createIcons();
+                updateSaveStatus();
+            }
+
+            function markDirty() {
+                dirty = true;
+                updateSaveStatus();
+            }
+
+            function updateSaveStatus() {
+                if (dirty) {
+                    saveStatus.textContent = '● 有未保存的更改';
+                    saveStatus.className = 'text-sm text-gold-400';
+                    btnSave.disabled = false;
+                    btnSave.classList.remove('opacity-50', 'cursor-not-allowed');
+                } else {
+                    saveStatus.textContent = '所有更改将自动保存';
+                    saveStatus.className = 'text-sm text-cream/60';
+                    btnSave.disabled = true;
+                    btnSave.classList.add('opacity-50', 'cursor-not-allowed');
+                }
+            }
+
+            // 加载设置
+            function loadSettings() {
+                fetch('/admin/api/settings')
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.success) {
+                            renderSettings(data);
+                            dirty = false;
+                            updateSaveStatus();
+                        }
+                    })
+                    .catch(err => {
+                        console.error('加载设置失败:', err);
+                        settingsContainer.innerHTML = '<div class="text-center py-12 text-red-400">加载设置失败</div>';
+                    });
+            }
+
+            // 保存设置
+            function saveSettings() {
+                const inputs = settingsContainer.querySelectorAll('input');
+                const items = [];
+                let hasChange = false;
+
+                inputs.forEach(function (input) {
+                    const key = input.dataset.key;
+                    const type = input.dataset.type;
+                    const value = getInputValue(input);
+
+                    if (isChanged(key, value, type)) {
+                        items.push({ key: key, value: value });
+                        hasChange = true;
+                    }
+                });
+
+                if (!hasChange) {
+                    return;
+                }
+
+                btnSave.disabled = true;
+                btnSave.innerHTML = '<i data-lucide="loader" class="w-4 h-4 inline mr-1 animate-spin"></i>保存中...';
+                if (window.lucide) lucide.createIcons();
+
+                fetch('/admin/api/settings/save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ items: items })
+                })
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        // 更新原始值
+                        items.forEach(function (item) {
+                            originalValues[item.key] = item.value;
+                        });
+                        dirty = false;
+                        updateSaveStatus();
+
+                        btnSave.innerHTML = '<i data-lucide="check" class="w-4 h-4 inline mr-1"></i>已保存';
+                        if (window.lucide) lucide.createIcons();
+
+                        setTimeout(function () {
+                            btnSave.innerHTML = '<i data-lucide="save" class="w-4 h-4 inline mr-1"></i>保存更改';
+                            if (window.lucide) lucide.createIcons();
+                        }, 2000);
+
+                        // 显示详细信息
+                        if (data.errors && data.errors.length > 0) {
+                            alert('部分设置保存失败:\n' + data.errors.map(e => e.key + ': ' + e.message).join('\n'));
+                        }
+                    } else {
+                        alert('保存失败: ' + (data.message || '未知错误'));
+                        btnSave.disabled = false;
+                        btnSave.innerHTML = '<i data-lucide="save" class="w-4 h-4 inline mr-1"></i>保存更改';
+                        if (window.lucide) lucide.createIcons();
+                    }
+                })
+                .catch(err => {
+                    alert('网络错误，请重试');
+                    btnSave.disabled = false;
+                    btnSave.innerHTML = '<i data-lucide="save" class="w-4 h-4 inline mr-1"></i>保存更改';
+                    if (window.lucide) lucide.createIcons();
+                });
+            }
+
+            // 显示确认对话框
+            function showConfirm(title, message) {
+                return new Promise(function (resolve) {
+                    confirmTitle.textContent = title;
+                    confirmMessage.textContent = message;
+                    confirmModal.classList.remove('hidden');
+                    confirmModal.classList.add('flex');
+
+                    function cleanup() {
+                        confirmModal.classList.add('hidden');
+                        confirmModal.classList.remove('flex');
+                        confirmOk.removeEventListener('click', onOk);
+                        confirmCancel.removeEventListener('click', onCancel);
+                    }
+
+                    function onOk() {
+                        cleanup();
+                        resolve(true);
+                    }
+
+                    function onCancel() {
+                        cleanup();
+                        resolve(false);
+                    }
+
+                    confirmOk.addEventListener('click', onOk);
+                    confirmCancel.addEventListener('click', onCancel);
+                });
+            }
+
+            // 保存按钮
+            btnSave.addEventListener('click', saveSettings);
+
+            // 重置所有按钮
+            btnResetAll.addEventListener('click', function () {
+                showConfirm('重置所有设置', '确定要将所有设置恢复为默认值吗？此操作将清除所有自定义配置。')
+                    .then(function (confirmed) {
+                        if (!confirmed) return;
+
+                        fetch('/admin/api/settings/reset-all', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' }
+                        })
+                        .then(r => r.json())
+                        .then(data => {
+                            if (data.success) {
+                                loadSettings();
+                            } else {
+                                alert('重置失败: ' + (data.message || '未知错误'));
+                            }
+                        })
+                        .catch(() => alert('网络错误，请重试'));
+                    });
+            });
+
+            // 自动保存（失焦时检查是否有更改）
+            let saveTimer = null;
+            settingsContainer.addEventListener('input', function () {
+                clearTimeout(saveTimer);
+                saveTimer = setTimeout(saveSettings, 1000); // 停止输入 1 秒后自动保存
+            });
+
+            // 初始化加载
+            loadSettings();
+        })();
+    </script>
+{% endblock %}

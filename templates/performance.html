@@ -111,6 +111,11 @@
                 } else {
                     cpuBar.className = 'h-full bg-gradient-to-r from-green-500 to-green-400 transition-all duration-500 rounded-full';
                 }
+            } else {
+                // CPU 数据不可用时清空显示，避免误导用户使用旧值
+                document.getElementById('cpu-usage').textContent = 'N/A';
+                document.getElementById('cpu-usage-text').textContent = 'N/A';
+                document.getElementById('cpu-bar').style.width = '0%';
             }
 
             // CPU温度
@@ -151,9 +156,22 @@
 
         function fetchData() {
             fetch(apiUrl)
-                .then(res => res.json())
+                .then(function (res) {
+                    if (!res.ok) {
+                        // 401/403：跳转登录页
+                        if (res.status === 401 || res.status === 403) {
+                            window.location.href = '{{ url_for("main.login") }}';
+                            throw new Error('未授权');
+                        }
+                        throw new Error('HTTP ' + res.status);
+                    }
+                    return res.json();
+                })
                 .then(updateData)
-                .catch(err => console.error('获取性能数据失败:', err));
+                .catch(function (err) {
+                    console.error('获取性能数据失败:', err);
+                    // 不再更新 last-update，让用户通过时间戳判断数据是否陈旧
+                });
         }
 
         // 页面加载时立即获取数据并启动定时刷新

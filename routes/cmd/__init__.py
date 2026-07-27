@@ -14,3 +14,4 @@ from routes.cmd import pages      # noqa: E402,F401
 from routes.cmd import commands   # noqa: E402,F401
 from routes.cmd import execution  # noqa: E402,F401
 from routes.cmd import scripts    # noqa: E402,F401
+from routes.cmd import terminal   # noqa: E402,F401

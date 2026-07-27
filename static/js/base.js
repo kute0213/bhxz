@@ -303,13 +303,6 @@ var CustomModal = (function () {
             close(false);
         });
     }
-    if (modal) {
-        modal.addEventListener('click', function (e) {
-            if (e.target === modal) {
-                close(false);
-            }
-        });
-    }
 
     document.addEventListener('keydown', function (e) {
         if (e.key === 'Escape' && modal && modal.classList.contains('active')) {

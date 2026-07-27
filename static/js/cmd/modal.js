@@ -4,6 +4,12 @@
  * 替代原生 alert / prompt / confirm，使用符合页面磨砂风格的模态框。
  * 返回 Promise，支持 async/await 链式调用。
  *
+ * 设计原则（可维护性）：
+ *   1. 单例 DOM：始终只有一个弹窗 DOM 结构，避免重复创建
+ *   2. 调用队列：连续调用自动排队，上一个完全关闭后才显示下一个
+ *   3. 状态机：closed → opening → open → closing → closed，非法状态直接忽略
+ *   4. 单一关闭入口：所有关闭路径（按钮、ESC、背景点击、动画结束、超时）都走 _doClose()
+ *
  * 用法：
  *   CmdModal.alert('标题', '消息')           => Promise<void>
  *   CmdModal.confirm('标题', '消息')         => Promise<bool>
@@ -12,9 +18,24 @@
 
 window.CmdModal = (function () {
 
-    // --------------------------------------------------------
-    // DOM 构建：单例模态框
-    // --------------------------------------------------------
+    // ============================================================
+    // 状态常量
+    // ============================================================
+    const STATE = {
+        CLOSED:  'closed',   // 完全关闭，display:none
+        OPENING: 'opening',  // enter 动画中
+        OPEN:    'open',     // 完全打开，等待用户操作
+        CLOSING: 'closing',  // leave 动画中
+    };
+
+    // ============================================================
+    // 内部状态
+    // ============================================================
+    let state = STATE.CLOSED;
+    let queue = [];       // 待显示的弹窗队列 [{type, title, message, defaultValue, resolve}]
+    let current = null;   // 当前正在显示的弹窗信息
+
+    // DOM 引用
     let root = null;
     let backdrop = null;
     let container = null;
@@ -25,18 +46,18 @@ window.CmdModal = (function () {
     let inputEl = null;
     let actionsEl = null;
 
-    let pending = null; // { resolve, type }
-    let closeTimer = null; // close() 的超时 fallback 定时器
-    let animEndHandler = null; // 当前 animationend 监听器引用（修复连续弹窗闪退）
+    let closeTimer = null;  // 关闭动画超时 fallback
+    let pendingEnterEnd = null;  // 未完成的 enter 动画监听器（用于在关闭时清理）
 
+    // ============================================================
+    // DOM 构建（只执行一次）
+    // ============================================================
     function build() {
         if (root) return;
 
         root = document.createElement('div');
         root.id = 'cmd-modal-root';
         root.style.cssText = 'position:fixed;inset:0;z-index:9999;display:none;align-items:center;justify-content:center;';
-        root.classList.add('cmd-modal-root');
-        // hidden 类由 Tailwind 提供，但内联样式优先级更高，所以用 style.display 控制显隐
 
         backdrop = document.createElement('div');
         backdrop.style.cssText = 'position:absolute;inset:0;background:rgba(0,0,0,0.7);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);';
@@ -65,6 +86,7 @@ window.CmdModal = (function () {
         titleEl.className = 'text-lg font-bold text-cream leading-tight';
         headerText.appendChild(titleEl);
         header.appendChild(iconEl);
+        header.appendChild(headerText);
 
         // 正文
         const bodyWrap = document.createElement('div');
@@ -95,94 +117,122 @@ window.CmdModal = (function () {
         root.appendChild(container);
         document.body.appendChild(root);
 
+        // 全局事件绑定（只绑定一次）
+        bindGlobalEvents();
+    }
+
+    function bindGlobalEvents() {
         // ESC 关闭
         document.addEventListener('keydown', function (e) {
-            if (e.key === 'Escape' && pending && pending.type === 'confirm') {
-                close();
-                pending.resolve(false);
+            if (e.key === 'Escape' && state === STATE.OPEN && current) {
+                if (current.type === 'confirm') {
+                    resolveAndClose(false);
+                } else if (current.type === 'prompt') {
+                    resolveAndClose('');
+                }
+                // alert 不支持 ESC 关闭
+            }
+            // Enter 提交（prompt 模式）
+            // 注意：若焦点在按钮上（如 Tab 切换到"取消"），不拦截 Enter，
+            // 让按钮自身的 click 事件正常触发，避免语义冲突
+            if (e.key === 'Enter' && state === STATE.OPEN && current && current.type === 'prompt') {
+                const activeTag = (document.activeElement && document.activeElement.tagName) || '';
+                if (activeTag === 'BUTTON') {
+                    return;  // 让按钮处理
+                }
+                e.preventDefault();
+                resolveAndClose(inputEl.value);
             }
         });
 
-        // 点击背景关闭（仅 confirm 模式）
-        backdrop.addEventListener('click', function () {
-            if (pending && pending.type === 'confirm') {
-                close();
-                pending.resolve(false);
+        // 关闭动画结束
+        container.addEventListener('animationend', function (e) {
+            // 只响应 leave 动画的结束
+            if (e.target !== container) return;
+            if (state === STATE.CLOSING && e.animationName === 'cmdModalLeave') {
+                finishClose();
+            }
+        });
+
+        // enter 动画被取消时也要兜底进入 OPEN 状态
+        // （onEnterEnd 自身也监听 animationcancel，这里是双保险）
+        container.addEventListener('animationcancel', function (e) {
+            if (e.target !== container) return;
+            if (state === STATE.OPENING && e.animationName === 'cmdModalEnter') {
+                // 动画被取消，直接进入 OPEN 状态，避免卡死
+                if (pendingEnterEnd) {
+                    container.removeEventListener('animationend', pendingEnterEnd);
+                    container.removeEventListener('animationcancel', pendingEnterEnd);
+                    pendingEnterEnd = null;
+                }
+                state = STATE.OPEN;
+                if (current && current.type === 'prompt') {
+                    setTimeout(function () { inputEl.focus(); inputEl.select(); }, 50);
+                }
             }
         });
     }
 
-    // --------------------------------------------------------
-    // 显示 / 隐藏
-    // --------------------------------------------------------
-    function show() {
-        build();
-        // 清除上次 close() 的超时 fallback，防止新弹窗被旧定时器隐藏
-        if (closeTimer) {
-            clearTimeout(closeTimer);
-            closeTimer = null;
-        }
-        // 移除上次 close() 残留的 animationend 监听器，防止新弹窗 enter 动画结束时被旧监听器隐藏
-        if (animEndHandler && container) {
-            container.removeEventListener('animationend', animEndHandler);
-            animEndHandler = null;
-        }
-        root.style.display = 'flex';
-        // 重启动画
-        container.classList.remove('cmd-modal-leave');
-        container.classList.remove('cmd-modal-enter');
-        void container.offsetWidth;
-        container.classList.add('cmd-modal-enter');
+    // ============================================================
+    // 状态机核心：显示下一个
+    // ============================================================
+    function showNext() {
+        if (state !== STATE.CLOSED) return;  // 忙，等当前的关完
+        if (queue.length === 0) return;       // 没了
 
-        // 重新渲染 lucide 图标
-        if (window.lucide && window.lucide.createIcons) {
-            window.lucide.createIcons();
-        }
+        current = queue.shift();
+        render(current);
+        doShow();
     }
 
-    function close() {
-        if (!root) return;
-        // 清除已有的定时器，避免重复
-        if (closeTimer) {
-            clearTimeout(closeTimer);
-            closeTimer = null;
-        }
-        // 移除旧的监听器，防止重复绑定
-        if (animEndHandler) {
-            container.removeEventListener('animationend', animEndHandler);
-            animEndHandler = null;
-        }
-        container.classList.remove('cmd-modal-enter');
-        container.classList.add('cmd-modal-leave');
+    // ============================================================
+    // 渲染弹窗内容
+    // ============================================================
+    function render(item) {
+        titleEl.textContent = item.title || '';
+        bodyEl.textContent = item.message || '';
 
-        let done = false;
-        const finish = function () {
-            if (done) return;
-            done = true;
-            container.classList.remove('cmd-modal-leave');
-            root.style.display = 'none';
-            // 清理监听器引用
-            if (animEndHandler) {
-                container.removeEventListener('animationend', animEndHandler);
-                animEndHandler = null;
-            }
+        // 图标
+        const iconMap = {
+            alert:   ['info',     '#f4d03f'],
+            confirm: ['question', '#60a5fa'],
+            prompt:  ['question', '#60a5fa'],
         };
+        const [iconName, iconColor] = iconMap[item.type] || ['info', '#f4d03f'];
+        setIcon(iconName, iconColor);
 
-        animEndHandler = function () { finish(); };
-        container.addEventListener('animationend', animEndHandler);
+        // 输入框
+        if (item.type === 'prompt') {
+            inputWrap.style.display = '';
+            inputEl.value = item.defaultValue != null ? item.defaultValue : '';
+        } else {
+            inputWrap.style.display = 'none';
+        }
 
-        // 超时 fallback：300ms 后强制关闭，防止动画未定义导致弹窗无法关闭
-        closeTimer = setTimeout(function () {
-            closeTimer = null;
-            finish();
-        }, 300);
+        // 按钮
+        actionsEl.innerHTML = '';
+        if (item.type === 'alert') {
+            actionsEl.appendChild(makeBtn('确定', 'primary', function () {
+                resolveAndClose();
+            }));
+        } else if (item.type === 'confirm') {
+            actionsEl.appendChild(makeBtn('取消', 'ghost', function () {
+                resolveAndClose(false);
+            }));
+            actionsEl.appendChild(makeBtn('确定', 'primary', function () {
+                resolveAndClose(true);
+            }));
+        } else if (item.type === 'prompt') {
+            actionsEl.appendChild(makeBtn('取消', 'ghost', function () {
+                resolveAndClose('');
+            }));
+            actionsEl.appendChild(makeBtn('确定', 'primary', function () {
+                resolveAndClose(inputEl.value);
+            }));
+        }
     }
 
-    // --------------------------------------------------------
-    // 图标 & 按钮辅助
-    // --------------------------------------------------------
     function setIcon(name, color) {
-        if (!iconEl) return;
         iconEl.innerHTML = '';
         const svg = document.createElement('i');
         svg.setAttribute('data-lucide', name);
@@ -190,12 +240,11 @@ window.CmdModal = (function () {
         if (color) svg.style.color = color;
         iconEl.appendChild(svg);
 
-        // 背景色映射
         const bgMap = {
-            info: 'rgba(244,208,63,0.15)',
-            success: 'rgba(74,222,128,0.15)',
-            warning: 'rgba(251,191,36,0.15)',
-            error: 'rgba(248,113,113,0.15)',
+            info:     'rgba(244,208,63,0.15)',
+            success:  'rgba(74,222,128,0.15)',
+            warning:  'rgba(251,191,36,0.15)',
+            error:    'rgba(248,113,113,0.15)',
             question: 'rgba(96,165,250,0.15)',
             terminal: 'rgba(168,85,247,0.15)',
         };
@@ -214,8 +263,6 @@ window.CmdModal = (function () {
             btn.classList.add('bg-gold-400', 'text-forest-900', 'hover:bg-gold-500');
         } else if (variant === 'danger') {
             btn.classList.add('bg-red-500', 'text-white', 'hover:bg-red-600');
-        } else if (variant === 'ghost') {
-            btn.classList.add('bg-cream/10', 'text-cream/80', 'hover:bg-cream/20');
         } else {
             btn.classList.add('bg-cream/10', 'text-cream/80', 'hover:bg-cream/20');
         }
@@ -224,104 +271,134 @@ window.CmdModal = (function () {
         return btn;
     }
 
-    // --------------------------------------------------------
-    // Public API
-    // --------------------------------------------------------
+    // ============================================================
+    // 显示动画
+    // ============================================================
+    function doShow() {
+        state = STATE.OPENING;
 
-    /**
-     * 消息提示（类似原生 alert）
-     * @returns {Promise<void>}
-     */
-    function alert(title, message, icon) {
+        root.style.display = 'flex';
+
+        // 清理可能残留的旧监听器（防御）
+        if (pendingEnterEnd) {
+            container.removeEventListener('animationend', pendingEnterEnd);
+            container.removeEventListener('animationcancel', pendingEnterEnd);
+            pendingEnterEnd = null;
+        }
+
+        // 重启动画
+        container.classList.remove('cmd-modal-leave');
+        container.classList.remove('cmd-modal-enter');
+        void container.offsetWidth;
+        container.classList.add('cmd-modal-enter');
+
+        // 动画结束 → 进入 OPEN 状态
+        // 同时监听 animationcancel，避免 enter 动画被中途取消时监听器泄漏
+        const onEnterEnd = function (e) {
+            if (e.target !== container) return;
+            if (e.animationName !== 'cmdModalEnter') return;
+            // 状态守卫：若期间已被关闭，则不再切到 OPEN
+            if (state !== STATE.OPENING) return;
+            container.removeEventListener('animationend', onEnterEnd);
+            container.removeEventListener('animationcancel', onEnterEnd);
+            pendingEnterEnd = null;
+            state = STATE.OPEN;
+            // prompt 聚焦
+            if (current && current.type === 'prompt') {
+                setTimeout(function () { inputEl.focus(); inputEl.select(); }, 50);
+            }
+        };
+        pendingEnterEnd = onEnterEnd;
+        container.addEventListener('animationend', onEnterEnd);
+        container.addEventListener('animationcancel', onEnterEnd);
+
+        // 渲染图标
+        if (window.lucide && window.lucide.createIcons) {
+            window.lucide.createIcons();
+        }
+    }
+
+    // ============================================================
+    // 关闭入口（所有路径都走这里）
+    // ============================================================
+    function resolveAndClose(result) {
+        if (state === STATE.CLOSED || state === STATE.CLOSING) return;
+        if (!current) return;
+
+        const item = current;
+        current = null;
+        doClose();
+        item.resolve(result);
+    }
+
+    function doClose() {
+        if (state === STATE.CLOSED || state === STATE.CLOSING) return;
+        state = STATE.CLOSING;
+
+        // 清除超时 fallback
+        if (closeTimer) {
+            clearTimeout(closeTimer);
+            closeTimer = null;
+        }
+
+        // 清理可能未完成的 enter 动画监听器，避免泄漏
+        if (pendingEnterEnd) {
+            container.removeEventListener('animationend', pendingEnterEnd);
+            container.removeEventListener('animationcancel', pendingEnterEnd);
+            pendingEnterEnd = null;
+        }
+
+        container.classList.remove('cmd-modal-enter');
+        container.classList.add('cmd-modal-leave');
+
+        // 超时 fallback：300ms 后强制完成关闭
+        closeTimer = setTimeout(function () {
+            closeTimer = null;
+            finishClose();
+        }, 300);
+    }
+
+    function finishClose() {
+        if (state === STATE.CLOSED) return;
+
+        if (closeTimer) {
+            clearTimeout(closeTimer);
+            closeTimer = null;
+        }
+
+        container.classList.remove('cmd-modal-leave');
+        root.style.display = 'none';
+        state = STATE.CLOSED;
+
+        // 处理队列中的下一个
+        setTimeout(showNext, 50);
+    }
+
+    // ============================================================
+    // Public API
+    // ============================================================
+
+    function alert(title, message) {
         return new Promise(function (resolve) {
             build();
-            pending = { resolve: resolve, type: 'alert' };
-            titleEl.textContent = title || '提示';
-            bodyEl.textContent = message || '';
-            inputWrap.style.display = 'none';
-
-            const iconName = icon || 'info';
-            setIcon(iconName);
-
-            actionsEl.innerHTML = '';
-            actionsEl.appendChild(makeBtn('确定', 'primary', function () {
-                close();
-                pending = null;
-                resolve();
-            }));
-
-            show();
+            queue.push({ type: 'alert', title: title, message: message, resolve: resolve });
+            showNext();
         });
     }
 
-    /**
-     * 确认对话框（类似原生 confirm）
-     * @returns {Promise<boolean>} true=确认, false=取消
-     */
     function confirm(title, message) {
         return new Promise(function (resolve) {
             build();
-            pending = { resolve: resolve, type: 'confirm' };
-            titleEl.textContent = title || '确认';
-            bodyEl.textContent = message || '';
-            inputWrap.style.display = 'none';
-            setIcon('question');
-
-            actionsEl.innerHTML = '';
-            actionsEl.appendChild(makeBtn('取消', 'ghost', function () {
-                close();
-                pending = null;
-                resolve(false);
-            }));
-            actionsEl.appendChild(makeBtn('确定', 'primary', function () {
-                close();
-                pending = null;
-                resolve(true);
-            }));
-
-            show();
+            queue.push({ type: 'confirm', title: title, message: message, resolve: resolve });
+            showNext();
         });
     }
 
-    /**
-     * 输入对话框（类似原生 prompt）
-     * @returns {Promise<string>} 用户输入的字符串，取消返回空字符串
-     */
     function prompt(title, message, defaultValue) {
         return new Promise(function (resolve) {
             build();
-            pending = { resolve: resolve, type: 'prompt' };
-            titleEl.textContent = title || '输入';
-            bodyEl.textContent = message || '';
-            inputWrap.style.display = '';
-            inputEl.value = defaultValue || '';
-            setIcon('question');
-
-            actionsEl.innerHTML = '';
-            actionsEl.appendChild(makeBtn('取消', 'ghost', function () {
-                close();
-                pending = null;
-                resolve('');
-            }));
-            const okBtn = makeBtn('确定', 'primary', function () {
-                close();
-                pending = null;
-                resolve(inputEl.value);
-            });
-            actionsEl.appendChild(okBtn);
-
-            show();
-            setTimeout(function () { inputEl.focus(); inputEl.select(); }, 100);
-
-            // Enter 提交
-            inputEl.addEventListener('keydown', function onKey(e) {
-                if (e.key === 'Enter') {
-                    inputEl.removeEventListener('keydown', onKey);
-                    close();
-                    pending = null;
-                    resolve(inputEl.value);
-                }
-            });
+            queue.push({ type: 'prompt', title: title, message: message, defaultValue: defaultValue, resolve: resolve });
+            showNext();
         });
     }
 
@@ -329,6 +406,5 @@ window.CmdModal = (function () {
         alert: alert,
         confirm: confirm,
         prompt: prompt,
-        close: close,
     };
 })();

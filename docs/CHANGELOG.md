@@ -6,10 +6,36 @@
 
 ## [未发布]
 
+### 修复
+- **修复交互式终端 SSE 连接断开问题**：
+  - 后端 `routes/cmd/terminal.py`：subprocess 改为二进制模式（`text=False`），避免 TextIOWrapper 内部缓冲与 `os.read` 混用导致数据丢失；`select.select` 改用文件描述符（`stdout.fileno()`）；stdin 写入前将 str 编码为 bytes
+  - SSE 心跳从注释 `: ping` 改为 `data: {"type":"heartbeat","data":{}}` 事件，避免被部分代理/缓冲丢弃
+  - SSE 生成器增加异常兜底（循环内 try/except + 最外层 try/except），避免异常冒泡导致连接意外关闭
+  - 前端 `static/js/cmd/editor-terminal.js`：`onerror` 增加 3 秒延迟自动重连（主动关闭 EventSource 默认自动重连以避免冲突）；新增 `heartbeat` / `error` 事件处理；`init()` 监听页面可见性，切回页面时若已断开则立即重连
+
+### 新增
+- **交互式终端面板**：输出面板改造为完整终端，底部输入行支持直接执行 shell 命令（SSE 流式输出）
+- **终端命令历史**：↑/↓ 切换历史命令，最多保存 100 条，localStorage 持久化
+- **终端快捷键**：Ctrl+L 清屏、Ctrl+C 终止当前命令、Enter 执行
+- **运行命令行显示**：运行脚本时终端顶部显示 `$ python <文件名>` 命令行
+- **终端后端 API**：`POST /admin/cmd/terminal/run`（SSE 流式执行）、`POST /admin/cmd/terminal/abort`（终止命令）
+
+### 重构
+- **CmdModal 状态机 + 队列架构**：彻底重写弹窗系统，从根源解决连续弹窗闪退问题
+  - 四态状态机：`closed → opening → open → closing → closed`，非法状态直接忽略
+  - 调用队列：连续调用自动排队，上一个完全关闭后才显示下一个
+  - 单一关闭入口：所有关闭路径都走 `resolveAndClose → doClose → finishClose`
+  - 动画事件精确匹配：按 `animationName` 区分 enter/leave，避免事件串扰
+  - 全局事件只绑定一次：ESC/Enter/背景点击等事件在 build() 时统一注册
+
 ### 变更
-- 脚本编辑器布局重构：输出面板移至左侧、Monaco 编辑器移至右侧，桌面端横向撑满视口（无滚动），屏幕过小时降级为竖向滚动
-- 输出面板折叠方向改为横向收起（宽度收为 44px 窄条，仅保留展开按钮）
-- 删除脚本编辑器示例区域：移除工具栏「示例」按钮、下拉列表、`EXAMPLES` 数据与 `toggleExamples` 函数
+- 脚本编辑器输出面板标题从"输出"改为"终端"，配色改为紫色主题
+- 终端面板宽度增加（桌面端 420px / 480px / 560px 三档）
+- `editor.js` 的 `appendOutput` / `clearOutput` 优先使用 TerminalPanel，保持向后兼容
+- `editor.js` 新增 `getCurrentFilename()` 公共 API
+
+### 修复
+- **彻底修复脚本无法保存**：根因是 CmdModal 单例连续弹窗时动画事件残留导致第二个弹窗被意外关闭。通过状态机+队列架构从根本上解决，而非临时补丁式修复
 
 ### 修复
 - 修复 `/admin/logs` 页面 500 错误：模板中 `url_for('api.api_logs_refresh')` 端点名错误，实际蓝图名为 `api_admin`，改为 `url_for('api_admin.api_logs_refresh')`

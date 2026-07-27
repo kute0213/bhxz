@@ -41,8 +41,8 @@
                             <i data-lucide="save" class="w-5 h-5 text-green-400"></i>
                         </div>
                         <div>
-                            <div class="text-xs text-cream/50">备份总数</div>
-                            <div id="backup-count" class="text-xl font-bold">{{ backups|length }}</div>
+                            <div class="text-xs text-cream/50">备份总数 / 最大保留</div>
+                            <div id="backup-count" class="text-xl font-bold">{{ backups|length }} / {{ max_backups }}</div>
                         </div>
                     </div>
                 </div>
@@ -59,7 +59,7 @@
                     1. 清理过期日志（超过配置上限的访问日志、命令日志、定时任务日志）<br>
                     2. 执行 CHECKPOINT，合并 WAL 文件到主数据库（减小文件大小）<br>
                     3. 完整备份数据库文件到 <code class="bg-forest-900/50 px-1.5 py-0.5 rounded text-xs">backups/db/</code> 目录<br>
-                    4. 自动清理超出保留数量的旧备份
+                    4. 自动清理超出保留数量的旧备份（当前保留上限：{{ max_backups }} 份）
                 </p>
 
                 <!-- 进度条 -->
@@ -93,7 +93,7 @@
 
                 <div id="backup-list" class="space-y-2">
                     {% for b in backups %}
-                    <div class="flex items-center justify-between p-3 rounded-lg bg-forest-900/40 border border-cream/5">
+                    <div class="flex items-center justify-between p-3 rounded-lg bg-forest-900/40 border border-cream/5" data-backup-id="{{ b.id }}">
                         <div class="flex items-center gap-3 min-w-0">
                             <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0
                                         {% if b.status == 'success' %}bg-green-500/20
@@ -115,7 +115,7 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="flex-shrink-0">
+                        <div class="flex items-center gap-2 flex-shrink-0">
                             <span class="px-2 py-1 text-xs rounded-full
                                         {% if b.status == 'success' %}bg-green-500/20 text-green-300 border border-green-400/20
                                         {% elif b.status == 'failed' %}bg-red-500/20 text-red-300 border border-red-400/20
@@ -124,6 +124,9 @@
                                 {% elif b.status == 'failed' %}失败
                                 {% else %}进行中{% endif %}
                             </span>
+                            <button class="btn-delete-backup p-1.5 text-cream/40 hover:text-red-400 transition-colors" title="删除此备份">
+                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                            </button>
                         </div>
                     </div>
                     {% else %}
@@ -154,6 +157,16 @@
                 return (bytes / 1024 / 1024).toFixed(2) + ' MB';
             }
 
+            function escapeHtml(str) {
+                if (!str) return '';
+                return String(str)
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;')
+                    .replace(/'/g, '&#39;');
+            }
+
             function renderBackupList(backups) {
                 if (!backups || !backups.length) {
                     backupList.innerHTML = `
@@ -164,7 +177,8 @@
                     backupCount.textContent = '0';
                     return;
                 }
-                backupCount.textContent = backups.length;
+                const maxBackups = {{ max_backups }};
+                backupCount.textContent = backups.length + ' / ' + maxBackups;
                 backupList.innerHTML = backups.map(function (b) {
                     const isSuccess = b.status === 'success';
                     const isFailed = b.status === 'failed';
@@ -174,8 +188,9 @@
                     const typeText = b.backup_type === 'scheduled' ? '定时' : '手动';
                     const sizeStr = b.size_bytes ? formatSize(b.size_bytes) : '';
                     const durStr = b.duration_seconds ? b.duration_seconds.toFixed(1) + 's' : '';
+                    const backupId = b.id;
                     return `
-                    <div class="flex items-center justify-between p-3 rounded-lg bg-forest-900/40 border border-cream/5">
+                    <div class="flex items-center justify-between p-3 rounded-lg bg-forest-900/40 border border-cream/5" data-backup-id="${backupId}">
                         <div class="flex items-center gap-3 min-w-0">
                             <div class="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 bg-${statusClass}-500/20">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5 text-${statusClass}-400">
@@ -185,22 +200,66 @@
                                 </svg>
                             </div>
                             <div class="min-w-0">
-                                <div class="font-medium text-sm truncate">${b.backup_name}</div>
+                                <div class="font-medium text-sm truncate">${escapeHtml(b.backup_name)}</div>
                                 <div class="text-xs text-cream/50 flex flex-wrap gap-x-3 gap-y-0.5">
                                     <span>${typeText}</span>
-                                    <span>${b.started_at || ''}</span>
+                                    <span>${escapeHtml(b.started_at) || ''}</span>
                                     ${sizeStr ? `<span>${sizeStr}</span>` : ''}
                                     ${durStr ? `<span>${durStr}</span>` : ''}
                                 </div>
                             </div>
                         </div>
-                        <div class="flex-shrink-0">
+                        <div class="flex items-center gap-2 flex-shrink-0">
                             <span class="px-2 py-1 text-xs rounded-full bg-${statusClass}-500/20 text-${statusClass}-300 border border-${statusClass}-400/20">
                                 ${statusText}
                             </span>
+                            <button class="btn-delete-backup p-1.5 text-cream/40 hover:text-red-400 transition-colors" title="删除此备份" data-backup-id="${backupId}">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
+                            </button>
                         </div>
                     </div>`;
                 }).join('');
+
+                // 绑定删除按钮事件
+                backupList.querySelectorAll('.btn-delete-backup').forEach(function (btn) {
+                    btn.addEventListener('click', handleDeleteBackup);
+                });
+            }
+
+            function handleDeleteBackup(e) {
+                const btn = e.currentTarget;
+                const backupId = btn.dataset.backupId;
+                const row = btn.closest('[data-backup-id]');
+
+                if (!confirm('确定要删除此备份吗？此操作不可恢复。')) return;
+
+                btn.disabled = true;
+                btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 animate-spin"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line></svg>';
+
+                fetch('/admin/api/db-backup/' + backupId + '/delete', { method: 'POST' })
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.success) {
+                            if (row) {
+                                row.style.transition = 'opacity 0.2s, transform 0.2s';
+                                row.style.opacity = '0';
+                                row.style.transform = 'translateX(10px)';
+                                setTimeout(() => {
+                                    row.remove();
+                                    refreshList();
+                                }, 200);
+                            }
+                        } else {
+                            alert(data.message || '删除失败');
+                            btn.disabled = false;
+                            btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>';
+                        }
+                    })
+                    .catch(() => {
+                        alert('网络错误，请重试');
+                        btn.disabled = false;
+                        btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>';
+                    });
             }
 
             function refreshList() {
@@ -220,7 +279,6 @@
                             progressBar.style.width = data.percent + '%';
                             progressPercent.textContent = data.percent + '%';
                         } else {
-                            // 备份完成
                             clearInterval(pollTimer);
                             pollTimer = null;
                             progressBar.style.width = '100%';
@@ -252,7 +310,6 @@
                             progressBar.style.width = '5%';
                             progressPercent.textContent = '5%';
                             progressMessage.textContent = '准备备份...';
-                            // 开始轮询进度
                             pollTimer = setInterval(pollProgress, 1000);
                         } else {
                             btnStart.disabled = false;

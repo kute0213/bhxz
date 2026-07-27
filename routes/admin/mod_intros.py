@@ -17,9 +17,11 @@ def manage_mod_intros():
         abort(403)
 
     conn = get_db()
-    intros = conn.execute("SELECT * FROM mod_intros ORDER BY id ASC").fetchall()
-    intros = [dict(r) for r in intros]
-    conn.close()
+    try:
+        intros = conn.execute("SELECT * FROM mod_intros ORDER BY id ASC").fetchall()
+        intros = [dict(r) for r in intros]
+    finally:
+        conn.close()
 
     return render_template('manage_mod_intros.html', user=user, mod_intros=intros)
 
@@ -37,13 +39,18 @@ def add_mod_intro():
 
     if title and content:
         conn = get_db()
-        now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        conn.execute(
-            "INSERT INTO mod_intros (icon, title, content, created_at) VALUES (?, ?, ?, ?)",
-            (icon, title, content, now)
-        )
-        conn.commit()
-        conn.close()
+        try:
+            try:
+                now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+                conn.execute(
+                    "INSERT INTO mod_intros (icon, title, content, created_at) VALUES (?, ?, ?, ?)",
+                    (icon, title, content, now)
+                )
+                conn.commit()
+            except:
+                conn.rollback()
+        finally:
+            conn.close()
         flash('模组介绍已添加', 'success')
 
     return redirect(url_for('admin.manage_mod_intros'))
@@ -62,12 +69,17 @@ def edit_mod_intro(intro_id):
 
     if title and content:
         conn = get_db()
-        conn.execute(
-            "UPDATE mod_intros SET icon = ?, title = ?, content = ? WHERE id = ?",
-            (icon, title, content, intro_id)
-        )
-        conn.commit()
-        conn.close()
+        try:
+            try:
+                conn.execute(
+                    "UPDATE mod_intros SET icon = ?, title = ?, content = ? WHERE id = ?",
+                    (icon, title, content, intro_id)
+                )
+                conn.commit()
+            except:
+                conn.rollback()
+        finally:
+            conn.close()
         flash('模组介绍已更新', 'success')
 
     return redirect(url_for('admin.manage_mod_intros'))
@@ -81,9 +93,14 @@ def delete_mod_intro(intro_id):
         abort(403)
 
     conn = get_db()
-    conn.execute("DELETE FROM mod_intros WHERE id = ?", (intro_id,))
-    conn.commit()
-    conn.close()
+    try:
+        try:
+            conn.execute("DELETE FROM mod_intros WHERE id = ?", (intro_id,))
+            conn.commit()
+        except:
+            conn.rollback()
+    finally:
+        conn.close()
     flash('模组介绍已删除', 'success')
 
     return redirect(url_for('admin.manage_mod_intros'))

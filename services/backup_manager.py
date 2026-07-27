@@ -3,9 +3,9 @@
 
 功能：
 - 备份 DuckDB 数据库文件到 BACKUP_DIR
-- 自动清理过期备份（保留 MAX_BACKUPS 份）
-- 备份前执行 CHECKPOINT（可选，减少文件大小）
-- 备份前清理过期日志（可选）
+- 自动清理过期备份（保留 MAX_BACKUPS 份，支持热重载）
+- 备份前执行 CHECKPOINT（可选，支持热重载）
+- 备份前清理过期日志（可选，支持热重载）
 - 记录备份历史到 db_backups 表
 - 提供进度回调接口（供前端进度条展示）
 - 后台线程执行，不阻塞主进程
@@ -25,9 +25,7 @@ from config import (
     DB_PATH,
     BACKUP_DIR,
     BACKUP_FILENAME_FORMAT,
-    MAX_BACKUPS,
-    BACKUP_CLEAN_LOGS,
-    BACKUP_CHECKPOINT,
+    get_config_value,
 )
 
 
@@ -164,6 +162,10 @@ class BackupManager:
         size_bytes = 0
 
         try:
+            # 读取当前配置（支持热重载）
+            clean_logs = get_config_value('BACKUP_CLEAN_LOGS', True)
+            do_checkpoint = get_config_value('BACKUP_CHECKPOINT', True)
+
             # 阶段 1: 准备
             self._report_progress(5, '准备备份...', progress_callback)
             os.makedirs(BACKUP_DIR, exist_ok=True)
@@ -175,7 +177,7 @@ class BackupManager:
             self._update_backup_record(backup_id, backup_name=backup_name, backup_path=backup_path)
 
             # 阶段 2: 清理过期日志
-            if BACKUP_CLEAN_LOGS:
+            if clean_logs:
                 self._report_progress(15, '清理过期日志...', progress_callback)
                 try:
                     self._clean_logs()
@@ -183,7 +185,7 @@ class BackupManager:
                     print(f'[Backup] 清理日志失败: {e}', flush=True)
 
             # 阶段 3: CHECKPOINT（合并 WAL 到主文件）
-            if BACKUP_CHECKPOINT:
+            if do_checkpoint:
                 self._report_progress(30, '执行 CHECKPOINT...', progress_callback)
                 try:
                     self._run_checkpoint()
@@ -196,9 +198,16 @@ class BackupManager:
             if not os.path.exists(DB_PATH):
                 raise FileNotFoundError(f'数据库文件不存在: {DB_PATH}')
 
-            # 用 shutil.copy2 保留元信息
-            file_size = os.path.getsize(DB_PATH)
-            shutil.copy2(DB_PATH, backup_path)
+            # 持有数据库锁，确保复制期间没有写入
+            from core.db import get_db
+            with get_db() as conn:
+                # 先执行一次 CHECKPOINT 确保数据都写到主文件
+                try:
+                    conn.execute('CHECKPOINT')
+                except Exception:
+                    pass
+                file_size = os.path.getsize(DB_PATH)
+                shutil.copy2(DB_PATH, backup_path)
             size_bytes = os.path.getsize(backup_path)
 
             # 阶段 5: 验证备份文件
@@ -256,10 +265,11 @@ class BackupManager:
 
     def _run_checkpoint(self):
         """执行 CHECKPOINT，将 WAL 合并到主数据库文件。"""
-        import duckdb
-        conn = duckdb.connect(DB_PATH)
+        from core.db import get_db
+        conn = get_db()
         try:
             conn.execute('CHECKPOINT')
+            conn.commit()
         finally:
             conn.close()
 
@@ -268,14 +278,14 @@ class BackupManager:
         import duckdb
         conn = duckdb.connect(backup_path, read_only=True)
         try:
-            # 查询系统表验证数据库完整性
             conn.execute("SELECT name FROM sqlite_master WHERE type='table' LIMIT 1")
         finally:
             conn.close()
 
     def _cleanup_old_backups(self):
-        """删除超出 MAX_BACKUPS 限制的旧备份（文件 + 记录）。"""
-        if MAX_BACKUPS <= 0:
+        """删除超出 MAX_BACKUPS 限制的旧备份（文件 + 记录）。支持热重载。"""
+        max_backups = get_config_value('MAX_BACKUPS', 30)
+        if max_backups <= 0:
             return
 
         from core.db import get_db
@@ -286,11 +296,11 @@ class BackupManager:
                 "SELECT id, backup_path, status FROM db_backups ORDER BY id DESC"
             ).fetchall()
 
-            if len(rows) <= MAX_BACKUPS:
+            if len(rows) <= max_backups:
                 return
 
             # 超出部分删除
-            to_delete = rows[MAX_BACKUPS:]
+            to_delete = rows[max_backups:]
             for row in to_delete:
                 path = row[1] if isinstance(row, (list, tuple)) else row['backup_path']
                 bid = row[0] if isinstance(row, (list, tuple)) else row['id']

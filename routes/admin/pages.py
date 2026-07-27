@@ -16,15 +16,17 @@ def admin_page():
         abort(403)
 
     conn = get_db()
-    stats = {
-        'total_users': conn.execute("SELECT COUNT(*) AS c FROM users").fetchone()['c'],
-        'total_polls': conn.execute("SELECT COUNT(*) AS c FROM polls").fetchone()['c'],
-        'total_votes': conn.execute("SELECT COUNT(*) AS c FROM poll_votes").fetchone()['c'],
-        'total_board_topics': conn.execute("SELECT COUNT(*) AS c FROM board_topics").fetchone()['c'],
-        'total_board_replies': conn.execute("SELECT COUNT(*) AS c FROM board_replies").fetchone()['c'],
-        'total_mod_intros': conn.execute("SELECT COUNT(*) AS c FROM mod_intros").fetchone()['c'],
-    }
-    conn.close()
+    try:
+        stats = {
+            'total_users': conn.execute("SELECT COUNT(*) AS c FROM users").fetchone()['c'],
+            'total_polls': conn.execute("SELECT COUNT(*) AS c FROM polls").fetchone()['c'],
+            'total_votes': conn.execute("SELECT COUNT(*) AS c FROM poll_votes").fetchone()['c'],
+            'total_board_topics': conn.execute("SELECT COUNT(*) AS c FROM board_topics").fetchone()['c'],
+            'total_board_replies': conn.execute("SELECT COUNT(*) AS c FROM board_replies").fetchone()['c'],
+            'total_mod_intros': conn.execute("SELECT COUNT(*) AS c FROM mod_intros").fetchone()['c'],
+        }
+    finally:
+        conn.close()
 
     return render_template('admin.html', user=user, stats=stats)
 

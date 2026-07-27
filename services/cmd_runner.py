@@ -134,6 +134,7 @@ def _log_cmd_execution(command, output, exit_code, success,
                        triggered_by, started_str, timeout):
     """在后台线程中记录命令执行日志，避免阻塞。"""
     def _write():
+        conn = None
         try:
             finished = datetime.datetime.now()
             duration = (finished - datetime.datetime.strptime(
@@ -153,8 +154,18 @@ def _log_cmd_execution(command, output, exit_code, success,
                  started_str, finished.strftime('%Y-%m-%d %H:%M:%S'), duration),
             )
             conn.commit()
-            conn.close()
         except Exception:
-            pass
+            # 仅记录到 stderr，不静默吞掉异常（便于调试连接/SQL 问题）
+            if conn is not None:
+                try:
+                    conn.rollback()
+                except Exception:
+                    pass
+        finally:
+            if conn is not None:
+                try:
+                    conn.close()
+                except Exception:
+                    pass
 
     threading.Thread(target=_write, daemon=True).start()

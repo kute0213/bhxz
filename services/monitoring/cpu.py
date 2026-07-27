@@ -1,9 +1,94 @@
-"""CPU 使用率与温度采集。"""
+"""CPU 使用率与温度采集。
+
+使用后台线程定期采样 CPU 使用率，避免每次请求都调用 psutil。
+这样可以：
+1. 解决首次调用返回 0.0 的问题（psutil 需要两次调用之间的时间差）
+2. 解决长时间运行的进程中 cpu_percent(interval=None) 可能一直返回 0.0 的问题
+3. 提高响应速度（直接返回缓存值，无需阻塞）
+
+fork 安全说明：
+  在 gunicorn --preload 等 preforking 部署下，模块在主进程加载时
+  启动的后台线程不会跨越 fork 存活。因此使用 pid 检测：每次
+  get_cpu_usage() 调用时检查采样线程是否属于当前进程，若不是
+  则在本进程内重新启动。
+"""
 
 import os
 import time
+import threading
 
 from services.monitoring.system import _psutil_available
+
+
+# ============================================================
+# 后台采样线程：定期调用 psutil.cpu_percent，缓存最新值
+# ============================================================
+
+# 缓存的 CPU 使用率（None 表示尚未采样）
+_cpu_usage_cache = None
+_cpu_usage_lock = threading.Lock()
+_cpu_usage_last_update = 0
+
+# 采样间隔（秒）：每 2 秒采样一次
+_CPU_SAMPLE_INTERVAL = 2.0
+
+# 记录采样线程所属的进程 pid。
+# fork 后子进程继承父进程的内存（_sampler_pid 仍是父 pid），
+# 但采样线程不会跨 fork 存活，因此通过 pid 比较来检测并重启。
+_sampler_pid = None
+_sampler_lock = threading.Lock()
+
+
+def _start_cpu_sampler():
+    """在当前进程内启动后台 CPU 采样线程。
+
+    fork 安全：通过 pid 检测，确保每个 worker 进程都有独立的采样线程。
+    """
+    global _sampler_pid
+    current_pid = os.getpid()
+    with _sampler_lock:
+        if _sampler_pid == current_pid:
+            return  # 本进程已启动采样线程
+        _sampler_pid = current_pid
+
+    psutil = _psutil_available()
+    if psutil:
+        try:
+            # 第一次调用 cpu_percent 建立基线（返回 0.0，但建立了内部状态）
+            psutil.cpu_percent(interval=None)
+            # 短暂等待，让 CPU 有一些活动可以采样
+            time.sleep(0.1)
+            # 第二次调用，使用阻塞模式获取真实值
+            value = psutil.cpu_percent(interval=0.5)
+            with _cpu_usage_lock:
+                global _cpu_usage_cache, _cpu_usage_last_update
+                _cpu_usage_cache = round(value, 1)
+                _cpu_usage_last_update = time.time()
+        except Exception:
+            pass
+
+    # 启动后台采样线程
+    def _sample_loop():
+        global _cpu_usage_cache, _cpu_usage_last_update
+        psutil = _psutil_available()
+        if not psutil:
+            return
+
+        while True:
+            try:
+                # interval=0.5 表示阻塞 0.5 秒采样，确保得到真实值
+                value = psutil.cpu_percent(interval=0.5)
+                with _cpu_usage_lock:
+                    _cpu_usage_cache = round(value, 1)
+                    _cpu_usage_last_update = time.time()
+            except Exception:
+                pass
+            # 等待下一次采样
+            time.sleep(max(_CPU_SAMPLE_INTERVAL - 0.5, 0.1))  # 减去采样本身的时间
+
+    t = threading.Thread(target=_sample_loop, daemon=True)
+    t.start()
+
 
 # 温度缓存（避免频繁读取 sysfs / sensors）
 _temp_cache = {'value': None, 'time': 0}
@@ -28,24 +113,62 @@ def _avg_valid_temps(temps):
 
 
 def get_cpu_usage():
+    """获取 CPU 使用率。
+
+    优先返回后台采样线程缓存的值。若当前进程尚未启动采样线程
+    （如 fork 后的 worker 进程），则惰性启动。
+    缓存超过 10 秒未更新则视为采样线程已死，强制重新采样。
+    """
+    global _cpu_usage_cache, _cpu_usage_last_update
+
+    # fork 安全：检查采样线程是否属于当前进程，若不是则启动
+    current_pid = os.getpid()
+    if _sampler_pid != current_pid:
+        _start_cpu_sampler()
+
+    # 检查缓存是否新鲜（10 秒内）
+    now = time.time()
+    with _cpu_usage_lock:
+        cached = _cpu_usage_cache
+        last_update = _cpu_usage_last_update
+
+    if cached is not None and (now - last_update) < 10.0:
+        return cached
+
+    # 缓存为空或过期：降级到 psutil 阻塞模式直接采样
     psutil = _psutil_available()
     if psutil:
         try:
-            # interval=None 表示非阻塞，返回上次调用以来的 CPU 使用率
-            return round(psutil.cpu_percent(interval=None), 1)
+            # interval=0.5 阻塞 0.5 秒采样，确保得到真实值
+            value = round(psutil.cpu_percent(interval=0.5), 1)
+            with _cpu_usage_lock:
+                _cpu_usage_cache = value
+                _cpu_usage_last_update = time.time()
+            return value
         except Exception:
             pass
 
     if os.name == 'posix':
         try:
+            # 两次读取 /proc/stat 求差值，得到当前使用率
+            # （单次读取得到的是开机以来平均值，不准确）
             with open('/proc/stat', 'r') as f:
-                lines = f.readlines()
-            cpu_line = [l for l in lines if l.startswith('cpu ')][0].strip()
-            parts = list(map(int, cpu_line.split()[1:]))
-            total = sum(parts)
-            idle = parts[3]
-            usage = ((total - idle) / total) * 100
-            return round(usage, 1)
+                line1 = [l for l in f.readlines() if l.startswith('cpu ')][0].strip()
+            parts1 = list(map(int, line1.split()[1:]))
+            total1 = sum(parts1)
+            idle1 = parts1[3]
+            time.sleep(0.5)
+            with open('/proc/stat', 'r') as f:
+                line2 = [l for l in f.readlines() if l.startswith('cpu ')][0].strip()
+            parts2 = list(map(int, line2.split()[1:]))
+            total2 = sum(parts2)
+            idle2 = parts2[3]
+            total_delta = total2 - total1
+            idle_delta = idle2 - idle1
+            if total_delta > 0:
+                usage = ((total_delta - idle_delta) / total_delta) * 100
+                return round(usage, 1)
+            return None
         except Exception:
             return None
 

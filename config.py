@@ -80,6 +80,108 @@ SCRIPT_MAX_LOOP_ITER = 100000
 # 脚本执行器并发数量限制（同时运行的脚本子进程数）
 SCRIPT_EXECUTOR_POOL_SIZE = 2
 
+# ---------------------------------------------------------------------------
+# 脚本存储配置
+# ---------------------------------------------------------------------------
+
+# MiniScript 脚本文件后缀
+SCRIPT_MS_EXTENSION = '.py'
+
+# Shell 命令脚本文件后缀（None 表示自动检测：Windows 用 .bat，其他用 .sh）
+SCRIPT_SHELL_EXTENSION = None  # None = 自动检测
+
+# 脚本文件名日期格式（用于自动生成文件名）
+SCRIPT_FILENAME_DATE_FORMAT = '%Y%m%d'
+
+# ---------------------------------------------------------------------------
+# 安全配置
+# ---------------------------------------------------------------------------
+
+# 密码密钥（用于密码哈希的盐值）
+PASSWORD_SALT = 'binhai_salt_2024'
+
+# 登录会话过期时间（秒），默认 7 天
+SESSION_LIFETIME = 604800
+
+# 登录失败锁定次数（超过后锁定账户）
+MAX_LOGIN_ATTEMPTS = 5
+
+# 登录失败锁定时间（秒），默认 30 分钟
+LOGIN_LOCKOUT_TIME = 1800
+
+# ---------------------------------------------------------------------------
+# 服务器配置
+# ---------------------------------------------------------------------------
+
+# 服务器主机地址
+SERVER_HOST = '0.0.0.0'
+
+# 服务器端口
+SERVER_PORT = 5000
+
+# 是否开启调试模式
+DEBUG_MODE = False
+
+# 工作线程数
+WORKER_THREADS = 4
+
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(BACKUP_DIR, exist_ok=True)
 os.makedirs(SCRIPTS_DIR, exist_ok=True)
+
+
+# ---------------------------------------------------------------------------
+# 设置注册表 —— 定义哪些配置可以通过管理后台在线编辑
+# ---------------------------------------------------------------------------
+
+# 每个条目: (key, default_value, type, label, description, category)
+# type: 'int', 'float', 'str', 'bool', 'select', 'time'
+SETTINGS_REGISTRY = [
+    # 日志清理
+    ('MAX_ACCESS_LOGS', 500, 'int', '访问日志最大条数', '超过此条数后自动删除最旧的访问日志', '日志清理'),
+    ('MAX_CMD_LOGS', 1000, 'int', '命令日志最大条数', '超过此条数后自动删除最旧的命令执行日志', '日志清理'),
+    ('MAX_TASK_LOGS', 2000, 'int', '定时任务日志最大条数', '超过此条数后自动删除最旧的定时任务日志', '日志清理'),
+    ('LOG_CLEANUP_INTERVAL', 300, 'int', '日志清理间隔（秒）', '后台线程每隔此时间检查一次日志数量', '日志清理'),
+
+    # 定时任务
+    ('TASK_SCHEDULER_INTERVAL', 10, 'int', '任务调度间隔（秒）', '后台线程每隔此时间扫描一次到期任务', '定时任务'),
+    ('TASK_EXECUTION_TIMEOUT', 300, 'int', '任务执行超时（秒）', '单个定时任务执行超时后自动终止', '定时任务'),
+    ('TASK_EXECUTOR_POOL_SIZE', 4, 'int', '任务执行线程池大小', '同时执行的定时任务数量上限', '定时任务'),
+
+    # 数据库备份
+    ('BACKUP_SCHEDULED_TIME', '03:00', 'time', '自动备份时间', '每天自动备份的时间（HH:MM 格式）', '数据库备份'),
+    ('MAX_BACKUPS', 30, 'int', '最大备份保留数', '超出后自动删除最旧的备份，0 表示不限制', '数据库备份'),
+    ('BACKUP_TIMEOUT', 3600, 'int', '备份超时（秒）', '备份执行超时时间，防止备份过程卡住', '数据库备份'),
+    ('BACKUP_CLEAN_LOGS', True, 'bool', '备份前清理日志', '执行备份前自动清理过期日志', '数据库备份'),
+    ('BACKUP_CHECKPOINT', True, 'bool', '备份前执行 CHECKPOINT', '将 WAL 合并到主文件，减小数据库体积', '数据库备份'),
+
+    # 脚本执行
+    ('SCRIPT_DEFAULT_TIMEOUT', 30, 'int', '脚本默认超时（秒）', '脚本执行默认超时时间', '脚本执行'),
+    ('SCRIPT_MAX_TIMEOUT', 300, 'int', '脚本最大超时（秒）', '脚本内 set_timeout() 不能超过此值', '脚本执行'),
+    ('SCRIPT_MAX_LOOP_ITER', 100000, 'int', '脚本最大循环次数', '防止脚本死循环，超过后自动终止', '脚本执行'),
+    ('SCRIPT_EXECUTOR_POOL_SIZE', 2, 'int', '脚本执行并发数', '同时运行的脚本子进程数上限', '脚本执行'),
+
+    # 安全
+    ('SESSION_LIFETIME', 604800, 'int', '会话有效期（秒）', '登录会话过期时间，默认 7 天', '安全配置'),
+    ('MAX_LOGIN_ATTEMPTS', 5, 'int', '登录失败锁定次数', '超过后临时锁定账户', '安全配置'),
+    ('LOGIN_LOCKOUT_TIME', 1800, 'int', '登录锁定时间（秒）', '账户被锁定后自动解锁的时间', '安全配置'),
+
+    # 服务器
+    ('SERVER_HOST', '0.0.0.0', 'str', '服务器监听地址', '服务器监听的 IP 地址，0.0.0.0 表示监听所有地址', '服务器配置'),
+    ('SERVER_PORT', 5000, 'int', '服务器监听端口', '服务器监听的端口号', '服务器配置'),
+    ('DEBUG_MODE', False, 'bool', '调试模式', '开启后显示详细错误信息和自动重载', '服务器配置'),
+    ('WORKER_THREADS', 4, 'int', '工作线程数', '处理请求的工作线程数量', '服务器配置'),
+]
+
+
+def get_config_value(key: str, default=None):
+    """获取配置值（优先从数据库读取，实现热重载）。
+
+    此函数应在运行时调用，以获取最新的设置值。
+    启动时应使用 config.py 中的默认值。
+    """
+    try:
+        from services.settings_manager import get_setting
+        return get_setting(key, default)
+    except Exception:
+        return default

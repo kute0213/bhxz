@@ -134,7 +134,6 @@ def toggle_poll(poll_id):
     try:
         poll = conn.execute("SELECT * FROM polls WHERE id = ?", (poll_id,)).fetchone()
         if not poll:
-            conn.close()
             abort(404)
 
         new_status = 0 if poll['is_active'] else 1
@@ -142,7 +141,10 @@ def toggle_poll(poll_id):
         conn.commit()
         return _respond('投票状态已更新', 'success')
     except Exception:
-        conn.rollback()
+        try:
+            conn.rollback()
+        except Exception:
+            pass
         return _respond('操作失败', 'error')
     finally:
         conn.close()

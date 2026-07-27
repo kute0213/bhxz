@@ -12,23 +12,31 @@
 │
 ├── core/                         # 核心基础设施
 │   ├── __init__.py
-│   ├── database.py               #   DuckDB 数据库层（兼容 sqlite3 接口：Row/lastrowid/executescript）
+│   ├── db/                       #   DuckDB 数据库层（兼容 sqlite3 接口：Row/lastrowid/executescript）
+│   │   ├── __init__.py           #     包入口，导出 get_db / init_db / DuckDBConnection 等
+│   │   ├── connection.py         #     连接、游标、行对象封装 + get_db
+│   │   └── schema.py             #     建表 SQL、迁移、默认数据 + init_db
 │   ├── auth.py                   #   认证模块（login_required / admin_required 装饰器、当前用户，含请求内缓存）
 │   └── middleware.py             #   请求中间件（异步访问日志记录，不阻塞请求）
 │
 ├── services/                     # 业务服务（含异步后台线程）
 │   ├── __init__.py
-│   ├── monitoring.py             #   系统监控（CPU 使用率/温度、内存、运行时间，跨平台）
+│   ├── monitoring/               #   系统监控（CPU 使用率/温度、内存、运行时间，跨平台）
+│   │   ├── __init__.py           #     包入口，导出 get_cpu_usage / get_cpu_temperature / get_memory_info / get_system_info
+│   │   ├── cpu.py                #     CPU 使用率与温度采集
+│   │   ├── memory.py             #     内存信息采集
+│   │   └── system.py             #     系统信息采集 + psutil 可用性检测
 │   ├── ip.py                     #   IP 工具（真实 IP 解析、异步地理信息查询）
 │   ├── cmd_runner.py             #   命令执行服务（SSE 流式 + 同步执行 + 异步日志记录）
 │   ├── scheduler.py              #   定时任务调度引擎（后台线程 + ThreadPoolExecutor 异步执行）
 │   ├── log_cleaner.py            #   日志自动清除服务（后台线程定期清理超限记录）
 │   ├── log_writer.py             #   异步日志写入器（队列 + 后台线程批量写入）
 │   ├── backup_manager.py         #   数据库备份管理器（CHECKPOINT + 文件复制 + 旧备份清理）
-│   ├── backup_scheduler.py       #   每日定时备份调度器（默认凌晨 3:00）
-│   └── miniscript/               #   MiniScript 后端执行引擎（独立子进程 + AST 沙箱）
-│       ├── __init__.py           #     包入口，导出 ScriptExecutor / validate_script
-│       ├── sandbox.py            #     AST 语法白名单校验器（拒绝 exec/eval/dunder 等）
+│   ├── backup_scheduler.py       #   每日定时备份调度器（默认凌晨 3:00，支持热重载）
+│   ├── settings_manager.py       #   系统设置管理器（数据库存储 + 内存缓存，支持热重载）
+│   ├── script_store.py           #   统一脚本存储服务（数据库存储，按名称自动排序）
+│   └── miniscript/               #   MiniScript 后端执行引擎（独立子进程执行）
+│       ├── __init__.py           #     包入口，导出 ScriptExecutor
 │       ├── builtins.py           #     内置函数工厂（echo/cmd/file_*/db_*/alert/prompt/confirm）
 │       ├── runner.py             #     子进程入口（exec 执行脚本 + 管道通信 + 超时看门狗）
 │       └── executor.py           #     ScriptExecutor 类（multiprocessing + Pipe + abort）
@@ -36,10 +44,32 @@
 ├── routes/                       # 路由控制器（Flask Blueprint）
 │   ├── __init__.py
 │   ├── main.py                   #   页面路由：首页、登录/注册、用户设置、性能监控页
-│   ├── community.py              #   社区路由：投票 CRUD、留言板 CRUD、多附件上传
-│   ├── admin.py                  #   管理路由：用户管理、日志查看、模组介绍管理、数据库备份
-│   ├── cmd.py                    #   CMD 控制台路由：实时命令执行 + 一键命令管理
-│   ├── scheduled.py              #   定时任务路由：任务 CRUD、启停、触发、执行日志
+│   ├── community/                #   社区蓝图包：投票 CRUD、留言板 CRUD、多附件上传
+│   │   ├── __init__.py           #     创建 community_bp，导入子模块注册路由
+│   │   ├── pages.py              #     社区首页渲染 + 附件下载
+│   │   ├── polls.py              #     投票创建/投票/删除/启停
+│   │   ├── board.py              #     留言板主题/回复/删除（含附件管理）
+│   │   └── helpers.py            #     _is_ajax / _respond 辅助函数
+│   ├── admin/                    #   管理蓝图包：用户管理、日志、模组介绍、数据库备份、系统设置
+│   │   ├── __init__.py           #     创建 admin_bp，导入子模块注册路由
+│   │   ├── pages.py              #     管理后台首页 + 请求头调试
+│   │   ├── users.py              #     用户列表/切换管理员/删除用户
+│   │   ├── mod_intros.py         #     模组介绍 增/改/删
+│   │   ├── logs.py               #     访问日志分页查看/清空
+│   │   ├── settings.py           #     系统设置页面 + API（在线编辑配置，热重载）
+│   │   └── backup.py             #     数据库备份页面/启动/进度/历史
+│   ├── cmd/                      #   CMD 控制台蓝图包：实时命令执行 + 一键命令管理 + 脚本
+│   │   ├── __init__.py           #     创建 cmd_bp，导入子模块注册路由
+│   │   ├── pages.py              #     命令控制台首页 + 脚本编辑器页面
+│   │   ├── commands.py           #     快捷命令 CRUD + 执行预设命令
+│   │   ├── execution.py          #     Shell 命令同步执行 + SSE 流式执行
+│   │   ├── script.py             #     MiniScript SSE 执行 + _admin_check 辅助函数
+│   │   ├── scripts.py            #     统一脚本管理 CRUD（文件系统 + 数据库）
+│   │   └── terminal.py           #     交互式终端（持久 shell 会话 + SSE 流式 + 命令输入）
+│   ├── scheduled/                #   定时任务蓝图包：任务 CRUD、启停、触发、执行日志
+│   │   ├── __init__.py           #     创建 scheduled_bp + _admin_check，导入子模块注册路由
+│   │   ├── tasks.py              #     任务 CRUD/启停/触发/状态查询
+│   │   └── logs.py               #     任务执行日志（单任务/全部/详情）
 │   ├── docs.py                   #   文档路由：Markdown 文档列表 + 内容 API
 │   └── api/                      #   API 接口（按功能模块拆分）
 │       ├── __init__.py
@@ -64,19 +94,26 @@
 │   ├── admin_cmd.html            #   CMD 控制台
 │   ├── admin_cmd_editor.html     #   脚本编辑器（专业代码编辑器页面）
 │   ├── admin_cmd_scheduled.html  #   定时任务管理页面
+│   ├── admin_settings.html       #   系统设置（在线编辑配置，支持重置，热重载）
 │   ├── admin_db_backup.html      #   数据库优化备份页面（进度条 + 备份历史）
 │   └── 403.html / 404.html       #   错误页
 │
 ├── static/                       # 静态资源
-│   ├── css/style.css             #   主样式（磨砂玻璃、动画、响应式）
+│   ├── css/
+│   │   ├── style.css             #   主样式（磨砂玻璃、动画、响应式）
+│   │   └── base.css              #   base.html 提取的全局样式（导航栏、模态框、动画）
 │   └── js/
 │       ├── main.js               #     全局交互（滚动动画、鼠标光晕、按钮反馈）
-│       └── cmd/                  #     CMD 控制台模块（6 个文件，职责清晰）
+│       ├── base.js               #     base.html 提取的全局脚本（导航、Toast、键盘快捷键）
+│       └── cmd/                  #     CMD 控制台模块（9 个文件，职责清晰）
 │           ├── modal.js          #       页内弹窗系统（替代原生 alert/prompt/confirm）
-│           ├── terminal.js       #       终端弹窗（SSE 流式输出 + 拖拽 + 动画 + 固定尺寸滚动）
+│           ├── terminal.js       #       终端弹窗（持久 shell 会话 + SSE 流式输出 + 拖拽 + 动画 + 断线重连）
 │           ├── presets.js        #       快捷命令管理（增删改查，按 [脚本] 前缀区分类型）
-│           ├── editor.js         #       专业脚本编辑器（Monaco + Python 语法 + SSE 执行）
-│           ├── scheduled.js      #       定时任务管理（任务列表/创建/编辑/日志）
+│           ├── editor.js         #       脚本编辑器核心（Monaco 初始化、工具栏、可折叠输出面板、自动保存）
+│           ├── editor-highlight.js  #    编辑器语法高亮 / 补全 / 主题 / 实时语法诊断（拆分自 editor.js）
+│           ├── editor-sse.js     #       编辑器 SSE 执行 / 事件分发 / 强制终止（拆分自 editor.js）
+│           ├── scheduled.js      #       定时任务管理核心（任务列表/创建/编辑/启停/触发/从快捷命令选择）
+│           ├── scheduled-logs.js #       定时任务执行日志查看（拆分自 scheduled.js）
 │           └── main.js           #       主入口（整合各模块 + 后端 SSE 脚本执行）
 │
 ├── docs/                         # Markdown 文档（通过 /docs 页面渲染）
@@ -130,7 +167,23 @@ python app.py
 
 ## 配置说明
 
+### 管理后台在线编辑（推荐）
+
+所有运行时配置均可在 **管理后台 → 系统设置** 中在线编辑，修改后立即生效（热重载），无需重启服务器。
+
+支持编辑的配置分类：
+- **日志清理**：访问日志、命令日志、任务日志上限及清理间隔
+- **定时任务**：调度间隔、执行超时、线程池大小
+- **数据库备份**：自动备份时间、保留份数、超时、清理日志、CHECKPOINT
+- **脚本执行**：默认超时、最大超时、最大循环次数、并发数
+- **安全配置**：会话有效期、登录失败锁定次数及时间
+- **服务器配置**：监听地址、端口、调试模式、工作线程数
+
+修改后的值存储在 `settings` 表中，重启后依然保留。点击「重置」可恢复为默认值。
+
 ### config.py
+
+`config.py` 中定义了所有配置的默认值。如需修改默认值，可编辑此文件；但推荐使用管理后台在线编辑。
 
 | 配置项 | 说明 | 默认值 |
 |--------|------|--------|
@@ -279,26 +332,33 @@ python app.py
 
 ### CMD 控制台与 MiniScript（管理员）
 
-CMD 控制台提供实时终端、快捷命令管理、专业脚本编辑器（Monaco）与定时任务管理。MiniScript 是一种 **Python 子集脚本语言**，由后端执行引擎在独立 Python 子进程中运行，通过 SSE 流式回流输出，不影响 Flask 主服务。支持完整 Python 语法、AST 沙箱校验、文件/数据库访问、交互弹窗、强制终止等。
+CMD 控制台提供实时终端、快捷命令管理、专业脚本编辑器（Monaco）与定时任务管理。MiniScript 是一种 **Python 子集脚本语言**，由后端执行引擎在独立 Python 子进程中运行，通过 SSE 流式回流输出，不影响 Flask 主服务。支持完整 Python 语法、文件/数据库访问、交互弹窗、强制终止等。
 
 > **完整的脚本语法、内置函数参考、安全限制、执行模式、实用示例与常见问题，请参阅 [CMD 控制台使用说明](file:///workspace/docs/cmd-guide.md)。**
 
-后端接口位于 [routes/cmd.py](file:///workspace/routes/cmd.py)，前端代码位于 [static/js/cmd/](file:///workspace/static/js/cmd/)：
+后端接口位于 [routes/cmd/](file:///workspace/routes/cmd/)，前端代码位于 [static/js/cmd/](file:///workspace/static/js/cmd/)：
 
 | 模块 | 文件 | 职责 |
 |------|------|------|
-| 终端弹窗 | [terminal.js](file:///workspace/static/js/cmd/terminal.js) | SSE 流式输出、命令历史（↑↓）、清屏快捷键、脚本运行中止按钮 |
-| 快捷命令 | [presets.js](file:///workspace/static/js/cmd/presets.js) | 增删改查一键命令（CMD / 脚本两种类型，按 `[脚本]` 前缀区分） |
-| 脚本编辑器 | [editor.js](file:///workspace/static/js/cmd/editor.js) | 专业脚本编辑器（Monaco + Python）：高亮、补全、悬浮提示、SSE 执行 |
+| 终端弹窗 | [terminal.js](file:///workspace/static/js/cmd/terminal.js) | **持久 shell 会话**（cd 状态保持）、SSE 流式输出、命令历史（↑↓）、Ctrl+L 清屏、Ctrl+C 中断、断线 3 秒自动重连、脚本运行中止按钮、**心跳看门狗（35 秒无数据主动重连）**、generation 计数防止多连接竞争 |
+| 快捷命令 | [presets.js](file:///workspace/static/js/cmd/presets.js) | 增删改查一键命令（数据库存储，**按名称自动排序**，删除前检查定时任务引用） |
+| 脚本编辑器核心 | [editor.js](file:///workspace/static/js/cmd/editor.js) | Monaco 初始化、工具栏绑定、**右侧可折叠终端面板**、**自动保存**（防抖 2 秒，状态指示器）、统一脚本存储 |
+| 编辑器高亮 | [editor-highlight.js](file:///workspace/static/js/cmd/editor-highlight.js) | Monaco Python 语法高亮、代码补全、自定义主题、**前端实时语法诊断**（拆分自 editor.js） |
+| 编辑器 SSE | [editor-sse.js](file:///workspace/static/js/cmd/editor-sse.js) | SSE 执行、事件分发、强制终止、运行时显示命令行（拆分自 editor.js） |
+| **编辑器终端** | [editor-terminal.js](file:///workspace/static/js/cmd/editor-terminal.js) | **持久化交互式终端**：真实 shell 会话、cd 状态保持、SSE 流式输出、命令历史（↑↓）、Ctrl+L 清屏、Ctrl+C 终止 |
+| 定时任务核心 | [scheduled.js](file:///workspace/static/js/cmd/scheduled.js) | 任务列表/创建/编辑/启停/触发/状态轮询、**仅从快捷命令列表选择**（command_id 引用 cmd_commands），暴露 `window.ScheduledCore` |
+| 定时任务日志 | [scheduled-logs.js](file:///workspace/static/js/cmd/scheduled-logs.js) | 执行日志查看（分页/详情），暴露 `window.ScheduledLogs.openLogsModal`（拆分自 scheduled.js） |
 | 主入口 | [main.js](file:///workspace/static/js/cmd/main.js) | 整合各模块、通过后端 SSE API 执行脚本、交互事件处理 |
-| 页内弹窗 | [modal.js](file:///workspace/static/js/cmd/modal.js) | 替代原生 alert/prompt/confirm，返回 Promise 支持 async/await |
+| 页内弹窗 | [modal.js](file:///workspace/static/js/cmd/modal.js) | 替代原生 alert/prompt/confirm，返回 Promise 支持 async/await，**状态机+队列架构彻底解决连续弹窗闪退**，仅可通过按钮或 ESC 关闭（禁用背景点击关闭） |
+
+> **前端模块化拆分**：`editor.js` 拆分为 `editor.js`（核心）+ `editor-highlight.js`（高亮）+ `editor-sse.js`（SSE）；`scheduled.js` 拆分为 `scheduled.js`（任务管理）+ `scheduled-logs.js`（日志查看）。模板按依赖顺序加载：核心文件 → 高亮 → SSE → 入口。`base.html` 的内联 CSS / JS 已分别提取至 `static/css/base.css` 和 `static/js/base.js`。
 
 #### 后端 API
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | GET | `/admin/cmd` | CMD 控制台页面 |
-| GET | `/admin/cmd/editor` | **专业脚本编辑器页面**（支持 `?edit=<id>` 编辑现有命令） |
+| GET | `/admin/cmd/editor` | **专业脚本编辑器页面**（支持 `?edit=<id>` 编辑现有脚本） |
 | GET | `/admin/cmd/commands` | 获取一键命令列表（JSON） |
 | POST | `/admin/cmd/commands` | 新增一键命令 |
 | PUT / POST | `/admin/cmd/commands/<id>` | 更新一键命令 |
@@ -309,6 +369,14 @@ CMD 控制台提供实时终端、快捷命令管理、专业脚本编辑器（M
 | POST | `/admin/cmd/run-script` | **MiniScript 脚本执行**（SSE 流式 + 交互） |
 | POST | `/admin/cmd/abort-script` | 终止正在执行的 MiniScript 脚本 |
 | POST | `/admin/cmd/script-response` | 回传前端对 prompt/confirm 事件的响应 |
+| GET | `/admin/cmd/scripts` | **获取脚本列表**（统一脚本存储，支持 type 过滤） |
+| POST | `/admin/cmd/scripts` | **创建脚本**（自动命名，写入文件和数据库） |
+| GET | `/admin/cmd/scripts/<id>` | 获取脚本详情 |
+| PUT / POST | `/admin/cmd/scripts/<id>` | 更新脚本内容/名称/备注 |
+| POST / DELETE | `/admin/cmd/scripts/<id>/delete` | 删除脚本（同时删除文件） |
+| GET | `/admin/cmd/terminal/stream` | **交互式终端 SSE 流**（持久 shell 会话，实时输出） |
+| POST | `/admin/cmd/terminal/input` | **向终端发送输入**（命令 / Ctrl+C / 等） |
+| POST | `/admin/cmd/terminal/close` | 关闭当前终端会话（重启 shell 进程） |
 
 **SSE 实时输出事件格式**：
 
@@ -355,10 +423,9 @@ data: [DONE]
 
 #### MiniScript 后端执行引擎
 
-基于 Python `ast` 模块的语法白名单校验 + 独立子进程执行的脚本引擎，位于 [services/miniscript/](file:///workspace/services/miniscript/)。脚本在独立 Python 子进程中运行，通过管道回传输出，不影响 Flask 主服务。
+基于独立子进程执行的脚本引擎，位于 [services/miniscript/](file:///workspace/services/miniscript/)。脚本在独立 Python 子进程中运行，通过管道回传输出，不影响 Flask 主服务。
 
 **核心特性**：
-- **AST 沙箱校验**：执行前用 `validate_script()` 校验代码安全性，拒绝 `exec`/`eval`/`compile`/`__import__` 等危险调用、双下划线属性访问（如 `__class__`）、`global`/`nonlocal` 声明
 - **完整 Python 语法**：支持控制流、函数、类、异常处理、`import` 标准库、推导式、f-string、装饰器等
 - **独立进程隔离**：使用 `multiprocessing.Process` 启动子进程，超时/异常不影响 Flask 主服务
 - **管道通信**：父子进程通过 `multiprocessing.Pipe` 通信，事件流式回流
@@ -368,10 +435,7 @@ data: [DONE]
 **公共 API**：
 
 ```python
-from services.miniscript import ScriptExecutor, validate_script
-
-# 安全校验
-errors = validate_script(code)  # 返回错误消息列表，空列表表示通过
+from services.miniscript import ScriptExecutor
 
 # 执行脚本（生成器模式，流式 yield 事件）
 executor = ScriptExecutor()
@@ -410,7 +474,7 @@ Markdown 文档存放在 [docs/](file:///workspace/docs/) 目录，通过 `/docs
 
 ## 数据库
 
-使用 **DuckDB**（高性能嵌入式 OLAP 数据库，单文件、支持列存、窗口函数），首次启动自动建表。共 13 张表：
+使用 **DuckDB**（高性能嵌入式 OLAP 数据库，单文件、支持列存、窗口函数），首次启动自动建表。共 15 张表：
 
 | 表名 | 说明 | 关键约束 |
 |------|------|----------|
@@ -422,17 +486,19 @@ Markdown 文档存放在 [docs/](file:///workspace/docs/) 目录，通过 `/docs
 | `board_replies` | 留言板回复 | 外键 `topic_id` 级联删除，`attachment` 存 JSON 数组 |
 | `mod_intros` | 模组介绍 | — |
 | `cmd_commands` | 一键命令 | 名称 / 命令 / 描述 / 排序 / 类型 |
+| `scripts` | **统一脚本表** | **name / description / content / script_type（数据库存储，无文件系统依赖）** |
 | `access_logs` | 访问日志 | 含 IP 国家/地区/城市/ISP，自动清理 |
-| `scheduled_tasks` | 定时任务 | 支持间隔/每日/一次性三种模式，`task_type` 区分 shell 命令 / MiniScript 脚本 |
+| `scheduled_tasks` | 定时任务 | 支持间隔/每日/一次性三种模式，`task_type` 强制为 shell，`command_id` 关联 `cmd_commands` 表（仅执行快捷命令） |
 | `scheduled_task_logs` | 定时任务执行日志 | 外键 `task_id` 设空 |
 | `cmd_run_logs` | CMD 命令执行日志 | — |
 | `db_backups` | 数据库备份记录 | 备份状态/大小/耗时 |
+| `settings` | **系统设置** | **key 唯一，存储用户自定义配置，支持热重载** |
 
 所有外键均启用 `enable_foreign_keys` 和 `ON DELETE CASCADE`。
 
 ### DuckDB 兼容层说明
 
-为了最小化代码改动，[core/database.py](file:///workspace/core/database.py) 对 DuckDB 做了 sqlite3 兼容封装：
+为了最小化代码改动，[core/db/](file:///workspace/core/db/) 对 DuckDB 做了 sqlite3 兼容封装：
 
 - **`DuckDBRow`**：模拟 `sqlite3.Row`，支持 `row['col']`、`row[0]`、`keys()` 等
 - **`lastrowid`**：INSERT 后通过序列 `currval('table_id_seq')` 获取自增 ID
@@ -543,7 +609,7 @@ server {
 | 日志清理器 | `services/log_cleaner.py` | 后台线程定期检查并清理超限日志 |
 | IP 地理信息查询 | `services/ip.py` | 后台线程异步更新缓存，请求时返回缓存值 |
 | 命令执行日志 | `services/cmd_runner.py` | 后台线程异步写入执行结果 |
-| CPU 使用率 | `services/monitoring.py` | 非阻塞模式 `cpu_percent(interval=None)` |
+| CPU 使用率 | `services/monitoring/cpu.py` | **后台线程定期采样（默认 2 秒）**，fork 安全（pid 检测重启采样线程），缓存 10 秒过期降级到阻塞采样 |
 | 用户信息查询 | `core/auth.py` | 单次请求内缓存，避免重复 DB 查询 |
 | MiniScript 脚本执行 | `services/miniscript/` | 独立子进程 + SSE 流式回流 |
 
@@ -556,4 +622,4 @@ server {
 
 ## 更新日志
 
-项目的版本变更历史详见 [CHANGELOG.md](file:///workspace/CHANGELOG.md)。
+项目的版本变更历史详见 [docs/CHANGELOG.md](file:///workspace/docs/CHANGELOG.md)。

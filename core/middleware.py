@@ -1,7 +1,6 @@
-from flask import request
+from flask import request, session
 from services.ip import get_client_ip, get_ip_info
 from services.log_writer import log_writer
-from core.auth import get_current_user
 
 SKIP_PATHS = ('/static/', '/favicon.ico', '/uploads/',
               '/api/admin/logs/refresh', '/api/performance')
@@ -12,6 +11,7 @@ def log_access():
 
     IP 信息查询使用缓存，不阻塞请求；
     日志写入通过队列异步完成，不阻塞请求；
+    用户信息直接从 session 读取，避免每次请求都查库。
     日志清理由 log_cleaner 后台线程定期执行。
     """
     if any(request.path.startswith(p) for p in SKIP_PATHS):
@@ -20,7 +20,10 @@ def log_access():
     try:
         ip = get_client_ip()
         ip_info = get_ip_info(ip)
-        user = get_current_user()
+
+        # 直接从 session 读取用户信息（登录时已设置），无需查库
+        user_id = session.get('user_id')
+        username = session.get('username')
 
         log_writer.enqueue({
             'ip_address': ip,
@@ -28,8 +31,8 @@ def log_access():
             'region': ip_info['region'],
             'city': ip_info['city'],
             'isp': ip_info['isp'],
-            'user_id': user['id'] if user else None,
-            'username': user['username'] if user else None,
+            'user_id': user_id,
+            'username': username,
             'path': request.path,
             'method': request.method,
             'user_agent': request.headers.get('User-Agent', '')[:500],
