@@ -7,6 +7,11 @@
 ## [未发布]
 
 ### 修复
+- **彻底修复数据库备份失败（Windows 文件锁定）**：
+  - `services/backup_manager.py`：将 `shutil.copy2` 文件复制替换为 DuckDB 在线备份 `ATTACH` + `COPY FROM DATABASE` + `DETACH`
+  - 备份过程中数据库无需关闭，不影响正常读写，彻底解决 Windows `[WinError 32] 另一个程序正在使用此文件，进程无法访问` 错误
+  - 动态查询 `duckdb_databases()` 获取当前数据库名（如 `site`），避免硬编码 `main` 导致的兼容性问题
+  - 备份失败时自动清理残留临时文件
 - **修复交互式终端 SSE 连接断开问题**：
   - 后端 `routes/cmd/terminal.py`：subprocess 改为二进制模式（`text=False`），避免 TextIOWrapper 内部缓冲与 `os.read` 混用导致数据丢失；`select.select` 改用文件描述符（`stdout.fileno()`）；stdin 写入前将 str 编码为 bytes
   - SSE 心跳从注释 `: ping` 改为 `data: {"type":"heartbeat","data":{}}` 事件，避免被部分代理/缓冲丢弃
@@ -14,6 +19,11 @@
   - 前端 `static/js/cmd/editor-terminal.js`：`onerror` 增加 3 秒延迟自动重连（主动关闭 EventSource 默认自动重连以避免冲突）；新增 `heartbeat` / `error` 事件处理；`init()` 监听页面可见性，切回页面时若已断开则立即重连
 
 ### 新增
+- **留言板附件功能全面优化**：
+  - `routes/community/board.py`：新增文件类型白名单（`png/jpg/jpeg/gif/webp/pdf/txt/zip/rar/7z/doc/docx/xls/xlsx/ppt/pptx/mp4/mp3/wav`）、数量限制（最多 5 个）、大小限制（单个 100MB）
+  - 附件存储格式从纯文件名数组升级为 JSON 元信息数组（含 `filename`、`original_name`、`file_type`、`size_bytes`），向后兼容旧格式
+  - `templates/community.html`：前端实时附件预览（图片缩略图/文件图标、文件名、大小）、实时校验（数量/类型/大小）、错误提示
+  - 历史附件展示优化：按文件类型显示对应图标（图片、PDF、压缩包、音视频等）
 - **交互式终端面板**：输出面板改造为完整终端，底部输入行支持直接执行 shell 命令（SSE 流式输出）
 - **终端命令历史**：↑/↓ 切换历史命令，最多保存 100 条，localStorage 持久化
 - **终端快捷键**：Ctrl+L 清屏、Ctrl+C 终止当前命令、Enter 执行

@@ -10,9 +10,14 @@ from werkzeug.utils import secure_filename
 
 from core.auth import login_required, get_current_user
 from core.db import get_db
-from config import UPLOAD_DIR
+from config import UPLOAD_DIR, ALLOWED_EXTENSIONS, MAX_CONTENT_LENGTH
 from routes.community import community_bp
 from routes.community.helpers import _respond
+
+
+# 附件限制常量
+MAX_FILE_COUNT = 5
+MAX_FILE_SIZE = MAX_CONTENT_LENGTH  # 100MB
 
 
 @community_bp.route('/board/create', methods=['POST'])
@@ -56,7 +61,7 @@ def reply_board(topic_id):
         return _respond('内容长度应为1-2000字符', 'error')
 
     conn = get_db()
-    attachment_names = []
+    attachment_info = []
     try:
         topic = conn.execute("SELECT id, is_active FROM board_topics WHERE id = ?", (topic_id,)).fetchone()
         if not topic or not topic['is_active']:
@@ -64,33 +69,56 @@ def reply_board(topic_id):
 
         # 处理多附件上传
         attachment_files = request.files.getlist('attachments')
+        if len(attachment_files) > MAX_FILE_COUNT:
+            return _respond(f'最多只能上传 {MAX_FILE_COUNT} 个文件', 'error')
+
         for file in attachment_files:
             if file and file.filename:
+                # 检查文件大小（通过读取 seek 到末尾获取准确大小）
+                file.seek(0, os.SEEK_END)
+                file_size = file.tell()
+                file.seek(0)
+                if file_size > MAX_FILE_SIZE:
+                    return _respond(f'文件 {file.filename} 超过 {MAX_FILE_SIZE // 1024 // 1024}MB 限制', 'error')
+
+                # 检查文件类型
+                ext = file.filename.rsplit('.', 1)[-1].lower() if '.' in file.filename else ''
+                if ext not in ALLOWED_EXTENSIONS:
+                    return _respond(f'不支持的文件类型: .{ext}，允许: {", ".join(sorted(ALLOWED_EXTENSIONS))}', 'error')
+
+                # 生成安全文件名
                 safe_prefix = secrets.token_hex(8)
                 clean_name = secure_filename(file.filename) or 'file'
                 safe_name = safe_prefix + '_' + clean_name
                 save_path = os.path.join(UPLOAD_DIR, safe_name)
                 file.save(save_path)
-                attachment_names.append(safe_name)
+
+                # 记录文件元信息（类型、大小、原始文件名）
+                attachment_info.append({
+                    'filename': safe_name,
+                    'original_name': clean_name,
+                    'file_type': ext,
+                    'size_bytes': file_size
+                })
 
         # 存储为JSON数组
-        attachment_filename = json.dumps(attachment_names) if attachment_names else None
+        attachment_data = json.dumps(attachment_info) if attachment_info else None
 
         now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         conn.execute(
             "INSERT INTO board_replies (topic_id, user_id, content, attachment, created_at) VALUES (?, ?, ?, ?, ?)",
-            (topic_id, user['id'], content, attachment_filename, now)
+            (topic_id, user['id'], content, attachment_data, now)
         )
         conn.commit()
         return _respond('回复成功', 'success')
-    except Exception:
+    except Exception as e:
         try:
             conn.rollback()
         except Exception:
             pass
         # 数据库写入失败时清理已上传的附件
-        for fname in attachment_names:
-            filepath = os.path.join(UPLOAD_DIR, fname)
+        for info in attachment_info:
+            filepath = os.path.join(UPLOAD_DIR, info['filename'])
             if os.path.exists(filepath):
                 try:
                     os.remove(filepath)
@@ -110,15 +138,25 @@ def delete_board_topic(topic_id):
 
     conn = get_db()
     try:
-        # 级联删除前清理附件文件
+        # 级联删除前清理附件文件（兼容新旧格式）
         replies = conn.execute("SELECT attachment FROM board_replies WHERE topic_id = ?", (topic_id,)).fetchall()
         for r in replies:
             if r['attachment']:
                 try:
                     parsed = json.loads(r['attachment'])
-                    filenames = [parsed] if isinstance(parsed, str) else parsed
+                    if isinstance(parsed, list):
+                        # 新格式：字典数组
+                        if parsed and isinstance(parsed[0], dict):
+                            filenames = [item['filename'] for item in parsed]
+                        else:
+                            # 旧格式：字符串数组
+                            filenames = parsed
+                    elif isinstance(parsed, str):
+                        filenames = [parsed]
+                    else:
+                        filenames = []
                 except (json.JSONDecodeError, TypeError):
-                    filenames = [r['attachment']]
+                    filenames = [r['attachment']] if isinstance(r['attachment'], str) else []
                 for fname in filenames:
                     filepath = os.path.join(UPLOAD_DIR, fname)
                     if os.path.exists(filepath):
@@ -153,13 +191,23 @@ def delete_board_reply(reply_id):
         if not user['is_admin'] and reply['user_id'] != user['id']:
             abort(403)
 
-        # 删除附件文件（兼容JSON数组和单个字符串）
+        # 删除附件文件（兼容新旧格式）
         if reply['attachment']:
             try:
                 parsed = json.loads(reply['attachment'])
-                filenames = [parsed] if isinstance(parsed, str) else parsed
+                if isinstance(parsed, list):
+                    # 新格式：字典数组
+                    if parsed and isinstance(parsed[0], dict):
+                        filenames = [item['filename'] for item in parsed]
+                    else:
+                        # 旧格式：字符串数组
+                        filenames = parsed
+                elif isinstance(parsed, str):
+                    filenames = [parsed]
+                else:
+                    filenames = []
             except (json.JSONDecodeError, TypeError):
-                filenames = [reply['attachment']]
+                filenames = [reply['attachment']] if isinstance(reply['attachment'], str) else []
 
             for fname in filenames:
                 filepath = os.path.join(UPLOAD_DIR, fname)

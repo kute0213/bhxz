@@ -192,22 +192,47 @@ class BackupManager:
                 except Exception as e:
                     print(f'[Backup] CHECKPOINT 失败: {e}', flush=True)
 
-            # 阶段 4: 复制数据库文件
-            self._report_progress(50, f'复制数据库文件到 {backup_name}...', progress_callback)
+            # 阶段 4: 使用 DuckDB 在线备份（避免文件锁定问题）
+            self._report_progress(50, f'执行在线备份到 {backup_name}...', progress_callback)
 
             if not os.path.exists(DB_PATH):
                 raise FileNotFoundError(f'数据库文件不存在: {DB_PATH}')
 
-            # 持有数据库锁，确保复制期间没有写入
+            # 使用 DuckDB 的 ATTACH + COPY FROM DATABASE 进行在线备份
+            # 避免 shutil.copy2 在 Windows 上因文件被锁定而失败
             from core.db import get_db
-            with get_db() as conn:
-                # 先执行一次 CHECKPOINT 确保数据都写到主文件
+            conn = get_db()
+            try:
+                # 先执行 CHECKPOINT 确保数据一致性
                 try:
                     conn.execute('CHECKPOINT')
                 except Exception:
                     pass
-                file_size = os.path.getsize(DB_PATH)
-                shutil.copy2(DB_PATH, backup_path)
+
+                # 获取当前数据库名（如 site）
+                db_rows = conn.execute(
+                    "SELECT database_name FROM duckdb_databases() WHERE database_name NOT IN ('system', 'temp')"
+                ).fetchall()
+                source_db = db_rows[0][0] if db_rows else 'main'
+
+                # 附加备份数据库
+                conn.execute(f"ATTACH '{backup_path}' AS backup_db")
+                # 复制整个数据库
+                conn.execute(f"COPY FROM DATABASE {source_db} TO backup_db")
+                # 分离备份数据库
+                conn.execute("DETACH backup_db")
+                conn.commit()
+            except Exception as e:
+                # 清理可能产生的临时文件
+                try:
+                    if os.path.exists(backup_path):
+                        os.remove(backup_path)
+                except OSError:
+                    pass
+                raise RuntimeError(f'在线备份失败: {e}') from e
+            finally:
+                conn.close()
+
             size_bytes = os.path.getsize(backup_path)
 
             # 阶段 5: 验证备份文件
