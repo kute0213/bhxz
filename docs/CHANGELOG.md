@@ -7,9 +7,16 @@
 ## [未发布]
 
 ### 修复
+- **修复 Windows 终端输出重复问题**：
+  - `services/terminal/session.py`：`read_pending_output` 增加 `caller_generation` 参数，旧 SSE 连接在 generation 切换后返回空列表且不再消费输出队列，避免同一段输出被多个连接重复发送
+  - `services/terminal/session.py`：`next_generation()` 非首次切换时清空旧输出队列，防止重连时残留输出被新连接重复显示；首次连接（generation 从 0 到 1）保留会话初始化输出
+  - `routes/cmd/terminal.py`：SSE 生成器将当前 generation 传入 `read_pending_output`，实现代际一致性校验
+  - `static/js/cmd/terminal-core.js`：`SseTerminal` 新增 `_connecting` 锁，防止并发调用 `connect()` 产生多个 EventSource 连接
+  - `core/shell.py`：Windows cmd 启动参数改为 `cmd.exe /q /k`，关闭命令回显，减少命令被前后端重复渲染的概率
 - **修复留言板附件选择显示异常与多文件上传失效**：
   - `templates/community.html`：将内联 `onchange` 中的复杂 JavaScript 提取为 `updateFileList(input, listId)` 函数，避免 HTML 属性中 `"` 转义错误导致 `<input>` 标签提前关闭、按钮文本显示为 JS 代码碎片的问题
-  - 选择文件后现在正确显示文件名列表，支持单次选择多个文件并全部上传
+  - 前端使用 `DataTransfer` 累积历次选择的文件并写回 `input.files`，支持单次多选和多次点击“添加附件”追加文件，避免后一次选择覆盖前一次
+  - 表单提交时所有累积文件通过 `FormData` 一并上传，后端 `request.files.getlist('attachments')` 遍历保存
 
 ### 重构
 - **终端（CMD 命令提示符）与 MiniScript 彻底重构**：

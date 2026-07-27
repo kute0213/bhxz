@@ -73,7 +73,7 @@ def terminal_stream():
                 if term_session.generation != my_generation:
                     break
 
-                chunks = term_session.read_pending_output()
+                chunks = term_session.read_pending_output(my_generation)
                 if chunks:
                     text = ''.join(chunks)
                     yield _sse_event('output', {'text': text})
