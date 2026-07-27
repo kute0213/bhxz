@@ -7,6 +7,11 @@
 ## [未发布]
 
 ### 修复
+
+- **修复 MiniScript 脚本编辑器输出重复问题**：
+  - `static/js/cmd/terminal-core.js`：`TerminalBuffer._finalizeCurrentLine()` 在换行时先移除 `.term-current-line` 类，再调用 `_flushLine()` 创建新的 div，导致当前行内容被重复渲染两次。修复后：当前行已存在于 DOM 中时直接移除标记类作为 finalized 行，不再创建重复 div
+  - `templates/admin_cmd_editor.html`：更新 `terminal-core.js` 缓存版本号 `v=2`，强制浏览器加载修复后的文件
+
 - **修复 Windows 终端输出重复问题**：
   - `services/terminal/session.py`：`read_pending_output` 增加 `caller_generation` 参数，旧 SSE 连接在 generation 切换后返回空列表且不再消费输出队列，避免同一段输出被多个连接重复发送
   - `services/terminal/session.py`：`next_generation()` 非首次切换时清空旧输出队列，防止重连时残留输出被新连接重复显示；首次连接（generation 从 0 到 1）保留会话初始化输出

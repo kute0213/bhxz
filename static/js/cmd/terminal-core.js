@@ -213,8 +213,15 @@ window.TerminalCore = (function () {
 
     TerminalBuffer.prototype._finalizeCurrentLine = function () {
         const cl = this.container.querySelector('.term-current-line');
-        if (cl) cl.classList.remove('term-current-line');
-        this._flushLine();
+        if (cl) {
+            // 当前行已在 DOM 中渲染，直接移除标记类即可作为 finalized 行。
+            // 不再调用 _flushLine() 创建新 div，避免同一行内容被重复输出。
+            cl.classList.remove('term-current-line');
+        } else if (this.fragments.length > 0) {
+            // 兜底：无当前行但仍有片段时 flush
+            this._flushLine();
+        }
+        this.fragments = [];
     };
 
     TerminalBuffer.prototype._parseAnsiEscape = function (text, start) {

@@ -637,6 +637,10 @@ server {
 
 ### 最近修复
 
+**修复 MiniScript 脚本编辑器输出重复问题：**
+- `static/js/cmd/terminal-core.js`：`TerminalBuffer._finalizeCurrentLine()` 在换行时不再调用 `_flushLine()` 创建新的 div，而是直接移除 `.term-current-line` 类，将已渲染的当前行转为 finalized 行，避免同一行内容被重复输出两次
+- `templates/admin_cmd_editor.html`：更新 `terminal-core.js` 缓存版本号 `v=2`，强制浏览器加载修复后的文件
+
 **终端与 MiniScript 架构重构（稳定性提升）：**
 - 前端提取 `static/js/cmd/terminal-core.js`：统一 ANSI 解析、SSE 连接管理、命令历史、输入发送，供终端弹窗和编辑器内嵌终端复用，消除重复代码
 - 后端拆分 `services/terminal/` 包：`TerminalSession` 封装单个持久 shell 会话的生命周期与 IO，`TerminalManager` 按用户 session 隔离管理多个 shell 进程
