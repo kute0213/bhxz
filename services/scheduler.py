@@ -18,7 +18,7 @@ from config import (
     SCRIPT_DEFAULT_TIMEOUT,
 )
 from core.db import get_db
-from utils.process import run_process
+from core.process_utils import run_process
 
 
 class TaskScheduler:

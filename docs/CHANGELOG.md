@@ -6,11 +6,23 @@
 
 ## [未发布]
 
+### 重构
+- **终端（CMD 命令提示符）与 MiniScript 彻底重构**：
+  - 前端提取 `static/js/cmd/terminal-core.js`：统一 ANSI 解析、SSE 连接管理（含断线重连 / 心跳看门狗 / 待发送队列）、命令历史、输入发送，供 `terminal.js` 弹窗与 `editor-terminal.js` 内嵌终端复用
+  - 后端拆分 `services/terminal/` 包：`TerminalSession` 封装单个持久 shell 会话的状态、IO 与生命周期；`TerminalManager` 按 Flask session 隔离管理多个 shell 进程，支持过期自动清理
+  - MiniScript 改为 session-based 状态管理：新增 `services/miniscript/session.py`，`ScriptSessionManager` 按 Flask session 隔离 `ScriptExecutor` 与 prompt/confirm 响应事件，彻底解决多用户/多 worker 环境下响应串扰
+  - 路由层瘦身：`routes/cmd/terminal.py` 与 `routes/cmd/script.py` 仅保留 HTTP/SSE 协议转换，所有子进程状态管理下沉到 `services/terminal/` 与 `services/miniscript/`
+- **跨平台子进程工具统一迁移到 `core/`**：
+  - 新增 `core/process_utils.py`：从原 `utils/process.py` 迁移并增强，提供跨平台编码解码（UTF-8/GBK/CP936/GB18030/MBCS）、无缓冲环境变量、`run_process` 统一封装
+  - 新增 `core/process_manager.py`：统一处理 Windows `CREATE_NO_WINDOW` / `CREATE_NEW_PROCESS_GROUP` 与 Unix `setsid`、进程组 SIGTERM/SIGKILL、Windows `CTRL_BREAK_EVENT` 进程组信号、阶梯式终止
+  - 新增 `core/shell.py`：自动检测 Windows cmd/PowerShell 与 Unix bash/sh，构造统一环境变量与初始化命令
+  - 删除已废弃的 `utils/process.py` 与 `utils/__init__.py`
+
 ### 修复
 - **彻底修复数据库备份失败（Windows 文件锁定）**：
   - `services/backup_manager.py`：将 `shutil.copy2` 文件复制替换为 DuckDB 在线备份 `ATTACH` + `COPY FROM DATABASE` + `DETACH`
   - 备份过程中数据库无需关闭，不影响正常读写，彻底解决 Windows `[WinError 32] 另一个程序正在使用此文件，进程无法访问` 错误
-  - 动态查询 `duckdb_databases()` 获取当前数据库名（如 `site`），避免硬编码 `main` 导致的兼容性问题
+  - 动态查询 `duckdb_databases()` 获取当前数据库名（如 `site`），避免硬编码 `main` 导致的兼容性问题；数据库名使用双引号包裹，路径中的单引号转义，避免特殊字符导致 SQL 语法错误
   - 备份失败时自动清理残留临时文件
 - **修复交互式终端 SSE 连接断开问题**：
   - 后端 `routes/cmd/terminal.py`：subprocess 改为二进制模式（`text=False`），避免 TextIOWrapper 内部缓冲与 `os.read` 混用导致数据丢失；`select.select` 改用文件描述符（`stdout.fileno()`）；stdin 写入前将 str 编码为 bytes

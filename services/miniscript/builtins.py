@@ -18,7 +18,7 @@ import time
 import subprocess
 
 from config import SCRIPT_MAX_TIMEOUT
-from utils.process import decode_output, make_env
+from core.process_utils import decode_output, make_env
 
 
 def create_builtins(output_callback, interactive=True):

@@ -2,21 +2,26 @@
 
 仅管理员可调用，通过 SSE（Server-Sent Events）流式返回 stdout/stderr。
 命令执行结果会记录到 cmd_run_logs 表中。
+
+本模块使用 core/process_manager.ProcessManager 统一处理子进程生命周期，
+屏蔽 Windows / Unix 在进程组、信号、终止等方面的差异。
 """
 
-import os
+import datetime
 import subprocess
 import threading
 import time
-import datetime
 from typing import Iterator
 
-from core.db import get_db
 from config import APP_ROOT
-from utils.process import decode_output, make_env
+from core.db import get_db
+from core.process_manager import ProcessManager
+from core.process_utils import decode_output
 
 
-def run_command_stream(command: str, cwd: str = None, timeout: int = 300) -> Iterator[dict]:
+def run_command_stream(
+    command: str, cwd: str = None, timeout: int = 300
+) -> Iterator[dict]:
     """以流式方式执行命令，逐行 yield 输出。
 
     Yields 字典：
@@ -31,18 +36,16 @@ def run_command_stream(command: str, cwd: str = None, timeout: int = 300) -> Ite
     if cwd is None:
         cwd = APP_ROOT
 
+    manager = ProcessManager()
     try:
-        process = subprocess.Popen(
+        manager.start(
             command,
-            shell=True,
             cwd=cwd,
+            shell=True,
+            use_process_group=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             bufsize=0,
-            env=make_env(),
-            **({
-                'creationflags': subprocess.CREATE_NO_WINDOW
-            } if os.name == 'nt' else {}),
         )
     except Exception as e:
         yield {'type': 'error', 'message': f'启动进程失败: {e}'}
@@ -52,11 +55,13 @@ def run_command_stream(command: str, cwd: str = None, timeout: int = 300) -> Ite
     killed_by_timeout = False
 
     def _reader():
+        proc = manager.get_process()
+        if proc is None or proc.stdout is None:
+            return
         buf = bytearray()
-        stdout = process.stdout
         while True:
             try:
-                chunk = stdout.read(4096)
+                chunk = proc.stdout.read(4096)
             except Exception:
                 if buf:
                     yield decode_output(bytes(buf)).rstrip('\r\n')
@@ -69,14 +74,14 @@ def run_command_stream(command: str, cwd: str = None, timeout: int = 300) -> Ite
             while True:
                 nl_idx = -1
                 for i, b in enumerate(buf):
-                    if b in (0x0a, 0x0d):
+                    if b in (0x0A, 0x0D):
                         nl_idx = i
                         break
                 if nl_idx < 0:
                     break
                 line_bytes = bytes(buf[:nl_idx])
                 del buf[:nl_idx + 1]
-                while buf and buf[0] in (0x0a, 0x0d):
+                while buf and buf[0] in (0x0A, 0x0D):
                     del buf[0]
                 yield decode_output(line_bytes).rstrip('\r\n')
 
@@ -84,28 +89,26 @@ def run_command_stream(command: str, cwd: str = None, timeout: int = 300) -> Ite
         yield {'type': 'output', 'line': line}
         if timeout and (time.time() - start_time) > timeout:
             killed_by_timeout = True
-            try:
-                process.kill()
-            except Exception:
-                pass
+            manager.kill()
             break
 
-    try:
-        process.wait(timeout=5)
-    except Exception:
-        try:
-            process.kill()
-        except Exception:
-            pass
+    manager.wait(timeout=3)
+    proc = manager.get_process()
+    code = proc.returncode if proc else -1
+    manager.cleanup()
 
     if killed_by_timeout:
         yield {'type': 'error', 'message': f'命令执行超时（>{timeout}秒），已强制终止'}
     else:
-        yield {'type': 'exit', 'code': process.returncode}
+        yield {'type': 'exit', 'code': code}
 
 
-def run_command_sync(command: str, cwd: str = None, timeout: int = 30,
-                     triggered_by: str = 'manual') -> dict:
+def run_command_sync(
+    command: str,
+    cwd: str = None,
+    timeout: int = 30,
+    triggered_by: str = 'manual',
+) -> dict:
     """同步执行命令（阻塞），返回完整输出。
 
     用于不需要实时查看输出的一键命令场景。
@@ -120,57 +123,73 @@ def run_command_sync(command: str, cwd: str = None, timeout: int = 30,
     started_at = time.time()
     started_str = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
+    manager = ProcessManager()
     try:
-        result = subprocess.run(
+        manager.start(
             command,
-            shell=True,
             cwd=cwd,
-            capture_output=True,
-            timeout=timeout,
-            env=make_env(),
-            **({
-                'creationflags': subprocess.CREATE_NO_WINDOW
-            } if os.name == 'nt' else {}),
+            shell=True,
+            use_process_group=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            bufsize=0,
         )
-        stdout_text = decode_output(result.stdout) if result.stdout else ''
-        stderr_text = decode_output(result.stderr) if result.stderr else ''
+    except Exception as e:
+        _log_cmd_execution(
+            command, str(e), -1, False, triggered_by, started_str, timeout
+        )
+        return {'success': False, 'output': '', 'error': str(e)}
+
+    try:
+        return_code = manager.wait(timeout=timeout)
+        if return_code is None:
+            manager.kill()
+            _log_cmd_execution(
+                command, f'执行超时（>{timeout}秒）', -1, False,
+                triggered_by, started_str, timeout,
+            )
+            return {'success': False, 'output': '', 'error': f'执行超时（>{timeout}秒）'}
+
+        proc = manager.get_process()
+        stdout_text = decode_output(proc.stdout.read()) if proc and proc.stdout else ''
+        stderr_text = decode_output(proc.stderr.read()) if proc and proc.stderr else ''
         output = stdout_text + stderr_text
-        success = result.returncode == 0
+        success = return_code == 0
 
         _log_cmd_execution(
-            command, output, result.returncode, success,
+            command, output, return_code, success,
             triggered_by, started_str, timeout,
         )
 
         return {
             'success': success,
             'output': output,
-            'exit_code': result.returncode,
+            'exit_code': return_code,
         }
-    except subprocess.TimeoutExpired:
-        _log_cmd_execution(
-            command, f'执行超时（>{timeout}秒）', -1, False,
-            triggered_by, started_str, timeout,
-        )
-        return {'success': False, 'output': '', 'error': f'执行超时（>{timeout}秒）'}
     except Exception as e:
+        manager.kill()
         _log_cmd_execution(
-            command, str(e), -1, False,
-            triggered_by, started_str, timeout,
+            command, str(e), -1, False, triggered_by, started_str, timeout
         )
         return {'success': False, 'output': '', 'error': str(e)}
+    finally:
+        manager.cleanup()
 
 
-def _log_cmd_execution(command, output, exit_code, success,
-                       triggered_by, started_str, timeout):
+def _log_cmd_execution(
+    command, output, exit_code, success,
+    triggered_by, started_str, timeout
+):
     """在后台线程中记录命令执行日志，避免阻塞。"""
     def _write():
         conn = None
         try:
             finished = datetime.datetime.now()
-            duration = (finished - datetime.datetime.strptime(
-                started_str, '%Y-%m-%d %H:%M:%S'
-            )).total_seconds()
+            duration = (
+                finished - datetime.datetime.strptime(
+                    started_str, '%Y-%m-%d %H:%M:%S'
+                )
+            ).total_seconds()
 
             if len(output) > 10000:
                 output = output[:10000] + '\n...(输出已截断)'
@@ -181,8 +200,11 @@ def _log_cmd_execution(command, output, exit_code, success,
                 "(command, output, exit_code, success, triggered_by, "
                 " started_at, finished_at, duration_seconds) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                (command, output, exit_code, success, triggered_by,
-                 started_str, finished.strftime('%Y-%m-%d %H:%M:%S'), duration),
+                (
+                    command, output, exit_code, success, triggered_by,
+                    started_str, finished.strftime('%Y-%m-%d %H:%M:%S'),
+                    duration,
+                ),
             )
             conn.commit()
         except Exception:

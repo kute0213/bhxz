@@ -17,7 +17,10 @@
 │   │   ├── connection.py         #     连接、游标、行对象封装 + get_db
 │   │   └── schema.py             #     建表 SQL、迁移、默认数据 + init_db
 │   ├── auth.py                   #   认证模块（login_required / admin_required 装饰器、当前用户，含请求内缓存）
-│   └── middleware.py             #   请求中间件（异步访问日志记录，不阻塞请求）
+│   ├── middleware.py             #   请求中间件（异步访问日志记录，不阻塞请求）
+│   ├── process_utils.py          #   跨平台子进程工具（编码解码、环境变量、run_process 封装）
+│   ├── process_manager.py        #   跨平台子进程生命周期管理（启动 / 终止 / 进程组 / 信号）
+│   └── shell.py                  #   跨平台 shell 检测与环境构造（Windows cmd/ps / Unix bash-sh）
 │
 ├── services/                     # 业务服务（含异步后台线程）
 │   ├── __init__.py
@@ -31,15 +34,20 @@
 │   ├── scheduler.py              #   定时任务调度引擎（后台线程 + ThreadPoolExecutor 异步执行）
 │   ├── log_cleaner.py            #   日志自动清除服务（后台线程定期清理超限记录）
 │   ├── log_writer.py             #   异步日志写入器（队列 + 后台线程批量写入）
-│   ├── backup_manager.py         #   数据库备份管理器（CHECKPOINT + 文件复制 + 旧备份清理）
+│   ├── backup_manager.py         #   数据库备份管理器（DuckDB 在线备份 + 旧备份清理）
 │   ├── backup_scheduler.py       #   每日定时备份调度器（默认凌晨 3:00，支持热重载）
 │   ├── settings_manager.py       #   系统设置管理器（数据库存储 + 内存缓存，支持热重载）
 │   ├── script_store.py           #   统一脚本存储服务（数据库存储，按名称自动排序）
+│   ├── terminal/                 #   持久交互式终端服务（session-based shell 子进程管理）
+│   │   ├── __init__.py           #     包入口，导出 TerminalManager / TerminalSession
+│   │   ├── manager.py            #     终端会话管理器（创建 / 获取 / 重置 / 过期清理）
+│   │   └── session.py            #     单个持久 shell 会话（IO 读写 / 生命周期）
 │   └── miniscript/               #   MiniScript 后端执行引擎（独立子进程执行）
 │       ├── __init__.py           #     包入口，导出 ScriptExecutor
 │       ├── builtins.py           #     内置函数工厂（echo/cmd/file_*/db_*/alert/prompt/confirm）
 │       ├── runner.py             #     子进程入口（exec 执行脚本 + 管道通信 + 超时看门狗）
-│       └── executor.py           #     ScriptExecutor 类（multiprocessing + Pipe + abort）
+│       ├── executor.py           #     ScriptExecutor 类（multiprocessing + Pipe + abort）
+│       └── session.py            #     按用户 session 隔离的脚本执行状态管理器
 │
 ├── routes/                       # 路由控制器（Flask Blueprint）
 │   ├── __init__.py
@@ -64,8 +72,8 @@
 │   │   ├── commands.py           #     快捷命令 CRUD + 执行预设命令
 │   │   ├── execution.py          #     Shell 命令同步执行 + SSE 流式执行
 │   │   ├── script.py             #     MiniScript SSE 执行 + _admin_check 辅助函数
-│   │   ├── scripts.py            #     统一脚本管理 CRUD（文件系统 + 数据库）
-│   │   └── terminal.py           #     交互式终端（持久 shell 会话 + SSE 流式 + 命令输入）
+│   │   ├── scripts.py            #     统一脚本管理 CRUD（数据库存储）
+│   │   └── terminal.py           #     交互式终端路由（持久 shell 会话 + SSE 流式 + 命令输入）
 │   ├── scheduled/                #   定时任务蓝图包：任务 CRUD、启停、触发、执行日志
 │   │   ├── __init__.py           #     创建 scheduled_bp + _admin_check，导入子模块注册路由
 │   │   ├── tasks.py              #     任务 CRUD/启停/触发/状态查询
@@ -105,13 +113,15 @@
 │   └── js/
 │       ├── main.js               #     全局交互（滚动动画、鼠标光晕、按钮反馈）
 │       ├── base.js               #     base.html 提取的全局脚本（导航、Toast、键盘快捷键）
-│       └── cmd/                  #     CMD 控制台模块（9 个文件，职责清晰）
+│       └── cmd/                  #     CMD 控制台模块（10 个文件，职责清晰）
+│           ├── terminal-core.js  #       终端核心复用库（ANSI 解析 / SSE 连接 / 命令历史 / 输入发送）
 │           ├── modal.js          #       页内弹窗系统（替代原生 alert/prompt/confirm）
-│           ├── terminal.js       #       终端弹窗（持久 shell 会话 + SSE 流式输出 + 拖拽 + 动画 + 断线重连）
+│           ├── terminal.js       #       终端弹窗（依赖 terminal-core.js，持久 shell 会话 + SSE 流式输出）
 │           ├── presets.js        #       快捷命令管理（增删改查，按 [脚本] 前缀区分类型）
 │           ├── editor.js         #       脚本编辑器核心（Monaco 初始化、工具栏、可折叠输出面板、自动保存）
 │           ├── editor-highlight.js  #    编辑器语法高亮 / 补全 / 主题 / 实时语法诊断（拆分自 editor.js）
 │           ├── editor-sse.js     #       编辑器 SSE 执行 / 事件分发 / 强制终止（拆分自 editor.js）
+│           ├── editor-terminal.js #      编辑器内嵌终端（依赖 terminal-core.js，持久 shell 会话）
 │           ├── scheduled.js      #       定时任务管理核心（任务列表/创建/编辑/启停/触发/从快捷命令选择）
 │           ├── scheduled-logs.js #       定时任务执行日志查看（拆分自 scheduled.js）
 │           └── main.js           #       主入口（整合各模块 + 后端 SSE 脚本执行）
@@ -521,7 +531,7 @@ Markdown 文档存放在 [docs/](file:///workspace/docs/) 目录，通过 `/docs
 **备份流程**：
 1. 清理过期日志（可选，`BACKUP_CLEAN_LOGS`）
 2. 执行 `CHECKPOINT` 合并 WAL 到主文件（可选，`BACKUP_CHECKPOINT`）
-3. 复制数据库文件到 `backups/db/` 目录
+3. 使用 DuckDB 在线备份 `ATTACH` + `COPY FROM DATABASE` + `DETACH` 复制数据库到 `backups/db/` 目录（无需关闭数据库，避免 Windows 文件锁定）
 4. 验证备份文件完整性
 5. 清理超出 `MAX_BACKUPS`（默认 30 份）的旧备份
 
@@ -611,7 +621,8 @@ server {
 | 命令执行日志 | `services/cmd_runner.py` | 后台线程异步写入执行结果 |
 | CPU 使用率 | `services/monitoring/cpu.py` | **后台线程定期采样（默认 2 秒）**，fork 安全（pid 检测重启采样线程），缓存 10 秒过期降级到阻塞采样 |
 | 用户信息查询 | `core/auth.py` | 单次请求内缓存，避免重复 DB 查询 |
-| MiniScript 脚本执行 | `services/miniscript/` | 独立子进程 + SSE 流式回流 |
+| 持久交互式终端 | `services/terminal/` | session-based shell 子进程 + 后台读取线程 + SSE 流式回流 |
+| MiniScript 脚本执行 | `services/miniscript/` | 独立子进程 + 按 session 隔离状态 + SSE 流式回流 |
 
 ### 安全注意事项
 
@@ -625,6 +636,18 @@ server {
 项目的版本变更历史详见 [docs/CHANGELOG.md](file:///workspace/docs/CHANGELOG.md)。
 
 ### 最近修复
+
+**终端与 MiniScript 架构重构（稳定性提升）：**
+- 前端提取 `static/js/cmd/terminal-core.js`：统一 ANSI 解析、SSE 连接管理、命令历史、输入发送，供终端弹窗和编辑器内嵌终端复用，消除重复代码
+- 后端拆分 `services/terminal/` 包：`TerminalSession` 封装单个持久 shell 会话的生命周期与 IO，`TerminalManager` 按用户 session 隔离管理多个 shell 进程
+- MiniScript 改为 session-based 状态管理：`services/miniscript/session.py` 的 `ScriptSessionManager` 按 Flask session 隔离执行器与 prompt/confirm 响应，彻底解决多用户/多 worker 环境下响应串扰问题
+- 路由层瘦身：`routes/cmd/terminal.py` 与 `routes/cmd/script.py` 仅负责 HTTP/SSE 协议转换，所有子进程状态管理下沉到服务层
+
+**跨平台子进程基础设施（统一迁移到 `core/`）：**
+- 新增 `core/process_utils.py`：跨平台编码解码（UTF-8/GBK/CP936/GB18030/MBCS）、无缓冲环境变量、`run_process` 统一封装
+- 新增 `core/process_manager.py`：统一处理 Windows `CREATE_NO_WINDOW` / `CREATE_NEW_PROCESS_GROUP` 与 Unix `setsid`、进程组 SIGTERM/SIGKILL、Windows `CTRL_BREAK_EVENT` 进程组信号、阶梯式终止
+- 新增 `core/shell.py`：自动检测 Windows cmd/PowerShell 与 Unix bash/sh，构造统一环境变量与初始化命令（如 `chcp 65001`、`TERM=xterm-256color`）
+- 删除已废弃的 `utils/process.py` 与 `utils/__init__.py`，所有子进程调用统一走 `core/process_utils.py` 与 `core/process_manager.py`
 
 **终端与编码修复：**
 - 修复 `print`/`echo` 输出不实时问题：设置 `PYTHONUNBUFFERED=1` 禁用 Python 输出缓冲，后端分块（4096字节）读取子进程输出

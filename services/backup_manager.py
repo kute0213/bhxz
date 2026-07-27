@@ -215,10 +215,13 @@ class BackupManager:
                 ).fetchall()
                 source_db = db_rows[0][0] if db_rows else 'main'
 
-                # 附加备份数据库
-                conn.execute(f"ATTACH '{backup_path}' AS backup_db")
+                # 附加备份数据库（Windows 路径反斜杠转为正斜杠，单引号转义避免 SQL 注入）
+                sql_safe_backup_path = backup_path.replace('\\', '/').replace("'", "''")
+                # 数据库名使用双引号包裹，兼容特殊字符
+                safe_source_db = source_db.replace('"', '""')
+                conn.execute(f"ATTACH '{sql_safe_backup_path}' AS backup_db")
                 # 复制整个数据库
-                conn.execute(f"COPY FROM DATABASE {source_db} TO backup_db")
+                conn.execute(f'COPY FROM DATABASE "{safe_source_db}" TO backup_db')
                 # 分离备份数据库
                 conn.execute("DETACH backup_db")
                 conn.commit()
