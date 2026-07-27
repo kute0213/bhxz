@@ -623,3 +623,43 @@ server {
 ## 更新日志
 
 项目的版本变更历史详见 [docs/CHANGELOG.md](file:///workspace/docs/CHANGELOG.md)。
+
+### 最近修复
+
+**终端与编码修复：**
+- 修复 `print`/`echo` 输出不实时问题：设置 `PYTHONUNBUFFERED=1` 禁用 Python 输出缓冲，后端分块（4096字节）读取子进程输出
+- 修复快捷命令无输出问题：实现命令队列 `pendingInputQueue`，SSE 连接建立后自动发送缓存命令，移除不安全的 `setTimeout` 延迟
+- 修复 Windows CMD 中文乱码：Windows 下自动执行 `chcp 65001` 切换到 UTF-8 代码页；统一跨平台编码解码（UTF-8/GBK/CP936/GB18030 多编码回退）
+- 修复 ANSI 颜色不显示：实现完整 ANSI SGR 解析器，支持 16 色、256 色、真彩色 RGB，支持加粗/斜体/下划线/闪烁等样式
+- 修复 `\r\n` (CRLF) 序列导致行内容丢失问题：添加 `pendingCr` 标记，回车后遇到换行时保留行内容
+
+**DuckDB 多进程并发修复：**
+- 彻底修复 Windows `multiprocessing spawn` 模式下子进程重新导入 `app.py` 导致的 DuckDB 文件锁定错误
+- 多层防护机制：
+  1. 父进程启动子进程前临时设置 `_BH_CHILD_PROCESS=1` 环境变量，子进程继承该变量（最早检测点）
+  2. `app.py` 在所有导入前检测环境变量、`__name__`、`sys.argv` 特征判断子进程
+  3. `connection.py` 的 `get_db()` 在连接数据库前再次检测子进程并抛出保护性异常
+  4. 子进程入口函数 `run_script()` 中再次设置环境变量作为双重保险
+- 默认管理员创建逻辑修复：仅当系统中无任何管理员时创建默认账户 `admin/admin1324`，删除管理员后重启不会自动重建
+
+**默认账户：**
+- 管理员用户名：`admin`
+- 管理员密码：`admin1324`
+
+**新增功能：公开文件/目录管理**
+- 管理员可在后台控制面板「公开文件管理」中配置将本地文件或目录对外公开访问
+- 支持**相对路径**（以项目根目录为基准）：如 `sw.js`、`verify`
+- 支持**绝对路径**（任意位置）：如 `/opt/files`、`/home/user/docs`、`C:\Users\Public\docs`
+- 支持单文件公开：例如将 `sw.js` 映射到 `http://域名/sw.js`
+- 支持目录公开：例如将 `verify` 映射到 `http://域名/verify`，目录下所有文件自动可访问
+- 目录自动首页：访问公开目录根路径时自动返回 `index.html` 或 `index.htm`
+- 安全防护：
+  - 禁止路径包含 `..` 防止目录遍历攻击
+  - 禁止公开 `core`、`services`、`routes`、`templates` 等源码目录
+  - 禁止访问 `.env`、`config.py`、`site.duckdb` 等敏感文件
+  - 禁止访问 `/etc`、`/proc`、`/dev`、`/boot`、`/root` 等系统敏感目录
+  - 禁止访问 Windows 系统目录（`C:\Windows`、`System32`、`Program Files` 等）
+  - 相对路径严格限制在项目根目录内
+- MIME类型自动识别：正确返回 JS、CSS、HTML、JSON、图片等文件类型
+- 支持启用/禁用单个公开路径，无需删除即可临时关闭访问
+

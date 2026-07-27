@@ -2,12 +2,57 @@
 
 由于 DuckDB 在 Windows 上多进程/多连接文件锁问题较严重，
 这里采用单例共享连接 + 线程锁的方式，确保同一时间只有一个线程在写数据库。
+
+同时提供多进程子进程检测：multiprocessing spawn 子进程不允许打开 DuckDB 连接。
 """
 
-import duckdb
+import os
 import threading
 
 from config import DB_PATH
+
+
+def _is_mp_child_process():
+    """检测当前进程是否是 multiprocessing 产生的子进程。
+
+    Windows 上 spawn 方式会重新导入主模块，如果子进程尝试打开 DuckDB，
+    会因为父进程独占文件锁而失败。通过多种方式检测子进程：
+    1. 环境变量 _BH_CHILD_PROCESS=1
+    2. __name__ == '__mp_main__'（fork 模式）
+    3. multiprocessing.current_process() 名称不是 MainProcess
+    4. sys.argv 包含 spawn/fork 特征参数
+    """
+    if os.environ.get('_BH_CHILD_PROCESS') == '1':
+        os.environ['_BH_CHILD_PROCESS'] = '1'
+        return True
+    try:
+        import sys
+        if getattr(sys, 'frozen', False):
+            pass
+        else:
+            argv_str = ' '.join(sys.argv).lower()
+            if '--multiprocessing-fork' in argv_str:
+                os.environ['_BH_CHILD_PROCESS'] = '1'
+                return True
+            if '-c' in argv_str and 'spawn_main' in argv_str:
+                os.environ['_BH_CHILD_PROCESS'] = '1'
+                return True
+            if 'multiprocessing' in argv_str and ('spawn' in argv_str or 'fork' in argv_str):
+                os.environ['_BH_CHILD_PROCESS'] = '1'
+                return True
+    except Exception:
+        pass
+    try:
+        import multiprocessing
+        if multiprocessing.current_process().name != 'MainProcess':
+            os.environ['_BH_CHILD_PROCESS'] = '1'
+            return True
+    except Exception:
+        pass
+    return False
+
+
+import duckdb
 
 
 # ---------------------------------------------------------------------------
@@ -281,7 +326,15 @@ def get_db():
         conn = get_db()
         conn.execute(...)
         conn.commit()
+
+    注意：multiprocessing 子进程不允许打开 DuckDB 连接
+    （DuckDB 同一时间只允许一个进程写入数据库文件）。
     """
+    if _is_mp_child_process():
+        raise RuntimeError(
+            '无法在 multiprocessing 子进程中打开数据库连接。'
+            'DuckDB 不支持多进程并发写入，请在主进程中访问数据库。'
+        )
     global _conn
     if _conn is None:
         with _init_lock:

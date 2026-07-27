@@ -6,13 +6,14 @@
 
 import os
 import subprocess
-import shlex
 import threading
 import time
 import datetime
 from typing import Iterator
 
 from core.db import get_db
+from config import APP_ROOT
+from utils.process import decode_output, make_env
 
 
 def run_command_stream(command: str, cwd: str = None, timeout: int = 300) -> Iterator[dict]:
@@ -28,7 +29,7 @@ def run_command_stream(command: str, cwd: str = None, timeout: int = 300) -> Ite
         return
 
     if cwd is None:
-        cwd = os.getcwd()
+        cwd = APP_ROOT
 
     try:
         process = subprocess.Popen(
@@ -37,8 +38,11 @@ def run_command_stream(command: str, cwd: str = None, timeout: int = 300) -> Ite
             cwd=cwd,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
-            bufsize=1,
-            universal_newlines=True,
+            bufsize=0,
+            env=make_env(),
+            **({
+                'creationflags': subprocess.CREATE_NO_WINDOW
+            } if os.name == 'nt' else {}),
         )
     except Exception as e:
         yield {'type': 'error', 'message': f'启动进程失败: {e}'}
@@ -48,11 +52,33 @@ def run_command_stream(command: str, cwd: str = None, timeout: int = 300) -> Ite
     killed_by_timeout = False
 
     def _reader():
-        try:
-            for line in process.stdout:
-                yield line.rstrip('\n')
-        except Exception:
-            pass
+        buf = bytearray()
+        stdout = process.stdout
+        while True:
+            try:
+                chunk = stdout.read(4096)
+            except Exception:
+                if buf:
+                    yield decode_output(bytes(buf)).rstrip('\r\n')
+                break
+            if not chunk:
+                if buf:
+                    yield decode_output(bytes(buf)).rstrip('\r\n')
+                break
+            buf.extend(chunk)
+            while True:
+                nl_idx = -1
+                for i, b in enumerate(buf):
+                    if b in (0x0a, 0x0d):
+                        nl_idx = i
+                        break
+                if nl_idx < 0:
+                    break
+                line_bytes = bytes(buf[:nl_idx])
+                del buf[:nl_idx + 1]
+                while buf and buf[0] in (0x0a, 0x0d):
+                    del buf[0]
+                yield decode_output(line_bytes).rstrip('\r\n')
 
     for line in _reader():
         yield {'type': 'output', 'line': line}
@@ -89,7 +115,7 @@ def run_command_sync(command: str, cwd: str = None, timeout: int = 30,
         return {'success': False, 'output': '', 'error': '命令不能为空'}
 
     if cwd is None:
-        cwd = os.getcwd()
+        cwd = APP_ROOT
 
     started_at = time.time()
     started_str = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -100,10 +126,15 @@ def run_command_sync(command: str, cwd: str = None, timeout: int = 30,
             shell=True,
             cwd=cwd,
             capture_output=True,
-            text=True,
             timeout=timeout,
+            env=make_env(),
+            **({
+                'creationflags': subprocess.CREATE_NO_WINDOW
+            } if os.name == 'nt' else {}),
         )
-        output = result.stdout + (result.stderr if result.stderr else '')
+        stdout_text = decode_output(result.stdout) if result.stdout else ''
+        stderr_text = decode_output(result.stderr) if result.stderr else ''
+        output = stdout_text + stderr_text
         success = result.returncode == 0
 
         _log_cmd_execution(
@@ -155,7 +186,6 @@ def _log_cmd_execution(command, output, exit_code, success,
             )
             conn.commit()
         except Exception:
-            # 仅记录到 stderr，不静默吞掉异常（便于调试连接/SQL 问题）
             if conn is not None:
                 try:
                     conn.rollback()

@@ -3,69 +3,204 @@
  *
  * 功能：
  *   - 持久 shell 会话（cd 等状态保持）
- *   - 真实命令提示符（从 shell 获取）
+ *   - ANSI 16色/256色/真彩色 渲染支持
  *   - 命令历史记录（↑/↓ 切换）
  *   - SSE 流式输出 + POST 输入
  *   - 快捷键：Ctrl+L 清屏、Ctrl+C 中断、Enter 执行
  *   - 终端重置（重启 shell）
+ *   - 待发送队列：连接建立前的命令自动排队
  *
  * 暴露：window.TerminalPanel
  */
 window.TerminalPanel = (function () {
 
-    // 命令历史
     let cmdHistory = [];
     let historyIndex = -1;
     let draftValue = '';
 
-    // SSE 连接状态
     let eventSource = null;
     let connected = false;
-    let reconnectTimer = null;     // 手动重连定时器
-    let manualCloseToken = 0;      // 主动关闭令牌：每次主动关闭递增，onerror 据此判断是否跳过重连
-    const RECONNECT_DELAY = 3000;  // 重连延迟（毫秒）
+    let reconnectTimer = null;
+    let manualCloseToken = 0;
+    let pendingInputQueue = [];
+    const RECONNECT_DELAY = 3000;
 
-    // 心跳看门狗：记录最后收到任意数据（含心跳）的时间，
-    // 超过阈值则认为连接已死，主动重连。
     let lastDataTime = Date.now();
     let watchdogTimer = null;
-    const WATCHDOG_TIMEOUT = 35000;  // 35 秒无数据视为断连（服务端心跳 10s 一次）
-    const WATCHDOG_CHECK_INTERVAL = 5000;  // 每 5 秒检查一次
+    const WATCHDOG_TIMEOUT = 35000;
+    const WATCHDOG_CHECK_INTERVAL = 5000;
 
-    // 终端输出缓冲区（用于 ANSI 处理、回显等）
-    let currentLine = '';
+    // ANSI 状态
+    let currentLineFragments = [];
+    let ansiStyle = {
+        bold: false, dim: false, italic: false, underline: false,
+        blink: false, reverse: false, hidden: false, strikethrough: false,
+        fg: null, bg: null,
+    };
+    let pendingCr = false;
+
+    const ANSI_COLORS = {
+        0: '#000000', 1: '#aa0000', 2: '#00aa00', 3: '#aa5500',
+        4: '#0000aa', 5: '#aa00aa', 6: '#00aaaa', 7: '#aaaaaa',
+        8: '#555555', 9: '#ff5555', 10: '#55ff55', 11: '#ffff55',
+        12: '#5555ff', 13: '#ff55ff', 14: '#55ffff', 15: '#ffffff',
+    };
+
+    function ansi256ToHex(n) {
+        n = Math.max(0, Math.min(255, n));
+        if (n < 16) return ANSI_COLORS[n];
+        if (n >= 232) {
+            const v = Math.round((n - 232) * 255 / 23);
+            const hex = v.toString(16).padStart(2, '0');
+            return '#' + hex + hex + hex;
+        }
+        const c = n - 16;
+        const r = Math.floor(c / 36);
+        const g = Math.floor((c % 36) / 6);
+        const b = c % 6;
+        const toVal = (v) => v === 0 ? 0 : 55 + v * 40;
+        const hex = (v) => v.toString(16).padStart(2, '0');
+        return '#' + hex(toVal(r)) + hex(toVal(g)) + hex(toVal(b));
+    }
+
+    function resetAnsiStyle() {
+        ansiStyle = {
+            bold: false, dim: false, italic: false, underline: false,
+            blink: false, reverse: false, hidden: false, strikethrough: false,
+            fg: null, bg: null,
+        };
+    }
+
+    function applyAnsiSgr(params) {
+        if (!params || params.length === 0) { resetAnsiStyle(); return; }
+        let i = 0;
+        while (i < params.length) {
+            const p = params[i];
+            if (p === 0) resetAnsiStyle();
+            else if (p === 1) ansiStyle.bold = true;
+            else if (p === 2) ansiStyle.dim = true;
+            else if (p === 3) ansiStyle.italic = true;
+            else if (p === 4) ansiStyle.underline = true;
+            else if (p === 5) ansiStyle.blink = true;
+            else if (p === 7) ansiStyle.reverse = true;
+            else if (p === 8) ansiStyle.hidden = true;
+            else if (p === 9) ansiStyle.strikethrough = true;
+            else if (p === 22) { ansiStyle.bold = false; ansiStyle.dim = false; }
+            else if (p === 23) ansiStyle.italic = false;
+            else if (p === 24) ansiStyle.underline = false;
+            else if (p === 25) ansiStyle.blink = false;
+            else if (p === 27) ansiStyle.reverse = false;
+            else if (p === 28) ansiStyle.hidden = false;
+            else if (p === 29) ansiStyle.strikethrough = false;
+            else if (p >= 30 && p <= 37) ansiStyle.fg = ANSI_COLORS[p - 30];
+            else if (p >= 40 && p <= 47) ansiStyle.bg = ANSI_COLORS[p - 40];
+            else if (p >= 90 && p <= 97) ansiStyle.fg = ANSI_COLORS[p - 90 + 8];
+            else if (p >= 100 && p <= 107) ansiStyle.bg = ANSI_COLORS[p - 100 + 8];
+            else if (p === 39) ansiStyle.fg = null;
+            else if (p === 49) ansiStyle.bg = null;
+            else if (p === 38 && i + 1 < params.length) {
+                const mode = params[i + 1];
+                if (mode === 5 && i + 2 < params.length) { ansiStyle.fg = ansi256ToHex(params[i + 2]); i += 2; }
+                else if (mode === 2 && i + 4 < params.length) { ansiStyle.fg = `rgb(${params[i+2]},${params[i+3]},${params[i+4]})`; i += 4; }
+            } else if (p === 48 && i + 1 < params.length) {
+                const mode = params[i + 1];
+                if (mode === 5 && i + 2 < params.length) { ansiStyle.bg = ansi256ToHex(params[i + 2]); i += 2; }
+                else if (mode === 2 && i + 4 < params.length) { ansiStyle.bg = `rgb(${params[i+2]},${params[i+3]},${params[i+4]})`; i += 4; }
+            }
+            i++;
+        }
+    }
+
+    function buildStyleCss() {
+        const parts = [];
+        let fg = ansiStyle.fg, bg = ansiStyle.bg;
+        if (ansiStyle.reverse) { [fg, bg] = [bg, fg]; if (!fg) fg = '#e2e8f0'; if (!bg) bg = '#000000'; }
+        parts.push('color:' + (fg || '#e2e8f0'));
+        if (bg) parts.push('background-color:' + bg);
+        if (ansiStyle.bold) parts.push('font-weight:700');
+        if (ansiStyle.dim) parts.push('opacity:0.6');
+        if (ansiStyle.italic) parts.push('font-style:italic');
+        if (ansiStyle.underline) parts.push('text-decoration:underline');
+        if (ansiStyle.blink) parts.push('animation:term-blink 1s steps(2) infinite');
+        if (ansiStyle.hidden) parts.push('visibility:hidden');
+        if (ansiStyle.strikethrough) parts.push('text-decoration:line-through');
+        return parts.join(';');
+    }
+
+    function pushTextFragment(text) {
+        if (!text) return;
+        const css = buildStyleCss();
+        const last = currentLineFragments[currentLineFragments.length - 1];
+        if (last && last.css === css) { last.text += text; }
+        else { currentLineFragments.push({ text, css }); }
+    }
+
+    function flushCurrentLine(panel) {
+        if (currentLineFragments.length === 0) return;
+        const line = document.createElement('div');
+        line.style.cssText = 'padding:0;white-space:pre-wrap;word-break:break-all;min-height:1.2em;line-height:1.4;';
+        for (const frag of currentLineFragments) {
+            const span = document.createElement('span');
+            span.style.cssText = frag.css;
+            span.textContent = frag.text;
+            line.appendChild(span);
+        }
+        panel.appendChild(line);
+        currentLineFragments = [];
+    }
+
+    function getCurrentLineElement(panel) {
+        let line = panel.querySelector('.term-current-line');
+        if (!line) {
+            line = document.createElement('div');
+            line.className = 'term-current-line';
+            line.style.cssText = 'padding:0;white-space:pre-wrap;word-break:break-all;min-height:1.2em;line-height:1.4;';
+            panel.appendChild(line);
+        }
+        return line;
+    }
+
+    function renderCurrentLine(panel) {
+        const line = getCurrentLineElement(panel);
+        line.innerHTML = '';
+        for (const frag of currentLineFragments) {
+            const span = document.createElement('span');
+            span.style.cssText = frag.css;
+            span.textContent = frag.text;
+            line.appendChild(span);
+        }
+    }
+
+    function ensureBlinkStyle() {
+        if (!document.getElementById('term-blink-style')) {
+            const style = document.createElement('style');
+            style.id = 'term-blink-style';
+            style.textContent = '@keyframes term-blink{0%,50%{opacity:1}50.01%,100%{opacity:0}}';
+            document.head.appendChild(style);
+        }
+    }
 
     // ============================================================
     // 初始化
     // ============================================================
     function init() {
+        ensureBlinkStyle();
         const input = document.getElementById('terminal-input');
         if (!input) return;
 
         input.addEventListener('keydown', onInputKeydown);
         loadHistory();
-
-        // 建立 SSE 连接
         connectStream();
 
-        // 点击终端区域聚焦输入框
         const wrapper = document.getElementById('editor-output-wrapper');
         if (wrapper) {
-            wrapper.addEventListener('click', function () {
-                focusInput();
-            });
+            wrapper.addEventListener('click', function () { focusInput(); });
         }
 
-        // 页面可见性监听：切回页面时若连接已断开则主动重连
         document.addEventListener('visibilitychange', function () {
             if (document.visibilityState !== 'visible') return;
-            // 已连接则无需处理
             if (connected && eventSource) return;
-            // 取消挂起的延迟重连，立即重连
-            if (reconnectTimer) {
-                clearTimeout(reconnectTimer);
-                reconnectTimer = null;
-            }
+            if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
             connectStream();
         });
     }
@@ -74,72 +209,40 @@ window.TerminalPanel = (function () {
     // SSE 连接
     // ============================================================
     function connectStream() {
-        // 取消可能挂起的重连
-        if (reconnectTimer) {
-            clearTimeout(reconnectTimer);
-            reconnectTimer = null;
-        }
+        if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
 
-        // 防御：面板折叠时不建立连接，避免不可见时浪费服务端资源。
-        // 仅当面板元素存在且已折叠时才跳过；元素不存在（如初始化阶段）
-        // 仍允许连接，避免影响正常流程。
         const panel = document.getElementById('output-panel');
-        if (panel && panel.classList.contains('collapsed')) {
-            return;
-        }
+        if (panel && panel.classList.contains('collapsed')) return;
 
-        // 主动关闭旧连接（递增 token，onerror 据此判断是否跳过重连）
-        // 旧 onerror 回调捕获本次 token 值，若发现 token 已变化则视为主动关闭
         const closedToken = ++manualCloseToken;
-        if (eventSource) {
-            try { eventSource.close(); } catch (_) { /* ignore */ }
-            eventSource = null;
-        }
+        if (eventSource) { try { eventSource.close(); } catch (_) {} eventSource = null; }
 
         connected = false;
         lastDataTime = Date.now();
         appendLine('正在连接终端…', 'dim');
 
-        // 使用 EventSource 实现 SSE（支持携带 cookie）
         const es = new EventSource('/admin/cmd/terminal/stream', { withCredentials: true });
 
         es.onopen = function () {
             connected = true;
             lastDataTime = Date.now();
-            // 连接成功，清除挂起的重连
-            if (reconnectTimer) {
-                clearTimeout(reconnectTimer);
-                reconnectTimer = null;
-            }
-            // 启动心跳看门狗
+            if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
             startWatchdog();
+            flushPendingQueue();
         };
 
         es.onmessage = function (e) {
             let msg;
-            try {
-                msg = JSON.parse(e.data);
-            } catch (_) {
-                return;
-            }
-            // 任何消息都视为连接活跃
+            try { msg = JSON.parse(e.data); } catch (_) { return; }
             lastDataTime = Date.now();
             handleSseEvent(msg);
         };
 
         es.onerror = function () {
-            // 捕获本次连接的 token：若 token 已变化，说明是主动关闭，跳过重连
             const myToken = closedToken;
-            if (connected) {
-                appendLine('[连接断开，正在重连…]', 'warning');
-                connected = false;
-            }
-            // 关闭当前 EventSource，避免其默认自动重连与手动重连冲突
-            try { es.close(); } catch (_) { /* ignore */ }
-            if (eventSource === es) {
-                eventSource = null;
-            }
-            // 主动关闭时不触发重连（token 已递增说明是主动关闭）
+            if (connected) { appendLine('[连接断开，正在重连…]', 'warning'); connected = false; }
+            try { es.close(); } catch (_) {}
+            if (eventSource === es) { eventSource = null; }
             if (myToken !== manualCloseToken) return;
             scheduleReconnect();
         };
@@ -147,25 +250,22 @@ window.TerminalPanel = (function () {
         eventSource = es;
     }
 
-    // ============================================================
-    // 心跳看门狗
-    // ============================================================
+    function flushPendingQueue() {
+        while (pendingInputQueue.length > 0 && connected) {
+            const text = pendingInputQueue.shift();
+            sendTextNow(text);
+        }
+    }
 
     function startWatchdog() {
         stopWatchdog();
         watchdogTimer = setInterval(function () {
-            // 面板折叠时不触发重连
             if (!isPanelVisible()) return;
-            // 已断开则交给 onerror 路径处理
             if (!connected) return;
             const elapsed = Date.now() - lastDataTime;
             if (elapsed > WATCHDOG_TIMEOUT) {
                 appendLine('[长时间无心跳，主动重连…]', 'warning');
-                // 强制关闭当前连接，触发重连
-                if (eventSource) {
-                    try { eventSource.close(); } catch (_) { /* ignore */ }
-                    eventSource = null;
-                }
+                if (eventSource) { try { eventSource.close(); } catch (_) {} eventSource = null; }
                 connected = false;
                 scheduleReconnect();
             }
@@ -173,21 +273,14 @@ window.TerminalPanel = (function () {
     }
 
     function stopWatchdog() {
-        if (watchdogTimer) {
-            clearInterval(watchdogTimer);
-            watchdogTimer = null;
-        }
+        if (watchdogTimer) { clearInterval(watchdogTimer); watchdogTimer = null; }
     }
 
     function scheduleReconnect() {
-        // 已有重连挂起则不重复调度
         if (reconnectTimer) return;
-        // 面板折叠时不重连，避免不可见时浪费资源
-        // 展开时由 toggle 处理器调用 reconnect()
         if (!isPanelVisible()) return;
         reconnectTimer = setTimeout(function () {
             reconnectTimer = null;
-            // 双重检查：定时器触发时面板可能已被折叠
             if (!isPanelVisible()) return;
             connectStream();
         }, RECONNECT_DELAY);
@@ -196,46 +289,32 @@ window.TerminalPanel = (function () {
     function isPanelVisible() {
         const panel = document.getElementById('output-panel');
         if (!panel) return false;
-        // 折叠状态下视为不可见
         return !panel.classList.contains('collapsed');
     }
 
     function reconnect() {
-        // 取消挂起的重连，立即尝试连接
-        if (reconnectTimer) {
-            clearTimeout(reconnectTimer);
-            reconnectTimer = null;
-        }
-        if (connected && eventSource) return;  // 已连接
-        if (!isPanelVisible()) return;  // 面板折叠时不连接
+        if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+        if (connected && eventSource) return;
+        if (!isPanelVisible()) return;
         connectStream();
     }
 
     function handleSseEvent(msg) {
         if (!msg || !msg.type) return;
         const data = msg.data || {};
-
         switch (msg.type) {
             case 'connected':
-                // 清除"正在连接"提示
                 clearLastLineIf('正在连接终端…');
                 break;
             case 'output':
                 handleTerminalOutput(data.text || '');
                 break;
             case 'heartbeat':
-                // 心跳包，仅用于保持连接活跃，无需处理
                 break;
             case 'closed':
                 appendLine('[会话已结束，正在重连…]', 'warning');
                 connected = false;
-                // 服务端 _get_or_create_session 会自动创建新会话，
-                // 这里主动重连以恢复终端可用性。
-                if (eventSource) {
-                    try { eventSource.close(); } catch (_) { /* ignore */ }
-                    eventSource = null;
-                }
-                // 递增 token 避免即将触发的 onerror 再次调度重连
+                if (eventSource) { try { eventSource.close(); } catch (_) {} eventSource = null; }
                 ++manualCloseToken;
                 scheduleReconnect();
                 break;
@@ -246,7 +325,7 @@ window.TerminalPanel = (function () {
     }
 
     // ============================================================
-    // 终端输出处理（处理换行、回车、ANSI 等）
+    // 终端输出处理
     // ============================================================
     function handleTerminalOutput(text) {
         const panel = document.getElementById('editor-output');
@@ -255,120 +334,77 @@ window.TerminalPanel = (function () {
         let i = 0;
         while (i < text.length) {
             const ch = text[i];
-
             if (ch === '\n') {
-                // 换行
-                finishLine(panel);
+                const cl = panel.querySelector('.term-current-line');
+                if (cl) cl.classList.remove('term-current-line');
+                flushCurrentLine(panel);
+                currentLineFragments = [];
+                pendingCr = false;
+                pushTextFragment('');
+                renderCurrentLine(panel);
                 i++;
             } else if (ch === '\r') {
-                // 回车：回到行首
-                currentLine = '';
-                updateCurrentLine(panel);
+                pendingCr = true;
                 i++;
             } else if (ch === '\x1b') {
-                // ANSI 转义序列：简单跳过
-                i = skipAnsiEscape(text, i);
+                const result = parseAnsiEscape(text, i);
+                i = result.next;
+                if (result.sgr) { applyAnsiSgr(result.params); renderCurrentLine(panel); }
             } else if (ch === '\x08') {
-                // 退格
-                if (currentLine.length > 0) {
-                    currentLine = currentLine.slice(0, -1);
-                    updateCurrentLine(panel);
+                if (pendingCr) pendingCr = false;
+                if (currentLineFragments.length > 0) {
+                    const last = currentLineFragments[currentLineFragments.length - 1];
+                    if (last.text.length > 0) { last.text = last.text.slice(0, -1); }
+                    else if (currentLineFragments.length > 1) { currentLineFragments.pop(); }
+                    renderCurrentLine(panel);
                 }
                 i++;
-            } else if (ch === '\x07') {
-                // 响铃：忽略
-                i++;
-            } else {
-                // 普通字符
-                currentLine += ch;
-                updateCurrentLine(panel);
-                i++;
+            } else if (ch === '\x07') { i++; }
+            else if (ch === '\x0c') { clearTerminalNoSend(); pendingCr = false; i++; }
+            else {
+                if (pendingCr) { currentLineFragments = []; pendingCr = false; }
+                pushTextFragment(ch); renderCurrentLine(panel); i++;
             }
         }
-
         scrollToBottom();
     }
 
-    function skipAnsiEscape(text, start) {
-        // 跳过 ANSI 转义序列
-        // CSI: \x1b[ 参数字节(0x30-0x3f) 中间字节(0x20-0x2f) 终止字节(0x40-0x7e)
-        // OSC: \x1b] ... \x07 (BEL) 或 \x1b\\ (ST)
+    function parseAnsiEscape(text, start) {
         let i = start + 1;
-        if (i >= text.length) return i;
-
+        if (i >= text.length) return { next: i };
         if (text[i] === '[') {
-            // CSI 序列
             i++;
+            let paramStr = '';
             while (i < text.length) {
                 const code = text.charCodeAt(i);
-                // 0x20-0x2f: 中间字节（继续）
-                // 0x30-0x3f: 参数字节（继续）
-                // 0x40-0x7e: 终止字节（结束）
                 if (code >= 0x40 && code <= 0x7e) {
-                    i++;
-                    break;
+                    const fb = text[i]; i++;
+                    if (fb === 'm') {
+                        const params = paramStr ? paramStr.split(';').map(s => parseInt(s, 10) || 0) : [0];
+                        return { next: i, sgr: true, params };
+                    }
+                    return { next: i };
                 }
-                // 0x20-0x3f 之间的字节都是合法的参数/中间字节，继续
-                if (code >= 0x20 && code <= 0x3f) {
-                    i++;
-                    continue;
-                }
-                // 非法字节，截断序列
+                if (code >= 0x20 && code <= 0x3f) { paramStr += text[i]; i++; continue; }
                 break;
             }
+            return { next: i };
         } else if (text[i] === ']') {
-            // OSC 序列：以 BEL(\x07) 或 ST(\x1b\\) 结束
             i++;
             while (i < text.length) {
-                if (text[i] === '\x07') {
-                    i++;
-                    break;
-                }
-                if (text[i] === '\x1b' && i + 1 < text.length && text[i + 1] === '\\') {
-                    i += 2;
-                    break;
-                }
+                if (text[i] === '\x07') { i++; break; }
+                if (text[i] === '\x1b' && i + 1 < text.length && text[i+1] === '\\') { i += 2; break; }
                 i++;
             }
-        } else {
-            // 其他转义序列（如 \x1b= \x1b> \x1b7 等）：跳过 1 个字符
-            i++;
-        }
-        return i;
-    }
-
-    function finishLine(panel) {
-        // 当前行转为正式行元素
-        const lines = panel.querySelectorAll('.term-current-line');
-        lines.forEach(function (el) {
-            el.classList.remove('term-current-line');
-        });
-        currentLine = '';
-        // 创建新的当前行
-        const line = document.createElement('div');
-        line.className = 'term-current-line';
-        line.style.cssText = 'color:#e2e8f0;padding:0;white-space:pre-wrap;word-break:break-all;min-height:1.2em;';
-        panel.appendChild(line);
-    }
-
-    function updateCurrentLine(panel) {
-        let line = panel.querySelector('.term-current-line');
-        if (!line) {
-            line = document.createElement('div');
-            line.className = 'term-current-line';
-            line.style.cssText = 'color:#e2e8f0;padding:0;white-space:pre-wrap;word-break:break-all;min-height:1.2em;';
-            panel.appendChild(line);
-        }
-        line.textContent = currentLine;
+            return { next: i };
+        } else { return { next: i + 1 }; }
     }
 
     function clearLastLineIf(text) {
         const panel = document.getElementById('editor-output');
         if (!panel) return;
         const last = panel.lastElementChild;
-        if (last && last.textContent.trim() === text.trim()) {
-            last.remove();
-        }
+        if (last && last.textContent.trim() === text.trim()) { last.remove(); }
     }
 
     // ============================================================
@@ -376,7 +412,6 @@ window.TerminalPanel = (function () {
     // ============================================================
     function onInputKeydown(e) {
         const input = e.target;
-
         if (e.key === 'Enter') {
             e.preventDefault();
             const cmd = input.value;
@@ -386,50 +421,25 @@ window.TerminalPanel = (function () {
             historyIndex = -1;
             return;
         }
-
-        if (e.key === 'ArrowUp') {
-            e.preventDefault();
-            navigateHistory(-1, input);
-            return;
-        }
-
-        if (e.key === 'ArrowDown') {
-            e.preventDefault();
-            navigateHistory(1, input);
-            return;
-        }
-
-        // Ctrl+L 清屏
-        if (e.key === 'l' && (e.ctrlKey || e.metaKey)) {
-            e.preventDefault();
-            clearTerminal();
-            return;
-        }
-
-        // Ctrl+C 中断
-        if (e.key === 'c' && (e.ctrlKey || e.metaKey)) {
-            e.preventDefault();
-            sendInterrupt();
-            return;
-        }
-
-        // Tab 补全（简单实现：发送 \t）
-        if (e.key === 'Tab') {
-            e.preventDefault();
-            sendText('\t');
-            return;
-        }
+        if (e.key === 'ArrowUp') { e.preventDefault(); navigateHistory(-1, input); return; }
+        if (e.key === 'ArrowDown') { e.preventDefault(); navigateHistory(1, input); return; }
+        if (e.key === 'l' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); clearTerminal(); return; }
+        if (e.key === 'c' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); sendInterrupt(); return; }
+        if (e.key === 'Tab') { e.preventDefault(); sendText('\t'); return; }
     }
 
-    function sendCommand(cmd) {
-        sendText(cmd + '\n');
-    }
+    function sendCommand(cmd) { sendText(cmd + '\n'); }
 
     function sendText(text) {
         if (!connected) {
-            appendLine('[未连接，无法发送]', 'error');
+            pendingInputQueue.push(text);
+            if (!eventSource && isPanelVisible()) { connectStream(); }
             return;
         }
+        sendTextNow(text);
+    }
+
+    function sendTextNow(text) {
         fetch('/admin/cmd/terminal/input', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -439,13 +449,8 @@ window.TerminalPanel = (function () {
         });
     }
 
-    function sendInterrupt() {
-        sendText('\x03');  // Ctrl+C
-    }
+    function sendInterrupt() { sendText('\x03'); }
 
-    // ============================================================
-    // 历史记录
-    // ============================================================
     function addToHistory(cmd) {
         if (!cmd.trim()) return;
         if (cmdHistory[cmdHistory.length - 1] === cmd) return;
@@ -456,45 +461,22 @@ window.TerminalPanel = (function () {
 
     function navigateHistory(dir, input) {
         if (cmdHistory.length === 0) return;
-
-        if (historyIndex === -1) {
-            draftValue = input.value;
-        }
-
+        if (historyIndex === -1) draftValue = input.value;
         if (dir < 0) {
-            if (historyIndex === -1) {
-                historyIndex = cmdHistory.length - 1;
-            } else if (historyIndex > 0) {
-                historyIndex--;
-            }
+            if (historyIndex === -1) historyIndex = cmdHistory.length - 1;
+            else if (historyIndex > 0) historyIndex--;
         } else {
-            if (historyIndex < cmdHistory.length - 1) {
-                historyIndex++;
-            } else {
-                historyIndex = -1;
-                input.value = draftValue;
-                return;
-            }
+            if (historyIndex < cmdHistory.length - 1) historyIndex++;
+            else { historyIndex = -1; input.value = draftValue; return; }
         }
-
         if (historyIndex >= 0 && historyIndex < cmdHistory.length) {
             input.value = cmdHistory[historyIndex];
             setTimeout(() => { input.selectionStart = input.selectionEnd = input.value.length; }, 0);
         }
     }
 
-    function saveHistory() {
-        try {
-            localStorage.setItem('terminal_history', JSON.stringify(cmdHistory));
-        } catch (_) { /* ignore */ }
-    }
-
-    function loadHistory() {
-        try {
-            const raw = localStorage.getItem('terminal_history');
-            if (raw) cmdHistory = JSON.parse(raw) || [];
-        } catch (_) { cmdHistory = []; }
-    }
+    function saveHistory() { try { localStorage.setItem('terminal_history', JSON.stringify(cmdHistory)); } catch (_) {} }
+    function loadHistory() { try { const raw = localStorage.getItem('terminal_history'); if (raw) cmdHistory = JSON.parse(raw) || []; } catch (_) { cmdHistory = []; } }
 
     // ============================================================
     // 输出辅助
@@ -502,44 +484,42 @@ window.TerminalPanel = (function () {
     function appendLine(text, type) {
         const panel = document.getElementById('editor-output');
         if (!panel) return;
-
-        // 如果有当前行，先结束它
         const current = panel.querySelector('.term-current-line');
         if (current) current.classList.remove('term-current-line');
+        flushCurrentLine(panel);
 
         const line = document.createElement('div');
-        line.textContent = text;
         const colorMap = {
-            'info':    '#60a5fa',
-            'error':   '#f87171',
-            'warning': '#fbbf24',
-            'success': '#4ade80',
-            'dim':     '#64748b',
-            'script':  '#a3e635',
+            'info': '#60a5fa', 'error': '#f87171', 'warning': '#fbbf24',
+            'success': '#4ade80', 'dim': '#64748b', 'script': '#a3e635',
         };
-        line.style.color = colorMap[type] || '#e2e8f0';
-        line.style.cssText += 'padding:1px 0;white-space:pre-wrap;word-break:break-all;';
+        line.style.cssText = 'color:' + (colorMap[type] || '#e2e8f0') + ';padding:1px 0;white-space:pre-wrap;word-break:break-all;';
+        line.textContent = text;
         panel.appendChild(line);
+
+        currentLineFragments = [];
+        resetAnsiStyle();
+        pushTextFragment('');
+        renderCurrentLine(panel);
         scrollToBottom();
     }
 
-    function appendCommandLine(cmd) {
-        appendLine('$ ' + cmd, 'info');
-    }
+    function appendCommandLine(cmd) { appendLine('$ ' + cmd, 'info'); }
+    function appendOutput(text) { handleTerminalOutput(text + '\n'); }
 
-    function appendOutput(text) {
-        // 兼容旧接口：直接追加文本
-        handleTerminalOutput(text + '\n');
+    function clearTerminalNoSend() {
+        const panel = document.getElementById('editor-output');
+        if (panel) panel.innerHTML = '';
+        currentLineFragments = [];
+        pendingCr = false;
+        resetAnsiStyle();
+        pushTextFragment('');
+        renderCurrentLine(panel);
     }
 
     function clearTerminal() {
-        const panel = document.getElementById('editor-output');
-        if (panel) panel.innerHTML = '';
-        currentLine = '';
-        // 仅在已连接时发送清屏命令，避免未连接时报错
-        if (connected) {
-            sendText('\x0c');  // Ctrl+L
-        }
+        clearTerminalNoSend();
+        if (connected) { sendText('\x0c'); }
     }
 
     function scrollToBottom() {
@@ -552,13 +532,8 @@ window.TerminalPanel = (function () {
         if (input) input.focus();
     }
 
-    function getRunning() {
-        return connected;
-    }
+    function getRunning() { return connected; }
 
-    // ============================================================
-    // Public API
-    // ============================================================
     return {
         init: init,
         sendCommand: sendCommand,

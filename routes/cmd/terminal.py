@@ -4,8 +4,8 @@
 每个用户会话对应一个独立的 shell 子进程，关闭页面后一段时间自动回收。
 
 跨平台兼容性说明：
-- Windows: 使用 cmd.exe，不支持 select.select 对管道 fd 的操作
-- Unix/Linux/macOS: 优先使用 bash，回退到 sh
+- Windows: 使用 cmd.exe（默认）或 PowerShell，自动切换到 UTF-8 代码页 (chcp 65001)
+- Unix/Linux/macOS: 优先使用 bash，回退到 sh，TERM=xterm-256color 支持颜色
 - 所有平台均通过统一读取/写入 API 屏蔽差异
 """
 
@@ -22,6 +22,8 @@ from flask import request, Response, stream_with_context, jsonify, session
 from core.auth import login_required
 from routes.cmd import cmd_bp
 from routes.cmd.script import _admin_check
+from config import APP_ROOT
+from utils.process import decode_output, make_env
 
 
 # ============================================================
@@ -32,57 +34,80 @@ def _detect_shell():
     """检测当前平台可用的 shell 命令列表。
 
     Returns:
-        list[str]: shell 启动参数列表
+        tuple: (shell_args, shell_type, init_commands)
+            shell_args: shell 启动参数列表
+            shell_type: 'cmd' | 'powershell' | 'bash' | 'sh'
+            init_commands: 启动后需要发送的初始化命令列表
     """
     if os.name == 'nt':  # Windows
-        # 优先使用 PowerShell（功能更完整），回退到 cmd.exe
         powershell = os.path.join(
             os.environ.get('SystemRoot', r'C:\Windows'),
             'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe'
         )
-        if os.path.isfile(powershell):
-            # -NoExit 保持交互模式，从管道持续读取命令
-            return [
-                powershell,
-                '-NoProfile',
-                '-NoLogo',
-                '-ExecutionPolicy', 'Bypass',
-                '-NoExit',
+        use_powershell = os.path.isfile(powershell) and os.environ.get('TERMINAL_SHELL', '').lower() == 'powershell'
+
+        if use_powershell:
+            return (
+                [
+                    powershell,
+                    '-NoProfile',
+                    '-NoLogo',
+                    '-ExecutionPolicy', 'Bypass',
+                    '-NoExit',
+                    '-Command', '-',
+                ],
+                'powershell',
+                [
+                    '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\n',
+                    '$OutputEncoding = [System.Text.Encoding]::UTF8\n',
+                    '$Host.UI.RawUI.WindowTitle = "滨海小镇终端"\n',
+                ]
+            )
+
+        return (
+            ['cmd.exe', '/k'],
+            'cmd',
+            [
+                'chcp 65001 >nul\n',
             ]
-        # 回退到 cmd.exe（/q 关闭 echo，/k 保持打开）
-        return ['cmd.exe', '/q', '/k']
+        )
 
-    # Unix-like
-    for shell_path in ('/bin/bash', '/usr/bin/bash', '/bin/sh', '/usr/bin/sh'):
+    for shell_path in ('/bin/bash', '/usr/bin/bash'):
         if os.path.isfile(shell_path):
-            if 'bash' in shell_path:
-                return [shell_path, '--norc', '--noprofile', '-i']
-            return [shell_path, '-i']
-
-    # 最后回退：尝试 PATH 中的 sh
-    return ['sh', '-i']
+            return (
+                [shell_path, '--norc', '--noprofile'],
+                'bash',
+                [
+                    'export TERM=xterm-256color\n',
+                    'export PS1="\\u@\\h:\\w\\$ "\n',
+                    'export LANG=${LANG:-en_US.UTF-8}\n',
+                    'stty -echoctl 2>/dev/null\n',
+                ]
+            )
+    for shell_path in ('/bin/sh', '/usr/bin/sh'):
+        if os.path.isfile(shell_path):
+            return (
+                [shell_path],
+                'sh',
+                [
+                    'export TERM=xterm-256color\n',
+                    'export PS1="$ "\n',
+                ]
+            )
+    return (['sh'], 'sh', ['export TERM=xterm-256color\n'])
 
 
 def _get_shell_env():
     """获取当前平台的 shell 环境变量字典。"""
-    env = {
+    env = make_env()
+    env.update({
         'HOME': os.path.expanduser('~'),
-        'PATH': os.environ.get('PATH', ''),
-    }
-    if os.name == 'nt':  # Windows
+        'TERM': 'xterm-256color',
+        'PYTHONIOENCODING': 'utf-8',
+    })
+    if os.name == 'nt':
         env.update({
-            'TERM': 'xterm',
             'PROMPT': '$P$G',
-        })
-        # 继承 Windows 特有环境变量
-        for key in ('SystemRoot', 'SystemDrive', 'TEMP', 'TMP',
-                    'USERPROFILE', 'USERNAME', 'COMPUTERNAME'):
-            if key in os.environ:
-                env[key] = os.environ[key]
-    else:
-        env.update({
-            'TERM': 'xterm-256color',
-            'PS1': '__TERM_PROMPT__',
         })
     return env
 
@@ -117,7 +142,6 @@ def _get_or_create_session():
         if sid and sid in _sessions:
             sess = _sessions[sid]
             proc = sess.get('proc')
-            # 进程已死或从未成功创建：清理并重建
             if proc is not None and proc.poll() is not None:
                 _cleanup_session_nolock(sid)
                 sess = None
@@ -134,13 +158,11 @@ def _get_or_create_session():
                 sess = _create_error_session(sid, creation_error)
                 _sessions[sid] = sess
 
-    # 仅在成功创建时发送初始化命令
-    if created:
-        if not _is_windows():
-            # Unix bash: 设置 PS1 和 TERM
-            _send_to_session_nolock(sess, 'export PS1="\\u@\\h:\\w\\$ "\n')
-            _send_to_session_nolock(sess, 'export TERM=xterm\n')
-        # Windows cmd/powershell 不需要额外初始化
+    if created and sess.get('error') is None:
+        init_cmds = sess.get('init_commands', [])
+        for cmd in init_cmds:
+            _send_to_session_nolock(sess, cmd)
+            time.sleep(0.05)
 
     if sess.get('error') is None:
         sess['last_active'] = time.time()
@@ -168,6 +190,8 @@ def _create_error_session(sid, error_msg):
         'sid': sid,
         'error': error_msg,
         'generation': 0,
+        'shell_type': None,
+        'init_commands': [],
     }
     sess['output_event'].set()
     return sess
@@ -175,23 +199,18 @@ def _create_error_session(sid, error_msg):
 
 def _create_session_nolock(sid):
     """创建一个新的 shell 会话（调用方需持有 _sessions_lock）。"""
-    from config import SCRIPTS_DIR
-
-    shell_args = _detect_shell()
+    shell_args, shell_type, init_commands = _detect_shell()
     shell_env = _get_shell_env()
 
-    # 启动子进程（交互式模式）
     proc = subprocess.Popen(
         shell_args,
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
-        cwd=SCRIPTS_DIR,
+        cwd=APP_ROOT,
         env=shell_env,
-        # 二进制模式：避免 TextIOWrapper 内部缓冲与 os.read 混用导致数据丢失
         text=False,
         bufsize=0,
-        # Windows 上 creationflags 避免创建新控制台窗口
         **({
             'creationflags': subprocess.CREATE_NO_WINDOW
         } if _is_windows() else {}),
@@ -206,13 +225,14 @@ def _create_session_nolock(sid):
         'reader_thread': None,
         'closed': False,
         'prompt': '$ ',
-        'cwd': SCRIPTS_DIR,
+        'cwd': APP_ROOT,
         'sid': sid,
         'error': None,
         'generation': 0,
+        'shell_type': shell_type,
+        'init_commands': init_commands,
     }
 
-    # 启动输出读取线程
     t = threading.Thread(target=_read_output_thread, args=(sess,), daemon=True)
     sess['reader_thread'] = t
     t.start()
@@ -223,11 +243,9 @@ def _create_session_nolock(sid):
 def _read_output_thread(sess):
     """后台线程：持续读取 shell 输出并放入队列。
 
-    跨平台实现：
-    - Unix: 旧代码使用 select.select + os.read，但为保持代码统一，
-      这里改用 stdout.read() 阻塞读取。子进程被 kill 后 read() 返回空。
-    - Windows: select.select 不支持管道 fd，必须使用阻塞读取。
-      子进程被 TerminateProcess 后管道关闭，read() 返回空。
+    使用 stdout.read(4096) 分块读取以确保输出及时显示。
+    当 read() 返回时表示内核管道中有数据可用，解码后立即推入队列，
+    这样无论有没有换行符（提示符、进度条等）都能立即显示。
     """
     proc = sess['proc']
     if proc is None:
@@ -236,23 +254,13 @@ def _read_output_thread(sess):
 
     while not sess['closed']:
         try:
-            # 跨平台统一：使用 stdout.read(4096) 阻塞读取。
-            # 当子进程被 terminate/kill 后，管道关闭，read() 返回空字符串，
-            # 线程自然退出。这是跨平台最简洁可靠的方式。
             data = stdout.read(4096)
             if not data:
-                # stdout 已关闭 -> 进程已结束
                 break
-
-            try:
-                text = data.decode('utf-8', errors='replace')
-            except Exception:
-                text = str(data)
-
+            text = decode_output(bytes(data))
             with sess['lock']:
                 sess['output_queue'].append(text)
                 sess['output_event'].set()
-
         except Exception as e:
             if not sess['closed']:
                 with sess['lock']:
@@ -262,20 +270,13 @@ def _read_output_thread(sess):
                     sess['output_event'].set()
             break
 
-    # 标记会话已关闭，并唤醒所有等待线程
     sess['closed'] = True
     with sess['lock']:
         sess['output_event'].set()
 
 
 def _send_to_session_nolock(sess, text):
-    """向 shell 发送输入。
-
-    跨平台说明：
-    - 旧代码在 Unix 上使用 select.select 检查 stdin 可写性，
-      但 Windows 的 select 不支持管道 fd，因此统一改为直接写入。
-    - 实际场景中管道缓冲区满的概率极低，直接写入是可靠且跨平台的方案。
-    """
+    """向 shell 发送输入。"""
     if sess['closed'] or sess.get('error'):
         return False
     proc = sess.get('proc')
@@ -283,9 +284,9 @@ def _send_to_session_nolock(sess, text):
         return False
 
     try:
-        # 二进制模式下 stdin 是 BufferedWriter，需要把 str 编码为 bytes
         if isinstance(text, str):
-            text = text.encode('utf-8', errors='replace')
+            encoding = 'utf-8'
+            text = text.encode(encoding, errors='replace')
         elif not isinstance(text, (bytes, bytearray)):
             return False
 
@@ -293,7 +294,6 @@ def _send_to_session_nolock(sess, text):
         if stdin is None:
             return False
 
-        # 直接写入并刷新（跨平台统一方式）
         stdin.write(text)
         stdin.flush()
         return True
@@ -307,50 +307,43 @@ def _send_to_session_nolock(sess, text):
 
 
 def _cleanup_session_nolock(sid):
-    """清理会话（调用方需持有 _sessions_lock）。
-
-    显式关闭 stdin/stdout 文件描述符，避免泄漏；
-    kill 后再次 wait() 防止僵尸进程。
-
-    跨平台注意：
-    - 先 kill 子进程，再 join reader 线程。这样 reader 线程的 read()
-      会立即返回（管道已关闭），避免等待 2 秒超时。
-    """
+    """清理会话（调用方需持有 _sessions_lock）。"""
     if sid not in _sessions:
         return
     sess = _sessions[sid]
 
-    # 标记会话已关闭
     with sess['lock']:
         sess['closed'] = True
 
-    # 先终止子进程，使 reader 线程的 read() 立即返回
     proc = sess.get('proc')
     if proc is not None:
         try:
             if proc.poll() is None:
                 try:
+                    if _is_windows():
+                        proc.terminate()
+                    else:
+                        import signal
+                        os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+                except Exception:
                     proc.terminate()
+                try:
+                    proc.wait(timeout=2)
+                except subprocess.TimeoutExpired:
+                    try:
+                        proc.kill()
+                    except Exception:
+                        pass
                     try:
                         proc.wait(timeout=2)
                     except subprocess.TimeoutExpired:
-                        proc.kill()
-                        try:
-                            proc.wait(timeout=2)
-                        except subprocess.TimeoutExpired:
-                            pass
-                except Exception as e:
-                    print(
-                        f'[Terminal] 会话 {sid} 终止进程失败: {e}',
-                        flush=True,
-                    )
+                        pass
         except Exception as e:
             print(
-                f'[Terminal] 会话 {sid} 终止进程异常: {e}',
+                f'[Terminal] 会话 {sid} 终止进程失败: {e}',
                 flush=True,
             )
 
-        # 显式关闭管道，避免 fd 泄漏
         for stream_attr in ('stdin', 'stdout', 'stderr'):
             stream = getattr(proc, stream_attr, None)
             if stream is not None:
@@ -359,7 +352,6 @@ def _cleanup_session_nolock(sid):
                 except Exception:
                     pass
 
-    # 等待 reader 线程退出（进程已 kill，read() 已返回，join 通常立即成功）
     reader_thread = sess.get('reader_thread')
     if reader_thread and reader_thread.is_alive():
         reader_thread.join(timeout=2)
@@ -379,7 +371,6 @@ def _cleanup_expired_sessions():
             _cleanup_session_nolock(sid)
 
 
-# 定期清理（每 5 分钟检查一次）
 def _start_cleanup_thread():
     def loop():
         while True:
@@ -403,15 +394,10 @@ _start_cleanup_thread()
 @cmd_bp.route('/admin/cmd/terminal/stream', methods=['GET'])
 @login_required
 def terminal_stream():
-    """终端输出流（SSE）。
-
-    建立 SSE 连接，持续推送 shell 输出。
-    若 shell 启动失败，推送错误信息后关闭连接，避免前端无限重连。
-    """
+    """终端输出流（SSE）。"""
     _admin_check()
     sess = _get_or_create_session()
 
-    # shell 启动失败：直接推送错误并关闭，阻止前端无限重连
     if sess.get('error'):
         def error_generate():
             for chunk in sess['output_queue']:
@@ -430,7 +416,6 @@ def terminal_stream():
             mimetype='text/event-stream',
         )
 
-    # 每个 SSE 连接分配一个唯一的 generation 标记
     with sess['lock']:
         sess['generation'] = sess.get('generation', 0) + 1
         my_generation = sess['generation']
@@ -498,7 +483,10 @@ def terminal_stream():
         except Exception:
             pass
 
-    return Response(stream_with_context(generate()), mimetype='text/event-stream')
+    resp = Response(stream_with_context(generate()), mimetype='text/event-stream')
+    resp.headers['Cache-Control'] = 'no-cache'
+    resp.headers['X-Accel-Buffering'] = 'no'
+    return resp
 
 
 @cmd_bp.route('/admin/cmd/terminal/input', methods=['POST'])
@@ -516,7 +504,6 @@ def terminal_input():
 
     sess = _get_or_create_session()
 
-    # 如果 shell 启动失败，直接返回错误
     if sess.get('error'):
         return jsonify({
             'success': False,
@@ -545,7 +532,6 @@ def terminal_reset():
         if sid and sid in _sessions:
             _cleanup_session_nolock(sid)
 
-    # 创建新会话
     sess = _get_or_create_session()
     if sess.get('error'):
         return jsonify({

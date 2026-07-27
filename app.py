@@ -1,29 +1,54 @@
 import os
+import sys
+
+
+def _set_child_env():
+    """标记当前进程为 multiprocessing 子进程。"""
+    os.environ['_BH_CHILD_PROCESS'] = '1'
+
+
+def _is_mp_spawn_child():
+    """检测当前进程是否是 multiprocessing spawn/forkserver 启动的子进程。
+
+    此函数必须在所有其他导入和业务逻辑之前调用，以确保子进程不会
+    尝试初始化数据库或启动后台服务。
+
+    检测策略（按优先级）：
+    1. 环境变量 _BH_CHILD_PROCESS=1 已被设置
+    2. __name__ == '__mp_main__'（fork 模式）
+    3. sys.argv 包含 multiprocessing spawn 特征（-c + spawn_main / --multiprocessing-fork）
+    """
+    if os.environ.get('_BH_CHILD_PROCESS') == '1':
+        return True
+
+    if globals().get('__name__') == '__mp_main__':
+        _set_child_env()
+        return True
+
+    try:
+        argv_str = ' '.join(sys.argv).lower()
+        if '--multiprocessing-fork' in argv_str:
+            _set_child_env()
+            return True
+        if '-c' in argv_str and 'spawn_main' in argv_str:
+            _set_child_env()
+            return True
+        if 'multiprocessing' in argv_str and ('spawn' in argv_str or 'fork' in argv_str):
+            _set_child_env()
+            return True
+    except Exception:
+        pass
+
+    return False
+
+
+_is_child = _is_mp_spawn_child()
+
+
 import socket
 from flask import Flask, render_template, abort
 
 from config import SECRET_KEY, MAX_CONTENT_LENGTH
-from core.db import init_db
-from core.middleware import log_access
-from routes.main import main_bp
-from routes.community import community_bp
-from routes.admin import admin_bp
-from routes.api import monitoring_bp, stats_bp, polls_bp, admin_api_bp
-from routes.cmd import cmd_bp
-from routes.scheduled import scheduled_bp
-from routes.docs import docs_bp
-from services.scheduler import scheduler
-from services.log_cleaner import log_cleaner
-from services.log_writer import log_writer
-from services.backup_scheduler import BackupScheduler
-
-
-def is_port_in_use(port):
-    try:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            return s.connect_ex(('127.0.0.1', port)) == 0
-    except Exception:
-        return False
 
 
 app = Flask(__name__)
@@ -31,26 +56,69 @@ app.secret_key = SECRET_KEY
 app.config['MAX_CONTENT_LENGTH'] = MAX_CONTENT_LENGTH
 app.config['TEMPLATES_AUTO_RELOAD'] = True
 
-init_db()
 
-app.before_request(log_access)
+def _init_app():
+    """初始化应用：数据库、后台服务、蓝图注册。仅在主进程执行。"""
+    from core.db import init_db
+    from core.middleware import log_access
+    from routes.main import main_bp
+    from routes.community import community_bp
+    from routes.admin import admin_bp
+    from routes.api import monitoring_bp, stats_bp, polls_bp, admin_api_bp
+    from routes.cmd import cmd_bp
+    from routes.scheduled import scheduled_bp
+    from routes.docs import docs_bp
+    from routes.public_files import public_bp, try_serve_public
+    from services.scheduler import scheduler
+    from services.log_cleaner import log_cleaner
+    from services.log_writer import log_writer
+    from services.backup_scheduler import BackupScheduler
 
-# 启动后台服务（异步线程）
-log_writer.start()
-log_cleaner.start()
-scheduler.start()
-BackupScheduler().start()
+    init_db()
 
-app.register_blueprint(main_bp)
-app.register_blueprint(community_bp)
-app.register_blueprint(admin_bp)
-app.register_blueprint(monitoring_bp)
-app.register_blueprint(stats_bp)
-app.register_blueprint(polls_bp)
-app.register_blueprint(admin_api_bp)
-app.register_blueprint(cmd_bp)
-app.register_blueprint(scheduled_bp)
-app.register_blueprint(docs_bp)
+    @app.before_request
+    def serve_public_files_hook():
+        from flask import request
+        from werkzeug.exceptions import HTTPException
+        path = request.path
+        if path.startswith('/static/') or path.startswith('/admin') or \
+           path.startswith('/api/') or path.startswith('/cmd/') or \
+           path.startswith('/scheduled') or path.startswith('/community') or \
+           path.startswith('/docs') or path in ('/login', '/register', '/logout',
+                                               '/settings', '/performance'):
+            return None
+        try:
+            resp = try_serve_public(path.lstrip('/'))
+            if resp is not None:
+                return resp
+        except HTTPException:
+            raise
+        except Exception:
+            pass
+        return None
+
+    app.before_request(log_access)
+
+    log_writer.start()
+    log_cleaner.start()
+    scheduler.start()
+    BackupScheduler().start()
+
+    app.register_blueprint(public_bp)
+    app.register_blueprint(main_bp)
+    app.register_blueprint(community_bp)
+    app.register_blueprint(admin_bp)
+    app.register_blueprint(monitoring_bp)
+    app.register_blueprint(stats_bp)
+    app.register_blueprint(polls_bp)
+    app.register_blueprint(admin_api_bp)
+    app.register_blueprint(cmd_bp)
+    app.register_blueprint(scheduled_bp)
+    app.register_blueprint(docs_bp)
+
+
+if not _is_child:
+    _init_app()
 
 
 @app.errorhandler(404)
@@ -61,6 +129,14 @@ def page_not_found(e):
 @app.errorhandler(403)
 def forbidden(e):
     return render_template('403.html'), 403
+
+
+def is_port_in_use(port):
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            return s.connect_ex(('127.0.0.1', port)) == 0
+    except Exception:
+        return False
 
 
 def run_server(port=5000):

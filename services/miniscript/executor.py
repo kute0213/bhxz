@@ -71,19 +71,28 @@ class ScriptExecutor:
             self._start_time = time.time()
             self._timeout = timeout
 
-        # 启动子进程
+        # 启动子进程：spawn 模式下子进程会继承父进程的环境变量，
+        # 因此在 start() 之前临时设置 _BH_CHILD_PROCESS=1，确保子进程
+        # 在导入 app.py 等模块之前就能检测到自己是子进程，不会尝试打开数据库。
+        _orig_env_val = os.environ.get('_BH_CHILD_PROCESS')
+        os.environ['_BH_CHILD_PROCESS'] = '1'
         try:
-            proc.start()
-        except Exception as e:
-            yield ('error', {'message': f'启动子进程失败: {e}'})
-            yield ('done', {})
-            # 关闭未使用的子进程端管道，再统一清理
             try:
-                child_conn.close()
-            except Exception:
-                pass
-            self._cleanup()
-            return
+                proc.start()
+            except Exception as e:
+                yield ('error', {'message': f'启动子进程失败: {e}'})
+                yield ('done', {})
+                try:
+                    child_conn.close()
+                except Exception:
+                    pass
+                self._cleanup()
+                return
+        finally:
+            if _orig_env_val is None:
+                os.environ.pop('_BH_CHILD_PROCESS', None)
+            else:
+                os.environ['_BH_CHILD_PROCESS'] = _orig_env_val
 
         # 父进程不需要子进程端
         try:

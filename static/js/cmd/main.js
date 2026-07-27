@@ -24,9 +24,12 @@
     // --------------------------------------------------------
     CmdPresets.init({
         onRunCommand: function (cmd) {
-            // 普通 CMD：打开终端并执行
-            CmdTerminal.open();
-            setTimeout(() => CmdTerminal.runCommand(cmd.command), 100);
+            // 普通 CMD：打开终端并执行（连接未就绪时命令会自动排队）
+            if (!CmdTerminal.isOpen()) {
+                CmdTerminal.open();
+            }
+            // runCommand 会显示命令回显并发送（连接未就绪时自动排队）
+            CmdTerminal.runCommand(cmd.command);
         },
         onRunScript: function (cmd) {
             // 脚本：通过后端 SSE API 执行

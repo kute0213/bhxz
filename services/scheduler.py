@@ -6,7 +6,6 @@
 
 import datetime
 import os
-import subprocess
 import threading
 import time
 import traceback
@@ -19,6 +18,7 @@ from config import (
     SCRIPT_DEFAULT_TIMEOUT,
 )
 from core.db import get_db
+from utils.process import run_process
 
 
 class TaskScheduler:
@@ -189,22 +189,18 @@ class TaskScheduler:
                 flush=True,
             )
 
-            result = subprocess.run(
+            proc_result = run_process(
                 cmd_content,
-                shell=True,
                 cwd=os.getcwd(),
-                capture_output=True,
-                text=True,
                 timeout=TASK_EXECUTION_TIMEOUT,
             )
-            output = (result.stdout or '') + (result.stderr or '')
-            exit_code = result.returncode
-            success = result.returncode == 0
-        except subprocess.TimeoutExpired:
-            output = f'执行超时（>{TASK_EXECUTION_TIMEOUT}秒）'
+            output = proc_result['stdout'] + proc_result['stderr']
+            exit_code = proc_result['returncode']
+            success = proc_result['success']
         except Exception as e:
-            # 任何执行异常都视为任务失败，但继续走收尾流程（记录日志）
             output = f'执行异常: {e}\n{traceback.format_exc()}'
+            exit_code = -1
+            success = False
             print(
                 f'[Scheduler] 任务 #{task_id} 执行异常: {e}',
                 flush=True,

@@ -18,6 +18,7 @@ import time
 import subprocess
 
 from config import SCRIPT_MAX_TIMEOUT
+from utils.process import decode_output, make_env
 
 
 def create_builtins(output_callback, interactive=True):
@@ -84,15 +85,19 @@ def create_builtins(output_callback, interactive=True):
     def cmd(command):
         """执行 shell 命令，返回输出字符串。"""
         try:
-            result = subprocess.run(
-                command,
-                shell=True,
-                capture_output=True,
-                text=True,
-            )
-            output = result.stdout
-            if result.stderr:
-                output = (output + result.stderr) if output else result.stderr
+            kwargs = {
+                'shell': True,
+                'capture_output': True,
+                'env': make_env(),
+            }
+            if os.name == 'nt':
+                kwargs['creationflags'] = subprocess.CREATE_NO_WINDOW
+            result = subprocess.run(command, **kwargs)
+            stdout = decode_output(result.stdout)
+            stderr = decode_output(result.stderr)
+            output = stdout
+            if stderr:
+                output = (output + stderr) if output else stderr
             return output or ''
         except Exception as e:
             output_callback('error', {'message': f'cmd 执行失败: {e}'})

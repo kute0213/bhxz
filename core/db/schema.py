@@ -232,6 +232,18 @@ def init_db():
                 updated_at VARCHAR NOT NULL
             )
         '''),
+        # 公开文件/目录映射表
+        ('public_paths', '''
+            CREATE SEQUENCE IF NOT EXISTS public_paths_id_seq START 1;
+            CREATE TABLE IF NOT EXISTS public_paths (
+                id INTEGER PRIMARY KEY DEFAULT nextval('public_paths_id_seq'),
+                url_path VARCHAR UNIQUE NOT NULL,
+                local_path VARCHAR NOT NULL,
+                is_directory INTEGER DEFAULT 0,
+                is_active INTEGER DEFAULT 1,
+                created_at VARCHAR NOT NULL
+            )
+        '''),
     ]
 
     for table_name, ddl in tables:
@@ -303,7 +315,7 @@ def init_db():
     if admin_row and admin_row[0] == 0:
         cursor.execute(
             "INSERT OR IGNORE INTO users (username, password_hash, is_admin, created_at) VALUES (?, ?, ?, ?)",
-            ('服主', hashlib.sha256('admin1324'.encode('utf-8')).hexdigest(), 1, datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+            ('admin', hashlib.sha256('admin1324'.encode('utf-8')).hexdigest(), 1, datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
         )
         conn.commit()
 

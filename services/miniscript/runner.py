@@ -15,7 +15,7 @@ import time
 import signal
 import traceback
 
-# 确保工作目录在 sys.path 中（子进程可能需要重新添加）
+
 _WORKSPACE = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 if _WORKSPACE not in sys.path:
     sys.path.insert(0, _WORKSPACE)
@@ -118,7 +118,8 @@ def run_script(code, pipe_conn, interactive, timeout, max_loop_iter):
         timeout: 执行超时
         max_loop_iter: 最大循环迭代次数
     """
-    # 设置超时看门狗
+    os.environ['_BH_CHILD_PROCESS'] = '1'
+
     if timeout and timeout > 0:
         _setup_timeout_watchdog(timeout)
 

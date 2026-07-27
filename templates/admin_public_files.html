@@ -1,0 +1,193 @@
+{% extends "base.html" %}
+{% block title %}公开文件管理{% endblock %}
+{% block content %}
+    <section class="page-container py-12">
+        <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="mb-8">
+                <a href="{{ url_for('admin.admin_page') }}" class="inline-flex items-center gap-1 text-cream/60 hover:text-gold-400 text-sm mb-4 transition-colors">
+                    <i data-lucide="arrow-left" class="w-4 h-4"></i>
+                    返回管理中心
+                </a>
+                <h1 class="text-2xl sm:text-3xl font-bold mb-2">公开文件管理</h1>
+                <p class="text-cream/60 text-sm sm:text-base">将本地文件或目录映射到URL对外公开访问</p>
+            </div>
+
+            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+            {% for category, message in messages %}
+            <div class="mb-6 p-4 rounded-lg text-sm flex items-center gap-2
+                        {% if category == 'error' %}bg-red-900/30 border border-red-500/30 text-red-300
+                        {% elif category == 'warning' %}bg-amber-900/30 border border-amber-500/30 text-amber-300
+                        {% else %}bg-green-900/30 border border-green-500/30 text-green-300{% endif %}">
+                <i data-lucide="{% if category == 'error' %}alert-circle{% elif category == 'warning' %}alert-triangle{% else %}check-circle{% endif %}" class="w-5 h-5 flex-shrink-0"></i>
+                {{ message }}
+            </div>
+            {% endfor %}
+            {% endif %}
+            {% endwith %}
+
+            <div class="pixel-card rounded-xl p-6 mb-8">
+                <h2 class="text-lg font-bold mb-4 flex items-center gap-2">
+                    <i data-lucide="plus-circle" class="w-5 h-5 text-gold-400"></i>
+                    添加公开路径
+                </h2>
+                <form method="POST" action="{{ url_for('public.admin_public_files_add') }}" class="space-y-4">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label class="block text-sm font-medium text-cream/80 mb-2">
+                                <i data-lucide="link" class="w-4 h-4 inline mr-1"></i>
+                                公开 URL 路径
+                            </label>
+                            <input type="text" name="url_path" required
+                                   placeholder="例如: /sw.js 或 /verify"
+                                   class="w-full px-4 py-2.5 bg-black/30 border border-white/10 rounded-lg focus:border-gold-400/50 focus:outline-none focus:ring-1 focus:ring-gold-400/50 text-cream placeholder-cream/40">
+                            <p class="mt-1 text-xs text-cream/50">用户访问的URL路径，必须以 / 开头</p>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-cream/80 mb-2">
+                                <i data-lucide="folder" class="w-4 h-4 inline mr-1"></i>
+                                本地路径
+                            </label>
+                            <input type="text" name="local_path" required
+                                   placeholder="例如: sw.js、verify、/opt/files、/home/user/docs"
+                                   class="w-full px-4 py-2.5 bg-black/30 border border-white/10 rounded-lg focus:border-gold-400/50 focus:outline-none focus:ring-1 focus:ring-gold-400/50 text-cream placeholder-cream/40">
+                            <p class="mt-1 text-xs text-cream/50">
+                                支持相对路径（相对于网站根目录）或绝对路径（如 /opt/files）
+                            </p>
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-between flex-wrap gap-4">
+                        <label class="flex items-center gap-3 cursor-pointer">
+                            <input type="checkbox" name="is_directory" class="w-5 h-5 rounded border-white/20 bg-black/30 text-gold-400 focus:ring-gold-400/50">
+                            <span class="text-sm text-cream/80">这是一个目录（公开目录下所有文件）</span>
+                        </label>
+                        <button type="submit"
+                                class="px-6 py-2.5 bg-gold-500 hover:bg-gold-400 text-black font-medium rounded-lg transition-colors flex items-center gap-2">
+                            <i data-lucide="plus" class="w-4 h-4"></i>
+                            添加公开路径
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="pixel-card rounded-xl p-6">
+                <h2 class="text-lg font-bold mb-4 flex items-center gap-2">
+                    <i data-lucide="list" class="w-5 h-5 text-gold-400"></i>
+                    已配置的公开路径
+                </h2>
+
+                {% if paths %}
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead>
+                            <tr class="border-b border-white/10">
+                                <th class="text-left py-3 px-2 text-cream/60 font-medium text-sm">状态</th>
+                                <th class="text-left py-3 px-2 text-cream/60 font-medium text-sm">类型</th>
+                                <th class="text-left py-3 px-2 text-cream/60 font-medium text-sm">URL 路径</th>
+                                <th class="text-left py-3 px-2 text-cream/60 font-medium text-sm">本地路径</th>
+                                <th class="text-left py-3 px-2 text-cream/60 font-medium text-sm">创建时间</th>
+                                <th class="text-right py-3 px-2 text-cream/60 font-medium text-sm">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for p in paths %}
+                            <tr class="border-b border-white/5 hover:bg-white/5">
+                                <td class="py-3 px-2">
+                                    {% if p.is_active %}
+                                    <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-emerald-900/30 text-emerald-400 text-xs">
+                                        <i data-lucide="check" class="w-3 h-3"></i>
+                                        启用
+                                    </span>
+                                    {% else %}
+                                    <span class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-red-900/30 text-red-400 text-xs">
+                                        <i data-lucide="x" class="w-3 h-3"></i>
+                                        禁用
+                                    </span>
+                                    {% endif %}
+                                </td>
+                                <td class="py-3 px-2">
+                                    {% if p.is_directory %}
+                                    <span class="inline-flex items-center gap-1 text-amber-400 text-sm">
+                                        <i data-lucide="folder" class="w-4 h-4"></i>
+                                        目录
+                                    </span>
+                                    {% else %}
+                                    <span class="inline-flex items-center gap-1 text-blue-400 text-sm">
+                                        <i data-lucide="file" class="w-4 h-4"></i>
+                                        文件
+                                    </span>
+                                    {% endif %}
+                                </td>
+                                <td class="py-3 px-2">
+                                    <a href="{{ p.url_path }}" target="_blank"
+                                       class="text-gold-400 hover:text-gold-300 font-mono text-sm flex items-center gap-1">
+                                        {{ p.url_path }}
+                                        <i data-lucide="external-link" class="w-3 h-3"></i>
+                                    </a>
+                                </td>
+                                <td class="py-3 px-2 font-mono text-sm text-cream/70">{{ p.local_path }}</td>
+                                <td class="py-3 px-2 text-cream/50 text-sm">{{ p.created_at }}</td>
+                                <td class="py-3 px-2 text-right">
+                                    <div class="flex items-center justify-end gap-2">
+                                        <form method="POST" action="{{ url_for('public.admin_public_files_toggle', pid=p.id) }}" class="inline">
+                                            <button type="submit"
+                                                    class="p-2 rounded-lg hover:bg-white/10 text-cream/60 hover:text-cream transition-colors"
+                                                    title="{% if p.is_active %}禁用{% else %}启用{% endif %}">
+                                                <i data-lucide="{% if p.is_active %}pause{% else %}play{% endif %}" class="w-4 h-4"></i>
+                                            </button>
+                                        </form>
+                                        <form method="POST" action="{{ url_for('public.admin_public_files_delete', pid=p.id) }}"
+                                              class="inline" onsubmit="return confirm('确定要删除此公开路径吗？');">
+                                            <button type="submit"
+                                                    class="p-2 rounded-lg hover:bg-red-900/30 text-red-400/70 hover:text-red-400 transition-colors"
+                                                    title="删除">
+                                                <i data-lucide="trash-2" class="w-4 h-4"></i>
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-12 text-cream/40">
+                    <i data-lucide="file-x" class="w-12 h-12 mx-auto mb-3 opacity-50"></i>
+                    <p>暂无公开路径配置</p>
+                    <p class="text-sm mt-1">在上方添加第一个公开路径吧</p>
+                </div>
+                {% endif %}
+            </div>
+
+            <div class="pixel-card rounded-xl p-6 mt-8">
+                <h3 class="text-md font-bold mb-3 flex items-center gap-2 text-cream/80">
+                    <i data-lucide="shield-alert" class="w-5 h-5 text-amber-400"></i>
+                    安全提示
+                </h3>
+                <ul class="space-y-2 text-sm text-cream/60">
+                    <li class="flex items-start gap-2">
+                        <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5"></i>
+                        支持相对路径（如 sw.js）和绝对路径（如 /opt/files），相对路径以项目根目录为基准
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5"></i>
+                        禁止路径包含 .. 防止目录遍历攻击；禁止访问 /etc、/proc、/dev 等系统敏感目录
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5"></i>
+                        禁止公开 core、services、routes、templates 等源码目录以及 .env、config.py 等敏感文件
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5"></i>
+                        目录公开时，自动识别 index.html / index.htm 作为目录首页
+                    </li>
+                    <li class="flex items-start gap-2">
+                        <i data-lucide="check-circle-2" class="w-4 h-4 text-emerald-400 flex-shrink-0 mt-0.5"></i>
+                        公开后任何人都可以通过URL访问，请勿公开敏感文件
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </section>
+{% endblock %}
