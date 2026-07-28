@@ -32,7 +32,7 @@ def guide_list():
                 FROM server_guides g
                 LEFT JOIN users u ON g.author_id = u.id
                 WHERE g.status = 'approved'
-                ORDER BY g.is_pinned DESC, g.sort_order ASC, g.published_at DESC
+                ORDER BY g.is_pinned DESC, g.title ASC
                 """
             ).fetchall()
         guides = [dict(r) for r in rows]

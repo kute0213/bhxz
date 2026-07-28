@@ -499,11 +499,12 @@ Markdown 文档存放在 [docs/](file:///workspace/docs/) 目录，通过 `/docs
 服务器指南是面向玩家的 Markdown 文档中心，管理员可直接发布，成员亦可提交但需审核通过后才公开显示。
 
 **功能特性**：
-- 卡片式列表页，支持置顶与自定义排序
+- 卡片式列表页，支持置顶与按标题自动排序
 - Markdown 详情页（标题锚点、代码高亮）
-- 成员可提交新指南或修改现有指南，进入待审核状态
+- 成员可提交新指南或修改现有指南，进入待审核状态（需验证码验证）
 - 管理员后台具备专业 Markdown 编辑器（实时预览）
-- 审核工作流：通过 / 拒绝（附原因）
+- 审核工作流：管理员可在预览弹窗中直接通过/拒绝（附原因）
+- 管理员新建指南自动通过，无需审核
 - 封禁机制：管理员可按用户名或 IP 封禁编辑权限，支持限时或永久封禁
 
 **前端页面**：
@@ -557,7 +558,7 @@ Markdown 文档存放在 [docs/](file:///workspace/docs/) 目录，通过 `/docs
 | `cmd_run_logs` | CMD 命令执行日志 | — |
 | `db_backups` | 数据库备份记录 | 备份状态/大小/耗时 |
 | `settings` | **系统设置** | **key 唯一，存储用户自定义配置，支持热重载** |
-| `server_guides` | **服务器指南** | **title / slug / summary / content(Markdown) / status / author_id / is_pinned / sort_order** |
+| `server_guides` | **服务器指南** | **title / slug / summary / content(Markdown) / status / author_id / is_pinned / 按标题自动排序** |
 | `guide_edit_bans` | **指南编辑封禁** | **user_id / ip_address / banned_by / reason / expires_at** |
 
 所有外键均启用 `enable_foreign_keys` 和 `ON DELETE CASCADE`。

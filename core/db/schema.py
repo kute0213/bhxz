@@ -316,29 +316,10 @@ def init_db():
     # 定时任务改为引用 cmd_commands 表中的快捷命令
     add_column_if_not_exists('scheduled_tasks', 'command_id', 'INTEGER DEFAULT NULL')
 
-    # ---- 迁移：scripts 表添加 content 列（从文件存储迁移到数据库存储） ----
+    # ---- 迁移：scripts 表添加 content 列（数据库存储） ----
     try:
         from services.script_store import ensure_table
         ensure_table()
-        # 迁移旧数据：如果 scripts 表有 filename 但 content 为空，从文件读取
-        import os
-        from config import SCRIPTS_DIR
-        from services.script_store import get_script, list_scripts
-        scripts = list_scripts()
-        for s in scripts:
-            if not s.get('content') and s.get('filename'):
-                filepath = os.path.join(SCRIPTS_DIR, s['filename'])
-                try:
-                    if os.path.isfile(filepath):
-                        with open(filepath, 'r', encoding='utf-8') as f:
-                            content = f.read()
-                        conn.execute(
-                            "UPDATE scripts SET content = ? WHERE id = ?",
-                            [content, s['id']]
-                        )
-                except Exception:
-                    pass
-        conn.commit()
     except Exception as e:
         print(f'[DB] 迁移 scripts 表失败: {e}', flush=True)
 

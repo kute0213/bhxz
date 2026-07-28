@@ -3,11 +3,12 @@
 import re
 from datetime import datetime
 
-from flask import request, jsonify, abort
+from flask import request, jsonify, abort, session
 
 from core.auth import login_required, get_current_user
 from core.db import get_db
 from services.ip import get_client_ip
+from services.captcha import verify_captcha
 from routes.guides import guides_bp
 
 
@@ -103,8 +104,8 @@ def submit_guide():
         conn.execute(
             """
             INSERT INTO server_guides
-            (title, slug, summary, content, author_id, status, is_pinned, sort_order, created_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, 'pending', 0, 0, ?, ?)
+            (title, slug, summary, content, author_id, status, is_pinned, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, 'pending', 0, ?, ?)
             """,
             (title, slug, summary, content, user['id'], now, now),
         )
@@ -196,3 +197,14 @@ def my_guides():
         conn.close()
 
     return jsonify({'success': True, 'guides': guides})
+
+
+@guides_bp.route('/api/guides/verify-captcha', methods=['POST'])
+def verify_guide_captcha():
+    """验证提交指南时的验证码。"""
+    data = request.get_json() or {}
+    user_input = (data.get('captcha') or '').strip()
+    answer = session.pop('captcha_answer', None)
+    if not answer or not verify_captcha(user_input, answer):
+        return jsonify({'success': False, 'message': '验证码错误或已过期'})
+    return jsonify({'success': True})

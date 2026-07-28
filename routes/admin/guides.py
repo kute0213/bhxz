@@ -24,7 +24,7 @@ def admin_guides():
             SELECT g.*, u.username as author_name
             FROM server_guides g
             LEFT JOIN users u ON g.author_id = u.id
-            ORDER BY g.status = 'pending' DESC, g.is_pinned DESC, g.sort_order ASC, g.updated_at DESC
+            ORDER BY g.status = 'pending' DESC, g.is_pinned DESC, g.title ASC
             """
         ).fetchall()
         guides = [dict(r) for r in rows]
@@ -48,7 +48,6 @@ def admin_guide_create():
         content = (request.form.get('content') or '').strip()
         cover_image = (request.form.get('cover_image') or '').strip()
         is_pinned = 1 if request.form.get('is_pinned') else 0
-        sort_order = int(request.form.get('sort_order') or 0)
         status = request.form.get('status', 'approved').strip()
 
         if not title or not content:
@@ -65,11 +64,11 @@ def admin_guide_create():
                 """
                 INSERT INTO server_guides
                 (title, slug, summary, content, cover_image, author_id, status,
-                 is_pinned, sort_order, created_at, updated_at, published_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 is_pinned, created_at, updated_at, published_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (title, slug, summary, content, cover_image, user['id'],
-                 status, is_pinned, sort_order, now, now, published_at),
+                 status, is_pinned, now, now, published_at),
             )
             conn.commit()
             flash('指南已创建', 'success')
@@ -109,7 +108,6 @@ def admin_guide_edit(guide_id):
         content = (request.form.get('content') or '').strip()
         cover_image = (request.form.get('cover_image') or '').strip()
         is_pinned = 1 if request.form.get('is_pinned') else 0
-        sort_order = int(request.form.get('sort_order') or 0)
         status = request.form.get('status', guide['status']).strip()
 
         if not title or not content:
@@ -131,11 +129,11 @@ def admin_guide_edit(guide_id):
                 UPDATE server_guides
                 SET title = ?, slug = ?, summary = ?, content = ?,
                     cover_image = ?, status = ?, is_pinned = ?,
-                    sort_order = ?, updated_at = ?, published_at = ?
+                    updated_at = ?, published_at = ?
                 WHERE id = ?
                 """,
                 (title, slug, summary, content, cover_image, status,
-                 is_pinned, sort_order, now, published_at, guide_id),
+                 is_pinned, now, published_at, guide_id),
             )
             conn.commit()
             flash('指南已更新', 'success')
