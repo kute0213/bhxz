@@ -18,7 +18,7 @@ def db_backup_page():
     if not user or not user['is_admin']:
         abort(403)
 
-    from config import MAX_BACKUPS
+    from config import get_config_value
 
     conn = get_db()
     try:
@@ -45,7 +45,7 @@ def db_backup_page():
         user=user,
         db_size=db_size,
         backups=backups,
-        max_backups=MAX_BACKUPS,
+        max_backups=get_config_value('MAX_BACKUPS', 30),
     )
 
 

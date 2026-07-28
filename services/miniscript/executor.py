@@ -13,7 +13,7 @@ import time
 import threading
 import multiprocessing
 
-from config import SCRIPT_DEFAULT_TIMEOUT, SCRIPT_MAX_TIMEOUT, SCRIPT_MAX_LOOP_ITER
+from config import get_config_value
 
 from services.miniscript.runner import run_script
 
@@ -49,12 +49,12 @@ class ScriptExecutor:
         """
         # 1. 确定超时
         if timeout is None:
-            timeout = SCRIPT_DEFAULT_TIMEOUT
-        timeout = min(int(timeout), SCRIPT_MAX_TIMEOUT)
+            timeout = get_config_value('SCRIPT_DEFAULT_TIMEOUT', 30)
+        timeout = min(int(timeout), get_config_value('SCRIPT_MAX_TIMEOUT', 300))
         if timeout <= 0:
-            timeout = SCRIPT_DEFAULT_TIMEOUT
+            timeout = get_config_value('SCRIPT_DEFAULT_TIMEOUT', 30)
 
-        max_loop_iter = SCRIPT_MAX_LOOP_ITER
+        max_loop_iter = get_config_value('SCRIPT_MAX_LOOP_ITER', 100000)
 
         # 2. 创建管道与子进程
         parent_conn, child_conn = multiprocessing.Pipe()

@@ -17,7 +17,7 @@ import os
 import time
 import subprocess
 
-from config import SCRIPT_MAX_TIMEOUT
+from config import get_config_value
 from core.process_utils import decode_output, make_env
 
 
@@ -61,16 +61,17 @@ def create_builtins(output_callback, interactive=True):
         return time.time()
 
     def set_timeout(seconds):
-        """设定本次执行超时，不能超过 SCRIPT_MAX_TIMEOUT。"""
+        """设定本次执行超时，不能超过最大允许值。"""
         import signal as _signal
         try:
             secs = int(seconds)
         except (TypeError, ValueError):
             return
-        if secs > SCRIPT_MAX_TIMEOUT:
-            secs = SCRIPT_MAX_TIMEOUT
+        max_timeout = get_config_value('SCRIPT_MAX_TIMEOUT', 300)
+        if secs > max_timeout:
+            secs = max_timeout
             output_callback('error', {
-                'message': f'set_timeout 超过最大允许值 {SCRIPT_MAX_TIMEOUT}s，已自动限制为 {secs}s'
+                'message': f'set_timeout 超过最大允许值 {max_timeout}s，已自动限制为 {secs}s'
             })
         if secs <= 0:
             return

@@ -12,10 +12,8 @@ import traceback
 from concurrent.futures import ThreadPoolExecutor
 
 from config import (
-    TASK_SCHEDULER_INTERVAL,
-    TASK_EXECUTION_TIMEOUT,
     TASK_EXECUTOR_POOL_SIZE,
-    SCRIPT_DEFAULT_TIMEOUT,
+    get_config_value,
 )
 from core.db import get_db
 from core.process_utils import run_process
@@ -84,7 +82,7 @@ class TaskScheduler:
                     f'[Scheduler] 调度异常: {e}\n{traceback.format_exc()}',
                     flush=True,
                 )
-            self._stop_event.wait(TASK_SCHEDULER_INTERVAL)
+            self._stop_event.wait(get_config_value('TASK_SCHEDULER_INTERVAL', 10))
 
     def _tick(self):
         """扫描到期任务并提交执行。
@@ -192,7 +190,7 @@ class TaskScheduler:
             proc_result = run_process(
                 cmd_content,
                 cwd=os.getcwd(),
-                timeout=TASK_EXECUTION_TIMEOUT,
+                timeout=get_config_value('TASK_EXECUTION_TIMEOUT', 300),
             )
             output = proc_result['stdout'] + proc_result['stderr']
             exit_code = proc_result['returncode']
