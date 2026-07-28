@@ -34,12 +34,12 @@ def _check_pil():
 
 
 def generate_math_captcha(
-    width: int = 120,
-    height: int = 40,
+    width: int = 200,
+    height: int = 50,
     min_num: int = 1,
     max_num: int = 10,
     line_count: int = 6,
-    point_count: int = 100,
+    point_count: int = 120,
 ) -> Tuple[str, str]:
     """
     生成数学加法验证码图片。
@@ -72,18 +72,18 @@ def generate_math_captcha(
     draw = ImageDraw.Draw(img)
 
     # 尝试使用系统字体，失败则使用默认字体
+    font_size = max(18, height // 2)
     try:
-        # 尝试常见的系统字体
         font_paths = [
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",  # Linux
-            "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",  # Linux
-            "C:\\Windows\\Fonts\\Arial.ttf",  # Windows
-            "/System/Library/Fonts/Helvetica.ttc",  # macOS
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+            "C:\\Windows\\Fonts\\Arial.ttf",
+            "/System/Library/Fonts/Helvetica.ttc",
         ]
         font = None
         for path in font_paths:
             try:
-                font = ImageFont.truetype(path, 20)
+                font = ImageFont.truetype(path, font_size)
                 break
             except Exception:
                 continue
@@ -92,7 +92,8 @@ def generate_math_captcha(
     except Exception:
         font = ImageFont.load_default()
 
-    # 绘制干扰点
+    # 绘制干扰点（随机分布，密度与图片面积成正比）
+    point_count = max(50, (width * height) // 80)
     for _ in range(point_count):
         x = random.randint(0, width - 1)
         y = random.randint(0, height - 1)

@@ -41,9 +41,14 @@
                     </div>
                     <div>
                         <label class="block text-sm font-medium mb-2 text-cream/80">验证码</label>
-                        <div class="flex gap-3 items-center">
-                            <input type="text" name="captcha" required class="input-field flex-1 px-4 py-3 rounded-lg" placeholder="请输入答案">
-                            <img id="captcha-img" src="" alt="验证码" class="h-10 rounded cursor-pointer hover:opacity-80 transition-opacity" title="点击刷新">
+                        <div class="flex flex-wrap gap-2 sm:gap-3 items-center">
+                            <input type="text" name="captcha" required class="input-field flex-1 min-w-[120px] px-4 py-3 rounded-lg" placeholder="请输入答案">
+                            <div class="flex items-center gap-1.5">
+                                <img id="captcha-img" src="" alt="验证码" class="h-11 sm:h-12 rounded cursor-pointer hover:opacity-80 transition-opacity border border-forest-700/50" title="点击刷新">
+                                <button type="button" onclick="loadCaptcha()" class="p-1.5 text-cream/50 hover:text-gold-400 transition-colors rounded-lg hover:bg-cream/5" title="刷新验证码">
+                                    <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                                </button>
+                            </div>
                         </div>
                     </div>
                     <button type="submit" class="btn-primary w-full py-3 rounded-lg font-bold">注册</button>
