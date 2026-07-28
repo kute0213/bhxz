@@ -52,6 +52,14 @@
                         <div class="text-2xl font-bold text-gold-400 mb-1">{{ stats.total_mod_intros }}</div>
                         <div class="text-xs text-cream/60">模组介绍</div>
                     </div>
+                    <div class="pixel-card rounded-xl p-4 text-center">
+                        <div class="text-2xl font-bold text-gold-400 mb-1">{{ stats.total_guides }}</div>
+                        <div class="text-xs text-cream/60">服务器指南</div>
+                    </div>
+                    <div class="pixel-card rounded-xl p-4 text-center">
+                        <div class="text-2xl font-bold text-gold-400 mb-1">{{ stats.pending_guides }}</div>
+                        <div class="text-xs text-cream/60">待审核指南</div>
+                    </div>
                 </div>
             </div>
 
@@ -77,6 +85,15 @@
                         </div>
                         <h3 class="text-lg font-bold mb-2">模组介绍管理</h3>
                         <p class="text-cream/60 text-sm">添加、编辑或删除服务器模组介绍</p>
+                        <span class="inline-block mt-4 text-gold-400 text-sm font-medium">进入管理 →</span>
+                    </a>
+
+                    <a href="{{ url_for('admin.admin_guides') }}" class="pixel-card rounded-xl p-6 block hover:no-underline">
+                        <div class="w-12 h-12 mb-4 bg-gold-400/20 rounded-xl flex items-center justify-center">
+                            <i data-lucide="book-open" class="w-6 h-6 text-gold-400"></i>
+                        </div>
+                        <h3 class="text-lg font-bold mb-2">服务器指南管理</h3>
+                        <p class="text-cream/60 text-sm">审核、编辑和管理服务器指南</p>
                         <span class="inline-block mt-4 text-gold-400 text-sm font-medium">进入管理 →</span>
                     </a>
 

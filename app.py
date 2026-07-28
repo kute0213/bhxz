@@ -68,6 +68,7 @@ def _init_app():
     from routes.cmd import cmd_bp
     from routes.scheduled import scheduled_bp
     from routes.docs import docs_bp
+    from routes.guides import guides_bp
     from routes.public_files import public_bp, try_serve_public
     from services.scheduler import scheduler
     from services.log_cleaner import log_cleaner
@@ -115,6 +116,7 @@ def _init_app():
     app.register_blueprint(cmd_bp)
     app.register_blueprint(scheduled_bp)
     app.register_blueprint(docs_bp)
+    app.register_blueprint(guides_bp)
 
 
 if not _is_child:

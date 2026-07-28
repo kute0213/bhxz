@@ -1,0 +1,240 @@
+{% extends "base.html" %}
+{% block title %}服务器指南{% endblock %}
+{% block extra_style %}
+<style>
+.guide-card {
+    background: rgba(12, 28, 18, 0.38);
+    backdrop-filter: blur(32px) saturate(220%) brightness(108%);
+    -webkit-backdrop-filter: blur(32px) saturate(220%) brightness(108%);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 24px !important;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.12), inset 0 -1px 0 rgba(0, 0, 0, 0.1);
+    position: relative; overflow: hidden;
+    transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+}
+.guide-card:hover {
+    border-color: rgba(244, 208, 63, 0.3);
+    transform: translateY(-4px);
+    box-shadow: 0 20px 56px rgba(0, 0, 0, 0.4), 0 0 30px rgba(244, 208, 63, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.14);
+}
+.guide-card::after {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 50%; border-radius: 24px 24px 0 0; pointer-events: none;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0) 100%);
+}
+.guide-card-top-bar {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: linear-gradient(90deg, #f4d03f, #d4a827);
+    border-radius: 24px 24px 0 0;
+    z-index: 1;
+}
+.guide-status-badge {
+    display: inline-flex; align-items: center; gap: 0.25rem;
+    font-size: 0.75rem; padding: 0.125rem 0.5rem; border-radius: 9999px;
+}
+.guide-status-pending { background: rgba(234, 179, 8, 0.15); color: #facc15; border: 1px solid rgba(234, 179, 8, 0.25); }
+.guide-status-approved { background: rgba(34, 197, 94, 0.15); color: #86efac; border: 1px solid rgba(34, 197, 94, 0.25); }
+.guide-status-rejected { background: rgba(239, 68, 68, 0.15); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.25); }
+</style>
+{% endblock %}
+{% block content %}
+<section class="page-container py-12">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="text-center mb-10 sm:mb-12">
+            <h1 class="text-2xl sm:text-3xl font-bold mb-3">{{ '我的指南' if my_mode else '服务器指南' }}</h1>
+            <p class="text-cream/60 text-sm sm:text-base">{{ '我提交或编辑过的指南' if my_mode else '探索滨海小镇的玩法与规则' }}</p>
+        </div>
+
+        {% if user %}
+        <div class="mb-8 flex flex-wrap items-center gap-3 justify-center">
+            {% if my_mode %}
+            <a href="{{ url_for('guides.guide_list') }}" class="btn-secondary px-4 py-2 rounded-lg text-sm inline-flex items-center gap-2">
+                <i data-lucide="book-open" class="w-4 h-4"></i>
+                全部指南
+            </a>
+            {% else %}
+            <a href="{{ url_for('guides.guide_list') }}?my=1" class="btn-secondary px-4 py-2 rounded-lg text-sm inline-flex items-center gap-2">
+                <i data-lucide="file-text" class="w-4 h-4"></i>
+                我的指南
+            </a>
+            {% endif %}
+            <button id="btn-new-guide" class="btn-primary px-4 py-2 rounded-lg text-sm inline-flex items-center gap-2">
+                <i data-lucide="plus" class="w-4 h-4"></i>
+                新建指南
+            </button>
+        </div>
+        {% endif %}
+
+        {% if guides %}
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+            {% for guide in guides %}
+            <div class="guide-card block p-6">
+                <div class="guide-card-top-bar"></div>
+                <div class="relative z-10">
+                    <div class="flex items-center gap-2 mb-3">
+                        {% if guide.is_pinned %}
+                        <span class="inline-flex items-center gap-1 text-xs text-gold-400"><i data-lucide="pin" class="w-3 h-3"></i>置顶</span>
+                        {% endif %}
+                        {% if my_mode %}
+                        <span class="guide-status-badge
+                            {% if guide.status == 'pending' %}guide-status-pending{% elif guide.status == 'approved' %}guide-status-approved{% else %}guide-status-rejected{% endif %}">
+                            {% if guide.status == 'pending' %}待审核{% elif guide.status == 'approved' %}已通过{% else %}已拒绝{% endif %}
+                        </span>
+                        {% endif %}
+                    </div>
+                    <a href="{{ url_for('guides.guide_detail', slug=guide.slug) }}" class="hover:no-underline">
+                        <h3 class="text-lg font-bold mb-2 text-cream">{{ guide.title }}</h3>
+                        <p class="text-cream/60 text-sm leading-relaxed mb-4 line-clamp-3">{{ guide.summary or guide.content[:120] + '...' }}</p>
+                    </a>
+                    <div class="flex items-center justify-between text-xs text-cream/40">
+                        <span class="flex items-center gap-1"><i data-lucide="user" class="w-3 h-3"></i>{{ guide.author_name or '未知' }}</span>
+                        <span class="flex items-center gap-1"><i data-lucide="calendar" class="w-3 h-3"></i>{{ guide.published_at[:10] if guide.published_at else guide.created_at[:10] }}</span>
+                    </div>
+                    {% if my_mode and guide.status != 'approved' %}
+                    <div class="mt-3 pt-3 border-t border-forest-700/30 flex items-center gap-2">
+                        <button type="button" class="text-gold-400 hover:text-gold-300 text-xs px-2 py-1 rounded bg-gold-400/10 border border-gold-400/20" onclick="editMyGuide({{ guide.id }}, {{ guide.title | tojson }}, {{ guide.summary | tojson }}, {{ guide.content | tojson }})">修改</button>
+                        {% if guide.rejected_reason %}
+                        <span class="text-xs text-red-300">原因：{{ guide.rejected_reason }}</span>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-center py-16">
+            <div class="pixel-card rounded-xl p-8 sm:p-12 max-w-lg mx-auto">
+                <i data-lucide="book-open" class="w-12 h-12 text-cream/30 mx-auto mb-4"></i>
+                <p class="text-cream/60 text-lg mb-2">暂无服务器指南</p>
+                <p class="text-cream/40 text-sm">管理员或成员可以添加新指南</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</section>
+
+<!-- 新建/编辑指南弹窗 -->
+<div id="guide-modal" class="fixed inset-0 z-50 hidden">
+    <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" id="guide-modal-overlay"></div>
+    <div class="absolute inset-0 flex items-center justify-center p-4">
+        <div class="relative w-full max-w-3xl max-h-[90vh] overflow-y-auto pixel-card rounded-2xl p-6 sm:p-8">
+            <div class="flex items-center justify-between mb-6">
+                <h2 id="guide-modal-title" class="text-xl font-bold">新建指南</h2>
+                <button id="guide-modal-close" class="text-cream/60 hover:text-cream p-1"><i data-lucide="x" class="w-5 h-5"></i></button>
+            </div>
+            <form id="guide-form" class="space-y-4">
+                <input type="hidden" id="guide-id" value="">
+                <div>
+                    <label class="block text-sm text-cream/70 mb-1">标题</label>
+                    <input type="text" id="guide-title" class="w-full px-4 py-2 rounded-lg bg-forest-900/60 border border-forest-700/50 text-cream focus:border-gold-400/50 focus:outline-none" maxlength="200" required>
+                </div>
+                <div>
+                    <label class="block text-sm text-cream/70 mb-1">摘要</label>
+                    <input type="text" id="guide-summary" class="w-full px-4 py-2 rounded-lg bg-forest-900/60 border border-forest-700/50 text-cream focus:border-gold-400/50 focus:outline-none" maxlength="300" placeholder="简短描述（可选）">
+                </div>
+                <div>
+                    <label class="block text-sm text-cream/70 mb-1">内容（支持 Markdown）</label>
+                    <textarea id="guide-content" rows="10" class="w-full px-4 py-2 rounded-lg bg-forest-900/60 border border-forest-700/50 text-cream focus:border-gold-400/50 focus:outline-none font-mono text-sm" required></textarea>
+                </div>
+                <div class="flex items-center justify-end gap-3 pt-2">
+                    <button type="button" id="guide-preview-btn" class="btn-secondary px-4 py-2 rounded-lg text-sm">预览</button>
+                    <button type="submit" class="btn-primary px-4 py-2 rounded-lg text-sm">提交审核</button>
+                </div>
+            </form>
+
+            <!-- 预览区域 -->
+            <div id="guide-preview" class="hidden mt-6 border-t border-forest-700/50 pt-6">
+                <h3 class="text-sm font-bold text-cream/70 mb-3">预览</h3>
+                <div id="guide-preview-content" class="prose-docs"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script>
+(function() {
+    const modal = document.getElementById('guide-modal');
+    const overlay = document.getElementById('guide-modal-overlay');
+    const closeBtn = document.getElementById('guide-modal-close');
+    const form = document.getElementById('guide-form');
+    const previewBtn = document.getElementById('guide-preview-btn');
+    const preview = document.getElementById('guide-preview');
+    const previewContent = document.getElementById('guide-preview-content');
+
+    function openModal() { modal.classList.remove('hidden'); document.body.style.overflow = 'hidden'; document.getElementById('guide-modal-title').textContent = '新建指南'; }
+    function closeModal() { modal.classList.add('hidden'); document.body.style.overflow = ''; form.reset(); preview.classList.add('hidden'); document.getElementById('guide-id').value = ''; }
+
+    window.editMyGuide = function(id, title, summary, content) {
+        document.getElementById('guide-id').value = id;
+        document.getElementById('guide-title').value = title;
+        document.getElementById('guide-summary').value = summary || '';
+        document.getElementById('guide-content').value = content;
+        document.getElementById('guide-modal-title').textContent = '修改指南';
+        preview.classList.add('hidden');
+        modal.classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+    };
+
+    document.getElementById('btn-new-guide')?.addEventListener('click', openModal);
+    overlay.addEventListener('click', closeModal);
+    closeBtn.addEventListener('click', closeModal);
+
+    previewBtn.addEventListener('click', () => {
+        const raw = document.getElementById('guide-content').value || '';
+        previewContent.innerHTML = marked.parse(raw);
+        preview.classList.remove('hidden');
+    });
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const id = document.getElementById('guide-id').value;
+        const title = document.getElementById('guide-title').value.trim();
+        const summary = document.getElementById('guide-summary').value.trim();
+        const content = document.getElementById('guide-content').value.trim();
+        if (!title || !content) return alert('标题和内容不能为空');
+
+        const payload = { title, summary, content };
+        let url = '/api/guides/submit';
+        let method = 'POST';
+        if (id) {
+            url = '/api/guides/' + id + '/edit-request';
+            method = 'POST';
+        }
+        try {
+            const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+            const data = await res.json();
+            if (data.success) {
+                alert(data.message);
+                closeModal();
+                location.reload();
+            } else {
+                alert(data.message || '提交失败');
+            }
+        } catch (err) {
+            alert('网络错误');
+        }
+    });
+})();
+</script>
+<style>
+.prose-docs h1 { font-size: 1.75rem; font-weight: 700; color: #f5e6c8; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid rgba(245,230,200,0.1); }
+.prose-docs h2 { font-size: 1.4rem; font-weight: 600; color: #f5e6c8; margin-top: 2rem; margin-bottom: 0.75rem; }
+.prose-docs h3 { font-size: 1.15rem; font-weight: 600; color: #d4b878; margin-top: 1.5rem; margin-bottom: 0.5rem; }
+.prose-docs h4 { font-size: 1rem; font-weight: 600; color: #d4b878; margin-top: 1rem; margin-bottom: 0.5rem; }
+.prose-docs p { color: rgba(245,230,200,0.8); line-height: 1.8; margin-bottom: 1rem; }
+.prose-docs ul, .prose-docs ol { color: rgba(245,230,200,0.8); line-height: 1.8; margin-bottom: 1rem; padding-left: 1.5rem; }
+.prose-docs li { margin-bottom: 0.25rem; }
+.prose-docs code { background: rgba(0,0,0,0.3); padding: 0.15rem 0.4rem; border-radius: 0.25rem; font-size: 0.875rem; color: #d4b878; font-family: monospace; }
+.prose-docs pre { background: rgba(0,0,0,0.4); border: 1px solid rgba(245,230,200,0.1); border-radius: 0.5rem; padding: 1rem; overflow-x: auto; margin-bottom: 1rem; }
+.prose-docs pre code { background: none; padding: 0; color: #a8d8a8; font-size: 0.85rem; line-height: 1.6; }
+.prose-docs table { width: 100%; border-collapse: collapse; margin-bottom: 1rem; }
+.prose-docs th { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 2px solid rgba(245,230,200,0.15); color: #f5e6c8; font-weight: 600; font-size: 0.9rem; }
+.prose-docs td { padding: 0.5rem 0.75rem; border-bottom: 1px solid rgba(245,230,200,0.08); color: rgba(245,230,200,0.7); font-size: 0.9rem; }
+.prose-docs blockquote { border-left: 3px solid rgba(212,184,120,0.5); padding-left: 1rem; margin: 1rem 0; color: rgba(245,230,200,0.6); }
+.prose-docs a { color: #d4b878; text-decoration: underline; }
+.prose-docs hr { border: none; border-top: 1px solid rgba(245,230,200,0.1); margin: 2rem 0; }
+.prose-docs strong { color: #f5e6c8; font-weight: 600; }
+.line-clamp-3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+</style>
+{% endblock %}

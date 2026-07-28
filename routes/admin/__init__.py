@@ -10,7 +10,9 @@ admin_bp = Blueprint('admin', __name__)
 # 导入子模块以注册路由
 from routes.admin import pages       # noqa: E402,F401
 from routes.admin import users       # noqa: E402,F401
-from routes.admin import mod_intros  # noqa: E402,F401
-from routes.admin import logs        # noqa: E402,F401
-from routes.admin import backup      # noqa: E402,F401
-from routes.admin import settings    # noqa: E402,F401
+from routes.admin import mod_intros   # noqa: E402,F401
+from routes.admin import guides       # noqa: E402,F401
+from routes.admin import guide_bans   # noqa: E402,F401
+from routes.admin import logs         # noqa: E402,F401
+from routes.admin import backup       # noqa: E402,F401
+from routes.admin import settings     # noqa: E402,F401

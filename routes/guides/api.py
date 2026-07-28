@@ -1,0 +1,198 @@
+"""服务器指南成员API：提交新指南、申请编辑。"""
+
+import re
+from datetime import datetime
+
+from flask import request, jsonify, abort
+
+from core.auth import login_required, get_current_user
+from core.db import get_db
+from services.ip import get_client_ip
+from routes.guides import guides_bp
+
+
+def _is_banned(user_id, ip_address):
+    """检查用户或IP是否被封禁。"""
+    conn = get_db()
+    try:
+        now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        # 检查 user_id 封禁
+        if user_id:
+            row = conn.execute(
+                """
+                SELECT id FROM guide_edit_bans
+                WHERE user_id = ? AND (expires_at IS NULL OR expires_at > ?)
+                LIMIT 1
+                """,
+                (user_id, now),
+            ).fetchone()
+            if row:
+                return True
+        # 检查 IP 封禁
+        if ip_address:
+            row = conn.execute(
+                """
+                SELECT id FROM guide_edit_bans
+                WHERE ip_address = ? AND (expires_at IS NULL OR expires_at > ?)
+                LIMIT 1
+                """,
+                (ip_address, now),
+            ).fetchone()
+            if row:
+                return True
+    finally:
+        conn.close()
+    return False
+
+
+def _slugify(text):
+    """将标题转换为 URL slug。"""
+    text = re.sub(r'[^\w\s-]', '', text).strip().lower()
+    text = re.sub(r'[-\s]+', '-', text)
+    return text[:80] or 'guide'
+
+
+def _ensure_unique_slug(conn, base_slug, exclude_id=None):
+    """确保 slug 唯一，重复时追加数字。"""
+    slug = base_slug
+    counter = 2
+    while True:
+        if exclude_id:
+            existing = conn.execute(
+                "SELECT id FROM server_guides WHERE slug = ? AND id != ?",
+                (slug, exclude_id),
+            ).fetchone()
+        else:
+            existing = conn.execute(
+                "SELECT id FROM server_guides WHERE slug = ?",
+                (slug,),
+            ).fetchone()
+        if not existing:
+            break
+        slug = f"{base_slug}-{counter}"
+        counter += 1
+    return slug
+
+
+@guides_bp.route('/api/guides/submit', methods=['POST'])
+@login_required
+def submit_guide():
+    """成员提交新指南（进入待审核状态）。"""
+    user = get_current_user()
+    ip = get_client_ip()
+
+    if _is_banned(user['id'], ip):
+        return jsonify({'success': False, 'message': '你已被禁止提交或编辑服务器指南'}), 403
+
+    data = request.get_json() or {}
+    title = (data.get('title') or '').strip()
+    summary = (data.get('summary') or '').strip()
+    content = (data.get('content') or '').strip()
+
+    if not title or len(title) > 200:
+        return jsonify({'success': False, 'message': '标题不能为空且不超过200字'}), 400
+    if not content:
+        return jsonify({'success': False, 'message': '内容不能为空'}), 400
+    if len(content) > 50000:
+        return jsonify({'success': False, 'message': '内容过长，不超过50000字'}), 400
+
+    conn = get_db()
+    try:
+        now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        slug = _ensure_unique_slug(conn, _slugify(title))
+        conn.execute(
+            """
+            INSERT INTO server_guides
+            (title, slug, summary, content, author_id, status, is_pinned, sort_order, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, 'pending', 0, 0, ?, ?)
+            """,
+            (title, slug, summary, content, user['id'], now, now),
+        )
+        conn.commit()
+        return jsonify({'success': True, 'message': '指南已提交，等待管理员审核'})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'success': False, 'message': f'提交失败: {e}'}), 500
+    finally:
+        conn.close()
+
+
+@guides_bp.route('/api/guides/<int:guide_id>/edit-request', methods=['POST'])
+@login_required
+def edit_guide_request(guide_id):
+    """成员申请编辑已有指南（需审核）。
+
+    只能编辑自己创建的指南；编辑后状态变回 pending 等待审核。
+    """
+    user = get_current_user()
+    ip = get_client_ip()
+
+    if _is_banned(user['id'], ip):
+        return jsonify({'success': False, 'message': '你已被禁止提交或编辑服务器指南'}), 403
+
+    data = request.get_json() or {}
+    title = (data.get('title') or '').strip()
+    summary = (data.get('summary') or '').strip()
+    content = (data.get('content') or '').strip()
+
+    if not title or len(title) > 200:
+        return jsonify({'success': False, 'message': '标题不能为空且不超过200字'}), 400
+    if not content:
+        return jsonify({'success': False, 'message': '内容不能为空'}), 400
+    if len(content) > 50000:
+        return jsonify({'success': False, 'message': '内容过长，不超过50000字'}), 400
+
+    conn = get_db()
+    try:
+        guide = conn.execute(
+            "SELECT id, author_id, status FROM server_guides WHERE id = ?",
+            (guide_id,),
+        ).fetchone()
+        if not guide:
+            abort(404)
+
+        # 成员只能编辑自己的指南
+        if guide['author_id'] != user['id']:
+            abort(403)
+
+        now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        slug = _ensure_unique_slug(conn, _slugify(title), exclude_id=guide_id)
+        conn.execute(
+            """
+            UPDATE server_guides
+            SET title = ?, slug = ?, summary = ?, content = ?,
+                status = 'pending', updated_at = ?, published_at = NULL, rejected_reason = ''
+            WHERE id = ?
+            """,
+            (title, slug, summary, content, now, guide_id),
+        )
+        conn.commit()
+        return jsonify({'success': True, 'message': '修改已提交，等待管理员审核'})
+    except Exception as e:
+        conn.rollback()
+        return jsonify({'success': False, 'message': f'修改失败: {e}'}), 500
+    finally:
+        conn.close()
+
+
+@guides_bp.route('/api/guides/my', methods=['GET'])
+@login_required
+def my_guides():
+    """获取当前用户创建的所有指南（含待审核）。"""
+    user = get_current_user()
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            """
+            SELECT id, title, slug, summary, status, is_pinned, created_at, updated_at, rejected_reason
+            FROM server_guides
+            WHERE author_id = ?
+            ORDER BY updated_at DESC
+            """,
+            (user['id'],),
+        ).fetchall()
+        guides = [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+    return jsonify({'success': True, 'guides': guides})

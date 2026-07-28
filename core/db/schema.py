@@ -244,6 +244,39 @@ def init_db():
                 created_at VARCHAR NOT NULL
             )
         '''),
+        # 服务器指南表
+        ('server_guides', '''
+            CREATE SEQUENCE IF NOT EXISTS server_guides_id_seq START 1;
+            CREATE TABLE IF NOT EXISTS server_guides (
+                id INTEGER PRIMARY KEY DEFAULT nextval('server_guides_id_seq'),
+                title VARCHAR NOT NULL,
+                slug VARCHAR UNIQUE NOT NULL,
+                summary VARCHAR DEFAULT '',
+                content VARCHAR NOT NULL DEFAULT '',
+                cover_image VARCHAR DEFAULT '',
+                author_id INTEGER NOT NULL,
+                status VARCHAR NOT NULL DEFAULT 'pending',
+                is_pinned INTEGER DEFAULT 0,
+                sort_order INTEGER DEFAULT 0,
+                created_at VARCHAR NOT NULL,
+                updated_at VARCHAR NOT NULL,
+                published_at VARCHAR DEFAULT NULL,
+                rejected_reason VARCHAR DEFAULT ''
+            )
+        '''),
+        # 指南编辑封禁表
+        ('guide_edit_bans', '''
+            CREATE SEQUENCE IF NOT EXISTS guide_edit_bans_id_seq START 1;
+            CREATE TABLE IF NOT EXISTS guide_edit_bans (
+                id INTEGER PRIMARY KEY DEFAULT nextval('guide_edit_bans_id_seq'),
+                user_id INTEGER DEFAULT NULL,
+                ip_address VARCHAR DEFAULT NULL,
+                banned_by INTEGER NOT NULL,
+                reason VARCHAR DEFAULT '',
+                created_at VARCHAR NOT NULL,
+                expires_at VARCHAR DEFAULT NULL
+            )
+        '''),
     ]
 
     for table_name, ddl in tables:

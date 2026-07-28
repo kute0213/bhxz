@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+{% block title %}{{ '编辑指南' if guide else '新建指南' }}{% endblock %}
+{% block extra_style %}
+<style>
+.markdown-editor { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; min-height: 500px; }
+@media (max-width: 1024px) { .markdown-editor { grid-template-columns: 1fr; } }
+.editor-pane, .preview-pane {
+    background: rgba(10, 20, 12, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 16px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+.editor-pane textarea {
+    flex: 1;
+    width: 100%;
+    resize: none;
+    background: transparent;
+    border: none;
+    padding: 1rem;
+    color: #e8e4d9;
+    font-family: 'Fira Code', 'JetBrains Mono', monospace;
+    font-size: 0.875rem;
+    line-height: 1.7;
+    outline: none;
+}
+.preview-pane .pane-header, .editor-pane .pane-header {
+    padding: 0.5rem 1rem;
+    background: rgba(255,255,255,0.03);
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    font-size: 0.75rem;
+    color: rgba(232,228,217,0.5);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.preview-pane .pane-body {
+    flex: 1;
+    padding: 1rem;
+    overflow-y: auto;
+}
+.prose-docs h1 { font-size: 1.75rem; font-weight: 700; color: #f5e6c8; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid rgba(245,230,200,0.1); }
+.prose-docs h2 { font-size: 1.4rem; font-weight: 600; color: #f5e6c8; margin-top: 2rem; margin-bottom: 0.75rem; }
+.prose-docs h3 { font-size: 1.15rem; font-weight: 600; color: #d4b878; margin-top: 1.5rem; margin-bottom: 0.5rem; }
+.prose-docs h4 { font-size: 1rem; font-weight: 600; color: #d4b878; margin-top: 1rem; margin-bottom: 0.5rem; }
+.prose-docs p { color: rgba(245,230,200,0.8); line-height: 1.8; margin-bottom: 1rem; }
+.prose-docs ul, .prose-docs ol { color: rgba(245,230,200,0.8); line-height: 1.8; margin-bottom: 1rem; padding-left: 1.5rem; }
+.prose-docs li { margin-bottom: 0.25rem; }
+.prose-docs code { background: rgba(0,0,0,0.3); padding: 0.15rem 0.4rem; border-radius: 0.25rem; font-size: 0.875rem; color: #d4b878; font-family: monospace; }
+.prose-docs pre { background: rgba(0,0,0,0.4); border: 1px solid rgba(245,230,200,0.1); border-radius: 0.5rem; padding: 1rem; overflow-x: auto; margin-bottom: 1rem; }
+.prose-docs pre code { background: none; padding: 0; color: #a8d8a8; font-size: 0.85rem; line-height: 1.6; }
+.prose-docs table { width: 100%; border-collapse: collapse; margin-bottom: 1rem; }
+.prose-docs th { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 2px solid rgba(245,230,200,0.15); color: #f5e6c8; font-weight: 600; font-size: 0.9rem; }
+.prose-docs td { padding: 0.5rem 0.75rem; border-bottom: 1px solid rgba(245,230,200,0.08); color: rgba(245,230,200,0.7); font-size: 0.9rem; }
+.prose-docs blockquote { border-left: 3px solid rgba(212,184,120,0.5); padding-left: 1rem; margin: 1rem 0; color: rgba(245,230,200,0.6); }
+.prose-docs a { color: #d4b878; text-decoration: underline; }
+.prose-docs hr { border: none; border-top: 1px solid rgba(245,230,200,0.1); margin: 2rem 0; }
+.prose-docs strong { color: #f5e6c8; font-weight: 600; }
+.editor-toolbar { display: flex; gap: 0.25rem; padding: 0.25rem; background: rgba(255,255,255,0.02); border-bottom: 1px solid rgba(255,255,255,0.06); }
+.editor-toolbar button { padding: 0.25rem 0.5rem; border-radius: 0.375rem; font-size: 0.75rem; color: rgba(232,228,217,0.6); background: transparent; border: none; cursor: pointer; }
+.editor-toolbar button:hover { background: rgba(255,255,255,0.06); color: #e8e4d9; }
+</style>
+{% endblock %}
+{% block content %}
+<section class="page-container py-12">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="mb-8">
+            <a href="{{ url_for('admin.admin_guides') }}" class="text-sm text-cream/50 hover:text-gold-400 inline-flex items-center gap-1 transition-colors mb-4">
+                <i data-lucide="arrow-left" class="w-4 h-4"></i>
+                返回指南管理
+            </a>
+            <h1 class="text-2xl sm:text-3xl font-bold">{{ '编辑指南' if guide else '新建指南' }}</h1>
+        </div>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        {% for category, message in messages %}
+        <div class="mb-6 p-4 rounded-lg text-sm flex items-center gap-2
+                    {% if category == 'error' %}bg-red-900/30 border border-red-500/30 text-red-300
+                    {% else %}bg-green-900/30 border border-green-500/30 text-green-300{% endif %}">
+            <i data-lucide="{% if category == 'error' %}alert-circle{% else %}check-circle{% endif %}" class="w-5 h-5 flex-shrink-0"></i>
+            {{ message }}
+        </div>
+        {% endfor %}
+        {% endif %}
+        {% endwith %}
+
+        <form method="POST" class="space-y-6">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-sm text-cream/70 mb-1">标题</label>
+                    <input type="text" name="title" value="{{ guide.title if guide else '' }}" class="w-full px-4 py-2 rounded-lg bg-forest-900/60 border border-forest-700/50 text-cream focus:border-gold-400/50 focus:outline-none" required maxlength="200">
+                </div>
+                <div>
+                    <label class="block text-sm text-cream/70 mb-1">封面图片 URL（可选）</label>
+                    <input type="text" name="cover_image" value="{{ guide.cover_image if guide else '' }}" class="w-full px-4 py-2 rounded-lg bg-forest-900/60 border border-forest-700/50 text-cream focus:border-gold-400/50 focus:outline-none" placeholder="https://...">
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-sm text-cream/70 mb-1">摘要（可选）</label>
+                <input type="text" name="summary" value="{{ guide.summary if guide else '' }}" class="w-full px-4 py-2 rounded-lg bg-forest-900/60 border border-forest-700/50 text-cream focus:border-gold-400/50 focus:outline-none" maxlength="300">
+            </div>
+
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                <div>
+                    <label class="block text-sm text-cream/70 mb-1">状态</label>
+                    <select name="status" class="w-full px-4 py-2 rounded-lg bg-forest-900/60 border border-forest-700/50 text-cream focus:border-gold-400/50 focus:outline-none">
+                        <option value="pending" {% if guide and guide.status == 'pending' %}selected{% endif %}>待审核</option>
+                        <option value="approved" {% if guide and guide.status == 'approved' %}selected{% endif %}>已通过</option>
+                        <option value="rejected" {% if guide and guide.status == 'rejected' %}selected{% endif %}>已拒绝</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm text-cream/70 mb-1">置顶</label>
+                    <select name="is_pinned" class="w-full px-4 py-2 rounded-lg bg-forest-900/60 border border-forest-700/50 text-cream focus:border-gold-400/50 focus:outline-none">
+                        <option value="" {% if not guide or not guide.is_pinned %}selected{% endif %}>否</option>
+                        <option value="1" {% if guide and guide.is_pinned %}selected{% endif %}>是</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm text-cream/70 mb-1">排序值</label>
+                    <input type="number" name="sort_order" value="{{ guide.sort_order if guide else 0 }}" class="w-full px-4 py-2 rounded-lg bg-forest-900/60 border border-forest-700/50 text-cream focus:border-gold-400/50 focus:outline-none">
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-sm text-cream/70 mb-2">内容（Markdown）</label>
+                <div class="markdown-editor">
+                    <div class="editor-pane">
+                        <div class="editor-toolbar">
+                            <button type="button" onclick="insertText('**', '**')">加粗</button>
+                            <button type="button" onclick="insertText('*', '*')">斜体</button>
+                            <button type="button" onclick="insertText('# ', '')">标题</button>
+                            <button type="button" onclick="insertText('- ', '')">列表</button>
+                            <button type="button" onclick="insertText('```\n', '\n```')">代码</button>
+                            <button type="button" onclick="insertText('[', '](url)')">链接</button>
+                            <button type="button" onclick="insertText('> ', '')">引用</button>
+                        </div>
+                        <textarea name="content" id="md-editor" placeholder="在此输入 Markdown 内容...">{{ guide.content if guide else '' }}</textarea>
+                    </div>
+                    <div class="preview-pane">
+                        <div class="pane-header"><i data-lucide="eye" class="w-3.5 h-3.5"></i> 实时预览</div>
+                        <div class="pane-body prose-docs" id="md-preview"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex items-center justify-end gap-3 pt-4">
+                <a href="{{ url_for('admin.admin_guides') }}" class="btn-secondary px-5 py-2.5 rounded-lg text-sm">取消</a>
+                <button type="submit" class="btn-primary px-5 py-2.5 rounded-lg text-sm">保存</button>
+            </div>
+        </form>
+    </div>
+</section>
+
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script>
+(function() {
+    const textarea = document.getElementById('md-editor');
+    const preview = document.getElementById('md-preview');
+
+    function updatePreview() {
+        preview.innerHTML = marked.parse(textarea.value || '');
+    }
+    textarea.addEventListener('input', updatePreview);
+    updatePreview();
+
+    window.insertText = function(before, after) {
+        const start = textarea.selectionStart;
+        const end = textarea.selectionEnd;
+        const text = textarea.value;
+        const selected = text.substring(start, end);
+        const replacement = before + selected + after;
+        textarea.value = text.substring(0, start) + replacement + text.substring(end);
+        textarea.selectionStart = start + before.length;
+        textarea.selectionEnd = start + before.length + selected.length;
+        textarea.focus();
+        updatePreview();
+    };
+})();
+</script>
+{% endblock %}

@@ -103,6 +103,10 @@
                     <i data-lucide="home" class="w-5 h-5"></i>
                     <span>首页</span>
                 </a>
+                <a href="{{ url_for('guides.guide_list') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors">
+                    <i data-lucide="book-open" class="w-5 h-5"></i>
+                    <span>服务器指南</span>
+                </a>
                 <a href="{{ url_for('community.community_page') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors">
                     <i data-lucide="message-circle" class="w-5 h-5"></i>
                     <span>社区活动</span>
@@ -162,6 +166,9 @@
                 <div class="hidden lg:flex items-center gap-6">
                     <a href="{{ url_for('main.home') }}" class="text-cream/80 hover:text-gold-400 text-sm font-medium transition-colors px-3 py-2 rounded-lg hover:bg-gold-400/5">
                         首页
+                    </a>
+                    <a href="{{ url_for('guides.guide_list') }}" class="text-cream/80 hover:text-gold-400 text-sm font-medium transition-colors px-3 py-2 rounded-lg hover:bg-gold-400/5">
+                        服务器指南
                     </a>
                     <a href="{{ url_for('community.community_page') }}" class="text-cream/80 hover:text-gold-400 text-sm font-medium transition-colors px-3 py-2 rounded-lg hover:bg-gold-400/5">
                         社区活动
@@ -235,6 +242,9 @@
             <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 flex items-center gap-1 overflow-x-auto">
                 <a href="{{ url_for('main.home') }}" class="flex-shrink-0 px-3 py-1.5 text-sm text-cream/70 hover:text-gold-400 rounded-lg hover:bg-gold-400/5 transition-colors">
                     首页
+                </a>
+                <a href="{{ url_for('guides.guide_list') }}" class="flex-shrink-0 px-3 py-1.5 text-sm text-cream/70 hover:text-gold-400 rounded-lg hover:bg-gold-400/5 transition-colors">
+                    服务器指南
                 </a>
                 <a href="{{ url_for('community.community_page') }}" class="flex-shrink-0 px-3 py-1.5 text-sm text-cream/70 hover:text-gold-400 rounded-lg hover:bg-gold-400/5 transition-colors">
                     社区活动

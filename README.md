@@ -58,14 +58,20 @@
 │   │   ├── polls.py              #     投票创建/投票/删除/启停
 │   │   ├── board.py              #     留言板主题/回复/删除（含附件管理）
 │   │   └── helpers.py            #     _is_ajax / _respond 辅助函数
-│   ├── admin/                    #   管理蓝图包：用户管理、日志、模组介绍、数据库备份、系统设置
+│   ├── admin/                    #   管理蓝图包：用户管理、日志、模组介绍、数据库备份、系统设置、服务器指南管理
 │   │   ├── __init__.py           #     创建 admin_bp，导入子模块注册路由
 │   │   ├── pages.py              #     管理后台首页 + 请求头调试
 │   │   ├── users.py              #     用户列表/切换管理员/删除用户
 │   │   ├── mod_intros.py         #     模组介绍 增/改/删
 │   │   ├── logs.py               #     访问日志分页查看/清空
 │   │   ├── settings.py           #     系统设置页面 + API（在线编辑配置，热重载）
-│   │   └── backup.py             #     数据库备份页面/启动/进度/历史
+│   │   ├── backup.py             #     数据库备份页面/启动/进度/历史
+│   │   ├── guides.py             #     服务器指南 CRUD + 审核工作流
+│   │   └── guide_bans.py         #     指南编辑权限封禁管理（用户/IP）
+│   ├── guides/                   #   服务器指南蓝图包：公开列表/详情 + 成员提交 API
+│   │   ├── __init__.py           #     创建 guides_bp，导入子模块注册路由
+│   │   ├── pages.py              #     指南列表页 + 详情页（Markdown 渲染）
+│   │   └── api.py                #     成员提交/编辑指南 API（需审核）
 │   ├── cmd/                      #   CMD 控制台蓝图包：实时命令执行 + 一键命令管理 + 脚本
 │   │   ├── __init__.py           #     创建 cmd_bp，导入子模块注册路由
 │   │   ├── pages.py              #     命令控制台首页 + 脚本编辑器页面
@@ -86,19 +92,25 @@
 │       ├── polls.py              #     /api/polls       投票数据
 │       └── admin.py              #     /api/admin/logs    访问日志（管理员）
 │
-├── templates/                    # Jinja2 模板（18 个页面）
+├── templates/                    # Jinja2 模板（20+ 个页面）
 │   ├── base.html                 #   基础模板（全局样式、磨砂玻璃、导航栏、动画）
-│   ├── index.html                #   首页（模组介绍卡片 + 关于官网链接）
+│   ├── index.html                #   首页（模组介绍卡片 + 服务器指南入口）
 │   ├── community.html            #   社区页（投票 + 留言板）
 │   ├── login.html / register.html
 │   ├── settings.html             #   用户设置（改用户名/密码/注销）
 │   ├── performance.html          #   服务器性能监控
 │   ├── docs.html                 #   文档中心（Markdown 渲染 + 侧边栏导航）
+│   ├── guides/                   #   服务器指南模板
+│   │   ├── index.html            #     指南列表页（卡片展示 + 状态筛选）
+│   │   └── detail.html           #     指南详情页（Markdown 渲染 + 标题锚点）
 │   ├── admin.html                #   管理后台首页
 │   ├── admin_users.html          #   用户管理
 │   ├── admin_logs.html           #   访问日志
 │   ├── admin_debug_headers.html  #   请求头调试
 │   ├── manage_mod_intros.html    #   模组介绍管理
+│   ├── admin_guides.html         #   服务器指南管理（审核/编辑/删除）
+│   ├── admin_guide_form.html     #   指南编辑页面（Markdown 编辑器 + 实时预览）
+│   ├── admin_guide_bans.html     #   指南编辑权限封禁管理
 │   ├── admin_cmd.html            #   CMD 控制台
 │   ├── admin_cmd_editor.html     #   脚本编辑器（专业代码编辑器页面）
 │   ├── admin_cmd_scheduled.html  #   定时任务管理页面
@@ -482,9 +494,51 @@ Markdown 文档存放在 [docs/](file:///workspace/docs/) 目录，通过 `/docs
 
 主页底部「关于官网」链接跳转至文档页面。
 
+### 服务器指南
+
+服务器指南是面向玩家的 Markdown 文档中心，管理员可直接发布，成员亦可提交但需审核通过后才公开显示。
+
+**功能特性**：
+- 卡片式列表页，支持置顶与自定义排序
+- Markdown 详情页（标题锚点、代码高亮）
+- 成员可提交新指南或修改现有指南，进入待审核状态
+- 管理员后台具备专业 Markdown 编辑器（实时预览）
+- 审核工作流：通过 / 拒绝（附原因）
+- 封禁机制：管理员可按用户名或 IP 封禁编辑权限，支持限时或永久封禁
+
+**前端页面**：
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/guides` | 指南列表页（默认展示已审核通过） |
+| GET | `/guides?my=1` | 我的指南（登录用户查看自己提交的） |
+| GET | `/guides/<slug>` | 指南详情页（Markdown 渲染） |
+
+**成员 API（需登录）**：
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/guides/submit` | 提交新指南（进入 `pending` 待审核） |
+| POST | `/api/guides/<id>/edit-request` | 提交编辑请求（进入 `pending` 待审核） |
+| GET | `/api/guides/my` | 获取当前用户的指南列表 |
+
+**管理后台（仅管理员）**：
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/admin/guides` | 指南管理首页（审核/编辑/删除） |
+| GET/POST | `/admin/guides/create` | 创建指南（直接通过，无需审核） |
+| GET/POST | `/admin/guides/<id>/edit` | 编辑指南 |
+| POST | `/admin/guides/<id>/delete` | 删除指南 |
+| POST | `/admin/guides/<id>/approve` | 通过审核 |
+| POST | `/admin/guides/<id>/reject` | 拒绝审核（需填写原因） |
+| GET | `/admin/guide-bans` | 封禁列表 |
+| POST | `/admin/guide-bans/create` | 新增封禁（按用户名或 IP） |
+| POST | `/admin/guide-bans/<id>/delete` | 解除封禁 |
+
 ## 数据库
 
-使用 **DuckDB**（高性能嵌入式 OLAP 数据库，单文件、支持列存、窗口函数），首次启动自动建表。共 15 张表：
+使用 **DuckDB**（高性能嵌入式 OLAP 数据库，单文件、支持列存、窗口函数），首次启动自动建表。共 17 张表：
 
 | 表名 | 说明 | 关键约束 |
 |------|------|----------|
@@ -503,6 +557,8 @@ Markdown 文档存放在 [docs/](file:///workspace/docs/) 目录，通过 `/docs
 | `cmd_run_logs` | CMD 命令执行日志 | — |
 | `db_backups` | 数据库备份记录 | 备份状态/大小/耗时 |
 | `settings` | **系统设置** | **key 唯一，存储用户自定义配置，支持热重载** |
+| `server_guides` | **服务器指南** | **title / slug / summary / content(Markdown) / status / author_id / is_pinned / sort_order** |
+| `guide_edit_bans` | **指南编辑封禁** | **user_id / ip_address / banned_by / reason / expires_at** |
 
 所有外键均启用 `enable_foreign_keys` 和 `ON DELETE CASCADE`。
 

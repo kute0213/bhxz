@@ -6,6 +6,17 @@
 
 ## [未发布]
 
+### 新增
+- **服务器指南系统**：
+  - 新增 `server_guides` 表：存储指南标题、slug、摘要、Markdown 内容、审核状态、作者、置顶与排序
+  - 新增 `guide_edit_bans` 表：记录用户/IP 的编辑权限封禁，支持限时或永久封禁
+  - 公开页面：`/guides` 卡片式列表页（支持 `?my=1` 查看我的指南）、`/guides/<slug>` Markdown 详情页（标题锚点、代码高亮）
+  - 成员 API：`POST /api/guides/submit` 提交新指南、`POST /api/guides/<id>/edit-request` 提交编辑请求、`GET /api/guides/my` 获取我的指南，均需登录，提交后进入 `pending` 待审核状态
+  - 管理后台：专业 Markdown 编辑器（分栏实时预览）、审核工作流（通过/拒绝附原因）、置顶与排序控制
+  - 封禁管理：`/admin/guide-bans` 按用户名或 IP 封禁/解封，后端 `_is_banned()` 实时校验
+  - 前端使用 `marked.js` 渲染 Markdown，支持标题自动生成锚点链接
+  - 蓝图拆分：`routes/guides/`（公开页面 + 成员 API）、`routes/admin/guides.py` + `guide_bans.py`（管理后台）
+
 ### 修复
 
 - **修复 MiniScript 脚本编辑器输出重复问题**：
