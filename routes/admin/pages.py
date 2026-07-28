@@ -1,10 +1,9 @@
-"""管理后台页面路由：仪表盘、调试头信息。"""
+"""管理后台页面路由：仪表盘。"""
 
-from flask import render_template, abort, request
+from flask import render_template, abort
 
 from core.auth import login_required, get_current_user
 from core.db import get_db
-from services.ip import get_client_ip
 from routes.admin import admin_bp
 
 
@@ -31,23 +30,3 @@ def admin_page():
         conn.close()
 
     return render_template('admin.html', user=user, stats=stats)
-
-
-@admin_bp.route('/admin/debug/headers')
-@login_required
-def admin_debug_headers():
-    user = get_current_user()
-    if not user or not user['is_admin']:
-        abort(403)
-
-    headers = dict(request.headers)
-    current_ip = get_client_ip()
-    remote_addr = request.remote_addr
-
-    return render_template(
-        'admin_debug_headers.html',
-        user=user,
-        headers=headers,
-        current_ip=current_ip,
-        remote_addr=remote_addr
-    )

@@ -60,7 +60,7 @@
 │   │   └── helpers.py            #     _is_ajax / _respond 辅助函数
 │   ├── admin/                    #   管理蓝图包：用户管理、日志、模组介绍、数据库备份、系统设置、服务器指南管理
 │   │   ├── __init__.py           #     创建 admin_bp，导入子模块注册路由
-│   │   ├── pages.py              #     管理后台首页 + 请求头调试
+│   │   ├── pages.py              #     管理后台首页
 │   │   ├── users.py              #     用户列表/切换管理员/删除用户
 │   │   ├── mod_intros.py         #     模组介绍 增/改/删
 │   │   ├── logs.py               #     访问日志分页查看/清空
@@ -85,14 +85,16 @@
 │   │   ├── tasks.py              #     任务 CRUD/启停/触发/状态查询
 │   │   └── logs.py               #     任务执行日志（单任务/全部/详情）
 │   ├── docs.py                   #   文档路由：Markdown 文档列表 + 内容 API
+│   ├── public_files.py           #   公开文件管理（本地文件/目录对外公开访问）
 │   └── api/                      #   API 接口（按功能模块拆分）
 │       ├── __init__.py
 │       ├── monitoring.py         #     /api/performance  性能数据
 │       ├── stats.py              #     /api/stats         网站统计
 │       ├── polls.py              #     /api/polls       投票数据
+│       ├── captcha.py            #     /api/captcha     验证码生成
 │       └── admin.py              #     /api/admin/logs    访问日志（管理员）
 │
-├── templates/                    # Jinja2 模板（20+ 个页面）
+├── templates/                    # Jinja2 模板（23 个页面）
 │   ├── base.html                 #   基础模板（全局样式、磨砂玻璃、导航栏、动画）
 │   ├── index.html                #   首页（模组介绍卡片 + 服务器指南入口）
 │   ├── community.html            #   社区页（投票 + 留言板）
@@ -106,7 +108,6 @@
 │   ├── admin.html                #   管理后台首页
 │   ├── admin_users.html          #   用户管理
 │   ├── admin_logs.html           #   访问日志
-│   ├── admin_debug_headers.html  #   请求头调试
 │   ├── manage_mod_intros.html    #   模组介绍管理
 │   ├── admin_guides.html         #   服务器指南管理（审核/编辑/删除）
 │   ├── admin_guide_form.html     #   指南编辑页面（Markdown 编辑器 + 实时预览）
@@ -116,6 +117,7 @@
 │   ├── admin_cmd_scheduled.html  #   定时任务管理页面
 │   ├── admin_settings.html       #   系统设置（在线编辑配置，支持重置，热重载）
 │   ├── admin_db_backup.html      #   数据库优化备份页面（进度条 + 备份历史）
+│   ├── admin_public_files.html   #   公开文件管理
 │   └── 403.html / 404.html       #   错误页
 │
 ├── static/                       # 静态资源

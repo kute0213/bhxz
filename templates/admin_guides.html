@@ -94,7 +94,7 @@
                             <td class="px-4 py-3 text-right">
                                 <div class="flex items-center justify-end gap-2">
                                     {% if guide.status == 'pending' %}
-                                    <button type="button" class="text-green-400 hover:text-green-300 text-xs px-2 py-1 rounded bg-green-500/10 border border-green-500/20" onclick="showPreviewModal({{ guide.id }}, {{ guide.title | tojson }}, {{ guide.content | tojson }})">预览</button>
+                                    <button type="button" class="text-green-400 hover:text-green-300 text-xs px-2 py-1 rounded bg-green-500/10 border border-green-500/20" onclick='showPreviewModal({{ guide.id }}, {{ guide.title | tojson }}, {{ guide.content | tojson }})'>预览</button>
                                     <form action="{{ url_for('admin.admin_guide_approve', guide_id=guide.id) }}" method="POST" class="inline">
                                         <button type="submit" class="text-green-400 hover:text-green-300 text-xs px-2 py-1 rounded bg-green-500/10 border border-green-500/20">通过</button>
                                     </form>
