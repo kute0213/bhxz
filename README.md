@@ -637,6 +637,10 @@ server {
 
 ### 最近修复
 
+**修复 MiniScript 脚本编辑器输出重复问题：**
+- `static/js/cmd/terminal-core.js`：`TerminalBuffer._finalizeCurrentLine()` 在换行时不再调用 `_flushLine()` 创建新的 div，而是直接移除 `.term-current-line` 类，将已渲染的当前行转为 finalized 行，避免同一行内容被重复输出两次
+- `templates/admin_cmd_editor.html`：更新 `terminal-core.js` 缓存版本号 `v=2`，强制浏览器加载修复后的文件
+
 **终端与 MiniScript 架构重构（稳定性提升）：**
 - 前端提取 `static/js/cmd/terminal-core.js`：统一 ANSI 解析、SSE 连接管理、命令历史、输入发送，供终端弹窗和编辑器内嵌终端复用，消除重复代码
 - 后端拆分 `services/terminal/` 包：`TerminalSession` 封装单个持久 shell 会话的生命周期与 IO，`TerminalManager` 按用户 session 隔离管理多个 shell 进程
@@ -695,7 +699,15 @@ server {
 
 **留言板附件（恢复简单机制）**
 - 支持单次回复上传多个附件，后端使用 `request.files.getlist('attachments')` 遍历保存
+- 支持多次点击“添加附件”追加文件：前端使用 `DataTransfer` 累积历次选择的文件，避免后一次选择覆盖前一次
 - 附件以 JSON 文件名数组形式存储在 `board_replies.attachment`，保持与旧版一致
-- 前端选择文件后实时显示文件名列表，修复了内联 `onchange` 中 `"` 转义错误导致按钮文本显示为 JavaScript 代码的问题
+- 前端选择文件后实时显示文件名列表，修复了内联 `onchange` 中 `"` 转义错误导致按钮文本显示为 JavaScript 代码碎片的问题
 - 不再做文件类型/大小/数量白名单校验，恢复为简单上传机制
+
+**修复 Windows 终端输出重复问题**
+- `services/terminal/session.py`：`read_pending_output` 增加 `caller_generation` 参数，旧 SSE 连接在 generation 切换后不再消费输出队列，避免同一段输出被多个连接重复发送
+- `services/terminal/session.py`：`next_generation()` 非首次切换时清空旧输出队列，防止重连时残留输出被新连接重复显示；首次连接保留会话初始化输出
+- `routes/cmd/terminal.py`：SSE 生成器将当前 generation 传入 `read_pending_output`，实现代际一致性校验
+- `static/js/cmd/terminal-core.js`：`SseTerminal` 新增 `_connecting` 锁，防止并发调用 `connect()` 产生多个 EventSource 连接
+- `core/shell.py`：Windows cmd 启动参数改为 `cmd.exe /q /k`，关闭命令回显，减少命令被前后端重复渲染的概率
 

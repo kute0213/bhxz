@@ -84,13 +84,20 @@ class TerminalSession:
             self.touch()
         return ok
 
-    def read_pending_output(self):
+    def read_pending_output(self, caller_generation=None):
         """读取并清空待发送的输出队列。
+
+        Args:
+            caller_generation: 调用方持有的代际标识。若提供且与当前
+                generation 不一致，说明已有新的 SSE 连接接管会话，
+                此时返回空列表且**不消耗**队列，避免旧连接输出被重复发送。
 
         Returns:
             list[str]: 输出块列表
         """
         with self._lock:
+            if caller_generation is not None and caller_generation != self.generation:
+                return []
             chunks = self._output_queue
             self._output_queue = []
             self._output_event.clear()
@@ -115,9 +122,15 @@ class TerminalSession:
 
         用于 SSE 连接独占：旧连接检测到 generation 变化后应主动退出，
         避免多个 SSE 连接同时消费同一个会话的输出队列。
+
+        非首次切换 generation 时清空旧队列，防止旧连接的残留输出被新连接
+        重复显示；首次连接（generation 从 0 到 1）保留会话初始化输出。
         """
         with self._lock:
             self.generation += 1
+            if self.generation > 1:
+                self._output_queue = []
+                self._output_event.clear()
             return self.generation
 
     def is_alive(self):

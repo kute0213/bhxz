@@ -296,7 +296,25 @@
         function updateFileList(input, listId) {
             const list = document.getElementById(listId);
             if (!list) return;
-            const names = Array.from(input.files).map(function (f) { return f.name; });
+
+            // 累积已选文件：支持多次点击“添加附件”追加文件
+            const existing = input._selectedFiles || [];
+            const selected = Array.from(input.files);
+            const mergedMap = new Map();
+            existing.concat(selected).forEach(function (f) {
+                mergedMap.set(f.name + '|' + f.size + '|' + f.lastModified, f);
+            });
+            const merged = Array.from(mergedMap.values());
+
+            // 通过 DataTransfer 写回 input.files，确保表单提交时带上全部文件
+            if (merged.length > 0 && 'DataTransfer' in window) {
+                var dt = new DataTransfer();
+                merged.forEach(function (f) { dt.items.add(f); });
+                input.files = dt.files;
+            }
+            input._selectedFiles = merged;
+
+            const names = merged.map(function (f) { return f.name; });
             if (names.length > 0) {
                 list.innerHTML = names.map(function (n) {
                     return '<span class="bg-forest-700 px-2 py-0.5 rounded text-cream/80 text-xs">' + n + '</span>';

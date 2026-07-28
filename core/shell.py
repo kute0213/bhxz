@@ -50,9 +50,10 @@ def _detect_windows_shell():
             ],
         )
 
-    # 默认使用 cmd.exe，并通过 chcp 切换到 UTF-8 代码页
+    # 默认使用 cmd.exe，/q 关闭命令回显，/k 执行后保持运行；
+    # 通过 chcp 切换到 UTF-8 代码页
     return (
-        ['cmd.exe', '/k'],
+        ['cmd.exe', '/q', '/k'],
         'cmd',
         ['chcp 65001 >nul\n'],
     )

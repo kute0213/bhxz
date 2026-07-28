@@ -213,8 +213,15 @@ window.TerminalCore = (function () {
 
     TerminalBuffer.prototype._finalizeCurrentLine = function () {
         const cl = this.container.querySelector('.term-current-line');
-        if (cl) cl.classList.remove('term-current-line');
-        this._flushLine();
+        if (cl) {
+            // 当前行已在 DOM 中渲染，直接移除标记类即可作为 finalized 行。
+            // 不再调用 _flushLine() 创建新 div，避免同一行内容被重复输出。
+            cl.classList.remove('term-current-line');
+        } else if (this.fragments.length > 0) {
+            // 兜底：无当前行但仍有片段时 flush
+            this._flushLine();
+        }
+        this.fragments = [];
     };
 
     TerminalBuffer.prototype._parseAnsiEscape = function (text, start) {
@@ -405,6 +412,7 @@ window.TerminalCore = (function () {
         this.pendingInputQueue = [];
         this.lastDataTime = Date.now();
         this.watchdogTimer = null;
+        this._connecting = false;
 
         this.RECONNECT_DELAY = options.reconnectDelay || 3000;
         this.WATCHDOG_TIMEOUT = options.watchdogTimeout || 35000;
@@ -412,12 +420,14 @@ window.TerminalCore = (function () {
     }
 
     SseTerminal.prototype.connect = function () {
+        if (this._connecting) return;
         if (this.reconnectTimer) {
             clearTimeout(this.reconnectTimer);
             this.reconnectTimer = null;
         }
         if (!this.shouldConnect()) return;
 
+        this._connecting = true;
         const closedToken = ++this.manualCloseToken;
         if (this.eventSource) {
             try { this.eventSource.close(); } catch (_) {}
@@ -431,6 +441,7 @@ window.TerminalCore = (function () {
         const self = this;
 
         es.onopen = function () {
+            self._connecting = false;
             self.connected = true;
             self.lastDataTime = Date.now();
             if (self.reconnectTimer) {
@@ -450,6 +461,7 @@ window.TerminalCore = (function () {
         };
 
         es.onerror = function () {
+            self._connecting = false;
             const myToken = closedToken;
             if (self.connected) {
                 self.connected = false;
@@ -471,6 +483,7 @@ window.TerminalCore = (function () {
             this.reconnectTimer = null;
         }
         ++this.manualCloseToken;
+        this._connecting = false;
         this._stopWatchdog();
         if (this.eventSource) {
             try { this.eventSource.close(); } catch (_) {}
