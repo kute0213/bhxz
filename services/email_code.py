@@ -1,12 +1,30 @@
 """邮箱验证码服务 —— 生成、存储、验证（带过期时间，内存存储）。"""
 
 import random
+import re
 import string
 import time
 import threading
 from datetime import datetime
 
 from services.email import email_service
+
+
+def normalize_email(email: str) -> str:
+    """规范化邮箱：清除不可见字符 + 全角转半角 + 去首尾空格 + 转小写。"""
+    # 清除零宽空格、BOM 等不可见字符
+    email = re.sub(r'[\u200b\u200c\u200d\ufeff\u2060\u180e]', '', email)
+    # 全角字符 -> 半角（如 ＠ -> @，． -> .，０-９ -> 0-9）
+    result = []
+    for ch in email:
+        code = ord(ch)
+        if 0xFF01 <= code <= 0xFF5E:
+            result.append(chr(code - 0xFEE0))
+        elif code == 0x3000:
+            result.append(' ')
+        else:
+            result.append(ch)
+    return ''.join(result).strip().lower()
 
 
 class EmailCodeService:

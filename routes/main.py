@@ -7,6 +7,7 @@ from core.auth import login_required, get_current_user
 from core.db import get_db
 from config import REGISTER_VERIFY_CODE, UPLOAD_DIR, get_config_value
 from services.captcha import verify_captcha
+from services.email_code import normalize_email
 
 main_bp = Blueprint('main', __name__)
 
@@ -41,7 +42,7 @@ def register():
         confirm = request.form.get('confirm', '')
         verify_code = request.form.get('verify_code', '').strip()
         captcha_input = request.form.get('captcha', '').strip()
-        email = request.form.get('email', '').strip().lower()
+        email = normalize_email(request.form.get('email', ''))
         email_code = request.form.get('email_code', '').strip()
 
         # 验证码校验（后端校验，不能前端绕过）
@@ -256,7 +257,7 @@ def change_password():
 @login_required
 def change_email():
     user = get_current_user()
-    new_email = request.form.get('new_email', '').strip().lower()
+    new_email = normalize_email(request.form.get('new_email', ''))
     email_code = request.form.get('email_code', '').strip()
     current_password = request.form.get('current_password', '')
 

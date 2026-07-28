@@ -1,9 +1,8 @@
 """邮箱验证码 API 路由。"""
 
-import re
 from flask import Blueprint, request, jsonify, session
 
-from services.email_code import email_code_service
+from services.email_code import email_code_service, normalize_email
 from services.email import email_service
 from config import get_config_value
 
@@ -13,7 +12,13 @@ email_code_bp = Blueprint('email_code', __name__)
 
 def _is_valid_email(email: str) -> bool:
     """简单邮箱格式校验。"""
-    return bool(re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', email))
+    if '@' not in email:
+        return False
+    local, domain = email.rsplit('@', 1)
+    if not local or not domain or '.' not in domain:
+        return False
+    parts = domain.rsplit('.', 1)
+    return len(parts) == 2 and len(parts[1]) >= 2
 
 
 @email_code_bp.route('/api/email/check-enabled')
@@ -42,7 +47,7 @@ def send_email_code():
     }
     """
     data = request.get_json(silent=True) or {}
-    email = (data.get('email') or '').strip().lower()
+    email = normalize_email(data.get('email') or '')
     purpose = data.get('purpose') or '注册'
 
     if not email:
