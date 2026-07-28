@@ -1,7 +1,7 @@
 """验证码 API 路由。"""
 
-from flask import Blueprint, session, jsonify
-from services.captcha import generate_math_captcha
+from flask import Blueprint, jsonify
+from services.captcha import captcha_service
 
 captcha_bp = Blueprint('captcha', __name__)
 
@@ -11,19 +11,23 @@ def generate():
     """
     生成验证码图片。
 
+    答案存于服务端内存（CaptchaService），不依赖 session，
+    返回随机 captcha_id 供前端提交时携带，防止被 curl 等工具绕过。
+
     返回 JSON:
     {
         "success": true,
-        "image": "data:image/png;base64,..."
+        "image": "data:image/png;base64,...",
+        "captcha_id": "uuid"
     }
     """
     try:
-        answer, image_data = generate_math_captcha()
-        # 将答案存储在 session 中
-        session['captcha_answer'] = answer
+        # 生成验证码，答案存于服务端内存，返回 captcha_id
+        captcha_id, _answer, image_data = captcha_service.generate()
         return jsonify({
             'success': True,
-            'image': image_data
+            'image': image_data,
+            'captcha_id': captcha_id
         })
     except Exception as e:
         return jsonify({

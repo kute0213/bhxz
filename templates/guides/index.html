@@ -243,6 +243,7 @@
     const captchaInput = document.getElementById('captcha-input');
     const captchaImg = document.getElementById('captcha-img');
     let pendingSubmit = null; // 暂存待提交的数据
+    let currentCaptchaId = ''; // 当前验证码 ID（服务端内存存储）
 
     // Markdown 实时预览
     textarea.addEventListener('input', function() {
@@ -284,7 +285,13 @@
     function loadCaptcha() {
         fetch('/api/captcha/generate')
             .then(res => res.json())
-            .then(data => { if (data.success) captchaImg.src = data.image; })
+            .then(data => {
+                if (data.success) {
+                    captchaImg.src = data.image;
+                    // 保存服务端返回的 captcha_id 供校验时使用
+                    currentCaptchaId = data.captcha_id || '';
+                }
+            })
             .catch(err => console.error('加载验证码失败:', err));
     }
     captchaImg.addEventListener('click', loadCaptcha);
@@ -320,7 +327,7 @@
         const title = document.getElementById('guide-title').value.trim();
         const summary = document.getElementById('guide-summary').value.trim();
         const content = textarea.value.trim();
-        if (!title || !content) return alert('标题和内容不能为空');
+        if (!title || !content) { Toast.warning('标题和内容不能为空'); return; }
 
         // 弹出验证码
         showCaptcha(async function(answer) {
@@ -330,14 +337,14 @@
                 const checkRes = await fetch('/api/guides/verify-captcha', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ captcha: answer })
+                    body: JSON.stringify({ captcha: answer, captcha_id: currentCaptchaId })
                 });
                 const checkData = await checkRes.json();
                 if (!checkData.success) {
-                    alert(checkData.message || '验证码错误');
+                    Toast.error(checkData.message || '验证码错误');
                     return;
                 }
-            } catch (err) { alert('验证失败'); return; }
+            } catch (err) { Toast.error('验证失败'); return; }
 
             // 提交
             const payload = { title, summary, content };
@@ -350,9 +357,9 @@
                     body: JSON.stringify(payload)
                 });
                 const data = await res.json();
-                alert(data.message);
+                Toast.error(data.message);
                 if (data.success) { closeModal(); location.reload(); }
-            } catch (err) { alert('网络错误'); }
+            } catch (err) { Toast.error('网络错误'); }
         });
     });
 })();

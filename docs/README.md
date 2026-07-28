@@ -37,7 +37,8 @@
 │   ├── backup_manager.py         #   数据库备份管理器（DuckDB 在线备份 + 旧备份清理）
 │   ├── backup_scheduler.py       #   每日定时备份调度器（默认凌晨 3:00，支持热重载）
 │   ├── settings_manager.py       #   系统设置管理器（数据库存储 + 内存缓存，支持热重载）
-│   ├── email.py                  #   SMTP 邮件发送服务（基于 yagmail，后台线程异步发送）
+│   ├── captcha.py                #   图形验证码服务（两位数运算 + 服务端内存存储 + 一次性删除防重放）
+│   ├── email.py                  #   SMTP 邮件发送服务（基于标准库 smtplib，后台线程异步发送）
 │   ├── email_code.py             #   邮箱验证码服务（生成/存储/验证，内存存储，自动过期）
 │   ├── script_store.py           #   统一脚本存储服务（数据库存储，按名称自动排序）
 │   ├── terminal/                 #   持久交互式终端服务（session-based shell 子进程管理）
@@ -88,7 +89,7 @@
 │   │   └── logs.py               #     任务执行日志（单任务/全部/详情）
 │   ├── docs.py                   #   文档路由：Markdown 文档列表 + 内容 API
 │   ├── public_files.py           #   公开文件管理（本地文件/目录对外公开访问）
-│   ├── api/                      #   API 接口（按功能模块拆分）
+│   └── api/                      #   API 接口（按功能模块拆分）
 │       ├── __init__.py
 │       ├── monitoring.py         #     /api/performance  性能数据
 │       ├── stats.py              #     /api/stats         网站统计
@@ -429,9 +430,7 @@ data: [DONE]
 { "code": "echo('hello')\nname = prompt('输入', '你的名字：')", "timeout": 30 }
 ```
 
-响应：`Content-Type: text/event-stream`，逐条推送事件，格式为 `data: {"type": "<事件类型>", "data": {...}}
-
-`。
+响应：`Content-Type: text/event-stream`，逐条推送事件，格式为 `data: {"type": "<事件类型>", "data": {...}}\n\n`。
 
 事件类型：
 
@@ -501,9 +500,52 @@ Markdown 文档存放在 [docs/](file:///workspace/docs/) 目录，通过 `/docs
 
 主页底部「关于官网」链接跳转至文档页面。
 
+### 服务器指南
+
+服务器指南是面向玩家的 Markdown 文档中心，管理员可直接发布，成员亦可提交但需审核通过后才公开显示。
+
+**功能特性**：
+- 卡片式列表页，支持置顶与按标题自动排序
+- Markdown 详情页（标题锚点、代码高亮）
+- 成员可提交新指南或修改现有指南，进入待审核状态（需验证码验证）
+- 管理员后台具备专业 Markdown 编辑器（实时预览）
+- 审核工作流：管理员可在预览弹窗中直接通过/拒绝（附原因）
+- 管理员新建指南自动通过，无需审核
+- 封禁机制：管理员可按用户名或 IP 封禁编辑权限，支持限时或永久封禁
+
+**前端页面**：
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/guides` | 指南列表页（默认展示已审核通过） |
+| GET | `/guides?my=1` | 我的指南（登录用户查看自己提交的） |
+| GET | `/guides/<slug>` | 指南详情页（Markdown 渲染） |
+
+**成员 API（需登录）**：
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/guides/submit` | 提交新指南（进入 `pending` 待审核） |
+| POST | `/api/guides/<id>/edit-request` | 提交编辑请求（进入 `pending` 待审核） |
+| GET | `/api/guides/my` | 获取当前用户的指南列表 |
+
+**管理后台（仅管理员）**：
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/admin/guides` | 指南管理首页（审核/编辑/删除） |
+| GET/POST | `/admin/guides/create` | 创建指南（直接通过，无需审核） |
+| GET/POST | `/admin/guides/<id>/edit` | 编辑指南 |
+| POST | `/admin/guides/<id>/delete` | 删除指南 |
+| POST | `/admin/guides/<id>/approve` | 通过审核 |
+| POST | `/admin/guides/<id>/reject` | 拒绝审核（需填写原因） |
+| GET | `/admin/guide-bans` | 封禁列表 |
+| POST | `/admin/guide-bans/create` | 新增封禁（按用户名或 IP） |
+| POST | `/admin/guide-bans/<id>/delete` | 解除封禁 |
+
 ## 数据库
 
-使用 **DuckDB**（高性能嵌入式 OLAP 数据库，单文件、支持列存、窗口函数），首次启动自动建表。共 15 张表：
+使用 **DuckDB**（高性能嵌入式 OLAP 数据库，单文件、支持列存、窗口函数），首次启动自动建表。共 17 张表：
 
 | 表名 | 说明 | 关键约束 |
 |------|------|----------|
@@ -522,6 +564,8 @@ Markdown 文档存放在 [docs/](file:///workspace/docs/) 目录，通过 `/docs
 | `cmd_run_logs` | CMD 命令执行日志 | — |
 | `db_backups` | 数据库备份记录 | 备份状态/大小/耗时 |
 | `settings` | **系统设置** | **key 唯一，存储用户自定义配置，支持热重载** |
+| `server_guides` | **服务器指南** | **title / slug / summary / content(Markdown) / status / author_id / is_pinned / 按标题自动排序** |
+| `guide_edit_bans` | **指南编辑封禁** | **user_id / ip_address / banned_by / reason / expires_at** |
 
 所有外键均启用 `enable_foreign_keys` 和 `ON DELETE CASCADE`。
 
@@ -649,12 +693,52 @@ server {
 2. 修改默认管理员密码
 3. 生产环境启用 HTTPS
 4. 定期清理 `access_logs` 表（管理后台支持一键清空，或配置自动清理）
+5. 图形验证码采用服务端内存存储（`CaptchaService` 单例），答案不依赖 session，返回随机 `captcha_id` 供前端提交，校验后一次性删除防止重放攻击与 curl 绕过
+6. Session Cookie 启用 `HttpOnly` 与 `SameSite=Lax` 安全选项，防止 JS 读取与跨站请求伪造
 
 ## 更新日志
 
 项目的版本变更历史详见 [docs/CHANGELOG.md](file:///workspace/docs/CHANGELOG.md)。
 
 ### 最近修复
+
+**统一网页弹窗系统（替换浏览器原生弹窗）：**
+- 新增 `CustomModal` 弹窗组件（放大居中动画 + 触发元素位置感知）与 `Toast` 提示组件（四种类型），位于 `static/js/base.js`
+- `base.js` 新增 `initCustomConfirm` 拦截器：自动将 `form[onsubmit*="confirm("]` 与 `a[onclick*="confirm("]` 替换为自定义弹窗，统一磨砂玻璃风格
+- `base.js` 新增附件上传进度条（XHR + `progress` 事件），上传时显示百分比与状态
+- `templates/admin_db_backup.html`：脚本块内调用的 `confirm()` 手动替换为 `CustomModal.confirm()`，与全站弹窗风格一致
+- 所有页面已不再使用浏览器原生 `alert`/`confirm`，统一使用磨砂玻璃风格的网页弹窗
+
+**前端移动端彻底适配：**
+- `templates/admin_settings.html`：内联固定宽度输入框改为响应式 `w-full sm:w-48` / `w-full sm:w-32`，设置项行布局在移动端纵向堆叠（`flex flex-col sm:flex-row`）
+- `templates/admin_logs.html`：工具栏改为移动端纵向布局 + 操作行 `flex-wrap`
+- 多处页面 H1 标题改为响应式变体（`text-xl sm:text-2xl` / `text-2xl sm:text-3xl`）
+- `templates/admin.html`：统计卡片数字改为 `text-xl sm:text-2xl break-all`，防止大数字溢出
+- `templates/performance.html`：系统信息卡片在小屏单列显示（`grid-cols-1 sm:grid-cols-2 lg:grid-cols-4`）
+- `templates/docs.html` / `templates/guides/detail.html`：Markdown 表格添加 `display: block; overflow-x: auto;`，移动端可横向滚动
+- `templates/register.html` / `templates/login.html`：卡片容器响应式边距与内边距（`mx-4 sm:mx-6`、`p-5 sm:p-8`）
+- `templates/manage_mod_intros.html` / `templates/community.html`：长文本行添加 `truncate` + `min-w-0` + `flex-shrink-0`，避免按钮被挤出可视区
+
+**验证码服务内存清理机制：**
+- `services/captcha.py` `CaptchaService`：新增后台清理线程（每 60 秒清理过期验证码），避免内存泄漏
+- `services/email_code.py` `EmailCodeService`：新增后台清理线程（每 5 分钟清理过期验证码），避免内存泄漏
+- 两个服务的 docstring 完善安全特性说明（服务端内存存储、一次性删除防重放、过期时间、后台清理）
+
+**验证码安全性增强（防止 curl 等工具绕过）：**
+- `services/captcha.py`：新增 `CaptchaService` 单例类，验证码答案改用服务端内存存储（`{captcha_id: {answer, expire, created_at}}`），不再依赖 session；`verify()` 校验后一次性删除防止重放攻击；线程锁保证线程安全；过期时间 300 秒
+- `services/captcha.py`：扩大答案空间，数学题从 1+1~10+10（答案 2-20，仅 19 种）改为两位数运算 a∈[10,99] + b∈[10,99]（答案 20-198，179 种），防止暴力枚举
+- `services/captcha.py`：`verify_captcha` 函数增加时间戳校验参数 `created_at`，超过 300 秒视为过期
+- `routes/api/captcha.py`：生成接口改用 `CaptchaService`，返回 `{success, image, captcha_id}`
+- `routes/api/email_code.py`、`routes/main.py`（注册/登录）、`routes/guides/api.py`：验证码校验改用 `captcha_service.verify(captcha_id, user_input)`，从请求中获取 `captcha_id`
+- 前端模板（register.html、login.html、settings.html、guides/index.html）：验证码图片加载后保存返回的 `captcha_id`，表单/请求中携带 `captcha_id` 字段提交
+- `app.py`：添加 Session Cookie 安全选项 `SESSION_COOKIE_HTTPONLY=True` 与 `SESSION_COOKIE_SAMESITE='Lax'`
+
+**邮件功能与稳定性修复：**
+- 修复 yagmail SMTP 连接参数错误：移除 `smtp_set_debug_level` 参数，解决 `SMTP_SSL.__init__() got an unexpected keyword argument` 错误
+- 邮箱验证码发送前增加图形验证码校验，防止恶意刷短信
+- 注册页面和设置页面的邮箱验证码发送按钮增加图形验证码，发送失败时自动刷新图形验证码
+- 修复 DuckDB WAL 文件损坏导致启动失败：自动检测并删除损坏的 WAL 文件，自动重试连接
+- 优化多进程子进程检测函数，移除冗余代码
 
 **修复 MiniScript 脚本编辑器输出重复问题：**
 - `static/js/cmd/terminal-core.js`：`TerminalBuffer._finalizeCurrentLine()` 在换行时不再调用 `_flushLine()` 创建新的 div，而是直接移除 `.term-current-line` 类，将已渲染的当前行转为 finalized 行，避免同一行内容被重复输出两次
@@ -729,3 +813,4 @@ server {
 - `routes/cmd/terminal.py`：SSE 生成器将当前 generation 传入 `read_pending_output`，实现代际一致性校验
 - `static/js/cmd/terminal-core.js`：`SseTerminal` 新增 `_connecting` 锁，防止并发调用 `connect()` 产生多个 EventSource 连接
 - `core/shell.py`：Windows cmd 启动参数改为 `cmd.exe /q /k`，关闭命令回显，减少命令被前后端重复渲染的概率
+

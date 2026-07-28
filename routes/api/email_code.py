@@ -1,9 +1,10 @@
 """邮箱验证码 API 路由。"""
 
-from flask import Blueprint, request, jsonify, session
+from flask import Blueprint, request, jsonify
 
 from services.email_code import email_code_service, normalize_email
 from services.email import email_service
+from services.captcha import captcha_service
 from config import get_config_value
 
 
@@ -37,7 +38,9 @@ def send_email_code():
     请求 JSON:
     {
         "email": "user@example.com",
-        "purpose": "注册"  // 可选，默认 "注册"
+        "purpose": "注册",  // 可选，默认 "注册"
+        "captcha": "1234",      // 图形验证码
+        "captcha_id": "uuid"    // 验证码 ID（服务端内存存储）
     }
 
     返回 JSON:
@@ -49,12 +52,18 @@ def send_email_code():
     data = request.get_json(silent=True) or {}
     email = normalize_email(data.get('email') or '')
     purpose = data.get('purpose') or '注册'
+    captcha_input = (data.get('captcha') or '').strip()
+    captcha_id = (data.get('captcha_id') or '').strip()
 
     if not email:
         return jsonify({'success': False, 'message': '请输入邮箱地址'}), 400
 
     if not _is_valid_email(email):
         return jsonify({'success': False, 'message': '邮箱格式不正确'}), 400
+
+    # 图形验证码校验（服务端内存存储，一次性删除防止重放）
+    if not captcha_service.verify(captcha_id, captcha_input):
+        return jsonify({'success': False, 'message': '图形验证码错误或已过期', 'need_captcha': True}), 400
 
     # 检查邮件功能是否启用
     if not email_service.is_enabled():

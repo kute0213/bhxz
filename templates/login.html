@@ -2,13 +2,13 @@
 {% block title %}登录{% endblock %}
 {% block content %}
     <section class="page-container flex items-center justify-center py-12">
-        <div class="max-w-md w-full mx-6">
-            <div class="pixel-card rounded-xl p-8">
-                <div class="text-center mb-8">
+        <div class="max-w-md w-full mx-4 sm:mx-6">
+            <div class="pixel-card rounded-xl p-5 sm:p-8">
+                <div class="text-center mb-6 sm:mb-8">
                     <div class="w-16 h-16 mx-auto bg-gold-400/20 rounded-full flex items-center justify-center mb-4">
                         <i data-lucide="log-in" class="w-8 h-8 text-gold-400"></i>
                     </div>
-                    <h1 class="text-2xl font-bold mb-2">登录账户</h1>
+                    <h1 class="text-xl sm:text-2xl font-bold mb-2">登录账户</h1>
                     <p class="text-cream/60 text-sm">欢迎回来，继续你的滨海小镇</p>
                 </div>
 
@@ -38,6 +38,7 @@
                         <label class="block text-sm font-medium mb-2 text-cream/80">验证码</label>
                         <div class="flex flex-wrap gap-2 sm:gap-3 items-center">
                             <input type="text" name="captcha" required class="input-field flex-1 min-w-[120px] px-4 py-3 rounded-lg" placeholder="请输入答案">
+                            <input type="hidden" name="captcha_id" id="captcha-id" value="">
                             <div class="flex items-center gap-1.5">
                                 <img id="captcha-img" src="" alt="验证码" class="h-11 sm:h-12 rounded cursor-pointer hover:opacity-80 transition-opacity border border-forest-700/50" title="点击刷新">
                                 <button type="button" onclick="loadCaptcha()" class="p-1.5 text-cream/50 hover:text-gold-400 transition-colors rounded-lg hover:bg-cream/5" title="刷新验证码">
@@ -64,11 +65,14 @@
 // 加载验证码
 function loadCaptcha() {
     const img = document.getElementById('captcha-img');
+    const captchaIdInput = document.getElementById('captcha-id');
     fetch('/api/captcha/generate')
         .then(res => res.json())
         .then(data => {
             if (data.success) {
                 img.src = data.image;
+                // 保存服务端返回的 captcha_id 供表单提交
+                if (captchaIdInput) captchaIdInput.value = data.captcha_id || '';
             }
         })
         .catch(err => console.error('加载验证码失败:', err));

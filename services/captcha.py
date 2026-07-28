@@ -2,11 +2,16 @@
 验证码服务模块：生成带干扰线条的数学题验证码图片。
 
 图片直接返回 base64 编码，不保存文件，减少服务器开销。
+验证码答案存于服务端内存（CaptchaService 单例），返回随机 captcha_id
+供前端提交时携带，校验后一次性删除防止重放攻击，避免被 curl 等工具绕过。
 """
 
 import io
 import base64
 import random
+import time
+import uuid
+import threading
 from typing import Tuple
 
 # 延迟导入 Pillow，避免不必要的依赖检查
@@ -36,19 +41,21 @@ def _check_pil():
 def generate_math_captcha(
     width: int = 200,
     height: int = 50,
-    min_num: int = 1,
-    max_num: int = 10,
+    min_num: int = 10,
+    max_num: int = 99,
     line_count: int = 6,
     point_count: int = 120,
 ) -> Tuple[str, str]:
     """
     生成数学加法验证码图片。
 
+    使用两位数运算，答案范围 20-198（179 种），扩大答案空间防止暴力枚举。
+
     Args:
         width: 图片宽度
         height: 图片高度
-        min_num: 最小数字
-        max_num: 最大数字
+        min_num: 最小数字（默认两位数 10）
+        max_num: 最大数字（默认两位数 99）
         line_count: 干扰线条数量
         point_count: 干扰点数量
 
@@ -61,7 +68,7 @@ def generate_math_captcha(
     if not _check_pil():
         raise RuntimeError("Pillow 库未安装，请运行: pip install Pillow")
 
-    # 生成随机数学题
+    # 生成随机数学题（两位数运算，答案范围 20-198）
     a = random.randint(min_num, max_num)
     b = random.randint(min_num, max_num)
     answer = str(a + b)
@@ -129,17 +136,124 @@ def generate_math_captcha(
     return answer, f"data:image/png;base64,{base64_data}"
 
 
-def verify_captcha(user_input: str, answer: str) -> bool:
+def verify_captcha(user_input: str, answer: str, created_at: float = None) -> bool:
     """
     验证用户输入的验证码是否正确。
+
+    支持时间戳校验：当传入 created_at 时，检查是否超过 300 秒过期。
 
     Args:
         user_input: 用户输入
         answer: 正确答案
+        created_at: 验证码生成时间戳（秒），传入则校验是否过期（300 秒）
 
     Returns:
         是否正确
     """
     if not user_input or not answer:
         return False
+    # 时间戳校验：超过 300 秒视为过期
+    if created_at is not None and (time.time() - created_at) > 300:
+        return False
     return user_input.strip() == answer.strip()
+
+
+class CaptchaService:
+    """图形验证码管理器（单例，服务端内存存储，自动过期清理，线程安全）。
+
+    存储结构：{captcha_id: {'answer': str, 'expire': float, 'created_at': float}}
+    答案不再依赖 session，防止被 curl 等工具绕过。
+
+    安全特性：
+    - 验证码答案仅在服务端内存中，不返回给客户端
+    - 使用随机 UUID 作为 captcha_id，无法预测
+    - verify() 校验后一次性删除，防止重放攻击
+    - 过期时间 300 秒，超时自动失效
+    - 后台线程定期清理过期项，避免内存泄漏
+    """
+
+    _instance = None
+    _lock = threading.Lock()
+
+    def __new__(cls):
+        with cls._lock:
+            if cls._instance is None:
+                cls._instance = super().__new__(cls)
+                cls._instance._initialized = False
+            return cls._instance
+
+    def __init__(self):
+        if self._initialized:
+            return
+        self._initialized = True
+        # {captcha_id: {'answer': str, 'expire': float, 'created_at': float}}
+        self._captchas: dict = {}
+        self._lock = threading.Lock()
+        # 过期时间（秒）
+        self._expire_seconds = 300
+        # 启动后台清理线程，每 60 秒清理一次过期验证码，避免内存泄漏
+        self._cleanup_thread = threading.Thread(
+            target=self._cleanup_loop, name='captcha-cleanup', daemon=True
+        )
+        self._cleanup_thread.start()
+
+    def _cleanup_loop(self):
+        """后台线程：定期清理过期验证码，避免内存泄漏。"""
+        while True:
+            time.sleep(60)
+            try:
+                self.cleanup_expired()
+            except Exception as e:
+                # 后台线程不应因异常退出
+                print(f'[Captcha] 清理过期验证码失败: {e}', flush=True)
+
+    def generate(self) -> Tuple[str, str, str]:
+        """生成验证码。
+
+        Returns:
+            (captcha_id, answer, image_base64): UUID 验证码 ID、答案、base64 图片
+        """
+        answer, image_data = generate_math_captcha()
+        captcha_id = str(uuid.uuid4())
+        now = time.time()
+        with self._lock:
+            self._captchas[captcha_id] = {
+                'answer': answer,
+                'expire': now + self._expire_seconds,
+                'created_at': now,
+            }
+        return captcha_id, answer, image_data
+
+    def verify(self, captcha_id: str, user_input: str) -> bool:
+        """校验验证码并一次性删除（防止重放攻击）。
+
+        Args:
+            captcha_id: 验证码 ID
+            user_input: 用户输入
+
+        Returns:
+            是否正确
+        """
+        if not captcha_id or not user_input:
+            return False
+        with self._lock:
+            # 一次性取出并删除，无论校验是否成功都防止重放
+            entry = self._captchas.pop(captcha_id, None)
+            if not entry:
+                return False
+            # 过期校验
+            if time.time() > entry['expire']:
+                return False
+            return user_input.strip() == entry['answer'].strip()
+
+    def cleanup_expired(self):
+        """清理过期的验证码。"""
+        now = time.time()
+        with self._lock:
+            expired = [k for k, v in self._captchas.items() if now > v['expire']]
+            for k in expired:
+                del self._captchas[k]
+
+
+# 全局单例
+captcha_service = CaptchaService()

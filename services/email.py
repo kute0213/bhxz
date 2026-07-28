@@ -1,8 +1,14 @@
-"""SMTP 邮件发送服务（基于 yagmail，后台线程异步发送，不阻塞主请求）。"""
+"""SMTP 邮件发送服务（基于标准库 smtplib，后台线程异步发送，不阻塞主请求）。"""
 
+import smtplib
+import ssl
 import threading
 import queue
+import traceback
 from datetime import datetime
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from email.utils import formataddr
 
 from config import get_config_value
 
@@ -78,28 +84,23 @@ class EmailService:
     # 内部实现
     # ------------------------------------------------------------------
 
-    def _get_yagmail_client(self):
-        """构建 yagmail 客户端（每次发送时读取最新配置，支持热重载）。"""
-        import yagmail
-
+    def _get_smtp_config(self):
+        """读取 SMTP 配置（每次发送时读取最新值，支持热重载）。"""
         host = get_config_value('SMTP_HOST', '')
         port = get_config_value('SMTP_PORT', 465)
         user = get_config_value('SMTP_USER', '')
         password = get_config_value('SMTP_PASSWORD', '')
         sender = get_config_value('SMTP_SENDER_NAME', '') or '滨海小镇'
+        use_ssl = get_config_value('SMTP_SSL', True)
+        use_starttls = get_config_value('SMTP_STARTTLS', False)
 
         if not host or not user or not password:
             return None
-
-        return yagmail.SMTP(
-            user=user,
-            password=password,
-            host=host,
-            port=port,
-            smtp_starttls=get_config_value('SMTP_STARTTLS', False),
-            smtp_ssl=get_config_value('SMTP_SSL', True),
-            smtp_set_debug_level=0,
-        ), sender
+        return {
+            'host': host, 'port': port, 'user': user,
+            'password': password, 'sender': sender,
+            'use_ssl': use_ssl, 'use_starttls': use_starttls,
+        }
 
     def _run_loop(self):
         """后台线程：从队列取邮件并发送。"""
@@ -124,27 +125,51 @@ class EmailService:
                 break
 
     def _send_one(self, item: dict):
-        """发送单封邮件（含异常处理）。"""
+        """发送单封邮件（使用标准库 smtplib，含详细异常处理）。"""
         if not self.is_enabled():
             return
 
-        try:
-            result = self._get_yagmail_client()
-            if result is None:
-                print('[Email] SMTP 配置不完整，跳过发送', flush=True)
-                return
-            client, sender = result
+        cfg = self._get_smtp_config()
+        if cfg is None:
+            print('[Email] SMTP 配置不完整，跳过发送', flush=True)
+            return
 
-            contents = [item.get('html') or item.get('body', '')]
-            client.send(
-                to=item['to'],
-                subject=item['subject'],
-                contents=contents,
-                headers={'From': sender},
-            )
+        try:
+            # 构建邮件
+            html_content = item.get('html')
+            text_content = item.get('body', '')
+
+            if html_content:
+                msg = MIMEMultipart('alternative')
+                msg.attach(MIMEText(text_content, 'plain', 'utf-8'))
+                msg.attach(MIMEText(html_content, 'html', 'utf-8'))
+            else:
+                msg = MIMEText(text_content, 'plain', 'utf-8')
+
+            msg['Subject'] = item['subject']
+            msg['From'] = formataddr((cfg['sender'], cfg['user']))
+            msg['To'] = item['to']
+
+            # 连接 SMTP 服务器并发送
+            if cfg['use_ssl']:
+                context = ssl.create_default_context()
+                with smtplib.SMTP_SSL(cfg['host'], cfg['port'], context=context, timeout=30) as server:
+                    server.login(cfg['user'], cfg['password'])
+                    server.sendmail(cfg['user'], [item['to']], msg.as_string())
+            else:
+                with smtplib.SMTP(cfg['host'], cfg['port'], timeout=30) as server:
+                    server.ehlo()
+                    if cfg['use_starttls']:
+                        context = ssl.create_default_context()
+                        server.starttls(context=context)
+                        server.ehlo()
+                    server.login(cfg['user'], cfg['password'])
+                    server.sendmail(cfg['user'], [item['to']], msg.as_string())
+
             print(f"[Email] 已发送: {item['to']} <- {item['subject']}", flush=True)
         except Exception as e:
-            print(f"[Email] 发送失败 ({item.get('to')}): {e}", flush=True)
+            print(f"[Email] 发送失败 ({item.get('to')}): {type(e).__name__}: {e}", flush=True)
+            traceback.print_exc()
 
 
 # 全局单例

@@ -37,7 +37,8 @@
 │   ├── backup_manager.py         #   数据库备份管理器（DuckDB 在线备份 + 旧备份清理）
 │   ├── backup_scheduler.py       #   每日定时备份调度器（默认凌晨 3:00，支持热重载）
 │   ├── settings_manager.py       #   系统设置管理器（数据库存储 + 内存缓存，支持热重载）
-│   ├── email.py                  #   SMTP 邮件发送服务（基于 yagmail，后台线程异步发送）
+│   ├── captcha.py                #   图形验证码服务（两位数运算 + 服务端内存存储 + 一次性删除防重放）
+│   ├── email.py                  #   SMTP 邮件发送服务（基于标准库 smtplib，后台线程异步发送）
 │   ├── email_code.py             #   邮箱验证码服务（生成/存储/验证，内存存储，自动过期）
 │   ├── script_store.py           #   统一脚本存储服务（数据库存储，按名称自动排序）
 │   ├── terminal/                 #   持久交互式终端服务（session-based shell 子进程管理）
@@ -692,12 +693,52 @@ server {
 2. 修改默认管理员密码
 3. 生产环境启用 HTTPS
 4. 定期清理 `access_logs` 表（管理后台支持一键清空，或配置自动清理）
+5. 图形验证码采用服务端内存存储（`CaptchaService` 单例），答案不依赖 session，返回随机 `captcha_id` 供前端提交，校验后一次性删除防止重放攻击与 curl 绕过
+6. Session Cookie 启用 `HttpOnly` 与 `SameSite=Lax` 安全选项，防止 JS 读取与跨站请求伪造
 
 ## 更新日志
 
 项目的版本变更历史详见 [docs/CHANGELOG.md](file:///workspace/docs/CHANGELOG.md)。
 
 ### 最近修复
+
+**统一网页弹窗系统（替换浏览器原生弹窗）：**
+- 新增 `CustomModal` 弹窗组件（放大居中动画 + 触发元素位置感知）与 `Toast` 提示组件（四种类型），位于 `static/js/base.js`
+- `base.js` 新增 `initCustomConfirm` 拦截器：自动将 `form[onsubmit*="confirm("]` 与 `a[onclick*="confirm("]` 替换为自定义弹窗，统一磨砂玻璃风格
+- `base.js` 新增附件上传进度条（XHR + `progress` 事件），上传时显示百分比与状态
+- `templates/admin_db_backup.html`：脚本块内调用的 `confirm()` 手动替换为 `CustomModal.confirm()`，与全站弹窗风格一致
+- 所有页面已不再使用浏览器原生 `alert`/`confirm`，统一使用磨砂玻璃风格的网页弹窗
+
+**前端移动端彻底适配：**
+- `templates/admin_settings.html`：内联固定宽度输入框改为响应式 `w-full sm:w-48` / `w-full sm:w-32`，设置项行布局在移动端纵向堆叠（`flex flex-col sm:flex-row`）
+- `templates/admin_logs.html`：工具栏改为移动端纵向布局 + 操作行 `flex-wrap`
+- 多处页面 H1 标题改为响应式变体（`text-xl sm:text-2xl` / `text-2xl sm:text-3xl`）
+- `templates/admin.html`：统计卡片数字改为 `text-xl sm:text-2xl break-all`，防止大数字溢出
+- `templates/performance.html`：系统信息卡片在小屏单列显示（`grid-cols-1 sm:grid-cols-2 lg:grid-cols-4`）
+- `templates/docs.html` / `templates/guides/detail.html`：Markdown 表格添加 `display: block; overflow-x: auto;`，移动端可横向滚动
+- `templates/register.html` / `templates/login.html`：卡片容器响应式边距与内边距（`mx-4 sm:mx-6`、`p-5 sm:p-8`）
+- `templates/manage_mod_intros.html` / `templates/community.html`：长文本行添加 `truncate` + `min-w-0` + `flex-shrink-0`，避免按钮被挤出可视区
+
+**验证码服务内存清理机制：**
+- `services/captcha.py` `CaptchaService`：新增后台清理线程（每 60 秒清理过期验证码），避免内存泄漏
+- `services/email_code.py` `EmailCodeService`：新增后台清理线程（每 5 分钟清理过期验证码），避免内存泄漏
+- 两个服务的 docstring 完善安全特性说明（服务端内存存储、一次性删除防重放、过期时间、后台清理）
+
+**验证码安全性增强（防止 curl 等工具绕过）：**
+- `services/captcha.py`：新增 `CaptchaService` 单例类，验证码答案改用服务端内存存储（`{captcha_id: {answer, expire, created_at}}`），不再依赖 session；`verify()` 校验后一次性删除防止重放攻击；线程锁保证线程安全；过期时间 300 秒
+- `services/captcha.py`：扩大答案空间，数学题从 1+1~10+10（答案 2-20，仅 19 种）改为两位数运算 a∈[10,99] + b∈[10,99]（答案 20-198，179 种），防止暴力枚举
+- `services/captcha.py`：`verify_captcha` 函数增加时间戳校验参数 `created_at`，超过 300 秒视为过期
+- `routes/api/captcha.py`：生成接口改用 `CaptchaService`，返回 `{success, image, captcha_id}`
+- `routes/api/email_code.py`、`routes/main.py`（注册/登录）、`routes/guides/api.py`：验证码校验改用 `captcha_service.verify(captcha_id, user_input)`，从请求中获取 `captcha_id`
+- 前端模板（register.html、login.html、settings.html、guides/index.html）：验证码图片加载后保存返回的 `captcha_id`，表单/请求中携带 `captcha_id` 字段提交
+- `app.py`：添加 Session Cookie 安全选项 `SESSION_COOKIE_HTTPONLY=True` 与 `SESSION_COOKIE_SAMESITE='Lax'`
+
+**邮件功能与稳定性修复：**
+- 修复 yagmail SMTP 连接参数错误：移除 `smtp_set_debug_level` 参数，解决 `SMTP_SSL.__init__() got an unexpected keyword argument` 错误
+- 邮箱验证码发送前增加图形验证码校验，防止恶意刷短信
+- 注册页面和设置页面的邮箱验证码发送按钮增加图形验证码，发送失败时自动刷新图形验证码
+- 修复 DuckDB WAL 文件损坏导致启动失败：自动检测并删除损坏的 WAL 文件，自动重试连接
+- 优化多进程子进程检测函数，移除冗余代码
 
 **修复 MiniScript 脚本编辑器输出重复问题：**
 - `static/js/cmd/terminal-core.js`：`TerminalBuffer._finalizeCurrentLine()` 在换行时不再调用 `_flushLine()` 创建新的 div，而是直接移除 `.term-current-line` 类，将已渲染的当前行转为 finalized 行，避免同一行内容被重复输出两次

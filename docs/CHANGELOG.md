@@ -13,6 +13,12 @@
   - 登录和注册页面添加验证码输入框，点击图片可刷新
   - 后端严格校验验证码（答案存储在 session 中，一次性使用后立即清除）
   - 延迟加载 Pillow 库，避免不必要的依赖检查开销
+- **统一网页弹窗系统**：
+  - 新增 `CustomModal` 弹窗组件：放大居中动画，支持触发元素位置感知
+  - 新增 `Toast` 提示组件：成功/错误/警告/信息四种类型
+  - `base.js` 新增 `initCustomConfirm`：自动拦截 `form[onsubmit*="confirm("]` 与 `a[onclick*="confirm("]`，统一替换为自定义弹窗
+  - `base.js` 新增附件上传进度条（XHR + `progress` 事件）
+  - 所有页面已替换浏览器原生 `alert`/`confirm` 为统一的网页弹窗，符合磨砂玻璃整体风格
 - **服务器指南系统**：
   - 新增 `server_guides` 表：存储指南标题、slug、摘要、Markdown 内容、审核状态、作者、置顶与排序
   - 新增 `guide_edit_bans` 表：记录用户/IP 的编辑权限封禁，支持限时或永久封禁
@@ -23,11 +29,35 @@
   - 前端使用 `marked.js` 渲染 Markdown，支持标题自动生成锚点链接
   - 蓝图拆分：`routes/guides/`（公开页面 + 成员 API）、`routes/admin/guides.py` + `guide_bans.py`（管理后台）
 
-### 修复
+### 重构
+- **前端移动端彻底适配**：
+  - `templates/admin_settings.html`：内联 `style="width: 200px;"` / `style="width: 120px;"` 改为响应式 `w-full sm:w-48` / `w-full sm:w-32`，移动端输入框占满宽度，桌面端固定宽度
+  - `templates/admin_settings.html`：设置项行布局从 `flex items-center` 改为 `flex flex-col sm:flex-row sm:items-center`，移动端纵向堆叠
+  - `templates/admin_settings.html`：操作栏添加 `flex-wrap`，避免窄屏按钮挤压
+  - `templates/admin_logs.html`：工具栏从 `flex items-center justify-between` 改为 `flex flex-col` + 内部 `flex-wrap`，移动端标题与操作行垂直排列
+  - `templates/manage_mod_intros.html`：底部信息行添加 `truncate` + `min-w-0` + `flex-shrink-0`，避免长文本将删除按钮挤出可视区
+  - `templates/community.html`：投票选项行添加 `truncate` + `flex-shrink-0`，防止长选项挤压百分比
+  - 多处页面 H1 标题从 `text-2xl` / `text-3xl` 改为 `text-xl sm:text-2xl` / `text-2xl sm:text-3xl` 响应式变体（admin_db_backup、admin_logs、admin_settings、admin_users、register、login、settings、performance、manage_mod_intros）
+  - `templates/admin.html`：统计卡片数字改为 `text-xl sm:text-2xl break-all`，防止大数字溢出
+  - `templates/performance.html`：系统信息卡片从 `grid-cols-2` 改为 `grid-cols-1 sm:grid-cols-2 lg:grid-cols-4`，小屏单列
+  - `templates/docs.html` / `templates/guides/detail.html`：`.prose-docs table` 添加 `display: block; overflow-x: auto; max-width: 100%;`，Markdown 表格在移动端可横向滚动
+  - `templates/register.html` / `templates/login.html`：容器 `mx-6` → `mx-4 sm:mx-6`，内边距 `p-8` → `p-5 sm:p-8`
+  - `templates/manage_mod_intros.html`：容器 `px-6` → `px-4 sm:px-6 lg:px-8`
+  - `templates/index.html`：内联 `text-2xl` → `text-xl sm:text-2xl`
+- **验证码服务内存清理机制**：
+  - `services/captcha.py` `CaptchaService`：新增后台清理线程（每 60 秒清理一次过期验证码），避免内存泄漏
+  - `services/email_code.py` `EmailCodeService`：新增后台清理线程（每 5 分钟清理一次过期验证码），避免内存泄漏
+  - 两个服务的 docstring 完善安全特性说明（服务端内存存储、一次性删除防重放、过期时间、后台清理）
 
-- **修复 MiniScript 脚本编辑器输出重复问题**：
-  - `static/js/cmd/terminal-core.js`：`TerminalBuffer._finalizeCurrentLine()` 在换行时先移除 `.term-current-line` 类，再调用 `_flushLine()` 创建新的 div，导致当前行内容被重复渲染两次。修复后：当前行已存在于 DOM 中时直接移除标记类作为 finalized 行，不再创建重复 div
-  - `templates/admin_cmd_editor.html`：更新 `terminal-core.js` 缓存版本号 `v=2`，强制浏览器加载修复后的文件
+### 修复
+- **替换 `admin_db_backup.html` 中内联 `confirm()`**：脚本块中的原生 `confirm('确定要删除此备份吗？此操作不可恢复。')` 替换为 `CustomModal.confirm()`，与全站统一弹窗风格保持一致（`initCustomConfirm` 仅拦截 `onsubmit`/`onclick` 属性，无法拦截脚本块内调用，故手动改写）
+
+- **邮件发送与验证码相关修复**：
+  - 修复 yagmail SMTP 连接参数错误：移除 `smtp_set_debug_level` 参数，避免 `SMTP_SSL.__init__() got an unexpected keyword argument` 错误
+  - 修复邮箱验证码发送前需图形验证码验证：`POST /api/email/send-code` 新增 `captcha` 参数，后端校验图形验证码后才发送邮箱验证码，防止恶意刷短信
+  - 注册页面和设置页面的邮箱验证码发送按钮增加图形验证码校验，发送失败时自动刷新图形验证码
+  - 修复 DuckDB WAL 文件损坏导致启动失败：`get_db()` 捕获 `InternalException`，检测到 WAL 损坏时自动删除损坏的 WAL 文件并重试连接，输出恢复日志
+  - 优化 `_is_mp_child_process()` 函数：移除冗余的环境变量重复设置，简化 frozen 分支判断逻辑
 
 - **修复 Windows 终端输出重复问题**：
   - `services/terminal/session.py`：`read_pending_output` 增加 `caller_generation` 参数，旧 SSE 连接在 generation 切换后返回空列表且不再消费输出队列，避免同一段输出被多个连接重复发送

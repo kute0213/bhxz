@@ -23,13 +23,10 @@ def _is_mp_child_process():
     4. sys.argv 包含 spawn/fork 特征参数
     """
     if os.environ.get('_BH_CHILD_PROCESS') == '1':
-        os.environ['_BH_CHILD_PROCESS'] = '1'
         return True
     try:
         import sys
-        if getattr(sys, 'frozen', False):
-            pass
-        else:
+        if not getattr(sys, 'frozen', False):
             argv_str = ' '.join(sys.argv).lower()
             if '--multiprocessing-fork' in argv_str:
                 os.environ['_BH_CHILD_PROCESS'] = '1'
@@ -339,7 +336,22 @@ def get_db():
     if _conn is None:
         with _init_lock:
             if _conn is None:
-                _conn = DuckDBConnection(DB_PATH)
+                try:
+                    _conn = DuckDBConnection(DB_PATH)
+                except duckdb.InternalException as e:
+                    if 'WAL file' in str(e):
+                        wal_path = f"{DB_PATH}.wal"
+                        print(f'[DB] 检测到 WAL 文件损坏，尝试恢复: {wal_path}', flush=True)
+                        if os.path.exists(wal_path):
+                            try:
+                                os.remove(wal_path)
+                                print(f'[DB] 已删除损坏的 WAL 文件，重试连接', flush=True)
+                            except OSError as oe:
+                                print(f'[DB] 删除 WAL 文件失败: {oe}', flush=True)
+                        _conn = DuckDBConnection(DB_PATH)
+                        print('[DB] 数据库连接恢复成功', flush=True)
+                    else:
+                        raise
                 _conn.row_factory = _row_factory_duckdbrow
     return _ThreadSafeConnection(_conn, _conn_lock)
 

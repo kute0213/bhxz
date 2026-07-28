@@ -3,12 +3,12 @@
 {% block content %}
     <section class="page-container py-12">
         <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex items-center justify-between mb-8">
+            <div class="flex flex-col gap-4 mb-8">
                 <div>
                     <a href="{{ url_for('admin.admin_page') }}" class="text-gold-400 hover:text-gold-300 text-sm mb-2 inline-block">
                         <i data-lucide="arrow-left" class="w-4 h-4 inline mr-1"></i>返回管理中心
                     </a>
-                    <h1 class="text-2xl font-bold">访问日志</h1>
+                    <h1 class="text-xl sm:text-2xl font-bold">访问日志</h1>
                     <p class="text-cream/60 text-sm mt-1">共 <span id="total-count">{{ total }}</span> 条记录</p>
 
                     {% with messages = get_flashed_messages(with_categories=true) %}
@@ -24,7 +24,7 @@
                     {% endif %}
                     {% endwith %}
                 </div>
-                <div class="flex items-center gap-3">
+                <div class="flex flex-wrap items-center gap-2 sm:gap-3">
                     <!-- 自动刷新控制 -->
                     <div class="flex items-center gap-2">
                         <label class="text-cream/60 text-sm">自动刷新</label>

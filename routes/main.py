@@ -2,11 +2,11 @@ import hashlib
 import json
 import os
 from datetime import datetime
-from flask import Blueprint, render_template, request, redirect, url_for, session, flash, jsonify, send_from_directory, abort
+from flask import Blueprint, render_template, request, redirect, url_for, session, flash, jsonify, abort
 from core.auth import login_required, get_current_user
 from core.db import get_db
 from config import REGISTER_VERIFY_CODE, UPLOAD_DIR, get_config_value
-from services.captcha import verify_captcha
+from services.captcha import captcha_service
 from services.email_code import normalize_email
 
 main_bp = Blueprint('main', __name__)
@@ -42,12 +42,12 @@ def register():
         confirm = request.form.get('confirm', '')
         verify_code = request.form.get('verify_code', '').strip()
         captcha_input = request.form.get('captcha', '').strip()
+        captcha_id = request.form.get('captcha_id', '').strip()
         email = normalize_email(request.form.get('email', ''))
         email_code = request.form.get('email_code', '').strip()
 
-        # 验证码校验（后端校验，不能前端绕过）
-        captcha_answer = session.pop('captcha_answer', None)
-        if not captcha_answer or not verify_captcha(captcha_input, captcha_answer):
+        # 验证码校验（服务端内存存储，一次性删除防止重放）
+        if not captcha_service.verify(captcha_id, captcha_input):
             return render_template('register.html', error='验证码错误或已过期',
                                    email_verify_enabled=email_verify_enabled)
 
@@ -112,10 +112,10 @@ def login():
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '')
         captcha_input = request.form.get('captcha', '').strip()
+        captcha_id = request.form.get('captcha_id', '').strip()
 
-        # 验证码校验（后端校验，不能前端绕过）
-        captcha_answer = session.pop('captcha_answer', None)
-        if not captcha_answer or not verify_captcha(captcha_input, captcha_answer):
+        # 验证码校验（服务端内存存储，一次性删除防止重放）
+        if not captcha_service.verify(captcha_id, captcha_input):
             return render_template('login.html', error='验证码错误或已过期')
 
         if not username or not password:
@@ -278,8 +278,8 @@ def change_email():
             flash('请输入新邮箱地址', 'error')
             return redirect(url_for('main.settings') + '#email')
 
-        # 邮箱验证码校验（仅在邮件功能启用时）
-        if get_config_value('EMAIL_ENABLED', False):
+        # 邮箱验证码校验（仅在邮件功能且邮箱验证开启时）
+        if get_config_value('EMAIL_ENABLED', False) and get_config_value('REGISTER_EMAIL_VERIFY', False):
             if not email_code:
                 flash('请输入邮箱验证码', 'error')
                 return redirect(url_for('main.settings') + '#email')

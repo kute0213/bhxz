@@ -116,9 +116,9 @@
                             {% for opt in poll.options %}
                             <div class="relative overflow-hidden rounded-lg border border-gold-400/30 px-4 py-3">
                                 <div class="absolute inset-y-0 left-0 bg-gold-400/20 transition-all" style="width: {{ opt.percent }}%"></div>
-                                <div class="relative flex items-center justify-between">
-                                    <span class="text-cream/90">{{ opt.option_text }}</span>
-                                    <span class="text-gold-400 font-medium text-sm">{{ opt.vote_count }} 票 · {{ opt.percent }}%</span>
+                                <div class="relative flex items-center justify-between gap-2">
+                                    <span class="text-cream/90 min-w-0 flex-1 truncate">{{ opt.option_text }}</span>
+                                    <span class="text-gold-400 font-medium text-sm flex-shrink-0">{{ opt.vote_count }} 票 · {{ opt.percent }}%</span>
                                 </div>
                             </div>
                             {% endfor %}

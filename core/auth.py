@@ -1,10 +1,6 @@
 from functools import wraps
-from flask import session, redirect, url_for, request, abort, g
+from flask import session, redirect, url_for, request, g
 from core.db import get_db
-
-
-def allowed_file(filename):
-    return bool(filename)
 
 
 def login_required(f):
@@ -12,17 +8,6 @@ def login_required(f):
     def decorated(*args, **kwargs):
         if 'user_id' not in session:
             return redirect(url_for('main.login', next=request.path))
-        return f(*args, **kwargs)
-    return decorated
-
-
-def admin_required(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        if 'user_id' not in session:
-            return redirect(url_for('main.login'))
-        if not session.get('is_admin', False):
-            abort(403)
         return f(*args, **kwargs)
     return decorated
 

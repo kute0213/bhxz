@@ -2,13 +2,13 @@
 {% block title %}注册{% endblock %}
 {% block content %}
     <section class="page-container flex items-center justify-center py-12">
-        <div class="max-w-md w-full mx-6">
-            <div class="pixel-card rounded-xl p-8">
-                <div class="text-center mb-8">
+        <div class="max-w-md w-full mx-4 sm:mx-6">
+            <div class="pixel-card rounded-xl p-5 sm:p-8">
+                <div class="text-center mb-6 sm:mb-8">
                     <div class="w-16 h-16 mx-auto bg-gold-400/20 rounded-full flex items-center justify-center mb-4">
                         <i data-lucide="user-plus" class="w-8 h-8 text-gold-400"></i>
                     </div>
-                    <h1 class="text-2xl font-bold mb-2">创建账户</h1>
+                    <h1 class="text-xl sm:text-2xl font-bold mb-2">创建账户</h1>
                     <p class="text-cream/60 text-sm">加入服务器社区，分享你的创意</p>
                 </div>
 
@@ -51,13 +51,14 @@
                         <input type="text" name="verify_code" required class="input-field w-full px-4 py-3 rounded-lg" placeholder="请输入群内验证码">
                         <p class="mt-2 text-xs text-cream/50">
                             <i data-lucide="info" class="w-3 h-3 inline mr-1"></i>
-                            为防止非小镇玩家捣乱，注册需输入群内验证码，可在 QQ 群公告中获取
+                            为防非本服务器玩家参与投票等，注册需输入群内验证码，可在 QQ 群公告中获取
                         </p>
                     </div>
                     <div>
                         <label class="block text-sm font-medium mb-2 text-cream/80">验证码</label>
                         <div class="flex flex-wrap gap-2 sm:gap-3 items-center">
                             <input type="text" name="captcha" required class="input-field flex-1 min-w-[120px] px-4 py-3 rounded-lg" placeholder="请输入答案">
+                            <input type="hidden" name="captcha_id" id="captcha-id" value="">
                             <div class="flex items-center gap-1.5">
                                 <img id="captcha-img" src="" alt="验证码" class="h-11 sm:h-12 rounded cursor-pointer hover:opacity-80 transition-opacity border border-forest-700/50" title="点击刷新">
                                 <button type="button" onclick="loadCaptcha()" class="p-1.5 text-cream/50 hover:text-gold-400 transition-colors rounded-lg hover:bg-cream/5" title="刷新验证码">
@@ -84,11 +85,14 @@
 // 加载验证码
 function loadCaptcha() {
     const img = document.getElementById('captcha-img');
+    const captchaIdInput = document.getElementById('captcha-id');
     fetch('/api/captcha/generate')
         .then(res => res.json())
         .then(data => {
             if (data.success) {
                 img.src = data.image;
+                // 保存服务端返回的 captcha_id 供表单提交
+                if (captchaIdInput) captchaIdInput.value = data.captcha_id || '';
             }
         })
         .catch(err => console.error('加载验证码失败:', err));
@@ -107,19 +111,27 @@ document.getElementById('captcha-img').addEventListener('click', loadCaptcha);
 
     btn.addEventListener('click', function() {
         const emailInput = document.querySelector('input[name="email"]');
+        const captchaInput = document.querySelector('input[name="captcha"]');
+        const captchaIdInput = document.getElementById('captcha-id');
         if (!emailInput || !emailInput.value.trim()) {
-            alert('请先输入邮箱地址');
+            Toast.warning('请先输入邮箱地址');
+            return;
+        }
+        if (!captchaInput || !captchaInput.value.trim()) {
+            Toast.warning('请先输入图形验证码');
             return;
         }
 
         const email = emailInput.value.trim();
+        const captcha = captchaInput.value.trim();
+        const captchaId = captchaIdInput ? captchaIdInput.value : '';
         btn.disabled = true;
         btn.textContent = '发送中...';
 
         fetch('/api/email/send-code', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: email, purpose: '注册' })
+            body: JSON.stringify({ email: email, purpose: '注册', captcha: captcha, captcha_id: captchaId })
         })
         .then(res => res.json())
         .then(data => {
@@ -136,13 +148,18 @@ document.getElementById('captcha-img').addEventListener('click', loadCaptcha);
                     }
                 }, 1000);
             } else {
-                alert(data.message || '发送失败');
+                Toast.error(data.message || '发送失败');
+                // 图形验证码错误时刷新验证码
+                if (data.need_captcha) {
+                    loadCaptcha();
+                    if (captchaInput) captchaInput.value = '';
+                }
                 btn.disabled = false;
                 btn.textContent = '发送验证码';
             }
         })
         .catch(function() {
-            alert('网络错误，请重试');
+            Toast.error('网络错误，请重试');
             btn.disabled = false;
             btn.textContent = '发送验证码';
         });

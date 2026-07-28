@@ -28,7 +28,15 @@ def normalize_email(email: str) -> str:
 
 
 class EmailCodeService:
-    """邮箱验证码管理器（单例，内存存储，自动过期清理）。"""
+    """邮箱验证码管理器（单例，内存存储，自动过期清理）。
+
+    安全特性：
+    - 内存存储验证码，不持久化
+    - 60 秒发送冷却时间，防止恶意刷邮件
+    - 5 分钟过期，超时自动失效
+    - verify() 验证成功后立即删除，防止重放
+    - 后台线程定期清理过期项，避免内存泄漏
+    """
 
     _instance = None
     _lock = threading.Lock()
@@ -51,6 +59,20 @@ class EmailCodeService:
         self._expire_seconds = 300  # 5 分钟
         # 发送间隔限制（秒），防止频繁发送
         self._resend_cooldown = 60
+        # 启动后台清理线程，每 5 分钟清理一次过期验证码，避免内存泄漏
+        self._cleanup_thread = threading.Thread(
+            target=self._cleanup_loop, name='email-code-cleanup', daemon=True
+        )
+        self._cleanup_thread.start()
+
+    def _cleanup_loop(self):
+        """后台线程：定期清理过期验证码，避免内存泄漏。"""
+        while True:
+            time.sleep(300)  # 5 分钟
+            try:
+                self.cleanup_expired()
+            except Exception as e:
+                print(f'[EmailCode] 清理过期验证码失败: {e}', flush=True)
 
     def _generate_code(self) -> str:
         """生成 6 位数字验证码。"""

@@ -55,6 +55,9 @@ app = Flask(__name__)
 app.secret_key = SECRET_KEY
 app.config['MAX_CONTENT_LENGTH'] = MAX_CONTENT_LENGTH
 app.config['TEMPLATES_AUTO_RELOAD'] = True
+# Session Cookie 安全选项：防止 JS 读取 Cookie、限制跨站携带
+app.config['SESSION_COOKIE_HTTPONLY'] = True
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 
 
 def _init_app():

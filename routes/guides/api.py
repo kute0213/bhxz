@@ -3,12 +3,12 @@
 import re
 from datetime import datetime
 
-from flask import request, jsonify, abort, session
+from flask import request, jsonify, abort
 
 from core.auth import login_required, get_current_user
 from core.db import get_db
 from services.ip import get_client_ip
-from services.captcha import verify_captcha
+from services.captcha import captcha_service
 from services.email import email_service
 from routes.guides import guides_bp
 
@@ -240,10 +240,18 @@ def my_guides():
 
 @guides_bp.route('/api/guides/verify-captcha', methods=['POST'])
 def verify_guide_captcha():
-    """验证提交指南时的验证码。"""
+    """验证提交指南时的验证码。
+
+    请求 JSON:
+    {
+        "captcha": "1234",      // 图形验证码
+        "captcha_id": "uuid"    // 验证码 ID（服务端内存存储）
+    }
+    """
     data = request.get_json() or {}
     user_input = (data.get('captcha') or '').strip()
-    answer = session.pop('captcha_answer', None)
-    if not answer or not verify_captcha(user_input, answer):
+    captcha_id = (data.get('captcha_id') or '').strip()
+    # 服务端内存存储校验，一次性删除防止重放
+    if not captcha_service.verify(captcha_id, user_input):
         return jsonify({'success': False, 'message': '验证码错误或已过期'})
     return jsonify({'success': True})

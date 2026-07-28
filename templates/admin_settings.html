@@ -7,13 +7,13 @@
                 <a href="{{ url_for('admin.admin_page') }}" class="text-gold-400 hover:text-gold-300 text-sm mb-2 inline-block">
                     <i data-lucide="arrow-left" class="w-4 h-4 inline mr-1"></i>返回管理中心
                 </a>
-                <h1 class="text-2xl font-bold">系统设置</h1>
+                <h1 class="text-xl sm:text-2xl font-bold">系统设置</h1>
                 <p class="text-cream/60 text-sm mt-1">在线编辑系统配置，修改后立即生效（热重载）</p>
             </div>
 
             <!-- 操作栏 -->
-            <div class="flex items-center justify-between mb-6">
-                <div class="flex items-center gap-3">
+            <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
+                <div class="flex items-center gap-3 min-w-0">
                     <span id="save-status" class="text-sm text-cream/60">所有更改将自动保存</span>
                 </div>
                 <div class="flex items-center gap-2">
@@ -106,7 +106,7 @@
 
                     // 分类标题
                     const header = document.createElement('div');
-                    header.className = 'px-6 py-4 border-b border-cream/10 bg-forest-900/30';
+                    header.className = 'px-4 sm:px-6 py-4 border-b border-cream/10 bg-forest-900/30';
                     header.innerHTML = `
                         <h2 class="text-lg font-bold flex items-center gap-2">
                             <i data-lucide="settings" class="w-5 h-5 text-gold-400"></i>
@@ -121,7 +121,7 @@
 
                     items.forEach(function (item) {
                         const row = document.createElement('div');
-                        row.className = 'px-6 py-4';
+                        row.className = 'px-4 sm:px-6 py-4';
                         row.setAttribute('data-key', item.key);
 
                         let inputHtml = '';
@@ -134,12 +134,12 @@
                             `;
                         } else if (item.type === 'time') {
                             inputHtml = `
-                                <input type="time" class="px-3 py-2 bg-forest-900/60 border border-cream/20 rounded-lg text-sm focus:outline-none focus:border-gold-400 transition-colors" style="width: 120px;">
+                                <input type="time" class="px-3 py-2 bg-forest-900/60 border border-cream/20 rounded-lg text-sm focus:outline-none focus:border-gold-400 transition-colors w-full sm:w-32">
                             `;
                         } else {
                             const typeAttr = item.type === 'int' ? 'type="number" step="1"' : (item.type === 'float' ? 'type="number" step="0.01"' : 'type="text"');
                             inputHtml = `
-                                <input ${typeAttr} class="px-3 py-2 bg-forest-900/60 border border-cream/20 rounded-lg text-sm focus:outline-none focus:border-gold-400 transition-colors" style="width: 200px;">
+                                <input ${typeAttr} class="px-3 py-2 bg-forest-900/60 border border-cream/20 rounded-lg text-sm focus:outline-none focus:border-gold-400 transition-colors w-full sm:w-48">
                             `;
                         }
 
@@ -148,18 +148,18 @@
                             : `<span class="text-xs text-cream/40">默认值</span>`;
 
                         row.innerHTML = `
-                            <div class="flex items-center justify-between gap-4">
+                            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
                                 <div class="min-w-0 flex-1">
-                                    <div class="flex items-center gap-2">
+                                    <div class="flex items-center gap-2 flex-wrap">
                                         <span class="font-medium text-sm">${item.label}</span>
                                         ${valueLabel}
                                     </div>
                                     <div class="text-xs text-cream/50 mt-0.5">${item.description}</div>
                                     <div class="text-xs text-cream/30 mt-0.5">默认值: <code class="bg-forest-900/40 px-1.5 py-0.5 rounded">${formatValue(item.default, item.type)}</code></div>
                                 </div>
-                                <div class="flex items-center gap-2 flex-shrink-0">
+                                <div class="flex items-center gap-2 sm:flex-shrink-0">
                                     ${inputHtml}
-                                    <button class="btn-reset-item p-1.5 text-cream/40 hover:text-red-400 transition-colors" title="恢复默认值">
+                                    <button class="btn-reset-item p-1.5 text-cream/40 hover:text-red-400 transition-colors flex-shrink-0" title="恢复默认值">
                                         <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
                                     </button>
                                 </div>
@@ -326,17 +326,17 @@
 
                         // 显示详细信息
                         if (data.errors && data.errors.length > 0) {
-                            alert('部分设置保存失败:\n' + data.errors.map(e => e.key + ': ' + e.message).join('\n'));
+                            Toast.error('部分设置保存失败');
                         }
                     } else {
-                        alert('保存失败: ' + (data.message || '未知错误'));
+                        Toast.error(data.message || '保存失败');
                         btnSave.disabled = false;
                         btnSave.innerHTML = '<i data-lucide="save" class="w-4 h-4 inline mr-1"></i>保存更改';
                         if (window.lucide) lucide.createIcons();
                     }
                 })
                 .catch(err => {
-                    alert('网络错误，请重试');
+                    Toast.error('网络错误，请重试');
                     btnSave.disabled = false;
                     btnSave.innerHTML = '<i data-lucide="save" class="w-4 h-4 inline mr-1"></i>保存更改';
                     if (window.lucide) lucide.createIcons();
@@ -391,10 +391,10 @@
                             if (data.success) {
                                 loadSettings();
                             } else {
-                                alert('重置失败: ' + (data.message || '未知错误'));
+                                Toast.error(data.message || '重置失败');
                             }
                         })
-                        .catch(() => alert('网络错误，请重试'));
+                        .catch(() => Toast.error('网络错误，请重试'));
                     });
             });
 
