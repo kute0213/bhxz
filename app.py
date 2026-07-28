@@ -64,7 +64,7 @@ def _init_app():
     from routes.main import main_bp
     from routes.community import community_bp
     from routes.admin import admin_bp
-    from routes.api import monitoring_bp, stats_bp, polls_bp, admin_api_bp, captcha_bp
+    from routes.api import monitoring_bp, stats_bp, polls_bp, admin_api_bp, captcha_bp, email_code_bp
     from routes.cmd import cmd_bp
     from routes.scheduled import scheduled_bp
     from routes.docs import docs_bp
@@ -74,6 +74,7 @@ def _init_app():
     from services.log_cleaner import log_cleaner
     from services.log_writer import log_writer
     from services.backup_scheduler import BackupScheduler
+    from services.email import email_service
 
     init_db()
 
@@ -104,6 +105,7 @@ def _init_app():
     log_cleaner.start()
     scheduler.start()
     BackupScheduler().start()
+    email_service.start()
 
     app.register_blueprint(public_bp)
     app.register_blueprint(main_bp)
@@ -114,6 +116,7 @@ def _init_app():
     app.register_blueprint(polls_bp)
     app.register_blueprint(admin_api_bp)
     app.register_blueprint(captcha_bp)
+    app.register_blueprint(email_code_bp)
     app.register_blueprint(cmd_bp)
     app.register_blueprint(scheduled_bp)
     app.register_blueprint(docs_bp)

@@ -5,7 +5,7 @@ from datetime import datetime
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash, jsonify, send_from_directory, abort
 from core.auth import login_required, get_current_user
 from core.db import get_db
-from config import REGISTER_VERIFY_CODE, UPLOAD_DIR
+from config import REGISTER_VERIFY_CODE, UPLOAD_DIR, get_config_value
 from services.captcha import verify_captcha
 
 main_bp = Blueprint('main', __name__)
@@ -33,37 +33,62 @@ def home():
 
 @main_bp.route('/register', methods=['GET', 'POST'])
 def register():
+    email_verify_enabled = get_config_value('REGISTER_EMAIL_VERIFY', False)
+
     if request.method == 'POST':
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '')
         confirm = request.form.get('confirm', '')
         verify_code = request.form.get('verify_code', '').strip()
         captcha_input = request.form.get('captcha', '').strip()
+        email = request.form.get('email', '').strip().lower()
+        email_code = request.form.get('email_code', '').strip()
 
         # 验证码校验（后端校验，不能前端绕过）
         captcha_answer = session.pop('captcha_answer', None)
         if not captcha_answer or not verify_captcha(captcha_input, captcha_answer):
-            return render_template('register.html', error='验证码错误或已过期')
+            return render_template('register.html', error='验证码错误或已过期',
+                                   email_verify_enabled=email_verify_enabled)
 
         if len(username) < 2 or len(username) > 20:
-            return render_template('register.html', error='用户名长度应为 2-20 个字符')
+            return render_template('register.html', error='用户名长度应为 2-20 个字符',
+                                   email_verify_enabled=email_verify_enabled)
         if len(password) < 6:
-            return render_template('register.html', error='密码至少 6 位')
+            return render_template('register.html', error='密码至少 6 位',
+                                   email_verify_enabled=email_verify_enabled)
         if password != confirm:
-            return render_template('register.html', error='两次输入的密码不一致')
+            return render_template('register.html', error='两次输入的密码不一致',
+                                   email_verify_enabled=email_verify_enabled)
         if verify_code != REGISTER_VERIFY_CODE:
-            return render_template('register.html', error='群内验证码错误，请在QQ群公告中获取正确验证码')
+            return render_template('register.html', error='群内验证码错误，请在QQ群公告中获取正确验证码',
+                                   email_verify_enabled=email_verify_enabled)
+
+        # 邮箱验证（仅在开启时要求）
+        if email_verify_enabled:
+            if not email:
+                return render_template('register.html', error='请输入邮箱地址',
+                                       email_verify_enabled=email_verify_enabled)
+            if not email_code:
+                return render_template('register.html', error='请输入邮箱验证码',
+                                       email_verify_enabled=email_verify_enabled)
+            from services.email_code import email_code_service
+            if not email_code_service.verify(email, email_code):
+                return render_template('register.html', error='邮箱验证码错误或已过期',
+                                       email_verify_enabled=email_verify_enabled)
+        else:
+            email = ''
 
         conn = get_db()
         try:
             existing = conn.execute("SELECT id FROM users WHERE username = ?", (username,)).fetchone()
             if existing:
-                return render_template('register.html', error='该用户名已被注册')
+                return render_template('register.html', error='该用户名已被注册',
+                                       email_verify_enabled=email_verify_enabled)
 
             password_hash = hashlib.sha256(password.encode('utf-8')).hexdigest()
             conn.execute(
-                "INSERT INTO users (username, password_hash, created_at) VALUES (?, ?, ?)",
-                (username, password_hash, datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+                "INSERT INTO users (username, password_hash, email, created_at) VALUES (?, ?, ?, ?)",
+                (username, password_hash, email, datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
             )
             conn.commit()
         except Exception:
@@ -71,12 +96,13 @@ def register():
                 conn.rollback()
             except Exception:
                 pass
-            return render_template('register.html', error='注册失败，请稍后重试')
+            return render_template('register.html', error='注册失败，请稍后重试',
+                                   email_verify_enabled=email_verify_enabled)
         finally:
             conn.close()
         return redirect(url_for('main.login', registered=1))
 
-    return render_template('register.html')
+    return render_template('register.html', email_verify_enabled=email_verify_enabled)
 
 
 @main_bp.route('/login', methods=['GET', 'POST'])
@@ -217,6 +243,53 @@ def change_password():
         conn.execute("UPDATE users SET password_hash = ? WHERE id = ?", (new_hash, user['id']))
         conn.commit()
         flash('密码修改成功！', 'success')
+    except Exception:
+        conn.rollback()
+        flash('修改失败，请重试', 'error')
+    finally:
+        conn.close()
+
+    return redirect(url_for('main.settings'))
+
+
+@main_bp.route('/settings/email', methods=['POST'])
+@login_required
+def change_email():
+    user = get_current_user()
+    new_email = request.form.get('new_email', '').strip().lower()
+    email_code = request.form.get('email_code', '').strip()
+    current_password = request.form.get('current_password', '')
+
+    if not current_password:
+        flash('请输入当前密码', 'error')
+        return redirect(url_for('main.settings') + '#email')
+
+    # 验证当前密码
+    password_hash = hashlib.sha256(current_password.encode('utf-8')).hexdigest()
+    conn = get_db()
+    try:
+        db_user = conn.execute("SELECT password_hash FROM users WHERE id = ?", (user['id'],)).fetchone()
+        if not db_user or db_user['password_hash'] != password_hash:
+            flash('当前密码错误', 'error')
+            return redirect(url_for('main.settings') + '#email')
+
+        if not new_email:
+            flash('请输入新邮箱地址', 'error')
+            return redirect(url_for('main.settings') + '#email')
+
+        # 邮箱验证码校验（仅在邮件功能启用时）
+        if get_config_value('EMAIL_ENABLED', False):
+            if not email_code:
+                flash('请输入邮箱验证码', 'error')
+                return redirect(url_for('main.settings') + '#email')
+            from services.email_code import email_code_service
+            if not email_code_service.verify(new_email, email_code):
+                flash('邮箱验证码错误或已过期', 'error')
+                return redirect(url_for('main.settings') + '#email')
+
+        conn.execute("UPDATE users SET email = ? WHERE id = ?", (new_email, user['id']))
+        conn.commit()
+        flash('邮箱修改成功！', 'success')
     except Exception:
         conn.rollback()
         flash('修改失败，请重试', 'error')

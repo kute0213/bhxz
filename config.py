@@ -109,6 +109,37 @@ MAX_LOGIN_ATTEMPTS = 5
 LOGIN_LOCKOUT_TIME = 1800
 
 # ---------------------------------------------------------------------------
+# 邮件 SMTP 配置
+# ---------------------------------------------------------------------------
+
+# 是否启用邮件功能（总开关，关闭后所有邮件通知和邮箱验证码均不发送）
+EMAIL_ENABLED = False
+
+# 注册时是否要求邮箱验证码
+REGISTER_EMAIL_VERIFY = False
+
+# SMTP 服务器地址（如 smtp.qq.com）
+SMTP_HOST = ''
+
+# SMTP 端口（SSL 默认 465，STARTTLS 默认 587）
+SMTP_PORT = 465
+
+# 是否使用 SSL
+SMTP_SSL = True
+
+# 是否使用 STARTTLS
+SMTP_STARTTLS = False
+
+# SMTP 用户名（邮箱地址）
+SMTP_USER = ''
+
+# SMTP 密码（授权码）
+SMTP_PASSWORD = ''
+
+# 发件人显示名称
+SMTP_SENDER_NAME = '滨海小镇'
+
+# ---------------------------------------------------------------------------
 # 服务器配置
 # ---------------------------------------------------------------------------
 
@@ -163,6 +194,17 @@ SETTINGS_REGISTRY = [
     ('SESSION_LIFETIME', 604800, 'int', '会话有效期（秒）', '登录会话过期时间，默认 7 天', '安全配置'),
     ('MAX_LOGIN_ATTEMPTS', 5, 'int', '登录失败锁定次数', '超过后临时锁定账户', '安全配置'),
     ('LOGIN_LOCKOUT_TIME', 1800, 'int', '登录锁定时间（秒）', '账户被锁定后自动解锁的时间', '安全配置'),
+
+    # 邮件 SMTP
+    ('EMAIL_ENABLED', False, 'bool', '启用邮件功能', '总开关，关闭后所有邮件通知和邮箱验证码均不发送', '邮件配置'),
+    ('REGISTER_EMAIL_VERIFY', False, 'bool', '注册要求邮箱验证', '开启后注册需输入邮箱并接收验证码', '邮件配置'),
+    ('SMTP_HOST', '', 'str', 'SMTP 服务器地址', '如 smtp.qq.com', '邮件配置'),
+    ('SMTP_PORT', 465, 'int', 'SMTP 端口', 'SSL 默认 465，STARTTLS 默认 587', '邮件配置'),
+    ('SMTP_SSL', True, 'bool', '使用 SSL', '是否使用 SSL 加密连接', '邮件配置'),
+    ('SMTP_STARTTLS', False, 'bool', '使用 STARTTLS', '是否使用 STARTTLS 加密连接', '邮件配置'),
+    ('SMTP_USER', '', 'str', 'SMTP 用户名', '发件邮箱地址', '邮件配置'),
+    ('SMTP_PASSWORD', '', 'str', 'SMTP 密码/授权码', '邮箱授权码（非登录密码）', '邮件配置'),
+    ('SMTP_SENDER_NAME', '滨海小镇', 'str', '发件人显示名称', '收件人看到的发件人名称', '邮件配置'),
 
     # 服务器
     ('SERVER_HOST', '0.0.0.0', 'str', '服务器监听地址', '服务器监听的 IP 地址，0.0.0.0 表示监听所有地址', '服务器配置'),

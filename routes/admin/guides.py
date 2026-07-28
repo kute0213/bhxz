@@ -6,7 +6,52 @@ from flask import render_template, redirect, url_for, flash, abort, request, jso
 
 from core.auth import login_required, get_current_user
 from core.db import get_db
+from services.email import email_service
 from routes.admin import admin_bp
+
+
+def _notify_author_guide_result(guide_title, author_email, approved, reason=''):
+    """异步通知指南作者审核结果（不阻塞请求）。"""
+    if not email_service.is_enabled() or not author_email:
+        return
+
+    if approved:
+        subject = f'[指南审核通过] 「{guide_title}」已通过'
+        body = (
+            f'您好！\n\n'
+            f'您提交的服务器指南「{guide_title}」已通过审核，现已发布。\n'
+        )
+        html = (
+            f'<div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 20px;">'
+            f'<h2 style="color: #4ade80;">指南审核通过</h2>'
+            f'<p>您好！</p>'
+            f'<p>您提交的服务器指南：</p>'
+            f'<div style="font-size: 18px; font-weight: bold; padding: 12px; '
+            f'background: #1a2a1a; border-radius: 8px; margin: 12px 0;">{guide_title}</div>'
+            f'<p>已通过审核，现已发布。</p></div>'
+        )
+    else:
+        subject = f'[指南审核未通过] 「{guide_title}」被拒绝'
+        body = (
+            f'您好！\n\n'
+            f'很遗憾，您提交的服务器指南「{guide_title}」未通过审核。\n'
+        )
+        if reason:
+            body += f'拒绝原因：{reason}\n'
+        body += '您可以修改后重新提交。\n'
+        html = (
+            f'<div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 20px;">'
+            f'<h2 style="color: #f87171;">指南审核未通过</h2>'
+            f'<p>您好！</p>'
+            f'<p>很遗憾，您提交的服务器指南：</p>'
+            f'<div style="font-size: 18px; font-weight: bold; padding: 12px; '
+            f'background: #1a2a1a; border-radius: 8px; margin: 12px 0;">{guide_title}</div>'
+            f'<p>未通过审核。</p>'
+            + (f'<p>拒绝原因：{reason}</p>' if reason else '')
+            + f'<p>您可以修改后重新提交。</p></div>'
+        )
+
+    email_service.send(author_email, subject, body, html)
 
 
 @admin_bp.route('/admin/guides')
@@ -179,6 +224,12 @@ def admin_guide_approve(guide_id):
 
     conn = get_db()
     try:
+        guide = conn.execute(
+            "SELECT g.title, u.email FROM server_guides g "
+            "LEFT JOIN users u ON g.author_id = u.id WHERE g.id = ?",
+            (guide_id,),
+        ).fetchone()
+
         now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         conn.execute(
             """
@@ -190,6 +241,9 @@ def admin_guide_approve(guide_id):
         )
         conn.commit()
         flash('指南已通过审核', 'success')
+
+        if guide:
+            _notify_author_guide_result(guide['title'], guide['email'] or '', approved=True)
     except Exception:
         conn.rollback()
         flash('操作失败', 'error')
@@ -211,6 +265,12 @@ def admin_guide_reject(guide_id):
 
     conn = get_db()
     try:
+        guide = conn.execute(
+            "SELECT g.title, u.email FROM server_guides g "
+            "LEFT JOIN users u ON g.author_id = u.id WHERE g.id = ?",
+            (guide_id,),
+        ).fetchone()
+
         now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         conn.execute(
             """
@@ -222,6 +282,9 @@ def admin_guide_reject(guide_id):
         )
         conn.commit()
         flash('指南已拒绝', 'success')
+
+        if guide:
+            _notify_author_guide_result(guide['title'], guide['email'] or '', approved=False, reason=reason)
     except Exception:
         conn.rollback()
         flash('操作失败', 'error')

@@ -37,6 +37,8 @@
 │   ├── backup_manager.py         #   数据库备份管理器（DuckDB 在线备份 + 旧备份清理）
 │   ├── backup_scheduler.py       #   每日定时备份调度器（默认凌晨 3:00，支持热重载）
 │   ├── settings_manager.py       #   系统设置管理器（数据库存储 + 内存缓存，支持热重载）
+│   ├── email.py                  #   SMTP 邮件发送服务（基于 yagmail，后台线程异步发送）
+│   ├── email_code.py             #   邮箱验证码服务（生成/存储/验证，内存存储，自动过期）
 │   ├── script_store.py           #   统一脚本存储服务（数据库存储，按名称自动排序）
 │   ├── terminal/                 #   持久交互式终端服务（session-based shell 子进程管理）
 │   │   ├── __init__.py           #     包入口，导出 TerminalManager / TerminalSession
@@ -92,6 +94,7 @@
 │       ├── stats.py              #     /api/stats         网站统计
 │       ├── polls.py              #     /api/polls       投票数据
 │       ├── captcha.py            #     /api/captcha     验证码生成
+│       ├── email_code.py         #     /api/email       邮箱验证码发送
 │       └── admin.py              #     /api/admin/logs    访问日志（管理员）
 │
 ├── templates/                    # Jinja2 模板（23 个页面）

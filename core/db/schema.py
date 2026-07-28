@@ -50,6 +50,7 @@ def init_db():
                 id INTEGER PRIMARY KEY DEFAULT nextval('users_id_seq'),
                 username VARCHAR UNIQUE NOT NULL,
                 password_hash VARCHAR NOT NULL,
+                email VARCHAR DEFAULT '',
                 is_admin INTEGER DEFAULT 0,
                 created_at VARCHAR NOT NULL
             )
@@ -315,6 +316,8 @@ def init_db():
     add_column_if_not_exists('scheduled_tasks', 'script_id', 'INTEGER DEFAULT NULL')
     # 定时任务改为引用 cmd_commands 表中的快捷命令
     add_column_if_not_exists('scheduled_tasks', 'command_id', 'INTEGER DEFAULT NULL')
+    # 用户表添加 email 列
+    add_column_if_not_exists('users', 'email', "VARCHAR DEFAULT ''")
 
     # ---- 迁移：scripts 表添加 content 列（数据库存储） ----
     try:

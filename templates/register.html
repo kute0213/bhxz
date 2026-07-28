@@ -31,6 +31,21 @@
                         <label class="block text-sm font-medium mb-2 text-cream/80">确认密码</label>
                         <input type="password" name="confirm" required minlength="6" class="input-field w-full px-4 py-3 rounded-lg" placeholder="再次输入密码">
                     </div>
+                    {% if email_verify_enabled %}
+                    <div>
+                        <label class="block text-sm font-medium mb-2 text-cream/80">邮箱地址</label>
+                        <input type="email" name="email" required class="input-field w-full px-4 py-3 rounded-lg" placeholder="请输入邮箱地址">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-2 text-cream/80">邮箱验证码</label>
+                        <div class="flex flex-wrap gap-2 items-center">
+                            <input type="text" name="email_code" required class="input-field flex-1 min-w-[120px] px-4 py-3 rounded-lg" placeholder="请输入邮箱验证码">
+                            <button type="button" id="btn-send-email-code" class="px-4 py-3 bg-gold-500/20 hover:bg-gold-500/30 text-gold-300 text-sm rounded-lg border border-gold-500/30 transition-colors whitespace-nowrap">
+                                发送验证码
+                            </button>
+                        </div>
+                    </div>
+                    {% endif %}
                     <div>
                         <label class="block text-sm font-medium mb-2 text-cream/80">群内验证码</label>
                         <input type="text" name="verify_code" required class="input-field w-full px-4 py-3 rounded-lg" placeholder="请输入群内验证码">
@@ -84,5 +99,54 @@ loadCaptcha();
 
 // 点击图片刷新验证码
 document.getElementById('captcha-img').addEventListener('click', loadCaptcha);
+
+// 邮箱验证码发送
+(function() {
+    const btn = document.getElementById('btn-send-email-code');
+    if (!btn) return;
+
+    btn.addEventListener('click', function() {
+        const emailInput = document.querySelector('input[name="email"]');
+        if (!emailInput || !emailInput.value.trim()) {
+            alert('请先输入邮箱地址');
+            return;
+        }
+
+        const email = emailInput.value.trim();
+        btn.disabled = true;
+        btn.textContent = '发送中...';
+
+        fetch('/api/email/send-code', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: email, purpose: '注册' })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                btn.textContent = '已发送';
+                let countdown = 60;
+                const timer = setInterval(function() {
+                    btn.textContent = countdown + 's';
+                    countdown--;
+                    if (countdown < 0) {
+                        clearInterval(timer);
+                        btn.disabled = false;
+                        btn.textContent = '发送验证码';
+                    }
+                }, 1000);
+            } else {
+                alert(data.message || '发送失败');
+                btn.disabled = false;
+                btn.textContent = '发送验证码';
+            }
+        })
+        .catch(function() {
+            alert('网络错误，请重试');
+            btn.disabled = false;
+            btn.textContent = '发送验证码';
+        });
+    });
+})();
 </script>
 {% endblock %}

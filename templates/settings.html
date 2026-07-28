@@ -54,12 +54,15 @@
             {% endif %}
             {% endwith %}
 
-            <div class="flex gap-2 mb-6 border-b border-forest-700 pb-2">
+            <div class="flex gap-2 mb-6 border-b border-forest-700 pb-2 flex-wrap">
                 <button class="tab-btn active px-4 py-2 rounded-lg text-sm font-medium transition-all border-2 border-transparent" data-tab="username">
                     <i data-lucide="user" class="w-4 h-4 inline mr-1"></i>修改用户名
                 </button>
                 <button class="tab-btn px-4 py-2 rounded-lg text-sm font-medium transition-all border-2 border-transparent" data-tab="password">
                     <i data-lucide="lock" class="w-4 h-4 inline mr-1"></i>修改密码
+                </button>
+                <button class="tab-btn px-4 py-2 rounded-lg text-sm font-medium transition-all border-2 border-transparent" data-tab="email">
+                    <i data-lucide="mail" class="w-4 h-4 inline mr-1"></i>修改邮箱
                 </button>
                 <button class="tab-btn px-4 py-2 rounded-lg text-sm font-medium transition-all border-2 border-transparent" data-tab="delete">
                     <i data-lucide="trash-2" class="w-4 h-4 inline mr-1"></i>注销账号
@@ -118,6 +121,41 @@
                 </div>
             </div>
 
+            <div id="tab-email" class="tab-content">
+                <div class="pixel-card rounded-xl p-6">
+                    <h2 class="text-xl font-bold mb-4 flex items-center gap-2">
+                        <i data-lucide="mail" class="w-5 h-5 text-gold-400"></i>修改邮箱
+                    </h2>
+                    <p class="text-cream/60 text-sm mb-6">修改邮箱后用于接收指南审核通知等重要消息。</p>
+                    <form method="POST" action="{{ url_for('main.change_email') }}" class="space-y-5">
+                        <div>
+                            <label class="block text-sm font-medium mb-2 text-cream/80">当前邮箱</label>
+                            <input type="email" value="{{ user.email or '未设置' }}" disabled class="input-field w-full px-4 py-3 rounded-lg opacity-50">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2 text-cream/80">新邮箱地址</label>
+                            <input type="email" name="new_email" required class="input-field w-full px-4 py-3 rounded-lg" placeholder="请输入新邮箱地址">
+                        </div>
+                        <div id="email-code-field" class="hidden">
+                            <label class="block text-sm font-medium mb-2 text-cream/80">邮箱验证码</label>
+                            <div class="flex flex-wrap gap-2 items-center">
+                                <input type="text" name="email_code" class="input-field flex-1 min-w-[120px] px-4 py-3 rounded-lg" placeholder="请输入验证码">
+                                <button type="button" id="btn-change-email-code" class="px-4 py-3 bg-gold-500/20 hover:bg-gold-500/30 text-gold-300 text-sm rounded-lg border border-gold-500/30 transition-colors whitespace-nowrap">
+                                    发送验证码
+                                </button>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2 text-cream/80">当前密码</label>
+                            <input type="password" name="current_password" required class="input-field w-full px-4 py-3 rounded-lg" placeholder="请输入当前密码确认身份">
+                        </div>
+                        <button type="submit" class="btn-primary w-full py-3 rounded-lg font-bold">
+                            确认修改
+                        </button>
+                    </form>
+                </div>
+            </div>
+
             <div id="tab-delete" class="tab-content">
                 <div class="pixel-card rounded-xl p-6 border-red-500/30">
                     <h2 class="text-xl font-bold mb-4 flex items-center gap-2 text-red-400">
@@ -166,5 +204,64 @@
         {% if tab %}
         switchTab('{{ tab }}');
         {% endif %}
+
+        // 修改邮箱 - 检查邮件功能是否开启
+        (function() {
+            fetch('/api/email/check-enabled')
+                .then(res => res.json())
+                .then(data => {
+                    if (data.enabled) {
+                        const field = document.getElementById('email-code-field');
+                        if (field) field.classList.remove('hidden');
+                    }
+                })
+                .catch(() => {});
+
+            const btn = document.getElementById('btn-change-email-code');
+            if (!btn) return;
+
+            btn.addEventListener('click', function() {
+                const emailInput = document.querySelector('input[name="new_email"]');
+                if (!emailInput || !emailInput.value.trim()) {
+                    alert('请先输入新邮箱地址');
+                    return;
+                }
+
+                const email = emailInput.value.trim();
+                btn.disabled = true;
+                btn.textContent = '发送中...';
+
+                fetch('/api/email/send-code', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ email: email, purpose: '修改邮箱' })
+                })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success) {
+                        btn.textContent = '已发送';
+                        let countdown = 60;
+                        const timer = setInterval(function() {
+                            btn.textContent = countdown + 's';
+                            countdown--;
+                            if (countdown < 0) {
+                                clearInterval(timer);
+                                btn.disabled = false;
+                                btn.textContent = '发送验证码';
+                            }
+                        }, 1000);
+                    } else {
+                        alert(data.message || '发送失败');
+                        btn.disabled = false;
+                        btn.textContent = '发送验证码';
+                    }
+                })
+                .catch(function() {
+                    alert('网络错误，请重试');
+                    btn.disabled = false;
+                    btn.textContent = '发送验证码';
+                });
+            });
+        })();
     </script>
 {% endblock %}
