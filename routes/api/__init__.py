@@ -4,3 +4,4 @@ from routes.api.monitoring import monitoring_bp
 from routes.api.stats import stats_bp
 from routes.api.polls import polls_bp
 from routes.api.admin import admin_api_bp
+from routes.api.captcha import captcha_bp

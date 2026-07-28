@@ -64,7 +64,7 @@ def _init_app():
     from routes.main import main_bp
     from routes.community import community_bp
     from routes.admin import admin_bp
-    from routes.api import monitoring_bp, stats_bp, polls_bp, admin_api_bp
+    from routes.api import monitoring_bp, stats_bp, polls_bp, admin_api_bp, captcha_bp
     from routes.cmd import cmd_bp
     from routes.scheduled import scheduled_bp
     from routes.docs import docs_bp
@@ -113,6 +113,7 @@ def _init_app():
     app.register_blueprint(stats_bp)
     app.register_blueprint(polls_bp)
     app.register_blueprint(admin_api_bp)
+    app.register_blueprint(captcha_bp)
     app.register_blueprint(cmd_bp)
     app.register_blueprint(scheduled_bp)
     app.register_blueprint(docs_bp)

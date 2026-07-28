@@ -39,6 +39,13 @@
                             为防止非小镇玩家捣乱，注册需输入群内验证码，可在 QQ 群公告中获取
                         </p>
                     </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-2 text-cream/80">验证码</label>
+                        <div class="flex gap-3 items-center">
+                            <input type="text" name="captcha" required class="input-field flex-1 px-4 py-3 rounded-lg" placeholder="请输入答案">
+                            <img id="captcha-img" src="" alt="验证码" class="h-10 rounded cursor-pointer hover:opacity-80 transition-opacity" title="点击刷新">
+                        </div>
+                    </div>
                     <button type="submit" class="btn-primary w-full py-3 rounded-lg font-bold">注册</button>
                 </form>
 
@@ -50,4 +57,27 @@
             </div>
         </div>
     </section>
+{% endblock %}
+
+{% block extra_script %}
+<script>
+// 加载验证码
+function loadCaptcha() {
+    const img = document.getElementById('captcha-img');
+    fetch('/api/captcha/generate')
+        .then(res => res.json())
+        .then(data => {
+            if (data.success) {
+                img.src = data.image;
+            }
+        })
+        .catch(err => console.error('加载验证码失败:', err));
+}
+
+// 页面加载时加载验证码
+loadCaptcha();
+
+// 点击图片刷新验证码
+document.getElementById('captcha-img').addEventListener('click', loadCaptcha);
+</script>
 {% endblock %}

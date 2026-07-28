@@ -8,6 +8,7 @@ from core.db import get_db
 from config import REGISTER_VERIFY_CODE, UPLOAD_DIR
 from services.monitoring import get_cpu_usage, get_cpu_temperature, get_memory_info, get_system_info
 from services.ip import get_client_ip
+from services.captcha import verify_captcha
 
 main_bp = Blueprint('main', __name__)
 
@@ -39,6 +40,12 @@ def register():
         password = request.form.get('password', '')
         confirm = request.form.get('confirm', '')
         verify_code = request.form.get('verify_code', '').strip()
+        captcha_input = request.form.get('captcha', '').strip()
+
+        # 验证码校验（后端校验，不能前端绕过）
+        captcha_answer = session.pop('captcha_answer', None)
+        if not captcha_answer or not verify_captcha(captcha_input, captcha_answer):
+            return render_template('register.html', error='验证码错误或已过期')
 
         if len(username) < 2 or len(username) > 20:
             return render_template('register.html', error='用户名长度应为 2-20 个字符')
@@ -79,6 +86,12 @@ def login():
     if request.method == 'POST':
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '')
+        captcha_input = request.form.get('captcha', '').strip()
+
+        # 验证码校验（后端校验，不能前端绕过）
+        captcha_answer = session.pop('captcha_answer', None)
+        if not captcha_answer or not verify_captcha(captcha_input, captcha_answer):
+            return render_template('login.html', error='验证码错误或已过期')
 
         if not username or not password:
             return render_template('login.html', error='请输入用户名和密码')

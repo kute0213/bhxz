@@ -7,6 +7,12 @@
 ## [未发布]
 
 ### 新增
+- **验证码功能**：
+  - 新增 `services/captcha.py`：生成带随机干扰线和干扰点的数学题验证码图片（base64 编码，不保存文件）
+  - 新增 `routes/api/captcha.py`：验证码生成 API `/api/captcha/generate`
+  - 登录和注册页面添加验证码输入框，点击图片可刷新
+  - 后端严格校验验证码（答案存储在 session 中，一次性使用后立即清除）
+  - 延迟加载 Pillow 库，避免不必要的依赖检查开销
 - **服务器指南系统**：
   - 新增 `server_guides` 表：存储指南标题、slug、摘要、Markdown 内容、审核状态、作者、置顶与排序
   - 新增 `guide_edit_bans` 表：记录用户/IP 的编辑权限封禁，支持限时或永久封禁
