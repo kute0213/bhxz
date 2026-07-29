@@ -41,21 +41,21 @@ def _check_pil():
 def generate_math_captcha(
     width: int = 200,
     height: int = 50,
-    min_num: int = 10,
-    max_num: int = 99,
+    min_num: int = 1,
+    max_num: int = 9,
     line_count: int = 6,
     point_count: int = 120,
 ) -> Tuple[str, str]:
     """
-    生成数学加法验证码图片。
+    生成一位数加减法验证码图片。
 
-    使用两位数运算，答案范围 20-198（179 种），扩大答案空间防止暴力枚举。
+    使用一位数运算（1-9），随机加减，答案范围 0-18。
 
     Args:
         width: 图片宽度
         height: 图片高度
-        min_num: 最小数字（默认两位数 10）
-        max_num: 最大数字（默认两位数 99）
+        min_num: 最小数字（默认单位数 1）
+        max_num: 最大数字（默认单位数 9）
         line_count: 干扰线条数量
         point_count: 干扰点数量
 
@@ -68,11 +68,18 @@ def generate_math_captcha(
     if not _check_pil():
         raise RuntimeError("Pillow 库未安装，请运行: pip install Pillow")
 
-    # 生成随机数学题（两位数运算，答案范围 20-198）
+    # 生成随机一位数加减法（答案范围 0-18）
     a = random.randint(min_num, max_num)
     b = random.randint(min_num, max_num)
-    answer = str(a + b)
-    question = f"{a} + {b} = ?"
+    if random.choice(['+', '-']) == '+':
+        answer = str(a + b)
+        question = f"{a} + {b} = ?"
+    else:
+        # 减法保证结果非负：大数减小数
+        if a < b:
+            a, b = b, a
+        answer = str(a - b)
+        question = f"{a} - {b} = ?"
 
     # 创建图片
     img = Image.new('RGB', (width, height), color=(240, 240, 240))

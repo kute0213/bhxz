@@ -13,7 +13,7 @@
   - `routes/api/email_code.py`：发送邮箱验证码接口新增 `verify_code` 参数校验，确保只有已验证群内验证码的用户才能发送邮件验证码
   - 优势：后端无需存储额外 session 状态，安全性不变（每次请求都验证），刷新页面需重新验证
 - **恢复图形验证码难度**：
-  - `services/captcha.py`：恢复为两位数加法 (10-99)，6 条干扰线，120 个干扰点，字号 18px
+  - `services/captcha.py`：一位数加减法 (1-9)，随机加减，答案范围 0-18，6 条干扰线，120 个干扰点，字号 18px
 
 - **修复广播邮件发送返回 "Unexpected token '<'" 错误**：
   - 根因：`/admin/broadcast/send` 等 AJAX 路由使用 `@login_required` 装饰器，session 过期或权限不足时返回 302 HTML 重定向，前端 `fetch().json()` 解析 HTML 遇到 `<` 字符报错
