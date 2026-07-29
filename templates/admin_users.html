@@ -3,7 +3,7 @@
 {% block content %}
     <section class="page-container py-12">
         <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex items-center justify-between mb-8">
+            <div class="flex flex-wrap items-center justify-between gap-3 mb-8">
                 <div>
                     <a href="{{ url_for('admin.admin_page') }}" class="text-gold-400 hover:text-gold-300 text-sm mb-2 inline-block">
                         <i data-lucide="arrow-left" class="w-4 h-4 inline mr-1"></i>返回管理中心
@@ -47,7 +47,7 @@
                                         <div class="w-7 h-7 bg-gold-400/20 rounded-full flex items-center justify-center text-xs font-bold text-gold-400">
                                             {{ u.username[0] }}
                                         </div>
-                                        <span class="text-cream/90">{{ u.username }}</span>
+                                        <span class="text-cream/90 break-all">{{ u.username }}</span>
                                     </div>
                                 </td>
                                 <td class="px-4 py-3">
@@ -60,7 +60,7 @@
                                 <td class="px-4 py-3 text-cream/60">{{ u.created_at }}</td>
                                 <td class="px-4 py-3">
                                     {% if u.id != user.id %}
-                                    <div class="flex items-center justify-end gap-2">
+                                    <div class="flex flex-wrap items-center justify-end gap-2">
                                         <form method="POST" action="{{ url_for('admin.admin_toggle_admin', user_id=u.id) }}" onsubmit="return confirm('确定{% if u.is_admin %}取消{% else %}设置{% endif %}该用户的管理员权限吗？')">
                                             <button type="submit" class="text-gold-400 hover:text-gold-300 text-xs px-2 py-1 rounded hover:bg-gold-400/10 transition-colors">
                                                 {% if u.is_admin %}取消管理员{% else %}设为管理员{% endif %}

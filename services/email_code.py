@@ -8,6 +8,7 @@ import threading
 from datetime import datetime
 
 from services.email import email_service
+from services.email_templates import verification_code as build_code_html
 
 
 def normalize_email(email: str) -> str:
@@ -114,7 +115,7 @@ class EmailCodeService:
                 'sent_at': now,
             }
 
-        # 异步发送邮件
+        # 异步发送邮件（HTML 使用统一模板，移动端自适应）
         subject = f'[{purpose}] 验证码: {code}'
         body = (
             f'您好！\n\n'
@@ -122,20 +123,7 @@ class EmailCodeService:
             f'验证码有效期为 {self._expire_seconds // 60} 分钟，请尽快使用。\n'
             f'如果这不是您本人的操作，请忽略此邮件。\n'
         )
-        html = (
-            f'<div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 20px;">'
-            f'<h2 style="color: #f4d03f;">{purpose}验证码</h2>'
-            f'<p>您好！</p>'
-            f'<p>您的验证码为:</p>'
-            f'<div style="font-size: 32px; font-weight: bold; '
-            f'color: #f4d03f; letter-spacing: 8px; '
-            f'background: #1a2a1a; padding: 16px; border-radius: 8px; text-align: center; margin: 16px 0;">'
-            f'{code}</div>'
-            f'<p style="color: #888; font-size: 13px;">'
-            f'验证码有效期为 {self._expire_seconds // 60} 分钟，请尽快使用。<br>'
-            f'如果这不是您本人的操作，请忽略此邮件。'
-            f'</p></div>'
-        )
+        html = build_code_html(code, purpose, self._expire_seconds // 60)
         email_service.send(email, subject, body, html)
 
         return True, '验证码已发送，请查收邮箱'

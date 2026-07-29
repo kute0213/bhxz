@@ -16,7 +16,7 @@
 │   │   ├── __init__.py           #     包入口，导出 get_db / init_db / DuckDBConnection 等
 │   │   ├── connection.py         #     连接、游标、行对象封装 + get_db
 │   │   └── schema.py             #     建表 SQL、迁移、默认数据 + init_db
-│   ├── auth.py                   #   认证模块（login_required / admin_required 装饰器、当前用户，含请求内缓存）
+│   ├── auth.py                   #   认证模块（login_required / admin_required 装饰器、hash_password / verify_password、当前用户，含请求内缓存，AJAX 返回 JSON）
 │   ├── middleware.py             #   请求中间件（异步访问日志记录，不阻塞请求）
 │   ├── process_utils.py          #   跨平台子进程工具（编码解码、环境变量、run_process 封装）
 │   ├── process_manager.py        #   跨平台子进程生命周期管理（启动 / 终止 / 进程组 / 信号）
@@ -40,6 +40,7 @@
 │   ├── captcha.py                #   图形验证码服务（两位数运算 + 服务端内存存储 + 一次性删除防重放）
 │   ├── email.py                  #   SMTP 邮件发送服务（基于标准库 smtplib，后台线程异步发送）
 │   ├── email_code.py             #   邮箱验证码服务（生成/存储/验证，内存存储，自动过期）
+│   ├── email_templates.py        #   邮件 HTML 模板模块（统一构建 + 公共组件复用 + 移动端响应式适配）
 │   ├── script_store.py           #   统一脚本存储服务（数据库存储，按名称自动排序）
 │   ├── terminal/                 #   持久交互式终端服务（session-based shell 子进程管理）
 │   │   ├── __init__.py           #     包入口，导出 TerminalManager / TerminalSession
@@ -70,7 +71,8 @@
 │   │   ├── settings.py           #     系统设置页面 + API（在线编辑配置，热重载）
 │   │   ├── backup.py             #     数据库备份页面/启动/进度/历史
 │   │   ├── guides.py             #     服务器指南 CRUD + 审核工作流
-│   │   └── guide_bans.py         #     指南编辑权限封禁管理（用户/IP）
+│   │   ├── guide_bans.py         #     指南编辑权限封禁管理（用户/IP）
+│   │   └── broadcast.py          #     广播邮件：向全体用户发送 Markdown 格式邮件
 │   ├── guides/                   #   服务器指南蓝图包：公开列表/详情 + 成员提交 API
 │   │   ├── __init__.py           #     创建 guides_bp，导入子模块注册路由
 │   │   ├── pages.py              #     指南列表页 + 详情页（Markdown 渲染）
@@ -122,6 +124,7 @@
 │   ├── admin_settings.html       #   系统设置（在线编辑配置，支持重置，热重载）
 │   ├── admin_db_backup.html      #   数据库优化备份页面（进度条 + 备份历史）
 │   ├── admin_public_files.html   #   公开文件管理
+│   ├── admin_broadcast.html      #   广播邮件（Markdown 编辑器 + 实时预览 + 发送确认）
 │   └── 403.html / 404.html       #   错误页
 │
 ├── static/                       # 静态资源
@@ -701,6 +704,13 @@ server {
 项目的版本变更历史详见 [docs/CHANGELOG.md](file:///workspace/docs/CHANGELOG.md)。
 
 ### 最近修复
+
+**统一邮件 HTML 模板模块（消除重复代码 + 移动端适配）：**
+- 新增 `services/email_templates.py`：集中构建所有邮件 HTML，提取公共组件（外层容器、高亮块、验证码块、次要提示），消除散落在 `services/email_code.py`、`routes/guides/api.py`、`routes/admin/guides.py` 三处的重复模板代码
+- 三个对外构建函数：`verification_code()`（验证码邮件）、`guide_review_pending()`（新指南待审核）、`guide_review_result()`（审核结果通知）
+- 顶部内联 `<style>` 含 `@media (max-width: 480px)` 媒体查询：移动端自适应缩小验证码字号（32px→26px）、字间距（8px→4px）、内边距，避免横向溢出
+- 容器 `max-width: 480px` + `width: 100%` + `box-sizing: border-box`，适配任意屏幕宽度
+- 所有用户输入内容（验证码、指南标题、用户名、拒绝原因）经 `html.escape()` 转义，防止 XSS 注入
 
 **统一网页弹窗系统（替换浏览器原生弹窗）：**
 - 新增 `CustomModal` 弹窗组件（放大居中动画 + 触发元素位置感知）与 `Toast` 提示组件（四种类型），位于 `static/js/base.js`

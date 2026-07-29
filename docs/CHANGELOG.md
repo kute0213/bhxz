@@ -6,7 +6,34 @@
 
 ## [未发布]
 
+### 修复
+- **修复广播邮件发送返回 "Unexpected token '<'" 错误**：
+  - 根因：`/admin/broadcast/send` 等 AJAX 路由使用 `@login_required` 装饰器，session 过期或权限不足时返回 302 HTML 重定向，前端 `fetch().json()` 解析 HTML 遇到 `<` 字符报错
+  - `core/auth.py` 新增 `admin_required` 装饰器：对 JSON/AJAX 请求返回 JSON 401/403（而非 HTML 重定向）
+  - `core/auth.py` 优化 `login_required`：同样对 JSON/AJAX 请求返回 JSON 401，避免其他 AJAX 接口出现同类问题
+  - `core/auth.py` 新增 `_is_json_request()` 辅助函数：检测 `Accept`/`Content-Type`/`X-Requested-With` 头
+  - `routes/admin/broadcast.py` 三个路由改用 `@admin_required`，移除手动权限检查，代码更简洁
+  - `templates/admin_broadcast.html` 所有 fetch 调用添加 `Accept: application/json` 请求头，并对非 200 响应做降级处理
+
 ### 新增
+- **管理员广播邮件功能**：
+  - 新增 `routes/admin/broadcast.py`：广播邮件路由（页面 + 发送 API + 历史日志 API），POST `/admin/broadcast/send` 接收 JSON 并异步发送
+  - 新增 `templates/admin_broadcast.html`：Markdown 编辑器 + 实时预览（marked.js 渲染）+ 发送确认弹窗 + 广播历史记录
+  - `services/email_templates.py` 新增 `broadcast_message()` 函数：将 Markdown 转为 HTML 构建广播邮件
+  - `services/email_templates.py` 新增 Markdown 内容样式（`.mail-content`）：标题、列表、引用块、代码块、表格、图片等元素适配邮件暗色主题 + 移动端响应式
+  - `core/db/schema.py` 新增 `broadcast_logs` 表：记录每次广播的发送者、主题、内容、接收人数和时间
+  - 发送流程：管理员勾选二次确认 → 验证邮件服务启用 → 构建 HTML 模板 → 异步批量发送 → 记录日志
+  - 支持 Markdown 全部常用语法：标题、加粗、列表、引用、代码块、表格、链接、图片
+  - 广播标题自动添加 `[广播]` 前缀，接收人能一眼识别
+- **统一邮件 HTML 模板模块**：
+  - 新增 `services/email_templates.py`：集中构建所有邮件 HTML，消除散落在 3 个文件中的重复模板代码
+  - 提取公共组件：外层容器 `_wrap()`、高亮块 `_highlight_block()`、验证码大号块 `_code_block()`、次要提示 `_muted()`
+  - 三个对外构建函数：`verification_code()`（验证码邮件）、`guide_review_pending()`（新指南待审核通知）、`guide_review_result()`（审核结果通知）
+  - 顶部内联 `<style>` 含 `@media (max-width: 480px)` 媒体查询：移动端自适应缩小验证码字号（32px→26px）、字间距（8px→4px）、内边距，避免横向溢出
+  - 容器 `max-width: 480px` + `width: 100%` + `box-sizing: border-box`，适配任意屏幕宽度
+  - 所有用户输入内容（验证码、指南标题、用户名、拒绝原因）经 `html.escape()` 转义，防止 XSS 注入
+  - 配色与网站整体风格一致：金黄主色 `#f4d03f` + 暗绿背景 `#1a2a1a` + 成功绿/失败红语义色
+  - `requirements.txt` 新增 `pygments` 依赖：为 `codehilite` 扩展提供代码块语法高亮，避免降级丢失表格/代码块扩展
 - **验证码功能**：
   - 新增 `services/captcha.py`：生成带随机干扰线和干扰点的数学题验证码图片（base64 编码，不保存文件）
   - 新增 `routes/api/captcha.py`：验证码生成 API `/api/captcha/generate`
@@ -30,6 +57,20 @@
   - 蓝图拆分：`routes/guides/`（公开页面 + 成员 API）、`routes/admin/guides.py` + `guide_bans.py`（管理后台）
 
 ### 重构
+- **前端移动端适配补强**：
+  - `templates/community.html`：投票/留言板区域标题行 `flex items-center justify-between` → `flex flex-wrap items-center justify-between gap-3`，移动端长标题不再挤压按钮
+  - `templates/community.html`：回复列表头像区、投票页脚行添加 `flex-wrap` + `gap-2`
+  - `templates/community.html`：投票/留言板标题添加 `break-words`，留言内容添加 `break-all`，防止长无空字符串横向溢出
+  - `templates/community.html`：留言输入框 + 发送按钮容器添加 `flex-wrap` + `min-w-[200px]`
+  - `templates/index.html`：模组介绍内容添加 `break-all`，防止长 URL/长英文串溢出
+  - `templates/admin_users.html`：页头与表格行操作按钮添加 `flex-wrap`，用户名添加 `break-all`
+  - `templates/admin_broadcast.html`：编辑器/预览头部添加 `flex-wrap` + `gap-2`
+  - `templates/performance.html`：CPU/内存进度条卡片头部添加 `flex-wrap` + `gap-2`
+  - `templates/settings.html`：用户名添加 `break-all`
+- **后端认证架构优化**：
+  - `core/auth.py` 新增 `hash_password()` / `verify_password()` 工具函数，统一密码哈希算法
+  - `routes/main.py` 移除 5 处重复的 `hashlib.sha256(password.encode('utf-8')).hexdigest()`，改用 `hash_password()`，移除 `import hashlib`
+  - `routes/admin/broadcast.py` 使用 `g._current_user` 避免重复查询，简化日志记录的连接管理（嵌套 try/finally）
 - **前端移动端彻底适配**：
   - `templates/admin_settings.html`：内联 `style="width: 200px;"` / `style="width: 120px;"` 改为响应式 `w-full sm:w-48` / `w-full sm:w-32`，移动端输入框占满宽度，桌面端固定宽度
   - `templates/admin_settings.html`：设置项行布局从 `flex items-center` 改为 `flex flex-col sm:flex-row sm:items-center`，移动端纵向堆叠
@@ -48,6 +89,11 @@
   - `services/captcha.py` `CaptchaService`：新增后台清理线程（每 60 秒清理一次过期验证码），避免内存泄漏
   - `services/email_code.py` `EmailCodeService`：新增后台清理线程（每 5 分钟清理一次过期验证码），避免内存泄漏
   - 两个服务的 docstring 完善安全特性说明（服务端内存存储、一次性删除防重放、过期时间、后台清理）
+- **邮件 HTML 模板统一重构**：
+  - `services/email_code.py`：验证码邮件 HTML 改用 `email_templates.verification_code()` 构建，移除硬编码 f-string 模板
+  - `routes/guides/api.py`：指南待审核通知 HTML 改用 `email_templates.guide_review_pending()` 构建
+  - `routes/admin/guides.py`：审核结果通知 HTML 改用 `email_templates.guide_review_result()` 构建，简化 `if/else` 分支为统一调用
+  - 消除 3 个文件中重复的外层容器样式与高亮块样式，所有邮件 HTML 集中在 `services/email_templates.py` 维护
 
 ### 修复
 - **替换 `admin_db_backup.html` 中内联 `confirm()`**：脚本块中的原生 `confirm('确定要删除此备份吗？此操作不可恢复。')` 替换为 `CustomModal.confirm()`，与全站统一弹窗风格保持一致（`initCustomConfirm` 仅拦截 `onsubmit`/`onclick` 属性，无法拦截脚本块内调用，故手动改写）

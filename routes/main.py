@@ -1,9 +1,8 @@
-import hashlib
 import json
 import os
 from datetime import datetime
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash, jsonify, abort
-from core.auth import login_required, get_current_user
+from core.auth import login_required, get_current_user, hash_password
 from core.db import get_db
 from config import REGISTER_VERIFY_CODE, UPLOAD_DIR, get_config_value
 from services.captcha import captcha_service
@@ -86,7 +85,7 @@ def register():
                 return render_template('register.html', error='该用户名已被注册',
                                        email_verify_enabled=email_verify_enabled)
 
-            password_hash = hashlib.sha256(password.encode('utf-8')).hexdigest()
+            password_hash = hash_password(password)
             conn.execute(
                 "INSERT INTO users (username, password_hash, email, created_at) VALUES (?, ?, ?, ?)",
                 (username, password_hash, email, datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
@@ -121,7 +120,7 @@ def login():
         if not username or not password:
             return render_template('login.html', error='请输入用户名和密码')
 
-        password_hash = hashlib.sha256(password.encode('utf-8')).hexdigest()
+        password_hash = hash_password(password)
         conn = get_db()
         try:
             user = conn.execute(
@@ -183,7 +182,7 @@ def change_username():
         flash('请输入当前密码', 'error')
         return redirect(url_for('main.settings') + '#username')
 
-    password_hash = hashlib.sha256(current_password.encode('utf-8')).hexdigest()
+    password_hash = hash_password(current_password)
     conn = get_db()
     try:
         db_user = conn.execute("SELECT password_hash FROM users WHERE id = ?", (user['id'],)).fetchone()
@@ -232,7 +231,7 @@ def change_password():
         flash('两次输入的新密码不一致', 'error')
         return redirect(url_for('main.settings') + '#password')
 
-    password_hash = hashlib.sha256(current_password.encode('utf-8')).hexdigest()
+    password_hash = hash_password(current_password)
     conn = get_db()
     try:
         db_user = conn.execute("SELECT password_hash FROM users WHERE id = ?", (user['id'],)).fetchone()
@@ -240,7 +239,7 @@ def change_password():
             flash('当前密码错误', 'error')
             return redirect(url_for('main.settings') + '#password')
 
-        new_hash = hashlib.sha256(new_password.encode('utf-8')).hexdigest()
+        new_hash = hash_password(new_password)
         conn.execute("UPDATE users SET password_hash = ? WHERE id = ?", (new_hash, user['id']))
         conn.commit()
         flash('密码修改成功！', 'success')
@@ -266,7 +265,7 @@ def change_email():
         return redirect(url_for('main.settings') + '#email')
 
     # 验证当前密码
-    password_hash = hashlib.sha256(current_password.encode('utf-8')).hexdigest()
+    password_hash = hash_password(current_password)
     conn = get_db()
     try:
         db_user = conn.execute("SELECT password_hash FROM users WHERE id = ?", (user['id'],)).fetchone()

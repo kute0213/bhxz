@@ -22,7 +22,7 @@
 
             <!-- 投票区域 -->
             <div id="polls" class="mb-12 sm:mb-16">
-                <div class="flex items-center justify-between mb-6">
+                <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
                     <h2 class="text-xl font-bold flex items-center gap-2">
                         <i data-lucide="vote" class="w-5 h-5 text-gold-400"></i>
                         投票活动
@@ -76,7 +76,7 @@
                     <div class="pixel-card rounded-xl p-5 sm:p-6">
                         <div class="flex items-start justify-between mb-4">
                             <div>
-                                <h3 class="text-lg font-bold mb-1">{{ poll.title }}</h3>
+                                <h3 class="text-lg font-bold mb-1 break-words">{{ poll.title }}</h3>
                                 {% if poll.description %}
                                 <p class="text-cream/60 text-sm">{{ poll.description }}</p>
                                 {% endif %}
@@ -125,7 +125,7 @@
                         </div>
                         {% endif %}
 
-                        <div class="mt-4 pt-4 border-t border-forest-700/50 flex items-center justify-between text-sm text-cream/50">
+                        <div class="mt-4 pt-4 border-t border-forest-700/50 flex flex-wrap items-center justify-between gap-2 text-sm text-cream/50">
                             <span>共 {{ poll.total_votes }} 人参与</span>
                             <span>{{ poll.created_at.split(' ')[0] }}</span>
                         </div>
@@ -142,7 +142,7 @@
 
             <!-- 留言板区域 -->
             <div id="board" class="mb-12">
-                <div class="flex items-center justify-between mb-6">
+                <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
                     <h2 class="text-xl font-bold flex items-center gap-2">
                         <i data-lucide="message-square" class="w-5 h-5 text-gold-400"></i>
                         留言板
@@ -179,7 +179,7 @@
                     <div class="pixel-card rounded-xl p-5 sm:p-6">
                         <div class="flex items-start justify-between mb-4">
                             <div>
-                                <h3 class="text-lg font-bold mb-1">{{ topic.title }}</h3>
+                                <h3 class="text-lg font-bold mb-1 break-words">{{ topic.title }}</h3>
                                 {% if topic.description %}
                                 <p class="text-cream/60 text-sm">{{ topic.description }}</p>
                                 {% endif %}
@@ -202,7 +202,7 @@
                         <div class="space-y-3 mb-4">
                             {% for reply in topic.replies %}
                             <div class="bg-forest-900/50 rounded-lg p-4">
-                                <div class="flex items-center justify-between mb-2">
+                                <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
                                     <div class="flex items-center gap-2">
                                         <div class="w-8 h-8 bg-gold-400/20 rounded-full flex items-center justify-center text-xs font-bold text-gold-400">
                                             {{ reply.username[0] }}
@@ -218,7 +218,7 @@
                                     </form>
                                     {% endif %}
                                 </div>
-                                <p class="text-cream/80 text-sm leading-relaxed whitespace-pre-wrap">{{ reply.content }}</p>
+                                <p class="text-cream/80 text-sm leading-relaxed whitespace-pre-wrap break-all">{{ reply.content }}</p>
                                 {% if reply.attachment %}
                                 <div class="mt-2 flex flex-wrap items-center gap-2 bg-forest-800/50 rounded-lg px-3 py-2">
                                     <i data-lucide="paperclip" class="w-4 h-4 text-gold-400 flex-shrink-0"></i>
@@ -238,8 +238,8 @@
                         <!-- 回复表单 -->
                         {% if user %}
                         <form method="POST" action="{{ url_for('community.reply_board', topic_id=topic.id) }}" enctype="multipart/form-data" class="space-y-2">
-                            <div class="flex gap-2">
-                                <textarea name="content" required rows="2" maxlength="2000" class="input-field flex-1 px-4 py-2 rounded-lg text-sm" placeholder="写下你的留言..."></textarea>
+                            <div class="flex flex-wrap gap-2">
+                                <textarea name="content" required rows="2" maxlength="2000" class="input-field flex-1 min-w-[200px] px-4 py-2 rounded-lg text-sm" placeholder="写下你的留言..."></textarea>
                                 <button type="submit" class="btn-primary px-4 py-2 rounded-lg text-sm font-bold self-end">
                                     发送
                                 </button>

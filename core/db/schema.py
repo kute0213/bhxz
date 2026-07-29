@@ -278,6 +278,19 @@ def init_db():
                 expires_at VARCHAR DEFAULT NULL
             )
         '''),
+        # 广播邮件日志表
+        ('broadcast_logs', '''
+            CREATE SEQUENCE IF NOT EXISTS broadcast_logs_id_seq START 1;
+            CREATE TABLE IF NOT EXISTS broadcast_logs (
+                id INTEGER PRIMARY KEY DEFAULT nextval('broadcast_logs_id_seq'),
+                subject TEXT NOT NULL,
+                body TEXT NOT NULL,
+                sender_id INTEGER NOT NULL,
+                sender_name TEXT NOT NULL,
+                recipient_count INTEGER NOT NULL,
+                created_at TEXT NOT NULL
+            )
+        '''),
     ]
 
     for table_name, ddl in tables:

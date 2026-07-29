@@ -1,0 +1,319 @@
+{% extends "base.html" %}
+{% block title %}广播邮件{% endblock %}
+{% block content %}
+    <section class="page-container py-12">
+        <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="mb-8">
+                <a href="{{ url_for('admin.admin_page') }}" class="text-gold-400 hover:text-gold-300 text-sm mb-2 inline-block">
+                    <i data-lucide="arrow-left" class="w-4 h-4 inline mr-1"></i>返回管理中心
+                </a>
+                <h1 class="text-xl sm:text-2xl font-bold">广播邮件</h1>
+                <p class="text-cream/60 text-sm mt-1">向全体用户发送 Markdown 格式的邮件广播</p>
+            </div>
+
+            <!-- 警告提示 -->
+            <div class="mb-6 p-4 bg-red-900/20 border border-red-500/30 rounded-lg flex items-start gap-3">
+                <i data-lucide="alert-triangle" class="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5"></i>
+                <div class="text-sm">
+                    <p class="text-red-300 font-medium">注意</p>
+                    <p class="text-cream/70 mt-1">广播邮件将发送给 <b id="user-count" class="text-gold-400">加载中...</b> 位已绑定邮箱的用户。请仔细检查内容后再发送。</p>
+                </div>
+            </div>
+
+            <!-- 主体内容 -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- 左侧：编辑器 -->
+                <div class="pixel-card rounded-xl overflow-hidden">
+                    <div class="px-4 py-3 border-b border-forest-700/50 flex flex-wrap items-center justify-between gap-2">
+                        <div class="flex items-center gap-2">
+                            <i data-lucide="edit-3" class="w-4 h-4 text-gold-400"></i>
+                            <span class="font-medium text-sm">Markdown 编辑器</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <button id="btn-sample" class="text-xs text-cream/60 hover:text-gold-400 px-2 py-1 rounded transition-colors">
+                                插入示例
+                            </button>
+                            <span id="char-count" class="text-xs text-cream/40">0 字</span>
+                        </div>
+                    </div>
+                    <div class="p-4 space-y-3">
+                        <div>
+                            <label class="block text-sm font-medium mb-1.5 text-cream/80">广播标题</label>
+                            <input id="subject" type="text" maxlength="200" placeholder="例如：服务器更新通知"
+                                   class="input-field w-full px-4 py-2.5 rounded-lg text-sm">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-1.5 text-cream/80">
+                                广播内容 <span class="text-cream/40">(支持 Markdown 语法)</span>
+                            </label>
+                            <textarea id="body" rows="14" maxlength="20000" placeholder="# 标题&#10;&#10;这是一条 **加粗** 文字。&#10;&#10;- 列表项 1&#10;- 列表项 2&#10;&#10;```python&#10;print('hello')&#10;```"
+                                      class="input-field w-full px-4 py-3 rounded-lg text-sm font-mono leading-relaxed resize-y"></textarea>
+                        </div>
+                        <div class="flex flex-wrap gap-2 pt-2">
+                            <button id="btn-send" class="btn-primary px-6 py-2.5 rounded-lg font-bold text-sm">
+                                <i data-lucide="send" class="w-4 h-4 inline mr-1"></i>发送广播
+                            </button>
+                            <button id="btn-clear" class="btn-secondary px-4 py-2.5 rounded-lg text-sm">
+                                <i data-lucide="trash-2" class="w-4 h-4 inline mr-1"></i>清空
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 右侧：预览 -->
+                <div class="pixel-card rounded-xl overflow-hidden">
+                    <div class="px-4 py-3 border-b border-forest-700/50 flex flex-wrap items-center justify-between gap-2">
+                        <div class="flex items-center gap-2">
+                            <i data-lucide="eye" class="w-4 h-4 text-gold-400"></i>
+                            <span class="font-medium text-sm">实时预览</span>
+                        </div>
+                        <span class="text-xs text-cream/40">使用 marked.js 渲染</span>
+                    </div>
+                    <div class="p-4">
+                        <!-- 邮件样式预览 -->
+                        <div class="bg-forest-900/40 rounded-lg p-4 max-w-md mx-auto" id="preview-container">
+                            <div class="text-center text-cream/40 text-sm py-8">
+                                在左侧编辑内容，此处将实时显示 Markdown 渲染效果
+                            </div>
+                        </div>
+                    </div>
+                    <!-- Markdown 语法提示 -->
+                    <div class="px-4 py-3 border-t border-forest-700/50">
+                        <details class="text-xs text-cream/60">
+                            <summary class="cursor-pointer hover:text-gold-400 transition-colors">
+                                <i data-lucide="help-circle" class="w-3 h-3 inline mr-1"></i>常用 Markdown 语法
+                            </summary>
+                            <div class="mt-2 p-3 bg-forest-900/40 rounded-lg space-y-1 font-mono text-xs">
+                                <div><span class="text-gold-400"># 标题</span> → 一级标题</div>
+                                <div><span class="text-gold-400">## 标题</span> → 二级标题</div>
+                                <div><span class="text-gold-400">**粗体**</span> → <b>粗体</b></div>
+                                <div><span class="text-gold-400">*斜体*</span> → <i>斜体</i></div>
+                                <div><span class="text-gold-400">[链接](url)</span> → 超链接</div>
+                                <div><span class="text-gold-400">- 列表</span> → 无序列表</div>
+                                <div><span class="text-gold-400">1. 列表</span> → 有序列表</div>
+                                <div><span class="text-gold-400">> 引用</span> → 引用块</div>
+                                <div><span class="text-gold-400">`代码`</span> → 行内代码</div>
+                                <div><span class="text-gold-400">```语言</span> → 代码块</div>
+                            </div>
+                        </details>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 广播历史 -->
+            <div class="mt-8">
+                <h2 class="text-lg font-bold mb-4 flex items-center gap-2">
+                    <i data-lucide="history" class="w-5 h-5 text-gold-400"></i>
+                    广播历史
+                </h2>
+                <div id="broadcast-history" class="pixel-card rounded-xl p-4">
+                    <div class="text-center text-cream/40 text-sm py-6">加载中...</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- 确认发送弹窗 -->
+    <div id="confirm-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
+        <div class="bg-forest-800 border border-gold-400/30 rounded-2xl shadow-2xl max-w-md w-full p-6 pixel-card">
+            <div class="flex items-center gap-3 mb-4">
+                <div class="w-10 h-10 bg-red-500/20 rounded-full flex items-center justify-center flex-shrink-0">
+                    <i data-lucide="alert-triangle" class="w-5 h-5 text-red-400"></i>
+                </div>
+                <div>
+                    <h3 class="text-lg font-bold text-red-400">确认发送广播</h3>
+                    <p class="text-sm text-cream/60">此操作不可撤销</p>
+                </div>
+            </div>
+            <div class="space-y-2 mb-6">
+                <p class="text-sm text-cream/80">您即将向 <b id="confirm-count" class="text-gold-400">0</b> 位用户发送邮件广播。</p>
+                <p class="text-sm text-cream/60">主题：<span id="confirm-subject" class="font-medium">—</span></p>
+            </div>
+            <div class="flex gap-3">
+                <button id="confirm-cancel" class="flex-1 px-4 py-2.5 bg-forest-700 hover:bg-forest-600 rounded-lg text-sm transition-colors">
+                    取消
+                </button>
+                <button id="confirm-ok" class="flex-1 px-4 py-2.5 bg-red-500 hover:bg-red-400 text-white rounded-lg text-sm font-bold transition-colors">
+                    确认发送
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script>
+    (function() {
+        var $ = function(id) { return document.getElementById(id); };
+        var body = $('body');
+        var subject = $('subject');
+        var preview = $('preview-container');
+        var charCount = $('char-count');
+        var userCount = $('user-count');
+        var confirmModal = $('confirm-modal');
+        var confirmOk = $('confirm-ok');
+        var confirmCancel = $('confirm-cancel');
+
+        marked.setOptions({ breaks: true, gfm: true });
+
+        // 实时预览
+        function updatePreview() {
+            var text = body.value;
+            charCount.textContent = text.length + ' 字';
+            if (!text.trim()) {
+                preview.innerHTML = '<div class="text-center text-cream/40 text-sm py-8">在左侧编辑内容，此处将实时显示 Markdown 渲染效果</div>';
+                return;
+            }
+            try {
+                var html = marked.parse(text);
+                preview.innerHTML = '<div style="text-align:left;font-size:13px;line-height:1.7;color:#e0e0e0;word-break:break-word;">' + html + '</div>';
+            } catch (e) {
+                preview.innerHTML = '<div class="text-red-400 text-sm">渲染错误：' + e.message + '</div>';
+            }
+        }
+
+        // 防抖预览
+        var previewTimer;
+        body.addEventListener('input', function() {
+            clearTimeout(previewTimer);
+            previewTimer = setTimeout(updatePreview, 200);
+        });
+        updatePreview();
+
+        // 加载用户数量
+        fetch('/api/stats', { headers: { 'Accept': 'application/json' } })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                userCount.textContent = data.total_users || 0;
+            })
+            .catch(function() { userCount.textContent = '未知'; });
+
+        // 插入示例
+        $('btn-sample').addEventListener('click', function() {
+            subject.value = '【重要】服务器维护通知';
+            body.value = '# 服务器维护通知\n\n各位玩家好：\n\n服务器将于 **本周六凌晨 2:00** 进行例行维护，预计持续 **2 小时**。\n\n## 维护内容\n\n- 修复已知 Bug\n- 优化数据库性能\n- 更新模组版本\n\n## 注意事项\n\n> 维护期间无法登录服务器，请提前保存好游戏进度。\n\n如有疑问，请联系管理员。\n\n---\n\n祝游戏愉快！';
+            updatePreview();
+        });
+
+        // 清空
+        $('btn-clear').addEventListener('click', function() {
+            CustomModal.confirm('确定要清空所有内容吗？', '确认清空').then(function(ok) {
+                if (ok) {
+                    subject.value = '';
+                    body.value = '';
+                    updatePreview();
+                }
+            });
+        });
+
+        // 加载广播历史
+        function loadHistory() {
+            fetch('/admin/broadcast/logs', { headers: { 'Accept': 'application/json' } })
+                .then(function(r) {
+                    if (!r.ok) {
+                        throw new Error('服务器返回状态 ' + r.status);
+                    }
+                    return r.json();
+                })
+                .then(function(data) {
+                    if (!data.success || !data.logs || data.logs.length === 0) {
+                        document.getElementById('broadcast-history').innerHTML = '<div class="text-center text-cream/40 text-sm py-6">暂无广播记录</div>';
+                        return;
+                    }
+                    var html = '<div class="space-y-3">';
+                    data.logs.forEach(function(log) {
+                        html += '<div class="border border-forest-700/50 rounded-lg p-4"><div class="flex items-start justify-between gap-3 mb-2"><h3 class="font-medium text-sm text-gold-400 flex-1 truncate">' + escapeHtml(log.subject) + '</h3><span class="text-xs text-cream/40 flex-shrink-0">' + log.created_at + '</span></div><p class="text-xs text-cream/60 mb-2">发送者：' + escapeHtml(log.sender_name) + ' · 接收：' + log.recipient_count + ' 人</p><p class="text-xs text-cream/50 line-clamp-2">' + escapeHtml(log.body.substring(0, 200)) + '</p></div>';
+                    });
+                    html += '</div>';
+                    document.getElementById('broadcast-history').innerHTML = html;
+                })
+                .catch(function() {
+                    document.getElementById('broadcast-history').innerHTML = '<div class="text-center text-cream/40 text-sm py-6">加载历史失败</div>';
+                });
+        }
+        loadHistory();
+
+        function escapeHtml(str) {
+            var div = document.createElement('div');
+            div.textContent = str;
+            return div.innerHTML;
+        }
+
+        // 发送按钮 → 确认弹窗
+        $('btn-send').addEventListener('click', function() {
+            if (!subject.value.trim()) {
+                Toast.show('请输入广播标题', 'error');
+                return;
+            }
+            if (!body.value.trim()) {
+                Toast.show('请输入广播内容', 'error');
+                return;
+            }
+            $('confirm-subject').textContent = subject.value.trim();
+            $('confirm-count').textContent = userCount.textContent;
+            confirmModal.classList.remove('hidden');
+            confirmModal.classList.add('flex');
+        });
+
+        function closeConfirm() {
+            confirmModal.classList.add('hidden');
+            confirmModal.classList.remove('flex');
+        }
+
+        confirmCancel.addEventListener('click', closeConfirm);
+
+        confirmOk.addEventListener('click', function() {
+            var btn = confirmOk;
+            btn.disabled = true;
+            btn.textContent = '发送中...';
+            var formData = {
+                subject: subject.value.trim(),
+                body: body.value.trim(),
+                confirm: 'CONFIRM'
+            };
+            fetch('/admin/broadcast/send', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify(formData)
+            })
+            .then(function(r) {
+                if (!r.ok) {
+                    return r.json().catch(function() {
+                        throw new Error('服务器返回状态 ' + r.status);
+                    });
+                }
+                return r.json();
+            })
+            .then(function(data) {
+                btn.disabled = false;
+                btn.textContent = '确认发送';
+                closeConfirm();
+                if (data.success) {
+                    Toast.show(data.message, 'success');
+                    subject.value = '';
+                    body.value = '';
+                    updatePreview();
+                    loadHistory();
+                } else {
+                    Toast.show(data.message || '发送失败', 'error');
+                }
+            })
+            .catch(function(err) {
+                btn.disabled = false;
+                btn.textContent = '确认发送';
+                closeConfirm();
+                Toast.show('请求失败：' + err.message, 'error');
+            });
+        });
+
+        // ESC 关闭确认框
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && !confirmModal.classList.contains('hidden')) {
+                closeConfirm();
+            }
+        });
+    })();
+    </script>
+{% endblock %}
