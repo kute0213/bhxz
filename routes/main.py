@@ -39,7 +39,6 @@ def register():
         username = request.form.get('username', '').strip()
         password = request.form.get('password', '')
         confirm = request.form.get('confirm', '')
-        verify_code = request.form.get('verify_code', '').strip()
         captcha_input = request.form.get('captcha', '').strip()
         captcha_id = request.form.get('captcha_id', '').strip()
         email = normalize_email(request.form.get('email', ''))
@@ -59,8 +58,10 @@ def register():
         if password != confirm:
             return render_template('register.html', error='两次输入的密码不一致',
                                    email_verify_enabled=email_verify_enabled)
-        if verify_code != REGISTER_VERIFY_CODE:
-            return render_template('register.html', error='群内验证码错误，请在QQ群公告中获取正确验证码',
+
+        # 群内验证码校验（从 session 中检查，需通过弹窗验证）
+        if not session.get('group_code_verified'):
+            return render_template('register.html', error='请先完成群内验证码验证',
                                    email_verify_enabled=email_verify_enabled)
 
         # 邮箱验证（仅在开启时要求）
@@ -100,9 +101,37 @@ def register():
                                    email_verify_enabled=email_verify_enabled)
         finally:
             conn.close()
+
+        # 清除群内验证码 session 标记
+        session.pop('group_code_verified', None)
+
         return redirect(url_for('main.login', registered=1))
 
     return render_template('register.html', email_verify_enabled=email_verify_enabled)
+
+
+@main_bp.route('/api/verify-group-code', methods=['POST'])
+def verify_group_code():
+    """验证群内验证码（AJAX）。验证成功后将标记存入 session。"""
+    data = request.get_json(silent=True) or {}
+    code = (data.get('code') or '').strip()
+
+    if not code:
+        return jsonify({'success': False, 'message': '请输入验证码'}), 400
+
+    if code != REGISTER_VERIFY_CODE:
+        return jsonify({'success': False, 'message': '验证码错误，请在QQ群公告中获取正确验证码'}), 400
+
+    session['group_code_verified'] = True
+    session['group_code_verified_at'] = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    return jsonify({'success': True, 'message': '验证成功'})
+
+
+@main_bp.route('/api/verify-group-code/check')
+def check_group_code():
+    """检查群内验证码是否已验证（AJAX）。"""
+    verified = session.get('group_code_verified', False)
+    return jsonify({'verified': bool(verified)})
 
 
 @main_bp.route('/login', methods=['GET', 'POST'])

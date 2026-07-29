@@ -7,6 +7,13 @@
 ## [未发布]
 
 ### 修复
+- **简化图形验证码难度 + 群内验证码改为弹窗模式**：
+  - `services/captcha.py`：验证码从两位数加法 (10-99) 改为个位数加法 (1-9)，答案范围 2-18；减少干扰线条数 (6→3) 和干扰点数 (120→60)；增大字体 (18→22px)，文字颜色更深、干扰颜色更浅
+  - `templates/register.html`：调整表单顺序，图形验证码移到邮箱验证码上方
+  - `templates/register.html`：群内验证码改为弹窗模式，打开注册页即弹出要求输入，验证正确后才显示注册表单
+  - `routes/main.py`：新增 `/api/verify-group-code` 和 `/api/verify-group-code/check` AJAX 接口，验证结果存入 session
+  - `routes/main.py`：注册路由改为检查 session 中的群内验证码标记，不再依赖表单字段
+
 - **修复广播邮件发送返回 "Unexpected token '<'" 错误**：
   - 根因：`/admin/broadcast/send` 等 AJAX 路由使用 `@login_required` 装饰器，session 过期或权限不足时返回 302 HTML 重定向，前端 `fetch().json()` 解析 HTML 遇到 `<` 字符报错
   - `core/auth.py` 新增 `admin_required` 装饰器：对 JSON/AJAX 请求返回 JSON 401/403（而非 HTML 重定向）
