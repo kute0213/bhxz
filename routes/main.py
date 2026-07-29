@@ -184,6 +184,78 @@ def logout():
     return redirect(url_for('main.home'))
 
 
+@main_bp.route('/forgot-password', methods=['GET', 'POST'])
+def forgot_password():
+    """找回密码页面。"""
+    if request.method == 'POST':
+        username = request.form.get('username', '').strip()
+        email = normalize_email(request.form.get('email', ''))
+        captcha_input = request.form.get('captcha', '').strip()
+        captcha_id = request.form.get('captcha_id', '').strip()
+        email_code = request.form.get('email_code', '').strip()
+        new_password = request.form.get('new_password', '')
+        confirm_password = request.form.get('confirm_password', '')
+
+        # 图形验证码校验
+        if not captcha_service.verify(captcha_id, captcha_input):
+            return render_template('forgot_password.html', error='图形验证码错误或已过期')
+
+        if not username:
+            return render_template('forgot_password.html', error='请输入用户名')
+
+        if not email:
+            return render_template('forgot_password.html', error='请输入邮箱地址')
+
+        # 查找用户并验证邮箱匹配
+        conn = get_db()
+        try:
+            user = conn.execute(
+                "SELECT id, email FROM users WHERE username = ?",
+                (username,)
+            ).fetchone()
+        finally:
+            conn.close()
+
+        if not user:
+            return render_template('forgot_password.html', error='用户不存在')
+
+        if not user['email']:
+            return render_template('forgot_password.html', error='该用户未设置邮箱，无法找回密码')
+
+        if user['email'] != email:
+            return render_template('forgot_password.html', error='邮箱与用户名不匹配')
+
+        # 邮箱验证码校验
+        if not email_code:
+            return render_template('forgot_password.html', error='请输入邮箱验证码')
+
+        from services.email_code import email_code_service
+        if not email_code_service.verify(email, email_code):
+            return render_template('forgot_password.html', error='邮箱验证码错误或已过期')
+
+        # 新密码校验
+        if len(new_password) < 6:
+            return render_template('forgot_password.html', error='新密码至少 6 位')
+        if new_password != confirm_password:
+            return render_template('forgot_password.html', error='两次输入的新密码不一致')
+
+        # 更新密码
+        conn = get_db()
+        try:
+            new_hash = hash_password(new_password)
+            conn.execute("UPDATE users SET password_hash = ? WHERE id = ?", (new_hash, user['id']))
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            return render_template('forgot_password.html', error='密码重置失败，请稍后重试')
+        finally:
+            conn.close()
+
+        return redirect(url_for('main.login', reset=1))
+
+    return render_template('forgot_password.html')
+
+
 @main_bp.route('/settings', methods=['GET', 'POST'])
 @login_required
 def settings():

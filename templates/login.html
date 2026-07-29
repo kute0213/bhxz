@@ -18,6 +18,12 @@
                 </div>
                 {% endif %}
 
+                {% if request.args.get('reset') %}
+                <div class="mb-6 p-4 bg-green-900/30 border border-green-500/30 rounded-lg text-green-300 text-sm">
+                    <i data-lucide="check-circle" class="w-4 h-4 inline mr-1"></i>密码重置成功，请使用新密码登录！
+                </div>
+                {% endif %}
+
                 {% if error %}
                 <div class="mb-6 p-4 bg-red-900/30 border border-red-500/30 rounded-lg text-red-300 text-sm">
                     <i data-lucide="alert-circle" class="w-4 h-4 inline mr-1"></i>{{ error }}
@@ -50,9 +56,12 @@
                     <button type="submit" class="btn-primary w-full py-3 rounded-lg font-bold">登录</button>
                 </form>
 
-                <div class="mt-6 pt-6 border-t border-forest-700 text-center">
+                <div class="mt-6 pt-6 border-t border-forest-700 text-center space-y-2">
                     <p class="text-sm text-cream/60">
                         还没有账户？ <a href="{{ url_for('main.register') }}" class="text-gold-400 hover:text-gold-500 font-medium">立即注册</a>
+                    </p>
+                    <p class="text-sm text-cream/60">
+                        <a href="{{ url_for('main.forgot_password') }}" class="text-gold-400/70 hover:text-gold-400 font-medium">忘记密码？</a>
                     </p>
                 </div>
             </div>

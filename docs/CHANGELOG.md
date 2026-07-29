@@ -6,6 +6,21 @@
 
 ## [未发布]
 
+### 新增
+- **找回密码功能**：
+  - 新增 `routes/main.py` `/forgot-password` 路由：支持通过已绑定邮箱找回密码，流程包含用户名验证 → 图形验证码 → 邮箱验证码 → 新密码重置
+  - 新增 `templates/forgot_password.html`：找回密码页面，风格与登录/注册保持一致，包含图形验证码输入、邮箱验证码发送、新密码确认
+  - `templates/login.html` 新增「忘记密码？」链接，重置成功后显示绿色提示
+  - `routes/api/email_code.py` 支持 `purpose: "找回密码"`，无需依赖 `REGISTER_EMAIL_VERIFY` 配置项，只要邮件功能启用即可发送
+
+### 优化
+- **弹窗系统响应式适配**：
+  - `static/css/base.css` 新增 `@media (max-width: 640px)` 弹窗响应式规则：`.modal-box` 宽度改为 `calc(100vw - 32px)`，圆角缩小，内边距缩减，底部按钮改为纵向堆叠并占满宽度
+  - `static/css/base.css` 新增 Toast 响应式规则：小屏下固定距左右 16px，取消水平居中 transform，避免窄屏溢出
+- **前端页面持续适配全屏**：
+  - 所有已发现的表格均包裹 `overflow-x-auto`，确保移动端横向滚动（admin_users、admin_guides、admin_logs、admin_guide_bans、admin_public_files）
+  - 登录页、注册页、找回密码页统一使用 `max-w-md w-full mx-4 sm:mx-6` 和 `p-5 sm:p-8` 响应式容器
+
 ### 修复
 - **群内验证码改为弹窗模式（前端缓存，不传 session）**：
   - `templates/register.html`：打开注册页即弹出全屏弹窗要求输入群内验证码，验证正确后才显示注册表单；前端将验证码值保存在闭包变量中，通过隐藏字段随表单提交，发送邮箱验证码时通过 JSON 回传

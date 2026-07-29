@@ -79,6 +79,10 @@ def send_email_code():
     if purpose == '注册' and not get_config_value('REGISTER_EMAIL_VERIFY', False):
         return jsonify({'success': False, 'message': '注册邮箱验证未开启'}), 400
 
+    # 找回密码场景：检查邮件功能是否启用即可
+    if purpose == '找回密码' and not email_service.is_enabled():
+        return jsonify({'success': False, 'message': '邮件功能未启用'}), 400
+
     # 发送验证码
     success, message = email_code_service.send_code(email, purpose)
     if success:
