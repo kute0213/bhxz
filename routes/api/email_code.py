@@ -5,7 +5,7 @@ from flask import Blueprint, request, jsonify
 from services.email_code import email_code_service, normalize_email
 from services.email import email_service
 from services.captcha import captcha_service
-from config import get_config_value
+from config import get_config_value, REGISTER_VERIFY_CODE
 
 
 email_code_bp = Blueprint('email_code', __name__)
@@ -38,9 +38,10 @@ def send_email_code():
     请求 JSON:
     {
         "email": "user@example.com",
-        "purpose": "注册",  // 可选，默认 "注册"
-        "captcha": "1234",      // 图形验证码
-        "captcha_id": "uuid"    // 验证码 ID（服务端内存存储）
+        "purpose": "注册",         // 可选，默认 "注册"
+        "captcha": "1234",         // 图形验证码
+        "captcha_id": "uuid",      // 验证码 ID（服务端内存存储）
+        "verify_code": "binhai_xz" // 群内验证码
     }
 
     返回 JSON:
@@ -54,12 +55,17 @@ def send_email_code():
     purpose = data.get('purpose') or '注册'
     captcha_input = (data.get('captcha') or '').strip()
     captcha_id = (data.get('captcha_id') or '').strip()
+    verify_code = (data.get('verify_code') or '').strip()
 
     if not email:
         return jsonify({'success': False, 'message': '请输入邮箱地址'}), 400
 
     if not _is_valid_email(email):
         return jsonify({'success': False, 'message': '邮箱格式不正确'}), 400
+
+    # 群内验证码校验（前端弹窗验证后缓存并回传）
+    if verify_code != REGISTER_VERIFY_CODE:
+        return jsonify({'success': False, 'message': '群内验证码错误，请在QQ群公告中获取正确验证码'}), 400
 
     # 图形验证码校验（服务端内存存储，一次性删除防止重放）
     if not captcha_service.verify(captcha_id, captcha_input):

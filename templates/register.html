@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block title %}注册{% endblock %}
 {% block content %}
-    <!-- 群内验证码弹窗（首次打开注册页必须输入正确验证码才能继续） -->
+    <!-- 群内验证码弹窗（每次打开注册页都需要输入） -->
     <div id="group-code-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
         <div class="bg-forest-800 border border-gold-400/30 rounded-2xl shadow-2xl max-w-md w-full p-6 sm:p-8 pixel-card">
             <div class="text-center mb-6">
@@ -44,7 +44,9 @@
                 </div>
                 {% endif %}
 
-                <form method="POST" class="space-y-5">
+                <form method="POST" class="space-y-5" id="register-form">
+                    <!-- 群内验证码（前端验证通过后填入，随表单提交） -->
+                    <input type="hidden" name="verify_code" id="verify-code-hidden" value="">
                     <div>
                         <label class="block text-sm font-medium mb-2 text-cream/80">用户名</label>
                         <input type="text" name="username" required minlength="2" maxlength="20" class="input-field w-full px-4 py-3 rounded-lg" placeholder="2-20 个字符">
@@ -100,7 +102,7 @@
 
 {% block extra_script %}
 <script>
-// 加载验证码
+// 加载图形验证码
 function loadCaptcha() {
     const img = document.getElementById('captcha-img');
     const captchaIdInput = document.getElementById('captcha-id');
@@ -109,40 +111,24 @@ function loadCaptcha() {
         .then(data => {
             if (data.success) {
                 img.src = data.image;
-                // 保存服务端返回的 captcha_id 供表单提交
                 if (captchaIdInput) captchaIdInput.value = data.captcha_id || '';
             }
         })
         .catch(err => console.error('加载验证码失败:', err));
 }
 
-// 点击图片刷新验证码
 document.getElementById('captcha-img').addEventListener('click', loadCaptcha);
 
-// 群内验证码弹窗逻辑
+// 群内验证码弹窗逻辑：验证通过后前端保存验证码值，后续请求直接回传
 (function() {
     const modal = document.getElementById('group-code-modal');
     const input = document.getElementById('group-code-input');
     const submitBtn = document.getElementById('group-code-submit');
     const formSection = document.getElementById('register-form-section');
+    const verifyCodeHidden = document.getElementById('verify-code-hidden');
 
-    // 检查 session 中是否已有验证标记
-    fetch('/api/verify-group-code/check', {
-        headers: { 'Accept': 'application/json' }
-    })
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-        if (data.verified) {
-            // 已验证过，直接显示表单
-            hideModal();
-        } else {
-            // 未验证，显示弹窗并聚焦输入
-            showModal();
-        }
-    })
-    .catch(function() {
-        showModal();
-    });
+    // 闭包变量：保存已验证的群内验证码
+    var savedGroupCode = '';
 
     function showModal() {
         modal.classList.remove('hidden');
@@ -154,14 +140,12 @@ document.getElementById('captcha-img').addEventListener('click', loadCaptcha);
         modal.classList.add('hidden');
         modal.classList.remove('flex');
         formSection.style.display = 'flex';
-        // 加载图形验证码
         loadCaptcha();
-        // 更新 lucide 图标
         if (window.lucide) lucide.createIcons();
     }
 
     function verifyCode() {
-        const code = input.value.trim();
+        var code = input.value.trim();
         if (!code) {
             Toast.warning('请输入群内验证码');
             input.focus();
@@ -177,6 +161,9 @@ document.getElementById('captcha-img').addEventListener('click', loadCaptcha);
         .then(function(res) { return res.json(); })
         .then(function(data) {
             if (data.success) {
+                savedGroupCode = code;
+                // 填入隐藏字段，注册提交时自动附带
+                if (verifyCodeHidden) verifyCodeHidden.value = code;
                 Toast.success('验证成功');
                 hideModal();
             } else {
@@ -198,6 +185,12 @@ document.getElementById('captcha-img').addEventListener('click', loadCaptcha);
     input.addEventListener('keydown', function(e) {
         if (e.key === 'Enter') verifyCode();
     });
+
+    // 页面加载时直接显示弹窗（每次打开注册页都需要重新验证）
+    showModal();
+
+    // 暴露获取验证码的方法，供邮箱验证码发送使用
+    window.__getGroupCode = function() { return savedGroupCode; };
 })();
 
 // 邮箱验证码发送
@@ -209,6 +202,8 @@ document.getElementById('captcha-img').addEventListener('click', loadCaptcha);
         const emailInput = document.querySelector('input[name="email"]');
         const captchaInput = document.querySelector('input[name="captcha"]');
         const captchaIdInput = document.getElementById('captcha-id');
+        var groupCode = (typeof window.__getGroupCode === 'function') ? window.__getGroupCode() : '';
+
         if (!emailInput || !emailInput.value.trim()) {
             Toast.warning('请先输入邮箱地址');
             return;
@@ -227,7 +222,13 @@ document.getElementById('captcha-img').addEventListener('click', loadCaptcha);
         fetch('/api/email/send-code', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: email, purpose: '注册', captcha: captcha, captcha_id: captchaId })
+            body: JSON.stringify({
+                email: email,
+                purpose: '注册',
+                captcha: captcha,
+                captcha_id: captchaId,
+                verify_code: groupCode
+            })
         })
         .then(res => res.json())
         .then(data => {
@@ -245,7 +246,6 @@ document.getElementById('captcha-img').addEventListener('click', loadCaptcha);
                 }, 1000);
             } else {
                 Toast.error(data.message || '发送失败');
-                // 图形验证码错误时刷新验证码
                 if (data.need_captcha) {
                     loadCaptcha();
                     if (captchaInput) captchaInput.value = '';

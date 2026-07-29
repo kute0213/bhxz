@@ -7,12 +7,13 @@
 ## [未发布]
 
 ### 修复
-- **简化图形验证码难度 + 群内验证码改为弹窗模式**：
-  - `services/captcha.py`：验证码从两位数加法 (10-99) 改为个位数加法 (1-9)，答案范围 2-18；减少干扰线条数 (6→3) 和干扰点数 (120→60)；增大字体 (18→22px)，文字颜色更深、干扰颜色更浅
-  - `templates/register.html`：调整表单顺序，图形验证码移到邮箱验证码上方
-  - `templates/register.html`：群内验证码改为弹窗模式，打开注册页即弹出要求输入，验证正确后才显示注册表单
-  - `routes/main.py`：新增 `/api/verify-group-code` 和 `/api/verify-group-code/check` AJAX 接口，验证结果存入 session
-  - `routes/main.py`：注册路由改为检查 session 中的群内验证码标记，不再依赖表单字段
+- **群内验证码改为弹窗模式（前端缓存，不传 session）**：
+  - `templates/register.html`：打开注册页即弹出全屏弹窗要求输入群内验证码，验证正确后才显示注册表单；前端将验证码值保存在闭包变量中，通过隐藏字段随表单提交，发送邮箱验证码时通过 JSON 回传
+  - `routes/main.py`：`/api/verify-group-code` 只验证不存 session；注册路由从表单 `verify_code` 字段直接验证，不再依赖 session 标记
+  - `routes/api/email_code.py`：发送邮箱验证码接口新增 `verify_code` 参数校验，确保只有已验证群内验证码的用户才能发送邮件验证码
+  - 优势：后端无需存储额外 session 状态，安全性不变（每次请求都验证），刷新页面需重新验证
+- **恢复图形验证码难度**：
+  - `services/captcha.py`：恢复为两位数加法 (10-99)，6 条干扰线，120 个干扰点，字号 18px
 
 - **修复广播邮件发送返回 "Unexpected token '<'" 错误**：
   - 根因：`/admin/broadcast/send` 等 AJAX 路由使用 `@login_required` 装饰器，session 过期或权限不足时返回 302 HTML 重定向，前端 `fetch().json()` 解析 HTML 遇到 `<` 字符报错
