@@ -74,9 +74,8 @@ def _init_app():
     from routes.guides import guides_bp
     from routes.public_files import public_bp, try_serve_public
     from services.scheduler import scheduler
-    from services.log_cleaner import log_cleaner
-    from services.log_writer import log_writer
-    from services.backup_scheduler import BackupScheduler
+    from services.logging import log_cleaner, log_writer
+    from services.backup import BackupScheduler
     from services.email import email_service
 
     init_db()

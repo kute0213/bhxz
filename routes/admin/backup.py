@@ -57,7 +57,7 @@ def api_db_backup_start():
     if not user or not user['is_admin']:
         return jsonify({'success': False, 'message': '无权限'}), 403
 
-    from services.backup_manager import BackupManager
+    from services.backup import BackupManager
     backup_id, thread = BackupManager().start_backup(
         backup_type='manual',
         progress_callback=None,
@@ -84,7 +84,7 @@ def api_db_backup_progress():
     if not user or not user['is_admin']:
         return jsonify({'success': False, 'message': '无权限'}), 403
 
-    from services.backup_manager import BackupManager
+    from services.backup import BackupManager
     bm = BackupManager()
     progress = bm.get_progress()
     last_backup = bm.get_last_backup()

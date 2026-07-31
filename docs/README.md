@@ -32,15 +32,21 @@
 │   ├── ip.py                     #   IP 工具（真实 IP 解析、异步地理信息查询）
 │   ├── cmd_runner.py             #   命令执行服务（SSE 流式 + 同步执行 + 异步日志记录）
 │   ├── scheduler.py              #   定时任务调度引擎（后台线程 + ThreadPoolExecutor 异步执行）
-│   ├── log_cleaner.py            #   日志自动清除服务（后台线程定期清理超限记录）
-│   ├── log_writer.py             #   异步日志写入器（队列 + 后台线程批量写入）
-│   ├── backup_manager.py         #   数据库备份管理器（DuckDB 在线备份 + 旧备份清理）
-│   ├── backup_scheduler.py       #   每日定时备份调度器（默认凌晨 3:00，支持热重载）
+│   ├── logging/                  #   日志服务包（后台线程异步写入与清理）
+│   │   ├── __init__.py           #     包入口，导出 log_cleaner / log_writer
+│   │   ├── cleaner.py            #     日志自动清除服务（后台线程定期清理超限记录）
+│   │   └── writer.py             #     异步日志写入器（队列 + 后台线程批量写入）
+│   ├── backup/                   #   数据库备份服务包
+│   │   ├── __init__.py           #     包入口，导出 BackupScheduler
+│   │   ├── manager.py            #     数据库备份管理器（DuckDB 在线备份 + 旧备份清理）
+│   │   └── scheduler.py          #     每日定时备份调度器（默认凌晨 3:00，支持热重载）
 │   ├── settings_manager.py       #   系统设置管理器（数据库存储 + 内存缓存，支持热重载）
 │   ├── captcha.py                #   图形验证码服务（两位数运算 + 服务端内存存储 + 一次性删除防重放）
-│   ├── email.py                  #   SMTP 邮件发送服务（基于标准库 smtplib，后台线程异步发送）
-│   ├── email_code.py             #   邮箱验证码服务（生成/存储/验证，内存存储，自动过期）
-│   ├── email_templates.py        #   邮件 HTML 模板模块（统一构建 + 公共组件复用 + 移动端响应式适配）
+│   ├── email/                    #   SMTP 邮件服务包
+│   │   ├── __init__.py           #     包入口，导出 email_service / email_code_service / 模板函数
+│   │   ├── service.py            #     SMTP 邮件发送服务（基于标准库 smtplib，后台线程异步发送）
+│   │   ├── code.py               #     邮箱验证码服务（生成/存储/验证，内存存储，自动过期）
+│   │   └── templates.py          #     邮件 HTML 模板模块（统一构建 + 公共组件复用 + 移动端响应式适配）
 │   ├── script_store.py           #   统一脚本存储服务（数据库存储，按名称自动排序）
 │   ├── terminal/                 #   持久交互式终端服务（session-based shell 子进程管理）
 │   │   ├── __init__.py           #     包入口，导出 TerminalManager / TerminalSession
@@ -588,7 +594,7 @@ Markdown 文档存放在 [docs/](file:///workspace/docs/) 目录，通过 `/docs
 - **阈值**：由 `config.py` 的 `MAX_ACCESS_LOGS`（默认 500 条）控制
 - **触发频率**：后台线程定期检查，不影响 Web 请求
 - **清理方式**：超出阈值时，删除最旧的记录（按 `id ASC` 排序），仅删除超出部分
-- **实现位置**：[services/log_cleaner.py](file:///workspace/services/log_cleaner.py)
+- **实现位置**：[services/logging/cleaner.py](file:///workspace/services/logging/cleaner.py)
 
 ### 数据库备份与优化
 
@@ -681,8 +687,8 @@ server {
 | 组件 | 文件 | 异步方式 |
 |------|------|----------|
 | 定时任务调度器 | `services/scheduler.py` | 后台线程扫描到期任务 + ThreadPoolExecutor 异步执行 |
-| 日志写入器 | `services/log_writer.py` | 队列 + 后台线程批量写入数据库 |
-| 日志清理器 | `services/log_cleaner.py` | 后台线程定期检查并清理超限日志 |
+| 日志写入器 | `services/logging/writer.py` | 队列 + 后台线程批量写入数据库 |
+| 日志清理器 | `services/logging/cleaner.py` | 后台线程定期检查并清理超限日志 |
 | IP 地理信息查询 | `services/ip.py` | 后台线程异步更新缓存，请求时返回缓存值 |
 | 命令执行日志 | `services/cmd_runner.py` | 后台线程异步写入执行结果 |
 | CPU 使用率 | `services/monitoring/cpu.py` | **后台线程定期采样（默认 2 秒）**，fork 安全（pid 检测重启采样线程），缓存 10 秒过期降级到阻塞采样 |
@@ -706,7 +712,7 @@ server {
 ### 最近修复
 
 **统一邮件 HTML 模板模块（消除重复代码 + 移动端适配）：**
-- 新增 `services/email_templates.py`：集中构建所有邮件 HTML，提取公共组件（外层容器、高亮块、验证码块、次要提示），消除散落在 `services/email_code.py`、`routes/guides/api.py`、`routes/admin/guides.py` 三处的重复模板代码
+- 新增 `services/email/templates.py`：集中构建所有邮件 HTML，提取公共组件（外层容器、高亮块、验证码块、次要提示），消除散落在 `services/email/code.py`、`routes/guides/api.py`、`routes/admin/guides.py` 三处的重复模板代码
 - 三个对外构建函数：`verification_code()`（验证码邮件）、`guide_review_pending()`（新指南待审核）、`guide_review_result()`（审核结果通知）
 - 顶部内联 `<style>` 含 `@media (max-width: 480px)` 媒体查询：移动端自适应缩小验证码字号（32px→26px）、字间距（8px→4px）、内边距，避免横向溢出
 - 容器 `max-width: 480px` + `width: 100%` + `box-sizing: border-box`，适配任意屏幕宽度
@@ -731,7 +737,7 @@ server {
 
 **验证码服务内存清理机制：**
 - `services/captcha.py` `CaptchaService`：新增后台清理线程（每 60 秒清理过期验证码），避免内存泄漏
-- `services/email_code.py` `EmailCodeService`：新增后台清理线程（每 5 分钟清理过期验证码），避免内存泄漏
+- `services/email/code.py` `EmailCodeService`：新增后台清理线程（每 5 分钟清理过期验证码），避免内存泄漏
 - 两个服务的 docstring 完善安全特性说明（服务端内存存储、一次性删除防重放、过期时间、后台清理）
 
 **验证码安全性增强（防止 curl 等工具绕过）：**

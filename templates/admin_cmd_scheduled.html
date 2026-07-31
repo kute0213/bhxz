@@ -40,6 +40,12 @@
     </div>
 </section>
 
+<script src="{{ url_for('static', filename='js/cmd/modal.js', v='4') }}"></script>
+<script src="{{ url_for('static', filename='js/cmd/scheduled.js', v='5') }}"></script>
+<script src="{{ url_for('static', filename='js/cmd/scheduled-logs.js', v='2') }}"></script>
+{% endblock %}
+
+{% block page_modals %}
 <!-- 创建/编辑任务模态框 -->
 <div id="task-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4"
      style="background: rgba(0,0,0,0.6);">
@@ -134,8 +140,4 @@
         </div>
     </div>
 </div>
-
-<script src="{{ url_for('static', filename='js/cmd/modal.js', v='4') }}"></script>
-<script src="{{ url_for('static', filename='js/cmd/scheduled.js', v='5') }}"></script>
-<script src="{{ url_for('static', filename='js/cmd/scheduled-logs.js', v='2') }}"></script>
 {% endblock %}

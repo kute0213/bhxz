@@ -285,7 +285,7 @@ class BackupManager:
     def _clean_logs(self):
         """触发日志清理（复用 log_cleaner 的逻辑）。"""
         try:
-            from services.log_cleaner import LogCleaner
+            from ..logging.cleaner import LogCleaner
             cleaner = LogCleaner()
             cleaner.clean_once()
         except Exception as e:

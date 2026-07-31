@@ -10,8 +10,7 @@ from flask import render_template, request, jsonify, g
 
 from core.auth import admin_required, get_current_user
 from core.db import get_db
-from services.email import email_service
-from services.email_templates import broadcast_message
+from services.email import email_service, broadcast_message
 from routes.admin import admin_bp
 
 

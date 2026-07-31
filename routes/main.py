@@ -6,7 +6,7 @@ from core.auth import login_required, get_current_user, hash_password
 from core.db import get_db
 from config import REGISTER_VERIFY_CODE, UPLOAD_DIR, get_config_value
 from services.captcha import captcha_service
-from services.email_code import normalize_email
+from services.email import normalize_email
 
 main_bp = Blueprint('main', __name__)
 
@@ -34,6 +34,8 @@ def home():
 @main_bp.route('/register', methods=['GET', 'POST'])
 def register():
     email_verify_enabled = get_config_value('REGISTER_EMAIL_VERIFY', False)
+    # 从 session 读取群内验证码验证状态，用于模板初始渲染
+    group_code_verified = session.get('group_code_verified', False)
 
     if request.method == 'POST':
         username = request.form.get('username', '').strip()
@@ -45,38 +47,40 @@ def register():
         email = normalize_email(request.form.get('email', ''))
         email_code = request.form.get('email_code', '').strip()
 
-        # 验证码校验（服务端内存存储，一次性删除防止重放）
-        if not captcha_service.verify(captcha_id, captcha_input):
-            return render_template('register.html', error='验证码错误或已过期',
-                                   email_verify_enabled=email_verify_enabled)
-
         if len(username) < 2 or len(username) > 20:
             return render_template('register.html', error='用户名长度应为 2-20 个字符',
-                                   email_verify_enabled=email_verify_enabled)
+                                   email_verify_enabled=email_verify_enabled,
+                                   group_code_verified=group_code_verified)
         if len(password) < 6:
             return render_template('register.html', error='密码至少 6 位',
-                                   email_verify_enabled=email_verify_enabled)
+                                   email_verify_enabled=email_verify_enabled,
+                                   group_code_verified=group_code_verified)
         if password != confirm:
             return render_template('register.html', error='两次输入的密码不一致',
-                                   email_verify_enabled=email_verify_enabled)
+                                   email_verify_enabled=email_verify_enabled,
+                                   group_code_verified=group_code_verified)
 
         # 群内验证码校验（由前端弹窗验证后，随表单提交）
         if verify_code != REGISTER_VERIFY_CODE:
             return render_template('register.html', error='群内验证码错误，请在QQ群公告中获取正确验证码',
-                                   email_verify_enabled=email_verify_enabled)
+                                   email_verify_enabled=email_verify_enabled,
+                                   group_code_verified=group_code_verified)
 
         # 邮箱验证（仅在开启时要求）
         if email_verify_enabled:
             if not email:
                 return render_template('register.html', error='请输入邮箱地址',
-                                       email_verify_enabled=email_verify_enabled)
+                                       email_verify_enabled=email_verify_enabled,
+                                       group_code_verified=group_code_verified)
             if not email_code:
                 return render_template('register.html', error='请输入邮箱验证码',
-                                       email_verify_enabled=email_verify_enabled)
-            from services.email_code import email_code_service
+                                       email_verify_enabled=email_verify_enabled,
+                                       group_code_verified=group_code_verified)
+            from services.email import email_code_service
             if not email_code_service.verify(email, email_code):
                 return render_template('register.html', error='邮箱验证码错误或已过期',
-                                       email_verify_enabled=email_verify_enabled)
+                                       email_verify_enabled=email_verify_enabled,
+                                       group_code_verified=group_code_verified)
         else:
             email = ''
 
@@ -85,7 +89,14 @@ def register():
             existing = conn.execute("SELECT id FROM users WHERE username = ?", (username,)).fetchone()
             if existing:
                 return render_template('register.html', error='该用户名已被注册',
-                                       email_verify_enabled=email_verify_enabled)
+                                       email_verify_enabled=email_verify_enabled,
+                                       group_code_verified=group_code_verified)
+
+            # 图形验证码校验（放在创建用户前最后一步，避免验证码被过早消耗）
+            if not captcha_service.verify(captcha_id, captcha_input):
+                return render_template('register.html', error='验证码错误或已过期',
+                                       email_verify_enabled=email_verify_enabled,
+                                       group_code_verified=group_code_verified)
 
             password_hash = hash_password(password)
             conn.execute(
@@ -93,24 +104,37 @@ def register():
                 (username, password_hash, email, datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
             )
             conn.commit()
+
+            # 获取新创建的用户信息并自动登录
+            new_user = conn.execute(
+                "SELECT id, username, is_admin FROM users WHERE username = ?",
+                (username,)
+            ).fetchone()
+            if new_user:
+                session['user_id'] = new_user['id']
+                session['username'] = new_user['username']
+                session['is_admin'] = bool(new_user['is_admin'])
+                session.permanent = True
         except Exception:
             try:
                 conn.rollback()
             except Exception:
                 pass
             return render_template('register.html', error='注册失败，请稍后重试',
-                                   email_verify_enabled=email_verify_enabled)
+                                   email_verify_enabled=email_verify_enabled,
+                                   group_code_verified=group_code_verified)
         finally:
             conn.close()
 
-        return redirect(url_for('main.login', registered=1))
+        return redirect(url_for('main.home'))
 
-    return render_template('register.html', email_verify_enabled=email_verify_enabled)
+    return render_template('register.html', email_verify_enabled=email_verify_enabled,
+                           group_code_verified=group_code_verified)
 
 
 @main_bp.route('/api/verify-group-code', methods=['POST'])
 def verify_group_code():
-    """验证群内验证码（AJAX）。只验证，不存 session，正确性由前端缓存并在后续请求中回传。"""
+    """验证群内验证码（AJAX）。验证通过后存入 session，刷新页面后无需重新验证。"""
     data = request.get_json(silent=True) or {}
     code = (data.get('code') or '').strip()
 
@@ -120,13 +144,16 @@ def verify_group_code():
     if code != REGISTER_VERIFY_CODE:
         return jsonify({'success': False, 'message': '验证码错误，请在QQ群公告中获取正确验证码'}), 400
 
+    # 存入 session，刷新页面后无需重新验证
+    session['group_code_verified'] = True
+    session.permanent = True
     return jsonify({'success': True, 'message': '验证成功'})
 
 
 @main_bp.route('/api/verify-group-code/check')
 def check_group_code():
-    """保留兼容接口：前端自行管理验证状态，此接口始终返回已验证（让页面继续展示）。"""
-    return jsonify({'verified': True})
+    """检查群内验证码是否已验证（通过 session 持久化）。"""
+    return jsonify({'verified': session.get('group_code_verified', False)})
 
 
 @main_bp.route('/login', methods=['GET', 'POST'])
@@ -229,7 +256,7 @@ def forgot_password():
         if not email_code:
             return render_template('forgot_password.html', error='请输入邮箱验证码')
 
-        from services.email_code import email_code_service
+        from services.email import email_code_service
         if not email_code_service.verify(email, email_code):
             return render_template('forgot_password.html', error='邮箱验证码错误或已过期')
 
@@ -378,7 +405,7 @@ def change_email():
             if not email_code:
                 flash('请输入邮箱验证码', 'error')
                 return redirect(url_for('main.settings') + '#email')
-            from services.email_code import email_code_service
+            from services.email import email_code_service
             if not email_code_service.verify(new_email, email_code):
                 flash('邮箱验证码错误或已过期', 'error')
                 return redirect(url_for('main.settings') + '#email')

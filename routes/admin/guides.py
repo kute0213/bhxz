@@ -6,8 +6,7 @@ from flask import render_template, redirect, url_for, flash, abort, request, jso
 
 from core.auth import login_required, get_current_user
 from core.db import get_db
-from services.email import email_service
-from services.email_templates import guide_review_result as build_result_html
+from services.email import email_service, guide_review_result as build_result_html
 from routes.admin import admin_bp
 
 

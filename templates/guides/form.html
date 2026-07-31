@@ -1,9 +1,21 @@
 {% extends "base.html" %}
 {% block title %}{{ '编辑指南' if guide else '新建指南' }}{% endblock %}
+
 {% block extra_style %}
 <style>
-.markdown-editor { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; min-height: 500px; max-height: 70vh; }
-@media (max-width: 1024px) { .markdown-editor { grid-template-columns: 1fr; max-height: none; } }
+.markdown-editor {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    min-height: 500px;
+    max-height: 70vh;
+}
+@media (max-width: 1024px) {
+    .markdown-editor {
+        grid-template-columns: 1fr;
+        max-height: none;
+    }
+}
 .editor-pane, .preview-pane {
     background: rgba(10, 20, 12, 0.6);
     border: 1px solid rgba(255, 255, 255, 0.1);
@@ -60,18 +72,37 @@
 .prose-docs a { color: #d4b878; text-decoration: underline; }
 .prose-docs hr { border: none; border-top: 1px solid rgba(245,230,200,0.1); margin: 2rem 0; }
 .prose-docs strong { color: #f5e6c8; font-weight: 600; }
-.editor-toolbar { display: flex; gap: 0.25rem; padding: 0.25rem; background: rgba(255,255,255,0.02); border-bottom: 1px solid rgba(255,255,255,0.06); flex-shrink: 0; }
-.editor-toolbar button { padding: 0.25rem 0.5rem; border-radius: 0.375rem; font-size: 0.75rem; color: rgba(232,228,217,0.6); background: transparent; border: none; cursor: pointer; }
-.editor-toolbar button:hover { background: rgba(255,255,255,0.06); color: #e8e4d9; }
+.editor-toolbar {
+    display: flex;
+    gap: 0.25rem;
+    padding: 0.25rem;
+    background: rgba(255,255,255,0.02);
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+    flex-shrink: 0;
+}
+.editor-toolbar button {
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.375rem;
+    font-size: 0.75rem;
+    color: rgba(232,228,217,0.6);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+}
+.editor-toolbar button:hover {
+    background: rgba(255,255,255,0.06);
+    color: #e8e4d9;
+}
 </style>
 {% endblock %}
+
 {% block content %}
 <section class="page-container py-12">
     <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="mb-8">
-            <a href="{{ url_for('admin.admin_guides') }}" class="text-sm text-cream/50 hover:text-gold-400 inline-flex items-center gap-1 transition-colors mb-4">
+            <a href="{{ url_for('guides.guide_list') }}" class="text-sm text-cream/50 hover:text-gold-400 inline-flex items-center gap-1 transition-colors mb-4">
                 <i data-lucide="arrow-left" class="w-4 h-4"></i>
-                返回指南管理
+                返回指南列表
             </a>
             <h1 class="text-2xl sm:text-3xl font-bold">{{ '编辑指南' if guide else '新建指南' }}</h1>
         </div>
@@ -90,38 +121,14 @@
         {% endwith %}
 
         <form method="POST" class="space-y-6">
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                    <label class="block text-sm text-cream/70 mb-1">标题</label>
-                    <input type="text" name="title" value="{{ guide.title if guide else '' }}" class="w-full px-4 py-2 rounded-lg bg-forest-900/60 border border-forest-700/50 text-cream focus:border-gold-400/50 focus:outline-none" required maxlength="200">
-                </div>
-                <div>
-                    <label class="block text-sm text-cream/70 mb-1">封面图片 URL（可选）</label>
-                    <input type="text" name="cover_image" value="{{ guide.cover_image if guide else '' }}" class="w-full px-4 py-2 rounded-lg bg-forest-900/60 border border-forest-700/50 text-cream focus:border-gold-400/50 focus:outline-none" placeholder="https://...">
-                </div>
+            <div>
+                <label class="block text-sm text-cream/70 mb-1">标题</label>
+                <input type="text" name="title" value="{{ guide.title if guide else '' }}" class="w-full px-4 py-2 rounded-lg bg-forest-900/60 border border-forest-700/50 text-cream focus:border-gold-400/50 focus:outline-none" required maxlength="200">
             </div>
 
             <div>
                 <label class="block text-sm text-cream/70 mb-1">摘要（可选）</label>
                 <input type="text" name="summary" value="{{ guide.summary if guide else '' }}" class="w-full px-4 py-2 rounded-lg bg-forest-900/60 border border-forest-700/50 text-cream focus:border-gold-400/50 focus:outline-none" maxlength="300">
-            </div>
-
-            <div class="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                <div>
-                    <label class="block text-sm text-cream/70 mb-1">状态</label>
-                    <select name="status" class="w-full px-4 py-2 rounded-lg bg-forest-900/60 border border-forest-700/50 text-cream focus:border-gold-400/50 focus:outline-none">
-                        <option value="pending" {% if guide and guide.status == 'pending' %}selected{% endif %}>待审核</option>
-                        <option value="approved" {% if guide and guide.status == 'approved' %}selected{% endif %}>已通过</option>
-                        <option value="rejected" {% if guide and guide.status == 'rejected' %}selected{% endif %}>已拒绝</option>
-                    </select>
-                </div>
-                <div>
-                    <label class="block text-sm text-cream/70 mb-1">置顶</label>
-                    <select name="is_pinned" class="w-full px-4 py-2 rounded-lg bg-forest-900/60 border border-forest-700/50 text-cream focus:border-gold-400/50 focus:outline-none">
-                        <option value="" {% if not guide or not guide.is_pinned %}selected{% endif %}>否</option>
-                        <option value="1" {% if guide and guide.is_pinned %}selected{% endif %}>是</option>
-                    </select>
-                </div>
             </div>
 
             <div>
@@ -147,8 +154,8 @@
             </div>
 
             <div class="flex items-center justify-end gap-3 pt-4">
-                <a href="{{ url_for('admin.admin_guides') }}" class="btn-secondary px-5 py-2.5 rounded-lg text-sm">取消</a>
-                <button type="submit" class="btn-primary px-5 py-2.5 rounded-lg text-sm">保存</button>
+                <a href="{{ url_for('guides.guide_list') }}" class="btn-secondary px-5 py-2.5 rounded-lg text-sm">取消</a>
+                <button type="submit" class="btn-primary px-5 py-2.5 rounded-lg text-sm">{{ '保存修改' if guide else '提交审核' }}</button>
             </div>
         </form>
     </div>

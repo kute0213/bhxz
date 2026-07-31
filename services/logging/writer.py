@@ -78,7 +78,7 @@ class AsyncLogWriter:
             except queue.Empty:
                 continue
             except Exception as e:
-                print(f'[LogWriter] 写入异常: {e}', flush=True)
+                print(f'[AsyncLogWriter] 写入异常: {e}', flush=True)
                 batch.clear()
 
         # 停止前刷新剩余日志
@@ -115,7 +115,7 @@ class AsyncLogWriter:
                 ))
             conn.commit()
         except Exception as e:
-            print(f'[LogWriter] 批量写入失败: {e}', flush=True)
+            print(f'[AsyncLogWriter] 批量写入失败: {e}', flush=True)
         finally:
             conn.close()
 

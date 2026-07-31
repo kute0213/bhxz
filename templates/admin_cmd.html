@@ -66,6 +66,55 @@
     </div>
 </section>
 
+<style>
+    /* 终端弹窗动画 */
+    .terminal-fade-in {
+        animation: terminalFadeIn 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    }
+    .terminal-fade-out {
+        animation: terminalFadeOut 0.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    }
+    @keyframes terminalFadeIn {
+        from { opacity: 0; transform: translateY(20px) scale(0.97); }
+        to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    @keyframes terminalFadeOut {
+        from { opacity: 1; transform: translateY(0) scale(1); }
+        to   { opacity: 0; transform: translateY(10px) scale(0.98); }
+    }
+    /* 弹窗遮罩淡入 */
+    .modal-backdrop-fade {
+        animation: backdropFade 0.25s ease forwards;
+    }
+    @keyframes backdropFade {
+        from { opacity: 0; }
+        to   { opacity: 1; }
+    }
+    /* CmdModal 动画 */
+    #cmd-modal-root .cmd-modal-enter {
+        animation: cmdModalEnter 0.22s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    }
+    #cmd-modal-root .cmd-modal-leave {
+        animation: cmdModalLeave 0.18s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    }
+    @keyframes cmdModalEnter {
+        from { opacity: 0; transform: translateY(14px) scale(0.96); }
+        to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    @keyframes cmdModalLeave {
+        from { opacity: 1; transform: translateY(0) scale(1); }
+        to   { opacity: 0; transform: translateY(8px) scale(0.98); }
+    }
+</style>
+
+<script src="{{ url_for('static', filename='js/cmd/terminal-core.js', v='1') }}"></script>
+<script src="{{ url_for('static', filename='js/cmd/modal.js', v='4') }}"></script>
+<script src="{{ url_for('static', filename='js/cmd/terminal.js', v='5') }}"></script>
+<script src="{{ url_for('static', filename='js/cmd/presets.js', v='2') }}"></script>
+<script src="{{ url_for('static', filename='js/cmd/main.js', v='2') }}"></script>
+{% endblock %}
+
+{% block page_modals %}
 <!-- 终端弹窗 -->
 <div id="terminal-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4" style="background:rgba(0,0,0,0.75);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);">
     <div id="terminal-modal-content" class="pixel-card rounded-2xl w-full max-w-4xl h-[70vh] flex flex-col overflow-hidden terminal-fade-in" style="position:relative;">
@@ -197,51 +246,4 @@
         </form>
     </div>
 </div>
-
-<style>
-    /* 终端弹窗动画 */
-    .terminal-fade-in {
-        animation: terminalFadeIn 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-    }
-    .terminal-fade-out {
-        animation: terminalFadeOut 0.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-    }
-    @keyframes terminalFadeIn {
-        from { opacity: 0; transform: translateY(20px) scale(0.97); }
-        to   { opacity: 1; transform: translateY(0) scale(1); }
-    }
-    @keyframes terminalFadeOut {
-        from { opacity: 1; transform: translateY(0) scale(1); }
-        to   { opacity: 0; transform: translateY(10px) scale(0.98); }
-    }
-    /* 弹窗遮罩淡入 */
-    .modal-backdrop-fade {
-        animation: backdropFade 0.25s ease forwards;
-    }
-    @keyframes backdropFade {
-        from { opacity: 0; }
-        to   { opacity: 1; }
-    }
-    /* CmdModal 动画 */
-    #cmd-modal-root .cmd-modal-enter {
-        animation: cmdModalEnter 0.22s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-    }
-    #cmd-modal-root .cmd-modal-leave {
-        animation: cmdModalLeave 0.18s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-    }
-    @keyframes cmdModalEnter {
-        from { opacity: 0; transform: translateY(14px) scale(0.96); }
-        to   { opacity: 1; transform: translateY(0) scale(1); }
-    }
-    @keyframes cmdModalLeave {
-        from { opacity: 1; transform: translateY(0) scale(1); }
-        to   { opacity: 0; transform: translateY(8px) scale(0.98); }
-    }
-</style>
-
-<script src="{{ url_for('static', filename='js/cmd/terminal-core.js', v='1') }}"></script>
-<script src="{{ url_for('static', filename='js/cmd/modal.js', v='4') }}"></script>
-<script src="{{ url_for('static', filename='js/cmd/terminal.js', v='5') }}"></script>
-<script src="{{ url_for('static', filename='js/cmd/presets.js', v='2') }}"></script>
-<script src="{{ url_for('static', filename='js/cmd/main.js', v='2') }}"></script>
 {% endblock %}

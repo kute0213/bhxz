@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+
+{% block content %}
+<p>管理员您好，</p>
+<p>用户 <b>{{ author_name }}</b> {{ action }}服务器指南：</p>
+<div class="mail-highlight">{{ guide_title }}</div>
+<p>请尽快前往管理后台审核。</p>
+{% endblock %}

@@ -2,8 +2,7 @@
 
 from flask import Blueprint, request, jsonify
 
-from services.email_code import email_code_service, normalize_email
-from services.email import email_service
+from services.email import email_code_service, normalize_email, email_service
 from services.captcha import captcha_service
 from config import get_config_value, REGISTER_VERIFY_CODE
 
@@ -63,8 +62,8 @@ def send_email_code():
     if not _is_valid_email(email):
         return jsonify({'success': False, 'message': '邮箱格式不正确'}), 400
 
-    # 群内验证码校验（前端弹窗验证后缓存并回传）
-    if verify_code != REGISTER_VERIFY_CODE:
+    # 群内验证码校验（仅注册场景需要）
+    if purpose == '注册' and verify_code != REGISTER_VERIFY_CODE:
         return jsonify({'success': False, 'message': '群内验证码错误，请在QQ群公告中获取正确验证码'}), 400
 
     # 图形验证码校验（服务端内存存储，一次性删除防止重放）

@@ -1,6 +1,6 @@
 from flask import request, session
 from services.ip import get_client_ip, get_ip_info
-from services.log_writer import log_writer
+from services.logging import log_writer
 
 SKIP_PATHS = ('/static/', '/favicon.ico', '/uploads/',
               '/api/admin/logs/refresh', '/api/performance')

@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+
+{% block content %}
+<p>您好！</p>
+<p>{{ greeting }}您提交的服务器指南：</p>
+<div class="mail-highlight">{{ guide_title }}</div>
+<p>{{ status }}</p>
+{% if not approved and reason %}
+<p>拒绝原因：<b>{{ reason }}</b></p>
+{% endif %}
+{% if not approved %}
+<p>您可以修改后重新提交。</p>
+{% endif %}
+{% endblock %}

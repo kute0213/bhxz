@@ -267,6 +267,9 @@
     {% block content %}{% endblock %}
     </main>
 
+    {# 页面级弹窗挂载点（在 body 下，不受 .page-content 的 transform 影响） #}
+    {% block page_modals %}{% endblock %}
+
     <script src="{{ url_for('static', filename='js/base.js', v='10') }}"></script>
     <script src="{{ url_for('static', filename='js/main.js', v='9') }}"></script>
     {% block extra_script %}{% endblock %}

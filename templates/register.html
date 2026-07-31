@@ -1,33 +1,7 @@
 {% extends "base.html" %}
 {% block title %}注册{% endblock %}
 {% block content %}
-    <!-- 群内验证码弹窗（每次打开注册页都需要输入） -->
-    <div id="group-code-modal" class="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-        <div class="bg-forest-800 border border-gold-400/30 rounded-2xl shadow-2xl max-w-md w-full p-6 sm:p-8 pixel-card">
-            <div class="text-center mb-6">
-                <div class="w-14 h-14 mx-auto bg-gold-400/20 rounded-full flex items-center justify-center mb-4">
-                    <i data-lucide="shield-check" class="w-7 h-7 text-gold-400"></i>
-                </div>
-                <h2 class="text-lg font-bold text-gold-400 mb-2">群内验证码</h2>
-                <p class="text-cream/60 text-sm">请输入QQ群公告中的验证码以继续注册</p>
-            </div>
-            <div class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium mb-2 text-cream/80">验证码</label>
-                    <input type="text" id="group-code-input" class="input-field w-full px-4 py-3 rounded-lg" placeholder="请输入群内验证码" autocomplete="off">
-                </div>
-                <button type="button" id="group-code-submit" class="btn-primary w-full py-3 rounded-lg font-bold">
-                    验证并继续
-                </button>
-                <p class="text-xs text-cream/40 text-center">
-                    <i data-lucide="info" class="w-3 h-3 inline mr-1"></i>
-                    验证码可在QQ群公告中获取
-                </p>
-            </div>
-        </div>
-    </div>
-
-    <section class="page-container flex items-center justify-center py-12" id="register-form-section" style="display:none;">
+    <section class="page-container flex items-center justify-center py-12" id="register-form-section" style="display:{% if group_code_verified %}flex{% else %}none{% endif %};">
         <div class="max-w-md w-full mx-4 sm:mx-6">
             <div class="pixel-card rounded-xl p-5 sm:p-8">
                 <div class="text-center mb-6 sm:mb-8">
@@ -100,6 +74,34 @@
     </section>
 {% endblock %}
 
+{% block page_modals %}
+<!-- 群内验证码弹窗（每次打开注册页都需要输入） -->
+<div id="group-code-modal" style="display: {% if group_code_verified %}none{% else %}block{% endif %}; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.8); backdrop-filter: blur(4px); z-index: 50;">
+    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(12, 28, 18, 0.95); backdrop-filter: blur(32px) saturate(220%) brightness(108%); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 24px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.12), inset 0 -1px 0 rgba(0, 0, 0, 0.1); max-width: 28rem; width: calc(100% - 2rem); padding: 1.5rem;">
+        <div class="text-center mb-6">
+            <div class="w-14 h-14 mx-auto bg-gold-400/20 rounded-full flex items-center justify-center mb-4">
+                <i data-lucide="shield-check" class="w-7 h-7 text-gold-400"></i>
+            </div>
+            <h2 class="text-lg font-bold text-gold-400 mb-2">群内验证码</h2>
+            <p class="text-cream/60 text-sm">请输入QQ群公告中的验证码以继续注册</p>
+        </div>
+        <div class="space-y-4">
+            <div>
+                <label class="block text-sm font-medium mb-2 text-cream/80">验证码</label>
+                <input type="text" id="group-code-input" class="input-field w-full px-4 py-3 rounded-lg" placeholder="请输入群内验证码" autocomplete="off">
+            </div>
+            <button type="button" id="group-code-submit" class="btn-primary w-full py-3 rounded-lg font-bold">
+                验证并继续
+            </button>
+            <p class="text-xs text-cream/40 text-center">
+                <i data-lucide="info" class="w-3 h-3 inline mr-1"></i>
+                验证码可在QQ群公告中获取
+            </p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
 {% block extra_script %}
 <script>
 // 加载图形验证码
@@ -131,14 +133,12 @@ document.getElementById('captcha-img').addEventListener('click', loadCaptcha);
     var savedGroupCode = '';
 
     function showModal() {
-        modal.classList.remove('hidden');
-        modal.classList.add('flex');
+        modal.style.display = 'block';
         setTimeout(function() { input.focus(); }, 100);
     }
 
     function hideModal() {
-        modal.classList.add('hidden');
-        modal.classList.remove('flex');
+        modal.style.display = 'none';
         formSection.style.display = 'flex';
         loadCaptcha();
         if (window.lucide) lucide.createIcons();
@@ -186,8 +186,36 @@ document.getElementById('captcha-img').addEventListener('click', loadCaptcha);
         if (e.key === 'Enter') verifyCode();
     });
 
-    // 页面加载时直接显示弹窗（每次打开注册页都需要重新验证）
-    showModal();
+    // 页面加载时检查群内验证状态
+    // 服务端已通过 group_code_verified 控制初始渲染状态
+    // JS 侧再通过 API 确认一次，确保状态同步
+    fetch('/api/verify-group-code/check')
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+            if (data.verified) {
+                savedGroupCode = window.__getGroupCodeCache || '';
+                modal.style.display = 'none';
+                formSection.style.display = 'flex';
+                loadCaptcha();
+                if (window.lucide) lucide.createIcons();
+            } else {
+                // 如果服务端显示已验证但 API 返回未验证，仍显示弹窗
+                if (formSection.style.display === 'flex') {
+                    formSection.style.display = 'none';
+                }
+                showModal();
+            }
+        })
+        .catch(function() {
+            // 网络错误时默认显示弹窗
+            showModal();
+        });
+
+    // 如果页面加载时已经显示表单（group_code_verified=true），且已有错误信息，加载验证码
+    if (formSection.style.display === 'flex') {
+        loadCaptcha();
+        if (window.lucide) lucide.createIcons();
+    }
 
     // 暴露获取验证码的方法，供邮箱验证码发送使用
     window.__getGroupCode = function() { return savedGroupCode; };
@@ -231,9 +259,12 @@ document.getElementById('captcha-img').addEventListener('click', loadCaptcha);
             })
         })
         .then(res => res.json())
-        .then(data => {
+        .then(function(data) {
             if (data.success) {
                 btn.textContent = '已发送';
+                // 邮箱验证码发送成功后，图形验证码已被消耗，重新加载新验证码
+                loadCaptcha();
+                if (captchaInput) captchaInput.value = '';
                 let countdown = 60;
                 const timer = setInterval(function() {
                     btn.textContent = countdown + 's';

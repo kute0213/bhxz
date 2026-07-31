@@ -7,8 +7,8 @@ import time
 import threading
 from datetime import datetime
 
-from services.email import email_service
-from services.email_templates import verification_code as build_code_html
+from .service import email_service
+from .templates import verification_code as build_code_html
 
 
 def normalize_email(email: str) -> str:

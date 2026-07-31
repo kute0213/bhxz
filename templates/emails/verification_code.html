@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+
+{% block content %}
+<p>您好！</p>
+<p>您的{{ purpose }}验证码为：</p>
+<div class="mail-code">{{ code }}</div>
+<p class="mail-muted">验证码有效期为 {{ expire_minutes }} 分钟，请尽快使用。<br>如果这不是您本人的操作，请忽略此邮件。</p>
+{% endblock %}

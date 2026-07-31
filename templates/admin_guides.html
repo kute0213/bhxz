@@ -94,7 +94,7 @@
                             <td class="px-4 py-3 text-right">
                                 <div class="flex items-center justify-end gap-2">
                                     {% if guide.status == 'pending' %}
-                                    <button type="button" class="text-green-400 hover:text-green-300 text-xs px-2 py-1 rounded bg-green-500/10 border border-green-500/20" onclick='showPreviewModal({{ guide.id }}, {{ guide.title | tojson }}, {{ guide.content | tojson }})'>预览</button>
+                                    <button type="button" class="text-green-400 hover:text-green-300 text-xs px-2 py-1 rounded bg-green-500/10 border border-green-500/20" data-guide-id="{{ guide.id }}" data-guide-title="{{ guide.title | tojson }}" data-guide-content="{{ guide.content | tojson }}" onclick="showPreviewModal(this)">预览</button>
                                     <form action="{{ url_for('admin.admin_guide_approve', guide_id=guide.id) }}" method="POST" class="inline">
                                         <button type="submit" class="text-green-400 hover:text-green-300 text-xs px-2 py-1 rounded bg-green-500/10 border border-green-500/20">通过</button>
                                     </form>
@@ -119,6 +119,34 @@
     </div>
 </section>
 
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script>
+function showRejectModal(id) {
+    const form = document.getElementById('reject-form');
+    form.action = '/admin/guides/' + id + '/reject';
+    document.getElementById('reject-modal').classList.remove('hidden');
+}
+function hideRejectModal() {
+    document.getElementById('reject-modal').classList.add('hidden');
+}
+function showPreviewModal(btn) {
+    const id = btn.dataset.guideId;
+    const title = JSON.parse(btn.dataset.guideTitle);
+    const content = JSON.parse(btn.dataset.guideContent);
+    document.getElementById('preview-title').textContent = title;
+    document.getElementById('preview-content').innerHTML = marked.parse(content);
+    document.getElementById('preview-approve-form').action = '/admin/guides/' + id + '/approve';
+    document.getElementById('preview-modal').classList.remove('hidden');
+    document.body.style.overflow = 'hidden';
+}
+function hidePreviewModal() {
+    document.getElementById('preview-modal').classList.add('hidden');
+    document.body.style.overflow = '';
+}
+</script>
+{% endblock %}
+
+{% block page_modals %}
 <!-- 拒绝弹窗 -->
 <div id="reject-modal" class="fixed inset-0 z-50 hidden">
     <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="hideRejectModal()"></div>
@@ -158,27 +186,4 @@
         </div>
     </div>
 </div>
-
-<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-<script>
-function showRejectModal(id) {
-    const form = document.getElementById('reject-form');
-    form.action = '/admin/guides/' + id + '/reject';
-    document.getElementById('reject-modal').classList.remove('hidden');
-}
-function hideRejectModal() {
-    document.getElementById('reject-modal').classList.add('hidden');
-}
-function showPreviewModal(id, title, content) {
-    document.getElementById('preview-title').textContent = title;
-    document.getElementById('preview-content').innerHTML = marked.parse(content);
-    document.getElementById('preview-approve-form').action = '/admin/guides/' + id + '/approve';
-    document.getElementById('preview-modal').classList.remove('hidden');
-    document.body.style.overflow = 'hidden';
-}
-function hidePreviewModal() {
-    document.getElementById('preview-modal').classList.add('hidden');
-    document.body.style.overflow = '';
-}
-</script>
 {% endblock %}

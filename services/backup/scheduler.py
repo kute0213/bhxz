@@ -107,7 +107,7 @@ class BackupScheduler:
 
     def _do_backup(self):
         """执行定时备份。"""
-        from services.backup_manager import BackupManager
+        from .manager import BackupManager
         print('[BackupScheduler] 开始定时自动备份...', flush=True)
         backup_id, thread = BackupManager().start_backup(
             backup_type='scheduled',
