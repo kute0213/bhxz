@@ -10,7 +10,7 @@ from werkzeug.utils import secure_filename
 
 from core.auth import login_required, get_current_user
 from core.db import get_db
-from config import UPLOAD_DIR
+from config import UPLOAD_DIR, get_config_value
 from routes.discussion import discussion_bp
 from services.logger import log
 
@@ -227,30 +227,16 @@ def detail(topic_id):
         conn.execute("UPDATE discussion_topics SET view_count = view_count + 1 WHERE id = ?", (topic_id,))
         conn.commit()
 
-        # 获取回复
-        replies = conn.execute(
-            """
-            SELECT r.*, u.username
-            FROM discussion_replies r
-            JOIN users u ON r.user_id = u.id
-            WHERE r.topic_id = ?
-            ORDER BY r.id ASC
-            """,
+        # 获取回复总数和最后一条回复ID（用于实时刷新）
+        total_replies = conn.execute(
+            "SELECT COUNT(*) AS c FROM discussion_replies WHERE topic_id = ?",
             (topic_id,)
-        ).fetchall()
+        ).fetchone()['c']
 
-        replies_list = []
-        for r in replies:
-            r_dict = dict(r)
-            if r_dict.get('attachment'):
-                try:
-                    parsed = json.loads(r_dict['attachment'])
-                    r_dict['attachment'] = [parsed] if isinstance(parsed, str) else parsed
-                except (json.JSONDecodeError, TypeError):
-                    r_dict['attachment'] = [r_dict['attachment']]
-            else:
-                r_dict['attachment'] = []
-            replies_list.append(r_dict)
+        last_reply_id = conn.execute(
+            "SELECT COALESCE(MAX(id), 0) AS max_id FROM discussion_replies WHERE topic_id = ?",
+            (topic_id,)
+        ).fetchone()['max_id']
 
         cat_dict = _get_category_dict()
         topic['category_name'] = cat_dict.get(topic.get('category_id'), '')
@@ -261,7 +247,10 @@ def detail(topic_id):
         'discussion/detail.html',
         user=user,
         topic=topic,
-        replies=replies_list,
+        total_replies=total_replies,
+        last_reply_id=last_reply_id,
+        discussion_refresh_interval=get_config_value('DISCUSSION_REFRESH_INTERVAL', 5),
+        replies_per_page=get_config_value('REPLIES_PER_PAGE', 10),
     )
 
 

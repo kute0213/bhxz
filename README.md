@@ -224,6 +224,7 @@ python app.py
 - **数据库备份**：自动备份时间、保留份数、超时、清理日志、CHECKPOINT
 - **脚本执行**：默认超时、最大超时、最大循环次数、并发数
 - **安全配置**：会话有效期、登录失败锁定次数及时间
+- **讨论区配置**：回复实时刷新间隔、每页加载数量
 - **服务器配置**：监听地址、端口、调试模式、工作线程数
 
 修改后的值存储在 `settings` 表中，重启后依然保留。点击「重置」可恢复为默认值。
@@ -257,6 +258,8 @@ python app.py
 | `SCRIPT_MAX_TIMEOUT` | 脚本最大允许超时（秒） | `300` |
 | `SCRIPT_MAX_LOOP_ITER` | 脚本最大循环迭代次数 | `100000` |
 | `SCRIPT_EXECUTOR_POOL_SIZE` | 脚本执行器并发数量限制 | `2` |
+| `DISCUSSION_REFRESH_INTERVAL` | 讨论区回复实时刷新间隔（秒） | `5` |
+| `REPLIES_PER_PAGE` | 讨论区回复每页加载数量 | `10` |
 
 ### 环境变量
 
@@ -376,6 +379,8 @@ python app.py
 | POST | `/board/reply/<id>/delete` | 删除回复（管理员或作者） |
 | POST | `/discussion/<id>/reply` | 回复帖子（支持多附件） |
 | POST | `/discussion/reply/<id>/delete` | 删除回复 |
+| GET | `/discussion/<id>/api/replies` | **分页获取回复（分段加载）** |
+| GET | `/discussion/<id>/api/new-replies` | **获取最新回复（实时刷新，仅返回比 last_id 大的记录）** |
 | POST | `/discussion/<id>/pin` | 置顶/取消置顶（管理员） |
 | POST | `/discussion/<id>/lock` | 锁定/解锁（管理员） |
 | POST | `/discussion/<id>/delete` | 删除帖子（作者或管理员） |
@@ -546,6 +551,8 @@ Markdown 文档存放在 [docs/](file:///workspace/docs/) 目录，通过 `/docs
 | GET | `/discussion/create` | 发帖页面（需登录） |
 | GET | `/discussion/<id>` | 帖子详情页（Markdown 渲染 + 回复列表） |
 | GET | `/discussion/<id>/edit` | 编辑帖子（作者或管理员） |
+| GET | `/discussion/<id>/api/replies` | **分页获取回复（支持分段加载）** |
+| GET | `/discussion/<id>/api/new-replies` | **获取最新回复（实时刷新用）** |
 
 **成员 API（需登录）**：
 
@@ -735,6 +742,15 @@ server {
 项目的版本变更历史详见 [docs/CHANGELOG.md](file:///workspace/docs/CHANGELOG.md)。
 
 ### 最近修复
+
+**讨论区回复功能优化（分段加载 + 实时刷新）：**
+- 发表回复窗口移至回复列表上方，优化交互流程
+- 回复列表改为前端分页加载（JS 动态渲染），点击"加载更多"按钮分段加载
+- 新增实时自动刷新功能（默认 5 秒间隔）：只获取比当前已加载最大 ID 更新的回复，不重复加载已存在的回复
+- 刷新间隔和每页数量可通过管理后台在线编辑（`DISCUSSION_REFRESH_INTERVAL`、`REPLIES_PER_PAGE`）
+- 新增 API 端点：`GET /discussion/<id>/api/replies`（分页获取）和 `GET /discussion/<id>/api/new-replies`（获取最新）
+- 删除回复改为 AJAX 异步操作，无需刷新页面
+- 性能优化：数据库查询仅返回必要字段，前端 `Set` 去重避免重复渲染
 
 **指南编辑功能重构（独立页面 + 独立滚动）：**
 - 将成员新建/编辑指南从弹窗模式改为独立页面（`/guides/create` 和 `/guides/<id>/edit`）

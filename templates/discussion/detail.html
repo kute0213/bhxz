@@ -120,79 +120,20 @@
             </div>
         </div>
 
-        <!-- 回复列表 -->
-        <div class="mb-6">
-            <h2 class="text-lg font-bold flex items-center gap-2 mb-4">
-                <i data-lucide="message-circle" class="w-5 h-5 text-gold-400"></i>
-                回复（{{ replies|length }}）
-            </h2>
-
-            {% if replies %}
-            <div class="space-y-3">
-                {% for reply in replies %}
-                <div class="pixel-card rounded-xl p-5" id="reply-{{ reply.id }}">
-                    <div class="flex items-center justify-between mb-3">
-                        <div class="flex items-center gap-2">
-                            <div class="w-8 h-8 bg-gold-400/20 rounded-full flex items-center justify-center text-sm font-bold text-gold-400">
-                                {{ reply.username[0] }}
-                            </div>
-                            <div>
-                                <span class="text-sm font-medium text-cream">{{ reply.username }}</span>
-                                <span class="text-xs text-cream/40 ml-2">{{ reply.created_at }}</span>
-                            </div>
-                        </div>
-                        {% if user and (user.id == reply.user_id or user.id == topic.user_id or user.is_admin) %}
-                        <form method="POST" action="{{ url_for('discussion.delete_reply', reply_id=reply.id) }}" class="inline"
-                              onsubmit="return confirm('确定要删除此回复吗？')">
-                            <button type="submit" class="text-xs text-red-300/50 hover:text-red-300 transition-colors flex items-center gap-1">
-                                <i data-lucide="x" class="w-3 h-3"></i>
-                                删除
-                            </button>
-                        </form>
-                        {% endif %}
-                    </div>
-
-                    <div class="prose prose-invert prose-sm max-w-none prose-headings:text-gold-400 prose-a:text-gold-400 prose-strong:text-cream prose-code:text-green-300 prose-pre:bg-forest-900/50 prose-pre:border prose-pre:border-forest-700/50 prose-blockquote:border-gold-400/50 prose-blockquote:text-cream/70">
-                        <div class="reply-content">{{ reply.content }}</div>
-                    </div>
-
-                    {% if reply.attachment %}
-                    <div class="mt-3 pt-3 border-t border-forest-700/50">
-                        <div class="flex flex-wrap gap-2">
-                            {% for fname in reply.attachment %}
-                            <a href="{{ url_for('community.download_attachment', filename=fname) }}"
-                               class="px-2 py-1 rounded text-xs bg-forest-700/50 text-cream/60 hover:text-cream border border-forest-700/50 transition-colors flex items-center gap-1">
-                                <i data-lucide="file" class="w-3 h-3"></i>
-                                {{ fname.split('_', 1)[1] if '_' in fname else fname }}
-                            </a>
-                            {% endfor %}
-                        </div>
-                    </div>
-                    {% endif %}
-                </div>
-                {% endfor %}
-            </div>
-            {% else %}
-            <div class="text-center py-8 text-cream/40 text-sm">
-                暂无回复，来发表第一条回复吧
-            </div>
-            {% endif %}
-        </div>
-
-        <!-- 回复表单 -->
+        <!-- 回复表单（在回复列表上方） -->
         {% if user %}
         {% if topic.is_locked %}
-        <div class="pixel-card rounded-xl p-6 text-center">
+        <div class="pixel-card rounded-xl p-6 mb-6 text-center">
             <i data-lucide="lock" class="w-8 h-8 mx-auto text-cream/30 mb-2"></i>
             <p class="text-cream/50 text-sm">此帖子已锁定，无法回复</p>
         </div>
         {% else %}
-        <div class="pixel-card rounded-xl p-6">
+        <div class="pixel-card rounded-xl p-6 mb-6" id="reply-form-container">
             <h3 class="text-base font-bold mb-4 flex items-center gap-2">
                 <i data-lucide="reply" class="w-4 h-4 text-gold-400"></i>
                 发表回复
             </h3>
-            <form method="POST" action="{{ url_for('discussion.reply', topic_id=topic.id) }}" enctype="multipart/form-data" class="space-y-4">
+            <form id="reply-form" method="POST" action="{{ url_for('discussion.reply', topic_id=topic.id) }}" enctype="multipart/form-data" class="space-y-4">
                 <div>
                     <textarea name="content" required rows="6" class="input-field w-full px-4 py-3 rounded-lg font-mono text-sm"
                               placeholder="输入回复内容（支持 Markdown）"></textarea>
@@ -216,36 +157,83 @@
         </div>
         {% endif %}
         {% else %}
-        <div class="pixel-card rounded-xl p-6 text-center">
+        <div class="pixel-card rounded-xl p-6 mb-6 text-center">
             <p class="text-cream/50 text-sm">
                 <a href="{{ url_for('main.login', next=request.path) }}" class="text-gold-400 hover:underline">登录</a>
                 后可以回复
             </p>
         </div>
         {% endif %}
+
+        <!-- 回复列表 -->
+        <div class="mb-6">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-lg font-bold flex items-center gap-2">
+                    <i data-lucide="message-circle" class="w-5 h-5 text-gold-400"></i>
+                    回复（<span id="reply-count">{{ total_replies }}</span>）
+                </h2>
+                <div class="flex items-center gap-3">
+                    <span id="refresh-status" class="text-xs text-cream/40"></span>
+                    <span class="text-xs text-cream/30">实时刷新中</span>
+                </div>
+            </div>
+
+            <!-- 回复容器 -->
+            <div id="replies-container" class="space-y-3">
+                <!-- 回复将通过 JavaScript 动态加载 -->
+            </div>
+
+            <!-- 加载更多 -->
+            <div class="mt-4 text-center" id="load-more-container">
+                <button id="btn-load-more"
+                        class="btn-secondary px-5 py-2 rounded-lg text-sm"
+                        data-page="1">
+                    加载更多回复
+                </button>
+            </div>
+
+            <!-- 空状态 -->
+            <div id="empty-state" class="text-center py-8 text-cream/40 text-sm hidden">
+                暂无回复，来发表第一条回复吧
+            </div>
+        </div>
     </div>
 </section>
 {% endblock %}
 {% block extra_script %}
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script>
-// 由于 marked 会对 HTML 实体如 &amp; 进行转义，我们在渲染时使用原始文本
+// ============================================================
+// 配置（仅后端可修改，前端使用固定值；实际值由后端模板注入）
+// ============================================================
+var CONFIG = {
+    refreshInterval: {{ discussion_refresh_interval }} * 1000,
+    repliesPerPage: {{ replies_per_page }},
+    topicId: {{ topic.id }},
+    lastReplyId: {{ last_reply_id|default(0) }},
+    isAdmin: {{ 'true' if user and user.is_admin else 'false' }},
+    currentUserId: {{ user.id if user else 'null' }},
+    topicUserId: {{ topic.user_id }},
+    currentUser: '{{ user.username if user else "" }}',
+    replyApiUrl: '{{ url_for("discussion.api_get_replies", topic_id=topic.id) }}',
+    newReplyApiUrl: '{{ url_for("discussion.api_get_new_replies", topic_id=topic.id) }}',
+    deleteReplyUrl: '{{ url_for("discussion.delete_reply", reply_id=0) }}',
+    downloadUrl: '{{ url_for("community.download_attachment", filename="") }}',
+};
+
+// ============================================================
+// Markdown 渲染
+// ============================================================
 document.addEventListener('DOMContentLoaded', function() {
-    // 渲染帖子内容
     var contentEl = document.getElementById('content-render');
     if (contentEl) {
-        var raw = contentEl.textContent;
-        contentEl.innerHTML = marked.parse(raw);
+        contentEl.innerHTML = marked.parse(contentEl.textContent);
     }
-    // 渲染所有回复内容
-    document.querySelectorAll('.reply-content').forEach(function(el) {
-        var raw = el.textContent;
-        el.innerHTML = marked.parse(raw);
-    });
 });
-</script>
-<script>
+
+// ============================================================
 // 回复附件管理
+// ============================================================
 document.addEventListener('DOMContentLoaded', function() {
     var attachInput = document.getElementById('reply-attach-input');
     var attachList = document.getElementById('reply-attach-list');
@@ -264,11 +252,7 @@ document.addEventListener('DOMContentLoaded', function() {
         var dt = new DataTransfer();
         fileArray.forEach(function(f) { dt.items.add(f); });
         attachInput.files = dt.files;
-
-        if (fileArray.length === 0) {
-            attachList.innerHTML = '';
-            return;
-        }
+        if (fileArray.length === 0) { attachList.innerHTML = ''; return; }
         var html = '';
         fileArray.forEach(function(f, idx) {
             html +=
@@ -285,7 +269,6 @@ document.addEventListener('DOMContentLoaded', function() {
         });
         attachList.innerHTML = html;
         if (window.lucide) lucide.createIcons();
-
         attachList.querySelectorAll('.remove-attach').forEach(function(btn) {
             btn.addEventListener('click', function() {
                 fileArray.splice(parseInt(this.getAttribute('data-index')), 1);
@@ -295,7 +278,6 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     attachBtn.addEventListener('click', function() { attachInput.click(); });
-
     attachInput.addEventListener('change', function() {
         Array.from(this.files).forEach(function(f) {
             var exists = fileArray.some(function(ef) { return ef.name === f.name && ef.size === f.size; });
@@ -305,5 +287,240 @@ document.addEventListener('DOMContentLoaded', function() {
         this.value = '';
     });
 });
+
+// ============================================================
+// 回复分段加载 & 实时刷新
+// ============================================================
+(function() {
+    var container = document.getElementById('replies-container');
+    var emptyState = document.getElementById('empty-state');
+    var loadMoreBtn = document.getElementById('btn-load-more');
+    var loadMoreContainer = document.getElementById('load-more-container');
+    var replyCountEl = document.getElementById('reply-count');
+    var refreshStatusEl = document.getElementById('refresh-status');
+    var currentPage = 1;
+    var isLoading = false;
+    var loadedIds = new Set();
+
+    // ---- 渲染单条回复 ----
+    function renderReplyHTML(r) {
+        var contentHtml = marked.parse(r.content || '');
+        var canDelete = CONFIG.currentUserId &&
+            (CONFIG.currentUserId === r.user_id || CONFIG.currentUserId === CONFIG.topicUserId || CONFIG.isAdmin);
+        var attachHtml = '';
+        if (r.attachment && r.attachment.length > 0) {
+            attachHtml = '<div class="mt-3 pt-3 border-t border-forest-700/50">' +
+                '<div class="flex flex-wrap gap-2">';
+            r.attachment.forEach(function(fname) {
+                var display = fname.indexOf('_') > -1 ? fname.substring(fname.indexOf('_') + 1) : fname;
+                attachHtml +=
+                    '<a href="' + CONFIG.downloadUrl + fname + '" ' +
+                    'class="px-2 py-1 rounded text-xs bg-forest-700/50 text-cream/60 hover:text-cream border border-forest-700/50 transition-colors flex items-center gap-1">' +
+                    '<i data-lucide="file" class="w-3 h-3"></i>' + escapeHtml(display) + '</a>';
+            });
+            attachHtml += '</div></div>';
+        }
+        var deleteBtn = '';
+        if (canDelete) {
+            deleteBtn =
+                '<button type="button" class="delete-reply-btn text-xs text-red-300/50 hover:text-red-300 transition-colors flex items-center gap-1" data-reply-id="' + r.id + '">' +
+                '<i data-lucide="x" class="w-3 h-3"></i> 删除</button>';
+        }
+        var initials = r.username ? r.username.charAt(0).toUpperCase() : '?';
+
+        return '<div class="pixel-card rounded-xl p-5" id="reply-' + r.id + '">' +
+            '<div class="flex items-center justify-between mb-3">' +
+            '  <div class="flex items-center gap-2">' +
+            '    <div class="w-8 h-8 bg-gold-400/20 rounded-full flex items-center justify-center text-sm font-bold text-gold-400">' + escapeHtml(initials) + '</div>' +
+            '    <div>' +
+            '      <span class="text-sm font-medium text-cream">' + escapeHtml(r.username) + '</span>' +
+            '      <span class="text-xs text-cream/40 ml-2">' + escapeHtml(r.created_at || '') + '</span>' +
+            '    </div>' +
+            '  </div>' +
+            '  ' + deleteBtn +
+            '</div>' +
+            '<div class="prose prose-invert prose-sm max-w-none prose-headings:text-gold-400 prose-a:text-gold-400 prose-strong:text-cream prose-code:text-green-300 prose-pre:bg-forest-900/50 prose-pre:border prose-pre:border-forest-700/50 prose-blockquote:border-gold-400/50 prose-blockquote:text-cream/70">' +
+            '  <div class="reply-content">' + contentHtml + '</div>' +
+            '</div>' +
+            attachHtml +
+            '</div>';
+    }
+
+    function escapeHtml(text) {
+        if (!text) return '';
+        var div = document.createElement('div');
+        div.appendChild(document.createTextNode(text));
+        return div.innerHTML;
+    }
+
+    // ---- 加载分页回复 ----
+    function loadReplies(page) {
+        if (isLoading) return;
+        isLoading = true;
+        loadMoreBtn.disabled = true;
+        loadMoreBtn.textContent = '加载中...';
+
+        fetch(CONFIG.replyApiUrl + '?page=' + page)
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
+                if (!data.success) { isLoading = false; loadMoreBtn.textContent = '加载失败'; return; }
+
+                var fragment = document.createDocumentFragment();
+                var temp = document.createElement('div');
+
+                data.replies.forEach(function(r) {
+                    if (loadedIds.has(r.id)) return;
+                    loadedIds.add(r.id);
+                    if (r.id > CONFIG.lastReplyId) CONFIG.lastReplyId = r.id;
+                    temp.innerHTML = renderReplyHTML(r);
+                    while (temp.firstChild) fragment.appendChild(temp.firstChild);
+                });
+
+                container.appendChild(fragment);
+                // 重新渲染 Lucide 图标
+                if (window.lucide) lucide.createIcons();
+
+                // 更新状态
+                currentPage = page;
+                if (data.has_more) {
+                    loadMoreBtn.dataset.page = page + 1;
+                    loadMoreBtn.disabled = false;
+                    loadMoreBtn.textContent = '加载更多回复';
+                } else {
+                    loadMoreBtn.textContent = '没有更多回复了';
+                    loadMoreBtn.disabled = true;
+                    loadMoreContainer.classList.add('opacity-50');
+                }
+
+                // 更新回复数
+                replyCountEl.textContent = data.total;
+
+                // 隐藏空状态
+                if (data.total > 0) emptyState.classList.add('hidden');
+
+                isLoading = false;
+            })
+            .catch(function() {
+                isLoading = false;
+                loadMoreBtn.textContent = '加载失败，点击重试';
+                loadMoreBtn.disabled = false;
+            });
+    }
+
+    // ---- 获取最新回复（实时刷新） ----
+    function fetchNewReplies() {
+        fetch(CONFIG.newReplyApiUrl + '?last_id=' + CONFIG.lastReplyId)
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
+                if (!data.success || data.replies.length === 0) return;
+
+                var count = 0;
+                var temp = document.createElement('div');
+                var firstNewId = null;
+
+                data.replies.forEach(function(r) {
+                    if (loadedIds.has(r.id)) return;
+                    loadedIds.add(r.id);
+                    if (r.id > CONFIG.lastReplyId) {
+                        if (firstNewId === null) firstNewId = r.id;
+                        CONFIG.lastReplyId = r.id;
+                    }
+                    count++;
+                    temp.innerHTML = renderReplyHTML(r);
+                    // 插入到容器最前面
+                    while (temp.firstChild) {
+                        container.insertBefore(temp.firstChild, container.firstChild);
+                    }
+                });
+
+                if (count > 0) {
+                    if (window.lucide) lucide.createIcons();
+                    // 更新回复数
+                    var current = parseInt(replyCountEl.textContent) || 0;
+                    replyCountEl.textContent = current + count;
+                    emptyState.classList.add('hidden');
+                    // 闪烁提示
+                    flashRefreshStatus('+' + count + ' 条新回复');
+                } else {
+                    updateRefreshTime();
+                }
+            })
+            .catch(function() {
+                // 静默失败，不干扰用户
+            });
+    }
+
+    function flashRefreshStatus(msg) {
+        refreshStatusEl.textContent = msg;
+        refreshStatusEl.className = 'text-xs text-gold-400 font-medium';
+        setTimeout(function() {
+            updateRefreshTime();
+        }, 2000);
+    }
+
+    function updateRefreshTime() {
+        var now = new Date();
+        var time = now.getHours().toString().padStart(2, '0') + ':' +
+                   now.getMinutes().toString().padStart(2, '0') + ':' +
+                   now.getSeconds().toString().padStart(2, '0');
+        refreshStatusEl.textContent = '最后刷新: ' + time;
+        refreshStatusEl.className = 'text-xs text-cream/40';
+    }
+
+    // ---- 删除回复 ----
+    container.addEventListener('click', function(e) {
+        var btn = e.target.closest('.delete-reply-btn');
+        if (!btn) return;
+        if (!confirm('确定要删除此回复吗？')) return;
+
+        var replyId = btn.getAttribute('data-reply-id');
+        var url = CONFIG.deleteReplyUrl.replace('/0', '/' + replyId);
+
+        fetch(url, { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
+                if (data.success) {
+                    var el = document.getElementById('reply-' + replyId);
+                    if (el) {
+                        el.style.transition = 'opacity 0.3s';
+                        el.style.opacity = '0';
+                        setTimeout(function() { el.remove(); }, 300);
+                    }
+                    var current = parseInt(replyCountEl.textContent) || 0;
+                    replyCountEl.textContent = Math.max(0, current - 1);
+                } else {
+                    alert(data.message || '删除失败');
+                }
+            })
+            .catch(function() { alert('删除失败，请稍后重试'); });
+    });
+
+    // ---- 初始化 ----
+    function init() {
+        // 加载第一页
+        loadReplies(1);
+        updateRefreshTime();
+
+        // 启动实时刷新定时器
+        setInterval(fetchNewReplies, CONFIG.refreshInterval);
+    }
+
+    // 加载更多按钮
+    loadMoreBtn.addEventListener('click', function() {
+        var page = parseInt(this.dataset.page);
+        if (this.disabled) return;
+        loadReplies(page);
+    });
+
+    // 回复表单提交后，清空内容并刷新
+    var replyForm = document.getElementById('reply-form');
+    if (replyForm) {
+        replyForm.addEventListener('submit', function() {
+            // 表单提交后页面会刷新，无需额外操作
+        });
+    }
+
+    init();
+})();
 </script>
 {% endblock %}

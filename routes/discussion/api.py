@@ -5,12 +5,12 @@ import datetime
 import os
 import secrets
 
-from flask import request, abort, url_for
+from flask import request, abort, url_for, jsonify
 from werkzeug.utils import secure_filename
 
 from core.auth import login_required, get_current_user
 from core.db import get_db
-from config import UPLOAD_DIR
+from config import UPLOAD_DIR, get_config_value
 from routes.discussion import discussion_bp
 from routes.community.helpers import _respond
 from services.logger import log
@@ -255,5 +255,101 @@ def delete_topic(topic_id):
         log('Discussion', '删除帖子失败', user_id=user['id'], username=user['username'],
             topic_id=topic_id, ip=request.remote_addr)
         return _respond('删除失败', 'error')
+    finally:
+        conn.close()
+
+
+# ---------------------------------------------------------------------------
+# 回复分段加载 & 实时刷新 API
+# ---------------------------------------------------------------------------
+
+@discussion_bp.route('/discussion/<int:topic_id>/api/replies')
+def api_get_replies(topic_id):
+    """API: 分页获取回复（用于前端分段加载）。"""
+    page = request.args.get('page', 1, type=int)
+    per_page = get_config_value('REPLIES_PER_PAGE', 10)
+
+    if page < 1:
+        page = 1
+
+    conn = get_db()
+    try:
+        total = conn.execute(
+            "SELECT COUNT(*) AS c FROM discussion_replies WHERE topic_id = ?",
+            (topic_id,)
+        ).fetchone()['c']
+
+        offset = (page - 1) * per_page
+        rows = conn.execute(
+            """
+            SELECT r.id, r.content, r.attachment, r.created_at, r.user_id, u.username
+            FROM discussion_replies r
+            JOIN users u ON r.user_id = u.id
+            WHERE r.topic_id = ?
+            ORDER BY r.id ASC
+            LIMIT ? OFFSET ?
+            """,
+            (topic_id, per_page, offset)
+        ).fetchall()
+
+        replies_list = []
+        for r in rows:
+            rd = dict(r)
+            # 解析附件
+            if rd.get('attachment'):
+                try:
+                    parsed = json.loads(rd['attachment'])
+                    rd['attachment'] = [parsed] if isinstance(parsed, str) else parsed
+                except (json.JSONDecodeError, TypeError):
+                    rd['attachment'] = [rd['attachment']]
+            else:
+                rd['attachment'] = []
+            replies_list.append(rd)
+
+        return jsonify({
+            'success': True,
+            'replies': replies_list,
+            'has_more': (page * per_page) < total,
+            'total': total,
+        })
+    finally:
+        conn.close()
+
+
+@discussion_bp.route('/discussion/<int:topic_id>/api/new-replies')
+def api_get_new_replies(topic_id):
+    """API: 获取最新回复（仅返回比 last_id 大的回复，用于实时刷新）。"""
+    last_id = request.args.get('last_id', 0, type=int)
+
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            """
+            SELECT r.id, r.content, r.attachment, r.created_at, r.user_id, u.username
+            FROM discussion_replies r
+            JOIN users u ON r.user_id = u.id
+            WHERE r.topic_id = ? AND r.id > ?
+            ORDER BY r.id ASC
+            """,
+            (topic_id, last_id)
+        ).fetchall()
+
+        replies_list = []
+        for r in rows:
+            rd = dict(r)
+            if rd.get('attachment'):
+                try:
+                    parsed = json.loads(rd['attachment'])
+                    rd['attachment'] = [parsed] if isinstance(parsed, str) else parsed
+                except (json.JSONDecodeError, TypeError):
+                    rd['attachment'] = [rd['attachment']]
+            else:
+                rd['attachment'] = []
+            replies_list.append(rd)
+
+        return jsonify({
+            'success': True,
+            'replies': replies_list,
+        })
     finally:
         conn.close()
