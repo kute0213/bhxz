@@ -25,6 +25,9 @@ def admin_page():
             'total_mod_intros': conn.execute("SELECT COUNT(*) AS c FROM mod_intros").fetchone()['c'],
             'total_guides': conn.execute("SELECT COUNT(*) AS c FROM server_guides").fetchone()['c'],
             'pending_guides': conn.execute("SELECT COUNT(*) AS c FROM server_guides WHERE status = 'pending'").fetchone()['c'],
+            'total_discussion_topics': conn.execute("SELECT COUNT(*) AS c FROM discussion_topics").fetchone()['c'],
+            'total_discussion_replies': conn.execute("SELECT COUNT(*) AS c FROM discussion_replies").fetchone()['c'],
+            'total_discussion_categories': conn.execute("SELECT COUNT(*) AS c FROM discussion_categories").fetchone()['c'],
         }
     finally:
         conn.close()

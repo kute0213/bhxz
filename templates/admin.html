@@ -60,6 +60,18 @@
                         <div class="text-xl sm:text-2xl font-bold text-gold-400 mb-1 break-all">{{ stats.pending_guides }}</div>
                         <div class="text-xs text-cream/60">待审核指南</div>
                     </div>
+                <div class="pixel-card rounded-xl p-4 text-center">
+                        <div class="text-xl sm:text-2xl font-bold text-gold-400 mb-1 break-all">{{ stats.total_discussion_topics }}</div>
+                        <div class="text-xs text-cream/60">讨论帖子</div>
+                    </div>
+                    <div class="pixel-card rounded-xl p-4 text-center">
+                        <div class="text-xl sm:text-2xl font-bold text-gold-400 mb-1 break-all">{{ stats.total_discussion_replies }}</div>
+                        <div class="text-xs text-cream/60">讨论回复</div>
+                    </div>
+                    <div class="pixel-card rounded-xl p-4 text-center">
+                        <div class="text-xl sm:text-2xl font-bold text-gold-400 mb-1 break-all">{{ stats.total_discussion_categories }}</div>
+                        <div class="text-xs text-cream/60">讨论分类</div>
+                    </div>
                 </div>
             </div>
 
@@ -167,6 +179,15 @@
                         <h3 class="text-lg font-bold mb-2">广播邮件</h3>
                         <p class="text-cream/60 text-sm">向全体用户发送 Markdown 格式邮件</p>
                         <span class="inline-block mt-4 text-gold-400 text-sm font-medium">发送广播 →</span>
+                    </a>
+
+                    <a href="{{ url_for('admin.admin_discussion') }}" class="pixel-card rounded-xl p-6 block hover:no-underline">
+                        <div class="w-12 h-12 mb-4 bg-gold-400/20 rounded-xl flex items-center justify-center">
+                            <i data-lucide="message-square" class="w-6 h-6 text-gold-400"></i>
+                        </div>
+                        <h3 class="text-lg font-bold mb-2">讨论管理</h3>
+                        <p class="text-cream/60 text-sm">管理帖子、分类，置顶/锁定/删除</p>
+                        <span class="inline-block mt-4 text-gold-400 text-sm font-medium">进入管理 →</span>
                     </a>
 
 
