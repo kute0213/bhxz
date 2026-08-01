@@ -8,6 +8,7 @@ from core.auth import login_required, get_current_user
 from core.db import get_db
 from routes.community import community_bp
 from routes.community.helpers import _respond
+from services.logger import log
 
 
 @community_bp.route('/poll/create', methods=['POST'])
@@ -44,9 +45,11 @@ def create_poll():
                 (poll_id, opt)
             )
         conn.commit()
+        log('Poll', '创建投票', user_id=user['id'], username=user['username'], title=title, ip=request.remote_addr)
         return _respond('投票已创建', 'success')
     except Exception:
         conn.rollback()
+        log('Poll', '创建投票失败', user_id=user['id'], username=user['username'], title=title, ip=request.remote_addr)
         return _respond('创建失败，请重试', 'error')
     finally:
         conn.close()
@@ -93,9 +96,11 @@ def vote_poll(poll_id):
                 )
 
         conn.commit()
+        log('Poll', '投票成功', user_id=user['id'], username=user['username'], poll_id=poll_id, ip=request.remote_addr)
         return _respond('投票成功', 'success')
     except Exception:
         conn.rollback()
+        log('Poll', '投票失败', user_id=user['id'], username=user['username'], poll_id=poll_id, ip=request.remote_addr)
         return _respond('投票失败，请重试', 'error')
     finally:
         conn.close()
@@ -115,9 +120,11 @@ def delete_poll(poll_id):
         conn.execute("DELETE FROM poll_options WHERE poll_id = ?", (poll_id,))
         conn.execute("DELETE FROM polls WHERE id = ?", (poll_id,))
         conn.commit()
+        log('Poll', '删除投票', user_id=user['id'], username=user['username'], poll_id=poll_id, ip=request.remote_addr)
         return _respond('投票已删除', 'success')
     except Exception:
         conn.rollback()
+        log('Poll', '删除投票失败', user_id=user['id'], username=user['username'], poll_id=poll_id, ip=request.remote_addr)
         return _respond('删除失败', 'error')
     finally:
         conn.close()
@@ -139,12 +146,14 @@ def toggle_poll(poll_id):
         new_status = 0 if poll['is_active'] else 1
         conn.execute("UPDATE polls SET is_active = ? WHERE id = ?", (new_status, poll_id))
         conn.commit()
+        log('Poll', '切换投票状态', user_id=user['id'], username=user['username'], poll_id=poll_id, new_active=new_status, ip=request.remote_addr)
         return _respond('投票状态已更新', 'success')
     except Exception:
         try:
             conn.rollback()
         except Exception:
             pass
+        log('Poll', '切换投票状态失败', user_id=user['id'], username=user['username'], poll_id=poll_id, ip=request.remote_addr)
         return _respond('操作失败', 'error')
     finally:
         conn.close()

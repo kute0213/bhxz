@@ -2,8 +2,8 @@
 {% block title %}{{ '编辑指南' if guide else '新建指南' }}{% endblock %}
 {% block extra_style %}
 <style>
-.markdown-editor { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; min-height: 500px; max-height: 70vh; }
-@media (max-width: 1024px) { .markdown-editor { grid-template-columns: 1fr; max-height: none; } }
+.markdown-editor { display: grid; grid-template-columns: 1fr 1fr; grid-template-rows: 1fr; gap: 1rem; min-height: 500px; max-height: 70vh; overflow: hidden; }
+@media (max-width: 1024px) { .markdown-editor { grid-template-columns: 1fr; grid-template-rows: auto; max-height: none; } }
 .editor-pane, .preview-pane {
     background: rgba(10, 20, 12, 0.6);
     border: 1px solid rgba(255, 255, 255, 0.1);
@@ -42,6 +42,7 @@
     flex: 1;
     padding: 1rem;
     overflow-y: auto;
+    min-height: 0;
 }
 .prose-docs h1 { font-size: 1.75rem; font-weight: 700; color: #f5e6c8; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid rgba(245,230,200,0.1); }
 .prose-docs h2 { font-size: 1.4rem; font-weight: 600; color: #f5e6c8; margin-top: 2rem; margin-bottom: 0.75rem; }
@@ -160,11 +161,30 @@
     const textarea = document.getElementById('md-editor');
     const preview = document.getElementById('md-preview');
 
+    var previewBody = preview; // preview 本身就是 pane-body
+
     function updatePreview() {
-        preview.innerHTML = marked.parse(textarea.value || '');
+        previewBody.innerHTML = marked.parse(textarea.value || '');
     }
     textarea.addEventListener('input', updatePreview);
     updatePreview();
+
+    // 同步滚动
+    var syncing = false;
+    textarea.addEventListener('scroll', function() {
+        if (syncing) return;
+        syncing = true;
+        var ratio = this.scrollTop / (this.scrollHeight - this.clientHeight);
+        previewBody.scrollTop = ratio * (previewBody.scrollHeight - previewBody.clientHeight);
+        syncing = false;
+    });
+    previewBody.addEventListener('scroll', function() {
+        if (syncing) return;
+        syncing = true;
+        var ratio = this.scrollTop / (this.scrollHeight - this.clientHeight);
+        textarea.scrollTop = ratio * (textarea.scrollHeight - textarea.clientHeight);
+        syncing = false;
+    });
 
     window.insertText = function(before, after) {
         const start = textarea.selectionStart;

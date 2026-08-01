@@ -1,6 +1,6 @@
 # 滨海小镇 - Minecraft 服务器社区网站
 
-基于 Flask 的 Minecraft 服务器社区门户，采用磨砂玻璃（Glassmorphism）设计风格。提供用户系统、社区投票、留言板（多附件上传）、模组介绍、管理后台、服务器性能监控、CMD 控制台与 MiniScript 脚本引擎等功能。
+基于 Flask 的 Minecraft 服务器社区门户，采用磨砂玻璃（Glassmorphism）设计风格。提供用户系统、社区投票、征集（多附件上传）、模组介绍、管理后台、服务器性能监控、CMD 控制台与 MiniScript 脚本引擎等功能。
 
 ## 项目结构
 
@@ -62,11 +62,11 @@
 ├── routes/                       # 路由控制器（Flask Blueprint）
 │   ├── __init__.py
 │   ├── main.py                   #   页面路由：首页、登录/注册、用户设置、性能监控页
-│   ├── community/                #   社区蓝图包：投票 CRUD、留言板 CRUD、多附件上传
+│   ├── community/                #   社区蓝图包：投票 CRUD、征集 CRUD、多附件上传
 │   │   ├── __init__.py           #     创建 community_bp，导入子模块注册路由
 │   │   ├── pages.py              #     社区首页渲染 + 附件下载
 │   │   ├── polls.py              #     投票创建/投票/删除/启停
-│   │   ├── board.py              #     留言板主题/回复/删除（含附件管理）
+│   │   ├── board.py              #     征集主题/回复/删除（含附件管理）
 │   │   └── helpers.py            #     _is_ajax / _respond 辅助函数
 │   ├── admin/                    #   管理蓝图包：用户管理、日志、模组介绍、数据库备份、系统设置、服务器指南管理
 │   │   ├── __init__.py           #     创建 admin_bp，导入子模块注册路由
@@ -109,7 +109,7 @@
 ├── templates/                    # Jinja2 模板（23 个页面）
 │   ├── base.html                 #   基础模板（全局样式、磨砂玻璃、导航栏、动画）
 │   ├── index.html                #   首页（模组介绍卡片 + 服务器指南入口）
-│   ├── community.html            #   社区页（投票 + 留言板）
+│   ├── community.html            #   社区页（投票 + 征集）
 │   ├── login.html / register.html
 │   ├── settings.html             #   用户设置（改用户名/密码/注销）
 │   ├── performance.html          #   服务器性能监控
@@ -341,7 +341,7 @@ python app.py
 
 ### 社区操作（支持 AJAX）
 
-社区路由（投票、留言板）同时支持传统表单提交和 AJAX 请求：
+社区路由（投票、征集）同时支持传统表单提交和 AJAX 请求：
 
 - **表单提交**：`flash` 消息 + 页面重定向（默认行为）
 - **AJAX 请求**：返回 JSON 响应（检测 `X-Requested-With`、`Content-Type: application/json`、`Accept: application/json`）
@@ -362,9 +362,9 @@ python app.py
 | POST | `/poll/<id>/vote` | 投票 |
 | POST | `/poll/<id>/delete` | 删除投票（管理员） |
 | POST | `/poll/<id>/toggle` | 启用/禁用投票（管理员） |
-| POST | `/board/create` | 创建留言板（管理员） |
-| POST | `/board/<id>/reply` | 回复留言板（支持多附件） |
-| POST | `/board/<id>/delete` | 删除留言板（管理员） |
+| POST | `/board/create` | 创建征集（管理员） |
+| POST | `/board/<id>/reply` | 回复征集（支持多附件） |
+| POST | `/board/<id>/delete` | 删除征集（管理员） |
 | POST | `/board/reply/<id>/delete` | 删除回复（管理员或作者） |
 
 ### CMD 控制台与 MiniScript（管理员）
@@ -562,8 +562,8 @@ Markdown 文档存放在 [docs/](file:///workspace/docs/) 目录，通过 `/docs
 | `polls` | 投票 | — |
 | `poll_options` | 投票选项 | 外键 `poll_id` 级联删除 |
 | `poll_votes` | 投票记录 | 唯一约束 `(poll_id, user_id, option_id)` 防重复投票 |
-| `board_topics` | 留言板主题 | 外键 `user_id` 级联删除 |
-| `board_replies` | 留言板回复 | 外键 `topic_id` 级联删除，`attachment` 存 JSON 数组 |
+| `board_topics` | 征集主题 | 外键 `user_id` 级联删除 |
+| `board_replies` | 征集回复 | 外键 `topic_id` 级联删除，`attachment` 存 JSON 数组 |
 | `mod_intros` | 模组介绍 | — |
 | `cmd_commands` | 一键命令 | 名称 / 命令 / 描述 / 排序 / 类型 |
 | `scripts` | **统一脚本表** | **name / description / content / script_type（数据库存储，无文件系统依赖）** |
@@ -816,7 +816,7 @@ server {
 - 自动动态获取当前数据库名（如 `site`），避免硬编码 `main` 导致的兼容性问题
 - 备份失败时自动清理残留临时文件
 
-**留言板附件（恢复简单机制）**
+**征集附件（恢复简单机制）**
 - 支持单次回复上传多个附件，后端使用 `request.files.getlist('attachments')` 遍历保存
 - 支持多次点击“添加附件”追加文件：前端使用 `DataTransfer` 累积历次选择的文件，避免后一次选择覆盖前一次
 - 附件以 JSON 文件名数组形式存储在 `board_replies.attachment`，保持与旧版一致

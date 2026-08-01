@@ -1,6 +1,6 @@
 # 滨海小镇 - Minecraft 服务器社区网站
 
-基于 Flask 的 Minecraft 服务器社区门户，采用磨砂玻璃（Glassmorphism）设计风格。提供用户系统、社区投票、留言板（多附件上传）、模组介绍、管理后台、服务器性能监控、CMD 控制台与 MiniScript 脚本引擎等功能。
+基于 Flask 的 Minecraft 服务器社区门户，采用磨砂玻璃（Glassmorphism）设计风格。提供用户系统、社区投票、征集（多附件上传）、模组介绍、管理后台、服务器性能监控、CMD 控制台与 MiniScript 脚本引擎等功能。
 
 ## 项目结构
 
@@ -11,7 +11,6 @@
 ├── requirements.txt              # Python 依赖
 │
 ├── core/                         # 核心基础设施
-│   ├── __init__.py
 │   ├── db/                       #   DuckDB 数据库层（兼容 sqlite3 接口：Row/lastrowid/executescript）
 │   │   ├── __init__.py           #     包入口，导出 get_db / init_db / DuckDBConnection 等
 │   │   ├── connection.py         #     连接、游标、行对象封装 + get_db
@@ -23,7 +22,6 @@
 │   └── shell.py                  #   跨平台 shell 检测与环境构造（Windows cmd/ps / Unix bash-sh）
 │
 ├── services/                     # 业务服务（含异步后台线程）
-│   ├── __init__.py
 │   ├── monitoring/               #   系统监控（CPU 使用率/温度、内存、运行时间，跨平台）
 │   │   ├── __init__.py           #     包入口，导出 get_cpu_usage / get_cpu_temperature / get_memory_info / get_system_info
 │   │   ├── cpu.py                #     CPU 使用率与温度采集
@@ -60,13 +58,16 @@
 │       └── session.py            #     按用户 session 隔离的脚本执行状态管理器
 │
 ├── routes/                       # 路由控制器（Flask Blueprint）
-│   ├── __init__.py
 │   ├── main.py                   #   页面路由：首页、登录/注册、用户设置、性能监控页
-│   ├── community/                #   社区蓝图包：投票 CRUD、留言板 CRUD、多附件上传
+│   ├── discussion/               #   讨论蓝图包：帖子列表、发帖、回复、管理
+│   │   ├── __init__.py           #     创建 discussion_bp，导入子模块注册路由
+│   │   ├── pages.py              #     帖子列表/详情/创建/编辑页面路由
+│   │   └── api.py                #     回复/删除/置顶/锁定 API
+│   ├── community/                #   社区蓝图包：投票 CRUD、征集 CRUD、多附件上传
 │   │   ├── __init__.py           #     创建 community_bp，导入子模块注册路由
 │   │   ├── pages.py              #     社区首页渲染 + 附件下载
 │   │   ├── polls.py              #     投票创建/投票/删除/启停
-│   │   ├── board.py              #     留言板主题/回复/删除（含附件管理）
+│   │   ├── board.py              #     征集主题/回复/删除（含附件管理）
 │   │   └── helpers.py            #     _is_ajax / _respond 辅助函数
 │   ├── admin/                    #   管理蓝图包：用户管理、日志、模组介绍、数据库备份、系统设置、服务器指南管理
 │   │   ├── __init__.py           #     创建 admin_bp，导入子模块注册路由
@@ -78,6 +79,7 @@
 │   │   ├── backup.py             #     数据库备份页面/启动/进度/历史
 │   │   ├── guides.py             #     服务器指南 CRUD + 审核工作流
 │   │   ├── guide_bans.py         #     指南编辑权限封禁管理（用户/IP）
+│   │   ├── discussion.py         #     讨论管理（帖子列表/删除/置顶/锁定 + 分类管理）
 │   │   └── broadcast.py          #     广播邮件：向全体用户发送 Markdown 格式邮件
 │   ├── guides/                   #   服务器指南蓝图包：公开列表/详情 + 成员提交 API
 │   │   ├── __init__.py           #     创建 guides_bp，导入子模块注册路由
@@ -97,19 +99,17 @@
 │   │   └── logs.py               #     任务执行日志（单任务/全部/详情）
 │   ├── docs.py                   #   文档路由：Markdown 文档列表 + 内容 API
 │   ├── public_files.py           #   公开文件管理（本地文件/目录对外公开访问）
-│   └── api/                      #   API 接口（按功能模块拆分）
-│       ├── __init__.py
-│       ├── monitoring.py         #     /api/performance  性能数据
-│       ├── stats.py              #     /api/stats         网站统计
-│       ├── polls.py              #     /api/polls       投票数据
+│   └── api/                      #   API 接口：
+│       ├── __init__.py           #     包入口，导出各蓝图
+│       ├── public.py             #     /api/performance, /api/stats, /api/polls
 │       ├── captcha.py            #     /api/captcha     验证码生成
 │       ├── email_code.py         #     /api/email       邮箱验证码发送
-│       └── admin.py              #     /api/admin/logs    访问日志（管理员）
+│       └── admin.py              #     /api/admin/logs  访问日志（管理员）
 │
-├── templates/                    # Jinja2 模板（23 个页面）
+├── templates/                    # Jinja2 模板（25 个页面）
 │   ├── base.html                 #   基础模板（全局样式、磨砂玻璃、导航栏、动画，含 page_modals 弹窗挂载点）
 │   ├── index.html                #   首页（模组介绍卡片 + 服务器指南入口）
-│   ├── community.html            #   社区页（投票 + 留言板）
+│   ├── community.html            #   社区页（投票 + 征集）
 │   ├── login.html / register.html
 │   ├── settings.html             #   用户设置（改用户名/密码/注销）
 │   ├── performance.html          #   服务器性能监控
@@ -117,6 +117,10 @@
 │   ├── guides/                   #   服务器指南模板
 │   │   ├── index.html            #     指南列表页（卡片展示 + 状态筛选）
 │   │   └── detail.html           #     指南详情页（Markdown 渲染 + 标题锚点）
+│   ├── discussion/               #   讨论帖子模板
+│   │   ├── list.html             #     帖子列表页（分类筛选、置顶优先、分页）
+│   │   ├── detail.html           #     帖子详情页（Markdown 渲染 + 回复列表）
+│   │   └── create.html           #     发帖/编辑页面（Markdown 编辑 + 附件上传）
 │   ├── admin.html                #   管理后台首页
 │   ├── admin_users.html          #   用户管理
 │   ├── admin_logs.html           #   访问日志
@@ -130,6 +134,8 @@
 │   ├── admin_settings.html       #   系统设置（在线编辑配置，支持重置，热重载）
 │   ├── admin_db_backup.html      #   数据库优化备份页面（进度条 + 备份历史）
 │   ├── admin_public_files.html   #   公开文件管理
+│   ├── admin_discussion.html     #   讨论管理（帖子列表/置顶/锁定/删除）
+│   ├── admin_discussion_categories.html  #   讨论分类管理（创建/删除）
 │   ├── admin_broadcast.html      #   广播邮件（Markdown 编辑器 + 实时预览 + 发送确认）
 │   └── 403.html / 404.html       #   错误页
 │
@@ -279,9 +285,7 @@ python app.py
 
 | 模块 | 文件 | 端点 | 说明 |
 |------|------|------|------|
-| 性能监控 | [monitoring.py](file:///workspace/routes/api/monitoring.py) | `/api/performance` | CPU / 内存 / 温度 / 运行时间 |
-| 网站统计 | [stats.py](file:///workspace/routes/api/stats.py) | `/api/stats` | 用户 / 投票 / 留言数 |
-| 投票数据 | [polls.py](file:///workspace/routes/api/polls.py) | `/api/polls` | 投票列表 + 选项 + 投票状态 |
+| 公开 API | [public.py](file:///workspace/routes/api/public.py) | `/api/performance`, `/api/stats`, `/api/polls` | 性能监控 / 网站统计 / 投票数据 |
 | 访问日志 | [admin.py](file:///workspace/routes/api/admin.py) | `/api/admin/logs/refresh` | 管理员：分页日志 |
 
 ### 公开接口
@@ -345,7 +349,7 @@ python app.py
 
 ### 社区操作（支持 AJAX）
 
-社区路由（投票、留言板）同时支持传统表单提交和 AJAX 请求：
+社区路由（投票、征集）同时支持传统表单提交和 AJAX 请求：
 
 - **表单提交**：`flash` 消息 + 页面重定向（默认行为）
 - **AJAX 请求**：返回 JSON 响应（检测 `X-Requested-With`、`Content-Type: application/json`、`Accept: application/json`）
@@ -366,10 +370,15 @@ python app.py
 | POST | `/poll/<id>/vote` | 投票 |
 | POST | `/poll/<id>/delete` | 删除投票（管理员） |
 | POST | `/poll/<id>/toggle` | 启用/禁用投票（管理员） |
-| POST | `/board/create` | 创建留言板（管理员） |
-| POST | `/board/<id>/reply` | 回复留言板（支持多附件） |
-| POST | `/board/<id>/delete` | 删除留言板（管理员） |
+| POST | `/board/create` | 创建征集（管理员） |
+| POST | `/board/<id>/reply` | 回复征集（支持多附件） |
+| POST | `/board/<id>/delete` | 删除征集（管理员） |
 | POST | `/board/reply/<id>/delete` | 删除回复（管理员或作者） |
+| POST | `/discussion/<id>/reply` | 回复帖子（支持多附件） |
+| POST | `/discussion/reply/<id>/delete` | 删除回复 |
+| POST | `/discussion/<id>/pin` | 置顶/取消置顶（管理员） |
+| POST | `/discussion/<id>/lock` | 锁定/解锁（管理员） |
+| POST | `/discussion/<id>/delete` | 删除帖子（作者或管理员） |
 
 ### CMD 控制台与 MiniScript（管理员）
 
@@ -533,6 +542,10 @@ Markdown 文档存放在 [docs/](file:///workspace/docs/) 目录，通过 `/docs
 | GET | `/guides` | 指南列表页（默认展示已审核通过） |
 | GET | `/guides?my=1` | 我的指南（登录用户查看自己提交的） |
 | GET | `/guides/<slug>` | 指南详情页（Markdown 渲染） |
+| GET | `/discussion` | 帖子列表（支持分类筛选、分页） |
+| GET | `/discussion/create` | 发帖页面（需登录） |
+| GET | `/discussion/<id>` | 帖子详情页（Markdown 渲染 + 回复列表） |
+| GET | `/discussion/<id>/edit` | 编辑帖子（作者或管理员） |
 
 **成员 API（需登录）**：
 
@@ -555,10 +568,15 @@ Markdown 文档存放在 [docs/](file:///workspace/docs/) 目录，通过 `/docs
 | GET | `/admin/guide-bans` | 封禁列表 |
 | POST | `/admin/guide-bans/create` | 新增封禁（按用户名或 IP） |
 | POST | `/admin/guide-bans/<id>/delete` | 解除封禁 |
+| GET | `/admin/discussion` | 讨论管理列表 |
+| POST | `/admin/discussion/<id>/delete` | 管理员删除帖子 |
+| POST | `/admin/discussion/<id>/toggle-pin` | 管理员切换置顶 |
+| POST | `/admin/discussion/<id>/toggle-lock` | 管理员切换锁定 |
+| GET/POST | `/admin/discussion/categories` | 分类管理（创建/删除） |
 
 ## 数据库
 
-使用 **DuckDB**（高性能嵌入式 OLAP 数据库，单文件、支持列存、窗口函数），首次启动自动建表。共 17 张表：
+使用 **DuckDB**（高性能嵌入式 OLAP 数据库，单文件、支持列存、窗口函数），首次启动自动建表。共 20 张表：
 
 | 表名 | 说明 | 关键约束 |
 |------|------|----------|
@@ -566,8 +584,8 @@ Markdown 文档存放在 [docs/](file:///workspace/docs/) 目录，通过 `/docs
 | `polls` | 投票 | — |
 | `poll_options` | 投票选项 | 外键 `poll_id` 级联删除 |
 | `poll_votes` | 投票记录 | 唯一约束 `(poll_id, user_id, option_id)` 防重复投票 |
-| `board_topics` | 留言板主题 | 外键 `user_id` 级联删除 |
-| `board_replies` | 留言板回复 | 外键 `topic_id` 级联删除，`attachment` 存 JSON 数组 |
+| `board_topics` | 征集主题 | 外键 `user_id` 级联删除 |
+| `board_replies` | 征集回复 | 外键 `topic_id` 级联删除，`attachment` 存 JSON 数组 |
 | `mod_intros` | 模组介绍 | — |
 | `cmd_commands` | 一键命令 | 名称 / 命令 / 描述 / 排序 / 类型 |
 | `scripts` | **统一脚本表** | **name / description / content / script_type（数据库存储，无文件系统依赖）** |
@@ -579,6 +597,9 @@ Markdown 文档存放在 [docs/](file:///workspace/docs/) 目录，通过 `/docs
 | `settings` | **系统设置** | **key 唯一，存储用户自定义配置，支持热重载** |
 | `server_guides` | **服务器指南** | **title / slug / summary / content(Markdown) / status / author_id / is_pinned / 按标题自动排序** |
 | `guide_edit_bans` | **指南编辑封禁** | **user_id / ip_address / banned_by / reason / expires_at** |
+| `discussion_categories` | **讨论分类** | **slug 唯一，支持排序** |
+| `discussion_topics` | **讨论帖子** | **外键 `user_id`，支持分类/标签/附件/置顶/锁定/浏览量** |
+| `discussion_replies` | **讨论回复** | **外键 `topic_id`，支持附件，JSON 存储** |
 
 所有外键均启用 `enable_foreign_keys` 和 `ON DELETE CASCADE`。
 
@@ -841,7 +862,7 @@ server {
 - 自动动态获取当前数据库名（如 `site`），避免硬编码 `main` 导致的兼容性问题
 - 备份失败时自动清理残留临时文件
 
-**留言板附件（恢复简单机制）**
+**征集附件（恢复简单机制）**
 - 支持单次回复上传多个附件，后端使用 `request.files.getlist('attachments')` 遍历保存
 - 支持多次点击“添加附件”追加文件：前端使用 `DataTransfer` 累积历次选择的文件，避免后一次选择覆盖前一次
 - 附件以 JSON 文件名数组形式存储在 `board_replies.attachment`，保持与旧版一致

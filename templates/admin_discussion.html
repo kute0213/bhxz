@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}讨论管理{% endblock %}
+{% block content %}
+<section class="page-container py-12">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-8">
+            <div>
+                <a href="{{ url_for('admin.admin_page') }}" class="text-gold-400 hover:text-gold-300 text-sm mb-2 inline-block">
+                    <i data-lucide="arrow-left" class="w-4 h-4 inline mr-1"></i>返回管理中心
+                </a>
+                <h1 class="text-xl sm:text-2xl font-bold">讨论管理</h1>
+                <p class="text-cream/60 text-sm mt-1">共 {{ topics|length }} 个帖子</p>
+            </div>
+            <a href="{{ url_for('admin.admin_categories') }}" class="btn-secondary px-4 py-2 rounded-lg text-sm">
+                <i data-lucide="tags" class="w-4 h-4 inline mr-1"></i>分类管理
+            </a>
+        </div>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        {% for category, message in messages %}
+        <div class="mb-4 p-4 rounded-lg text-sm flex items-center gap-2
+                    {% if category == 'error' %}bg-red-900/30 border border-red-500/30 text-red-300
+                    {% else %}bg-green-900/30 border border-green-500/30 text-green-300{% endif %}">
+            <i data-lucide="{% if category == 'error' %}alert-circle{% else %}check-circle{% endif %}" class="w-5 h-5 flex-shrink-0"></i>
+            {{ message }}
+        </div>
+        {% endfor %}
+        {% endif %}
+        {% endwith %}
+
+        {% if topics %}
+        <div class="pixel-card rounded-xl overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="border-b border-forest-700/50">
+                            <th class="text-left px-4 py-3 text-cream/60 font-medium">ID</th>
+                            <th class="text-left px-4 py-3 text-cream/60 font-medium">标题</th>
+                            <th class="text-left px-4 py-3 text-cream/60 font-medium">作者</th>
+                            <th class="text-left px-4 py-3 text-cream/60 font-medium">分类</th>
+                            <th class="text-center px-4 py-3 text-cream/60 font-medium">回复</th>
+                            <th class="text-center px-4 py-3 text-cream/60 font-medium">浏览</th>
+                            <th class="text-center px-4 py-3 text-cream/60 font-medium">状态</th>
+                            <th class="text-right px-4 py-3 text-cream/60 font-medium">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for topic in topics %}
+                        <tr class="border-b border-forest-700/30 hover:bg-forest-800/30">
+                            <td class="px-4 py-3 text-cream/60">{{ topic.id }}</td>
+                            <td class="px-4 py-3">
+                                <a href="{{ url_for('discussion.detail', topic_id=topic.id) }}" class="text-cream/90 hover:text-gold-400 transition-colors">
+                                    {{ topic.title[:50] }}{% if topic.title|length > 50 %}...{% endif %}
+                                </a>
+                            </td>
+                            <td class="px-4 py-3 text-cream/70">{{ topic.username }}</td>
+                            <td class="px-4 py-3 text-cream/60">{{ cat_dict.get(topic.category_id, '未分类') }}</td>
+                            <td class="px-4 py-3 text-center text-cream/60">{{ topic.reply_count }}</td>
+                            <td class="px-4 py-3 text-center text-cream/60">{{ topic.view_count }}</td>
+                            <td class="px-4 py-3 text-center">
+                                {% if topic.is_pinned %}
+                                <span class="inline-block px-2 py-1 bg-red-500/20 text-red-300 rounded text-xs font-medium">置顶</span>
+                                {% endif %}
+                                {% if topic.is_locked %}
+                                <span class="inline-block px-2 py-1 bg-yellow-500/20 text-yellow-300 rounded text-xs font-medium">锁定</span>
+                                {% endif %}
+                                {% if not topic.is_pinned and not topic.is_locked %}
+                                <span class="text-cream/40 text-xs">正常</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-4 py-3">
+                                <div class="flex items-center justify-end gap-2">
+                                    <form method="POST" action="{{ url_for('admin.admin_toggle_pin', topic_id=topic.id) }}" class="inline">
+                                        <button type="submit" class="px-2 py-1 rounded text-xs border border-cream/20 text-cream/60 hover:text-cream hover:border-cream/40 transition-colors"
+                                                title="{% if topic.is_pinned %}取消置顶{% else %}置顶{% endif %}">
+                                            <i data-lucide="pin" class="w-3 h-3"></i>
+                                        </button>
+                                    </form>
+                                    <form method="POST" action="{{ url_for('admin.admin_toggle_lock', topic_id=topic.id) }}" class="inline">
+                                        <button type="submit" class="px-2 py-1 rounded text-xs border border-cream/20 text-cream/60 hover:text-cream hover:border-cream/40 transition-colors"
+                                                title="{% if topic.is_locked %}解锁{% else %}锁定{% endif %}">
+                                            <i data-lucide="lock" class="w-3 h-3"></i>
+                                        </button>
+                                    </form>
+                                    <form method="POST" action="{{ url_for('admin.admin_delete_topic', topic_id=topic.id) }}" class="inline"
+                                          onsubmit="return confirm('确定要删除此帖子吗？')">
+                                        <button type="submit" class="px-2 py-1 rounded text-xs border border-red-500/30 text-red-300 hover:bg-red-500/10 transition-colors"
+                                                title="删除">
+                                            <i data-lucide="trash-2" class="w-3 h-3"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% else %}
+        <div class="pixel-card rounded-xl p-12 text-center">
+            <i data-lucide="message-square" class="w-12 h-12 mx-auto text-cream/20 mb-4"></i>
+            <p class="text-cream/50">暂无帖子</p>
+        </div>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

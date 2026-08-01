@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block title %}讨论{% endblock %}
+{% block content %}
+<section class="page-container py-12">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        {% for category, message in messages %}
+        <div class="mb-4 p-4 rounded-2xl text-sm flex items-center gap-2
+                    {% if category == 'error' %}bg-red-900/30 border border-red-500/30 text-red-300
+                    {% else %}bg-green-900/30 border border-green-500/30 text-green-300{% endif %}">
+            <i data-lucide="{% if category == 'error' %}alert-circle{% else %}check-circle{% endif %}" class="w-5 h-5 flex-shrink-0"></i>
+            {{ message }}
+        </div>
+        {% endfor %}
+        {% endif %}
+        {% endwith %}
+
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
+            <div>
+                <h1 class="text-2xl sm:text-3xl font-bold">讨论</h1>
+                <p class="text-cream/60 text-sm mt-1">交流分享，畅所欲言</p>
+            </div>
+            {% if user %}
+            <a href="{{ url_for('discussion.create') }}" class="btn-primary px-5 py-2.5 rounded-lg text-sm font-bold flex items-center gap-2">
+                <i data-lucide="plus" class="w-4 h-4"></i>
+                发帖
+            </a>
+            {% endif %}
+        </div>
+
+        <!-- 分类筛选 -->
+        <div class="flex flex-wrap gap-2 mb-6">
+            <a href="{{ url_for('discussion.list') }}"
+               class="px-4 py-1.5 rounded-lg text-sm transition-colors {% if not category_id %}bg-gold-400/20 text-gold-400 border border-gold-400/30{% else %}text-cream/60 hover:text-cream border border-transparent hover:border-cream/20{% endif %}">
+                全部
+            </a>
+            {% for cat in categories %}
+            <a href="{{ url_for('discussion.list', category=cat.id) }}"
+               class="px-4 py-1.5 rounded-lg text-sm transition-colors {% if category_id == cat.id %}bg-gold-400/20 text-gold-400 border border-gold-400/30{% else %}text-cream/60 hover:text-cream border border-transparent hover:border-cream/20{% endif %}">
+                {{ cat.name }}
+            </a>
+            {% endfor %}
+        </div>
+
+        <!-- 帖子列表 -->
+        {% if topics %}
+        <div class="space-y-3">
+            {% for topic in topics %}
+            <a href="{{ url_for('discussion.detail', topic_id=topic.id) }}"
+               class="pixel-card rounded-xl p-4 sm:p-5 flex items-start gap-4 hover:bg-forest-700/40 transition-colors group">
+                <div class="flex-1 min-w-0">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        {% if topic.is_pinned %}
+                        <span class="px-2 py-0.5 rounded text-xs font-bold bg-red-500/20 text-red-300 border border-red-500/30">置顶</span>
+                        {% endif %}
+                        {% if topic.is_locked %}
+                        <span class="px-2 py-0.5 rounded text-xs font-bold bg-yellow-500/20 text-yellow-300 border border-yellow-500/30">已锁定</span>
+                        {% endif %}
+                        <h3 class="text-base sm:text-lg font-bold text-cream group-hover:text-gold-400 transition-colors truncate">
+                            {{ topic.title }}
+                        </h3>
+                    </div>
+                    <div class="flex items-center gap-3 mt-2 text-xs text-cream/50">
+                        <span class="flex items-center gap-1">
+                            <i data-lucide="user" class="w-3 h-3"></i>
+                            {{ topic.username }}
+                        </span>
+                        <span>{{ topic.created_at[:10] }}</span>
+                        {% if topic.category_id %}
+                        <span class="px-2 py-0.5 rounded bg-forest-700/50 text-cream/60">{{ topic.category_name or '' }}</span>
+                        {% endif %}
+                        {% if topic.tags %}
+                        <span class="flex items-center gap-1">
+                            <i data-lucide="tag" class="w-3 h-3"></i>
+                            {{ topic.tags }}
+                        </span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="flex items-center gap-4 text-xs text-cream/50 flex-shrink-0">
+                    <div class="text-center">
+                        <div class="font-bold text-sm text-cream/70">{{ topic.reply_count }}</div>
+                        <div>回复</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="font-bold text-sm text-cream/70">{{ topic.view_count }}</div>
+                        <div>浏览</div>
+                    </div>
+                </div>
+            </a>
+            {% endfor %}
+        </div>
+
+        <!-- 分页 -->
+        {% if total_pages > 1 %}
+        <div class="flex items-center justify-center gap-2 mt-8">
+            {% if page > 1 %}
+            <a href="{{ url_for('discussion.list', page=page-1, category=category_id) }}"
+               class="px-4 py-2 rounded-lg text-sm border border-cream/20 text-cream/70 hover:text-cream hover:border-cream/40 transition-colors">
+                上一页
+            </a>
+            {% endif %}
+            {% for p in range(1, total_pages + 1) %}
+            {% if p == page %}
+            <span class="px-4 py-2 rounded-lg text-sm bg-gold-400/20 text-gold-400 border border-gold-400/30">{{ p }}</span>
+            {% else %}
+            <a href="{{ url_for('discussion.list', page=p, category=category_id) }}"
+               class="px-4 py-2 rounded-lg text-sm border border-cream/20 text-cream/70 hover:text-cream hover:border-cream/40 transition-colors">{{ p }}</a>
+            {% endif %}
+            {% endfor %}
+            {% if page < total_pages %}
+            <a href="{{ url_for('discussion.list', page=page+1, category=category_id) }}"
+               class="px-4 py-2 rounded-lg text-sm border border-cream/20 text-cream/70 hover:text-cream hover:border-cream/40 transition-colors">
+                下一页
+            </a>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {% else %}
+        <div class="pixel-card rounded-xl p-12 text-center">
+            <i data-lucide="message-square" class="w-12 h-12 mx-auto text-cream/20 mb-4"></i>
+            <p class="text-cream/50">暂无帖子</p>
+            {% if user %}
+            <a href="{{ url_for('discussion.create') }}" class="btn-primary px-5 py-2.5 rounded-lg text-sm font-bold inline-block mt-4">
+                发布第一个帖子
+            </a>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

@@ -45,19 +45,30 @@ def guide_list():
 
 @guides_bp.route('/guides/<slug>')
 def guide_detail(slug):
-    """公开指南详情页（仅展示已审核通过的）。"""
+    """公开指南详情页（已审核通过的可公开访问；作者可查看自己的待审核指南）。"""
     user = get_current_user()
     conn = get_db()
     try:
-        row = conn.execute(
-            """
-            SELECT g.*, u.username as author_name
-            FROM server_guides g
-            LEFT JOIN users u ON g.author_id = u.id
-            WHERE g.slug = ? AND g.status = 'approved'
-            """,
-            (slug,),
-        ).fetchone()
+        if user:
+            row = conn.execute(
+                """
+                SELECT g.*, u.username as author_name
+                FROM server_guides g
+                LEFT JOIN users u ON g.author_id = u.id
+                WHERE g.slug = ? AND (g.status = 'approved' OR g.author_id = ?)
+                """,
+                (slug, user['id']),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                """
+                SELECT g.*, u.username as author_name
+                FROM server_guides g
+                LEFT JOIN users u ON g.author_id = u.id
+                WHERE g.slug = ? AND g.status = 'approved'
+                """,
+                (slug,),
+            ).fetchone()
     finally:
         conn.close()
 
@@ -127,9 +138,9 @@ def guide_edit(guide_id):
 
     guide = dict(row)
 
-    # 只能编辑自己的指南
-    if guide['author_id'] != user['id']:
-        abort(403)
+    # 任何登录用户都可以提交修改
+    if guide['author_id'] != user['id'] and not user.get('is_admin'):
+        flash('注意：你不是原作者，修改后需管理员审核', 'info')
 
     if request.method == 'POST':
         title = (request.form.get('title') or '').strip()
@@ -156,7 +167,7 @@ def guide_edit(guide_id):
             )
             conn.commit()
             flash('修改已提交，等待管理员审核', 'success')
-            return redirect(url_for('guides.guide_list', my=1))
+            return redirect(url_for('guides.guide_detail', slug=slug))
         except Exception as e:
             conn.rollback()
             flash(f'修改失败: {e}', 'error')

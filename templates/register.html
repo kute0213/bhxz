@@ -27,19 +27,19 @@
                     </div>
                     <div>
                         <label class="block text-sm font-medium mb-2 text-cream/80">密码</label>
-                        <input type="password" name="password" required minlength="6" class="input-field w-full px-4 py-3 rounded-lg" placeholder="至少 6 位">
+                        <input type="password" name="password" required minlength="8" class="input-field w-full px-4 py-3 rounded-lg" placeholder="至少 8 位，需包含字母">
                     </div>
                     <div>
                         <label class="block text-sm font-medium mb-2 text-cream/80">确认密码</label>
-                        <input type="password" name="confirm" required minlength="6" class="input-field w-full px-4 py-3 rounded-lg" placeholder="再次输入密码">
+                        <input type="password" name="confirm" required minlength="8" class="input-field w-full px-4 py-3 rounded-lg" placeholder="再次输入密码">
                     </div>
                     <div>
                         <label class="block text-sm font-medium mb-2 text-cream/80">验证码</label>
                         <div class="flex flex-wrap gap-2 sm:gap-3 items-center">
                             <input type="text" name="captcha" required class="input-field flex-1 min-w-[120px] px-4 py-3 rounded-lg" placeholder="请输入答案">
-                            <input type="hidden" name="captcha_id" id="captcha-id" value="">
+                            <input type="hidden" name="captcha_id" id="captcha-id" value="{{ captcha_id or '' }}">
                             <div class="flex items-center gap-1.5">
-                                <img id="captcha-img" src="" alt="验证码" class="h-11 sm:h-12 rounded cursor-pointer hover:opacity-80 transition-opacity border border-forest-700/50" title="点击刷新">
+                                <img id="captcha-img" src="{% if captcha_image %}{{ captcha_image }}{% else %}{% endif %}" alt="验证码" class="h-11 sm:h-12 rounded cursor-pointer hover:opacity-80 transition-opacity border border-forest-700/50" title="点击刷新">
                                 <button type="button" onclick="loadCaptcha()" class="p-1.5 text-cream/50 hover:text-gold-400 transition-colors rounded-lg hover:bg-cream/5" title="刷新验证码">
                                     <i data-lucide="refresh-cw" class="w-4 h-4"></i>
                                 </button>
@@ -196,7 +196,10 @@ document.getElementById('captcha-img').addEventListener('click', loadCaptcha);
                 savedGroupCode = window.__getGroupCodeCache || '';
                 modal.style.display = 'none';
                 formSection.style.display = 'flex';
-                loadCaptcha();
+                // 只有在没有服务端提供的验证码图片时才加载新验证码
+                if (!document.getElementById('captcha-img').getAttribute('src')) {
+                    loadCaptcha();
+                }
                 if (window.lucide) lucide.createIcons();
             } else {
                 // 如果服务端显示已验证但 API 返回未验证，仍显示弹窗
@@ -213,7 +216,10 @@ document.getElementById('captcha-img').addEventListener('click', loadCaptcha);
 
     // 如果页面加载时已经显示表单（group_code_verified=true），且已有错误信息，加载验证码
     if (formSection.style.display === 'flex') {
-        loadCaptcha();
+        // 只有在没有服务端提供的验证码图片时才加载新验证码
+        if (!document.getElementById('captcha-img').getAttribute('src')) {
+            loadCaptcha();
+        }
         if (window.lucide) lucide.createIcons();
     }
 

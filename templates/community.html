@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}社区活动{% endblock %}
+{% block title %}投票与征集{% endblock %}
 {% block content %}
     <section class="page-container py-12">
         <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -16,7 +16,7 @@
             {% endif %}
             {% endwith %}
             <div class="text-center mb-10 sm:mb-12">
-                <h1 class="text-2xl sm:text-3xl font-bold mb-3">社区活动</h1>
+                <h1 class="text-2xl sm:text-3xl font-bold mb-3">投票与征集</h1>
                 <p class="text-cream/60 text-sm sm:text-base">参与投票，畅聊分享</p>
             </div>
 
@@ -140,23 +140,23 @@
                 {% endif %}
             </div>
 
-            <!-- 留言板区域 -->
+            <!-- 征集区域 -->
             <div id="board" class="mb-12">
                 <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
                     <h2 class="text-xl font-bold flex items-center gap-2">
                         <i data-lucide="message-square" class="w-5 h-5 text-gold-400"></i>
-                        留言板
+                        征集
                     </h2>
                     {% if user and user.is_admin %}
                     <button onclick="toggleTopicForm()" class="btn-secondary px-4 py-2 rounded-lg text-sm">
-                        <i data-lucide="plus" class="w-4 h-4 inline mr-1"></i>新建留言板
+                        <i data-lucide="plus" class="w-4 h-4 inline mr-1"></i>新建征集
                     </button>
                     {% endif %}
                 </div>
 
                 {% if user and user.is_admin %}
                 <div id="topic-form" class="pixel-card rounded-xl p-6 mb-6 hidden">
-                    <h3 class="text-lg font-bold mb-4">新建留言板主题</h3>
+                    <h3 class="text-lg font-bold mb-4">新建征集主题</h3>
                     <form method="POST" action="{{ url_for('community.create_board_topic') }}" class="space-y-4">
                         <div>
                             <label class="block text-sm font-medium mb-2 text-cream/80">主题标题</label>
@@ -185,7 +185,7 @@
                                 {% endif %}
                             </div>
                             {% if user and user.is_admin %}
-                            <form method="POST" action="{{ url_for('community.delete_board_topic', topic_id=topic.id) }}" onsubmit="return confirm('确定删除这个留言板吗？所有回复也会被删除。')">
+                            <form method="POST" action="{{ url_for('community.delete_board_topic', topic_id=topic.id) }}" onsubmit="return confirm('确定删除这个征集吗？所有回复也会被删除。')">
                                 <button type="submit" class="text-red-400 hover:text-red-300 text-sm">
                                     <i data-lucide="trash-2" class="w-4 h-4"></i>
                                 </button>
@@ -245,14 +245,14 @@
                                 </button>
                             </div>
                             <div class="flex items-center gap-2 flex-wrap">
-                                <label class="flex items-center gap-1.5 text-cream/50 text-xs cursor-pointer hover:text-gold-400 transition-colors">
+                                <button type="button" class="reply-attach-btn btn-secondary px-3 py-1.5 rounded-lg text-xs flex items-center gap-1" data-topic-id="{{ topic.id }}">
                                     <i data-lucide="paperclip" class="w-3.5 h-3.5"></i>
-                                    <span>添加附件</span>
-                                    <input type="file" name="attachments" multiple class="hidden" onchange="updateFileList(this, 'file-list-{{ topic.id }}')">
-                                </label>
+                                    选择附件
+                                </button>
                                 <span class="text-cream/30 text-xs ml-auto">支持上传多个附件</span>
                             </div>
-                            <div id="file-list-{{ topic.id }}" class="flex flex-wrap gap-1 hidden"></div>
+                            <input type="file" class="reply-attach-input hidden" name="attachments" multiple data-topic-id="{{ topic.id }}">
+                            <div class="reply-attach-list mt-2 space-y-1.5" data-topic-id="{{ topic.id }}"></div>
                         </form>
                         {% else %}
                         <div class="text-center py-3 bg-forest-900/50 rounded-lg">
@@ -265,9 +265,9 @@
                 {% else %}
                 <div class="text-center py-10 pixel-card rounded-xl">
                     <i data-lucide="message-square" class="w-10 h-10 text-cream/30 mx-auto mb-4"></i>
-                    <p class="text-cream/60">暂无留言板</p>
+                    <p class="text-cream/60">暂无征集</p>
                     {% if user and user.is_admin %}
-                    <p class="text-cream/40 text-sm mt-2">点击上方"新建留言板"创建一个主题</p>
+                    <p class="text-cream/40 text-sm mt-2">点击上方"新建征集"创建一个主题</p>
                     {% endif %}
                 </div>
                 {% endif %}
@@ -293,37 +293,69 @@
                 form.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }
         }
-        function updateFileList(input, listId) {
-            const list = document.getElementById(listId);
-            if (!list) return;
 
-            // 累积已选文件：支持多次点击“添加附件”追加文件
-            const existing = input._selectedFiles || [];
-            const selected = Array.from(input.files);
-            const mergedMap = new Map();
-            existing.concat(selected).forEach(function (f) {
-                mergedMap.set(f.name + '|' + f.size + '|' + f.lastModified, f);
+        // 附件管理：支持多个回复表单独立管理
+        document.addEventListener('DOMContentLoaded', function() {
+            function formatSize(bytes) {
+                if (bytes < 1024) return bytes + ' B';
+                if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
+                return (bytes / 1048576).toFixed(1) + ' MB';
+            }
+
+            // 为每个回复表单初始化附件管理
+            document.querySelectorAll('.reply-attach-btn').forEach(function(btn) {
+                var topicId = btn.getAttribute('data-topic-id');
+                var input = document.querySelector('.reply-attach-input[data-topic-id="' + topicId + '"]');
+                var list = document.querySelector('.reply-attach-list[data-topic-id="' + topicId + '"]');
+                if (!input) return;
+
+                var fileArray = [];
+
+                function renderAttachments() {
+                    var dt = new DataTransfer();
+                    fileArray.forEach(function(f) { dt.items.add(f); });
+                    input.files = dt.files;
+
+                    if (fileArray.length === 0) {
+                        list.innerHTML = '';
+                        return;
+                    }
+                    var html = '';
+                    fileArray.forEach(function(f, idx) {
+                        html +=
+                            '<div class="flex items-center justify-between px-3 py-2 rounded-lg bg-forest-900/40 border border-forest-700/50">' +
+                            '  <div class="flex items-center gap-2 min-w-0">' +
+                            '    <i data-lucide="file" class="w-3.5 h-3.5 text-cream/40 flex-shrink-0"></i>' +
+                            '    <span class="text-xs text-cream/80 truncate">' + f.name + '</span>' +
+                            '    <span class="text-xs text-cream/40 flex-shrink-0">(' + formatSize(f.size) + ')</span>' +
+                            '  </div>' +
+                            '  <button type="button" data-index="' + idx + '" class="remove-attach text-red-300/50 hover:text-red-300 transition-colors p-0.5 flex-shrink-0">' +
+                            '    <i data-lucide="x" class="w-3.5 h-3.5"></i>' +
+                            '  </button>' +
+                            '</div>';
+                    });
+                    list.innerHTML = html;
+                    if (window.lucide) lucide.createIcons();
+
+                    list.querySelectorAll('.remove-attach').forEach(function(rmBtn) {
+                        rmBtn.addEventListener('click', function() {
+                            fileArray.splice(parseInt(this.getAttribute('data-index')), 1);
+                            renderAttachments();
+                        });
+                    });
+                }
+
+                btn.addEventListener('click', function() { input.click(); });
+
+                input.addEventListener('change', function() {
+                    Array.from(this.files).forEach(function(f) {
+                        var exists = fileArray.some(function(ef) { return ef.name === f.name && ef.size === f.size; });
+                        if (!exists) fileArray.push(f);
+                    });
+                    renderAttachments();
+                    this.value = '';
+                });
             });
-            const merged = Array.from(mergedMap.values());
-
-            // 通过 DataTransfer 写回 input.files，确保表单提交时带上全部文件
-            if (merged.length > 0 && 'DataTransfer' in window) {
-                var dt = new DataTransfer();
-                merged.forEach(function (f) { dt.items.add(f); });
-                input.files = dt.files;
-            }
-            input._selectedFiles = merged;
-
-            const names = merged.map(function (f) { return f.name; });
-            if (names.length > 0) {
-                list.innerHTML = names.map(function (n) {
-                    return '<span class="bg-forest-700 px-2 py-0.5 rounded text-cream/80 text-xs">' + n + '</span>';
-                }).join('');
-                list.classList.remove('hidden');
-            } else {
-                list.innerHTML = '';
-                list.classList.add('hidden');
-            }
-        }
+        });
     </script>
 {% endblock %}

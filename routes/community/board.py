@@ -1,4 +1,4 @@
-"""留言板路由：创建主题、回复、删除主题/回复（含附件管理）。"""
+"""征集路由：创建主题、回复、删除主题/回复（含附件管理）。"""
 
 import json
 import os
@@ -13,6 +13,7 @@ from core.db import get_db
 from config import UPLOAD_DIR
 from routes.community import community_bp
 from routes.community.helpers import _respond
+from services.logger import log
 
 
 @community_bp.route('/board/create', methods=['POST'])
@@ -38,9 +39,11 @@ def create_board_topic():
             (user['id'], title, description, now)
         )
         conn.commit()
-        return _respond('留言板已创建', 'success')
+        log('Board', '创建征集', user_id=user['id'], username=user['username'], title=title, ip=request.remote_addr)
+        return _respond('征集已创建', 'success')
     except Exception:
         conn.rollback()
+        log('Board', '创建征集失败', user_id=user['id'], username=user['username'], title=title, ip=request.remote_addr)
         return _respond('创建失败，请重试', 'error')
     finally:
         conn.close()
@@ -60,7 +63,7 @@ def reply_board(topic_id):
     try:
         topic = conn.execute("SELECT id, is_active FROM board_topics WHERE id = ?", (topic_id,)).fetchone()
         if not topic or not topic['is_active']:
-            return _respond('留言板不存在或已关闭', 'error')
+            return _respond('征集不存在或已关闭', 'error')
 
         # 处理多附件上传 (恢复旧版简单逻辑)
         attachment_files = request.files.getlist('attachments')
@@ -82,6 +85,7 @@ def reply_board(topic_id):
             (topic_id, user['id'], content, attachment_filename, now)
         )
         conn.commit()
+        log('Board', '回复征集', user_id=user['id'], username=user['username'], topic_id=topic_id, ip=request.remote_addr)
         return _respond('回复成功', 'success')
     except Exception:
         try:
@@ -96,6 +100,7 @@ def reply_board(topic_id):
                     os.remove(filepath)
                 except OSError:
                     pass
+        log('Board', '回复征集失败', user_id=user['id'], username=user['username'], topic_id=topic_id, ip=request.remote_addr)
         return _respond('回复失败，请重试', 'error')
     finally:
         conn.close()
@@ -131,9 +136,11 @@ def delete_board_topic(topic_id):
         conn.execute("DELETE FROM board_replies WHERE topic_id = ?", (topic_id,))
         conn.execute("DELETE FROM board_topics WHERE id = ?", (topic_id,))
         conn.commit()
-        return _respond('留言板已删除', 'success')
+        log('Board', '删除征集', user_id=user['id'], username=user['username'], topic_id=topic_id, ip=request.remote_addr)
+        return _respond('征集已删除', 'success')
     except Exception:
         conn.rollback()
+        log('Board', '删除征集失败', user_id=user['id'], username=user['username'], topic_id=topic_id, ip=request.remote_addr)
         return _respond('删除失败', 'error')
     finally:
         conn.close()
@@ -171,12 +178,14 @@ def delete_board_reply(reply_id):
 
         conn.execute("DELETE FROM board_replies WHERE id = ?", (reply_id,))
         conn.commit()
+        log('Board', '删除回复', user_id=user['id'], username=user['username'], reply_id=reply_id, topic_id=reply['topic_id'], ip=request.remote_addr)
         return _respond('回复已删除', 'success')
     except Exception:
         try:
             conn.rollback()
         except Exception:
             pass
+        log('Board', '删除回复失败', user_id=user['id'], username=user['username'], reply_id=reply_id, ip=request.remote_addr)
         return _respond('删除失败', 'error')
     finally:
         conn.close()

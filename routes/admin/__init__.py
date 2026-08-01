@@ -17,3 +17,4 @@ from routes.admin import logs         # noqa: E402,F401
 from routes.admin import backup       # noqa: E402,F401
 from routes.admin import settings     # noqa: E402,F401
 from routes.admin import broadcast    # noqa: E402,F401
+from routes.admin import discussion   # noqa: E402,F401

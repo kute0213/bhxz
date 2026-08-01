@@ -9,6 +9,7 @@ from core.auth import login_required, get_current_user
 from core.db import get_db
 from config import UPLOAD_DIR
 from routes.admin import admin_bp
+from services.logger import log
 
 
 @admin_bp.route('/admin/users')
@@ -52,6 +53,7 @@ def admin_toggle_admin(user_id):
         new_status = 0 if target['is_admin'] else 1
         conn.execute("UPDATE users SET is_admin = ? WHERE id = ?", (new_status, user_id))
         conn.commit()
+        log('Admin', '切换管理员权限', admin_user=user['username'], target_user_id=user_id, new_status=new_status, ip=request.remote_addr)
     except Exception:
         try:
             conn.rollback()
@@ -108,9 +110,11 @@ def admin_delete_user(user_id):
         conn.execute("DELETE FROM board_topics WHERE user_id = ?", (user_id,))
         conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
         conn.commit()
+        log('Admin', '删除用户', admin_user=user['username'], target_user_id=user_id, ip=request.remote_addr)
         flash('用户已删除', 'success')
     except Exception:
         conn.rollback()
+        log('Admin', '删除用户失败', admin_user=user['username'], target_user_id=user_id, ip=request.remote_addr)
         flash('删除失败，请重试', 'error')
     finally:
         conn.close()

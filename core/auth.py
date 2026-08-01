@@ -19,6 +19,15 @@ def hash_password(password: str) -> str:
     return hashlib.sha256(password.encode('utf-8')).hexdigest()
 
 
+def validate_password(password: str) -> str | None:
+    """校验密码强度，返回 None 表示通过，否则返回错误描述。"""
+    if len(password) < 8:
+        return '密码至少 8 位'
+    if not any(c.isalpha() for c in password):
+        return '密码必须包含至少一个字母'
+    return None
+
+
 def verify_password(password: str, password_hash: str) -> bool:
     """校验密码是否匹配哈希值。"""
     return hash_password(password) == password_hash

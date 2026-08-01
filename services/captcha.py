@@ -20,6 +20,18 @@ Image = None
 ImageDraw = None
 ImageFont = None
 
+# 简单日志输出
+_log_lock = threading.Lock()
+
+
+def _log(event: str, detail: str = '', **kwargs):
+    """输出格式化的日志信息。"""
+    now = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
+    parts = [f'[{now}] [CaptchaService]', f'[{event}]', detail]
+    for k, v in kwargs.items():
+        parts.append(f'{k}={v}')
+    print(' '.join(parts), flush=True)
+
 
 def _check_pil():
     """检查 Pillow 是否可用，延迟加载。"""
@@ -209,7 +221,9 @@ class CaptchaService:
         while True:
             time.sleep(60)
             try:
-                self.cleanup_expired()
+                expired_count = self.cleanup_expired()
+                if expired_count > 0:
+                    _log('Cleanup', f'清理过期验证码 {expired_count} 个', remaining=len(self._captchas))
             except Exception as e:
                 # 后台线程不应因异常退出
                 print(f'[Captcha] 清理过期验证码失败: {e}', flush=True)
@@ -226,13 +240,29 @@ class CaptchaService:
         with self._lock:
             self._captchas[captcha_id] = {
                 'answer': answer,
+                'image': image_data,  # 存图片数据，页面刷新后可复用
                 'expire': now + self._expire_seconds,
                 'created_at': now,
             }
         return captcha_id, answer, image_data
 
+    def get_image(self, captcha_id: str) -> str | None:
+        """获取已生成验证码的图片数据（用于页面刷新后复用，无需重新生成）。"""
+        if not captcha_id:
+            return None
+        with self._lock:
+            entry = self._captchas.get(captcha_id)
+            if not entry:
+                return None
+            return entry.get('image')
+
     def verify(self, captcha_id: str, user_input: str) -> bool:
-        """校验验证码并一次性删除（防止重放攻击）。
+        """校验验证码（不消耗，可多次校验，防止误判导致用户需要重新输入）。
+
+        安全机制：
+        - 验证码过期时间 300 秒，超时自动失效
+        - 注册成功后调用 consume() 主动删除，防止重放
+        - IP 频率限制 + 验证码过期双重防护
 
         Args:
             captcha_id: 验证码 ID
@@ -242,24 +272,42 @@ class CaptchaService:
             是否正确
         """
         if not captcha_id or not user_input:
+            _log('Verify', '参数为空', captcha_id=captcha_id)
             return False
         with self._lock:
-            # 一次性取出并删除，无论校验是否成功都防止重放
-            entry = self._captchas.pop(captcha_id, None)
+            entry = self._captchas.get(captcha_id)
             if not entry:
+                _log('Verify', '验证码不存在或已消耗', captcha_id=captcha_id)
                 return False
-            # 过期校验
             if time.time() > entry['expire']:
+                _log('Verify', '验证码已过期', captcha_id=captcha_id)
                 return False
-            return user_input.strip() == entry['answer'].strip()
+            result = user_input.strip() == entry['answer'].strip()
+            if not result:
+                _log('Verify', '验证码答案错误', captcha_id=captcha_id)
+            return result
 
-    def cleanup_expired(self):
-        """清理过期的验证码。"""
+    def consume(self, captcha_id: str):
+        """消耗验证码（注册成功后调用，防止重放攻击）。"""
+        if not captcha_id:
+            return
+        with self._lock:
+            if captcha_id in self._captchas:
+                self._captchas.pop(captcha_id)
+                _log('Consume', '验证码已消耗', captcha_id=captcha_id)
+
+    def cleanup_expired(self) -> int:
+        """清理过期的验证码。
+
+        Returns:
+            清理的过期验证码数量
+        """
         now = time.time()
         with self._lock:
             expired = [k for k, v in self._captchas.items() if now > v['expire']]
             for k in expired:
                 del self._captchas[k]
+            return len(expired)
 
 
 # 全局单例

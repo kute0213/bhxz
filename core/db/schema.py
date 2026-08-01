@@ -291,6 +291,48 @@ def init_db():
                 created_at TEXT NOT NULL
             )
         '''),
+        # 讨论分类表
+        ('discussion_categories', '''
+            CREATE SEQUENCE IF NOT EXISTS discussion_categories_id_seq START 1;
+            CREATE TABLE IF NOT EXISTS discussion_categories (
+                id INTEGER PRIMARY KEY DEFAULT nextval('discussion_categories_id_seq'),
+                name VARCHAR NOT NULL,
+                slug VARCHAR UNIQUE NOT NULL,
+                sort_order INTEGER DEFAULT 0,
+                created_at VARCHAR NOT NULL
+            )
+        '''),
+        # 讨论帖子表
+        ('discussion_topics', '''
+            CREATE SEQUENCE IF NOT EXISTS discussion_topics_id_seq START 1;
+            CREATE TABLE IF NOT EXISTS discussion_topics (
+                id INTEGER PRIMARY KEY DEFAULT nextval('discussion_topics_id_seq'),
+                user_id INTEGER NOT NULL,
+                category_id INTEGER,
+                title VARCHAR NOT NULL,
+                content VARCHAR NOT NULL DEFAULT '',
+                tags VARCHAR DEFAULT '',
+                attachment VARCHAR,
+                is_pinned INTEGER DEFAULT 0,
+                is_locked INTEGER DEFAULT 0,
+                view_count INTEGER DEFAULT 0,
+                created_at VARCHAR NOT NULL,
+                updated_at VARCHAR NOT NULL
+            )
+        '''),
+        # 讨论回复表
+        ('discussion_replies', '''
+            CREATE SEQUENCE IF NOT EXISTS discussion_replies_id_seq START 1;
+            CREATE TABLE IF NOT EXISTS discussion_replies (
+                id INTEGER PRIMARY KEY DEFAULT nextval('discussion_replies_id_seq'),
+                topic_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                content VARCHAR NOT NULL,
+                attachment VARCHAR,
+                created_at VARCHAR NOT NULL,
+                updated_at VARCHAR NOT NULL
+            )
+        '''),
     ]
 
     for table_name, ddl in tables:

@@ -2,13 +2,36 @@ import json
 import os
 from datetime import datetime
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash, jsonify, abort
-from core.auth import login_required, get_current_user, hash_password
+from core.auth import login_required, get_current_user, hash_password, validate_password
 from core.db import get_db
 from config import REGISTER_VERIFY_CODE, UPLOAD_DIR, get_config_value
 from services.captcha import captcha_service
 from services.email import normalize_email
+from services.ratelimit import register_limiter, login_limiter
+from services.logger import log
 
 main_bp = Blueprint('main', __name__)
+
+
+def _render_register_error(error: str, new_captcha=False, **kwargs):
+    """渲染注册页面错误。
+
+    Args:
+        error: 错误信息
+        new_captcha: True 时生成新验证码（如验证码答案错误），False 时复用现有验证码
+    """
+    if new_captcha:
+        # 验证码校验失败：生成新验证码，让用户重新输入
+        new_id, _answer, new_image = captcha_service.generate()
+        captcha_id = new_id
+        captcha_image = new_image
+    else:
+        # 其他字段校验失败：保留已有验证码，用户无需重新输入
+        captcha_id = request.form.get('captcha_id', '').strip() if request.method == 'POST' else ''
+        captcha_image = captcha_service.get_image(captcha_id) if captcha_id else None
+    return render_template('register.html', error=error,
+                           captcha_image=captcha_image, captcha_id=captcha_id,
+                           **kwargs)
 
 
 @main_bp.route('/')
@@ -47,40 +70,55 @@ def register():
         email = normalize_email(request.form.get('email', ''))
         email_code = request.form.get('email_code', '').strip()
 
+        # IP 频率限制：每 IP 每分钟最多 5 次注册请求
+        if not register_limiter.check(request.remote_addr or 'unknown'):
+            log('Register', '注册请求过于频繁', ip=request.remote_addr, username=username)
+            return _render_register_error('注册请求过于频繁，请稍后再试',
+                                           email_verify_enabled=email_verify_enabled,
+                                           group_code_verified=group_code_verified)
+
         if len(username) < 2 or len(username) > 20:
-            return render_template('register.html', error='用户名长度应为 2-20 个字符',
-                                   email_verify_enabled=email_verify_enabled,
-                                   group_code_verified=group_code_verified)
-        if len(password) < 6:
-            return render_template('register.html', error='密码至少 6 位',
-                                   email_verify_enabled=email_verify_enabled,
-                                   group_code_verified=group_code_verified)
+            log('Register', '用户名长度不符合要求', username=username, ip=request.remote_addr)
+            return _render_register_error('用户名长度应为 2-20 个字符',
+                                           email_verify_enabled=email_verify_enabled,
+                                           group_code_verified=group_code_verified)
+        pwd_err = validate_password(password)
+        if pwd_err:
+            log('Register', '密码不符合要求', username=username, ip=request.remote_addr)
+            return _render_register_error(pwd_err,
+                                           email_verify_enabled=email_verify_enabled,
+                                           group_code_verified=group_code_verified)
         if password != confirm:
-            return render_template('register.html', error='两次输入的密码不一致',
-                                   email_verify_enabled=email_verify_enabled,
-                                   group_code_verified=group_code_verified)
+            log('Register', '两次密码不一致', username=username, ip=request.remote_addr)
+            return _render_register_error('两次输入的密码不一致',
+                                           email_verify_enabled=email_verify_enabled,
+                                           group_code_verified=group_code_verified)
 
         # 群内验证码校验（由前端弹窗验证后，随表单提交）
         if verify_code != REGISTER_VERIFY_CODE:
-            return render_template('register.html', error='群内验证码错误，请在QQ群公告中获取正确验证码',
-                                   email_verify_enabled=email_verify_enabled,
-                                   group_code_verified=group_code_verified)
+            log('Register', '群内验证码错误', username=username, ip=request.remote_addr)
+            return _render_register_error('群内验证码错误，请在QQ群公告中获取正确验证码',
+                                           email_verify_enabled=email_verify_enabled,
+                                           group_code_verified=group_code_verified)
 
         # 邮箱验证（仅在开启时要求）
         if email_verify_enabled:
             if not email:
-                return render_template('register.html', error='请输入邮箱地址',
-                                       email_verify_enabled=email_verify_enabled,
-                                       group_code_verified=group_code_verified)
+                log('Register', '邮箱为空', username=username, ip=request.remote_addr)
+                return _render_register_error('请输入邮箱地址',
+                                               email_verify_enabled=email_verify_enabled,
+                                               group_code_verified=group_code_verified)
             if not email_code:
-                return render_template('register.html', error='请输入邮箱验证码',
-                                       email_verify_enabled=email_verify_enabled,
-                                       group_code_verified=group_code_verified)
+                log('Register', '邮箱验证码为空', username=username, ip=request.remote_addr)
+                return _render_register_error('请输入邮箱验证码',
+                                               email_verify_enabled=email_verify_enabled,
+                                               group_code_verified=group_code_verified)
             from services.email import email_code_service
             if not email_code_service.verify(email, email_code):
-                return render_template('register.html', error='邮箱验证码错误或已过期',
-                                       email_verify_enabled=email_verify_enabled,
-                                       group_code_verified=group_code_verified)
+                log('Register', '邮箱验证码错误', username=username, email=email, ip=request.remote_addr)
+                return _render_register_error('邮箱验证码错误或已过期',
+                                               email_verify_enabled=email_verify_enabled,
+                                               group_code_verified=group_code_verified)
         else:
             email = ''
 
@@ -88,15 +126,17 @@ def register():
         try:
             existing = conn.execute("SELECT id FROM users WHERE username = ?", (username,)).fetchone()
             if existing:
-                return render_template('register.html', error='该用户名已被注册',
-                                       email_verify_enabled=email_verify_enabled,
-                                       group_code_verified=group_code_verified)
+                log('Register', '用户名已被注册', username=username, ip=request.remote_addr)
+                return _render_register_error('该用户名已被注册',
+                                               email_verify_enabled=email_verify_enabled,
+                                               group_code_verified=group_code_verified)
 
             # 图形验证码校验（放在创建用户前最后一步，避免验证码被过早消耗）
             if not captcha_service.verify(captcha_id, captcha_input):
-                return render_template('register.html', error='验证码错误或已过期',
-                                       email_verify_enabled=email_verify_enabled,
-                                       group_code_verified=group_code_verified)
+                log('Register', '图形验证码错误', username=username, ip=request.remote_addr)
+                return _render_register_error('验证码错误或已过期', new_captcha=True,
+                                               email_verify_enabled=email_verify_enabled,
+                                               group_code_verified=group_code_verified)
 
             password_hash = hash_password(password)
             conn.execute(
@@ -104,6 +144,9 @@ def register():
                 (username, password_hash, email, datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
             )
             conn.commit()
+
+            # 注册成功后消耗验证码，防止重放攻击
+            captcha_service.consume(captcha_id)
 
             # 获取新创建的用户信息并自动登录
             new_user = conn.execute(
@@ -115,14 +158,17 @@ def register():
                 session['username'] = new_user['username']
                 session['is_admin'] = bool(new_user['is_admin'])
                 session.permanent = True
+
+            log('Register', '注册成功', username=username, user_id=new_user['id'], email=email, ip=request.remote_addr)
         except Exception:
             try:
                 conn.rollback()
             except Exception:
                 pass
-            return render_template('register.html', error='注册失败，请稍后重试',
-                                   email_verify_enabled=email_verify_enabled,
-                                   group_code_verified=group_code_verified)
+            log('Register', '注册异常', username=username, ip=request.remote_addr)
+            return _render_register_error('注册失败，请稍后重试',
+                                           email_verify_enabled=email_verify_enabled,
+                                           group_code_verified=group_code_verified)
         finally:
             conn.close()
 
@@ -139,14 +185,17 @@ def verify_group_code():
     code = (data.get('code') or '').strip()
 
     if not code:
+        log('VerifyGroupCode', '群内验证码为空', ip=request.remote_addr)
         return jsonify({'success': False, 'message': '请输入验证码'}), 400
 
     if code != REGISTER_VERIFY_CODE:
+        log('VerifyGroupCode', '群内验证码错误', ip=request.remote_addr)
         return jsonify({'success': False, 'message': '验证码错误，请在QQ群公告中获取正确验证码'}), 400
 
     # 存入 session，刷新页面后无需重新验证
     session['group_code_verified'] = True
     session.permanent = True
+    log('VerifyGroupCode', '群内验证码验证成功', ip=request.remote_addr)
     return jsonify({'success': True, 'message': '验证成功'})
 
 
@@ -166,9 +215,11 @@ def login():
 
         # 验证码校验（服务端内存存储，一次性删除防止重放）
         if not captcha_service.verify(captcha_id, captcha_input):
+            log('Login', '验证码错误', username=username, ip=request.remote_addr)
             return render_template('login.html', error='验证码错误或已过期')
 
         if not username or not password:
+            log('Login', '用户名或密码为空', ip=request.remote_addr)
             return render_template('login.html', error='请输入用户名和密码')
 
         password_hash = hash_password(password)
@@ -187,12 +238,15 @@ def login():
                 pass
 
         if not user:
+            log('Login', '用户名或密码错误', username=username, ip=request.remote_addr)
             return render_template('login.html', error='用户名或密码错误')
 
         session['user_id'] = user['id']
         session['username'] = user['username']
         session['is_admin'] = bool(user['is_admin'])
         session.permanent = True
+
+        log('Login', '登录成功', username=username, user_id=user['id'], ip=request.remote_addr, is_admin=user['is_admin'])
 
         next_page = request.args.get('next') or request.form.get('next')
         if next_page and next_page.startswith('/'):
@@ -207,7 +261,9 @@ def login():
 
 @main_bp.route('/logout')
 def logout():
+    username = session.get('username', 'unknown')
     session.clear()
+    log('Logout', '用户登出', username=username, ip=request.remote_addr)
     return redirect(url_for('main.home'))
 
 
@@ -225,12 +281,15 @@ def forgot_password():
 
         # 图形验证码校验
         if not captcha_service.verify(captcha_id, captcha_input):
+            log('ForgotPassword', '图形验证码错误', username=username, ip=request.remote_addr)
             return render_template('forgot_password.html', error='图形验证码错误或已过期')
 
         if not username:
+            log('ForgotPassword', '用户名为空', ip=request.remote_addr)
             return render_template('forgot_password.html', error='请输入用户名')
 
         if not email:
+            log('ForgotPassword', '邮箱为空', username=username, ip=request.remote_addr)
             return render_template('forgot_password.html', error='请输入邮箱地址')
 
         # 查找用户并验证邮箱匹配
@@ -244,26 +303,34 @@ def forgot_password():
             conn.close()
 
         if not user:
+            log('ForgotPassword', '用户不存在', username=username, ip=request.remote_addr)
             return render_template('forgot_password.html', error='用户不存在')
 
         if not user['email']:
+            log('ForgotPassword', '用户未设置邮箱', username=username, ip=request.remote_addr)
             return render_template('forgot_password.html', error='该用户未设置邮箱，无法找回密码')
 
         if user['email'] != email:
+            log('ForgotPassword', '邮箱不匹配', username=username, ip=request.remote_addr)
             return render_template('forgot_password.html', error='邮箱与用户名不匹配')
 
         # 邮箱验证码校验
         if not email_code:
+            log('ForgotPassword', '邮箱验证码为空', username=username, ip=request.remote_addr)
             return render_template('forgot_password.html', error='请输入邮箱验证码')
 
         from services.email import email_code_service
         if not email_code_service.verify(email, email_code):
+            log('ForgotPassword', '邮箱验证码错误', username=username, email=email, ip=request.remote_addr)
             return render_template('forgot_password.html', error='邮箱验证码错误或已过期')
 
         # 新密码校验
-        if len(new_password) < 6:
-            return render_template('forgot_password.html', error='新密码至少 6 位')
+        pwd_err = validate_password(new_password)
+        if pwd_err:
+            log('ForgotPassword', '新密码不符合要求', username=username, ip=request.remote_addr)
+            return render_template('forgot_password.html', error=pwd_err)
         if new_password != confirm_password:
+            log('ForgotPassword', '两次密码不一致', username=username, ip=request.remote_addr)
             return render_template('forgot_password.html', error='两次输入的新密码不一致')
 
         # 更新密码
@@ -272,8 +339,10 @@ def forgot_password():
             new_hash = hash_password(new_password)
             conn.execute("UPDATE users SET password_hash = ? WHERE id = ?", (new_hash, user['id']))
             conn.commit()
+            log('ForgotPassword', '密码重置成功', username=username, user_id=user['id'], ip=request.remote_addr)
         except Exception:
             conn.rollback()
+            log('ForgotPassword', '密码重置失败', username=username, user_id=user['id'], ip=request.remote_addr)
             return render_template('forgot_password.html', error='密码重置失败，请稍后重试')
         finally:
             conn.close()
@@ -326,9 +395,11 @@ def change_username():
         conn.commit()
 
         session['username'] = new_username
+        log('ChangeUsername', '用户名修改成功', user_id=user['id'], old_username=user['username'], new_username=new_username, ip=request.remote_addr)
         flash('用户名修改成功！', 'success')
     except Exception:
         conn.rollback()
+        log('ChangeUsername', '用户名修改失败', user_id=user['id'], username=user['username'], ip=request.remote_addr)
         flash('修改失败，请重试', 'error')
     finally:
         conn.close()
@@ -347,8 +418,9 @@ def change_password():
     if not current_password:
         flash('请输入当前密码', 'error')
         return redirect(url_for('main.settings') + '#password')
-    if len(new_password) < 6:
-        flash('新密码至少 6 位', 'error')
+    pwd_err = validate_password(new_password)
+    if pwd_err:
+        flash(pwd_err, 'error')
         return redirect(url_for('main.settings') + '#password')
     if new_password != confirm_password:
         flash('两次输入的新密码不一致', 'error')
@@ -365,9 +437,11 @@ def change_password():
         new_hash = hash_password(new_password)
         conn.execute("UPDATE users SET password_hash = ? WHERE id = ?", (new_hash, user['id']))
         conn.commit()
+        log('ChangePassword', '密码修改成功', user_id=user['id'], username=user['username'], ip=request.remote_addr)
         flash('密码修改成功！', 'success')
     except Exception:
         conn.rollback()
+        log('ChangePassword', '密码修改失败', user_id=user['id'], username=user['username'], ip=request.remote_addr)
         flash('修改失败，请重试', 'error')
     finally:
         conn.close()
@@ -412,9 +486,11 @@ def change_email():
 
         conn.execute("UPDATE users SET email = ? WHERE id = ?", (new_email, user['id']))
         conn.commit()
+        log('ChangeEmail', '邮箱修改成功', user_id=user['id'], username=user['username'], new_email=new_email, ip=request.remote_addr)
         flash('邮箱修改成功！', 'success')
     except Exception:
         conn.rollback()
+        log('ChangeEmail', '邮箱修改失败', user_id=user['id'], username=user['username'], ip=request.remote_addr)
         flash('修改失败，请重试', 'error')
     finally:
         conn.close()
@@ -482,8 +558,10 @@ def delete_account():
         conn.execute("DELETE FROM board_replies WHERE user_id = ?", (user['id'],))
         conn.execute("DELETE FROM users WHERE id = ?", (user['id'],))
         conn.commit()
+        log('DeleteAccount', '账号注销成功', user_id=user['id'], username=user['username'], ip=request.remote_addr)
     except Exception:
         conn.rollback()
+        log('DeleteAccount', '账号注销失败', user_id=user['id'], username=user['username'], ip=request.remote_addr)
         flash('注销失败，请重试', 'error')
         return redirect(url_for('main.settings') + '#delete')
     finally:

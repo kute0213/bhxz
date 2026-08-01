@@ -4,26 +4,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}{% endblock %} - 滨海小镇</title>
-    <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/tailwind.css', v='1') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='9') }}">
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    colors: {
-                        forest: { 900: '#0d1b0f', 800: '#1a2f1a', 700: '#1a472a', 600: '#2d5a3d' },
-                        gold: { 400: '#f4d03f', 500: '#d4a827' },
-                        cream: '#e8e4d9',
-                    },
-                    fontFamily: { sans: ['Noto Sans SC', 'sans-serif'] },
-                }
-            }
-        }
-    </script>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css', v='10') }}">
     {% block extra_style %}{% endblock %}
 </head>
@@ -109,7 +95,11 @@
                 </a>
                 <a href="{{ url_for('community.community_page') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors">
                     <i data-lucide="message-circle" class="w-5 h-5"></i>
-                    <span>社区活动</span>
+                    <span>投票与征集</span>
+                </a>
+                <a href="{{ url_for('discussion.list') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors">
+                    <i data-lucide="message-square" class="w-5 h-5"></i>
+                    <span>讨论</span>
                 </a>
                 <a href="{{ url_for('main.performance_page') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors">
                     <i data-lucide="activity" class="w-5 h-5"></i>
@@ -171,11 +161,14 @@
                         服务器指南
                     </a>
                     <a href="{{ url_for('community.community_page') }}" class="text-cream/80 hover:text-gold-400 text-sm font-medium transition-colors px-3 py-2 rounded-lg hover:bg-gold-400/5">
-                        社区活动
-                    </a>
-                    <a href="{{ url_for('main.performance_page') }}" class="text-cream/80 hover:text-gold-400 text-sm font-medium transition-colors px-3 py-2 rounded-lg hover:bg-gold-400/5">
-                        服务器状态
-                    </a>
+                    投票与征集
+                </a>
+                <a href="{{ url_for('discussion.list') }}" class="text-cream/80 hover:text-gold-400 text-sm font-medium transition-colors px-3 py-2 rounded-lg hover:bg-gold-400/5">
+                    讨论
+                </a>
+                <a href="{{ url_for('main.performance_page') }}" class="text-cream/80 hover:text-gold-400 text-sm font-medium transition-colors px-3 py-2 rounded-lg hover:bg-gold-400/5">
+                    服务器状态
+                </a>
                     {% if user and user.is_admin %}
                     <a href="{{ url_for('admin.admin_page') }}" class="text-cream/80 hover:text-gold-400 text-sm font-medium transition-colors px-3 py-2 rounded-lg hover:bg-gold-400/5">
                         管理中心
@@ -247,7 +240,10 @@
                     服务器指南
                 </a>
                 <a href="{{ url_for('community.community_page') }}" class="flex-shrink-0 px-3 py-1.5 text-sm text-cream/70 hover:text-gold-400 rounded-lg hover:bg-gold-400/5 transition-colors">
-                    社区活动
+                    投票与征集
+                </a>
+                <a href="{{ url_for('discussion.list') }}" class="flex-shrink-0 px-3 py-1.5 text-sm text-cream/70 hover:text-gold-400 rounded-lg hover:bg-gold-400/5 transition-colors">
+                    讨论
                 </a>
                 <a href="{{ url_for('main.performance_page') }}" class="flex-shrink-0 px-3 py-1.5 text-sm text-cream/70 hover:text-gold-400 rounded-lg hover:bg-gold-400/5 transition-colors">
                     服务器状态

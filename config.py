@@ -5,7 +5,7 @@ DB_PATH = os.path.join(APP_ROOT, 'site.duckdb')
 UPLOAD_DIR = os.path.join(APP_ROOT, 'uploads')
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'pdf', 'txt', 'zip', 'rar', '7z', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'mp4', 'mp3', 'wav'}
 MAX_CONTENT_LENGTH = 100 * 1024 * 1024
-SECRET_KEY = 'mc_server_site_random_secret_key_2024'
+SECRET_KEY = os.environ.get('SECRET_KEY', 'mc_server_site_random_secret_key_2024')
 REGISTER_VERIFY_CODE = 'binhai_xz'
 
 # ---------------------------------------------------------------------------

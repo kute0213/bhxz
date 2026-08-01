@@ -47,3 +47,6 @@ Thumbs.db
 
 # Trae spec 文档
 .trae/
+
+# Node.js
+node_modules/
