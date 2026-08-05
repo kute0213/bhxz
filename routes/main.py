@@ -13,25 +13,9 @@ from services.logger import log
 main_bp = Blueprint('main', __name__)
 
 
-def _render_register_error(error: str, new_captcha=False, **kwargs):
-    """渲染注册页面错误。
-
-    Args:
-        error: 错误信息
-        new_captcha: True 时生成新验证码（如验证码答案错误），False 时复用现有验证码
-    """
-    if new_captcha:
-        # 验证码校验失败：生成新验证码，让用户重新输入
-        new_id, _answer, new_image = captcha_service.generate()
-        captcha_id = new_id
-        captcha_image = new_image
-    else:
-        # 其他字段校验失败：保留已有验证码，用户无需重新输入
-        captcha_id = request.form.get('captcha_id', '').strip() if request.method == 'POST' else ''
-        captcha_image = captcha_service.get_image(captcha_id) if captcha_id else None
-    return render_template('register.html', error=error,
-                           captcha_image=captcha_image, captcha_id=captcha_id,
-                           **kwargs)
+def _render_register_error(error: str, **kwargs):
+    """渲染注册页面错误。"""
+    return render_template('register.html', error=error, **kwargs)
 
 
 @main_bp.route('/')
@@ -50,7 +34,9 @@ def home():
     return render_template(
         'index.html',
         user=user,
-        mod_intros=mod_intros
+        mod_intros=mod_intros,
+        map_url=get_config_value('MAP_URL', 'https://map.bhxz.tw.kg'),
+        qq_group_url=get_config_value('QQ_GROUP_URL', ''),
     )
 
 
@@ -65,8 +51,6 @@ def register():
         password = request.form.get('password', '')
         confirm = request.form.get('confirm', '')
         verify_code = request.form.get('verify_code', '').strip()
-        captcha_input = request.form.get('captcha', '').strip()
-        captcha_id = request.form.get('captcha_id', '').strip()
         email = normalize_email(request.form.get('email', ''))
         email_code = request.form.get('email_code', '').strip()
 
@@ -131,22 +115,12 @@ def register():
                                                email_verify_enabled=email_verify_enabled,
                                                group_code_verified=group_code_verified)
 
-            # 图形验证码校验（放在创建用户前最后一步，避免验证码被过早消耗）
-            if not captcha_service.verify(captcha_id, captcha_input):
-                log('Register', '图形验证码错误', username=username, ip=request.remote_addr)
-                return _render_register_error('验证码错误或已过期', new_captcha=True,
-                                               email_verify_enabled=email_verify_enabled,
-                                               group_code_verified=group_code_verified)
-
             password_hash = hash_password(password)
             conn.execute(
                 "INSERT INTO users (username, password_hash, email, created_at) VALUES (?, ?, ?, ?)",
                 (username, password_hash, email, datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
             )
             conn.commit()
-
-            # 注册成功后消耗验证码，防止重放攻击
-            captcha_service.consume(captcha_id)
 
             # 获取新创建的用户信息并自动登录
             new_user = conn.execute(

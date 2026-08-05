@@ -33,19 +33,6 @@
                         <label class="block text-sm font-medium mb-2 text-cream/80">确认密码</label>
                         <input type="password" name="confirm" required minlength="8" class="input-field w-full px-4 py-3 rounded-lg" placeholder="再次输入密码">
                     </div>
-                    <div>
-                        <label class="block text-sm font-medium mb-2 text-cream/80">验证码</label>
-                        <div class="flex flex-wrap gap-2 sm:gap-3 items-center">
-                            <input type="text" name="captcha" required class="input-field flex-1 min-w-[120px] px-4 py-3 rounded-lg" placeholder="请输入答案">
-                            <input type="hidden" name="captcha_id" id="captcha-id" value="{{ captcha_id or '' }}">
-                            <div class="flex items-center gap-1.5">
-                                <img id="captcha-img" src="{% if captcha_image %}{{ captcha_image }}{% else %}{% endif %}" alt="验证码" class="h-11 sm:h-12 rounded cursor-pointer hover:opacity-80 transition-opacity border border-forest-700/50" title="点击刷新">
-                                <button type="button" onclick="loadCaptcha()" class="p-1.5 text-cream/50 hover:text-gold-400 transition-colors rounded-lg hover:bg-cream/5" title="刷新验证码">
-                                    <i data-lucide="refresh-cw" class="w-4 h-4"></i>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
                     {% if email_verify_enabled %}
                     <div>
                         <label class="block text-sm font-medium mb-2 text-cream/80">邮箱地址</label>
@@ -61,7 +48,6 @@
                         </div>
                     </div>
                     {% endif %}
-                    <button type="submit" class="btn-primary w-full py-3 rounded-lg font-bold">注册</button>
                 </form>
 
                 <div class="mt-6 pt-6 border-t border-forest-700 text-center">
@@ -100,27 +86,42 @@
         </div>
     </div>
 </div>
+
+<!-- 图形验证码弹窗（点击发送验证码时弹出） -->
+<div id="captcha-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.8); backdrop-filter: blur(4px); z-index: 51;">
+    <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(12, 28, 18, 0.95); backdrop-filter: blur(32px) saturate(220%) brightness(108%); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 24px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.12), inset 0 -1px 0 rgba(0, 0, 0, 0.1); max-width: 28rem; width: calc(100% - 2rem); padding: 1.5rem;">
+        <div class="text-center mb-6">
+            <div class="w-14 h-14 mx-auto bg-gold-400/20 rounded-full flex items-center justify-center mb-4">
+                <i data-lucide="shield" class="w-7 h-7 text-gold-400"></i>
+            </div>
+            <h2 class="text-lg font-bold text-gold-400 mb-2">图形验证码</h2>
+            <p class="text-cream/60 text-sm">请先完成图形验证码以发送邮箱验证码</p>
+        </div>
+        <div class="space-y-4">
+            <div class="flex items-center justify-center gap-3">
+                <img id="modal-captcha-img" src="" alt="验证码" class="h-14 rounded cursor-pointer hover:opacity-80 transition-opacity border border-forest-700/50" title="点击刷新" style="image-rendering: auto;">
+                <input type="hidden" id="modal-captcha-id" value="">
+                <button type="button" id="modal-captcha-refresh" class="p-2 text-cream/50 hover:text-gold-400 transition-colors rounded-lg hover:bg-cream/5" title="刷新验证码">
+                    <i data-lucide="refresh-cw" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-2 text-cream/80">验证码</label>
+                <input type="text" id="modal-captcha-input" class="input-field w-full px-4 py-3 rounded-lg" placeholder="请输入验证码" autocomplete="off" maxlength="6">
+            </div>
+            <button type="button" id="modal-captcha-submit" class="btn-primary w-full py-3 rounded-lg font-bold">
+                验证并发送
+            </button>
+            <button type="button" id="modal-captcha-close" class="w-full py-2 text-cream/50 hover:text-cream/80 text-sm transition-colors">
+                取消
+            </button>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_script %}
 <script>
-// 加载图形验证码
-function loadCaptcha() {
-    const img = document.getElementById('captcha-img');
-    const captchaIdInput = document.getElementById('captcha-id');
-    fetch('/api/captcha/generate')
-        .then(res => res.json())
-        .then(data => {
-            if (data.success) {
-                img.src = data.image;
-                if (captchaIdInput) captchaIdInput.value = data.captcha_id || '';
-            }
-        })
-        .catch(err => console.error('加载验证码失败:', err));
-}
-
-document.getElementById('captcha-img').addEventListener('click', loadCaptcha);
-
 // 群内验证码弹窗逻辑：验证通过后前端保存验证码值，后续请求直接回传
 (function() {
     const modal = document.getElementById('group-code-modal');
@@ -140,7 +141,6 @@ document.getElementById('captcha-img').addEventListener('click', loadCaptcha);
     function hideModal() {
         modal.style.display = 'none';
         formSection.style.display = 'flex';
-        loadCaptcha();
         if (window.lucide) lucide.createIcons();
     }
 
@@ -187,8 +187,6 @@ document.getElementById('captcha-img').addEventListener('click', loadCaptcha);
     });
 
     // 页面加载时检查群内验证状态
-    // 服务端已通过 group_code_verified 控制初始渲染状态
-    // JS 侧再通过 API 确认一次，确保状态同步
     fetch('/api/verify-group-code/check')
         .then(function(res) { return res.json(); })
         .then(function(data) {
@@ -196,13 +194,8 @@ document.getElementById('captcha-img').addEventListener('click', loadCaptcha);
                 savedGroupCode = window.__getGroupCodeCache || '';
                 modal.style.display = 'none';
                 formSection.style.display = 'flex';
-                // 只有在没有服务端提供的验证码图片时才加载新验证码
-                if (!document.getElementById('captcha-img').getAttribute('src')) {
-                    loadCaptcha();
-                }
                 if (window.lucide) lucide.createIcons();
             } else {
-                // 如果服务端显示已验证但 API 返回未验证，仍显示弹窗
                 if (formSection.style.display === 'flex') {
                     formSection.style.display = 'none';
                 }
@@ -210,16 +203,10 @@ document.getElementById('captcha-img').addEventListener('click', loadCaptcha);
             }
         })
         .catch(function() {
-            // 网络错误时默认显示弹窗
             showModal();
         });
 
-    // 如果页面加载时已经显示表单（group_code_verified=true），且已有错误信息，加载验证码
     if (formSection.style.display === 'flex') {
-        // 只有在没有服务端提供的验证码图片时才加载新验证码
-        if (!document.getElementById('captcha-img').getAttribute('src')) {
-            loadCaptcha();
-        }
         if (window.lucide) lucide.createIcons();
     }
 
@@ -227,52 +214,91 @@ document.getElementById('captcha-img').addEventListener('click', loadCaptcha);
     window.__getGroupCode = function() { return savedGroupCode; };
 })();
 
-// 邮箱验证码发送
+// 图形验证码弹窗 + 邮箱验证码发送
 (function() {
     const btn = document.getElementById('btn-send-email-code');
     if (!btn) return;
 
+    const captchaModal = document.getElementById('captcha-modal');
+    const captchaImg = document.getElementById('modal-captcha-img');
+    const captchaIdInput = document.getElementById('modal-captcha-id');
+    const captchaCodeInput = document.getElementById('modal-captcha-input');
+    const captchaSubmit = document.getElementById('modal-captcha-submit');
+    const captchaRefresh = document.getElementById('modal-captcha-refresh');
+    const captchaClose = document.getElementById('modal-captcha-close');
+
+    var pendingEmail = '';
+
+    function loadModalCaptcha() {
+        fetch('/api/captcha/generate')
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
+                if (data.success) {
+                    captchaImg.src = data.image;
+                    if (captchaIdInput) captchaIdInput.value = data.captcha_id || '';
+                }
+            })
+            .catch(function(err) { console.error('加载验证码失败:', err); });
+    }
+
+    function showCaptchaModal(email) {
+        pendingEmail = email;
+        captchaCodeInput.value = '';
+        captchaModal.style.display = 'block';
+        loadModalCaptcha();
+        setTimeout(function() { captchaCodeInput.focus(); }, 100);
+    }
+
+    function hideCaptchaModal() {
+        captchaModal.style.display = 'none';
+        pendingEmail = '';
+    }
+
+    // 点击发送验证码 → 弹出图形验证码窗口
     btn.addEventListener('click', function() {
         const emailInput = document.querySelector('input[name="email"]');
-        const captchaInput = document.querySelector('input[name="captcha"]');
-        const captchaIdInput = document.getElementById('captcha-id');
-        var groupCode = (typeof window.__getGroupCode === 'function') ? window.__getGroupCode() : '';
-
         if (!emailInput || !emailInput.value.trim()) {
             Toast.warning('请先输入邮箱地址');
             return;
         }
-        if (!captchaInput || !captchaInput.value.trim()) {
-            Toast.warning('请先输入图形验证码');
+        showCaptchaModal(emailInput.value.trim());
+    });
+
+    // 验证图形验证码并发送邮箱验证码
+    function verifyCaptchaAndSend() {
+        var code = captchaCodeInput.value.trim();
+        if (!code) {
+            Toast.warning('请输入验证码');
+            captchaCodeInput.focus();
             return;
         }
+        var captchaId = captchaIdInput.value;
+        var groupCode = (typeof window.__getGroupCode === 'function') ? window.__getGroupCode() : '';
 
-        const email = emailInput.value.trim();
-        const captcha = captchaInput.value.trim();
-        const captchaId = captchaIdInput ? captchaIdInput.value : '';
-        btn.disabled = true;
-        btn.textContent = '发送中...';
+        captchaSubmit.disabled = true;
+        captchaSubmit.textContent = '验证中...';
 
         fetch('/api/email/send-code', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                email: email,
+                email: pendingEmail,
                 purpose: '注册',
-                captcha: captcha,
+                captcha: code,
                 captcha_id: captchaId,
                 verify_code: groupCode
             })
         })
-        .then(res => res.json())
+        .then(function(res) { return res.json(); })
         .then(function(data) {
             if (data.success) {
+                Toast.success('验证码已发送');
+                hideCaptchaModal();
+                // 更新按钮状态
+                btn.disabled = true;
                 btn.textContent = '已发送';
-                // 邮箱验证码发送成功后，图形验证码已被消耗，重新加载新验证码
-                loadCaptcha();
-                if (captchaInput) captchaInput.value = '';
-                let countdown = 60;
-                const timer = setInterval(function() {
+                var countdown = 60;
+                var timer = setInterval(function() {
                     btn.textContent = countdown + 's';
                     countdown--;
                     if (countdown < 0) {
@@ -283,19 +309,41 @@ document.getElementById('captcha-img').addEventListener('click', loadCaptcha);
                 }, 1000);
             } else {
                 Toast.error(data.message || '发送失败');
-                if (data.need_captcha) {
-                    loadCaptcha();
-                    if (captchaInput) captchaInput.value = '';
-                }
-                btn.disabled = false;
-                btn.textContent = '发送验证码';
+                // 刷新验证码
+                captchaCodeInput.value = '';
+                loadModalCaptcha();
+                captchaCodeInput.focus();
             }
         })
         .catch(function() {
             Toast.error('网络错误，请重试');
-            btn.disabled = false;
-            btn.textContent = '发送验证码';
+        })
+        .finally(function() {
+            captchaSubmit.disabled = false;
+            captchaSubmit.textContent = '验证并发送';
         });
+    }
+
+    captchaSubmit.addEventListener('click', verifyCaptchaAndSend);
+    captchaCodeInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') verifyCaptchaAndSend();
+    });
+
+    // 刷新验证码
+    captchaRefresh.addEventListener('click', function() {
+        captchaCodeInput.value = '';
+        loadModalCaptcha();
+    });
+    captchaImg.addEventListener('click', function() {
+        captchaCodeInput.value = '';
+        loadModalCaptcha();
+    });
+
+    // 关闭弹窗
+    captchaClose.addEventListener('click', hideCaptchaModal);
+    // 点击背景关闭
+    captchaModal.addEventListener('click', function(e) {
+        if (e.target === captchaModal) hideCaptchaModal();
     });
 })();
 </script>

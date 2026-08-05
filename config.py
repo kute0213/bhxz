@@ -167,6 +167,16 @@ DISCUSSION_REFRESH_INTERVAL = 5
 REPLIES_PER_PAGE = 10
 
 # ---------------------------------------------------------------------------
+# 外部链接配置
+# ---------------------------------------------------------------------------
+
+# 卫星地图地址
+MAP_URL = 'https://map.bhxz.tw.kg'
+
+# QQ 群链接
+QQ_GROUP_URL = 'https://qun.qq.com/universal-share/share?ac=1&authKey=rMtk0BTqbTh2Dx%2BwtNX3GwhYs4NEZDPuKTO0UBHc6X2r55iPkda3lmuA9Styubor&busi_data=eyJncm91cENvZGUiOiI1OTY3OTQxMTIiLCJ0b2tlbiI6IkNUajRvZ0NJQ1dzQ3lZb0FBSzdRSElFQXdqOWZaZy9QSFRlajhuMGpIeUU5bkNyQnA1WGloQW0zcFVReXJpakoiLCJ1aW4iOiIzODQ2NDE1NDczIn0%3D&data=U8tnRnk8Yo1OQFedRkDUVccnyfIRXgZja1nQxv60UTRAphySRL7G3XPXtqrubu0Th2TJ4Q_l-BgqRjikCRI5_Q&svctype=4&tempid=h5_group_info'
+
+# ---------------------------------------------------------------------------
 # 设置注册表 —— 定义哪些配置可以通过管理后台在线编辑
 # ---------------------------------------------------------------------------
 
@@ -216,6 +226,10 @@ SETTINGS_REGISTRY = [
     # 讨论区
     ('DISCUSSION_REFRESH_INTERVAL', 5, 'int', '回复实时刷新间隔（秒）', '讨论区回复列表自动刷新频率，仅后台可修改', '讨论区配置'),
     ('REPLIES_PER_PAGE', 10, 'int', '回复每页加载数量', '讨论区回复列表每次加载的回复数量', '讨论区配置'),
+
+    # 外部链接
+    ('MAP_URL', 'https://map.bhxz.tw.kg', 'str', '卫星地图地址', '首页卫星地图按钮的链接地址', '外部链接'),
+    ('QQ_GROUP_URL', 'https://qun.qq.com/...', 'str', 'QQ 群链接', '首页加入 QQ 群按钮的链接地址', '外部链接'),
 
     # 服务器
     ('SERVER_HOST', '0.0.0.0', 'str', '服务器监听地址', '服务器监听的 IP 地址，0.0.0.0 表示监听所有地址', '服务器配置'),

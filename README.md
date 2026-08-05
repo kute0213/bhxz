@@ -225,6 +225,7 @@ python app.py
 - **脚本执行**：默认超时、最大超时、最大循环次数、并发数
 - **安全配置**：会话有效期、登录失败锁定次数及时间
 - **讨论区配置**：回复实时刷新间隔、每页加载数量
+- **外部链接**：卫星地图地址、QQ 群链接
 - **服务器配置**：监听地址、端口、调试模式、工作线程数
 
 修改后的值存储在 `settings` 表中，重启后依然保留。点击「重置」可恢复为默认值。
@@ -260,6 +261,8 @@ python app.py
 | `SCRIPT_EXECUTOR_POOL_SIZE` | 脚本执行器并发数量限制 | `2` |
 | `DISCUSSION_REFRESH_INTERVAL` | 讨论区回复实时刷新间隔（秒） | `5` |
 | `REPLIES_PER_PAGE` | 讨论区回复每页加载数量 | `10` |
+| `MAP_URL` | 卫星地图地址 | `https://map.bhxz.tw.kg` |
+| `QQ_GROUP_URL` | QQ 群链接 | `https://qun.qq.com/...` |
 
 ### 环境变量
 
