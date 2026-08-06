@@ -26,7 +26,7 @@ from urllib.error import URLError
 # ---------------------------------------------------------------------------
 
 # 项目根目录
-APP_ROOT = os.path.dirname(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+APP_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 
 # GitHub 仓库地址
 GITHUB_REPO = 'https://github.com/kute0213/bhxz.git'
