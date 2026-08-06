@@ -79,7 +79,7 @@
 
     <script>
         let refreshTimer = null;
-        const apiUrl = "{{ url_for('api_monitoring.api_performance') }}";
+        const apiUrl = "{{ url_for('api.api_performance') }}";
 
         function formatBytes(bytes) {
             if (bytes === null || bytes === undefined) return '--';
