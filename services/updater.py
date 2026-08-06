@@ -1,9 +1,9 @@
 """
-一键更新服务：从 GitHub 获取最新代码，安全替换指定文件夹，自动重启。
+一键更新服务：从 GitHub 获取最新代码，全量同步到本地，自动重启。
 
 安全策略：
-- 只删除并替换指定的代码文件夹（core, docs, routes, services, static, templates）
-- 绝对不碰：数据库文件、backups/、uploads/、ssl/、.env
+- 克隆 GitHub 仓库，遍历仓库根目录所有项目
+- 每个项目：如果不在不替换列表 → 删除本地版本 → 复制新版本
 - 不替换的文件列表可在管理后台一键更新页面设置
 - 更新后自动重启进程
 - 跨平台兼容（Windows/Linux/macOS）
@@ -32,22 +32,6 @@ APP_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 # GitHub 仓库地址
 GITHUB_REPO = 'https://github.com/kute0213/bhxz.git'
 
-# 需要替换的代码文件夹（删除再下载）
-TARGET_FOLDERS = [
-    'core',
-    'docs',
-    'routes',
-    'services',
-    'static',
-    'templates',
-]
-
-# 需要更新的根级文件（直接覆盖）
-TARGET_ROOT_FILES = [
-    'app.py',
-    'requirements.txt',
-]
-
 # 默认不替换的路径（相对项目根目录），运行时还会合并设置的排除列表
 DEFAULT_PROTECTED_PATHS = [
     'site.duckdb',
@@ -61,7 +45,6 @@ DEFAULT_PROTECTED_PATHS = [
 ]
 
 # 默认 GitHub 代理列表（按响应速度排序，检测时自动选最快的）
-# 来源：https://github.com/topics/github-proxy
 DEFAULT_PROXY_LIST = [
     ('直连', 'https://github.com'),
     # 通用型代理（URL 前缀方式）
@@ -74,18 +57,14 @@ DEFAULT_PROXY_LIST = [
     ('gh.h233.eu.org', 'https://gh.h233.eu.org/https://github.com'),
     ('gh.api.99988866.xyz', 'https://gh.api.99988866.xyz/https://github.com'),
     ('moeyy.cn/gh-proxy', 'https://moeyy.cn/gh-proxy/https://github.com'),
-    # 直接访问型镜像站
     ('bgithub.xyz', 'https://bgithub.xyz/https://github.com'),
     ('kkgithub.com', 'https://kkgithub.com/https://github.com'),
-    ('kgithub.com', 'https://kgithub.com/https://github.com'),
     ('hub.fastgit.org', 'https://hub.fastgit.org/https://github.com'),
     ('gitclone.com', 'https://gitclone.com/github.com'),
     ('github.ur1.fun', 'https://github.ur1.fun/https://github.com'),
     ('githubfast.com', 'https://githubfast.com/https://github.com'),
-    # 文件加速型
     ('github.akams.cn', 'https://github.akams.cn/https://github.com'),
     ('ghp.ci', 'https://ghp.ci/https://github.com'),
-    ('g.nite07.org', 'https://g.nite07.org/https://github.com'),
 ]
 
 # ---------------------------------------------------------------------------
@@ -146,19 +125,27 @@ def get_status():
 # 代理检测
 # ---------------------------------------------------------------------------
 
-def _test_proxy_timeout(proxy_name, proxy_url, timeout=5):
-    """测试代理的响应时间，返回 (名称, 完整URL, 延迟秒数) 或 None。"""
-    test_url = proxy_url.rstrip('/') + '/'
+def _test_proxy_timeout(proxy_name, proxy_url, timeout=6):
+    """测试代理的响应时间，返回 (名称, 完整URL, 延迟秒数) 或 None。
+
+    使用 GET 请求测试，部分代理不支持 HEAD。
+    """
+    # 构建测试 URL：用代理访问 GitHub 根路径
+    base = proxy_url.rstrip('/')
+    if 'github.com' in base or proxy_name == '直连':
+        test_url = base + '/'
+    else:
+        test_url = base + '/https://github.com/'
+
     try:
-        req = Request(test_url, method='HEAD')
-        # 设置合理的 User-Agent
+        req = Request(test_url, method='GET')
         req.add_header('User-Agent', 'Mozilla/5.0')
+        # 不自动跟随重定向，减少超时
         start = time.time()
         resp = urlopen(req, timeout=timeout)
         elapsed = time.time() - start
-        # 检查响应状态
-        if resp.status < 400:
-            return (proxy_name, proxy_url, elapsed)
+        # 只要返回了响应就算成功（包括 3xx 重定向）
+        return (proxy_name, proxy_url, elapsed)
     except (URLError, OSError, ValueError):
         pass
     return None
@@ -222,21 +209,6 @@ def _is_protected(rel_path, protected_paths=None):
         return True
 
     return False
-
-
-def _is_target_folder(rel_path):
-    """检查路径是否是需要更新的目标文件夹内的文件。"""
-    rel_path = rel_path.replace('\\', '/').strip('/')
-    for folder in TARGET_FOLDERS:
-        if rel_path == folder or rel_path.startswith(folder + '/'):
-            return True
-    return False
-
-
-def _is_target_root_file(rel_path):
-    """检查是否是根级需要更新的文件。"""
-    rel_path = rel_path.replace('\\', '/').strip('/')
-    return rel_path in TARGET_ROOT_FILES
 
 
 # ---------------------------------------------------------------------------
@@ -328,10 +300,8 @@ def _run_update():
                     if not line or '=' not in line:
                         continue
                     name, url = line.split('=', 1)
-                    name = name.strip()
-                    url = url.strip()
+                    name, url = name.strip(), url.strip()
                     if name and url:
-                        # 替换同名的已有代理，或追加
                         replaced = False
                         for i, (n, u) in enumerate(proxy_list):
                             if n == name:
@@ -341,11 +311,11 @@ def _run_update():
                         if not replaced:
                             proxy_list.append((name, url))
         except Exception:
-            pass  # 读取设置失败时使用默认值
+            pass
 
-        _add_event('progress', {'percent': 2, 'message': f'已加载 {len(protected_paths)} 个受保护路径，{len(proxy_list)} 个代理'})
+        _add_event('progress', {'percent': 2, 'message': f'已加载配置，{len(protected_paths)} 个受保护路径'})
 
-        # 1. 检测 git 是否可用
+        # 1. 检测 git
         git_path = _find_git()
         if not git_path:
             raise RuntimeError(
@@ -353,9 +323,8 @@ def _run_update():
                 '并确保 Git 已添加到系统 PATH 环境变量中'
             )
 
-        _add_event('progress', {'percent': 3, 'message': f'已找到 Git: {git_path}'})
-
         # 2. 检测代理
+        _add_event('progress', {'percent': 3, 'message': '正在检测最快的 GitHub 代理...'})
         proxy_name, proxy_url = detect_fastest_proxy(proxy_list=proxy_list)
         _add_event('progress', {'percent': 5, 'message': f'已选择代理: {proxy_name}'})
 
@@ -363,52 +332,33 @@ def _run_update():
         if proxy_name == '直连':
             clone_url = GITHUB_REPO
         else:
-            # 代理 URL 需要拼接仓库路径
             base = proxy_url.rstrip('/')
-            # 如果代理 URL 已经包含 github.com，直接添加 /kute0213/bhxz.git
             if 'github.com' in base:
-                clone_url = base.rstrip('/') + '/kute0213/bhxz.git'
+                clone_url = base + '/kute0213/bhxz.git'
             else:
-                clone_url = base.rstrip('/') + '/https://github.com/kute0213/bhxz.git'
+                clone_url = base + '/https://github.com/kute0213/bhxz.git'
 
-        _add_event('progress', {'percent': 5, 'message': f'正在从 {proxy_name} 克隆仓库...'})
+        _add_event('progress', {'percent': 5, 'message': '正在克隆仓库...'})
 
-        # 2. 克隆到临时目录
+        # 3. 克隆到临时目录
         temp_dir = tempfile.mkdtemp(prefix='bhxz_update_')
         try:
-            # 使用 git clone（使用完整路径确保 Windows 能找到）
+            # 执行 git clone
             git_cmd = [git_path, 'clone', '--depth', '1', '--single-branch', '--progress', clone_url, temp_dir]
-
-            # 设置 git 不再交互
             env = os.environ.copy()
             env['GIT_TERMINAL_PROMPT'] = '0'
             env['GIT_ASKPASS'] = 'echo'
 
-            # Windows 上确保 Git 的 bin 目录在 PATH 中（解决 DLL 依赖问题）
             if sys.platform == 'win32':
                 git_dir = os.path.dirname(os.path.dirname(git_path))
-                git_bin = os.path.join(git_dir, 'bin')
-                git_cmd_dir = os.path.join(git_dir, 'cmd')
-                extra_paths = []
-                for p in [git_bin, git_cmd_dir]:
+                for p in [os.path.join(git_dir, 'bin'), os.path.join(git_dir, 'cmd')]:
                     if os.path.isdir(p) and p not in env.get('PATH', ''):
-                        extra_paths.append(p)
-                if extra_paths:
-                    env['PATH'] = os.pathsep.join(extra_paths + [env.get('PATH', '')])
+                        env['PATH'] = os.pathsep.join([p, env.get('PATH', '')])
 
-            # 流式克隆，实时解析进度
-            proc = subprocess.Popen(
-                git_cmd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                bufsize=0,
-                env=env,
-            )
+            proc = subprocess.Popen(git_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=0, env=env)
 
-            # 解析 git clone --progress 的 stderr 输出
-            CLONE_START = 5
-            CLONE_END = 70
-            progress_range = CLONE_END - CLONE_START
+            # 解析克隆进度
+            CLONE_RANGE = 70
             last_clone_pct = -1
             line_buf = b''
 
@@ -419,185 +369,153 @@ def _run_update():
                     if not chunk:
                         break
                     for byte in chunk:
-                        if byte == 0x0d:  # \r 回车符（进度行结束）
-                            _parse_progress_line(line_buf, last_clone_pct)
+                        if byte == 0x0d:
+                            _parse_line(line_buf)
                             line_buf = b''
-                        elif byte == 0x0a:  # \n 换行符
+                        elif byte == 0x0a:
                             line_buf = b''
                         else:
                             line_buf += bytes([byte])
 
-            def _parse_progress_line(buf, last_pct):
+            def _parse_line(buf):
                 nonlocal last_clone_pct
                 text = buf.decode('utf-8', errors='replace')
                 m = re.search(r'(\d+)\s*%', text)
                 if m:
                     pct = int(m.group(1))
-                    if pct != last_pct:
+                    if pct != last_clone_pct:
                         last_clone_pct = pct
-                        mapped = CLONE_START + int(pct * progress_range / 100)
-                        _add_event('progress', {
-                            'percent': mapped,
-                            'message': f'正在克隆仓库... {pct}%',
-                        })
+                        mapped = 5 + int(pct * CLONE_RANGE / 100)
+                        _add_event('progress', {'percent': mapped, 'message': f'正在克隆仓库... {pct}%'})
 
-            # 在后台线程中读取 stderr
-            stderr_thread = threading.Thread(
-                target=_read_stderr, args=(proc.stderr,), daemon=True
-            )
+            stderr_thread = threading.Thread(target=_read_stderr, args=(proc.stderr,), daemon=True)
             stderr_thread.start()
             proc.wait()
             stderr_thread.join(timeout=5)
 
             if proc.returncode != 0:
                 remaining = proc.stderr.read().decode('utf-8', errors='replace').strip()
-                error_msg = remaining or '克隆失败'
-                raise RuntimeError(f'Git 克隆失败: {error_msg}')
+                raise RuntimeError(f'Git 克隆失败: {remaining or "未知错误"}')
 
-            _add_event('progress', {'percent': 72, 'message': '仓库克隆完成，正在验证...'})
+            _add_event('progress', {'percent': 72, 'message': '克隆完成，正在同步文件...'})
 
-            # 3. 验证临时目录
-            if not os.path.isdir(temp_dir):
-                raise RuntimeError('克隆目录不存在')
+            # 4. 列出仓库根目录下的所有项目（排除 .git）
+            repo_items = sorted([
+                item for item in os.listdir(temp_dir)
+                if item != '.git'
+            ])
 
-            # 列出仓库中的顶级目录和文件
-            repo_items = set()
-            for item in os.listdir(temp_dir):
-                if item == '.git':
-                    continue
-                repo_items.add(item)
+            if not repo_items:
+                raise RuntimeError('仓库为空，没有可同步的文件')
 
-            _add_event('progress', {'percent': 74, 'message': f'仓库包含 {len(repo_items)} 个顶级项目，开始更新...'})
-
-            # 4. 统计需要处理的文件数量（精确到文件级别，让进度更平滑）
+            # 统计总文件数（用于进度条）
             total_files = 0
-            file_ops = []  # [(type, src, dst), ...]   type: 'folder' | 'root_file'
-
-            for folder in TARGET_FOLDERS:
-                src = os.path.join(temp_dir, folder)
-                dst = os.path.join(APP_ROOT, folder)
+            for item in repo_items:
+                src = os.path.join(temp_dir, item)
                 if os.path.isdir(src):
-                    file_ops.append(('folder', src, dst, folder))
-
-            for root_file in TARGET_ROOT_FILES:
-                src = os.path.join(temp_dir, root_file)
-                dst = os.path.join(APP_ROOT, root_file)
-                if os.path.isfile(src):
-                    file_ops.append(('root_file', src, dst, root_file))
-
-            if not file_ops:
-                raise RuntimeError('仓库中没有找到任何需要更新的代码文件夹')
-
-            # 统计每个目录下的实际文件数以精确计算进度
-            for op_type, src, dst, name in file_ops:
-                if op_type == 'folder':
                     for dirpath, dirnames, filenames in os.walk(src):
                         total_files += len(filenames)
                 else:
                     total_files += 1
 
-            if total_files == 0:
-                total_files = len(file_ops)
+            _add_event('progress', {'percent': 75, 'message': f'将同步 {len(repo_items)} 个项目，{total_files} 个文件...'})
 
-            _add_event('progress', {'percent': 75, 'message': f'将更新 {total_files} 个文件...'})
+            # 5. 全量同步：遍历仓库每个顶级项目
+            #    - 不在保护列表 → 删除本地版本 → 复制新版本
+            #    - 在保护列表 → 跳过
+            #    这样仓库里删除的文件，本地也会被删掉
+            processed = 0
+            remaining_pct = 95 - 75  # 20%
 
-            # 5. 更新文件（精确到每个文件，进度条平滑推进，但避免日志刷屏）
-            FILE_PROGRESS_START = 75
-            FILE_PROGRESS_END = 95
-            file_progress_range = FILE_PROGRESS_END - FILE_PROGRESS_START
-            processed_files = 0
-            last_reported_pct = -1
+            for item in repo_items:
+                # 检查是否受保护
+                if _is_protected(item, protected_paths):
+                    _add_event('progress', {
+                        'percent': 75 + int(processed * remaining_pct / total_files),
+                        'message': f'跳过受保护路径: {item}',
+                    })
+                    processed += 1
+                    continue
 
-            def _update_file_progress(message, force=False):
-                """更新进度。force=True 时强制上报（用于文件夹切换等关键节点）。"""
-                nonlocal processed_files, last_reported_pct
-                processed_files += 1
-                pct = FILE_PROGRESS_START + int(processed_files * file_progress_range / total_files)
-                pct = min(pct, 94)
+                src = os.path.join(temp_dir, item)
+                dst = os.path.join(APP_ROOT, item)
 
-                # 只有百分比变化 >= 2 或强制上报时才发事件，避免逐文件刷屏
-                if force or abs(pct - last_reported_pct) >= 2:
-                    last_reported_pct = pct
-                    _add_event('progress', {'percent': pct, 'message': message})
+                # 删除本地版本（如果存在）
+                if os.path.isdir(dst):
+                    _add_event('progress', {
+                        'percent': 75 + int(processed * remaining_pct / total_files),
+                        'message': f'正在删除 {item}/...',
+                    })
 
-            for op_type, src, dst, name in file_ops:
-                if op_type == 'folder':
-                    # 删除现有文件夹
-                    if os.path.isdir(dst):
-                        _update_file_progress(f'正在删除 {name}/...', force=True)
+                    def _onerror(func, path, exc_info):
+                        for attempt in range(3):
+                            try:
+                                time.sleep(0.5)
+                                func(path)
+                                return
+                            except Exception:
+                                pass
 
-                        def _onerror(func, path, exc_info):
-                            for attempt in range(3):
-                                try:
-                                    time.sleep(0.5)
-                                    func(path)
-                                    return
-                                except Exception:
-                                    pass
+                    shutil.rmtree(dst, onerror=_onerror)
+                elif os.path.isfile(dst):
+                    try:
+                        os.remove(dst)
+                    except Exception:
+                        pass
 
-                        shutil.rmtree(dst, onerror=_onerror)
-
-                    # 复制新文件夹（逐个文件上报进度，但按百分比阈值控制日志频率）
-                    copy_files = []
+                # 复制新版本
+                if os.path.isdir(src):
+                    # 确保父目录存在
+                    os.makedirs(os.path.dirname(dst) if os.path.dirname(dst) else APP_ROOT, exist_ok=True)
+                    # 递归复制整个目录
                     for dirpath, dirnames, filenames in os.walk(src):
                         rel_dir = os.path.relpath(dirpath, src)
+                        target_dir = os.path.join(dst, rel_dir) if rel_dir != '.' else dst
+                        os.makedirs(target_dir, exist_ok=True)
                         for fn in filenames:
                             src_file = os.path.join(dirpath, fn)
-                            dst_file = os.path.join(dst, rel_dir, fn) if rel_dir != '.' else os.path.join(dst, fn)
-                            copy_files.append((src_file, dst_file))
-
-                    # 确保目标子目录存在
-                    all_dirs = set()
-                    for _, dst_file in copy_files:
-                        all_dirs.add(os.path.dirname(dst_file))
-                    for d in sorted(all_dirs):
-                        os.makedirs(d, exist_ok=True)
-
-                    # 逐个复制文件，进度条每变化 2% 才上报一次
-                    for src_file, dst_file in copy_files:
-                        try:
-                            shutil.copy2(src_file, dst_file)
-                        except Exception:
-                            pass
-                        _update_file_progress(f'正在复制 {name}/...')
-
-                    # 文件夹完成时强制上报
-                    _update_file_progress(f'{name}/ 已更新', force=True)
-
+                            dst_file = os.path.join(target_dir, fn)
+                            try:
+                                shutil.copy2(src_file, dst_file)
+                            except Exception:
+                                pass
+                            processed += 1
+                            if processed % max(1, total_files // 20) == 0:
+                                pct = 75 + int(processed * remaining_pct / total_files)
+                                _add_event('progress', {
+                                    'percent': min(pct, 94),
+                                    'message': f'正在同步 {item}/...',
+                                })
                 else:
-                    # 根级文件直接覆盖
+                    # 单个文件直接复制
+                    os.makedirs(APP_ROOT, exist_ok=True)
                     try:
                         shutil.copy2(src, dst)
-                    except Exception as e:
-                        _update_file_progress(f'更新 {name} 失败: {e}', force=True)
-                    _update_file_progress(f'正在更新 {name}...')
+                    except Exception:
+                        pass
+                    processed += 1
 
-            # 7. 清理临时目录
+            # 清理临时目录
             try:
                 shutil.rmtree(temp_dir)
             except Exception:
                 pass
 
-            _add_event('progress', {'percent': 97, 'message': '更新完成，正在准备重启...'})
+            _add_event('progress', {'percent': 97, 'message': '同步完成，正在准备重启...'})
 
         except Exception:
-            # 清理临时目录
             try:
                 shutil.rmtree(temp_dir)
             except Exception:
                 pass
             raise
 
-        # 8. 更新完成，准备重启
+        # 6. 完成
         _add_event('done', {
             'success': True,
             'message': '更新成功，即将重启服务器...',
         })
-
-        # 给前端一点时间接收事件
         time.sleep(1)
-
-        # 9. 重启
         _restart_app()
 
     except Exception as e:
