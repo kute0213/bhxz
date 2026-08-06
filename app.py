@@ -5,6 +5,9 @@ import socket
 from flask import Flask, render_template, abort
 from config import SECRET_KEY, MAX_CONTENT_LENGTH
 
+# 项目根目录（确保工作目录正确，不受快捷方式启动影响）
+_APP_ROOT = os.path.dirname(os.path.abspath(__file__))
+
 
 # ---------------------------------------------------------------------------
 # multiprocessing 子进程检测 —— 必须在任何其他导入之前执行
@@ -141,6 +144,9 @@ def _start_background_services():
 def _init_app():
     """初始化应用：数据库、蓝图、钩子、后台服务。仅在主进程执行。"""
     from core.db import init_db
+
+    # 确保工作目录始终是项目根目录（避免快捷方式启动时跑到桌面）
+    os.chdir(_APP_ROOT)
 
     print('[INFO] 正在初始化数据库...', flush=True)
     init_db()

@@ -609,9 +609,8 @@ def _run_update():
 def _restart_app():
     """重启当前应用进程（跨平台，优雅替换）。
 
-    使用 os.execv 直接替换当前进程，不做额外清理。
-    Python 解释器在此过程中会自动释放资源、关闭文件描述符，
-    比手动关闭线程、关闭数据库连接更可靠。
+    - Unix: 使用 os.execv 直接替换当前进程，干净利落
+    - Windows: 使用 Popen 启动新进程 + 优雅退出，避免 CMD 窗口闪烁
     """
     python_exe = sys.executable
     script = os.path.join(APP_ROOT, 'app.py')
@@ -621,10 +620,50 @@ def _restart_app():
     # 给前端一点时间接收事件
     time.sleep(0.5)
 
-    # 直接替换当前进程（跨平台，无需清理）
-    # os.execv 在 Windows 和 Unix 上均受支持，干净利落
-    os.chdir(APP_ROOT)
-    os.execv(python_exe, [python_exe, script])
+    if sys.platform == 'win32':
+        _restart_win32(python_exe, script)
+    else:
+        # Unix/Linux/macOS 使用 execv 替换进程
+        os.chdir(APP_ROOT)
+        os.execv(python_exe, [python_exe, script])
+
+
+def _restart_win32(python_exe, script):
+    """Windows 可靠重启：Popen 启动新进程 + 优雅退出。
+
+    避免 CMD 窗口闪烁。使用 CREATE_NO_WINDOW 标志让新进程无窗口启动，
+    然后通过信号触发当前进程的优雅关闭。
+    """
+    import signal
+
+    # 1. 启动新进程（无窗口，独立进程组，避免被连带终止）
+    try:
+        proc = subprocess.Popen(
+            [python_exe, script],
+            cwd=APP_ROOT,
+            creationflags=subprocess.CREATE_NO_WINDOW | subprocess.CREATE_NEW_PROCESS_GROUP,
+            close_fds=True,
+        )
+    except Exception:
+        # fallback：不带标志启动
+        try:
+            proc = subprocess.Popen([python_exe, script], cwd=APP_ROOT)
+        except Exception:
+            proc = None
+
+    if proc and proc.pid:
+        _add_event('progress', {'percent': 100, 'message': f'已启动新进程 (PID: {proc.pid})'})
+
+    # 2. 触发当前进程的优雅退出
+    #    使用 os.kill 发送 SIGTERM，app.py 中注册了 SIGTERM 处理函数
+    #    会依次关闭后台线程、关闭数据库连接，然后 sys.exit(0)
+    try:
+        os.kill(os.getpid(), signal.SIGTERM)
+    except Exception:
+        pass
+
+    # 3. 如果上面的信号处理没生效，兜底退出
+    sys.exit(0)
 
 
 def start_update():
