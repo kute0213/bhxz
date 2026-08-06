@@ -760,8 +760,10 @@ server {
 
 - **更新范围**：自动替换 `core/`、`docs/`、`routes/`、`services/`、`static/`、`templates/` 代码文件夹，以及根级文件 `app.py`、`requirements.txt`
 - **安全保护**：数据库文件（`site.duckdb`）、备份目录（`backups/`）、上传目录（`uploads/`）、SSL证书（`ssl/`）、`.env` 等配置文件不受影响
-- **代理检测**：自动并行测试多个 GitHub 代理（ghproxy.com、ghproxy.net 等），选择响应最快的代理进行克隆
+- **代理检测**：自动并行测试 **15 个 GitHub 代理**（ghproxy.com、ghproxy.net、mirror.ghproxy.com、bgithub.xyz、gitclone.com 等），选择响应最快的进行克隆，覆盖更广的加速节点
 - **进度展示**：SSE 实时流式输出更新进度，前端展示进度条与详细日志
+  - **克隆进度实时化**：解析 `git clone --progress` 输出，克隆阶段从 5% 平滑推进到 70%，不再卡在 8% 跳 30%
+  - **文件操作精确化**：按实际文件数逐文件计算进度，文件操作阶段从 75% 平滑推进到 95%，不再按文件夹跳变
 - **自动重启**：更新完成后自动重启服务器（Unix 使用 `os.execv` 进程替换，Windows 使用临时 BAT 脚本代理重启）
 - **跨平台兼容**：Windows/Linux/macOS 全平台支持
   - Windows 修复：从 BAT 脚本启动时，自动重启失败（只关闭不重启）的问题已修复。使用临时 BAT 脚本作为重启代理 + `CREATE_NEW_CONSOLE` 独立控制台 + `os._exit(0)` 强制进程退出，确保新进程能独立启动
