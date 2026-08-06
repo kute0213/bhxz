@@ -14,38 +14,13 @@ from services.monitoring import (
 api_bp = Blueprint('api', __name__, url_prefix='/api')
 
 
-class _ApiError(Exception):
-    """API 错误，携带消息和状态码，由错误处理器转为 JSON。"""
-
-    def __init__(self, message, status_code):
-        super().__init__(message)
-        self.message = message
-        self.status_code = status_code
-
-
-@api_bp.errorhandler(_ApiError)
-def _handle_api_error(err):
-    """将 _ApiError 转换为 JSON 响应，避免返回 HTML 错误页。"""
-    return jsonify({'success': False, 'message': err.message}), err.status_code
-
-
-def _check_admin():
-    """校验当前请求是否来自管理员，否则抛出 JSONError。"""
-    user = get_current_user()
-    if user is None:
-        raise _ApiError('请先登录', 401)
-    if not user.get('is_admin', False):
-        raise _ApiError('需要管理员权限', 403)
-
-
 # ---------------------------------------------------------------------------
 # 性能监控
 # ---------------------------------------------------------------------------
 
 @api_bp.route('/performance')
 def api_performance():
-    """获取系统性能数据（CPU、内存、温度、运行时间）。仅管理员可访问。"""
-    _check_admin()
+    """获取系统性能数据（CPU、内存、温度、运行时间）。公开访问。"""
     return jsonify({
         'cpu_usage': get_cpu_usage(),
         'cpu_temp': get_cpu_temperature(),

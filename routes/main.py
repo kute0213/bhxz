@@ -1,7 +1,7 @@
 import json
 import os
 from datetime import datetime
-from flask import Blueprint, render_template, request, redirect, url_for, session, flash, jsonify, abort
+from flask import Blueprint, render_template, request, redirect, url_for, session, flash, jsonify
 from core.auth import login_required, get_current_user, hash_password, validate_password
 from core.db import get_db
 from config import REGISTER_VERIFY_CODE, UPLOAD_DIR, get_config_value
@@ -560,11 +560,6 @@ def delete_account():
 
 @main_bp.route('/performance')
 def performance_page():
-    """服务器性能监控页面（仅管理员可访问）。"""
+    """服务器性能监控页面（公开访问）。"""
     user = get_current_user()
-    # 鉴权：未登录跳转登录页，非管理员 403
-    if not user:
-        return redirect(url_for('main.login', next=request.path))
-    if not user.get('is_admin'):
-        abort(403)
     return render_template('performance.html', user=user)

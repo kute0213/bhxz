@@ -158,11 +158,6 @@
             fetch(apiUrl)
                 .then(function (res) {
                     if (!res.ok) {
-                        // 401/403：跳转登录页
-                        if (res.status === 401 || res.status === 403) {
-                            window.location.href = '{{ url_for("main.login") }}';
-                            throw new Error('未授权');
-                        }
                         throw new Error('HTTP ' + res.status);
                     }
                     return res.json();
