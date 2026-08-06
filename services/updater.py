@@ -72,13 +72,19 @@ PROXY_LIST = [
     ('hub.gitmirror.com', 'https://hub.gitmirror.com/https://github.com'),
     ('gh.h233.eu.org', 'https://gh.h233.eu.org/https://github.com'),
     ('gh.api.99988866.xyz', 'https://gh.api.99988866.xyz/https://github.com'),
+    ('moeyy.cn/gh-proxy', 'https://moeyy.cn/gh-proxy/https://github.com'),
     # 直接访问型镜像站
     ('bgithub.xyz', 'https://bgithub.xyz/https://github.com'),
+    ('kkgithub.com', 'https://kkgithub.com/https://github.com'),
+    ('kgithub.com', 'https://kgithub.com/https://github.com'),
+    ('hub.fastgit.org', 'https://hub.fastgit.org/https://github.com'),
     ('gitclone.com', 'https://gitclone.com/github.com'),
     ('github.ur1.fun', 'https://github.ur1.fun/https://github.com'),
+    ('githubfast.com', 'https://githubfast.com/https://github.com'),
     # 文件加速型
     ('github.akams.cn', 'https://github.akams.cn/https://github.com'),
     ('ghp.ci', 'https://ghp.ci/https://github.com'),
+    ('g.nite07.org', 'https://g.nite07.org/https://github.com'),
 ]
 
 # ---------------------------------------------------------------------------
@@ -448,29 +454,30 @@ def _run_update():
 
             _add_event('progress', {'percent': 75, 'message': f'将更新 {total_files} 个文件...'})
 
-            # 5. 更新文件（精确到每个文件，进度条平滑推进）
+            # 5. 更新文件（精确到每个文件，进度条平滑推进，但避免日志刷屏）
             FILE_PROGRESS_START = 75
             FILE_PROGRESS_END = 95
             file_progress_range = FILE_PROGRESS_END - FILE_PROGRESS_START
             processed_files = 0
+            last_reported_pct = -1
 
-            def _update_file_progress(message):
-                nonlocal processed_files
+            def _update_file_progress(message, force=False):
+                """更新进度。force=True 时强制上报（用于文件夹切换等关键节点）。"""
+                nonlocal processed_files, last_reported_pct
                 processed_files += 1
                 pct = FILE_PROGRESS_START + int(processed_files * file_progress_range / total_files)
-                _add_event('progress', {'percent': min(pct, 94), 'message': message})
+                pct = min(pct, 94)
+
+                # 只有百分比变化 >= 2 或强制上报时才发事件，避免逐文件刷屏
+                if force or abs(pct - last_reported_pct) >= 2:
+                    last_reported_pct = pct
+                    _add_event('progress', {'percent': pct, 'message': message})
 
             for op_type, src, dst, name in file_ops:
                 if op_type == 'folder':
                     # 删除现有文件夹
                     if os.path.isdir(dst):
-                        _add_event('progress', {
-                            'percent': min(
-                                FILE_PROGRESS_START + int(processed_files * file_progress_range / total_files),
-                                94,
-                            ),
-                            'message': f'正在删除 {name}/...',
-                        })
+                        _update_file_progress(f'正在删除 {name}/...', force=True)
 
                         def _onerror(func, path, exc_info):
                             for attempt in range(3):
@@ -483,8 +490,7 @@ def _run_update():
 
                         shutil.rmtree(dst, onerror=_onerror)
 
-                    # 复制新文件夹（逐个文件上报进度）
-                    # 先收集所有文件
+                    # 复制新文件夹（逐个文件上报进度，但按百分比阈值控制日志频率）
                     copy_files = []
                     for dirpath, dirnames, filenames in os.walk(src):
                         rel_dir = os.path.relpath(dirpath, src)
@@ -500,34 +506,23 @@ def _run_update():
                     for d in sorted(all_dirs):
                         os.makedirs(d, exist_ok=True)
 
-                    # 逐个复制文件并上报进度
+                    # 逐个复制文件，进度条每变化 2% 才上报一次
                     for src_file, dst_file in copy_files:
                         try:
                             shutil.copy2(src_file, dst_file)
-                        except Exception as e:
+                        except Exception:
                             pass
                         _update_file_progress(f'正在复制 {name}/...')
 
-                    _add_event('progress', {
-                        'percent': min(
-                            FILE_PROGRESS_START + int(processed_files * file_progress_range / total_files),
-                            94,
-                        ),
-                        'message': f'{name}/ 已更新',
-                    })
+                    # 文件夹完成时强制上报
+                    _update_file_progress(f'{name}/ 已更新', force=True)
 
                 else:
                     # 根级文件直接覆盖
                     try:
                         shutil.copy2(src, dst)
                     except Exception as e:
-                        _add_event('progress', {
-                            'percent': min(
-                                FILE_PROGRESS_START + int(processed_files * file_progress_range / total_files),
-                                94,
-                            ),
-                            'message': f'更新 {name} 失败: {e}',
-                        })
+                        _update_file_progress(f'更新 {name} 失败: {e}', force=True)
                     _update_file_progress(f'正在更新 {name}...')
 
             # 7. 清理临时目录
