@@ -599,56 +599,62 @@ def _restart_app():
 
 
 def _restart_win32(python_exe, script):
-    """Windows 可靠重启：使用临时 BAT 脚本作为重启代理。
+    """Windows 可靠重启：使用 Python 代理脚本（pythonw.exe 无窗口模式）。
 
-    从 BAT 脚本启动时，如果直接 Popen 新 Python 进程然后自杀，
-    新进程可能被连带终止。核心思路：
-    1. 创建一个临时 BAT 脚本（独立 cmd.exe 进程）
-    2. BAT 等待 3 秒确保当前进程完全退出
-    3. BAT 启动新 Python 进程
-    4. BAT 自删除清理
+    避免 CMD 窗口闪烁。创建一个临时 .pyw 脚本，
+    使用 pythonw.exe 运行（无任何窗口），代理脚本等待当前进程退出后
+    启动新进程，然后自删除。
     """
-    bat_content = (
-        '@echo off\r\n'
-        f'cd /d "{APP_ROOT}"\r\n'
-        'timeout /t 3 /nobreak > nul\r\n'
-        f'start "" "{python_exe}" "{script}"\r\n'
-        'del "%~f0"\r\n'
+    # 代理脚本内容（一行式，紧凑，避免中文编码问题）
+    proxy_code = (
+        'import os,sys,time,subprocess\n'
+        f'APP_ROOT={APP_ROOT!r}\n'
+        f'PYTHON_EXE={python_exe!r}\n'
+        f'SCRIPT={script!r}\n'
+        'time.sleep(3)\n'
+        'flags=subprocess.CREATE_NO_WINDOW if sys.platform=="win32" else 0\n'
+        'subprocess.Popen([PYTHON_EXE,SCRIPT],cwd=APP_ROOT,creationflags=flags,close_fds=True)\n'
+        'try:os.remove(sys.argv[0])\n'
+        'except Exception:pass\n'
     )
 
-    bat_path = os.path.join(
+    # 定位 pythonw.exe（无窗口模式）
+    pythonw = python_exe.replace('python.exe', 'pythonw.exe')
+    if not os.path.isfile(pythonw):
+        pythonw = shutil.which('pythonw') or python_exe
+
+    proxy_path = os.path.join(
         tempfile.gettempdir(),
-        f'restart_{os.getpid()}_{int(time.time())}.bat',
+        f'restart_{os.getpid()}_{int(time.time())}.pyw',
     )
 
     try:
-        with open(bat_path, 'w', newline='\r\n') as f:
-            f.write(bat_content)
+        with open(proxy_path, 'w', newline='') as f:
+            f.write(proxy_code)
 
-        # 以独立于当前进程的方式启动 BAT 脚本
-        # 使用 CREATE_NEW_CONSOLE 让 cmd.exe 拥有独立控制台，
-        # 确保 start 命令能正常创建新窗口给 Python 进程
+        # pythonw.exe 本身无窗口，无需额外标志
+        # 如果 fallback 到 python.exe，则使用 CREATE_NO_WINDOW
+        flags = subprocess.CREATE_NO_WINDOW if pythonw == python_exe else 0
+
         subprocess.Popen(
-            ['cmd.exe', '/c', bat_path],
+            [pythonw, proxy_path],
             cwd=APP_ROOT,
-            creationflags=subprocess.CREATE_NEW_CONSOLE,
+            creationflags=flags,
             close_fds=True,
         )
     except Exception:
-        # fallback：直接启动，总比不启动好
+        # fallback：直接启动，完全无窗口
         try:
             subprocess.Popen(
                 [python_exe, script],
                 cwd=APP_ROOT,
-                creationflags=subprocess.CREATE_NEW_CONSOLE,
+                creationflags=subprocess.CREATE_NO_WINDOW,
                 close_fds=True,
             )
         except Exception:
             subprocess.Popen([python_exe, script], cwd=APP_ROOT)
 
-    # 强制终止整个进程（注意：_run_update 运行在 daemon 线程中，
-    # sys.exit(0) 只会退出线程，不会退出主进程，导致端口被占用）
-    # 使用 os._exit(0) 确保整个进程退出，让 BAT 脚本接管重启
+    # 强制终止整个进程
     os._exit(0)
 
 
