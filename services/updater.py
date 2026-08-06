@@ -3,8 +3,9 @@
 
 安全策略：
 - 只删除并替换指定的代码文件夹（core, docs, routes, services, static, templates）
-- 绝对不碰：数据库文件(site.duckdb*)、backups/、uploads/、ssl/、.env
-- 更新后自动通过 os.execv 重启进程
+- 绝对不碰：数据库文件、backups/、uploads/、ssl/、.env
+- 不替换的文件列表可在管理后台一键更新页面设置
+- 更新后自动重启进程
 - 跨平台兼容（Windows/Linux/macOS）
 - 自动检测最快代理
 """
@@ -47,8 +48,8 @@ TARGET_ROOT_FILES = [
     'requirements.txt',
 ]
 
-# 绝对不删除/覆盖的路径（相对项目根目录）
-PROTECTED_PATHS = [
+# 默认不替换的路径（相对项目根目录），运行时还会合并设置的排除列表
+DEFAULT_PROTECTED_PATHS = [
     'site.duckdb',
     'site.duckdb.wal',
     'backups',
@@ -59,9 +60,9 @@ PROTECTED_PATHS = [
     '__pycache__',
 ]
 
-# GitHub 代理检测列表（按响应速度排序，检测时自动选最快的）
+# 默认 GitHub 代理列表（按响应速度排序，检测时自动选最快的）
 # 来源：https://github.com/topics/github-proxy
-PROXY_LIST = [
+DEFAULT_PROXY_LIST = [
     ('直连', 'https://github.com'),
     # 通用型代理（URL 前缀方式）
     ('ghproxy.com', 'https://ghproxy.com/https://github.com'),
@@ -163,11 +164,14 @@ def _test_proxy_timeout(proxy_name, proxy_url, timeout=5):
     return None
 
 
-def detect_fastest_proxy(timeout=5):
+def detect_fastest_proxy(proxy_list=None, timeout=5):
     """检测最快的 GitHub 代理，返回 (代理名称, 代理完整URL)。
 
     如果所有代理都不可达，返回直连。
     """
+    if proxy_list is None:
+        proxy_list = DEFAULT_PROXY_LIST
+
     results = []
     threads = []
 
@@ -177,7 +181,7 @@ def detect_fastest_proxy(timeout=5):
         if r:
             results.append(r)
 
-    for name, url in PROXY_LIST:
+    for name, url in proxy_list:
         t = threading.Thread(target=_test, args=(name, url), daemon=True)
         threads.append(t)
         t.start()
@@ -192,20 +196,23 @@ def detect_fastest_proxy(timeout=5):
         return fastest[0], fastest[1]
 
     # 所有代理都失败，返回直连
-    return '直连', PROXY_LIST[0][1]
+    return '直连', proxy_list[0][1]
 
 
 # ---------------------------------------------------------------------------
 # 安全路径检查
 # ---------------------------------------------------------------------------
 
-def _is_protected(rel_path):
+def _is_protected(rel_path, protected_paths=None):
     """检查路径是否受保护（不应删除/覆盖）。"""
+    if protected_paths is None:
+        protected_paths = DEFAULT_PROTECTED_PATHS
+
     # 规范化路径
     rel_path = rel_path.replace('\\', '/').strip('/')
 
     # 检查是否匹配受保护路径
-    for protected in PROTECTED_PATHS:
+    for protected in protected_paths:
         p = protected.replace('\\', '/').strip('/')
         if rel_path == p or rel_path.startswith(p + '/'):
             return True
@@ -296,9 +303,49 @@ def _find_git():
 def _run_update():
     """执行更新（在后台线程中运行）。"""
     try:
-        _add_event('progress', {'percent': 2, 'message': '正在检测最快的 GitHub 代理...'})
+        _add_event('progress', {'percent': 1, 'message': '正在加载更新配置...'})
 
-        # 0. 检测 git 是否可用
+        # 0. 从设置读取不替换文件列表和自定义代理
+        protected_paths = list(DEFAULT_PROTECTED_PATHS)
+        proxy_list = list(DEFAULT_PROXY_LIST)
+
+        try:
+            from config import get_config_value
+
+            # 读取不替换文件列表
+            excluded_raw = get_config_value('UPDATE_EXCLUDED_FILES', '')
+            if excluded_raw:
+                custom_excluded = [p.strip() for p in excluded_raw.split(',') if p.strip()]
+                for p in custom_excluded:
+                    if p not in protected_paths:
+                        protected_paths.append(p)
+
+            # 读取自定义代理
+            proxies_raw = get_config_value('GITHUB_PROXIES', '')
+            if proxies_raw:
+                for line in proxies_raw.strip().split('\n'):
+                    line = line.strip()
+                    if not line or '=' not in line:
+                        continue
+                    name, url = line.split('=', 1)
+                    name = name.strip()
+                    url = url.strip()
+                    if name and url:
+                        # 替换同名的已有代理，或追加
+                        replaced = False
+                        for i, (n, u) in enumerate(proxy_list):
+                            if n == name:
+                                proxy_list[i] = (name, url)
+                                replaced = True
+                                break
+                        if not replaced:
+                            proxy_list.append((name, url))
+        except Exception:
+            pass  # 读取设置失败时使用默认值
+
+        _add_event('progress', {'percent': 2, 'message': f'已加载 {len(protected_paths)} 个受保护路径，{len(proxy_list)} 个代理'})
+
+        # 1. 检测 git 是否可用
         git_path = _find_git()
         if not git_path:
             raise RuntimeError(
@@ -308,8 +355,8 @@ def _run_update():
 
         _add_event('progress', {'percent': 3, 'message': f'已找到 Git: {git_path}'})
 
-        # 1. 检测代理
-        proxy_name, proxy_url = detect_fastest_proxy()
+        # 2. 检测代理
+        proxy_name, proxy_url = detect_fastest_proxy(proxy_list=proxy_list)
         _add_event('progress', {'percent': 5, 'message': f'已选择代理: {proxy_name}'})
 
         # 构建克隆 URL
@@ -560,102 +607,24 @@ def _run_update():
 
 
 def _restart_app():
-    """重启当前应用进程（跨平台）。"""
-    import signal
+    """重启当前应用进程（跨平台，优雅替换）。
 
+    使用 os.execv 直接替换当前进程，不做额外清理。
+    Python 解释器在此过程中会自动释放资源、关闭文件描述符，
+    比手动关闭线程、关闭数据库连接更可靠。
+    """
     python_exe = sys.executable
     script = os.path.join(APP_ROOT, 'app.py')
 
     _add_event('progress', {'percent': 100, 'message': '正在重启服务器...'})
 
-    # 关闭所有后台线程
-    try:
-        from services.logging import log_writer, log_cleaner
-        from services.scheduler import scheduler
-        log_writer.stop()
-        log_cleaner.stop()
-        scheduler.stop()
-    except Exception:
-        pass
+    # 给前端一点时间接收事件
+    time.sleep(0.5)
 
-    # 关闭数据库连接
-    try:
-        from core.db import get_db
-        conn = get_db()
-        try:
-            conn.commit()
-        except Exception:
-            pass
-        conn.close()
-    except Exception:
-        pass
-
-    if sys.platform == 'win32':
-        _restart_win32(python_exe, script)
-    else:
-        # Unix/Linux/macOS 使用 execv 替换进程
-        os.chdir(APP_ROOT)
-        os.execv(python_exe, [python_exe, script])
-
-
-def _restart_win32(python_exe, script):
-    """Windows 可靠重启：使用 Python 代理脚本（pythonw.exe 无窗口模式）。
-
-    避免 CMD 窗口闪烁。创建一个临时 .pyw 脚本，
-    使用 pythonw.exe 运行（无任何窗口），代理脚本等待当前进程退出后
-    启动新进程，然后自删除。
-    """
-    # 代理脚本内容（一行式，紧凑，避免中文编码问题）
-    proxy_code = (
-        'import os,sys,time,subprocess\n'
-        f'APP_ROOT={APP_ROOT!r}\n'
-        f'PYTHON_EXE={python_exe!r}\n'
-        f'SCRIPT={script!r}\n'
-        'time.sleep(3)\n'
-        'flags=subprocess.CREATE_NO_WINDOW if sys.platform=="win32" else 0\n'
-        'subprocess.Popen([PYTHON_EXE,SCRIPT],cwd=APP_ROOT,creationflags=flags,close_fds=True)\n'
-        'try:os.remove(sys.argv[0])\n'
-        'except Exception:pass\n'
-    )
-
-    # 定位 pythonw.exe（无窗口模式）
-    pythonw = python_exe.replace('python.exe', 'pythonw.exe')
-    if not os.path.isfile(pythonw):
-        pythonw = shutil.which('pythonw') or python_exe
-
-    proxy_path = os.path.join(
-        tempfile.gettempdir(),
-        f'restart_{os.getpid()}_{int(time.time())}.pyw',
-    )
-
-    try:
-        with open(proxy_path, 'w', newline='') as f:
-            f.write(proxy_code)
-
-        # pythonw.exe 本身无窗口，无需额外标志
-        # 如果 fallback 到 python.exe，则使用 CREATE_NO_WINDOW
-        flags = subprocess.CREATE_NO_WINDOW if pythonw == python_exe else 0
-
-        subprocess.Popen(
-            [pythonw, proxy_path],
-            cwd=APP_ROOT,
-            creationflags=flags,
-            close_fds=True,
-        )
-    except Exception:
-        # fallback：直接启动，完全无窗口
-        try:
-            subprocess.Popen(
-                [python_exe, script],
-                cwd=APP_ROOT,
-                creationflags=subprocess.CREATE_NO_WINDOW,
-                close_fds=True,
-            )
-        except Exception:
-            subprocess.Popen([python_exe, script], cwd=APP_ROOT)
-
-    # 强制终止整个进程
-    os._exit(0)
+    # 直接替换当前进程（跨平台，无需清理）
+    # os.execv 在 Windows 和 Unix 上均受支持，干净利落
+    os.chdir(APP_ROOT)
+    os.execv(python_exe, [python_exe, script])
 
 
 def start_update():

@@ -80,6 +80,53 @@
                 返回管理中心
             </a>
         </div>
+
+        <!-- 设置面板 -->
+        <div class="mt-8 pixel-card rounded-xl overflow-hidden">
+            <button id="settings-toggle"
+                    class="w-full px-6 py-4 flex items-center justify-between text-left hover:bg-cream/5 transition-colors">
+                <div class="flex items-center gap-2">
+                    <i data-lucide="settings" class="w-5 h-5 text-gold-400"></i>
+                    <span class="font-bold text-base">更新设置</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span id="settings-status" class="text-xs text-cream/50"></span>
+                    <i data-lucide="chevron-down" class="w-5 h-5 text-cream/50 transition-transform duration-200" id="settings-chevron"></i>
+                </div>
+            </button>
+            <div id="settings-body" class="hidden px-6 pb-6 space-y-4">
+                <!-- 不替换文件列表 -->
+                <div>
+                    <label for="excluded-files" class="block text-sm font-medium mb-2">
+                        不替换的文件/文件夹
+                        <span class="text-cream/50 text-xs ml-2">逗号分隔，这些路径在更新时不会被删除或覆盖</span>
+                    </label>
+                    <textarea id="excluded-files" rows="3"
+                              class="w-full px-3 py-2 bg-forest-900/60 border border-cream/20 rounded-lg text-sm focus:outline-none focus:border-gold-400 transition-colors resize-y font-mono"
+                              placeholder="site.duckdb,backups,uploads,ssl,.env"></textarea>
+                </div>
+                <!-- GitHub 代理列表 -->
+                <div>
+                    <label for="github-proxies" class="block text-sm font-medium mb-2">
+                        自定义 GitHub 代理
+                        <span class="text-cream/50 text-xs ml-2">每行一个，格式：名称=URL。留空使用默认列表</span>
+                    </label>
+                    <textarea id="github-proxies" rows="4"
+                              class="w-full px-3 py-2 bg-forest-900/60 border border-cream/20 rounded-lg text-sm focus:outline-none focus:border-gold-400 transition-colors resize-y font-mono"
+                              placeholder="示例：
+ghproxy.com=https://ghproxy.com/https://github.com
+kkgithub.com=https://kkgithub.com/https://github.com"></textarea>
+                </div>
+                <!-- 保存按钮 -->
+                <div class="flex justify-end">
+                    <button id="save-settings-btn"
+                            class="px-5 py-2 bg-cream/10 hover:bg-cream/20 text-cream text-sm rounded-lg transition-colors border border-cream/20 disabled:opacity-50 disabled:cursor-not-allowed">
+                        <i data-lucide="save" class="w-4 h-4 inline mr-1"></i>
+                        保存设置
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
 </section>
 {% endblock %}
@@ -264,6 +311,97 @@ function resetButton() {
     if (window.lucide) lucide.createIcons();
 }
 
+// ---------------------------------------------------------------------------
+// 设置面板
+// ---------------------------------------------------------------------------
+const settingsToggle = document.getElementById('settings-toggle');
+const settingsBody = document.getElementById('settings-body');
+const settingsChevron = document.getElementById('settings-chevron');
+const settingsStatus = document.getElementById('settings-status');
+const excludedInput = document.getElementById('excluded-files');
+const proxiesInput = document.getElementById('github-proxies');
+const saveBtn = document.getElementById('save-settings-btn');
+
+// 加载设置
+function loadUpdateSettings() {
+    fetch('/admin/api/settings')
+        .then(r => r.json())
+        .then(data => {
+            if (!data.success) return;
+            const settings = data.settings || [];
+            let excluded = '';
+            let proxies = '';
+            settings.forEach(function(s) {
+                if (s.key === 'UPDATE_EXCLUDED_FILES') {
+                    excluded = s.value || '';
+                } else if (s.key === 'GITHUB_PROXIES') {
+                    proxies = s.value || '';
+                }
+            });
+            excludedInput.value = excluded;
+            proxiesInput.value = proxies;
+            settingsStatus.textContent = '已加载';
+        })
+        .catch(function() {
+            settingsStatus.textContent = '加载失败';
+        });
+}
+
+// 保存设置
+function saveUpdateSettings() {
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<i data-lucide="loader" class="w-4 h-4 inline mr-1 animate-spin"></i>保存中...';
+    if (window.lucide) lucide.createIcons();
+
+    fetch('/admin/api/settings/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            items: [
+                { key: 'UPDATE_EXCLUDED_FILES', value: excludedInput.value },
+                { key: 'GITHUB_PROXIES', value: proxiesInput.value },
+            ]
+        })
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.success) {
+            settingsStatus.textContent = '已保存 ✓';
+            settingsStatus.className = 'text-xs text-green-400';
+        } else {
+            settingsStatus.textContent = '保存失败: ' + (data.message || '');
+            settingsStatus.className = 'text-xs text-red-400';
+        }
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = '<i data-lucide="save" class="w-4 h-4 inline mr-1"></i>保存设置';
+        if (window.lucide) lucide.createIcons();
+        setTimeout(function() {
+            settingsStatus.className = 'text-xs text-cream/50';
+        }, 3000);
+    })
+    .catch(function() {
+        settingsStatus.textContent = '网络错误';
+        settingsStatus.className = 'text-xs text-red-400';
+        saveBtn.disabled = false;
+        saveBtn.innerHTML = '<i data-lucide="save" class="w-4 h-4 inline mr-1"></i>保存设置';
+        if (window.lucide) lucide.createIcons();
+    });
+}
+
+// 折叠面板
+settingsToggle.addEventListener('click', function() {
+    const isHidden = settingsBody.classList.contains('hidden');
+    settingsBody.classList.toggle('hidden');
+    if (isHidden) {
+        settingsChevron.style.transform = 'rotate(180deg)';
+    } else {
+        settingsChevron.style.transform = 'rotate(0deg)';
+    }
+});
+
+// 保存按钮
+saveBtn.addEventListener('click', saveUpdateSettings);
+
 // 页面加载时，如果已有更新在运行，自动连接 SSE
 document.addEventListener('DOMContentLoaded', function() {
     if (updateRunning) {
@@ -272,6 +410,7 @@ document.addEventListener('DOMContentLoaded', function() {
         if (window.lucide) lucide.createIcons();
         connectSSE();
     }
+    loadUpdateSettings();
 });
 </script>
 {% endblock %}
