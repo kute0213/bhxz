@@ -511,24 +511,66 @@ def _restart_app():
     except Exception:
         pass
 
-    # 使用 os.execv 重启（Unix）或 subprocess（Windows fallback）
     if sys.platform == 'win32':
-        # Windows 上 os.execv 可能有问题，使用 subprocess 启动新进程后退出
-        try:
-            subprocess.Popen(
-                [python_exe, script],
-                cwd=APP_ROOT,
-                creationflags=subprocess.CREATE_NEW_PROCESS_GROUP
-                if hasattr(subprocess, 'CREATE_NEW_PROCESS_GROUP') else 0,
-            )
-        except Exception:
-            subprocess.Popen([python_exe, script], cwd=APP_ROOT)
-        # 发送终止信号给自己
-        os.kill(os.getpid(), signal.SIGTERM)
+        _restart_win32(python_exe, script)
     else:
         # Unix/Linux/macOS 使用 execv 替换进程
         os.chdir(APP_ROOT)
         os.execv(python_exe, [python_exe, script])
+
+
+def _restart_win32(python_exe, script):
+    """Windows 可靠重启：使用临时 BAT 脚本作为重启代理。
+
+    从 BAT 脚本启动时，如果直接 Popen 新 Python 进程然后自杀，
+    新进程可能被连带终止。核心思路：
+    1. 创建一个临时 BAT 脚本（独立 cmd.exe 进程）
+    2. BAT 等待 3 秒确保当前进程完全退出
+    3. BAT 启动新 Python 进程
+    4. BAT 自删除清理
+    """
+    bat_content = (
+        '@echo off\r\n'
+        f'cd /d "{APP_ROOT}"\r\n'
+        'timeout /t 3 /nobreak > nul\r\n'
+        f'start "" "{python_exe}" "{script}"\r\n'
+        'del "%~f0"\r\n'
+    )
+
+    bat_path = os.path.join(
+        tempfile.gettempdir(),
+        f'restart_{os.getpid()}_{int(time.time())}.bat',
+    )
+
+    try:
+        with open(bat_path, 'w', newline='\r\n') as f:
+            f.write(bat_content)
+
+        # 以独立于当前进程的方式启动 BAT 脚本
+        # 使用 CREATE_NEW_CONSOLE 让 cmd.exe 拥有独立控制台，
+        # 确保 start 命令能正常创建新窗口给 Python 进程
+        subprocess.Popen(
+            ['cmd.exe', '/c', bat_path],
+            cwd=APP_ROOT,
+            creationflags=subprocess.CREATE_NEW_CONSOLE,
+            close_fds=True,
+        )
+    except Exception:
+        # fallback：直接启动，总比不启动好
+        try:
+            subprocess.Popen(
+                [python_exe, script],
+                cwd=APP_ROOT,
+                creationflags=subprocess.CREATE_NEW_CONSOLE,
+                close_fds=True,
+            )
+        except Exception:
+            subprocess.Popen([python_exe, script], cwd=APP_ROOT)
+
+    # 强制终止整个进程（注意：_run_update 运行在 daemon 线程中，
+    # sys.exit(0) 只会退出线程，不会退出主进程，导致端口被占用）
+    # 使用 os._exit(0) 确保整个进程退出，让 BAT 脚本接管重启
+    os._exit(0)
 
 
 def start_update():

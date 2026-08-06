@@ -762,8 +762,9 @@ server {
 - **安全保护**：数据库文件（`site.duckdb`）、备份目录（`backups/`）、上传目录（`uploads/`）、SSL证书（`ssl/`）、`.env` 等配置文件不受影响
 - **代理检测**：自动并行测试多个 GitHub 代理（ghproxy.com、ghproxy.net 等），选择响应最快的代理进行克隆
 - **进度展示**：SSE 实时流式输出更新进度，前端展示进度条与详细日志
-- **自动重启**：更新完成后自动重启服务器（Unix 使用 `os.execv` 进程替换，Windows 使用 `subprocess` 新进程）
+- **自动重启**：更新完成后自动重启服务器（Unix 使用 `os.execv` 进程替换，Windows 使用临时 BAT 脚本代理重启）
 - **跨平台兼容**：Windows/Linux/macOS 全平台支持
+  - Windows 修复：从 BAT 脚本启动时，自动重启失败（只关闭不重启）的问题已修复。使用临时 BAT 脚本作为重启代理 + `CREATE_NEW_CONSOLE` 独立控制台 + `os._exit(0)` 强制进程退出，确保新进程能独立启动
 
 **后端实现**：
 - `services/updater.py` — 核心更新逻辑（代理检测、Git 克隆、安全删除替换、自动重启）
