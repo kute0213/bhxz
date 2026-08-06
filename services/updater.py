@@ -214,6 +214,63 @@ def _is_target_root_file(rel_path):
 
 
 # ---------------------------------------------------------------------------
+# Git 查找（跨平台）
+# ---------------------------------------------------------------------------
+
+def _find_git():
+    """查找系统上的 Git 可执行文件路径。
+
+    优先使用 PATH 中的 git，Windows 上额外检查常见安装路径。
+    返回完整路径字符串，未找到则返回 None。
+    """
+    # 1. 优先检查 PATH
+    git = shutil.which('git')
+    if git:
+        return os.path.abspath(git)
+
+    # 2. Windows 上检查常见安装路径
+    if sys.platform == 'win32':
+        common_paths = [
+            r'C:\Program Files\Git\bin\git.exe',
+            r'C:\Program Files (x86)\Git\bin\git.exe',
+            r'C:\Program Files\Git\cmd\git.exe',
+            r'C:\Program Files (x86)\Git\cmd\git.exe',
+            os.path.expanduser(r'~\AppData\Local\Programs\Git\bin\git.exe'),
+            os.path.expanduser(r'~\AppData\Local\Programs\Git\cmd\git.exe'),
+            os.path.expanduser(r'~\scoop\apps\git\current\bin\git.exe'),
+            os.path.expanduser(r'~\scoop\apps\git\current\cmd\git.exe'),
+        ]
+        for p in common_paths:
+            if os.path.isfile(p):
+                return p
+
+        # 3. 尝试从注册表读取 Git 安装路径
+        try:
+            import winreg
+            for key in [winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER]:
+                for subkey in [
+                    r'SOFTWARE\GitForWindows',
+                    r'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Git_is1',
+                ]:
+                    try:
+                        with winreg.OpenKey(key, subkey) as reg_key:
+                            install_path, _ = winreg.QueryValueEx(reg_key, 'InstallPath')
+                            if install_path:
+                                exe = os.path.join(install_path, 'bin', 'git.exe')
+                                if os.path.isfile(exe):
+                                    return exe
+                                exe = os.path.join(install_path, 'cmd', 'git.exe')
+                                if os.path.isfile(exe):
+                                    return exe
+                    except (OSError, ValueError):
+                        continue
+        except ImportError:
+            pass
+
+    return None
+
+
+# ---------------------------------------------------------------------------
 # 核心更新逻辑
 # ---------------------------------------------------------------------------
 
@@ -221,6 +278,16 @@ def _run_update():
     """执行更新（在后台线程中运行）。"""
     try:
         _add_event('progress', {'percent': 2, 'message': '正在检测最快的 GitHub 代理...'})
+
+        # 0. 检测 git 是否可用
+        git_path = _find_git()
+        if not git_path:
+            raise RuntimeError(
+                '未找到 Git，请先安装 Git（https://git-scm.com/downloads）'
+                '并确保 Git 已添加到系统 PATH 环境变量中'
+            )
+
+        _add_event('progress', {'percent': 3, 'message': f'已找到 Git: {git_path}'})
 
         # 1. 检测代理
         proxy_name, proxy_url = detect_fastest_proxy()
@@ -243,13 +310,25 @@ def _run_update():
         # 2. 克隆到临时目录
         temp_dir = tempfile.mkdtemp(prefix='bhxz_update_')
         try:
-            # 使用 git clone
-            git_cmd = ['git', 'clone', '--depth', '1', '--single-branch', clone_url, temp_dir]
+            # 使用 git clone（使用完整路径确保 Windows 能找到）
+            git_cmd = [git_path, 'clone', '--depth', '1', '--single-branch', clone_url, temp_dir]
 
             # 设置 git 不再交互
             env = os.environ.copy()
             env['GIT_TERMINAL_PROMPT'] = '0'
             env['GIT_ASKPASS'] = 'echo'
+
+            # Windows 上确保 Git 的 bin 目录在 PATH 中（解决 DLL 依赖问题）
+            if sys.platform == 'win32':
+                git_dir = os.path.dirname(os.path.dirname(git_path))
+                git_bin = os.path.join(git_dir, 'bin')
+                git_cmd_dir = os.path.join(git_dir, 'cmd')
+                extra_paths = []
+                for p in [git_bin, git_cmd_dir]:
+                    if os.path.isdir(p) and p not in env.get('PATH', ''):
+                        extra_paths.append(p)
+                if extra_paths:
+                    env['PATH'] = os.pathsep.join(extra_paths + [env.get('PATH', '')])
 
             proc = subprocess.run(
                 git_cmd,
