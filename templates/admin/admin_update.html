@@ -218,6 +218,10 @@ function handleEvent(msg) {
             updateProgress(data.percent || 0, data.message || '');
             break;
 
+        case 'log':
+            addLogEntry(data.message || '');
+            break;
+
         case 'error':
             showError(data.message || '未知错误');
             break;
@@ -226,6 +230,19 @@ function handleEvent(msg) {
             handleDone(data.success, data.message, null);
             break;
     }
+}
+
+// 添加日志条目（不改变进度条）
+function addLogEntry(message) {
+    const logArea = document.getElementById('log-area');
+    if (logArea.classList.contains('hidden')) {
+        logArea.classList.remove('hidden');
+    }
+    const logEntry = document.createElement('div');
+    logEntry.className = 'text-cream/60';
+    logEntry.textContent = '[' + new Date().toLocaleTimeString() + '] ' + message;
+    logArea.appendChild(logEntry);
+    logArea.scrollTop = logArea.scrollHeight;
 }
 
 // 更新进度

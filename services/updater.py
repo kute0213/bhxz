@@ -7,7 +7,7 @@
 - 不替换的文件列表可在管理后台一键更新页面设置
 - 更新后自动重启进程
 - 跨平台兼容（Windows/Linux/macOS）
-- 自动检测最快代理
+- 自动检测最快代理（带详细日志）
 """
 
 import os
@@ -44,12 +44,14 @@ DEFAULT_PROTECTED_PATHS = [
     '__pycache__',
 ]
 
-# 默认 GitHub 代理列表（按响应速度排序，检测时自动选最快的）
+# 默认 GitHub 代理列表（按类型分组，检测时自动选择最快的可用代理）
+# 移除了重复的 ghproxy.net 条目
 DEFAULT_PROXY_LIST = [
+    # ===== 直连 =====
     ('直连', 'https://github.com'),
-    # 通用型代理（URL 前缀方式）
+
+    # ===== 通用型代理（URL 前缀方式，在最前面加 https://X/） =====
     ('ghproxy.com', 'https://ghproxy.com/https://github.com'),
-    ('ghproxy.net', 'https://ghproxy.net/https://github.com'),
     ('mirror.ghproxy.com', 'https://mirror.ghproxy.com/https://github.com'),
     ('ghproxy.homeboyc.cn', 'https://ghproxy.homeboyc.cn/https://github.com'),
     ('gh.llkk.cc', 'https://gh.llkk.cc/https://github.com'),
@@ -57,14 +59,33 @@ DEFAULT_PROXY_LIST = [
     ('gh.h233.eu.org', 'https://gh.h233.eu.org/https://github.com'),
     ('gh.api.99988866.xyz', 'https://gh.api.99988866.xyz/https://github.com'),
     ('moeyy.cn/gh-proxy', 'https://moeyy.cn/gh-proxy/https://github.com'),
+    ('gh-proxy.yizhuan.org', 'https://gh-proxy.yizhuan.org/https://github.com'),
+    ('ghproxy.856539.xyz', 'https://ghproxy.856539.xyz/https://github.com'),
+    ('ghproxy.alphavps.workers.dev', 'https://ghproxy.alphavps.workers.dev/https://github.com'),
+    ('gitproxy.plus1.win', 'https://gitproxy.plus1.win/https://github.com'),
+    ('gh-proxy.lxstv.pw', 'https://gh-proxy.lxstv.pw/https://github.com'),
+    ('ghproxy.guidao.workers.dev', 'https://ghproxy.guidao.workers.dev/https://github.com'),
+
+    # ===== 镜像站 =====
     ('bgithub.xyz', 'https://bgithub.xyz/https://github.com'),
     ('kkgithub.com', 'https://kkgithub.com/https://github.com'),
     ('hub.fastgit.org', 'https://hub.fastgit.org/https://github.com'),
     ('gitclone.com', 'https://gitclone.com/github.com'),
     ('github.ur1.fun', 'https://github.ur1.fun/https://github.com'),
     ('githubfast.com', 'https://githubfast.com/https://github.com'),
+    ('github.moeyy.xyz', 'https://github.moeyy.xyz/https://github.com'),
+
+    # ===== 文件加速型 =====
     ('github.akams.cn', 'https://github.akams.cn/https://github.com'),
     ('ghp.ci', 'https://ghp.ci/https://github.com'),
+    ('gh.dcm.so', 'https://gh.dcm.so/https://github.com'),
+    ('gh-proxy.lhr.ltd', 'https://gh-proxy.lhr.ltd/https://github.com'),
+    ('gitproxy.188706.xyz', 'https://gitproxy.188706.xyz/https://github.com'),
+    ('ghproxy.yaoyaoling.net', 'https://ghproxy.yaoyaoling.net/https://github.com'),
+    ('github.ddlink.cc', 'https://github.ddlink.cc/https://github.com'),
+    ('gh.idayer.com', 'https://gh.idayer.com/https://github.com'),
+    ('slink.ltd', 'https://slink.ltd/https://github.com'),
+    ('gh-proxy.netlify.app', 'https://gh-proxy.netlify.app/https://github.com'),
 ]
 
 # ---------------------------------------------------------------------------
@@ -122,51 +143,134 @@ def get_status():
 
 
 # ---------------------------------------------------------------------------
-# 代理检测
+# 代理检测（带详细日志）
 # ---------------------------------------------------------------------------
 
-def _test_proxy_timeout(proxy_name, proxy_url, timeout=6):
-    """测试代理的响应时间，返回 (名称, 完整URL, 延迟秒数) 或 None。
+# 代理检测结果缓存（供日志查看）
+_proxy_test_results = []
+_proxy_test_lock = threading.Lock()
 
-    使用 GET 请求测试，部分代理不支持 HEAD。
-    """
-    # 构建测试 URL：用代理访问 GitHub 根路径
+
+def _build_test_url(proxy_name, proxy_url):
+    """根据代理类型构建测试 URL。"""
     base = proxy_url.rstrip('/')
-    if 'github.com' in base or proxy_name == '直连':
-        test_url = base + '/'
+    if proxy_name == '直连' or 'github.com' in base:
+        # 直连或本身就是 github.com 的变体
+        return base + '/'
     else:
-        test_url = base + '/https://github.com/'
+        # 前缀式代理：测试 https://代理/https://github.com/
+        return base + '/https://github.com/'
+
+
+def _test_proxy_timeout(proxy_name, proxy_url, timeout=4):
+    """测试代理的响应时间，返回详细结果字典。
+
+    返回:
+        {
+            'name': 代理名称,
+            'url': 代理URL,
+            'test_url': 实际测试URL,
+            'elapsed': 响应秒数（失败则为 timeout 值）,
+            'status': 'success' 或 'fail',
+            'error': 错误描述（成功时为空字符串）,
+        }
+    """
+    test_url = _build_test_url(proxy_name, proxy_url)
 
     try:
         req = Request(test_url, method='GET')
         req.add_header('User-Agent', 'Mozilla/5.0')
-        # 不自动跟随重定向，减少超时
         start = time.time()
         resp = urlopen(req, timeout=timeout)
         elapsed = time.time() - start
-        # 只要返回了响应就算成功（包括 3xx 重定向）
-        return (proxy_name, proxy_url, elapsed)
-    except (URLError, OSError, ValueError):
-        pass
-    return None
+        return {
+            'name': proxy_name,
+            'url': proxy_url,
+            'test_url': test_url,
+            'elapsed': round(elapsed, 2),
+            'status': 'success',
+            'error': '',
+        }
+    except URLError as e:
+        reason = _get_urlerror_reason(e)
+        return {
+            'name': proxy_name,
+            'url': proxy_url,
+            'test_url': test_url,
+            'elapsed': timeout,
+            'status': 'fail',
+            'error': f'URLError: {reason}',
+        }
+    except OSError as e:
+        return {
+            'name': proxy_name,
+            'url': proxy_url,
+            'test_url': test_url,
+            'elapsed': timeout,
+            'status': 'fail',
+            'error': f'OSError: {e.strerror or str(e)[:60]}',
+        }
+    except ValueError as e:
+        return {
+            'name': proxy_name,
+            'url': proxy_url,
+            'test_url': test_url,
+            'elapsed': timeout,
+            'status': 'fail',
+            'error': f'ValueError: {str(e)[:60]}',
+        }
+    except Exception as e:
+        return {
+            'name': proxy_name,
+            'url': proxy_url,
+            'test_url': test_url,
+            'elapsed': timeout,
+            'status': 'fail',
+            'error': f'{type(e).__name__}: {str(e)[:80]}',
+        }
 
 
-def detect_fastest_proxy(proxy_list=None, timeout=5):
-    """检测最快的 GitHub 代理，返回 (代理名称, 代理完整URL)。
+def _get_urlerror_reason(e):
+    """提取 URLError 的具体原因描述。"""
+    if hasattr(e, 'reason'):
+        r = e.reason
+        if isinstance(r, (TimeoutError, ConnectionRefusedError, ConnectionResetError,
+                          ConnectionAbortedError, ConnectionError)):
+            return type(r).__name__
+        if isinstance(r, str):
+            return r[:60]
+        return str(r)[:60]
+    if hasattr(e, 'code'):
+        return f'HTTP {e.code}'
+    return str(e)[:60]
 
-    如果所有代理都不可达，返回直连。
+
+def detect_fastest_proxy(proxy_list=None, timeout=4):
+    """检测所有可用的 GitHub 代理，返回排序后的可用列表 [(名称, URL, 延迟), ...]。
+
+    特点：
+    - 并行检测所有代理
+    - 记录每个代理的详细测试结果（包括测试URL、错误原因）
+    - 至少返回一个结果（直连兜底）
+
+    参数:
+        proxy_list: 待检测的代理列表，默认使用 DEFAULT_PROXY_LIST
+        timeout: 每个代理的超时秒数（默认 4s，比之前 5s 更激进）
+
+    返回:
+        [(名称, URL, 延迟秒数), ...] 按延迟升序排列
     """
     if proxy_list is None:
         proxy_list = DEFAULT_PROXY_LIST
 
-    results = []
+    all_results = []
     threads = []
+    lock = threading.Lock()
 
-    # 使用多线程并行测试
     def _test(pn, pu):
         r = _test_proxy_timeout(pn, pu, timeout)
-        if r:
-            results.append(r)
+        with lock:
+            all_results.append(r)
 
     for name, url in proxy_list:
         t = threading.Thread(target=_test, args=(name, url), daemon=True)
@@ -176,14 +280,45 @@ def detect_fastest_proxy(proxy_list=None, timeout=5):
     for t in threads:
         t.join()
 
-    if results:
-        # 按延迟排序，取最快的
-        results.sort(key=lambda x: x[2])
-        fastest = results[0]
-        return fastest[0], fastest[1]
+    # 按状态和延迟排序（成功的在前，按延迟升序；失败的在后，按名称排序）
+    success_results = [r for r in all_results if r['status'] == 'success']
+    fail_results = [r for r in all_results if r['status'] == 'fail']
 
-    # 所有代理都失败，返回直连
-    return '直连', proxy_list[0][1]
+    success_results.sort(key=lambda x: x['elapsed'])
+    fail_results.sort(key=lambda x: x['name'])
+
+    # 记录详细结果（供后续日志查看）
+    with _proxy_test_lock:
+        _proxy_test_results.clear()
+        for r in success_results:
+            _proxy_test_results.append({
+                'name': r['name'],
+                'url': r['url'],
+                'test_url': r['test_url'],
+                'elapsed': f'{r["elapsed"]:.1f}s',
+                'status': 'success',
+                'error': '',
+            })
+        for r in fail_results:
+            _proxy_test_results.append({
+                'name': r['name'],
+                'url': r['url'],
+                'test_url': r['test_url'],
+                'elapsed': f'{r["elapsed"]:.1f}s',
+                'status': 'fail',
+                'error': r['error'],
+            })
+
+    # 返回可用代理列表
+    available = [(r['name'], r['url'], r['elapsed']) for r in success_results]
+
+    # 如果所有代理都失败，至少返回直连
+    if not available:
+        # 找到直连在原始列表中的位置
+        direct_url = proxy_list[0][1]  # 默认第一个是直连
+        return [('直连', direct_url, 999)]
+
+    return available
 
 
 # ---------------------------------------------------------------------------
@@ -323,28 +458,80 @@ def _run_update():
                 '并确保 Git 已添加到系统 PATH 环境变量中'
             )
 
-        # 2. 检测代理
-        _add_event('progress', {'percent': 3, 'message': '正在检测最快的 GitHub 代理...'})
-        proxy_name, proxy_url = detect_fastest_proxy(proxy_list=proxy_list)
-        _add_event('progress', {'percent': 5, 'message': f'已选择代理: {proxy_name}'})
+        _add_event('log', {'message': f'✓ Git 路径: {git_path}'})
 
-        # 构建克隆 URL
-        if proxy_name == '直连':
-            clone_url = GITHUB_REPO
-        else:
-            base = proxy_url.rstrip('/')
-            if 'github.com' in base:
-                clone_url = base + '/kute0213/bhxz.git'
+        # 2. 检测代理（带详细日志）
+        _add_event('progress', {'percent': 3, 'message': f'正在检测 {len(proxy_list)} 个 GitHub 代理...'})
+        _add_event('log', {'message': f'╔══ 开始代理检测（共 {len(proxy_list)} 个，超时 {4}s）'})
+
+        # 列出所有待测代理
+        for i, (name, url) in enumerate(proxy_list, 1):
+            test_url = _build_test_url(name, url)
+            _add_event('log', {'message': f'║  [{i:2d}] {name:25s} → {test_url}'})
+
+        available_proxies = detect_fastest_proxy(proxy_list=proxy_list)
+
+        # 记录详细结果
+        success_count = 0
+        fail_count = 0
+        with _proxy_test_lock:
+            for r in _proxy_test_results:
+                if r['status'] == 'success':
+                    success_count += 1
+                    _add_event('log', {'message': f'║  ✓ {r["name"]:25s} {r["elapsed"]:>6s}  {r["test_url"]}'})
+                else:
+                    fail_count += 1
+                    _add_event('log', {'message': f'║  ✗ {r["name"]:25s} {r["elapsed"]:>6s}  {r["error"][:60]}'})
+
+        _add_event('log', {'message': f'╚══ 代理检测完成：可用 {success_count} 个，不可用 {fail_count} 个'})
+
+        if not available_proxies:
+            _add_event('log', {'message': '⚠ 所有代理均不可达，将使用直连'})
+            available_proxies = [('直连', GITHUB_REPO, 999)]
+
+        fastest = available_proxies[0]
+        proxy_name, proxy_url = fastest[0], fastest[1]
+        _add_event('progress', {
+            'percent': 5,
+            'message': f'已选择代理: {proxy_name} ({fastest[2]:.1f}s)',
+        })
+        _add_event('log', {'message': f'→ 选择最快代理: {proxy_name} ({fastest[2]:.1f}s)'})
+
+        # 输出可用代理排名
+        if len(available_proxies) > 1:
+            rank_parts = [f'{i+1}. {n} ({e:.1f}s)' for i, (n, _, e) in enumerate(available_proxies[:5])]
+            _add_event('log', {'message': f'→ 代理速度排名: {"; ".join(rank_parts)}'})
+            if len(available_proxies) > 5:
+                _add_event('log', {'message': f'→ 以及另外 {len(available_proxies) - 5} 个可用代理'})
+
+        # 3. 构建克隆 URL 并尝试克隆（如果最快的失败，自动尝试下一个）
+        clone_success = False
+        last_error = ''
+
+        for attempt_idx, (name, url, _) in enumerate(available_proxies):
+            if name == '直连':
+                cur_clone_url = GITHUB_REPO
             else:
-                clone_url = base + '/https://github.com/kute0213/bhxz.git'
+                base = url.rstrip('/')
+                if 'github.com' in base:
+                    cur_clone_url = base + '/kute0213/bhxz.git'
+                else:
+                    cur_clone_url = base + '/https://github.com/kute0213/bhxz.git'
 
-        _add_event('progress', {'percent': 5, 'message': '正在克隆仓库...'})
+            _add_event('log', {'message': f'{"─" * 40}'})
+            if attempt_idx == 0:
+                _add_event('log', {'message': f'克隆尝试 #{attempt_idx + 1}: {name} （首选）'})
+                _add_event('progress', {'percent': 5, 'message': f'正在从 {name} 克隆仓库...'})
+            else:
+                _add_event('log', {'message': f'克隆尝试 #{attempt_idx + 1}: {name} （备用）'})
+                _add_event('progress', {'percent': 5, 'message': f'尝试备用代理 {name}...'})
 
-        # 3. 克隆到临时目录
-        temp_dir = tempfile.mkdtemp(prefix='bhxz_update_')
-        try:
+            _add_event('log', {'message': f'  克隆 URL: {cur_clone_url}'})
+
+            temp_dir = tempfile.mkdtemp(prefix='bhxz_update_')
+
             # 执行 git clone
-            git_cmd = [git_path, 'clone', '--depth', '1', '--single-branch', '--progress', clone_url, temp_dir]
+            git_cmd = [git_path, 'clone', '--depth', '1', '--single-branch', '--progress', cur_clone_url, temp_dir]
             env = os.environ.copy()
             env['GIT_TERMINAL_PROMPT'] = '0'
             env['GIT_ASKPASS'] = 'echo'
@@ -355,6 +542,8 @@ def _run_update():
                     if os.path.isdir(p) and p not in env.get('PATH', ''):
                         env['PATH'] = os.pathsep.join([p, env.get('PATH', '')])
 
+            _add_event('log', {'message': f'  执行: {" ".join(git_cmd[:3])} ...'})
+            clone_start = time.time()
             proc = subprocess.Popen(git_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=0, env=env)
 
             # 解析克隆进度
@@ -392,123 +581,142 @@ def _run_update():
             stderr_thread.start()
             proc.wait()
             stderr_thread.join(timeout=5)
+            clone_elapsed = time.time() - clone_start
 
-            if proc.returncode != 0:
+            if proc.returncode == 0:
+                clone_success = True
+                _add_event('log', {'message': f'✓ {name} 克隆成功（耗时 {clone_elapsed:.1f}s）'})
+                break  # 跳出 fallback 循环
+            else:
                 remaining = proc.stderr.read().decode('utf-8', errors='replace').strip()
-                raise RuntimeError(f'Git 克隆失败: {remaining or "未知错误"}')
+                last_error = remaining or '克隆失败（无错误输出）'
+                _add_event('log', {'message': f'✗ {name} 克隆失败（耗时 {clone_elapsed:.1f}s）'})
+                _add_event('log', {'message': f'  错误: {last_error[:200]}'})
+                # 清理本次临时目录
+                try:
+                    shutil.rmtree(temp_dir)
+                except Exception:
+                    pass
+                continue  # 尝试下一个代理
 
-            _add_event('progress', {'percent': 72, 'message': '克隆完成，正在同步文件...'})
+        _add_event('log', {'message': f'{"─" * 40}'})
 
-            # 4. 列出仓库根目录下的所有项目（排除 .git）
-            repo_items = sorted([
-                item for item in os.listdir(temp_dir)
-                if item != '.git'
-            ])
+        # 所有代理都失败
+        if not clone_success:
+            raise RuntimeError(f'所有 {len(available_proxies)} 个可用代理克隆均失败: {last_error}')
 
-            if not repo_items:
-                raise RuntimeError('仓库为空，没有可同步的文件')
+        _add_event('progress', {'percent': 72, 'message': '克隆完成，正在同步文件...'})
 
-            # 统计总文件数（用于进度条）
-            total_files = 0
-            for item in repo_items:
-                src = os.path.join(temp_dir, item)
-                if os.path.isdir(src):
-                    for dirpath, dirnames, filenames in os.walk(src):
-                        total_files += len(filenames)
-                else:
-                    total_files += 1
+        # 4. 列出仓库根目录下的所有项目（排除 .git）
+        repo_items = sorted([
+            item for item in os.listdir(temp_dir)
+            if item != '.git'
+        ])
 
-            _add_event('progress', {'percent': 75, 'message': f'将同步 {len(repo_items)} 个项目，{total_files} 个文件...'})
+        if not repo_items:
+            raise RuntimeError('仓库为空，没有可同步的文件')
 
-            # 5. 全量同步：遍历仓库每个顶级项目
-            #    - 不在保护列表 → 删除本地版本 → 复制新版本
-            #    - 在保护列表 → 跳过
-            #    这样仓库里删除的文件，本地也会被删掉
-            processed = 0
-            remaining_pct = 95 - 75  # 20%
+        # 统计总文件数（用于进度条）
+        total_files = 0
+        for item in repo_items:
+            src = os.path.join(temp_dir, item)
+            if os.path.isdir(src):
+                for dirpath, dirnames, filenames in os.walk(src):
+                    total_files += len(filenames)
+            else:
+                total_files += 1
 
-            for item in repo_items:
-                # 检查是否受保护
-                if _is_protected(item, protected_paths):
-                    _add_event('progress', {
-                        'percent': 75 + int(processed * remaining_pct / total_files),
-                        'message': f'跳过受保护路径: {item}',
-                    })
-                    processed += 1
-                    continue
+        _add_event('progress', {'percent': 75, 'message': f'将同步 {len(repo_items)} 个项目，{total_files} 个文件...'})
+        _add_event('log', {'message': f'开始同步 {len(repo_items)} 个项目，{total_files} 个文件'})
 
-                src = os.path.join(temp_dir, item)
-                dst = os.path.join(APP_ROOT, item)
+        # 5. 全量同步：遍历仓库每个顶级项目
+        #    - 不在保护列表 → 删除本地版本 → 复制新版本
+        #    - 在保护列表 → 跳过
+        #    这样仓库里删除的文件，本地也会被删掉
+        processed = 0
+        remaining_pct = 95 - 75  # 20%
 
-                # 删除本地版本（如果存在）
-                if os.path.isdir(dst):
-                    _add_event('progress', {
-                        'percent': 75 + int(processed * remaining_pct / total_files),
-                        'message': f'正在删除 {item}/...',
-                    })
+        for item in repo_items:
+            # 检查是否受保护
+            if _is_protected(item, protected_paths):
+                _add_event('log', {'message': f'  ⏭ 跳过受保护路径: {item}'})
+                _add_event('progress', {
+                    'percent': 75 + int(processed * remaining_pct / total_files),
+                    'message': f'跳过受保护路径: {item}',
+                })
+                processed += 1
+                continue
 
-                    def _onerror(func, path, exc_info):
-                        for attempt in range(3):
-                            try:
-                                time.sleep(0.5)
-                                func(path)
-                                return
-                            except Exception:
-                                pass
+            src = os.path.join(temp_dir, item)
+            dst = os.path.join(APP_ROOT, item)
 
-                    shutil.rmtree(dst, onerror=_onerror)
-                elif os.path.isfile(dst):
-                    try:
-                        os.remove(dst)
-                    except Exception:
-                        pass
+            _add_event('log', {'message': f'  → 同步: {item}'})
 
-                # 复制新版本
-                if os.path.isdir(src):
-                    # 确保父目录存在
-                    os.makedirs(os.path.dirname(dst) if os.path.dirname(dst) else APP_ROOT, exist_ok=True)
-                    # 递归复制整个目录
-                    for dirpath, dirnames, filenames in os.walk(src):
-                        rel_dir = os.path.relpath(dirpath, src)
-                        target_dir = os.path.join(dst, rel_dir) if rel_dir != '.' else dst
-                        os.makedirs(target_dir, exist_ok=True)
-                        for fn in filenames:
-                            src_file = os.path.join(dirpath, fn)
-                            dst_file = os.path.join(target_dir, fn)
-                            try:
-                                shutil.copy2(src_file, dst_file)
-                            except Exception:
-                                pass
-                            processed += 1
-                            if processed % max(1, total_files // 20) == 0:
-                                pct = 75 + int(processed * remaining_pct / total_files)
-                                _add_event('progress', {
-                                    'percent': min(pct, 94),
-                                    'message': f'正在同步 {item}/...',
-                                })
-                else:
-                    # 单个文件直接复制
-                    os.makedirs(APP_ROOT, exist_ok=True)
-                    try:
-                        shutil.copy2(src, dst)
-                    except Exception:
-                        pass
-                    processed += 1
+            # 删除本地版本（如果存在）
+            if os.path.isdir(dst):
+                _add_event('log', {'message': f'    删除旧目录: {item}/'})
+                _add_event('progress', {
+                    'percent': 75 + int(processed * remaining_pct / total_files),
+                    'message': f'正在删除 {item}/...',
+                })
 
-            # 清理临时目录
-            try:
-                shutil.rmtree(temp_dir)
-            except Exception:
-                pass
+                def _onerror(func, path, exc_info):
+                    for attempt in range(3):
+                        try:
+                            time.sleep(0.5)
+                            func(path)
+                            return
+                        except Exception:
+                            pass
 
-            _add_event('progress', {'percent': 97, 'message': '同步完成，正在准备重启...'})
+                shutil.rmtree(dst, onerror=_onerror)
+            elif os.path.isfile(dst):
+                _add_event('log', {'message': f'    删除旧文件: {item}'})
+                try:
+                    os.remove(dst)
+                except Exception:
+                    pass
 
+            # 复制新版本
+            if os.path.isdir(src):
+                # 确保父目录存在
+                os.makedirs(os.path.dirname(dst) if os.path.dirname(dst) else APP_ROOT, exist_ok=True)
+                # 递归复制整个目录
+                for dirpath, dirnames, filenames in os.walk(src):
+                    rel_dir = os.path.relpath(dirpath, src)
+                    target_dir = os.path.join(dst, rel_dir) if rel_dir != '.' else dst
+                    os.makedirs(target_dir, exist_ok=True)
+                    for fn in filenames:
+                        src_file = os.path.join(dirpath, fn)
+                        dst_file = os.path.join(target_dir, fn)
+                        try:
+                            shutil.copy2(src_file, dst_file)
+                        except Exception:
+                            pass
+                        processed += 1
+                        if processed % max(1, total_files // 20) == 0:
+                            pct = 75 + int(processed * remaining_pct / total_files)
+                            _add_event('progress', {
+                                'percent': min(pct, 94),
+                                'message': f'正在同步 {item}/...',
+                            })
+            else:
+                # 单个文件直接复制
+                os.makedirs(APP_ROOT, exist_ok=True)
+                try:
+                    shutil.copy2(src, dst)
+                except Exception:
+                    pass
+                processed += 1
+
+        # 清理临时目录
+        try:
+            shutil.rmtree(temp_dir)
         except Exception:
-            try:
-                shutil.rmtree(temp_dir)
-            except Exception:
-                pass
-            raise
+            pass
+
+        _add_event('log', {'message': f'✓ 同步完成，共处理 {processed} 个文件'})
+        _add_event('progress', {'percent': 97, 'message': '同步完成，正在准备重启...'})
 
         # 6. 完成
         _add_event('done', {
@@ -520,6 +728,7 @@ def _run_update():
 
     except Exception as e:
         error_msg = str(e)
+        _add_event('log', {'message': f'✗ 更新失败: {error_msg}'})
         _add_event('error', {'message': f'更新失败: {error_msg}'})
         _add_event('done', {'success': False, 'message': f'更新失败: {error_msg}'})
 
