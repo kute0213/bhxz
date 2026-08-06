@@ -51,6 +51,8 @@ def register():
         password = request.form.get('password', '')
         confirm = request.form.get('confirm', '')
         verify_code = request.form.get('verify_code', '').strip()
+        captcha_input = request.form.get('captcha', '').strip()
+        captcha_id = request.form.get('captcha_id', '').strip()
         email = normalize_email(request.form.get('email', ''))
         email_code = request.form.get('email_code', '').strip()
 
@@ -106,6 +108,13 @@ def register():
         else:
             email = ''
 
+        # 图形验证码校验（在创建用户前最后一步，防止验证码被过早消耗）
+        if not captcha_service.verify(captcha_id, captcha_input):
+            log('Register', '图形验证码错误', username=username, ip=request.remote_addr)
+            return _render_register_error('验证码错误或已过期',
+                                           email_verify_enabled=email_verify_enabled,
+                                           group_code_verified=group_code_verified)
+
         conn = get_db()
         try:
             existing = conn.execute("SELECT id FROM users WHERE username = ?", (username,)).fetchone()
@@ -121,6 +130,9 @@ def register():
                 (username, password_hash, email, datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
             )
             conn.commit()
+
+            # 注册成功后消耗验证码，防止重放攻击
+            captcha_service.consume(captcha_id)
 
             # 获取新创建的用户信息并自动登录
             new_user = conn.execute(

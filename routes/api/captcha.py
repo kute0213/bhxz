@@ -37,3 +37,34 @@ def generate():
             'success': False,
             'message': f'生成验证码失败: {str(e)}'
         }), 500
+
+
+@captcha_bp.route('/api/captcha/verify', methods=['POST'])
+def verify():
+    """验证图形验证码（仅校验，不消耗，供前端弹窗验证后提交表单使用）。
+
+    请求 JSON:
+    {
+        "captcha_id": "uuid",
+        "captcha": "用户输入"
+    }
+
+    返回 JSON:
+    {
+        "success": true/false,
+        "message": "验证结果说明"
+    }
+    """
+    data = request.get_json(silent=True) or {}
+    captcha_id = (data.get('captcha_id') or '').strip()
+    captcha_input = (data.get('captcha') or '').strip()
+
+    if not captcha_id or not captcha_input:
+        return jsonify({'success': False, 'message': '参数不完整'}), 400
+
+    if captcha_service.verify(captcha_id, captcha_input):
+        log('Captcha', '验证码校验成功', captcha_id=captcha_id, ip=request.remote_addr)
+        return jsonify({'success': True, 'message': '验证成功'})
+    else:
+        log('Captcha', '验证码校验失败', captcha_id=captcha_id, ip=request.remote_addr)
+        return jsonify({'success': False, 'message': '验证码错误或已过期'})
