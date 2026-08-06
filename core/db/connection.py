@@ -125,7 +125,13 @@ class DuckDBCursor:
             try:
                 parts = sql_stripped.split()
                 if len(parts) >= 3:
-                    table_name = parts[2].strip('`"[]')
+                    raw_table = parts[2].strip('`"[]')
+                    # 只允许纯字母数字下划线的表名，防止 SQL 注入
+                    import re
+                    if not re.match(r'^[a-zA-Z_][a-zA-Z0-9_]*$', raw_table):
+                        self._lastrowid = None
+                        return self
+                    table_name = raw_table
                     seq_name = f'{table_name}_id_seq'
                     try:
                         row = self._duckdb_conn.execute(

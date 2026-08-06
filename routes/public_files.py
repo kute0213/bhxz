@@ -301,7 +301,7 @@ def admin_public_files_page():
     finally:
         conn.close()
 
-    return render_template('admin_public_files.html', user=user, paths=paths)
+    return render_template('admin/admin_public_files.html', user=user, paths=paths)
 
 
 @public_bp.route('/admin/public-files/add', methods=['POST'])

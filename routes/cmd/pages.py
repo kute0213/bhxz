@@ -29,7 +29,7 @@ def cmd_page():
     ]
 
     return render_template(
-        'admin_cmd.html',
+        'admin/admin_cmd.html',
         user=user,
         commands=shell_commands,
     )
@@ -68,7 +68,7 @@ def cmd_editor_page():
             conn.close()
 
     return render_template(
-        'admin_cmd_editor.html',
+        'admin/admin_cmd_editor.html',
         user=user,
         editing_cmd=editing_cmd,
         editing_script=editing_script,

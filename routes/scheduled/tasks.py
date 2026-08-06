@@ -19,7 +19,7 @@ from routes.scheduled import scheduled_bp, _admin_check
 def scheduled_page():
     """定时任务管理页面。"""
     user = _admin_check()
-    return render_template('admin_cmd_scheduled.html', user=user)
+    return render_template('admin/admin_cmd_scheduled.html', user=user)
 
 
 # ---------------------------------------------------------------------------

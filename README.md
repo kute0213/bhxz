@@ -106,38 +106,48 @@
 │       ├── email_code.py         #     /api/email       邮箱验证码发送
 │       └── admin.py              #     /api/admin/logs  访问日志（管理员）
 │
-├── templates/                    # Jinja2 模板（25 个页面）
+├── templates/                    # Jinja2 模板（按功能分类存放）
 │   ├── base.html                 #   基础模板（全局样式、磨砂玻璃、导航栏、动画，含 page_modals 弹窗挂载点）
 │   ├── index.html                #   首页（模组介绍卡片 + 服务器指南入口）
 │   ├── community.html            #   社区页（投票 + 征集）
 │   ├── login.html / register.html
+│   ├── forgot_password.html      #   忘记密码（邮箱验证码重置）
 │   ├── settings.html             #   用户设置（改用户名/密码/注销）
 │   ├── performance.html          #   服务器性能监控
 │   ├── docs.html                 #   文档中心（Markdown 渲染 + 侧边栏导航）
+│   ├── 403.html / 404.html       #   错误页
+│   ├── admin/                    #   管理后台模板（17 个页面）
+│   │   ├── admin.html            #     管理后台首页（统计概览）
+│   │   ├── admin_users.html      #     用户管理
+│   │   ├── admin_logs.html       #     访问日志
+│   │   ├── admin_mod_intros.html #     模组介绍管理
+│   │   ├── admin_guides.html     #     服务器指南管理（审核/编辑/删除）
+│   │   ├── admin_guide_form.html #     指南编辑页面（Markdown 编辑器 + 实时预览）
+│   │   ├── admin_guide_bans.html #     指南编辑权限封禁管理
+│   │   ├── admin_cmd.html        #     CMD 控制台
+│   │   ├── admin_cmd_editor.html #     脚本编辑器（专业代码编辑器页面）
+│   │   ├── admin_cmd_scheduled.html  # 定时任务管理页面
+│   │   ├── admin_settings.html   #     系统设置（在线编辑配置，支持重置，热重载）
+│   │   ├── admin_db_backup.html  #     数据库优化备份页面（进度条 + 备份历史）
+│   │   ├── admin_public_files.html   # 公开文件管理
+│   │   ├── admin_discussion.html #     讨论管理（帖子列表/置顶/锁定/删除）
+│   │   ├── admin_discussion_categories.html  # 讨论分类管理（创建/删除）
+│   │   ├── admin_broadcast.html  #     广播邮件（Markdown 编辑器 + 实时预览 + 发送确认）
+│   │   └── admin_update.html     #     一键更新（SSE 实时进度 + 自动重启）
 │   ├── guides/                   #   服务器指南模板
 │   │   ├── index.html            #     指南列表页（卡片展示 + 状态筛选）
-│   │   └── detail.html           #     指南详情页（Markdown 渲染 + 标题锚点）
+│   │   ├── detail.html           #     指南详情页（Markdown 渲染 + 标题锚点）
+│   │   └── form.html             #     指南编辑页（Markdown 编辑器 + 实时预览）
 │   ├── discussion/               #   讨论帖子模板
 │   │   ├── list.html             #     帖子列表页（分类筛选、置顶优先、分页）
 │   │   ├── detail.html           #     帖子详情页（Markdown 渲染 + 回复列表）
 │   │   └── create.html           #     发帖/编辑页面（Markdown 编辑 + 附件上传）
-│   ├── admin.html                #   管理后台首页
-│   ├── admin_users.html          #   用户管理
-│   ├── admin_logs.html           #   访问日志
-│   ├── manage_mod_intros.html    #   模组介绍管理
-│   ├── admin_guides.html         #   服务器指南管理（审核/编辑/删除）
-│   ├── admin_guide_form.html     #   指南编辑页面（Markdown 编辑器 + 实时预览）
-│   ├── admin_guide_bans.html     #   指南编辑权限封禁管理
-│   ├── admin_cmd.html            #   CMD 控制台
-│   ├── admin_cmd_editor.html     #   脚本编辑器（专业代码编辑器页面）
-│   ├── admin_cmd_scheduled.html  #   定时任务管理页面
-│   ├── admin_settings.html       #   系统设置（在线编辑配置，支持重置，热重载）
-│   ├── admin_db_backup.html      #   数据库优化备份页面（进度条 + 备份历史）
-│   ├── admin_public_files.html   #   公开文件管理
-│   ├── admin_discussion.html     #   讨论管理（帖子列表/置顶/锁定/删除）
-│   ├── admin_discussion_categories.html  #   讨论分类管理（创建/删除）
-│   ├── admin_broadcast.html      #   广播邮件（Markdown 编辑器 + 实时预览 + 发送确认）
-│   └── 403.html / 404.html       #   错误页
+│   └── emails/                   #   邮件 HTML 模板（由服务层程序化渲染）
+│       ├── base.html             #     邮件基础布局
+│       ├── broadcast_message.html #     广播邮件内容
+│       ├── guide_review_pending.html  # 指南待审核通知
+│       ├── guide_review_result.html   # 指南审核结果通知
+│       └── verification_code.html     # 邮箱验证码
 │
 ├── static/                       # 静态资源
 │   ├── css/
@@ -743,6 +753,27 @@ server {
 ## 更新日志
 
 项目的版本变更历史详见 [docs/CHANGELOG.md](file:///workspace/docs/CHANGELOG.md)。
+
+### 一键更新功能
+
+管理后台新增「一键更新」功能，可自动从 GitHub 获取最新代码并重启服务器：
+
+- **更新范围**：自动替换 `core/`、`docs/`、`routes/`、`services/`、`static/`、`templates/` 代码文件夹，以及根级文件 `app.py`、`requirements.txt`
+- **安全保护**：数据库文件（`site.duckdb`）、备份目录（`backups/`）、上传目录（`uploads/`）、SSL证书（`ssl/`）、`.env` 等配置文件不受影响
+- **代理检测**：自动并行测试多个 GitHub 代理（ghproxy.com、ghproxy.net 等），选择响应最快的代理进行克隆
+- **进度展示**：SSE 实时流式输出更新进度，前端展示进度条与详细日志
+- **自动重启**：更新完成后自动重启服务器（Unix 使用 `os.execv` 进程替换，Windows 使用 `subprocess` 新进程）
+- **跨平台兼容**：Windows/Linux/macOS 全平台支持
+
+**后端实现**：
+- `services/updater.py` — 核心更新逻辑（代理检测、Git 克隆、安全删除替换、自动重启）
+- `routes/admin/update.py` — 管理后台路由（页面、启动、SSE 流）
+- `templates/admin_update.html` — 更新页面模板（进度条、实时日志、操作按钮）
+
+### 管理中心功能调整
+- 移除了「社区互动管理」入口（投票与征集管理移至社区页面）
+- 移除了「服务器状态」入口（`/performance` 已公开可访问，无需从管理中心进入）
+- 修复 `admin_cmd.html` 模板中 `<style>` 块未包裹在 `{% block %}` 内导致的 Jinja2 编译错误
 
 ### 最近修复
 

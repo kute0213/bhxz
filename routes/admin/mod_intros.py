@@ -23,7 +23,7 @@ def manage_mod_intros():
     finally:
         conn.close()
 
-    return render_template('manage_mod_intros.html', user=user, mod_intros=intros)
+    return render_template('admin/admin_mod_intros.html', user=user, mod_intros=intros)
 
 
 @admin_bp.route('/admin/mod-intros/add', methods=['POST'])

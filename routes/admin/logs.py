@@ -33,7 +33,7 @@ def admin_logs():
         conn.close()
 
     return render_template(
-        'admin_logs.html',
+        'admin/admin_logs.html',
         user=user,
         logs=logs,
         page=page,

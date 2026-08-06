@@ -18,7 +18,7 @@ from routes.admin import admin_bp
 @admin_required
 def admin_broadcast():
     """广播邮件页面。"""
-    return render_template('admin_broadcast.html', user=g._current_user)
+    return render_template('admin/admin_broadcast.html', user=g._current_user)
 
 
 @admin_bp.route('/admin/broadcast/send', methods=['POST'])

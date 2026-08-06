@@ -32,4 +32,4 @@ def admin_page():
     finally:
         conn.close()
 
-    return render_template('admin.html', user=user, stats=stats)
+    return render_template('admin/admin.html', user=user, stats=stats)

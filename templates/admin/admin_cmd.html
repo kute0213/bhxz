@@ -66,6 +66,7 @@
     </div>
 </section>
 
+{% block extra_style %}
 <style>
     /* 终端弹窗动画 */
     .terminal-fade-in {
@@ -106,6 +107,7 @@
         to   { opacity: 0; transform: translateY(8px) scale(0.98); }
     }
 </style>
+{% endblock %}
 
 {% block extra_script %}
 <script src="{{ url_for('static', filename='js/cmd/terminal-core.js', v='1') }}"></script>

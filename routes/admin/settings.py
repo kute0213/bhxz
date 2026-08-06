@@ -23,7 +23,7 @@ def _admin_check():
 def admin_settings_page():
     """系统设置页面。"""
     user = _admin_check()
-    return render_template('admin_settings.html', user=user)
+    return render_template('admin/admin_settings.html', user=user)
 
 
 @admin_bp.route('/admin/api/settings')

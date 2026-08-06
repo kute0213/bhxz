@@ -57,7 +57,7 @@ def admin_guides():
     finally:
         conn.close()
 
-    return render_template('admin_guides.html', user=user, guides=guides)
+    return render_template('admin/admin_guides.html', user=user, guides=guides)
 
 
 @admin_bp.route('/admin/guides/create', methods=['GET', 'POST'])
@@ -105,7 +105,7 @@ def admin_guide_create():
         finally:
             conn.close()
 
-    return render_template('admin_guide_form.html', user=user, guide=None)
+    return render_template('admin/admin_guide_form.html', user=user, guide=None)
 
 
 @admin_bp.route('/admin/guides/<int:guide_id>/edit', methods=['GET', 'POST'])
@@ -170,7 +170,7 @@ def admin_guide_edit(guide_id):
         finally:
             conn.close()
 
-    return render_template('admin_guide_form.html', user=user, guide=guide)
+    return render_template('admin/admin_guide_form.html', user=user, guide=guide)
 
 
 @admin_bp.route('/admin/guides/<int:guide_id>/delete', methods=['POST'])

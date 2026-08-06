@@ -50,6 +50,8 @@ app.config['MAX_CONTENT_LENGTH'] = MAX_CONTENT_LENGTH
 app.config['TEMPLATES_AUTO_RELOAD'] = os.environ.get('FLASK_ENV') == 'development'
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+# HTTPS 环境下启用 Secure 标志，防止会话 Cookie 被中间人劫持
+app.config['SESSION_COOKIE_SECURE'] = os.environ.get('ENABLE_SSL', '0').lower() in ('1', 'true', 'yes', 'on')
 
 
 # ---------------------------------------------------------------------------

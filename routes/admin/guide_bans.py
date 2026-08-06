@@ -37,7 +37,7 @@ def admin_guide_bans():
     finally:
         conn.close()
 
-    return render_template('admin_guide_bans.html', user=user, bans=bans)
+    return render_template('admin/admin_guide_bans.html', user=user, bans=bans)
 
 
 @admin_bp.route('/admin/guide-bans/create', methods=['POST'])

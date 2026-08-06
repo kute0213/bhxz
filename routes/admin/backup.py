@@ -41,7 +41,7 @@ def db_backup_page():
         conn.close()
 
     return render_template(
-        'admin_db_backup.html',
+        'admin/admin_db_backup.html',
         user=user,
         db_size=db_size,
         backups=backups,

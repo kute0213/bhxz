@@ -1,0 +1,277 @@
+{% extends "base.html" %}
+{% block title %}一键更新{% endblock %}
+{% block content %}
+<section class="page-container py-12">
+    <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="text-center mb-8 sm:mb-10">
+            <h1 class="text-2xl sm:text-3xl font-bold mb-3">一键更新</h1>
+            <p class="text-cream/60 text-sm sm:text-base">从 GitHub 自动获取最新代码，安全替换指定文件夹</p>
+        </div>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        {% for category, message in messages %}
+        <div class="mb-6 p-4 rounded-lg text-sm flex items-center gap-2
+                    {% if category == 'error' %}bg-red-900/30 border border-red-500/30 text-red-300
+                    {% else %}bg-green-900/30 border border-green-500/30 text-green-300{% endif %}">
+            <i data-lucide="{% if category == 'error' %}alert-circle{% else %}check-circle{% endif %}" class="w-5 h-5 flex-shrink-0"></i>
+            {{ message }}
+        </div>
+        {% endfor %}
+        {% endif %}
+        {% endwith %}
+
+        <!-- 更新说明 -->
+        <div class="pixel-card rounded-xl p-6 mb-6">
+            <h2 class="text-lg font-bold mb-3 flex items-center gap-2">
+                <i data-lucide="info" class="w-5 h-5 text-gold-400"></i>
+                更新说明
+            </h2>
+            <ul class="text-sm text-cream/70 space-y-2 list-disc list-inside">
+                <li>将自动更新以下文件夹：<code class="text-gold-400">core/</code>、<code class="text-gold-400">docs/</code>、<code class="text-gold-400">routes/</code>、<code class="text-gold-400">services/</code>、<code class="text-gold-400">static/</code>、<code class="text-gold-400">templates/</code></li>
+                <li>将自动更新根级文件：<code class="text-gold-400">app.py</code>、<code class="text-gold-400">requirements.txt</code></li>
+                <li>数据库、备份、上传文件、SSL证书等用户数据<strong class="text-green-400">不会</strong>被删除</li>
+                <li>更新完成后服务器将<strong class="text-yellow-400">自动重启</strong></li>
+            </ul>
+        </div>
+
+        <!-- 进度区域 -->
+        <div class="pixel-card rounded-xl p-6 mb-6">
+            <h2 class="text-lg font-bold mb-4 flex items-center gap-2">
+                <i data-lucide="refresh-cw" class="w-5 h-5 text-gold-400"></i>
+                更新进度
+            </h2>
+
+            <!-- 进度条 -->
+            <div class="w-full bg-cream/10 rounded-full h-4 mb-3 overflow-hidden">
+                <div id="progress-bar" class="h-full rounded-full transition-all duration-500 ease-out"
+                     style="width: 0%; background: linear-gradient(90deg, #fbbf24, #f59e0b);"></div>
+            </div>
+
+            <!-- 进度文字 -->
+            <div id="progress-text" class="text-sm text-cream/60 text-center">等待开始</div>
+
+            <!-- 详细日志 -->
+            <div id="log-area" class="mt-4 bg-black/40 rounded-lg p-4 max-h-60 overflow-y-auto font-mono text-xs space-y-1 hidden">
+            </div>
+
+            <!-- 错误信息 -->
+            <div id="error-area" class="mt-4 hidden">
+                <div class="bg-red-900/30 border border-red-500/30 rounded-lg p-4 text-sm text-red-300">
+                    <strong>错误：</strong><span id="error-text"></span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 操作按钮 -->
+        <div class="flex flex-col sm:flex-row gap-4 justify-center">
+            <button id="start-btn"
+                    onclick="startUpdate()"
+                    class="px-8 py-3 rounded-xl font-bold text-sm transition-all duration-200
+                           bg-gold-400 text-black hover:bg-gold-500 hover:shadow-lg hover:shadow-gold-400/20
+                           disabled:opacity-50 disabled:cursor-not-allowed">
+                <i data-lucide="download" class="w-5 h-5 inline-block mr-2"></i>
+                开始更新
+            </button>
+            <a href="{{ url_for('admin.admin_page') }}"
+               class="px-8 py-3 rounded-xl font-bold text-sm text-center transition-all duration-200
+                      bg-cream/10 text-cream hover:bg-cream/20">
+                <i data-lucide="arrow-left" class="w-5 h-5 inline-block mr-2"></i>
+                返回管理中心
+            </a>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_script %}
+<script>
+// 更新状态
+let updateRunning = {{ 'true' if status.running else 'false' }};
+let updateDone = {{ 'true' if status.done else 'false' }};
+let eventSource = null;
+
+// 启动更新
+function startUpdate() {
+    const btn = document.getElementById('start-btn');
+    btn.disabled = true;
+    btn.innerHTML = '<i data-lucide="loader" class="w-5 h-5 inline-block mr-2 animate-spin"></i>更新中...';
+
+    // 重新初始化图标
+    if (window.lucide) lucide.createIcons();
+
+    // 先连接 SSE
+    connectSSE();
+
+    // 发起更新请求
+    fetch('{{ url_for("admin.admin_update_start") }}', {
+        method: 'POST',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (!data.success) {
+            showError(data.message || '启动失败');
+            resetButton();
+        }
+    })
+    .catch(err => {
+        showError('请求失败: ' + err.message);
+        resetButton();
+    });
+}
+
+// 连接 SSE 流
+function connectSSE() {
+    if (eventSource) {
+        eventSource.close();
+    }
+
+    eventSource = new EventSource('{{ url_for("admin.admin_update_stream") }}');
+
+    eventSource.onmessage = function(e) {
+        if (e.data === '[DONE]') {
+            eventSource.close();
+            return;
+        }
+
+        try {
+            const msg = JSON.parse(e.data);
+            handleEvent(msg);
+        } catch (err) {
+            console.error('SSE 解析失败:', err);
+        }
+    };
+
+    eventSource.onerror = function() {
+        // 如果更新已结束，忽略错误
+        if (updateDone) return;
+        console.error('SSE 连接错误');
+    };
+}
+
+// 处理事件
+function handleEvent(msg) {
+    const type = msg.type;
+    const data = msg.data || {};
+
+    switch (type) {
+        case 'status':
+            updateRunning = data.running;
+            updateDone = data.done;
+            if (data.progress > 0) {
+                updateProgress(data.progress, data.message);
+            }
+            if (data.done) {
+                handleDone(data.success, data.message, data.error);
+            }
+            break;
+
+        case 'progress':
+            updateProgress(data.percent || 0, data.message || '');
+            break;
+
+        case 'error':
+            showError(data.message || '未知错误');
+            break;
+
+        case 'done':
+            handleDone(data.success, data.message, null);
+            break;
+    }
+}
+
+// 更新进度
+function updateProgress(percent, message) {
+    const bar = document.getElementById('progress-bar');
+    const text = document.getElementById('progress-text');
+    const logArea = document.getElementById('log-area');
+
+    bar.style.width = Math.min(percent, 100) + '%';
+    text.textContent = message;
+
+    // 显示日志区域
+    if (logArea.classList.contains('hidden')) {
+        logArea.classList.remove('hidden');
+    }
+
+    // 添加日志条目
+    const logEntry = document.createElement('div');
+    logEntry.className = 'text-cream/70';
+    logEntry.textContent = '[' + new Date().toLocaleTimeString() + '] ' + message;
+    logArea.appendChild(logEntry);
+    logArea.scrollTop = logArea.scrollHeight;
+}
+
+// 处理完成
+function handleDone(success, message, error) {
+    updateDone = true;
+    updateRunning = false;
+
+    const bar = document.getElementById('progress-bar');
+    const text = document.getElementById('progress-text');
+    const btn = document.getElementById('start-btn');
+
+    if (success) {
+        bar.style.width = '100%';
+        bar.style.background = 'linear-gradient(90deg, #22c55e, #16a34a)';
+        text.textContent = message || '更新成功！服务器即将重启...';
+        text.className = 'text-sm text-green-400 text-center';
+
+        // 添加日志
+        const logArea = document.getElementById('log-area');
+        const logEntry = document.createElement('div');
+        logEntry.className = 'text-green-400 font-bold';
+        logEntry.textContent = '[' + new Date().toLocaleTimeString() + '] ' + (message || '更新成功，正在重启...');
+        logArea.appendChild(logEntry);
+
+        btn.disabled = true;
+        btn.innerHTML = '<i data-lucide="refresh-cw" class="w-5 h-5 inline-block mr-2 animate-spin"></i>重启中...';
+        if (window.lucide) lucide.createIcons();
+    } else {
+        bar.style.width = '100%';
+        bar.style.background = 'linear-gradient(90deg, #ef4444, #dc2626)';
+        text.textContent = '更新失败';
+        text.className = 'text-sm text-red-400 text-center';
+
+        showError(error || message || '更新失败');
+        resetButton();
+    }
+
+    if (window.lucide) lucide.createIcons();
+}
+
+// 显示错误
+function showError(message) {
+    const errorArea = document.getElementById('error-area');
+    const errorText = document.getElementById('error-text');
+    errorArea.classList.remove('hidden');
+    errorText.textContent = message;
+
+    // 添加日志
+    const logArea = document.getElementById('log-area');
+    const logEntry = document.createElement('div');
+    logEntry.className = 'text-red-400';
+    logEntry.textContent = '[' + new Date().toLocaleTimeString() + '] [错误] ' + message;
+    logArea.appendChild(logEntry);
+}
+
+// 重置按钮
+function resetButton() {
+    const btn = document.getElementById('start-btn');
+    btn.disabled = false;
+    btn.innerHTML = '<i data-lucide="download" class="w-5 h-5 inline-block mr-2"></i>重新尝试';
+    if (window.lucide) lucide.createIcons();
+}
+
+// 页面加载时，如果已有更新在运行，自动连接 SSE
+document.addEventListener('DOMContentLoaded', function() {
+    if (updateRunning) {
+        document.getElementById('start-btn').disabled = true;
+        document.getElementById('start-btn').innerHTML = '<i data-lucide="loader" class="w-5 h-5 inline-block mr-2 animate-spin"></i>更新中...';
+        if (window.lucide) lucide.createIcons();
+        connectSSE();
+    }
+});
+</script>
+{% endblock %}

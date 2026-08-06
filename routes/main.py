@@ -1,6 +1,8 @@
 import json
 import os
 from datetime import datetime
+from urllib.parse import urlparse
+
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash, jsonify
 from core.auth import login_required, get_current_user, hash_password, validate_password
 from core.db import get_db
@@ -11,6 +13,15 @@ from services.ratelimit import register_limiter, login_limiter
 from services.logger import log
 
 main_bp = Blueprint('main', __name__)
+
+
+def _is_safe_redirect_url(target: str) -> bool:
+    """检查重定向目标 URL 是否安全，防止开放重定向漏洞。"""
+    if not target:
+        return False
+    # 只允许相对路径的重定向，拒绝绝对 URL（防止 //evil.com 绕过）
+    parsed = urlparse(target)
+    return not parsed.netloc and not parsed.scheme
 
 
 def _render_register_error(error: str, **kwargs):
@@ -140,6 +151,7 @@ def register():
                 (username,)
             ).fetchone()
             if new_user:
+                session.clear()
                 session['user_id'] = new_user['id']
                 session['username'] = new_user['username']
                 session['is_admin'] = bool(new_user['is_admin'])
@@ -199,6 +211,11 @@ def login():
         captcha_input = request.form.get('captcha', '').strip()
         captcha_id = request.form.get('captcha_id', '').strip()
 
+        # IP 频率限制：每 IP 每分钟最多 10 次登录尝试
+        if not login_limiter.check(request.remote_addr or 'unknown'):
+            log('Login', '登录请求过于频繁', ip=request.remote_addr, username=username)
+            return render_template('login.html', error='登录请求过于频繁，请稍后再试')
+
         # 验证码校验（服务端内存存储，一次性删除防止重放）
         if not captcha_service.verify(captcha_id, captcha_input):
             log('Login', '验证码错误', username=username, ip=request.remote_addr)
@@ -227,6 +244,9 @@ def login():
             log('Login', '用户名或密码错误', username=username, ip=request.remote_addr)
             return render_template('login.html', error='用户名或密码错误')
 
+        # 清除旧会话数据，防止会话固定攻击
+        session.clear()
+
         session['user_id'] = user['id']
         session['username'] = user['username']
         session['is_admin'] = bool(user['is_admin'])
@@ -235,7 +255,7 @@ def login():
         log('Login', '登录成功', username=username, user_id=user['id'], ip=request.remote_addr, is_admin=user['is_admin'])
 
         next_page = request.args.get('next') or request.form.get('next')
-        if next_page and next_page.startswith('/'):
+        if next_page and _is_safe_redirect_url(next_page):
             return redirect(next_page)
         return redirect(url_for('main.home'))
 

@@ -7,6 +7,12 @@
 - 注册页面图形验证码改为点击"发送验证码"按钮后弹窗，优化交互流程
 - `MAP_URL` 和 `QQ_GROUP_URL` 配置项，支持管理后台实时修改
 - 广播邮件页面 Markdown 编辑器升级为分栏布局（编辑区 + 实时预览区），支持工具栏、滚动同步
+- 一键更新功能：从 GitHub 自动获取并覆盖代码文件，智能代理检测，自动重启（`services/updater.py`）
+- 图形验证码（服务端内存存储、一次性删除防重放）
+- 邮箱验证码（SMTP）
+- IP 频率限制
+- 异步日志写入与自动清理
+- DuckDB 数据库兼容层
 
 ### 修复
 - 修复 `/performance` 页面 500 错误：`url_for` 端点名从 `api.performance` 修正为 `api.api_performance`
@@ -25,6 +31,9 @@
 - 数据库查询仅返回必要字段，减少网络传输
 - 前端 `Set` 去重机制，避免重复渲染
 - 回复列表改为 JS 动态渲染，减少初始页面加载时间
+- 管理后台模板统一移入 `templates/admin/` 子目录，按功能分类整理模板文件
+- 新增 `templates/emails/` 邮件模板目录，与页面模板分离
+- 重新生成 Tailwind CSS 静态文件（`static/css/tailwind.css`）
 
 ---
 

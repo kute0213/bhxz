@@ -30,7 +30,7 @@ def admin_users():
     finally:
         conn.close()
 
-    return render_template('admin_users.html', user=user, users_list=users_list)
+    return render_template('admin/admin_users.html', user=user, users_list=users_list)
 
 
 @admin_bp.route('/admin/users/<int:user_id>/toggle-admin', methods=['POST'])

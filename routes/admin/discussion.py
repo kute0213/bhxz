@@ -40,7 +40,7 @@ def admin_discussion():
     finally:
         conn.close()
 
-    return render_template('admin_discussion.html', user=user, topics=topics, cat_dict=cat_dict)
+    return render_template('admin/admin_discussion.html', user=user, topics=topics, cat_dict=cat_dict)
 
 
 @admin_bp.route('/admin/discussion/<int:topic_id>/delete', methods=['POST'])
@@ -210,4 +210,4 @@ def admin_categories():
     finally:
         conn.close()
 
-    return render_template('admin_discussion_categories.html', user=user, categories=categories)
+    return render_template('admin/admin_discussion_categories.html', user=user, categories=categories)
