@@ -412,10 +412,10 @@ def _run_update():
     try:
         _add_event('progress', {'percent': 1, 'message': '正在加载更新配置...'})
 
-        # 0. 从设置读取不替换文件列表、自定义代理和重启命令
+        # 0. 从设置读取不替换文件列表、自定义代理和启动命令
         protected_paths = list(DEFAULT_PROTECTED_PATHS)
         proxy_list = list(DEFAULT_PROXY_LIST)
-        restart_command = ''
+        start_command = ''
 
         try:
             from config import get_config_value
@@ -447,14 +447,14 @@ def _run_update():
                         if not replaced:
                             proxy_list.append((name, url))
 
-            # 读取自定义重启命令
-            restart_command = get_config_value('RESTART_COMMAND', '')
+            # 读取自定义启动命令
+            start_command = get_config_value('START_COMMAND', '')
         except Exception:
             pass
 
         _add_event('progress', {'percent': 2, 'message': f'已加载配置，{len(protected_paths)} 个受保护路径'})
-        if restart_command:
-            _add_event('log', {'message': f'✓ 自定义重启命令: {restart_command}'})
+        if start_command:
+            _add_event('log', {'message': f'✓ 自定义启动命令: {start_command}'})
 
         # 1. 检测 git
         git_path = _find_git()
@@ -730,7 +730,7 @@ def _run_update():
             'message': '更新成功，即将重启服务器...',
         })
         time.sleep(1)
-        _restart_app(restart_command)
+        _restart_app(start_command)
 
     except Exception as e:
         error_msg = str(e)
@@ -739,15 +739,15 @@ def _run_update():
         _add_event('done', {'success': False, 'message': f'更新失败: {error_msg}'})
 
 
-def _restart_app(restart_command=''):
+def _restart_app(start_command=''):
     """重启当前应用进程（跨平台，优雅替换）。
 
-    如果设置了自定义重启命令，则执行该命令后退出当前进程。
+    如果设置了自定义启动命令，则执行该命令启动新服务器，然后自动关闭当前进程。
     否则使用内置的重启方式：
     - Unix: os.execv 直接替换当前进程
     - Windows: Popen 启动新进程 + 优雅退出
 
-    自定义命令支持占位符：
+    自定义启动命令支持占位符：
     - {python}    → Python 可执行文件路径
     - {script}    → app.py 绝对路径
     - {app_root}  → 项目根目录
@@ -757,36 +757,43 @@ def _restart_app(restart_command=''):
     # 给前端一点时间接收事件
     time.sleep(0.5)
 
-    if restart_command:
+    if start_command:
         # 格式化占位符
-        formatted = restart_command.replace('{python}', sys.executable)\
-                                   .replace('{script}', os.path.join(APP_ROOT, 'app.py'))\
-                                   .replace('{app_root}', APP_ROOT)
-        _add_event('log', {'message': f'执行自定义重启命令: {formatted}'})
-        # 在新进程中执行命令，然后退出当前进程
+        formatted = start_command.replace('{python}', sys.executable)\
+                                 .replace('{script}', os.path.join(APP_ROOT, 'app.py'))\
+                                 .replace('{app_root}', APP_ROOT)
+        _add_event('log', {'message': f'执行自定义启动命令: {formatted}'})
         try:
             subprocess.Popen(formatted, cwd=APP_ROOT, shell=True, close_fds=True)
         except Exception as e:
-            _add_event('log', {'message': f'自定义重启命令执行失败，回退默认重启: {e}'})
-            # 回退到默认重启方式
-            if sys.platform == 'win32':
-                _restart_win32()
-            else:
-                os.chdir(APP_ROOT)
-                os.execv(sys.executable, [sys.executable, os.path.join(APP_ROOT, 'app.py')])
+            _add_event('log', {'message': f'自定义启动命令执行失败，回退默认启动: {e}'})
+            # 回退到默认方式
+            _restart_win32()
             return
-        # 退出当前进程
-        sys.exit(0)
+        # 使用自动方式关闭当前进程
+        _shutdown_current_process()
     else:
         # 使用内置重启方式
-        python_exe = sys.executable
-        script = os.path.join(APP_ROOT, 'app.py')
-
         if sys.platform == 'win32':
             _restart_win32()
         else:
             os.chdir(APP_ROOT)
-            os.execv(python_exe, [python_exe, script])
+            os.execv(sys.executable, [sys.executable, os.path.join(APP_ROOT, 'app.py')])
+
+
+def _shutdown_current_process():
+    """自动关闭当前进程（跨平台）。
+
+    - Windows: 发送 SIGTERM 信号触发优雅关闭，兜底 sys.exit
+    - Unix: 直接 sys.exit
+    """
+    if sys.platform == 'win32':
+        import signal
+        try:
+            os.kill(os.getpid(), signal.SIGTERM)
+        except Exception:
+            pass
+    sys.exit(0)
 
 
 def _restart_win32():
@@ -795,7 +802,6 @@ def _restart_win32():
     避免 CMD 窗口闪烁。使用 CREATE_NO_WINDOW 标志让新进程无窗口启动，
     然后通过信号触发当前进程的优雅关闭。
     """
-    import signal
     python_exe = sys.executable
     script = os.path.join(APP_ROOT, 'app.py')
 
@@ -817,16 +823,8 @@ def _restart_win32():
     if proc and proc.pid:
         _add_event('progress', {'percent': 100, 'message': f'已启动新进程 (PID: {proc.pid})'})
 
-    # 2. 触发当前进程的优雅退出
-    #    使用 os.kill 发送 SIGTERM，app.py 中注册了 SIGTERM 处理函数
-    #    会依次关闭后台线程、关闭数据库连接，然后 sys.exit(0)
-    try:
-        os.kill(os.getpid(), signal.SIGTERM)
-    except Exception:
-        pass
-
-    # 3. 如果上面的信号处理没生效，兜底退出
-    sys.exit(0)
+    # 2. 自动关闭当前进程
+    _shutdown_current_process()
 
 
 def start_update():

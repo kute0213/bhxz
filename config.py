@@ -237,7 +237,7 @@ SETTINGS_REGISTRY = [
     # 一键更新
     ('UPDATE_EXCLUDED_FILES', 'site.duckdb,site.duckdb.wal,backups,uploads,ssl,.env,.git,__pycache__', 'str', '不替换的文件/文件夹', '逗号分隔，更新时不会被删除或覆盖', '一键更新'),
     ('GITHUB_PROXIES', '', 'str', '自定义 GitHub 代理', '每行一个，格式：名称=URL。留空使用默认代理列表', '一键更新'),
-    ('RESTART_COMMAND', '', 'str', '自定义重启命令', '更新完成后执行的命令，留空使用默认重启方式。可用占位符：{python} {script} {app_root}', '一键更新'),
+    ('START_COMMAND', '', 'str', '自定义启动命令', '更新完成后启动服务器的命令，留空使用默认方式。关闭服务器使用自动方式。可用占位符：{python} {script} {app_root}', '一键更新'),
 
     # 外部链接
     ('MAP_URL', 'https://map.bhxz.tw.kg', 'str', '卫星地图地址', '首页卫星地图按钮的链接地址', '外部链接'),

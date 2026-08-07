@@ -117,16 +117,16 @@
 ghproxy.com=https://ghproxy.com/https://github.com
 kkgithub.com=https://kkgithub.com/https://github.com"></textarea>
                 </div>
-                <!-- 自定义重启命令 -->
+                <!-- 自定义启动命令 -->
                 <div>
-                    <label for="restart-command" class="block text-sm font-medium mb-2">
-                        自定义重启命令
-                        <span class="text-cream/50 text-xs ml-2">留空使用默认重启方式。可用占位符：{python} {script} {app_root}</span>
+                    <label for="start-command" class="block text-sm font-medium mb-2">
+                        自定义启动命令
+                        <span class="text-cream/50 text-xs ml-2">留空使用默认方式。关闭服务器使用自动方式。可用占位符：{python} {script} {app_root}</span>
                     </label>
-                    <input id="restart-command" type="text"
+                    <input id="start-command" type="text"
                               class="w-full px-3 py-2 bg-forest-900/60 border border-cream/20 rounded-lg text-sm focus:outline-none focus:border-gold-400 transition-colors font-mono"
-                              placeholder='例如：start.bat  或  {python} {script}  或  systemctl restart myservice'>
-                    <p class="text-xs text-cream/40 mt-1">如果不清楚，请留空使用默认重启方式。默认重启方式在 Windows 上可能不稳定，自定义命令可解决此问题。</p>
+                              placeholder='例如：start.bat  或  {python} {script}'>
+                    <p class="text-xs text-cream/40 mt-1">如果内置重启方式在 Windows 上不稳定，可通过自定义启动命令解决，关闭服务器由系统自动处理。</p>
                 </div>
                 <!-- 保存按钮 -->
                 <div class="flex justify-end">
@@ -348,7 +348,7 @@ const settingsChevron = document.getElementById('settings-chevron');
 const settingsStatus = document.getElementById('settings-status');
 const excludedInput = document.getElementById('excluded-files');
 const proxiesInput = document.getElementById('github-proxies');
-const restartInput = document.getElementById('restart-command');
+const restartInput = document.getElementById('start-command');
 const saveBtn = document.getElementById('save-settings-btn');
 
 // 加载设置
@@ -366,7 +366,7 @@ function loadUpdateSettings() {
                     excluded = s.value || '';
                 } else if (s.key === 'GITHUB_PROXIES') {
                     proxies = s.value || '';
-                } else if (s.key === 'RESTART_COMMAND') {
+                } else if (s.key === 'START_COMMAND') {
                     restart = s.value || '';
                 }
             });
@@ -393,7 +393,7 @@ function saveUpdateSettings() {
             items: [
                 { key: 'UPDATE_EXCLUDED_FILES', value: excludedInput.value },
                 { key: 'GITHUB_PROXIES', value: proxiesInput.value },
-                { key: 'RESTART_COMMAND', value: restartInput.value },
+                { key: 'START_COMMAND', value: restartInput.value },
             ]
         })
     })
