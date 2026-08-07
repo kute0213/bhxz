@@ -303,6 +303,9 @@ function handleDone(success, message, error) {
         btn.disabled = true;
         btn.innerHTML = '<i data-lucide="refresh-cw" class="w-5 h-5 inline-block mr-2 animate-spin"></i>重启中...';
         if (window.lucide) lucide.createIcons();
+
+        // 自动检测服务器是否已重启完成
+        waitForServerRestart();
     } else {
         bar.style.width = '100%';
         bar.style.background = 'linear-gradient(90deg, #ef4444, #dc2626)';
@@ -314,6 +317,46 @@ function handleDone(success, message, error) {
     }
 
     if (window.lucide) lucide.createIcons();
+}
+
+// 等待服务器重启完成，自动将按钮变为"更新成功"
+function waitForServerRestart() {
+    let attempts = 0;
+    const maxAttempts = 30; // 最多等 60 秒
+    const interval = setInterval(function() {
+        attempts++;
+        // 尝试请求当前页面，检测服务器是否已恢复
+        fetch(window.location.href, { method: 'HEAD', cache: 'no-store' })
+            .then(function() {
+                clearInterval(interval);
+                // 服务器已恢复，更新按钮为"更新成功"
+                const btn = document.getElementById('start-btn');
+                btn.disabled = false;
+                btn.innerHTML = '<i data-lucide="check-circle" class="w-5 h-5 inline-block mr-2" style="color: #22c55e;"></i>更新成功 ✓';
+                btn.className = 'px-8 py-3 rounded-xl font-bold text-sm transition-all duration-200 bg-green-600/30 text-green-400 border border-green-500/30 cursor-default';
+                if (window.lucide) lucide.createIcons();
+
+                // 添加日志
+                const logArea = document.getElementById('log-area');
+                const logEntry = document.createElement('div');
+                logEntry.className = 'text-green-400 font-bold';
+                logEntry.textContent = '[' + new Date().toLocaleTimeString() + '] 服务器已重启完成 ✓';
+                logArea.appendChild(logEntry);
+                logArea.scrollTop = logArea.scrollHeight;
+            })
+            .catch(function() {
+                if (attempts >= maxAttempts) {
+                    clearInterval(interval);
+                    // 超时未恢复，提示用户手动刷新
+                    const logArea = document.getElementById('log-area');
+                    const logEntry = document.createElement('div');
+                    logEntry.className = 'text-yellow-400';
+                    logEntry.textContent = '[' + new Date().toLocaleTimeString() + '] 等待服务器重启超时，请手动刷新页面';
+                    logArea.appendChild(logEntry);
+                    logArea.scrollTop = logArea.scrollHeight;
+                }
+            });
+    }, 2000);
 }
 
 // 显示错误
