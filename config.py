@@ -7,12 +7,8 @@ UPLOAD_DIR = os.path.join(APP_ROOT, 'uploads')
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'pdf', 'txt', 'zip', 'rar', '7z', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'mp4', 'mp3', 'wav'}
 MAX_CONTENT_LENGTH = 100 * 1024 * 1024
 
-# 生产环境必须通过环境变量设置 SECRET_KEY
-SECRET_KEY = os.environ.get('SECRET_KEY')
-if not SECRET_KEY:
-    print('[WARNING] 环境变量 SECRET_KEY 未设置，使用默认密钥（不安全！）', file=sys.stderr, flush=True)
-    print('[WARNING] 请通过 export SECRET_KEY="your-strong-secret-key" 设置', file=sys.stderr, flush=True)
-    SECRET_KEY = 'mc_server_site_random_secret_key_2024'
+# Session 密钥（硬编码默认值，无需环境变量，开箱即用）
+SECRET_KEY = 'mc_server_site_random_secret_key_2024'
 REGISTER_VERIFY_CODE = 'binhai_xz'
 
 # ---------------------------------------------------------------------------
