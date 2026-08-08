@@ -135,17 +135,39 @@ def generate_math_captcha(
         color = (random.randint(100, 180), random.randint(100, 180), random.randint(100, 180))
         draw.line((x1, y1, x2, y2), fill=color, width=1)
 
-    # 绘制文字（居中）
+    # 绘制文字（居中，每个字符独立颜色，实现字母变色效果）
+    # 先测量总宽度，计算居中起始 x
+    char_widths = []
+    total_width = 0
+    for ch in question:
+        ch_bbox = draw.textbbox((0, 0), ch, font=font)
+        cw = ch_bbox[2] - ch_bbox[0]
+        char_widths.append(cw)
+        total_width += cw
+    x = (width - total_width) // 2
     text_bbox = draw.textbbox((0, 0), question, font=font)
-    text_width = text_bbox[2] - text_bbox[0]
     text_height = text_bbox[3] - text_bbox[1]
-    x = (width - text_width) // 2
-    y = (height - text_height) // 2 - 2
+    base_y = (height - text_height) // 2 - 2
 
-    # 文字阴影效果
-    draw.text((x + 1, y + 1), question, font=font, fill=(150, 150, 150))
-    # 主文字
-    draw.text((x, y), question, font=font, fill=(30, 30, 30))
+    for i, ch in enumerate(question):
+        # 每个字符随机颜色（鲜艳，避免太浅）
+        r = random.randint(20, 200)
+        g = random.randint(20, 200)
+        b = random.randint(20, 200)
+        char_color = (r, g, b)
+
+        # 轻微上下抖动（-2 ~ +2 像素）
+        jitter_y = random.randint(-2, 2)
+
+        # 阴影颜色（基于字符颜色调暗）
+        shadow_color = (max(0, r - 120), max(0, g - 120), max(0, b - 120))
+
+        # 绘制阴影
+        draw.text((x + 1, base_y + jitter_y + 1), ch, font=font, fill=shadow_color)
+        # 绘制主文字
+        draw.text((x, base_y + jitter_y), ch, font=font, fill=char_color)
+
+        x += char_widths[i] + 1
 
     # 转换为 base64
     buffer = io.BytesIO()
