@@ -78,7 +78,7 @@
     <!-- Hero Section -->
     <section class="hero-bg min-h-screen flex items-center justify-center relative">
         <div class="max-w-5xl mx-auto px-6 text-center relative z-10 pt-20 lg:pt-24">
-            <div class="float-animation mb-8">
+            <div class="float-animation mb-8 parallax-layer" data-parallax-speed="0.08">
                 <div class="w-20 h-20 sm:w-24 sm:h-24 mx-auto bg-gradient-to-br from-gold-400 to-gold-500 rounded-2xl flex items-center justify-center pulse-glow">
                     <i data-lucide="mountain" class="w-10 h-10 sm:w-12 sm:h-12 text-forest-900"></i>
                 </div>
@@ -86,11 +86,11 @@
             <h1 class="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-black mb-4 sm:mb-6 glow-text">
                 <span class="text-gold-400">滨海小镇</span>
             </h1>
-            <p class="text-lg sm:text-xl md:text-2xl text-cream/90 mb-3 sm:mb-4 font-medium">
-                超强社交 × 超多地形 × 超强体验
+            <p class="text-lg sm:text-xl md:text-2xl text-cream/90 mb-3 sm:mb-4 font-medium text-reveal-container">
+                <span class="text-reveal-word">超强社交</span><span class="text-reveal-word"> × </span><span class="text-reveal-word">超多地形</span><span class="text-reveal-word"> × </span><span class="text-reveal-word">超强体验</span>
             </p>
-            <p class="text-base sm:text-lg text-cream/60 mb-8 sm:mb-12 max-w-2xl mx-auto">
-                Minecraft Java 1.20.1 Fabric 模组服务器
+            <p class="text-base sm:text-lg text-cream/60 mb-8 sm:mb-12 max-w-2xl mx-auto text-reveal-container">
+                <span class="text-reveal-word">Minecraft</span><span class="text-reveal-word"> Java </span><span class="text-reveal-word">1.20.1</span><span class="text-reveal-word"> Fabric </span><span class="text-reveal-word">模组服务器</span>
             </p>
             <div class="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center">
                 <a href="#contact" class="btn-primary px-6 sm:px-8 py-3 sm:py-4 rounded-xl text-base sm:text-lg inline-flex items-center justify-center gap-2">
@@ -112,7 +112,7 @@
                 <div class="flex items-center gap-2"><i data-lucide="heart" class="w-4 h-4"></i><span>休闲养老</span></div>
             </div>
         </div>
-        <div class="absolute bottom-6 sm:bottom-10 left-1/2 -translate-x-1/2 animate-bounce hidden sm:block">
+        <div class="absolute bottom-6 sm:bottom-10 left-1/2 -translate-x-1/2 animate-bounce hidden sm:block parallax-layer" data-parallax-speed="-0.05">
             <i data-lucide="chevron-down" class="w-6 h-6 sm:w-8 sm:h-8 text-gold-400/50"></i>
         </div>
     </section>
@@ -123,25 +123,25 @@
             <div class="text-center mb-10 sm:mb-12 lg:mb-16 section-fade">
                 <span class="inline-block px-3 sm:px-4 py-1 bg-gold-400/10 text-gold-400 rounded-full text-xs sm:text-sm font-medium mb-3 sm:mb-4">社交畅联，互动无界</span>
                 <h2 class="text-2xl sm:text-3xl lg:text-4xl font-bold mb-3 sm:mb-4">社交畅联</h2>
-                <p class="text-cream/60 max-w-2xl mx-auto text-sm sm:text-base">在这里，朋友与社交才是最珍贵的宝藏</p>
+                <p class="text-cream/60 max-w-2xl mx-auto text-sm sm:text-base text-reveal">在这里，朋友与社交才是最珍贵的宝藏</p>
             </div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
-                <div class="pixel-card rounded-xl p-5 sm:p-6 section-fade">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 tilt-container">
+                <div class="pixel-card rounded-xl p-5 sm:p-6 stagger-item tilt-card" data-stagger-delay="0.05">
                     <div class="feature-icon mb-4"><i data-lucide="mic" class="w-6 h-6 text-gold-400"></i></div>
                     <h3 class="text-lg font-bold mb-2">语音畅聊</h3>
                     <p class="text-cream/60 text-sm leading-relaxed">内置超便捷语音系统，游戏中能随时语音交流，甚至能来场欢乐 K 歌，和伙伴告别打字繁琐！</p>
                 </div>
-                <div class="pixel-card rounded-xl p-5 sm:p-6 section-fade">
+                <div class="pixel-card rounded-xl p-5 sm:p-6 stagger-item tilt-card" data-stagger-delay="0.12">
                     <div class="feature-icon mb-4"><i data-lucide="shield-check" class="w-6 h-6 text-gold-400"></i></div>
                     <h3 class="text-lg font-bold mb-2">领地系统</h3>
                     <p class="text-cream/60 text-sm leading-relaxed">进服就可以直接圈地，没有经济系统！做自己的管理员，让熊孩子望而却步，保护自己的领地！</p>
                 </div>
-                <div class="pixel-card rounded-xl p-5 sm:p-6 section-fade">
+                <div class="pixel-card rounded-xl p-5 sm:p-6 stagger-item tilt-card" data-stagger-delay="0.19">
                     <div class="feature-icon mb-4"><i data-lucide="satellite" class="w-6 h-6 text-gold-400"></i></div>
                     <h3 class="text-lg font-bold mb-2">卫星地图</h3>
                     <p class="text-cream/60 text-sm leading-relaxed">点击链接进入卫星地图，开始偷窥服务器的建筑！</p>
                 </div>
-                <div class="pixel-card rounded-xl p-5 sm:p-6 section-fade">
+                <div class="pixel-card rounded-xl p-5 sm:p-6 stagger-item tilt-card" data-stagger-delay="0.26">
                     <div class="feature-icon mb-4"><i data-lucide="message-circle" class="w-6 h-6 text-gold-400"></i></div>
                     <h3 class="text-lg font-bold mb-2">群服互通</h3>
                     <p class="text-cream/60 text-sm leading-relaxed">专业机器人实现 QQ 群与游戏内消息双向实时转发，不管在游戏还是群聊，都能和小伙伴随时互动。</p>
@@ -156,15 +156,15 @@
             <div class="text-center mb-10 sm:mb-12 lg:mb-16 section-fade">
                 <span class="inline-block px-3 sm:px-4 py-1 bg-gold-400/10 text-gold-400 rounded-full text-xs sm:text-sm font-medium mb-3 sm:mb-4">精彩内容</span>
                 <h2 class="text-2xl sm:text-3xl lg:text-4xl font-bold mb-3 sm:mb-4">模组介绍</h2>
-                <p class="text-cream/60 max-w-2xl mx-auto text-sm sm:text-base">服务器精选模组一览，感受丰富玩法的魅力</p>
+                <p class="text-cream/60 max-w-2xl mx-auto text-sm sm:text-base text-reveal">服务器精选模组一览，感受丰富玩法的魅力</p>
                 {% if user and user.is_admin %}
                 <div class="mt-4 sm:mt-6"><a href="{{ url_for('admin.manage_mod_intros') }}" class="inline-flex items-center gap-2 text-sm text-gold-400/70 hover:text-gold-400 transition-colors"><i data-lucide="settings" class="w-4 h-4"></i>管理模组介绍</a></div>
                 {% endif %}
             </div>
             {% if mod_intros %}
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 tilt-container">
                 {% for intro in mod_intros %}
-                <div class="pixel-card rounded-xl p-5 sm:p-6 section-fade">
+                <div class="pixel-card rounded-xl p-5 sm:p-6 stagger-item tilt-card" data-stagger-delay="{{ 0.05 + loop.index0 * 0.07 }}">
                     <div class="feature-icon mb-4"><i data-lucide="{{ intro.icon or 'box' }}" class="w-6 h-6 text-gold-400"></i></div>
                     <h3 class="text-lg font-bold mb-3">{{ intro.title }}</h3>
                     <p class="text-cream/60 text-sm leading-relaxed whitespace-pre-wrap break-all">{{ intro.content }}</p>
@@ -193,25 +193,25 @@
                 <h2 class="text-2xl sm:text-3xl lg:text-4xl font-bold mb-3 sm:mb-4">你的另一个游戏世界</h2>
             </div>
             <div class="space-y-6 sm:space-y-8 text-center section-fade">
-                <p class="text-lg sm:text-xl text-cream/90 leading-relaxed max-w-3xl mx-auto">
+                <p class="text-lg sm:text-xl text-cream/90 leading-relaxed max-w-3xl mx-auto text-reveal">
                     我们都明白，单人模式下，这些好玩的模组也能带来乐趣。可在这虚拟方块世界里，<strong class="text-gold-400 text-xl sm:text-2xl">朋友与社交才是最珍贵的宝藏</strong>。
                 </p>
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mt-8 sm:mt-10">
-                    <div class="pixel-card rounded-xl p-5 sm:p-6">
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mt-8 sm:mt-10 tilt-container">
+                    <div class="pixel-card rounded-xl p-5 sm:p-6 stagger-item tilt-card" data-stagger-delay="0.05">
                         <div class="w-12 h-12 mx-auto mb-4 bg-gold-400/20 rounded-full flex items-center justify-center">
                             <i data-lucide="castle" class="w-6 h-6 text-gold-400"></i>
                         </div>
                         <h3 class="text-base font-bold mb-2">冰雪城堡派对</h3>
                         <p class="text-cream/60 text-sm">在冰雪城堡举办派对，身边围坐一同欢笑的好友</p>
                     </div>
-                    <div class="pixel-card rounded-xl p-5 sm:p-6">
+                    <div class="pixel-card rounded-xl p-5 sm:p-6 stagger-item tilt-card" data-stagger-delay="0.12">
                         <div class="w-12 h-12 mx-auto mb-4 bg-gold-400/20 rounded-full flex items-center justify-center">
                             <i data-lucide="flag" class="w-6 h-6 text-gold-400"></i>
                         </div>
                         <h3 class="text-base font-bold mb-2">终点欢呼</h3>
                         <p class="text-cream/60 text-sm">驾驶亲手打造的座驾冲过终点，有人为你欢呼喝彩</p>
                     </div>
-                    <div class="pixel-card rounded-xl p-5 sm:p-6">
+                    <div class="pixel-card rounded-xl p-5 sm:p-6 stagger-item tilt-card" data-stagger-delay="0.19">
                         <div class="w-12 h-12 mx-auto mb-4 bg-gold-400/20 rounded-full flex items-center justify-center">
                             <i data-lucide="wine" class="w-6 h-6 text-gold-400"></i>
                         </div>
@@ -253,10 +253,10 @@
             <div class="section-fade">
                 <span class="inline-block px-3 sm:px-4 py-1 bg-gold-400/10 text-gold-400 rounded-full text-xs sm:text-sm font-medium mb-3 sm:mb-4">联系我们</span>
                 <h2 class="text-2xl sm:text-3xl lg:text-4xl font-bold mb-3 sm:mb-4">加入我们</h2>
-                <p class="text-cream/60 mb-8 sm:mb-12 text-sm sm:text-base">点击链接加入群聊，直接和服务器的伙伴沟通吧！</p>
+                <p class="text-cream/60 mb-8 sm:mb-12 text-sm sm:text-base text-reveal">点击链接加入群聊，直接和服务器的伙伴沟通吧！</p>
             </div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 section-fade">
-                <a href="{{ qq_group_url }}" target="_blank" rel="noopener noreferrer" class="pixel-card rounded-xl p-6 sm:p-8 flex flex-col items-center gap-3 sm:gap-4 hover:no-underline">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 section-fade tilt-container">
+                <a href="{{ qq_group_url }}" target="_blank" rel="noopener noreferrer" class="pixel-card rounded-xl p-6 sm:p-8 flex flex-col items-center gap-3 sm:gap-4 hover:no-underline stagger-item tilt-card" data-stagger-delay="0.05">
                     <div class="w-14 h-14 sm:w-16 sm:h-16 bg-blue-500/20 rounded-full flex items-center justify-center">
                         <i data-lucide="message-square" class="w-7 h-7 sm:w-8 sm:h-8 text-blue-400"></i>
                     </div>
@@ -264,7 +264,7 @@
                     <p class="text-cream/60 text-sm">群聊群：Minecraft基建项目部</p>
                     <span class="text-blue-400 font-medium text-sm">点击加入群聊 →</span>
                 </a>
-                <a href="{{ map_url }}" target="_blank" rel="noopener noreferrer" class="pixel-card rounded-xl p-6 sm:p-8 flex flex-col items-center gap-3 sm:gap-4 hover:no-underline">
+                <a href="{{ map_url }}" target="_blank" rel="noopener noreferrer" class="pixel-card rounded-xl p-6 sm:p-8 flex flex-col items-center gap-3 sm:gap-4 hover:no-underline stagger-item tilt-card" data-stagger-delay="0.12">
                     <div class="w-14 h-14 sm:w-16 sm:h-16 bg-green-500/20 rounded-full flex items-center justify-center">
                         <i data-lucide="globe" class="w-7 h-7 sm:w-8 sm:h-8 text-green-400"></i>
                     </div>
