@@ -35,6 +35,14 @@ def cmd_page():
     )
 
 
+@cmd_bp.route('/admin/cmd/terminal-page')
+@login_required
+def terminal_page():
+    """独立实时终端页面。"""
+    user = _admin_check()
+    return render_template('admin/admin_terminal_page.html', user=user)
+
+
 @cmd_bp.route('/admin/cmd/editor')
 @login_required
 def cmd_editor_page():

@@ -10,12 +10,20 @@
 
         <!-- 顶部操作栏 -->
         <div class="flex flex-wrap gap-3 mb-6 justify-center sm:justify-start">
-            <button
-                id="open-terminal-btn"
+            <a
+                href="{{ url_for('cmd.terminal_page') }}"
                 class="px-5 py-2.5 bg-gold-400 text-forest-900 font-bold rounded-lg hover:bg-gold-500 transition-colors flex items-center gap-2"
             >
                 <i data-lucide="terminal" class="w-5 h-5"></i>
                 实时终端
+            </a>
+            <button
+                id="open-terminal-btn"
+                class="px-5 py-2.5 bg-gold-400/40 text-gold-300 font-bold rounded-lg hover:bg-gold-400/50 transition-colors flex items-center gap-2"
+                title="在弹窗中打开终端（旧版）"
+            >
+                <i data-lucide="maximize-2" class="w-5 h-5"></i>
+                弹窗终端
             </button>
             <button
                 id="add-cmd-btn"

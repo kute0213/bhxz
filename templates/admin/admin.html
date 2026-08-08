@@ -114,8 +114,17 @@
                             <i data-lucide="terminal" class="w-6 h-6 text-gold-400"></i>
                         </div>
                         <h3 class="text-lg font-bold mb-2">CMD 控制台</h3>
-                        <p class="text-cream/60 text-sm">实时执行命令，管理一键命令</p>
+                        <p class="text-cream/60 text-sm">管理一键命令和脚本</p>
                         <span class="inline-block mt-4 text-gold-400 text-sm font-medium">进入控制台 →</span>
+                    </a>
+
+                    <a href="{{ url_for('cmd.terminal_page') }}" class="pixel-card rounded-xl p-6 block hover:no-underline">
+                        <div class="w-12 h-12 mb-4 bg-emerald-500/20 rounded-xl flex items-center justify-center">
+                            <i data-lucide="shell" class="w-6 h-6 text-emerald-400"></i>
+                        </div>
+                        <h3 class="text-lg font-bold mb-2">实时终端</h3>
+                        <p class="text-cream/60 text-sm">独立全屏终端，持久 Shell 会话</p>
+                        <span class="inline-block mt-4 text-emerald-400 text-sm font-medium">打开终端 →</span>
                     </a>
 
                     <a href="{{ url_for('admin.admin_logs') }}" class="pixel-card rounded-xl p-6 block hover:no-underline">

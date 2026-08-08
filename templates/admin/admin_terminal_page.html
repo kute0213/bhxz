@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}实时终端{% endblock %}
+{% block content %}
+<section class="page-container" style="padding:0;min-height:0;">
+    <div class="flex flex-col" id="terminal-app" style="height:calc(100vh - 64px);">
+        <!-- 顶部状态栏 -->
+        <div class="flex items-center justify-between px-4 sm:px-6 py-2.5 flex-shrink-0" style="background:rgba(0,0,0,0.35);border-bottom:1px solid rgba(255,255,255,0.06);">
+            <div class="flex items-center gap-3 sm:gap-5">
+                <a href="{{ url_for('cmd.cmd_page') }}" class="p-1.5 -ml-1.5 text-cream/50 hover:text-gold-400 transition-colors rounded-lg hover:bg-cream/5" title="返回 CMD 控制台">
+                    <i data-lucide="arrow-left" class="w-4 h-4"></i>
+                </a>
+                <div class="flex items-center gap-2.5">
+                    <div class="w-7 h-7 rounded-lg flex items-center justify-center" style="background:rgba(244,208,63,0.15);">
+                        <i data-lucide="terminal" class="w-3.5 h-3.5 text-gold-400"></i>
+                    </div>
+                    <span class="text-sm font-bold text-cream/90">实时终端</span>
+                </div>
+                <div class="flex items-center gap-2 text-xs">
+                    <span class="terminal-status-dot w-2 h-2 rounded-full bg-emerald-400" id="term-status-dot"></span>
+                    <span class="text-cream/60" id="term-status-text">就绪</span>
+                    <span class="text-cream/20">|</span>
+                    <span class="text-cream/40" id="term-session-info">会话就绪</span>
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <button id="term-reset-btn" class="px-2.5 py-1.5 text-xs text-cream/60 hover:text-cream bg-cream/5 hover:bg-cream/10 rounded-lg transition-colors flex items-center gap-1.5" title="重置终端会话">
+                    <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+                    <span class="hidden sm:inline">重置会话</span>
+                </button>
+                <button id="term-clear-btn" class="px-2.5 py-1.5 text-xs text-cream/60 hover:text-cream bg-cream/5 hover:bg-cream/10 rounded-lg transition-colors flex items-center gap-1.5" title="清屏 (Ctrl+L)">
+                    <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                    <span class="hidden sm:inline">清屏</span>
+                </button>
+                <div class="hidden sm:flex items-center gap-1 text-xs text-cream/30 ml-2">
+                    <kbd class="px-1.5 py-0.5 rounded text-[10px]" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.08);">Ctrl+L</kbd>
+                    <span>清屏</span>
+                    <span class="mx-1">·</span>
+                    <kbd class="px-1.5 py-0.5 rounded text-[10px]" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.08);">↑↓</kbd>
+                    <span>历史</span>
+                    <span class="mx-1">·</span>
+                    <kbd class="px-1.5 py-0.5 rounded text-[10px]" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.08);">Tab</kbd>
+                    <span>补全</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- 终端输出区 -->
+        <div class="flex-1 overflow-hidden relative" style="background:rgba(0,0,0,0.5);">
+            <div
+                id="terminal-output"
+                class="absolute inset-0 overflow-y-auto p-3 sm:p-4 font-mono text-xs sm:text-sm leading-relaxed"
+                style="color:#4ade80;"
+            ></div>
+            <!-- 连接中遮罩 -->
+            <div id="term-connecting-overlay" class="absolute inset-0 flex flex-col items-center justify-center" style="background:rgba(0,0,0,0.6);">
+                <div class="w-8 h-8 border-2 border-gold-400/40 border-t-gold-400 rounded-full animate-spin mb-3"></div>
+                <div class="text-sm text-cream/60">正在连接终端...</div>
+                <div class="text-xs text-cream/30 mt-1">建立持久 Shell 会话</div>
+            </div>
+        </div>
+
+        <!-- 底部输入栏 -->
+        <div class="flex-shrink-0 px-3 sm:px-4 py-2.5 flex items-center gap-2" style="background:rgba(0,0,0,0.4);border-top:1px solid rgba(255,255,255,0.06);">
+            <div class="flex items-center gap-1.5 text-xs text-cream/40 font-mono flex-shrink-0">
+                <span style="color:#4ade80;">$</span>
+            </div>
+            <div class="flex-1 flex items-center min-w-0">
+                <input
+                    id="terminal-input"
+                    type="text"
+                    class="w-full bg-transparent text-cream placeholder-cream/25 outline-none font-mono text-sm"
+                    style="caret-color: #4ade80;"
+                    placeholder="输入命令，回车执行..."
+                    autocomplete="off"
+                    autocapitalize="off"
+                    autocorrect="off"
+                    spellcheck="false"
+                />
+            </div>
+            <button
+                id="terminal-run-btn"
+                class="px-3.5 py-1.5 bg-gold-400/90 text-forest-900 font-bold rounded-lg hover:bg-gold-500 transition-all duration-150 active:scale-95 flex items-center gap-2 flex-shrink-0 text-xs"
+                title="执行命令 (Enter)"
+            >
+                <i data-lucide="play" class="w-3.5 h-3.5"></i>
+                <span class="hidden sm:inline">执行</span>
+            </button>
+            <button
+                id="term-interrupt-btn"
+                class="px-3 py-1.5 bg-red-500/70 text-white rounded-lg hover:bg-red-500 transition-all duration-150 active:scale-95 flex items-center gap-2 flex-shrink-0 text-xs"
+                title="发送中断信号 (Ctrl+C)"
+                style="display:none;"
+            >
+                <i data-lucide="stop-circle" class="w-3.5 h-3.5"></i>
+                <span class="hidden sm:inline">中断</span>
+            </button>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_style %}
+<style>
+    /* 终端输出区滚动条 */
+    #terminal-output::-webkit-scrollbar { width: 8px; height: 8px; }
+    #terminal-output::-webkit-scrollbar-track { background: transparent; }
+    #terminal-output::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 4px; }
+    #terminal-output::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.15); }
+
+    /* 终端输出行样式 */
+    #terminal-output .term-line { white-space: pre-wrap; word-break: break-all; min-height: 1.4em; }
+    #terminal-output .term-line.input { color: #f4d03f; }
+    #terminal-output .term-line.output { color: #4ade80; }
+    #terminal-output .term-line.error { color: #f87171; }
+    #terminal-output .term-line.warning { color: #fbbf24; }
+    #terminal-output .term-line.script { color: #c084fc; }
+    #terminal-output .term-line.system { color: #6b7280; font-style: italic; }
+
+    /* 连接中动画 */
+    #term-connecting-overlay { transition: opacity 0.4s ease; }
+    #term-connecting-overlay.hidden { opacity: 0; pointer-events: none; }
+
+    /* 页面过渡：终端独立页面禁用默认的 translateY 动画 */
+    .page-content { opacity: 1 !important; transform: none !important; }
+</style>
+{% endblock %}
+
+{% block extra_script %}
+<script src="{{ url_for('static', filename='js/cmd/terminal-core.js', v='2') }}"></script>
+<script src="{{ url_for('static', filename='js/cmd/terminal-page.js', v='1') }}"></script>
+{% endblock %}
+{% block page_modals %}{% endblock %}
