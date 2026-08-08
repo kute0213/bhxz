@@ -19,7 +19,7 @@
 - 修复控制台日志（`services/logger.py`）显示 `127.0.0.1` 的问题：`log()` 函数自动使用 `get_client_ip()` 获取真实客户端 IP，统一与访问日志的 IP 判断逻辑
 - 修复验证码文字渲染：每个字符独立随机颜色 + 轻微上下抖动，增强安全性
 - 删除首页顶部导航栏（特色玩法、模组介绍、服务器理念、加入我们）
-- 一键更新默认启动命令改为 `{python} app.py`
+- 一键更新：移除空命令时系统自动处理启动的 fallback 逻辑，统一使用 `{python} app.py` 默认命令
 - 修复 `/performance` 页面 500 错误：`url_for` 端点名从 `api.performance` 修正为 `api.api_performance`
 - 修复 `/admin/broadcast` 发送广播按钮无反应：脚本移入 `extra_script` 块，确保 `page_modals` 中的弹窗元素已加载
 - 广播邮件页面移除了 `var body` 与 `document.body` 的变量名冲突

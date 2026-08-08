@@ -742,10 +742,8 @@ def _run_update():
 def _restart_app(start_command=''):
     """重启当前应用进程（跨平台，优雅替换）。
 
-    如果设置了自定义启动命令，则执行该命令启动新服务器，然后自动关闭当前进程。
-    否则使用内置的重启方式：
-    - Unix: os.execv 直接替换当前进程
-    - Windows: Popen 启动新进程 + 优雅退出
+    使用自定义启动命令启动新服务器，然后自动关闭当前进程。
+    默认使用 `{python} app.py`（在 config.py 中配置 START_COMMAND）。
 
     自定义启动命令支持占位符：
     - {python}    → Python 可执行文件路径
@@ -757,28 +755,21 @@ def _restart_app(start_command=''):
     # 给前端一点时间接收事件
     time.sleep(0.5)
 
-    if start_command:
-        # 格式化占位符
-        formatted = start_command.replace('{python}', sys.executable)\
-                                 .replace('{script}', os.path.join(APP_ROOT, 'app.py'))\
-                                 .replace('{app_root}', APP_ROOT)
-        _add_event('log', {'message': f'执行自定义启动命令: {formatted}'})
-        try:
-            subprocess.Popen(formatted, cwd=APP_ROOT, shell=True, close_fds=True)
-        except Exception as e:
-            _add_event('log', {'message': f'自定义启动命令执行失败，回退默认启动: {e}'})
-            # 回退到默认方式
-            _restart_win32()
-            return
-        # 使用自动方式关闭当前进程
+    cmd = start_command or '{python} app.py'
+    # 格式化占位符
+    formatted = cmd.replace('{python}', sys.executable)\
+                   .replace('{script}', os.path.join(APP_ROOT, 'app.py'))\
+                   .replace('{app_root}', APP_ROOT)
+    _add_event('log', {'message': f'执行启动命令: {formatted}'})
+    try:
+        subprocess.Popen(formatted, cwd=APP_ROOT, shell=True, close_fds=True)
+    except Exception as e:
+        _add_event('log', {'message': f'启动命令执行失败: {e}'})
+        # 关闭当前进程，避免卡死
         _shutdown_current_process()
-    else:
-        # 使用内置重启方式
-        if sys.platform == 'win32':
-            _restart_win32()
-        else:
-            os.chdir(APP_ROOT)
-            os.execv(sys.executable, [sys.executable, os.path.join(APP_ROOT, 'app.py')])
+        return
+    # 使用自动方式关闭当前进程
+    _shutdown_current_process()
 
 
 def _shutdown_current_process():
