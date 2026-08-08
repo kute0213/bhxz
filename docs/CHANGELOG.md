@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### 修复
+- 修复 DuckDB 多进程并发写入假阳性错误：`_is_mp_child_process()` 检测结果模块级缓存，避免多次调用时 `sys.argv` 或 `multiprocessing.current_process().name` 产生假阳性
+- `AsyncLogWriter` 和 `LogCleaner` 容错增强：捕获 `get_db()` 抛出的 `RuntimeError`，在子进程中静默跳过而非崩溃
+
 ### 新增
 - 外部链接配置化：卫星地图网址、QQ 群链接可在管理后台在线编辑（热重载）
 - 注册页面图形验证码改为点击"发送验证码"按钮后弹窗，优化交互流程

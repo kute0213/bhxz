@@ -12,6 +12,10 @@ import threading
 from config import DB_PATH
 
 
+# 模块级缓存：每个进程只检测一次，避免假阳性
+_IS_CHILD_PROCESS = None
+
+
 def _is_mp_child_process():
     """检测当前进程是否是 multiprocessing 产生的子进程。
 
@@ -21,8 +25,17 @@ def _is_mp_child_process():
     2. __name__ == '__mp_main__'（fork 模式）
     3. multiprocessing.current_process() 名称不是 MainProcess
     4. sys.argv 包含 spawn/fork 特征参数
+
+    结果在模块级缓存，每个进程只检测一次，避免多次调用时产生假阳性。
     """
+    global _IS_CHILD_PROCESS
+    if _IS_CHILD_PROCESS is not None:
+        return _IS_CHILD_PROCESS
+
+    _IS_CHILD_PROCESS = False  # 默认：不是子进程
+
     if os.environ.get('_BH_CHILD_PROCESS') == '1':
+        _IS_CHILD_PROCESS = True
         return True
     try:
         import sys
@@ -30,12 +43,15 @@ def _is_mp_child_process():
             argv_str = ' '.join(sys.argv).lower()
             if '--multiprocessing-fork' in argv_str:
                 os.environ['_BH_CHILD_PROCESS'] = '1'
+                _IS_CHILD_PROCESS = True
                 return True
             if '-c' in argv_str and 'spawn_main' in argv_str:
                 os.environ['_BH_CHILD_PROCESS'] = '1'
+                _IS_CHILD_PROCESS = True
                 return True
             if 'multiprocessing' in argv_str and ('spawn' in argv_str or 'fork' in argv_str):
                 os.environ['_BH_CHILD_PROCESS'] = '1'
+                _IS_CHILD_PROCESS = True
                 return True
     except Exception:
         pass
@@ -43,6 +59,7 @@ def _is_mp_child_process():
         import multiprocessing
         if multiprocessing.current_process().name != 'MainProcess':
             os.environ['_BH_CHILD_PROCESS'] = '1'
+            _IS_CHILD_PROCESS = True
             return True
     except Exception:
         pass

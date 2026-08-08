@@ -897,6 +897,8 @@ server {
   2. `app.py` 在所有导入前检测环境变量、`__name__`、`sys.argv` 特征判断子进程
   3. `connection.py` 的 `get_db()` 在连接数据库前再次检测子进程并抛出保护性异常
   4. 子进程入口函数 `run_script()` 中再次设置环境变量作为双重保险
+- 模块级缓存检测结果：`connection.py` 的 `_is_mp_child_process()` 结果在每个进程中只计算一次并缓存，彻底消除多次调用时 `sys.argv` 或 `multiprocessing.current_process().name` 产生假阳性的可能
+- 后台服务容错增强：`AsyncLogWriter._flush()` 和 `LogCleaner._clean_all()` 捕获 `get_db()` 抛出的 `RuntimeError`，在子进程中静默跳过而非崩溃，避免日志服务异常影响主进程
 - 默认管理员创建逻辑修复：仅当系统中无任何管理员时创建默认账户 `admin/admin1324`，删除管理员后重启不会自动重建
 
 **默认账户：**

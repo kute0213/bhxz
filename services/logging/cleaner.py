@@ -75,7 +75,11 @@ class LogCleaner:
 
     def _clean_all(self):
         """检查所有日志表并清理超限记录。"""
-        conn = get_db()
+        try:
+            conn = get_db()
+        except RuntimeError:
+            # 子进程中无法访问数据库，静默跳过本次清理
+            return
         try:
             for table, max_count in self._get_log_tables():
                 self._clean_table(conn, table, max_count)

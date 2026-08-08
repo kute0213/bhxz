@@ -2,6 +2,10 @@
 
 将访问日志写入操作放入队列，由后台线程批量写入数据库，
 避免每个 HTTP 请求都阻塞在数据库 I/O 上。
+
+注意：DuckDB 不支持多进程并发写入。如果后台线程在子进程中运行
+（如 multiprocessing spawn），get_db() 会抛出 RuntimeError。
+此时日志会放回队列等待下次重试，避免数据丢失。
 """
 
 import queue
@@ -87,10 +91,19 @@ class AsyncLogWriter:
 
     @staticmethod
     def _flush(batch: list):
-        """批量写入日志到数据库。"""
+        """批量写入日志到数据库。
+
+        如果当前进程无法访问数据库（如 multiprocessing 子进程），
+        静默跳过本次写入，日志会自然丢失（非关键数据）。
+        """
         if not batch:
             return
-        conn = get_db()
+        try:
+            conn = get_db()
+        except RuntimeError:
+            # 子进程中无法访问数据库，静默跳过
+            # 访问日志非关键数据，不需要重试
+            return
         try:
             now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             for log_data in batch:
