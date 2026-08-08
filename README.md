@@ -88,7 +88,7 @@
 │   │   └── api.py                #     成员提交/编辑指南 API（需审核）
 │   ├── cmd/                      #   CMD 控制台蓝图包：实时命令执行 + 一键命令管理 + 脚本
 │   │   ├── __init__.py           #     创建 cmd_bp，导入子模块注册路由
-│   │   ├── pages.py              #     命令控制台首页 + 脚本编辑器页面
+│   │   ├── pages.py              #     命令控制台首页 + 脚本编辑器页面 + 独立实时终端页面
 │   │   ├── commands.py           #     快捷命令 CRUD + 执行预设命令
 │   │   ├── execution.py          #     Shell 命令同步执行 + SSE 流式执行
 │   │   ├── script.py             #     MiniScript SSE 执行 + _admin_check 辅助函数
@@ -126,6 +126,7 @@
 │   │   ├── admin_guide_form.html #     指南编辑页面（Markdown 编辑器 + 实时预览）
 │   │   ├── admin_guide_bans.html #     指南编辑权限封禁管理
 │   │   ├── admin_cmd.html        #     CMD 控制台
+│   │   ├── admin_terminal_page.html  # 独立实时终端页面（全屏持久 Shell 会话）
 │   │   ├── admin_cmd_editor.html #     脚本编辑器（专业代码编辑器页面）
 │   │   ├── admin_cmd_scheduled.html  # 定时任务管理页面
 │   │   ├── admin_settings.html   #     系统设置（在线编辑配置，支持重置，热重载）
@@ -159,6 +160,7 @@
 │       ├── base.js               #     base.html 提取的全局脚本（导航、Toast、键盘快捷键）
 │       └── cmd/                  #     CMD 控制台模块（10 个文件，职责清晰）
 │           ├── terminal-core.js  #       终端核心复用库（ANSI 解析 / SSE 连接 / 命令历史 / 输入发送）
+│           ├── terminal-page.js  #       独立终端页面 JS（全屏终端，SSE 连接 + 会话管理 + 重置）
 │           ├── modal.js          #       页内弹窗系统（替代原生 alert/prompt/confirm）
 │           ├── terminal.js       #       终端弹窗（依赖 terminal-core.js，持久 shell 会话 + SSE 流式输出）
 │           ├── presets.js        #       快捷命令管理（增删改查，按 [脚本] 前缀区分类型）
@@ -427,6 +429,7 @@ CMD 控制台提供实时终端、快捷命令管理、专业脚本编辑器（M
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | GET | `/admin/cmd` | CMD 控制台页面 |
+| GET | `/admin/cmd/terminal-page` | **独立实时终端页面**（全屏持久 Shell 会话，独立于弹窗） |
 | GET | `/admin/cmd/editor` | **专业脚本编辑器页面**（支持 `?edit=<id>` 编辑现有脚本） |
 | GET | `/admin/cmd/commands` | 获取一键命令列表（JSON） |
 | POST | `/admin/cmd/commands` | 新增一键命令 |
