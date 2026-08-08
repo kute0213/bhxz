@@ -196,7 +196,7 @@ document.addEventListener('keydown', function (e) {
 })();
 
 // ============================================
-// 自定义弹窗系统 - 放大居中动画
+// 自定义弹窗系统 - 从按钮放大移动到中间
 // ============================================
 var CustomModal = (function () {
     var modal = document.getElementById('custom-modal');
@@ -210,6 +210,7 @@ var CustomModal = (function () {
 
     var currentCallback = null;
     var currentTrigger = null;
+    var triggerRect = null;
 
     function setIcon(type) {
         var iconMap = {
@@ -249,48 +250,101 @@ var CustomModal = (function () {
         cancelBtn.textContent = cancelText;
         cancelBtn.style.display = showCancel ? '' : 'none';
 
+        // 从触发按钮位置放大到中间
         if (trigger) {
             var rect = trigger.getBoundingClientRect();
-            var modalRect = modalBox.getBoundingClientRect();
-            var centerX = rect.left + rect.width / 2;
-            var centerY = rect.top + rect.height / 2;
+            triggerRect = rect;
+            var vw = window.innerWidth;
+            var vh = window.innerHeight;
+            var btnCx = rect.left + rect.width / 2;
+            var btnCy = rect.top + rect.height / 2;
+            var vpCx = vw / 2;
+            var vpCy = vh / 2;
 
-            var startX = centerX - (window.innerWidth / 2);
-            var startY = centerY - (window.innerHeight / 2);
+            // 计算偏移：从按钮中心到视口中心
+            var dx = btnCx - vpCx;
+            var dy = btnCy - vpCy;
 
-            var scaleX = rect.width / 420;
-            var scaleY = rect.height / 200;
-            var startScale = Math.min(scaleX, scaleY, 0.5);
+            // 计算起始缩放：按钮尺寸相对于弹窗尺寸
+            var modalW = 440;
+            var modalH = 240;
+            var scaleX = rect.width / modalW;
+            var scaleY = rect.height / modalH;
+            var startScale = Math.min(Math.max(scaleX, scaleY, 0.08), 0.35);
 
-            modalBox.style.transform = 'translate(' + startX + 'px, ' + startY + 'px) scale(' + startScale + ')';
+            // 重置过渡，设置起始位置
+            modalBox.style.transition = 'none';
+            modalBox.style.transform = 'translate(' + dx + 'px, ' + dy + 'px) scale(' + startScale + ')';
+            modalBox.style.opacity = '0';
+
+            // 显示弹窗
+            modal.offsetHeight;
+            modal.classList.add('active');
+            document.body.style.overflow = 'hidden';
+
+            // 下一帧启用过渡，动画到中心
+            requestAnimationFrame(function () {
+                modalBox.style.transition = '';
+                modalBox.style.transform = 'translate(0, 0) scale(1)';
+                modalBox.style.opacity = '1';
+            });
+        } else {
+            // 无触发器：简单淡入
+            modalBox.style.transition = 'none';
+            modalBox.style.transform = 'scale(0.92)';
             modalBox.style.opacity = '0';
 
             modal.offsetHeight;
-
             modal.classList.add('active');
             document.body.style.overflow = 'hidden';
 
             requestAnimationFrame(function () {
-                modalBox.style.transform = '';
-                modalBox.style.opacity = '';
+                modalBox.style.transition = '';
+                modalBox.style.transform = 'scale(1)';
+                modalBox.style.opacity = '1';
             });
-        } else {
-            modal.classList.add('active');
-            document.body.style.overflow = 'hidden';
         }
     }
 
     function close(result) {
-        modal.classList.remove('active');
-        document.body.style.overflow = '';
+        // 反向动画：回到触发位置
+        if (triggerRect) {
+            var vw = window.innerWidth;
+            var vh = window.innerHeight;
+            var btnCx = triggerRect.left + triggerRect.width / 2;
+            var btnCy = triggerRect.top + triggerRect.height / 2;
+            var vpCx = vw / 2;
+            var vpCy = vh / 2;
+            var dx = btnCx - vpCx;
+            var dy = btnCy - vpCy;
+            var modalW = 440;
+            var modalH = 240;
+            var scaleX = triggerRect.width / modalW;
+            var scaleY = triggerRect.height / modalH;
+            var endScale = Math.min(Math.max(scaleX, scaleY, 0.08), 0.35);
+
+            modalBox.style.transition = '';
+            modalBox.style.transform = 'translate(' + dx + 'px, ' + dy + 'px) scale(' + endScale + ')';
+            modalBox.style.opacity = '0';
+        } else {
+            modalBox.style.transform = 'scale(0.92)';
+            modalBox.style.opacity = '0';
+        }
 
         setTimeout(function () {
+            modal.classList.remove('active');
+            document.body.style.overflow = '';
+            modalBox.style.transform = '';
+            modalBox.style.opacity = '';
+            modalBox.style.transition = '';
+
             if (currentCallback) {
                 currentCallback(result);
                 currentCallback = null;
             }
             currentTrigger = null;
-        }, 300);
+            triggerRect = null;
+        }, 400);
     }
 
     if (confirmBtn) {
@@ -312,6 +366,15 @@ var CustomModal = (function () {
             close(true);
         }
     });
+
+    // 点击遮罩关闭
+    if (modal) {
+        modal.addEventListener('click', function (e) {
+            if (e.target === modal) {
+                close(false);
+            }
+        });
+    }
 
     return {
         open: open,

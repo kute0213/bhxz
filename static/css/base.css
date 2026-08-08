@@ -263,10 +263,9 @@ body.page-leaving .page-transition-overlay {
         inset 0 -1px 0 rgba(0, 0, 0, 0.1);
     max-width: 90vw;
     width: 440px;
-    transform-origin: center center;
-    transform: scale(0.25) translateY(30px);
-    opacity: 0;
-    transition: transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1),
+    transform: scale(1) translate(0, 0);
+    opacity: 1;
+    transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1),
                 opacity 0.3s ease;
     overflow: hidden;
 }
@@ -274,11 +273,6 @@ body.page-leaving .page-transition-overlay {
     content: ''; position: absolute; top: 0; left: 0; right: 0; height: 50%; border-radius: 28px 28px 0 0; pointer-events: none;
     background: linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0) 100%);
 }
-.modal-overlay.active .modal-box {
-    transform: scale(1) translateY(0);
-    opacity: 1;
-}
-
 .modal-header {
     padding: 24px 28px 18px;
     border-bottom: 1px solid rgba(244, 208, 63, 0.1);
@@ -452,27 +446,6 @@ img {
 }
 
 /* ============================================================
- * 高级动画 - 滚动进度条
- * ============================================================ */
-.scroll-progress {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 0%;
-    height: 2px;
-    z-index: 99999;
-    background: linear-gradient(90deg, #f4d03f, #d4a827, #f4d03f);
-    background-size: 200% 100%;
-    animation: progressGlow 2s linear infinite;
-    will-change: width;
-    pointer-events: none;
-}
-@keyframes progressGlow {
-    0% { background-position: 0% 0%; }
-    100% { background-position: 200% 0%; }
-}
-
-/* ============================================================
  * 高级动画 - 卡片交错出现
  * ============================================================ */
 .stagger-item {
@@ -508,31 +481,6 @@ img {
 .text-reveal-word.visible {
     opacity: 1;
     transform: translateY(0) rotateX(0deg);
-}
-
-/* ============================================================
- * 高级动画 - 3D 卡片倾斜
- * ============================================================ */
-.tilt-container {
-    transform-style: preserve-3d;
-    perspective: 800px;
-}
-.tilt-card {
-    transition: transform 0.15s ease-out;
-    transform-style: preserve-3d;
-    will-change: transform;
-}
-.tilt-card .tilt-shine {
-    position: absolute;
-    inset: 0;
-    border-radius: inherit;
-    pointer-events: none;
-    background: radial-gradient(circle at 50% 50%, rgba(255,255,255,0.08), transparent 60%);
-    opacity: 0;
-    transition: opacity 0.15s ease;
-}
-.tilt-card:hover .tilt-shine {
-    opacity: 1;
 }
 
 /* ============================================================
@@ -582,26 +530,6 @@ img {
 }
 
 /* ============================================================
- * 高级动画 - 悬浮粒子
- * ============================================================ */
-.particle-container {
-    position: fixed;
-    inset: 0;
-    z-index: -1;
-    pointer-events: none;
-    overflow: hidden;
-}
-.particle {
-    position: absolute;
-    width: 3px;
-    height: 3px;
-    background: rgba(244, 208, 63, 0.3);
-    border-radius: 50%;
-    pointer-events: none;
-    will-change: transform;
-}
-
-/* ============================================================
  * 高级动画 - 数字跳动
  * ============================================================ */
 @keyframes countUp {
@@ -627,9 +555,6 @@ img {
     .bg-orb { animation: none !important; }
     .mouse-glow { display: none !important; }
     .scroll-progress { display: none !important; }
-    .particle-container { display: none !important; }
-    .tilt-card { transform: none !important; }
-    .border-glow::before { animation: none !important; }
 }
 
 /* 性能优化 - 离屏内容延迟渲染 */

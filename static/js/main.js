@@ -6,12 +6,9 @@ document.addEventListener('DOMContentLoaded', function() {
     initSmoothScroll();
     initButtonFeedback();
     initMouseGlow();
-    initScrollProgress();
     initStaggerReveal();
     initTextReveal();
-    initCardTilt();
     initParallax();
-    initParticles();
 });
 
 // ============================================
@@ -133,44 +130,6 @@ function initMouseGlow() {
 }
 
 // ============================================
-// 高级动画：滚动进度条
-// ============================================
-function initScrollProgress() {
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-
-    var bar = document.createElement('div');
-    bar.className = 'scroll-progress';
-    document.body.appendChild(bar);
-
-    var ticking = false;
-    function updateProgress() {
-        var scrollTop = window.pageYOffset || document.documentElement.scrollTop;
-        var docHeight = Math.max(
-            document.body.scrollHeight,
-            document.documentElement.scrollHeight,
-            document.body.offsetHeight,
-            document.documentElement.offsetHeight,
-            document.body.clientHeight,
-            document.documentElement.clientHeight
-        );
-        var winHeight = window.innerHeight;
-        var scrollPercent = (scrollTop / (docHeight - winHeight)) * 100;
-        bar.style.width = scrollPercent + '%';
-        ticking = false;
-    }
-
-    window.addEventListener('scroll', function() {
-        if (!ticking) {
-            requestAnimationFrame(updateProgress);
-            ticking = true;
-        }
-    }, { passive: true });
-
-    // 初始更新
-    updateProgress();
-}
-
-// ============================================
 // 高级动画：卡片交错出现
 // ============================================
 function initStaggerReveal() {
@@ -247,49 +206,6 @@ function initTextReveal() {
 }
 
 // ============================================
-// 高级动画：3D 卡片倾斜
-// ============================================
-function initCardTilt() {
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    if (window.matchMedia('(hover: none)').matches) return;
-
-    document.querySelectorAll('.tilt-card').forEach(function(card) {
-        var container = card.closest('.tilt-container') || card.parentElement;
-        var shine = card.querySelector('.tilt-shine');
-        if (!shine) {
-            shine = document.createElement('div');
-            shine.className = 'tilt-shine';
-            card.appendChild(shine);
-        }
-
-        card.addEventListener('mousemove', function(e) {
-            var rect = card.getBoundingClientRect();
-            var x = e.clientX - rect.left;
-            var y = e.clientY - rect.top;
-
-            var centerX = rect.width / 2;
-            var centerY = rect.height / 2;
-
-            var rotateX = ((y - centerY) / centerY) * -6;
-            var rotateY = ((x - centerX) / centerX) * 6;
-
-            card.style.transform = 'perspective(800px) rotateX(' + rotateX + 'deg) rotateY(' + rotateY + 'deg) scale3d(1.02, 1.02, 1.02)';
-
-            // 光晕跟随
-            var pctX = (x / rect.width) * 100;
-            var pctY = (y / rect.height) * 100;
-            shine.style.background = 'radial-gradient(circle at ' + pctX + '% ' + pctY + '%, rgba(255,255,255,0.1), transparent 60%)';
-            shine.style.opacity = '1';
-        });
-
-        card.addEventListener('mouseleave', function() {
-            card.style.transform = '';
-            shine.style.opacity = '0';
-        });
-    });
-}
-
-// ============================================
 // 高级动画：视差滚动
 // ============================================
 function initParallax() {
@@ -328,65 +244,4 @@ function initParallax() {
     }, { passive: true });
 
     updateParallax();
-}
-
-// ============================================
-// 高级动画：悬浮粒子背景
-// ============================================
-function initParticles() {
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-
-    var container = document.querySelector('.particle-container');
-    if (container) return; // 已经存在
-
-    // 只在非移动设备上启用粒子
-    if (window.innerWidth < 768) return;
-
-    container = document.createElement('div');
-    container.className = 'particle-container';
-    document.body.appendChild(container);
-
-    var count = Math.min(Math.floor(window.innerWidth / 40), 30);
-    var particles = [];
-    var rafId = null;
-
-    for (var i = 0; i < count; i++) {
-        var p = document.createElement('div');
-        p.className = 'particle';
-        var size = 1.5 + Math.random() * 2.5;
-        p.style.width = size + 'px';
-        p.style.height = size + 'px';
-        p.style.opacity = 0.1 + Math.random() * 0.3;
-        p.style.left = Math.random() * 100 + '%';
-        p.style.top = Math.random() * 100 + '%';
-
-        container.appendChild(p);
-
-        particles.push({
-            el: p,
-            x: Math.random() * 100,
-            y: Math.random() * 100,
-            vx: (Math.random() - 0.5) * 0.15,
-            vy: (Math.random() - 0.5) * 0.15 - 0.04
-        });
-    }
-
-    function animateParticles() {
-        particles.forEach(function(p) {
-            p.x += p.vx;
-            p.y += p.vy;
-
-            if (p.x < 0 || p.x > 100) p.vx *= -1;
-            if (p.y < 0 || p.y > 100) p.vy *= -1;
-
-            p.el.style.transform = 'translate3d(' + p.x + 'vw, ' + p.y + 'vh, 0)';
-        });
-
-        rafId = requestAnimationFrame(animateParticles);
-    }
-
-    // 延迟启动，避免影响页面初始渲染
-    setTimeout(function() {
-        animateParticles();
-    }, 1000);
 }
