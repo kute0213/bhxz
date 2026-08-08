@@ -5,6 +5,7 @@ from datetime import datetime
 
 from core.auth import get_current_user, login_required
 from core.db import get_db
+from services.captcha import captcha_service
 from routes.guides import guides_bp
 
 
@@ -94,6 +95,13 @@ def guide_create():
             flash('标题和内容不能为空', 'error')
             return render_template('guides/form.html', user=user, guide=None)
 
+        # 验证图形验证码
+        captcha_input = (request.form.get('captcha') or '').strip()
+        captcha_id = (request.form.get('captcha_id') or '').strip()
+        if not captcha_service.verify(captcha_id, captcha_input):
+            flash('验证码错误或已过期', 'error')
+            return render_template('guides/form.html', user=user, guide=None)
+
         from routes.guides.api import _slugify, _ensure_unique_slug
         conn = get_db()
         try:
@@ -149,6 +157,13 @@ def guide_edit(guide_id):
 
         if not title or not content:
             flash('标题和内容不能为空', 'error')
+            return render_template('guides/form.html', user=user, guide=guide)
+
+        # 验证图形验证码
+        captcha_input = (request.form.get('captcha') or '').strip()
+        captcha_id = (request.form.get('captcha_id') or '').strip()
+        if not captcha_service.verify(captcha_id, captcha_input):
+            flash('验证码错误或已过期', 'error')
             return render_template('guides/form.html', user=user, guide=guide)
 
         from routes.guides.api import _slugify, _ensure_unique_slug
