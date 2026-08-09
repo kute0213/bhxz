@@ -135,6 +135,18 @@ def register():
                                                email_verify_enabled=email_verify_enabled,
                                                group_code_verified=group_code_verified)
 
+            # 邮箱唯一性检查：一个邮箱只能注册一个账号
+            if email:
+                email_exists = conn.execute(
+                    "SELECT id FROM users WHERE email = ? AND email != ''",
+                    (email,)
+                ).fetchone()
+                if email_exists:
+                    log('Register', '邮箱已被注册', email=email, ip=request.remote_addr)
+                    return _render_register_error('该邮箱已被其他账号使用，一个邮箱只可注册一个账号',
+                                                   email_verify_enabled=email_verify_enabled,
+                                                   group_code_verified=group_code_verified)
+
             password_hash = hash_password(password)
             conn.execute(
                 "INSERT INTO users (username, password_hash, email, created_at) VALUES (?, ?, ?, ?)",
@@ -345,6 +357,8 @@ def forgot_password():
             new_hash = hash_password(new_password)
             conn.execute("UPDATE users SET password_hash = ? WHERE id = ?", (new_hash, user['id']))
             conn.commit()
+            # 消耗验证码，防止重放攻击
+            captcha_service.consume(captcha_id)
             log('ForgotPassword', '密码重置成功', username=username, user_id=user['id'], ip=request.remote_addr)
         except Exception:
             conn.rollback()
@@ -488,6 +502,16 @@ def change_email():
             from services.email import email_code_service
             if not email_code_service.verify(new_email, email_code):
                 flash('邮箱验证码错误或已过期', 'error')
+                return redirect(url_for('main.settings') + '#email')
+
+        # 邮箱唯一性检查：一个邮箱只能注册一个账号
+        if new_email:
+            email_exists = conn.execute(
+                "SELECT id FROM users WHERE email = ? AND email != '' AND id != ?",
+                (new_email, user['id'])
+            ).fetchone()
+            if email_exists:
+                flash('该邮箱已被其他账号使用，一个邮箱只可注册一个账号', 'error')
                 return redirect(url_for('main.settings') + '#email')
 
         conn.execute("UPDATE users SET email = ? WHERE id = ?", (new_email, user['id']))

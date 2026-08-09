@@ -1,8 +1,8 @@
 /* ============================================================
  * base.js — 全站基础脚本（由 templates/base.html 提取）
  * 包含：移动端菜单、页面过渡、附件上传进度、自定义弹窗、
- *       Toast 提示、原生 confirm 拦截替换
- * 暴露全局对象：CustomModal、Toast
+ *       Toast 提示、原生 confirm 拦截替换、图形验证码弹窗
+ * 暴露全局对象：CustomModal、Toast、CaptchaModal
  * 页面级脚本通过 {% block extra_script %} 注入
  * 依赖：Tailwind CSS CDN、Lucide CDN（在 base.html 中加载）
  * ============================================================ */
@@ -534,3 +534,118 @@ var Toast = (function () {
         observer.observe(document.body, { childList: true, subtree: true });
     }
 })();
+
+// ============================================
+// 图形验证码弹窗（全局共享，供注册/找回密码等页面使用）
+// 暴露全局对象：CaptchaModal
+// 页面代码通过 CaptchaModal.show(hint, callback) 调用
+// ============================================
+var CaptchaModal = (function () {
+    var modal = document.getElementById('captcha-modal');
+    if (!modal) return { show: function() {}, hide: function() {} };
+
+    var captchaImg = document.getElementById('modal-captcha-img');
+    var captchaIdInput = document.getElementById('modal-captcha-id');
+    var captchaCodeInput = document.getElementById('modal-captcha-input');
+    var captchaSubmit = document.getElementById('modal-captcha-submit');
+    var captchaRefresh = document.getElementById('modal-captcha-refresh');
+    var captchaClose = document.getElementById('modal-captcha-close');
+    var captchaHint = document.getElementById('captcha-modal-hint');
+
+    var captchaCallback = null;
+
+    function loadModalCaptcha() {
+        fetch('/api/captcha/generate')
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
+                if (data.success) {
+                    captchaImg.src = data.image;
+                    if (captchaIdInput) captchaIdInput.value = data.captcha_id || '';
+                }
+            })
+            .catch(function(err) { console.error('加载验证码失败:', err); });
+    }
+
+    function show(hint, callback) {
+        if (!modal) return;
+        captchaHint.textContent = hint || '请完成图形验证码';
+        captchaCodeInput.value = '';
+        captchaCallback = callback;
+        modal.style.display = 'block';
+        loadModalCaptcha();
+        setTimeout(function() { captchaCodeInput.focus(); }, 100);
+    }
+
+    function hide() {
+        if (!modal) return;
+        modal.style.display = 'none';
+        captchaCallback = null;
+    }
+
+    function verify() {
+        var code = captchaCodeInput.value.trim();
+        if (!code) {
+            if (typeof Toast !== 'undefined' && Toast.warning) Toast.warning('请输入验证码');
+            captchaCodeInput.focus();
+            return;
+        }
+        var captchaId = captchaIdInput.value;
+
+        captchaSubmit.disabled = true;
+        captchaSubmit.textContent = '验证中...';
+
+        fetch('/api/captcha/verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                captcha_id: captchaId,
+                captcha: code
+            })
+        })
+        .then(function(res) { return res.json(); })
+        .then(function(data) {
+            if (data.success) {
+                if (typeof captchaCallback === 'function') {
+                    captchaCallback(captchaId, code);
+                }
+                hide();
+            } else {
+                if (typeof Toast !== 'undefined' && Toast.error) Toast.error(data.message || '验证码错误');
+                captchaCodeInput.value = '';
+                loadModalCaptcha();
+                captchaCodeInput.focus();
+            }
+        })
+        .catch(function() {
+            if (typeof Toast !== 'undefined' && Toast.error) Toast.error('网络错误，请重试');
+        })
+        .finally(function() {
+            captchaSubmit.disabled = false;
+            captchaSubmit.textContent = '验证';
+        });
+    }
+
+    // 事件绑定
+    if (captchaSubmit) captchaSubmit.addEventListener('click', verify);
+    if (captchaCodeInput) captchaCodeInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') verify();
+    });
+    if (captchaRefresh) captchaRefresh.addEventListener('click', function() {
+        captchaCodeInput.value = '';
+        loadModalCaptcha();
+    });
+    if (captchaImg) captchaImg.addEventListener('click', function() {
+        captchaCodeInput.value = '';
+        loadModalCaptcha();
+    });
+    if (captchaClose) captchaClose.addEventListener('click', hide);
+    if (modal) modal.addEventListener('click', function(e) {
+        if (e.target === modal) hide();
+    });
+
+    return { show: show, hide: hide };
+})();
+
+// 向后兼容：旧的 window.__showCaptchaModal / __hideCaptchaModal 指向 CaptchaModal
+window.__showCaptchaModal = CaptchaModal.show;
+window.__hideCaptchaModal = CaptchaModal.hide;

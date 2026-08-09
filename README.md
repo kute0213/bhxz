@@ -187,6 +187,7 @@
 ### 开发注意事项
 
 - **弹窗定位**：`base.html` 中的 `<main class="page-content">` 使用了 `transform: translateY(16px)` 实现页面过渡动画。这会创建新的 CSS 包含块，导致内部 `position: fixed` 元素相对于 `.page-content` 而非视口定位。所有全屏弹窗/模态框应放置在 `{% block page_modals %}` 中（该块在 `</main>` 之后渲染），而非 `{% block content %}` 内。
+- **图形验证码模块化**：图形验证码弹窗 HTML 位于 `base.html`（`</main>` 后），JS 逻辑位于 `base.js` 的 `CaptchaModal` 全局对象。页面通过 `CaptchaModal.show(hint, callback)` 或 `window.__showCaptchaModal(hint, callback)` 调用，无需重复编写弹窗逻辑。注册和找回密码页面已统一使用此模块化组件。
 - **白屏闪烁防护**：`base.html` 的 `<head>` 中内联了 `<style>body{background:#07120c}</style>` 和 `<style>.js .page-content{opacity:0;transform:translateY(16px)}</style>`，确保深色背景和页面过渡动画的初始状态在外部 CSS 加载前已生效，防止浏览器默认白色背景闪烁。页面内容过渡动画依赖 `.js` 类（由同步内联 `<script>` 添加），确保动画在 JS 确认可用后才执行，无 JS 时内容直接可见。
 
 ### 分层设计
@@ -606,7 +607,7 @@ Markdown 文档存放在 [docs/](file:///workspace/docs/) 目录，通过 `/docs
 
 | 表名 | 说明 | 关键约束 |
 |------|------|----------|
-| `users` | 用户 | `username` 唯一 |
+| `users` | 用户 | `username` 唯一, `email` 唯一（一个邮箱仅可注册一个账号） |
 | `polls` | 投票 | — |
 | `poll_options` | 投票选项 | 外键 `poll_id` 级联删除 |
 | `poll_votes` | 投票记录 | 唯一约束 `(poll_id, user_id, option_id)` 防重复投票 |
@@ -755,6 +756,7 @@ server {
 4. 定期清理 `access_logs` 表（管理后台支持一键清空，或配置自动清理）
 5. 图形验证码采用服务端内存存储（`CaptchaService` 单例），答案不依赖 session，返回随机 `captcha_id` 供前端提交，校验后一次性删除防止重放攻击与 curl 绕过
 6. Session Cookie 启用 `HttpOnly` 与 `SameSite=Lax` 安全选项，防止 JS 读取与跨站请求伪造
+7. 邮箱唯一性检查：注册和修改邮箱时检查邮箱是否已被其他账号使用，系统确保一个邮箱仅可注册一个账号
 
 ## 更新日志
 
