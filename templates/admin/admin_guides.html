@@ -75,7 +75,7 @@
                         <tr class="border-b border-forest-700/30 hover:bg-forest-800/20 transition-colors">
                             <td class="px-4 py-3 text-cream/40">{{ guide.id }}</td>
                             <td class="px-4 py-3">
-                                <a href="{{ url_for('guides.guide_detail', slug=guide.slug) }}" target="_blank" class="text-gold-400 hover:underline font-medium">{{ guide.title }}</a>
+                                <a href="{{ url_for('guides.guide_detail', guide_id=guide.id) }}" target="_blank" class="text-gold-400 hover:underline font-medium">{{ guide.title }}</a>
                                 {% if guide.rejected_reason %}
                                 <div class="text-xs text-red-300 mt-1">原因：{{ guide.rejected_reason }}</div>
                                 {% endif %}

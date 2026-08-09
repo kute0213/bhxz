@@ -177,14 +177,15 @@ body {
 }
 .mobile-menu-overlay.active { opacity: 1; visibility: visible; }
 
-/* 页面过渡动画 - 从下往上淡入 */
-.page-content {
+/* 页面过渡动画 - 从下往上淡入
+ * 默认可见（无JS fallback），JS确认可用后执行动画 */
+.js .page-content {
     opacity: 0;
     transform: translateY(16px);
     transition: opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1),
                 transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.page-content.page-ready {
+.js .page-content.page-ready {
     opacity: 1;
     transform: translateY(0);
 }

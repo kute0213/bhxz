@@ -187,6 +187,7 @@
 ### 开发注意事项
 
 - **弹窗定位**：`base.html` 中的 `<main class="page-content">` 使用了 `transform: translateY(16px)` 实现页面过渡动画。这会创建新的 CSS 包含块，导致内部 `position: fixed` 元素相对于 `.page-content` 而非视口定位。所有全屏弹窗/模态框应放置在 `{% block page_modals %}` 中（该块在 `</main>` 之后渲染），而非 `{% block content %}` 内。
+- **白屏闪烁防护**：`base.html` 的 `<head>` 中内联了 `<style>body{background:#07120c}</style>` 和 `<style>.js .page-content{opacity:0;transform:translateY(16px)}</style>`，确保深色背景和页面过渡动画的初始状态在外部 CSS 加载前已生效，防止浏览器默认白色背景闪烁。页面内容过渡动画依赖 `.js` 类（由同步内联 `<script>` 添加），确保动画在 JS 确认可用后才执行，无 JS 时内容直接可见。
 
 ### 分层设计
 
@@ -563,7 +564,8 @@ Markdown 文档存放在 [docs/](file:///workspace/docs/) 目录，通过 `/docs
 |------|------|------|
 | GET | `/guides` | 指南列表页（默认展示已审核通过） |
 | GET | `/guides?my=1` | 我的指南（登录用户查看自己提交的） |
-| GET | `/guides/<slug>` | 指南详情页（Markdown 渲染） |
+| GET | `/guides/<int:guide_id>` | 指南详情页（ID 编号路由，如 `/guides/12`） |
+| GET | `/guides/<int:guide_id>/edit` | 编辑指南（与详情页使用同一编号） |
 | GET | `/discussion` | 帖子列表（支持分类筛选、分页） |
 | GET | `/discussion/create` | 发帖页面（需登录） |
 | GET | `/discussion/<id>` | 帖子详情页（Markdown 渲染 + 回复列表） |
@@ -942,4 +944,23 @@ server {
 - `routes/cmd/terminal.py`：SSE 生成器将当前 generation 传入 `read_pending_output`，实现代际一致性校验
 - `static/js/cmd/terminal-core.js`：`SseTerminal` 新增 `_connecting` 锁，防止并发调用 `connect()` 产生多个 EventSource 连接
 - `core/shell.py`：Windows cmd 启动参数改为 `cmd.exe /q /k`，关闭命令回显，减少命令被前后端重复渲染的概率
+
+**找回密码功能（邮箱验证码 + 图形验证码双重验证）：**
+- 新增 `routes/main.py` 中的 `/forgot-password` 路由：邮箱验证码验证 → 图形验证码验证 → 密码重置，完整的忘记密码流程
+- 新增 `templates/forgot_password.html`：找回密码页面模板，包含邮箱输入、邮箱验证码发送、图形验证码验证、密码重置表单
+- 安全措施：邮箱验证码和图形验证码双重验证，验证码服务端一次性校验防重放，密码重置 token 临时存储
+
+**指南详情页 URL 从 slug 改为数字 ID 路由：**
+- `routes/guides/pages.py`：`guide_detail()` 路由参数从 `slug` 改为 `guide_id`，使用数据库 `id` 字段查询
+- `templates/guides/index.html`、`templates/admin/admin_guides.html`：链接生成使用 `guide_id=guide.id` 替代旧的 slug 参数
+- 现在指南详情页 URL 格式为 `/guides/12`，编辑页为 `/guides/12/edit`，共用同一 ID 编号
+
+**修复首页白屏闪烁问题：**
+- `templates/base.html`：`<head>` 中添加内联 `<style>body{background:#07120c}</style>`，在外部 CSS 加载前立即应用深色背景，防止浏览器默认白色背景闪烁
+- `<head>` 中添加同步内联 `<script>document.documentElement.classList.add('js')</script>`，在渲染前确认 JS 可用
+- `<head>` 中添加内联 `<style>.js .page-content{opacity:0;transform:translateY(16px)}</style>`，页面过渡动画初始状态在渲染前已就绪
+- `static/css/base.css`：`.page-content` 动画规则改为 `.js .page-content`，仅当 JS 确认可用时执行动画，无 JS 时内容直接可见（渐进增强）
+
+**.gitignore 更新：**
+- 添加 `/.trae-html-share-packages` 到 `.gitignore`
 

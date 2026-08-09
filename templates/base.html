@@ -8,9 +8,13 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- 关键CSS内联：防止白屏闪烁 -->
+    <style>body{background:#07120c}</style>
+    <script>document.documentElement.classList.add('js');</script>
+    <style>.js .page-content{opacity:0;transform:translateY(16px)}</style>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/tailwind.css', v='1') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='9') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css', v='11') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css', v='12') }}">
     {% block extra_style %}{% endblock %}
 </head>
 <body>
@@ -266,7 +270,7 @@
     {# 页面级弹窗挂载点（在 body 下，不受 .page-content 的 transform 影响） #}
     {% block page_modals %}{% endblock %}
 
-    <script src="{{ url_for('static', filename='js/base.js', v='10') }}"></script>
+    <script src="{{ url_for('static', filename='js/base.js', v='11') }}"></script>
     <script src="{{ url_for('static', filename='js/main.js', v='10') }}"></script>
     {% block extra_script %}{% endblock %}
 </body>

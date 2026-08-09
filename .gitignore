@@ -48,6 +48,7 @@ Thumbs.db
 # Trae spec 文档
 .trae/
 .trae-html-share-packages/
+/.trae-html-share-packages
 
 # Node.js
 node_modules/

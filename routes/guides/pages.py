@@ -44,8 +44,8 @@ def guide_list():
     return render_template('guides/index.html', user=user, guides=guides, my_mode=bool(user and request.args.get('my')))
 
 
-@guides_bp.route('/guides/<slug>')
-def guide_detail(slug):
+@guides_bp.route('/guides/<int:guide_id>')
+def guide_detail(guide_id):
     """公开指南详情页（已审核通过的可公开访问；作者可查看自己的待审核指南）。"""
     user = get_current_user()
     conn = get_db()
@@ -56,9 +56,9 @@ def guide_detail(slug):
                 SELECT g.*, u.username as author_name
                 FROM server_guides g
                 LEFT JOIN users u ON g.author_id = u.id
-                WHERE g.slug = ? AND (g.status = 'approved' OR g.author_id = ?)
+                WHERE g.id = ? AND (g.status = 'approved' OR g.author_id = ?)
                 """,
-                (slug, user['id']),
+                (guide_id, user['id']),
             ).fetchone()
         else:
             row = conn.execute(
@@ -66,9 +66,9 @@ def guide_detail(slug):
                 SELECT g.*, u.username as author_name
                 FROM server_guides g
                 LEFT JOIN users u ON g.author_id = u.id
-                WHERE g.slug = ? AND g.status = 'approved'
+                WHERE g.id = ? AND g.status = 'approved'
                 """,
-                (slug,),
+                (guide_id,),
             ).fetchone()
     finally:
         conn.close()
@@ -182,7 +182,7 @@ def guide_edit(guide_id):
             )
             conn.commit()
             flash('修改已提交，等待管理员审核', 'success')
-            return redirect(url_for('guides.guide_detail', slug=slug))
+            return redirect(url_for('guides.guide_detail', guide_id=guide_id))
         except Exception as e:
             conn.rollback()
             flash(f'修改失败: {e}', 'error')
