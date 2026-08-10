@@ -88,6 +88,6 @@ def get_current_user():
     finally:
         conn.close()
 
-    user_dict = dict(user) if user else None
+    user_dict = {k: user[k] for k in user.keys()} if user else None
     g._current_user = user_dict
     return user_dict
