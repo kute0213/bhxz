@@ -18,7 +18,7 @@ import time
 import subprocess
 
 from config import get_config_value
-from core.process_utils import decode_output, make_env
+from services.process_utils import decode_output, make_env
 
 
 def create_builtins(output_callback, interactive=True):

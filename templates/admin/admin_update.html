@@ -21,20 +21,6 @@
         {% endif %}
         {% endwith %}
 
-        <!-- 更新说明 -->
-        <div class="pixel-card rounded-xl p-6 mb-6">
-            <h2 class="text-lg font-bold mb-3 flex items-center gap-2">
-                <i data-lucide="info" class="w-5 h-5 text-gold-400"></i>
-                更新说明
-            </h2>
-            <ul class="text-sm text-cream/70 space-y-2 list-disc list-inside">
-                <li>将自动更新以下文件夹：<code class="text-gold-400">core/</code>、<code class="text-gold-400">docs/</code>、<code class="text-gold-400">routes/</code>、<code class="text-gold-400">services/</code>、<code class="text-gold-400">static/</code>、<code class="text-gold-400">templates/</code></li>
-                <li>将自动更新根级文件：<code class="text-gold-400">app.py</code>、<code class="text-gold-400">requirements.txt</code></li>
-                <li>数据库、备份、上传文件、SSL证书等用户数据<strong class="text-green-400">不会</strong>被删除</li>
-                <li>更新完成后服务器将<strong class="text-yellow-400">自动重启</strong></li>
-            </ul>
-        </div>
-
         <!-- 进度区域 -->
         <div class="pixel-card rounded-xl p-6 mb-6">
             <h2 class="text-lg font-bold mb-4 flex items-center gap-2">
@@ -49,7 +35,7 @@
             </div>
 
             <!-- 进度文字 -->
-            <div id="progress-text" class="text-sm text-cream/60 text-center">等待开始</div>
+            <div id="progress-text" class="text-sm text-cream/60 text-center"></div>
 
             <!-- 详细日志 -->
             <div id="log-area" class="mt-4 bg-black/40 rounded-lg p-4 max-h-60 overflow-y-auto font-mono text-xs space-y-1 hidden">

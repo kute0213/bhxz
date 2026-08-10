@@ -6,10 +6,22 @@
 
 ```
 app.py ──→ routes/ ──→ services/ ──→ core/
-  │            │            │
+  │            │            │            │
   │         HTTP 层     业务逻辑层    基础设施层
-  │            │            │
+  │            │            │            │
   Flask    蓝图/路由   纯 Python 函数    DB/认证/工具
+             │            │
+         main/        process_utils.py
+         docs/        process_manager.py
+         public/      shell.py
+         admin/       user_service.py
+         api/         attachment_service.py
+         cmd/         board_service.py
+         community/   discussion_service.py
+         discussion/  poll_service.py
+         guides/      captcha.py （验证码）
+         scheduled/   ratelimit.py （限流）
+                      logger.py （日志）
 ```
 
 | 层级 | 目录 | 职责 | 禁止 |
@@ -17,7 +29,7 @@ app.py ──→ routes/ ──→ services/ ──→ core/
 | **入口** | `app.py` | Flask 实例、蓝图注册、WSGI 服务器 | 不得包含业务逻辑 |
 | **路由** | `routes/` | HTTP 请求解析、参数校验、Session 管理、响应构造 | 不得包含 SQL、事务、业务逻辑 |
 | **服务** | `services/` | 纯业务逻辑，Flask 无关，返回 `(success, data_or_error)` 元组 | 不得导入 Flask、不得直接操作 request/session |
-| **核心** | `core/` | 数据库连接、认证装饰器、跨平台工具 | 不得包含业务逻辑，不得导入 services |
+| **核心** | `core/` | 数据库连接、认证装饰器、中间件 | 不得包含业务逻辑，不得导入 services |
 
 ## 路由层规范（routes/）
 
@@ -82,7 +94,57 @@ def do_something(user_id, value, ip_address):
 - `core/db/` — 数据库连接封装
 - `core/auth.py` — 认证装饰器、密码哈希
 - `core/middleware.py` — 请求中间件
-- `core/process_*.py` / `core/shell.py` — 跨平台子进程工具
+
+## 目录结构
+
+```
+workspace/
+├── app.py                    # Flask 入口 + WSGI 服务器
+├── config.py                 # 全局配置
+├── requirements.txt          # Python 依赖
+├── core/                     # 基础设施层
+│   ├── db/                   #   数据库连接与 schema
+│   ├── auth.py               #   认证装饰器、密码哈希
+│   └── middleware.py         #   请求中间件
+├── services/                 # 业务逻辑层
+│   ├── user_service.py       #   用户注册/登录/改密
+│   ├── attachment_service.py #   附件上传/清理
+│   ├── board_service.py      #   征集主题 CRUD
+│   ├── discussion_service.py #   讨论区帖子管理
+│   ├── poll_service.py       #   投票业务
+│   ├── captcha.py            #   图形验证码
+│   ├── ratelimit.py          #   IP 频率限制
+│   ├── logger.py             #   操作日志
+│   ├── process_manager.py    #   子进程生命周期管理
+│   ├── process_utils.py      #   子进程工具（编码/缓冲/环境变量）
+│   ├── shell.py              #   跨平台 shell 检测
+│   ├── scheduler.py          #   定时任务调度器
+│   ├── settings_manager.py   #   系统设置管理
+│   ├── updater.py            #   自动更新
+│   ├── cmd_runner.py         #   命令执行流
+│   ├── script_store.py       #   MiniScript 脚本存储
+│   ├── email/                #   邮件服务
+│   ├── backup/               #   数据库备份
+│   ├── logging/              #   日志写入与清理
+│   ├── miniscript/           #   MiniScript 脚本引擎
+│   ├── monitoring/           #   系统监控
+│   └── terminal/             #   持久终端会话
+├── routes/                   # HTTP 路由层
+│   ├── main/                 #   首页、登录、注册、设置
+│   ├── docs/                 #   文档页面
+│   ├── public/               #   公开文件服务
+│   ├── admin/                #   管理后台
+│   ├── api/                  #   JSON API
+│   ├── cmd/                  #   命令控制台
+│   ├── community/            #   社区（投票、留言板）
+│   ├── discussion/           #   讨论区
+│   ├── guides/               #   服务器指南
+│   └── scheduled/            #   定时任务管理
+├── static/                   # 静态资源（CSS/JS）
+├── templates/                # Jinja2 模板
+├── docs/                     # 项目文档
+└── .trae/server-test/        # 自动化测试
+```
 
 ## 新增功能的流程
 

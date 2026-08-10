@@ -9,8 +9,8 @@ import time
 import uuid
 
 from config import APP_ROOT
-from core.process_manager import ProcessManager
-from core.shell import detect_shell, get_shell_env
+from services.process_manager import ProcessManager
+from services.shell import detect_shell, get_shell_env
 from services.terminal.session import TerminalSession
 
 

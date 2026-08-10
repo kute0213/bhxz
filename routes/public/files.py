@@ -15,13 +15,12 @@ import os
 import platform
 import mimetypes
 from datetime import datetime
-from flask import Blueprint, send_file, abort, request, render_template, redirect, url_for, flash
+from flask import send_file, abort, request, render_template, redirect, url_for, flash
 
 from config import APP_ROOT
 from core.auth import login_required, get_current_user
 from core.db import get_db
-
-public_bp = Blueprint('public', __name__)
+from routes.public import public_bp
 
 # 项目内部禁止公开的敏感目录/文件（相对路径时检查）
 FORBIDDEN_LOCAL_PARTS = {
@@ -42,7 +41,6 @@ def _is_windows_drive_path(path):
     """检测是否为 Windows 盘符路径（如 C:\\ 或 D:/）。"""
     if not path:
         return False
-    # 检查原始路径前3个字符是否为 X:\\ 或 X:/
     if len(path) >= 3 and path[1] == ':' and path[0].isalpha():
         if path[2] in ('\\', '/'):
             return True
@@ -53,7 +51,6 @@ def _is_absolute_path(path):
     """判断路径是否为绝对路径（兼容 Linux 和 Windows）。"""
     if not path:
         return False
-    # 优先检测 Windows 盘符路径（在 Linux 上 normpath 会改变它）
     if _is_windows_drive_path(path):
         return True
     norm = os.path.normpath(path)
@@ -70,7 +67,6 @@ def _resolve_local_path(local_path):
     """
     if not local_path:
         return None
-    # Windows 盘符路径：直接 normpath，不使用 os.path.abspath（避免 Linux 上加前缀）
     if _is_windows_drive_path(local_path):
         return os.path.normpath(local_path)
     norm = os.path.normpath(local_path)
@@ -100,8 +96,6 @@ def _is_path_safe(local_path, is_directory):
     if not local_path:
         return False, '本地路径不能为空'
 
-    # 检查原始路径中是否包含 .. 组件
-    # os.path.normpath 会消除 ..，但我们应在规范化前检查
     raw_parts = local_path.replace('\\', '/').split('/')
     if '..' in raw_parts:
         return False, '路径不能包含 ..（路径遍历攻击）'
@@ -110,13 +104,10 @@ def _is_path_safe(local_path, is_directory):
     if abs_path is None:
         return False, '路径解析失败'
 
-    # 禁止公开根目录
     if abs_path == os.path.abspath('/'):
         return False, '不能公开系统根目录'
 
-    # 磁盘根目录检查（Windows 盘符根目录如 C:\、C:/）
     if _is_windows_drive_path(local_path):
-        # 去掉尾部斜杠后若只剩下 "C:" 或长度<=3，则是根目录
         stripped = local_path.replace('\\', '/').rstrip('/')
         if len(stripped) <= 3:
             return False, '不能公开磁盘根目录'
@@ -125,16 +116,12 @@ def _is_path_safe(local_path, is_directory):
     app_root_abs = os.path.abspath(APP_ROOT)
 
     if is_abs:
-        # 绝对路径安全检查
         abs_norm = abs_path.replace('\\', '/')
-
-        # 检查是否在系统敏感目录下
         for prefix in FORBIDDEN_SYSTEM_PREFIXES:
             prefix_norm = prefix.rstrip('/')
             if abs_norm == prefix_norm or abs_norm.startswith(prefix_norm + '/'):
                 return False, f'禁止访问系统敏感目录：{prefix}'
 
-        # Windows 系统目录检查（跨平台：无论当前系统是否 Windows，只要路径是 Windows 风格就检查）
         if _is_windows_drive_path(local_path):
             lower = abs_path.lower()
             win_forbidden = ['windows', 'program files', 'programdata',
@@ -143,25 +130,20 @@ def _is_path_safe(local_path, is_directory):
                 if part in win_forbidden:
                     return False, f'禁止访问 Windows 系统目录：{part}'
 
-        # 绝对路径指向项目内部时，也要检查是否命中项目敏感目录
         if abs_path == app_root_abs or abs_path.startswith(app_root_abs + os.sep):
             rel_to_app = os.path.relpath(abs_path, app_root_abs).replace('\\', '/')
             first_part = rel_to_app.split('/')[0]
             if first_part in FORBIDDEN_LOCAL_PARTS:
                 return False, f'禁止公开项目敏感路径：{first_part}'
-
     else:
-        # 相对路径安全检查：不能超出项目根目录
         if not (abs_path == app_root_abs or abs_path.startswith(app_root_abs + os.sep)):
             return False, '相对路径不能超出项目根目录'
 
-        # 检查是否映射到项目敏感目录
         rel_to_app = os.path.relpath(abs_path, app_root_abs).replace('\\', '/')
         first_part = rel_to_app.split('/')[0]
         if first_part in FORBIDDEN_LOCAL_PARTS:
             return False, f'禁止公开项目敏感路径：{first_part}'
 
-    # 类型一致性检查（路径已存在时）
     if os.path.exists(abs_path):
         if is_directory and os.path.isfile(abs_path):
             return False, '指定路径是文件，但您标记为目录'
@@ -237,13 +219,11 @@ def try_serve_public(path):
         is_directory = bool(row['is_directory'])
 
         if not is_directory:
-            # 单文件：URL 必须完全匹配
             if full_path.rstrip('/') == url_path.rstrip('/'):
                 abs_path = _resolve_local_path(local_path)
                 if abs_path and os.path.isfile(abs_path):
                     return _send_file(abs_path)
         else:
-            # 目录映射
             req_prefix = url_path.rstrip('/')
             matched = False
             sub = ''
@@ -255,9 +235,8 @@ def try_serve_public(path):
                 matched = True
                 sub = full_path[len(req_prefix) + 1:]
             elif req_prefix == '' and full_path.startswith('/'):
-                # url_path 为 '/' 的特殊情况
                 matched = True
-                sub = full_path[1:]  # 去掉前导 /
+                sub = full_path[1:]
 
             if not matched:
                 continue

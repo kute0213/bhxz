@@ -72,7 +72,7 @@ def _register_blueprints():
     from routes.docs import docs_bp
     from routes.guides import guides_bp
     from routes.discussion import discussion_bp
-    from routes.public_files import public_bp, try_serve_public
+    from routes.public import public_bp, try_serve_public
 
     blueprints = [
         public_bp, main_bp, community_bp, admin_bp,

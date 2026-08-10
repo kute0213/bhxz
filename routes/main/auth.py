@@ -1,22 +1,19 @@
-"""公开页面路由：首页、登录、注册、找回密码、设置、性能监控。
+"""认证路由：登录、注册、找回密码、退出、群码验证。
 
 薄层：仅负责 HTTP 请求解析/响应构造，业务逻辑委托给 services。
 """
 
 from urllib.parse import urlparse
 
-from flask import Blueprint, render_template, request, redirect, url_for, session, flash, jsonify
-from core.auth import login_required, get_current_user
-from core.db import get_db
-from config import get_config_value
+from flask import render_template, request, redirect, url_for, session, flash, jsonify
+from core.auth import get_current_user
+from config import get_config_value, REGISTER_VERIFY_CODE
 from services.email import normalize_email
 from services.user_service import (
     register, login, forgot_password,
-    change_username, change_password, change_email, delete_account,
 )
 from services.logger import log
-
-main_bp = Blueprint('main', __name__)
+from routes.main import main_bp
 
 
 def _is_safe_redirect_url(target: str) -> bool:
@@ -24,24 +21,6 @@ def _is_safe_redirect_url(target: str) -> bool:
         return False
     parsed = urlparse(target)
     return not parsed.netloc and not parsed.scheme
-
-
-@main_bp.route('/')
-def home():
-    user = get_current_user()
-    conn = get_db()
-    try:
-        mod_intros = conn.execute(
-            "SELECT * FROM mod_intros ORDER BY id ASC"
-        ).fetchall()
-        mod_intros = [dict(r) for r in mod_intros]
-    finally:
-        conn.close()
-    return render_template(
-        'index.html', user=user, mod_intros=mod_intros,
-        map_url=get_config_value('MAP_URL', 'https://map.bhxz.tw.kg'),
-        qq_group_url=get_config_value('QQ_GROUP_URL', ''),
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -84,7 +63,6 @@ def register_view():
 
 @main_bp.route('/api/verify-group-code', methods=['POST'])
 def verify_group_code():
-    from config import REGISTER_VERIFY_CODE
     data = request.get_json(silent=True) or {}
     code = (data.get('code') or '').strip()
     if not code:
@@ -168,89 +146,3 @@ def forgot_password_view():
         return redirect(url_for('main.login', reset=1))
 
     return render_template('forgot_password.html')
-
-
-# ---------------------------------------------------------------------------
-# 设置
-# ---------------------------------------------------------------------------
-
-@main_bp.route('/settings', methods=['GET', 'POST'])
-@login_required
-def settings():
-    user = get_current_user()
-    return render_template('settings.html', user=user)
-
-
-@main_bp.route('/settings/username', methods=['POST'])
-@login_required
-def change_username_view():
-    user = get_current_user()
-    success, message = change_username(
-        user_id=user['id'],
-        current_username=user['username'],
-        new_username=request.form.get('new_username', '').strip(),
-        current_password=request.form.get('current_password', ''),
-        ip_address=request.remote_addr,
-    )
-    if success:
-        session['username'] = request.form.get('new_username', '').strip()
-    flash(message, 'success' if success else 'error')
-    return redirect(url_for('main.settings'))
-
-@main_bp.route('/settings/password', methods=['POST'])
-@login_required
-def change_password_view():
-    user = get_current_user()
-    success, message = change_password(
-        user_id=user['id'],
-        username=user['username'],
-        current_password=request.form.get('current_password', ''),
-        new_password=request.form.get('new_password', ''),
-        confirm_password=request.form.get('confirm_password', ''),
-        ip_address=request.remote_addr,
-    )
-    flash(message, 'success' if success else 'error')
-    return redirect(url_for('main.settings'))
-
-@main_bp.route('/settings/email', methods=['POST'])
-@login_required
-def change_email_view():
-    user = get_current_user()
-    success, message = change_email(
-        user_id=user['id'],
-        username=user['username'],
-        new_email=normalize_email(request.form.get('new_email', '')),
-        email_code=request.form.get('email_code', '').strip(),
-        current_password=request.form.get('current_password', ''),
-        ip_address=request.remote_addr,
-    )
-    flash(message, 'success' if success else 'error')
-    return redirect(url_for('main.settings'))
-
-
-@main_bp.route('/settings/delete', methods=['POST'])
-@login_required
-def delete_account_view():
-    user = get_current_user()
-    success, message = delete_account(
-        user_id=user['id'],
-        username=user['username'],
-        confirm_username=request.form.get('confirm_username', '').strip(),
-        ip_address=request.remote_addr,
-    )
-    if success:
-        session.clear()
-        flash(message, 'success')
-        return redirect(url_for('main.home'))
-    flash(message, 'error')
-    return redirect(url_for('main.settings'))
-
-
-# ---------------------------------------------------------------------------
-# 性能监控
-# ---------------------------------------------------------------------------
-
-@main_bp.route('/performance')
-def performance_page():
-    user = get_current_user()
-    return render_template('performance.html', user=user)

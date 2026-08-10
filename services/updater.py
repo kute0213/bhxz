@@ -19,6 +19,7 @@ import threading
 import time
 import json
 import subprocess
+from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError
 from urllib.request import Request, urlopen
 from urllib.error import URLError
 
@@ -248,14 +249,17 @@ def _get_urlerror_reason(e):
 def detect_fastest_proxy(proxy_list=None, timeout=4):
     """检测所有可用的 GitHub 代理，返回排序后的可用列表 [(名称, URL, 延迟), ...]。
 
+    使用异步方式（ThreadPoolExecutor + 整体超时），确保在 timeout 秒内返回。
+
     特点：
     - 并行检测所有代理
+    - 整体超时控制，严格在 timeout 秒内完成
     - 记录每个代理的详细测试结果（包括测试URL、错误原因）
     - 至少返回一个结果（直连兜底）
 
     参数:
         proxy_list: 待检测的代理列表，默认使用 DEFAULT_PROXY_LIST
-        timeout: 每个代理的超时秒数（默认 4s，比之前 5s 更激进）
+        timeout: 整体超时秒数（默认 4s，同时也是每个代理的单次超时）
 
     返回:
         [(名称, URL, 延迟秒数), ...] 按延迟升序排列
@@ -264,21 +268,27 @@ def detect_fastest_proxy(proxy_list=None, timeout=4):
         proxy_list = DEFAULT_PROXY_LIST
 
     all_results = []
-    threads = []
     lock = threading.Lock()
 
-    def _test(pn, pu):
-        r = _test_proxy_timeout(pn, pu, timeout)
-        with lock:
-            all_results.append(r)
+    with ThreadPoolExecutor(max_workers=min(len(proxy_list), 50)) as executor:
+        future_map = {
+            executor.submit(_test_proxy_timeout, name, url, timeout): (name, url)
+            for name, url in proxy_list
+        }
 
-    for name, url in proxy_list:
-        t = threading.Thread(target=_test, args=(name, url), daemon=True)
-        threads.append(t)
-        t.start()
-
-    for t in threads:
-        t.join()
+        deadline = time.time() + timeout
+        try:
+            for future in as_completed(future_map, timeout=timeout):
+                try:
+                    result = future.result(timeout=max(0.1, deadline - time.time()))
+                    with lock:
+                        all_results.append(result)
+                except Exception:
+                    pass
+        except TimeoutError:
+            # 整体超时：取消所有未完成的任务
+            for f in future_map:
+                f.cancel()
 
     # 按状态和延迟排序（成功的在前，按延迟升序；失败的在后，按名称排序）
     success_results = [r for r in all_results if r['status'] == 'success']
@@ -314,7 +324,6 @@ def detect_fastest_proxy(proxy_list=None, timeout=4):
 
     # 如果所有代理都失败，至少返回直连
     if not available:
-        # 找到直连在原始列表中的位置
         direct_url = proxy_list[0][1]  # 默认第一个是直连
         return [('直连', direct_url, 999)]
 

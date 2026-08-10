@@ -11,7 +11,7 @@ import signal
 import subprocess
 import threading
 
-from core.process_utils import make_env
+from services.process_utils import make_env
 
 
 class ProcessManager:
@@ -78,13 +78,11 @@ class ProcessManager:
             self._use_process_group = use_process_group
 
             if os.name == 'nt':
-                # Windows：默认隐藏窗口；需要进程组时附加 CREATE_NEW_PROCESS_GROUP
                 default_flags = subprocess.CREATE_NO_WINDOW
                 if use_process_group:
                     default_flags |= subprocess.CREATE_NEW_PROCESS_GROUP
                 popen_kwargs.setdefault('creationflags', default_flags)
             else:
-                # Unix：创建新会话/进程组，便于整体终止子进程树
                 if use_process_group:
                     popen_kwargs.setdefault('preexec_fn', os.setsid)
 
@@ -112,8 +110,6 @@ class ProcessManager:
 
             try:
                 if os.name == 'nt':
-                    # Windows：若创建了进程组，先向整个组发送 CTRL_BREAK_EVENT
-                    # 使 shell 及其子进程都能收到终止信号
                     if use_pg and hasattr(signal, 'CTRL_BREAK_EVENT'):
                         try:
                             os.kill(proc.pid, signal.CTRL_BREAK_EVENT)
@@ -157,7 +153,6 @@ class ProcessManager:
                 return
             try:
                 if os.name == 'nt':
-                    # 进程组模式下仍优先尝试组信号，失败后强制 kill
                     if use_pg and hasattr(signal, 'CTRL_BREAK_EVENT'):
                         try:
                             os.kill(proc.pid, signal.CTRL_BREAK_EVENT)

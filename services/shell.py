@@ -7,7 +7,7 @@
 import os
 import shutil
 
-from core.process_utils import make_env
+from services.process_utils import make_env
 
 
 def detect_shell():
@@ -50,8 +50,6 @@ def _detect_windows_shell():
             ],
         )
 
-    # 默认使用 cmd.exe，/q 关闭命令回显，/k 执行后保持运行；
-    # 通过 chcp 切换到 UTF-8 代码页
     return (
         ['cmd.exe', '/q', '/k'],
         'cmd',
@@ -85,7 +83,6 @@ def _detect_unix_shell():
                 ],
             )
 
-    # 最后回退到 PATH 中任意可用的 sh
     sh = shutil.which('sh') or 'sh'
     return (
         [sh],

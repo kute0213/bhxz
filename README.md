@@ -32,45 +32,50 @@ python app.py
 
 ```
 /workspace
-├── app.py                        # 应用入口
+├── app.py                        # 应用入口 + WSGI 服务器
 ├── config.py                     # 全局配置
 ├── requirements.txt              # Python 依赖
 │
-├── core/                         # 核心基础设施
-│   ├── db/                       #   DuckDB 数据库层（sqlite3 兼容接口）
-│   ├── auth.py                   #   认证模块
-│   ├── middleware.py             #   请求中间件
-│   ├── process_utils.py          #   跨平台子进程工具
-│   ├── process_manager.py        #   子进程生命周期管理
-│   └── shell.py                  #   Shell 检测与环境构造
+├── core/                         # 基础设施层
+│   ├── db/                       #   DuckDB 数据库连接与 schema
+│   ├── auth.py                   #   认证装饰器、密码哈希
+│   └── middleware.py             #   请求中间件
 │
-├── services/                     # 业务服务
-│   ├── monitoring/               #   系统监控（CPU/内存/运行时间）
-│   ├── captcha.py                #   图形验证码服务
+├── services/                     # 业务逻辑层（纯 Python，不依赖 Flask）
+│   ├── user_service.py           #   用户注册/登录/改密
+│   ├── attachment_service.py     #   附件上传/清理
+│   ├── board_service.py          #   征集主题 CRUD
+│   ├── discussion_service.py     #   讨论区帖子管理
+│   ├── poll_service.py           #   投票业务
+│   ├── captcha.py                #   图形验证码
+│   ├── ratelimit.py              #   IP 频率限制
+│   ├── logger.py                 #   操作日志
+│   ├── process_manager.py        #   子进程生命周期管理
+│   ├── process_utils.py          #   子进程工具（编码/缓冲/环境变量）
+│   ├── shell.py                  #   跨平台 shell 检测
+│   ├── scheduler.py              #   定时任务调度
+│   ├── settings_manager.py       #   系统设置管理
+│   ├── updater.py                #   一键更新
+│   ├── cmd_runner.py             #   命令执行
+│   ├── script_store.py           #   MiniScript 脚本存储
 │   ├── email/                    #   SMTP 邮件服务
 │   ├── terminal/                 #   持久交互式终端服务
 │   ├── miniscript/               #   MiniScript 脚本引擎
-│   ├── scheduler.py              #   定时任务调度
 │   ├── logging/                  #   日志服务（异步写入+自动清理）
 │   ├── backup/                   #   数据库备份
-│   ├── settings_manager.py       #   系统设置管理
-│   ├── ip.py                     #   IP 工具
-│   ├── logger.py                 #   控制台日志
-│   ├── cmd_runner.py             #   命令执行
-│   ├── script_store.py           #   脚本存储
-│   └── updater.py                #   一键更新
+│   └── monitoring/               #   系统监控（CPU/内存/运行时间）
 │
-├── routes/                       # 路由控制器（Flask Blueprint）
-│   ├── main.py                   #   首页/登录/注册/设置/找回密码
+├── routes/                       # HTTP 路由层（Flask Blueprint）
+│   ├── main/                     #   首页/登录/注册/设置/找回密码
 │   ├── admin/                    #   管理后台（用户/日志/模组/指南/设置/备份/CMD/讨论/广播）
-│   ├── community/                #   社区（投票/征集）
+│   ├── community/                #   社区（投票/征集/留言板）
 │   ├── discussion/               #   讨论区
 │   ├── guides/                   #   服务器指南
 │   ├── cmd/                      #   CMD 控制台
-│   ├── scheduled/                #   定时任务
+│   ├── scheduled/                #   定时任务管理
 │   ├── api/                      #   公开 API（性能/统计/验证码/邮箱）
-│   ├── docs.py                   #   文档系统
-│   └── public_files.py           #   公开文件管理
+│   ├── docs/                     #   文档系统
+│   └── public/                   #   公开文件管理
 │
 ├── templates/                    # Jinja2 模板
 │   ├── base.html                 #   基础模板
@@ -92,8 +97,10 @@ python app.py
 ├── docs/                         # Markdown 文档
 │   ├── README.md                 #   项目说明副本
 │   ├── CHANGELOG.md              #   更新日志
+│   ├── DEVELOPMENT.md            #   开发准则
 │   └── cmd-guide.md              #   CMD 控制台使用说明
 │
+├── .trae/server-test/            # 自动化测试套件
 ├── uploads/                      # 用户上传文件
 ├── backups/db/                   # 数据库备份
 └── ssl/                          # SSL 证书
@@ -352,9 +359,9 @@ server {
 | 层级 | 职责 |
 |------|------|
 | **入口** `app.py` | Flask 实例、蓝图注册、WSGI 服务器 |
-| **核心** `core/` | 数据库、认证、中间件 — 不含业务逻辑 |
-| **服务** `services/` | 监控、IP、调度、脚本引擎 — 可被任意路由调用 |
-| **路由** `routes/` | 接收请求、调用 core/services、返回响应 |
+| **核心** `core/` | 数据库、认证、中间件 — 不含业务逻辑，不导入 services |
+| **服务** `services/` | 纯业务逻辑，Flask 无关 — 返回 `(success, data_or_error)` 元组 |
+| **路由** `routes/` | 薄层 HTTP 处理 — 参数解析、调用 service、构造响应 |
 | **视图** `templates/` `static/` | 纯展示层 |
 
 ### 异步架构

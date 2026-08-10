@@ -16,7 +16,7 @@ from config import (
     get_config_value,
 )
 from core.db import get_db
-from core.process_utils import run_process
+from services.process_utils import run_process
 
 
 class TaskScheduler:

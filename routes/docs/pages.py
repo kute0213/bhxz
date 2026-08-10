@@ -1,12 +1,15 @@
 """文档页面路由。"""
 
 import os
-from flask import Blueprint, render_template, jsonify, abort
+from flask import render_template, jsonify, abort
 from core.auth import get_current_user
+from routes.docs import docs_bp
 
-docs_bp = Blueprint('docs', __name__)
-
-DOCS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'docs')
+# docs/ 目录位于项目根目录下
+DOCS_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    'docs'
+)
 
 
 @docs_bp.route('/docs')

@@ -6,7 +6,7 @@
 import threading
 import time
 
-from core.process_utils import decode_output
+from services.process_utils import decode_output
 
 
 class TerminalSession:

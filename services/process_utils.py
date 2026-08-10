@@ -1,8 +1,8 @@
 """跨平台子进程工具：统一处理编码、输出缓冲、环境变量等问题。
 
-本模块从 utils/process.py 迁移到 core/process_utils.py，
-作为 core 子进程基础设施的一部分，供 core/process_manager.py、
-core/shell.py 及各服务层使用。
+本模块从 core/process_utils.py 迁移至 services/process_utils.py，
+作为服务层子进程基础设施，供 services/process_manager.py、
+services/shell.py 及各服务层使用。
 """
 
 import os
