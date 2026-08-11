@@ -45,6 +45,16 @@ GITHUB_REPO = 'https://github.com/kute0213/bhxz.git'
 # 下载后解压，顶层目录名为 kute0213-bhxz-main
 REPO_ARCHIVE_PATH = 'kute0213/bhxz/archive/refs/heads/main.zip'
 
+# ZIP 下载候选 URL 格式（按优先级排序）
+# 不同 GitHub 代理支持的 URL 格式不同，依次尝试直到成功
+# {proxy_base} - 代理基础 URL（如 https://github.akams.cn/）
+# {archive_path} - REPO_ARCHIVE_PATH
+DOWNLOAD_URL_FORMATS = [
+    '{proxy_base}{archive_path}',                          # 格式1: 直接拼接
+    '{proxy_base}https://github.com/{archive_path}',       # 格式2: 带完整 GitHub URL
+    '{proxy_base}download/{archive_path}',                 # 格式3: download 前缀
+]
+
 # 默认不替换的路径（相对项目根目录），运行时还会合并设置的排除列表
 DEFAULT_PROTECTED_PATHS = [
     'site.duckdb',
@@ -617,14 +627,21 @@ def _run_update():
         total_attempts = len(available_proxies)
 
         for attempt_idx, (name, base_url, download_template, elapsed) in enumerate(available_proxies):
-            # 构建 ZIP 下载 URL
-            zip_url = download_template.replace('{repo}', REPO_ARCHIVE_PATH)
+            # 使用代理基础 URL（去掉末尾的 /）
+            proxy_base = download_template.replace('{repo}', '')
+            if not proxy_base.endswith('/'):
+                proxy_base += '/'
+
+            # 生成该代理的所有候选 URL
+            candidate_urls = []
+            for fmt in DOWNLOAD_URL_FORMATS:
+                url = fmt.format(proxy_base=proxy_base, archive_path=REPO_ARCHIVE_PATH)
+                candidate_urls.append(url)
 
             _add_event('log', {'message': f'{"─" * 40}'})
             hint = '首选' if attempt_idx == 0 else '备用'
             _add_event('log', {'message': f'下载尝试 #{attempt_idx + 1}: {name} （{hint}，延迟 {elapsed:.1f}s）'})
             _add_event('progress', {'percent': 5, 'message': f'正在从 {name} 下载更新包...'})
-            _add_event('log', {'message': f'  下载 URL: {zip_url}'})
 
             zip_path = _make_zip_path()
             download_start = time.time()
@@ -633,35 +650,42 @@ def _run_update():
                 mapped = 5 + int(pct * 65 / 100)
                 _add_event('progress', {'percent': mapped, 'message': f'正在下载更新包... {int(pct)}%'})
 
-            try:
-                success = _download_zip(zip_url, zip_path, progress_callback=_dl_progress, timeout=30)
-                if success:
-                    download_elapsed = time.time() - download_start
-                    _add_event('log', {'message': f'✓ {name} 下载成功（耗时 {download_elapsed:.1f}s）'})
-                    _add_event('progress', {'percent': 70, 'message': '下载完成，正在解压...'})
+            # 依次尝试每种 URL 格式
+            url_ok = False
+            for url_idx, zip_url in enumerate(candidate_urls):
+                _add_event('log', {'message': f'  URL格式{url_idx + 1}: {zip_url}'})
+                try:
+                    success = _download_zip(zip_url, zip_path, progress_callback=_dl_progress, timeout=30)
+                    if success:
+                        url_ok = True
+                        break
+                    else:
+                        _add_event('log', {'message': f'  ✗ 格式{url_idx + 1} 不可用'})
+                except Exception as e:
+                    _add_event('log', {'message': f"  ✗ 格式{url_idx + 1} 异常: {str(e)[:60]}"})
+                finally:
+                    # 清理失败的下载文件
+                    if os.path.isfile(zip_path):
+                        try:
+                            os.remove(zip_path)
+                        except Exception:
+                            pass
 
-                    # 解压到临时目录
-                    temp_dir = tempfile.mkdtemp(prefix='bhxz_update_')
-                    _add_event('log', {'message': '正在解压更新包...'})
-                    _extract_zip(zip_path, temp_dir)
+            if url_ok:
+                download_elapsed = time.time() - download_start
+                _add_event('log', {'message': f'✓ {name} 下载成功（耗时 {download_elapsed:.1f}s）'})
+                _add_event('progress', {'percent': 70, 'message': '下载完成，正在解压...'})
 
-                    download_success = True
-                    break
-                else:
-                    download_elapsed = time.time() - download_start
-                    last_error = f'{name} 下载失败'
-                    _add_event('log', {'message': f'✗ {name} 下载失败（耗时 {download_elapsed:.1f}s）'})
-            except Exception as e:
-                last_error = str(e)[:200]
-                _add_event('log', {'message': f'✗ {name} 下载异常: {last_error}'})
-            finally:
-                # 清理临时 ZIP 文件
-                if zip_path and os.path.isfile(zip_path):
-                    try:
-                        os.remove(zip_path)
-                    except Exception:
-                        pass
-                    zip_path = None
+                # 解压到临时目录
+                temp_dir = tempfile.mkdtemp(prefix='bhxz_update_')
+                _add_event('log', {'message': '正在解压更新包...'})
+                _extract_zip(zip_path, temp_dir)
+
+                download_success = True
+                break
+            else:
+                _add_event('log', {'message': f'✗ {name} 所有格式均失败（耗时 {time.time() - download_start:.1f}s）'})
+                last_error = f'{name} 所有格式均失败'
 
         # 如果所有代理都失败，尝试直连 GitHub 下载
         if not download_success:
