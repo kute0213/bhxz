@@ -49,10 +49,21 @@ REPO_ARCHIVE_PATH = 'kute0213/bhxz/archive/refs/heads/main.zip'
 # 不同 GitHub 代理支持的 URL 格式不同，依次尝试直到成功
 # {proxy_base} - 代理基础 URL（如 https://github.akams.cn/）
 # {archive_path} - REPO_ARCHIVE_PATH
+#
+# 常见代理 URL 格式说明：
+#   格式1: 直接拼接 — 代理支持透传路径，如 https://ghproxy.net/kute0213/bhxz/...
+#   格式2: 完整 GitHub URL — 代理重写完整 URL，如 https://ghproxy.net/https://github.com/...
+#   格式3: download 前缀 — 部分代理要求 /download/ 前缀
+#   格式4: 无协议 — 部分代理只接受 github.com/... 格式（无 https://）
+#   格式5: gh 前缀 — 部分代理使用 /gh/ 路径映射
+#   格式6: 带 / 后缀的完整 GitHub URL — 部分代理对 URL 结尾的 / 敏感
 DOWNLOAD_URL_FORMATS = [
     '{proxy_base}{archive_path}',                          # 格式1: 直接拼接
     '{proxy_base}https://github.com/{archive_path}',       # 格式2: 带完整 GitHub URL
     '{proxy_base}download/{archive_path}',                 # 格式3: download 前缀
+    '{proxy_base}github.com/{archive_path}',               # 格式4: 无协议
+    '{proxy_base}gh/{archive_path}',                       # 格式5: gh 前缀
+    '{proxy_base}https://github.com/{archive_path}/',      # 格式6: 尾斜杠
 ]
 
 # 默认不替换的路径（相对项目根目录），运行时还会合并设置的排除列表
@@ -839,10 +850,14 @@ def _run_update():
                 _add_event('log', {'message': '正在构建静态资源...'})
                 _add_event('progress', {'percent': 97, 'message': '正在构建静态资源...'})
 
+                # 设置 PYTHONUNBUFFERED=1 强制 Python 不缓冲 stdout，
+                # 确保构建脚本的每一行输出都能被实时读取
+                build_env = {**os.environ, 'PYTHONUNBUFFERED': '1'}
                 proc = subprocess.Popen(
                     [sys.executable, build_script],
                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                     text=True, bufsize=1,  # 行缓冲
+                    env=build_env,
                 )
 
                 # 实时读取输出并发送 SSE 事件

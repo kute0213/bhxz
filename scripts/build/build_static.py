@@ -126,7 +126,7 @@ HIGHLIGHT_FILES = [
 
 def download_highlight():
     """下载 Highlight.js 所有需要的文件。"""
-    print('\n=== Highlight.js ===')
+    print('\n=== Highlight.js ===', flush=True)
     lib_dir = os.path.join(LIB_DIR, 'highlight')
     os.makedirs(os.path.join(lib_dir, 'languages'), exist_ok=True)
 
@@ -145,7 +145,7 @@ LUCIDE_URL = 'https://unpkg.com/lucide@latest'
 
 def download_lucide():
     """下载 Lucide 图标库。"""
-    print('\n=== Lucide Icons ===')
+    print('\n=== Lucide Icons ===', flush=True)
     lib_dir = os.path.join(LIB_DIR, 'lucide')
     os.makedirs(lib_dir, exist_ok=True)
 
@@ -183,7 +183,7 @@ MARKED_URL = 'https://cdn.jsdelivr.net/npm/marked/marked.min.js'
 
 def download_marked():
     """下载 Marked.js Markdown 渲染库。"""
-    print('\n=== Marked.js ===')
+    print('\n=== Marked.js ===', flush=True)
     lib_dir = os.path.join(LIB_DIR, 'marked')
     os.makedirs(lib_dir, exist_ok=True)
 
@@ -209,7 +209,7 @@ JETBRAINS_MONO_URL = (
 
 def download_fonts():
     """生成字体 CSS（使用系统字体栈），下载 JetBrains Mono 编程字体。"""
-    print('\n=== 字体 ===')
+    print('\n=== 字体 ===', flush=True)
 
     fonts_dir = os.path.join(LIB_DIR, 'fonts')
     os.makedirs(fonts_dir, exist_ok=True)
@@ -338,7 +338,7 @@ MONACO_TGZ_URL = f'https://registry.npmjs.org/monaco-editor/-/monaco-editor-{MON
 
 def download_monaco():
     """从 npm registry 直接下载 Monaco Editor 压缩包，无需 npm。"""
-    print('\n=== Monaco Editor ===')
+    print('\n=== Monaco Editor ===', flush=True)
 
     lib_dir = os.path.join(LIB_DIR, 'monaco')
     target_dir = os.path.join(lib_dir, 'vs')
@@ -424,11 +424,11 @@ def generate_version_file():
 # ---------------------------------------------------------------------------
 
 def main():
-    print('=' * 60)
-    print('  静态资源构建脚本')
-    print(f'  项目根目录: {PROJECT_ROOT}')
-    print(f'  输出目录: {LIB_DIR}')
-    print('=' * 60)
+    print('=' * 60, flush=True)
+    print('  静态资源构建脚本', flush=True)
+    print(f'  项目根目录: {PROJECT_ROOT}', flush=True)
+    print(f'  输出目录: {LIB_DIR}', flush=True)
+    print('=' * 60, flush=True)
 
     # 确保 lib 目录存在
     os.makedirs(LIB_DIR, exist_ok=True)
@@ -466,15 +466,15 @@ def main():
             except Exception:
                 pass
 
-    print(f'\n{"=" * 60}')
-    print(f'  构建完成！')
-    print(f'  文件数: {file_count}')
-    print(f'  总大小: {total_size / 1024 / 1024:.1f} MB')
-    print(f'  输出目录: {LIB_DIR}')
-    print(f'  {"=" * 60}')
-    print(f'  提示: 如果 Monaco Editor 下载失败，')
-    print(f'        网站仍使用 CDN 加载 Monaco，其他资源已全部本地化。')
-    print(f'  {"=" * 60}')
+    print(f'\n{"=" * 60}', flush=True)
+    print(f'  构建完成！', flush=True)
+    print(f'  文件数: {file_count}', flush=True)
+    print(f'  总大小: {total_size / 1024 / 1024:.1f} MB', flush=True)
+    print(f'  输出目录: {LIB_DIR}', flush=True)
+    print(f'  {"=" * 60}', flush=True)
+    print(f'  提示: 如果 Monaco Editor 下载失败，', flush=True)
+    print(f'        网站仍使用 CDN 加载 Monaco，其他资源已全部本地化。', flush=True)
+    print(f'  {"=" * 60}', flush=True)
 
 
 if __name__ == '__main__':
