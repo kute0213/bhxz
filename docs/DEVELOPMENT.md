@@ -231,7 +231,52 @@ add_column_if_not_exists('表名', '列名', '类型 DEFAULT 默认值')
 
 不要在 `CREATE TABLE IF NOT EXISTS` 中修改已有表的列定义——那对已存在的表无效。
 
-### 4. 路由函数名避免与 service 导入名冲突
+## 路由检测配置
+
+### 1. 新增路由时必须同步更新检测脚本
+
+所有路由必须注册到 `.trae/server-test/test_routes.py` 的 `ROUTES` 列表中，否则路由检测将无法覆盖新增路由。
+
+**每次新增路由流程：**
+1. 在 `routes/` 中注册新路由
+2. 在 `.trae/server-test/test_routes.py` 的 `ROUTES` 列表中添加对应条目
+3. 运行 `cd .trae/server-test && python test_routes.py` 验证新路由可达
+4. 提交代码
+
+### 2. ROUTES 条目格式
+
+```python
+# (路径, HTTP方法, 预期状态码列表, 认证要求, 备注)
+# 认证要求: False=公开, True=需登录, 'admin'=需管理员权限
+
+# 公开页面
+('/community', 'GET', [200], False, '社区首页'),
+
+# 需登录（未登录预期 302 跳转）
+('/settings', 'GET', [302, 401], True, '设置页'),
+
+# 需管理员（未登录预期 302/403）
+('/admin', 'GET', [302, 401, 403], 'admin', '管理后台'),
+
+# 静态文件
+('/static/css/style.css', 'GET', [200, 304], False, 'CSS文件'),
+```
+
+### 3. 规则
+
+- **新增路由后必须添加检测条目** — 这是硬性要求，否则路由检测覆盖不全
+- 公开页面预期 `200`，认证页面预期 `302/401/403`（未登录）
+- POST 路由只需测试不返回 500（空表单请求应返回 400/302 等合理状态码）
+- 如果有特殊参数或 Header 需求，在 `test_post_routes()` 函数中添加自定义测试逻辑
+- 静态文件预期 `200` 或 `304`
+
+### 4. 检查清单
+
+- [ ] 新路由已在 `ROUTES` 列表中添加
+- [ ] 预期状态码正确（公开页面 200，认证页面 302/401/403）
+- [ ] 已运行 `python test_routes.py` 验证通过
+
+### 5. 路由函数名避免与 service 导入名冲突
 
 ```python
 # ❌ 错误：视图函数 vote_poll 与导入的 vote_poll 同名

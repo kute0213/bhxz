@@ -47,6 +47,8 @@ Thumbs.db
 
 # Trae spec 文档
 .trae/
+# 但允许跟踪测试脚本
+!.trae/server-test/
 .trae-html-share-packages/
 /.trae-html-share-packages
 
