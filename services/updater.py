@@ -526,6 +526,8 @@ def _is_protected(rel_path, protected_paths=None):
 
 def _run_update():
     """执行更新（在后台线程中运行）。"""
+    zip_path = None
+    temp_dir = None
     try:
         _add_event('progress', {'percent': 1, 'message': '正在加载更新配置...'})
 
@@ -675,8 +677,8 @@ def _run_update():
                 except Exception as e:
                     _add_event('log', {'message': f"  ✗ 格式{url_idx + 1} 异常: {str(e)[:60]}"})
                 finally:
-                    # 清理失败的下载文件
-                    if os.path.isfile(zip_path):
+                    # 只有下载失败时才清理文件（break 也会触发 finally，但此时 url_ok=True）
+                    if not url_ok and os.path.isfile(zip_path):
                         try:
                             os.remove(zip_path)
                         except Exception:
@@ -914,6 +916,18 @@ def _run_update():
         _add_event('log', {'message': f'✗ 更新失败: {error_msg}'})
         _add_event('error', {'message': f'更新失败: {error_msg}'})
         _add_event('done', {'success': False, 'message': f'更新失败: {error_msg}'})
+    finally:
+        # 清理临时文件和目录（无论成功还是失败）
+        if zip_path and os.path.isfile(zip_path):
+            try:
+                os.remove(zip_path)
+            except Exception:
+                pass
+        if temp_dir and os.path.isdir(temp_dir):
+            try:
+                shutil.rmtree(temp_dir, ignore_errors=True)
+            except Exception:
+                pass
 
 
 def _restart_app(start_command=''):
