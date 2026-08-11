@@ -673,6 +673,73 @@ img {
     transition: width 0.2s ease;
     position: relative;
 }
+/* ============================================================
+ * 代码块样式 - 复制按钮 + 高亮优化
+ * ============================================================ */
+.code-copy-btn {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.25rem 0.6rem;
+    font-size: 0.75rem;
+    font-family: 'Noto Sans SC', sans-serif;
+    background: rgba(255, 255, 255, 0.06);
+    color: rgba(232, 228, 217, 0.6);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 0.375rem;
+    cursor: pointer;
+    opacity: 0;
+    transition: opacity 0.2s ease, background 0.2s ease, color 0.2s ease;
+    z-index: 10;
+    line-height: 1.4;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+pre:hover .code-copy-btn {
+    opacity: 1;
+}
+.code-copy-btn:hover {
+    background: rgba(255, 255, 255, 0.12);
+    color: #e8e4d9;
+}
+.code-copy-btn.copied {
+    background: rgba(34, 197, 94, 0.2);
+    color: #86efac;
+    border-color: rgba(34, 197, 94, 0.3);
+    opacity: 1;
+}
+.code-copy-btn svg {
+    flex-shrink: 0;
+}
+
+/* 优化 highlight.js 代码块在深色背景上的显示 */
+pre code.hljs {
+    background: transparent !important;
+    padding: 0 !important;
+    font-size: 0.85rem;
+    line-height: 1.6;
+}
+pre {
+    position: relative;
+}
+/* 修复代码块内的滚动条样式 */
+pre::-webkit-scrollbar {
+    height: 6px;
+}
+pre::-webkit-scrollbar-track {
+    background: transparent;
+}
+pre::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 3px;
+}
+pre::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
 .upload-progress-fill::after {
     content: '';
     position: absolute;

@@ -28,6 +28,8 @@
 - `MAP_URL` 和 `QQ_GROUP_URL` 配置项，支持管理后台实时修改
 - 广播邮件页面 Markdown 编辑器升级为分栏布局（编辑区 + 实时预览区），支持工具栏、滚动同步
 - 一键更新功能：从 GitHub 自动获取并覆盖代码文件，智能代理检测，自动重启（`services/updater.py`）
+- 代码块语法高亮：集成 highlight.js，支持 Python/JavaScript/Shell/JSON/YAML/SQL/CSS 等语言
+- 代码块一键复制：鼠标悬停时显示复制按钮，点击复制代码并反馈"已复制"状态
 - 图形验证码（服务端内存存储、一次性删除防重放）
 - 邮箱验证码（SMTP）
 - IP 频率限制

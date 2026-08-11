@@ -95,6 +95,8 @@
     };
     marked.use({ renderer });
     document.getElementById('guide-body').innerHTML = marked.parse(raw);
+    // 触发代码高亮和复制按钮
+    if (typeof CodeBlocks !== 'undefined') CodeBlocks.enhance(document.getElementById('guide-body'));
 })();
 </script>
 {% endblock %}

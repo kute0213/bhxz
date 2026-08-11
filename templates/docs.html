@@ -154,6 +154,8 @@
                 for (const k in usedIds) delete usedIds[k];
                 const html = marked.parse(data.content);
                 content.innerHTML = html;
+                // 触发代码高亮和复制按钮
+                if (typeof CodeBlocks !== 'undefined') CodeBlocks.enhance(content);
 
                 // 处理 URL hash（首次加载或刷新时若 URL 带 #锚点）
                 if (location.hash) {

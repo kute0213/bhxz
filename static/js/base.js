@@ -649,3 +649,109 @@ var CaptchaModal = (function () {
 // 向后兼容：旧的 window.__showCaptchaModal / __hideCaptchaModal 指向 CaptchaModal
 window.__showCaptchaModal = CaptchaModal.show;
 window.__hideCaptchaModal = CaptchaModal.hide;
+
+// ============================================
+// 代码高亮 + 一键复制
+// ============================================
+var CodeBlocks = (function () {
+    // 为所有 <pre><code> 块添加复制按钮并触发高亮
+    function enhance(root) {
+        if (!root) root = document;
+        var blocks = root.querySelectorAll('pre code');
+        blocks.forEach(function (codeEl) {
+            var pre = codeEl.parentElement;
+            if (!pre || pre.tagName !== 'PRE') return;
+            // 已处理过则跳过
+            if (pre.querySelector('.code-copy-btn')) return;
+
+            // 设置相对定位
+            pre.style.position = 'relative';
+
+            // 创建复制按钮
+            var btn = document.createElement('button');
+            btn.className = 'code-copy-btn';
+            btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg> 复制';
+            btn.setAttribute('aria-label', '复制代码');
+            pre.appendChild(btn);
+
+            btn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                var text = codeEl.textContent || '';
+                // 去掉末尾多余的换行
+                text = text.replace(/\n$/, '');
+                navigator.clipboard.writeText(text).then(function () {
+                    var orig = btn.innerHTML;
+                    btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg> 已复制';
+                    btn.classList.add('copied');
+                    setTimeout(function () {
+                        btn.innerHTML = orig;
+                        btn.classList.remove('copied');
+                    }, 2000);
+                }).catch(function () {
+                    // clipboard 失败时 fallback
+                    var ta = document.createElement('textarea');
+                    ta.value = text;
+                    ta.style.position = 'fixed';
+                    ta.style.left = '-9999px';
+                    document.body.appendChild(ta);
+                    ta.select();
+                    try {
+                        document.execCommand('copy');
+                        var orig = btn.innerHTML;
+                        btn.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg> 已复制';
+                        btn.classList.add('copied');
+                        setTimeout(function () {
+                            btn.innerHTML = orig;
+                            btn.classList.remove('copied');
+                        }, 2000);
+                    } catch (err) {
+                        btn.innerHTML = '复制失败';
+                    }
+                    document.body.removeChild(ta);
+                });
+            });
+        });
+
+        // 触发 highlight.js 高亮
+        if (typeof hljs !== 'undefined') {
+            root.querySelectorAll('pre code').forEach(function (el) {
+                hljs.highlightElement(el);
+            });
+        }
+    }
+
+    // 自动增强：监听 DOM 变化（用于动态加载的内容）
+    var observer = null;
+    function startObserver() {
+        if (observer) return;
+        observer = new MutationObserver(function (mutations) {
+            mutations.forEach(function (m) {
+                m.addedNodes.forEach(function (node) {
+                    if (node.nodeType === 1) {
+                        // 如果新节点包含 <pre><code>
+                        if (node.querySelector && node.querySelector('pre code')) {
+                            enhance(node);
+                        }
+                    }
+                });
+            });
+        });
+        if (document.body) {
+            observer.observe(document.body, { childList: true, subtree: true });
+        }
+    }
+
+    // DOMContentLoaded 时增强一次
+    function init() {
+        enhance(document.body);
+        startObserver();
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+
+    return { enhance: enhance };
+})();

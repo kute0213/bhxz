@@ -228,6 +228,8 @@ document.addEventListener('DOMContentLoaded', function() {
     var contentEl = document.getElementById('content-render');
     if (contentEl) {
         contentEl.innerHTML = marked.parse(contentEl.textContent);
+        // 触发代码高亮和复制按钮
+        if (typeof CodeBlocks !== 'undefined') CodeBlocks.enhance(contentEl);
     }
 });
 
