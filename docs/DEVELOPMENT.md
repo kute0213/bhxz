@@ -175,3 +175,76 @@ cd .trae/server-test && python run_all.py
 - 测试失败路径（边界条件、权限不足、参数错误）
 - 使用 `app.test_client()` 模拟 HTTP 请求
 - 使用 `db` 事务隔离避免测试间相互影响
+
+## 易错点清单（新增代码前必查）
+
+以下规则来自实际线上事故，**每次新增/修改路由和模板时必须逐条检查**：
+
+### 1. 路由函数名 ≡ 模板 `url_for` 端点名（最常见 Bug）
+
+Flask 默认以**函数名**作为端点名（`蓝图名.函数名`），模板中 `url_for('蓝图名.函数名')` 必须与之完全一致。
+
+```python
+# ❌ 错误：函数名带 _view 后缀，模板却用 url_for('community.create_poll')
+@community_bp.route('/poll/create', methods=['POST'])
+def create_poll_view():          # 端点 → community.create_poll_view
+    ...
+
+# ✅ 正确：函数名就是模板要用的名字
+@community_bp.route('/poll/create', methods=['POST'])
+def create_poll():                # 端点 → community.create_poll
+    ...
+
+# 模板中必须一致：
+# <form action="{{ url_for('community.create_poll') }}">
+```
+
+**检查清单：**
+- [ ] 每个 `@蓝图.route()` 的函数名都对应模板中的 `url_for('蓝图名.函数名')`
+- [ ] 不要加 `_view`、`_handler`、`_action` 等后缀（除非模板也用了这个后缀）
+- [ ] 当路由函数名与 service 导入的函数名冲突时，用 `import ... as svc_xxx` 解决
+
+### 2. 模板渲染必须端到端验证
+
+修改模板或路由后，必须用 `curl` 或浏览器访问一次，确认不报 500：
+
+```bash
+# 匿名访问
+curl -s -o /dev/null -w "%{http_code}" http://localhost:5000/community
+# 应返回 200
+```
+
+**检查清单：**
+- [ ] 匿名用户访问（无 cookie）
+- [ ] 普通用户访问（有 session cookie）
+- [ ] 管理员访问
+- [ ] 有数据时访问 vs 无数据时访问
+
+### 3. 数据库迁移兼容
+
+修改表结构时，必须使用 `add_column_if_not_exists` 模式，确保老数据库兼容：
+
+```python
+# 在 core/db/schema.py 的 migrate 部分添加：
+add_column_if_not_exists('表名', '列名', '类型 DEFAULT 默认值')
+```
+
+不要在 `CREATE TABLE IF NOT EXISTS` 中修改已有表的列定义——那对已存在的表无效。
+
+### 4. 路由函数名避免与 service 导入名冲突
+
+```python
+# ❌ 错误：视图函数 vote_poll 与导入的 vote_poll 同名
+from services.poll_service import vote_poll
+
+@community_bp.route('/poll/<int:poll_id>/vote', methods=['POST'])
+def vote_poll(poll_id):           # 覆盖了 import 的 vote_poll！
+    result = vote_poll(...)       # 递归调用自身，报错
+
+# ✅ 正确：用别名
+from services.poll_service import vote_poll as svc_vote_poll
+
+@community_bp.route('/poll/<int:poll_id>/vote', methods=['POST'])
+def vote_poll(poll_id):
+    result = svc_vote_poll(...)   # 正确调用 service
+```
