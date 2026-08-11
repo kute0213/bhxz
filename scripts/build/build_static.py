@@ -11,17 +11,13 @@
     static/lib/lucide/        - Lucide 图标库
     static/lib/marked/        - Marked.js Markdown 渲染
     static/lib/fonts/         - Google Fonts 字体文件（Noto Sans SC + JetBrains Mono）
-    static/lib/monaco/        - Monaco Editor（仅当 npm 可用时）
+    static/lib/monaco/        - Monaco Editor 代码编辑器（HTTP 下载，无需 npm）
 """
 
 import os
-import sys
-import re
 import json
-import glob
 import shutil
 import tarfile
-import subprocess
 import time
 from urllib.request import Request, urlopen, build_opener, HTTPRedirectHandler, HTTPSHandler
 from urllib.error import URLError, HTTPError
@@ -333,70 +329,52 @@ def download_fonts():
 
 
 # ---------------------------------------------------------------------------
-# 5. Monaco Editor
+# 5. Monaco Editor (HTTP 下载，无需 npm)
 # ---------------------------------------------------------------------------
 
 MONACO_VERSION = '0.45.0'
+MONACO_TGZ_URL = f'https://registry.npmjs.org/monaco-editor/-/monaco-editor-{MONACO_VERSION}.tgz'
 
 
 def download_monaco():
-    """使用 npm 下载 Monaco Editor 并复制到 static/lib/monaco。"""
+    """从 npm registry 直接下载 Monaco Editor 压缩包，无需 npm。"""
     print('\n=== Monaco Editor ===')
 
-    # 检查 npm 是否可用
-    npm_path = shutil.which('npm')
-    if not npm_path:
-        print('  ⚠ npm 不可用，跳过 Monaco Editor 下载')
-        print('  提示: Monaco Editor 仍使用 CDN 加载')
-        return
-
-    # 用 npm pack 下载 Monaco 包
-    work_dir = os.path.join(LIB_DIR, '.monaco_tmp')
-    os.makedirs(work_dir, exist_ok=True)
-
-    target_dir = os.path.join(LIB_DIR, 'monaco', 'vs')
+    lib_dir = os.path.join(LIB_DIR, 'monaco')
+    target_dir = os.path.join(lib_dir, 'vs')
     os.makedirs(target_dir, exist_ok=True)
 
+    # 下载 .tgz 文件
+    tgz_path = os.path.join(lib_dir, f'monaco-editor-{MONACO_VERSION}.tgz')
+    print(f'  正在下载 monaco-editor@{MONACO_VERSION}...')
+    success = _download_with_redirect(MONACO_TGZ_URL, tgz_path, 'monaco-editor.tgz')
+
+    if not success:
+        print('  ✗ Monaco Editor 下载失败')
+        print('  提示: 网站仍使用 CDN 加载 Monaco')
+        # 清理空目录
+        try:
+            shutil.rmtree(lib_dir, ignore_errors=True)
+        except Exception:
+            pass
+        return
+
     try:
-        # 使用 npm pack 获取包
-        print('  正在下载 monaco-editor 包...')
-        result = subprocess.run(
-            [npm_path, 'pack', f'monaco-editor@{MONACO_VERSION}'],
-            cwd=work_dir,
-            capture_output=True,
-            text=True,
-            timeout=120,
-        )
-        if result.returncode != 0:
-            print(f'  ✗ npm pack 失败: {result.stderr[:200]}')
-            shutil.rmtree(work_dir, ignore_errors=True)
-            return
-
-        # 找到 .tgz 文件
-        tgz_files = glob.glob(os.path.join(work_dir, '*.tgz'))
-        if not tgz_files:
-            print('  ✗ 未找到 .tgz 文件')
-            shutil.rmtree(work_dir, ignore_errors=True)
-            return
-
-        tgz_path = tgz_files[0]
-        print(f'  下载完成: {os.path.basename(tgz_path)}')
-
-        # 解压
+        # 解压 .tgz
         print('  正在解压...')
-        extract_dir = os.path.join(work_dir, 'extracted')
+        extract_dir = os.path.join(lib_dir, '.extracted')
         os.makedirs(extract_dir, exist_ok=True)
         with tarfile.open(tgz_path, 'r:gz') as tar:
             tar.extractall(extract_dir)
 
-        # 复制 min/vs 目录到 static/lib/monaco/vs
-        package_dir = os.path.join(extract_dir, 'package')
-        src_vs = os.path.join(package_dir, 'min', 'vs')
+        # 复制 package/min/vs 到目标目录
+        src_vs = os.path.join(extract_dir, 'package', 'min', 'vs')
         if os.path.isdir(src_vs):
-            # 先删除旧的 vs 目录（如果存在）
+            # 先删除旧的 vs 目录
             if os.path.isdir(target_dir):
                 shutil.rmtree(target_dir)
             shutil.copytree(src_vs, target_dir)
+            # 计算大小
             size_mb = 0
             for dirpath, dirnames, filenames in os.walk(target_dir):
                 for fn in filenames:
@@ -409,13 +387,19 @@ def download_monaco():
         else:
             print(f'  ✗ 未找到 min/vs 目录: {src_vs}')
 
-    except subprocess.TimeoutExpired:
-        print('  ✗ npm pack 超时（120s）')
     except Exception as e:
-        print(f'  ✗ 下载 Monaco Editor 失败: {e}')
+        print(f'  ✗ 解压 Monaco Editor 失败: {e}')
+
     finally:
         # 清理临时文件
-        shutil.rmtree(work_dir, ignore_errors=True)
+        try:
+            os.remove(tgz_path)
+        except Exception:
+            pass
+        try:
+            shutil.rmtree(extract_dir, ignore_errors=True)
+        except Exception:
+            pass
 
 
 # ---------------------------------------------------------------------------
@@ -461,7 +445,7 @@ def main():
     # 4. Google Fonts
     download_fonts()
 
-    # 5. Monaco Editor (可选，需要 npm)
+    # 5. Monaco Editor（HTTP 下载，无需 npm）
     download_monaco()
 
     # 6. 版本文件

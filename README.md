@@ -31,7 +31,7 @@ python scripts/build/build_static.py
 - **Lucide Icons** — 图标库
 - **Marked.js** — Markdown 渲染
 - **JetBrains Mono** — 编程字体
-- **Monaco Editor** — 代码编辑器（较大，约 12MB，需 npm）
+- **Monaco Editor** — 代码编辑器（约 12MB，HTTP 下载，无需 npm）
 
 > 所有中文字体使用系统字体栈（各平台预装），**零下载、零延迟**。
 > 一键更新时会自动运行构建脚本，无需手动操作。

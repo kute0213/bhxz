@@ -328,3 +328,40 @@ def vote_poll(poll_id):
 - [ ] 页面加载了 `marked.js`
 - [ ] Markdown 渲染后调用了 `CodeBlocks.enhance()`
 - [ ] 动态加载的内容会被 MutationObserver 自动捕获
+
+## 发布与更新流程
+
+### 1. 打包 ZIP 发布
+
+每次代码变更后，需要打包为 ZIP 压缩包供用户通过一键更新下载：
+
+```bash
+# 1. 构建静态资源（下载所有 CDN 资源到本地，包括 Monaco Editor）
+python scripts/build/build_static.py
+
+# 2. 确认所有文件都已提交到 Git
+git status
+
+# 3. 推送到 GitHub（触发一键更新）
+git push
+```
+
+> **注意：** `static/lib/monaco/` 目录（~12MB）被 `.gitignore` 排除，不会提交到 Git 仓库。
+> 用户通过一键更新或从 GitHub 下载 ZIP 后，需要运行 `python scripts/build/build_static.py` 以获取 Monaco Editor。
+
+### 2. 一键更新机制
+
+用户通过管理后台的「一键更新」功能，从 GitHub 获取最新代码：
+
+1. 系统自动检测最快代理，下载 GitHub 仓库的 ZIP 压缩包
+2. 解压后同步到本地（跳过受保护文件：数据库、配置、上传文件等）
+3. 自动运行 `scripts/build/build_static.py` 构建静态资源
+4. 自动重启服务器
+
+> 更新机制详见 `services/updater.py`。
+
+### 3. 更新规则
+
+- 每次代码变更后必须运行 `python scripts/build/build_static.py` 验证构建通过
+- 提交前检查 `.gitignore` 确保敏感文件不被提交
+- 推送到 GitHub 后，一键更新即可生效
