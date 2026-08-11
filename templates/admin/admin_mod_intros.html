@@ -3,35 +3,34 @@
 {% block extra_style %}
     <style>
         .btn-danger-outline {
-            background: rgba(239, 68, 68, 0.14);
-            backdrop-filter: blur(16px) saturate(160%);
-            -webkit-backdrop-filter: blur(16px) saturate(160%);
-            border: 1px solid rgba(239, 68, 68, 0.35);
+            background: linear-gradient(135deg, rgba(239, 68, 68, 0.07) 0%, rgba(239, 68, 68, 0.03) 100%);
+            backdrop-filter: blur(12px) saturate(110%);
+            -webkit-backdrop-filter: blur(12px) saturate(110%);
+            border: 1px solid rgba(239, 68, 68, 0.15);
             border-radius: 14px !important;
             color: #fca5a5; font-weight: 500;
             transition: transform 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
             position: relative;
             overflow: hidden;
-            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.1), inset 0 1px 0 rgba(255,255,255,0.08);
+            box-shadow: 0 2px 8px rgba(239, 68, 68, 0.04), inset 0 0.5px 0 rgba(255,255,255,0.05);
         }
         .btn-danger-outline:hover {
-            border-color: rgba(239, 68, 68, 0.6);
-            background: rgba(239, 68, 68, 0.2);
+            border-color: rgba(239, 68, 68, 0.30);
+            background: linear-gradient(135deg, rgba(239, 68, 68, 0.12) 0%, rgba(239, 68, 68, 0.06) 100%);
             color: #fecaca;
             transform: translateY(-1px);
-            box-shadow: 0 8px 24px rgba(239, 68, 68, 0.16), inset 0 1px 0 rgba(255,255,255,0.12);
+            box-shadow: 0 4px 16px rgba(239, 68, 68, 0.08), inset 0 0.5px 0 rgba(255,255,255,0.07);
         }
         .intro-card {
-            background: rgba(12, 28, 18, 0.38);
-            backdrop-filter: blur(32px) saturate(220%) brightness(108%);
-            -webkit-backdrop-filter: blur(32px) saturate(220%) brightness(108%);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            background: linear-gradient(145deg, rgba(10, 24, 16, 0.15) 0%, rgba(15, 30, 20, 0.08) 50%, rgba(10, 24, 16, 0.15) 100%);
+            backdrop-filter: blur(40px) saturate(100%);
+            -webkit-backdrop-filter: blur(40px) saturate(100%);
+            border: 1px solid rgba(255, 255, 255, 0.03);
             border-radius: 22px !important;
             transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
             box-shadow:
-                0 12px 40px rgba(0, 0, 0, 0.35),
-                inset 0 1px 0 rgba(255, 255, 255, 0.12),
-                inset 0 -1px 0 rgba(0, 0, 0, 0.1);
+                0 8px 32px rgba(0, 0, 0, 0.18),
+                inset 0 0.5px 0 rgba(255, 255, 255, 0.06);
             position: relative;
             overflow: hidden;
         }
@@ -40,20 +39,19 @@
             background: linear-gradient(180deg, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0) 100%);
         }
         .intro-card:hover {
-            border-color: rgba(244, 208, 63, 0.28);
-            transform: translateY(-3px);
+            border-color: rgba(244, 208, 63, 0.15);
+            transform: translateY(-2px);
             box-shadow:
-                0 20px 56px rgba(0, 0, 0, 0.4),
-                0 0 30px rgba(244, 208, 63, 0.06),
-                inset 0 1px 0 rgba(255, 255, 255, 0.14);
+                0 12px 40px rgba(0, 0, 0, 0.22),
+                inset 0 0.5px 0 rgba(255, 255, 255, 0.08);
         }
         .intro-icon {
-            background: rgba(244, 208, 63, 0.12);
-            border: 1px solid rgba(244, 208, 63, 0.18);
+            background: linear-gradient(135deg, rgba(244, 208, 63, 0.08) 0%, rgba(244, 208, 63, 0.04) 100%);
+            border: 1px solid rgba(244, 208, 63, 0.12);
             border-radius: 14px !important;
-            backdrop-filter: blur(12px) saturate(160%);
-            -webkit-backdrop-filter: blur(12px) saturate(160%);
-            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 4px 12px rgba(0, 0, 0, 0.15);
+            backdrop-filter: blur(10px) saturate(110%);
+            -webkit-backdrop-filter: blur(10px) saturate(110%);
+            box-shadow: inset 0 0.5px 0 rgba(255, 255, 255, 0.05), 0 2px 8px rgba(0, 0, 0, 0.10);
             position: relative;
             overflow: hidden;
         }

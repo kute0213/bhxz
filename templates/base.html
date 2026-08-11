@@ -271,8 +271,8 @@
     {% block page_modals %}{% endblock %}
 
     <!-- 图形验证码弹窗（全局共享，由 base.js 的 CaptchaModal 控制） -->
-    <div id="captcha-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.8); backdrop-filter: blur(4px); z-index: 51;">
-        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: rgba(12, 28, 18, 0.95); backdrop-filter: blur(32px) saturate(220%) brightness(108%); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 24px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.12), inset 0 -1px 0 rgba(0, 0, 0, 0.1); max-width: 28rem; width: calc(100% - 2rem); padding: 1.5rem;">
+    <div id="captcha-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.4); backdrop-filter: blur(8px) saturate(120%); -webkit-backdrop-filter: blur(8px) saturate(120%); z-index: 51;">
+        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: linear-gradient(145deg, rgba(10, 24, 16, 0.22) 0%, rgba(15, 30, 20, 0.14) 50%, rgba(10, 24, 16, 0.22) 100%); backdrop-filter: blur(40px) saturate(100%); -webkit-backdrop-filter: blur(40px) saturate(100%); border: 1px solid rgba(255, 255, 255, 0.03); border-radius: 24px; box-shadow: 0 16px 64px rgba(0, 0, 0, 0.30), inset 0 0.5px 0 rgba(255, 255, 255, 0.06); max-width: 28rem; width: calc(100% - 2rem); padding: 1.5rem;">
             <div class="text-center mb-6">
                 <div class="w-14 h-14 mx-auto bg-gold-400/20 rounded-full flex items-center justify-center mb-4">
                     <i data-lucide="shield" class="w-7 h-7 text-gold-400"></i>
@@ -282,7 +282,7 @@
             </div>
             <div class="space-y-4">
                 <div class="flex items-center justify-center gap-3">
-                    <img id="modal-captcha-img" src="" alt="验证码" class="h-14 rounded cursor-pointer hover:opacity-80 transition-opacity border border-forest-700/50" title="点击刷新" style="image-rendering: auto;">
+                    <img id="modal-captcha-img" src="" alt="验证码" class="h-16 rounded cursor-pointer hover:opacity-80 transition-opacity border border-forest-700/50" title="点击刷新" style="image-rendering: auto;">
                     <input type="hidden" id="modal-captcha-id" value="">
                     <button type="button" id="modal-captcha-refresh" class="p-2 text-cream/50 hover:text-gold-400 transition-colors rounded-lg hover:bg-cream/5" title="刷新验证码">
                         <i data-lucide="refresh-cw" class="w-5 h-5"></i>
@@ -290,7 +290,7 @@
                 </div>
                 <div>
                     <label class="block text-sm font-medium mb-2 text-cream/80">验证码</label>
-                    <input type="text" id="modal-captcha-input" class="input-field w-full px-4 py-3 rounded-lg" placeholder="请输入验证码" autocomplete="off" maxlength="6">
+                    <input type="text" id="modal-captcha-input" class="input-field w-full px-4 py-3 rounded-lg" placeholder="请输入验证码" autocomplete="off" maxlength="5">
                 </div>
                 <button type="button" id="modal-captcha-submit" class="btn-primary w-full py-3 rounded-lg font-bold">
                     验证

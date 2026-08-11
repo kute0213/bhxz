@@ -45,48 +45,18 @@ DEFAULT_PROTECTED_PATHS = [
     '__pycache__',
 ]
 
-# 默认 GitHub 代理列表（按类型分组，检测时自动选择最快的可用代理）
-# 移除了重复的 ghproxy.net 条目
+# 默认 GitHub 代理列表（仅代理，不包含直连 — 直连在用户环境不可用）
 DEFAULT_PROXY_LIST = [
-    # ===== 直连 =====
-    ('直连', 'https://github.com'),
-
-    # ===== 通用型代理（URL 前缀方式，在最前面加 https://X/） =====
-    ('ghproxy.com', 'https://ghproxy.com/https://github.com'),
-    ('mirror.ghproxy.com', 'https://mirror.ghproxy.com/https://github.com'),
-    ('ghproxy.homeboyc.cn', 'https://ghproxy.homeboyc.cn/https://github.com'),
-    ('gh.llkk.cc', 'https://gh.llkk.cc/https://github.com'),
-    ('hub.gitmirror.com', 'https://hub.gitmirror.com/https://github.com'),
-    ('gh.h233.eu.org', 'https://gh.h233.eu.org/https://github.com'),
-    ('gh.api.99988866.xyz', 'https://gh.api.99988866.xyz/https://github.com'),
-    ('moeyy.cn/gh-proxy', 'https://moeyy.cn/gh-proxy/https://github.com'),
-    ('gh-proxy.yizhuan.org', 'https://gh-proxy.yizhuan.org/https://github.com'),
-    ('ghproxy.856539.xyz', 'https://ghproxy.856539.xyz/https://github.com'),
-    ('ghproxy.alphavps.workers.dev', 'https://ghproxy.alphavps.workers.dev/https://github.com'),
-    ('gitproxy.plus1.win', 'https://gitproxy.plus1.win/https://github.com'),
-    ('gh-proxy.lxstv.pw', 'https://gh-proxy.lxstv.pw/https://github.com'),
-    ('ghproxy.guidao.workers.dev', 'https://ghproxy.guidao.workers.dev/https://github.com'),
-
-    # ===== 镜像站 =====
-    ('bgithub.xyz', 'https://bgithub.xyz/https://github.com'),
-    ('kkgithub.com', 'https://kkgithub.com/https://github.com'),
-    ('hub.fastgit.org', 'https://hub.fastgit.org/https://github.com'),
-    ('gitclone.com', 'https://gitclone.com/github.com'),
-    ('github.ur1.fun', 'https://github.ur1.fun/https://github.com'),
-    ('githubfast.com', 'https://githubfast.com/https://github.com'),
-    ('github.moeyy.xyz', 'https://github.moeyy.xyz/https://github.com'),
-
-    # ===== 文件加速型 =====
-    ('github.akams.cn', 'https://github.akams.cn/https://github.com'),
     ('ghp.ci', 'https://ghp.ci/https://github.com'),
-    ('gh.dcm.so', 'https://gh.dcm.so/https://github.com'),
-    ('gh-proxy.lhr.ltd', 'https://gh-proxy.lhr.ltd/https://github.com'),
-    ('gitproxy.188706.xyz', 'https://gitproxy.188706.xyz/https://github.com'),
-    ('ghproxy.yaoyaoling.net', 'https://ghproxy.yaoyaoling.net/https://github.com'),
-    ('github.ddlink.cc', 'https://github.ddlink.cc/https://github.com'),
-    ('gh.idayer.com', 'https://gh.idayer.com/https://github.com'),
-    ('slink.ltd', 'https://slink.ltd/https://github.com'),
+    ('github.moeyy.xyz', 'https://github.moeyy.xyz/https://github.com'),
+    ('mirror.ghproxy.com', 'https://mirror.ghproxy.com/https://github.com'),
+    ('ghproxy.alphavps.workers.dev', 'https://ghproxy.alphavps.workers.dev/https://github.com'),
+    ('ghproxy.guidao.workers.dev', 'https://ghproxy.guidao.workers.dev/https://github.com'),
     ('gh-proxy.netlify.app', 'https://gh-proxy.netlify.app/https://github.com'),
+    ('gh.dcm.so', 'https://gh.dcm.so/https://github.com'),
+    ('gh.idayer.com', 'https://gh.idayer.com/https://github.com'),
+    ('github.akams.cn', 'https://github.akams.cn/https://github.com'),
+    ('ghfast.top', 'https://ghfast.top/https://github.com'),
 ]
 
 # ---------------------------------------------------------------------------
@@ -155,8 +125,8 @@ _proxy_test_lock = threading.Lock()
 def _build_test_url(proxy_name, proxy_url):
     """根据代理类型构建测试 URL。"""
     base = proxy_url.rstrip('/')
-    if proxy_name == '直连' or 'github.com' in base:
-        # 直连或本身就是 github.com 的变体
+    if 'github.com' in base:
+        # 本身就是 github.com 的变体
         return base + '/'
     else:
         # 前缀式代理：测试 https://代理/https://github.com/
@@ -322,11 +292,6 @@ def detect_fastest_proxy(proxy_list=None, timeout=4):
     # 返回可用代理列表
     available = [(r['name'], r['url'], r['elapsed']) for r in success_results]
 
-    # 如果所有代理都失败，至少返回直连
-    if not available:
-        direct_url = proxy_list[0][1]  # 默认第一个是直连
-        return [('直连', direct_url, 999)]
-
     return available
 
 
@@ -475,16 +440,14 @@ def _run_update():
 
         _add_event('log', {'message': f'✓ Git 路径: {git_path}'})
 
-        # 2. 检测代理（带详细日志）
+        # 2. 检测可用代理（并行检测，3s 超时）
         _add_event('progress', {'percent': 3, 'message': f'正在检测 {len(proxy_list)} 个 GitHub 代理...'})
-        _add_event('log', {'message': f'╔══ 开始代理检测（共 {len(proxy_list)} 个，超时 {4}s）'})
-
-        # 列出所有待测代理
+        _add_event('log', {'message': f'╔══ 开始代理检测（共 {len(proxy_list)} 个，超时 3s）'})
         for i, (name, url) in enumerate(proxy_list, 1):
             test_url = _build_test_url(name, url)
             _add_event('log', {'message': f'║  [{i:2d}] {name:25s} → {test_url}'})
 
-        available_proxies = detect_fastest_proxy(proxy_list=proxy_list)
+        available_proxies = detect_fastest_proxy(proxy_list=proxy_list, timeout=3)
 
         # 记录详细结果
         success_count = 0
@@ -501,96 +464,107 @@ def _run_update():
         _add_event('log', {'message': f'╚══ 代理检测完成：可用 {success_count} 个，不可用 {fail_count} 个'})
 
         if not available_proxies:
-            _add_event('log', {'message': '⚠ 所有代理均不可达，将使用直连'})
-            available_proxies = [('直连', GITHUB_REPO, 999)]
+            # 所有代理都不可达，给用户明确的错误信息
+            err_details = []
+            with _proxy_test_lock:
+                for r in _proxy_test_results:
+                    err_details.append(f'{r["name"]}: {r["error"]}')
+            err_msg = '所有 GitHub 代理均不可达，请检查网络连接或稍后重试'
+            if err_details:
+                err_msg += '\n' + '\n'.join(err_details[:5])
+            raise RuntimeError(err_msg)
 
-        fastest = available_proxies[0]
-        proxy_name, proxy_url = fastest[0], fastest[1]
-        _add_event('progress', {
-            'percent': 5,
-            'message': f'已选择代理: {proxy_name} ({fastest[2]:.1f}s)',
-        })
-        _add_event('log', {'message': f'→ 选择最快代理: {proxy_name} ({fastest[2]:.1f}s)'})
+        # 速度排名
+        rank_parts = [f'{i+1}. {n} ({e:.1f}s)' for i, (n, _, e) in enumerate(available_proxies[:5])]
+        _add_event('log', {'message': f'→ 代理速度排名: {"; ".join(rank_parts)}'})
+        if len(available_proxies) > 5:
+            _add_event('log', {'message': f'→ 以及另外 {len(available_proxies) - 5} 个可用代理'})
 
-        # 输出可用代理排名
-        if len(available_proxies) > 1:
-            rank_parts = [f'{i+1}. {n} ({e:.1f}s)' for i, (n, _, e) in enumerate(available_proxies[:5])]
-            _add_event('log', {'message': f'→ 代理速度排名: {"; ".join(rank_parts)}'})
-            if len(available_proxies) > 5:
-                _add_event('log', {'message': f'→ 以及另外 {len(available_proxies) - 5} 个可用代理'})
-
-        # 3. 构建克隆 URL 并尝试克隆（如果最快的失败，自动尝试下一个）
+        # 3. 按速度顺序尝试克隆
         clone_success = False
         last_error = ''
+        temp_dir = None
+        total_attempts = len(available_proxies)
+
+        # 复用克隆函数（内部定义，捕获 stderr 到 stderr_lines）
+        CLONE_RANGE = 70
+        stderr_lines = []
+        stderr_lock = threading.Lock()
+
+        def _parse_line(buf):
+            nonlocal last_clone_pct
+            text = buf.decode('utf-8', errors='replace')
+            m = re.search(r'(\d+)\s*%', text)
+            if m:
+                pct = int(m.group(1))
+                if pct != last_clone_pct:
+                    last_clone_pct = pct
+                    mapped = 5 + int(pct * CLONE_RANGE / 100)
+                    _add_event('progress', {'percent': mapped, 'message': f'正在克隆仓库... {pct}%'})
+
+        def _read_stderr(stream):
+            nonlocal last_clone_pct, line_buf
+            while True:
+                chunk = stream.read(4096)
+                if not chunk:
+                    break
+                for byte in chunk:
+                    if byte == 0x0d:
+                        text = line_buf.decode('utf-8', errors='replace').strip()
+                        if text:
+                            with stderr_lock:
+                                stderr_lines.append(text)
+                        _parse_line(line_buf)
+                        line_buf = b''
+                    elif byte == 0x0a:
+                        text = line_buf.decode('utf-8', errors='replace').strip()
+                        if text:
+                            with stderr_lock:
+                                stderr_lines.append(text)
+                        line_buf = b''
+                    else:
+                        line_buf += bytes([byte])
+            if line_buf:
+                text = line_buf.decode('utf-8', errors='replace').strip()
+                if text:
+                    with stderr_lock:
+                        stderr_lines.append(text)
 
         for attempt_idx, (name, url, _) in enumerate(available_proxies):
-            if name == '直连':
-                cur_clone_url = GITHUB_REPO
+            base = url.rstrip('/')
+            if 'github.com' in base:
+                cur_clone_url = base + '/kute0213/bhxz.git'
             else:
-                base = url.rstrip('/')
-                if 'github.com' in base:
-                    cur_clone_url = base + '/kute0213/bhxz.git'
-                else:
-                    cur_clone_url = base + '/https://github.com/kute0213/bhxz.git'
+                cur_clone_url = base + '/https://github.com/kute0213/bhxz.git'
 
             _add_event('log', {'message': f'{"─" * 40}'})
-            if attempt_idx == 0:
-                _add_event('log', {'message': f'克隆尝试 #{attempt_idx + 1}: {name} （首选）'})
-                _add_event('progress', {'percent': 5, 'message': f'正在从 {name} 克隆仓库...'})
-            else:
-                _add_event('log', {'message': f'克隆尝试 #{attempt_idx + 1}: {name} （备用）'})
-                _add_event('progress', {'percent': 5, 'message': f'尝试备用代理 {name}...'})
-
+            hint = '首选' if attempt_idx == 0 else '备用'
+            _add_event('log', {'message': f'克隆尝试 #{attempt_idx + 1}: {name} （{hint}）'})
+            _add_event('progress', {'percent': 5, 'message': f'正在从 {name} 克隆仓库...'})
             _add_event('log', {'message': f'  克隆 URL: {cur_clone_url}'})
 
             temp_dir = tempfile.mkdtemp(prefix='bhxz_update_')
-
-            # 执行 git clone
-            git_cmd = [git_path, 'clone', '--depth', '1', '--single-branch', '--progress', cur_clone_url, temp_dir]
+            git_cmd = [git_path, 'clone', '--depth', '1', '--single-branch', '--progress',
+                       cur_clone_url, temp_dir]
             env = os.environ.copy()
             env['GIT_TERMINAL_PROMPT'] = '0'
             env['GIT_ASKPASS'] = 'echo'
 
             if sys.platform == 'win32':
-                git_dir = os.path.dirname(os.path.dirname(git_path))
-                for p in [os.path.join(git_dir, 'bin'), os.path.join(git_dir, 'cmd')]:
+                _git_dir = os.path.dirname(os.path.dirname(git_path))
+                for p in [os.path.join(_git_dir, 'bin'), os.path.join(_git_dir, 'cmd')]:
                     if os.path.isdir(p) and p not in env.get('PATH', ''):
                         env['PATH'] = os.pathsep.join([p, env.get('PATH', '')])
 
             _add_event('log', {'message': f'  执行: {" ".join(git_cmd[:3])} ...'})
             clone_start = time.time()
-            proc = subprocess.Popen(git_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=0, env=env)
+            proc = subprocess.Popen(git_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                    bufsize=0, env=env)
 
-            # 解析克隆进度
-            CLONE_RANGE = 70
+            # 重置进度变量
             last_clone_pct = -1
             line_buf = b''
-
-            def _read_stderr(stream):
-                nonlocal last_clone_pct, line_buf
-                while True:
-                    chunk = stream.read(4096)
-                    if not chunk:
-                        break
-                    for byte in chunk:
-                        if byte == 0x0d:
-                            _parse_line(line_buf)
-                            line_buf = b''
-                        elif byte == 0x0a:
-                            line_buf = b''
-                        else:
-                            line_buf += bytes([byte])
-
-            def _parse_line(buf):
-                nonlocal last_clone_pct
-                text = buf.decode('utf-8', errors='replace')
-                m = re.search(r'(\d+)\s*%', text)
-                if m:
-                    pct = int(m.group(1))
-                    if pct != last_clone_pct:
-                        last_clone_pct = pct
-                        mapped = 5 + int(pct * CLONE_RANGE / 100)
-                        _add_event('progress', {'percent': mapped, 'message': f'正在克隆仓库... {pct}%'})
+            stderr_lines.clear()
 
             stderr_thread = threading.Thread(target=_read_stderr, args=(proc.stderr,), daemon=True)
             stderr_thread.start()
@@ -601,24 +575,27 @@ def _run_update():
             if proc.returncode == 0:
                 clone_success = True
                 _add_event('log', {'message': f'✓ {name} 克隆成功（耗时 {clone_elapsed:.1f}s）'})
-                break  # 跳出 fallback 循环
+                break
             else:
-                remaining = proc.stderr.read().decode('utf-8', errors='replace').strip()
-                last_error = remaining or '克隆失败（无错误输出）'
+                with stderr_lock:
+                    last_error = '\n'.join(stderr_lines[-10:]) if stderr_lines else f'{name} 克隆失败'
                 _add_event('log', {'message': f'✗ {name} 克隆失败（耗时 {clone_elapsed:.1f}s）'})
                 _add_event('log', {'message': f'  错误: {last_error[:200]}'})
-                # 清理本次临时目录
-                try:
-                    shutil.rmtree(temp_dir)
-                except Exception:
-                    pass
-                continue  # 尝试下一个代理
+                if temp_dir:
+                    try:
+                        shutil.rmtree(temp_dir)
+                    except Exception:
+                        pass
+                    temp_dir = None
+                continue
 
         _add_event('log', {'message': f'{"─" * 40}'})
 
-        # 所有代理都失败
         if not clone_success:
-            raise RuntimeError(f'所有 {len(available_proxies)} 个可用代理克隆均失败: {last_error}')
+            raise RuntimeError(
+                f'已尝试 {total_attempts} 个代理，全部失败。\n'
+                f'最后错误: {last_error[:300]}'
+            )
 
         _add_event('progress', {'percent': 72, 'message': '克隆完成，正在同步文件...'})
 

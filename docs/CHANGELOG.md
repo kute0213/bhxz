@@ -2,6 +2,18 @@
 
 ## [Unreleased]
 
+### 优化
+- 磨砂玻璃 UI 全面升级：去除塑料感，模拟真实酸蚀刻玻璃效果
+  - 卡片/按钮/弹窗/输入框/导航栏改用 `linear-gradient` 渐变背景，替代纯色 `rgba`
+  - 降低 `backdrop-filter` 饱和度（`saturate(220%)` → `saturate(100%)`），效果更自然通透
+  - 添加光线散射伪元素（`radial-gradient` 模拟漫射光），模拟磨砂玻璃内部光线散射
+  - 添加边缘光晕伪元素（`mask-composite` 渐变边框），模拟玻璃切割面折射
+  - 降低背景透明度（`0.18` → `0.08~0.10`），让背景光晕充分透出
+  - 全局噪点纹理优化（`fractalNoise` 频率降低、增加去饱和度），微观蚀刻感更真实
+  - 添加环境光晕叠加（`body::after`），模拟玻璃微弱冷色/暖色环境反光
+  - 背景光球透明度降低（`0.85` → `0.50`），模糊半径增大（`60px` → `80px`），光晕更柔和
+  - 统一所有页面内联玻璃样式（`index.html`、`settings.html`、`guides/index.html`、`register.html`、`admin/admin_mod_intros.html`、`admin/admin_cmd.html`、`base.html`）
+
 ### 修复
 - 修复 DuckDB 多进程并发写入假阳性错误：`_is_mp_child_process()` 检测结果模块级缓存，避免多次调用时 `sys.argv` 或 `multiprocessing.current_process().name` 产生假阳性
 - `AsyncLogWriter` 和 `LogCleaner` 容错增强：捕获 `get_db()` 抛出的 `RuntimeError`，在子进程中静默跳过而非崩溃

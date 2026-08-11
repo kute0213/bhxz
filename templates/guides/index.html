@@ -3,19 +3,19 @@
 {% block extra_style %}
 <style>
 .guide-card {
-    background: rgba(12, 28, 18, 0.38);
-    backdrop-filter: blur(32px) saturate(220%) brightness(108%);
-    -webkit-backdrop-filter: blur(32px) saturate(220%) brightness(108%);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: linear-gradient(145deg, rgba(10, 24, 16, 0.15) 0%, rgba(15, 30, 20, 0.08) 50%, rgba(10, 24, 16, 0.15) 100%);
+    backdrop-filter: blur(40px) saturate(100%);
+    -webkit-backdrop-filter: blur(40px) saturate(100%);
+    border: 1px solid rgba(255, 255, 255, 0.03);
     border-radius: 24px !important;
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.12), inset 0 -1px 0 rgba(0, 0, 0, 0.1);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.18), inset 0 0.5px 0 rgba(255, 255, 255, 0.06);
     position: relative; overflow: hidden;
     transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
 }
 .guide-card:hover {
-    border-color: rgba(244, 208, 63, 0.3);
-    transform: translateY(-4px);
-    box-shadow: 0 20px 56px rgba(0, 0, 0, 0.4), 0 0 30px rgba(244, 208, 63, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.14);
+    border-color: rgba(244, 208, 63, 0.15);
+    transform: translateY(-2px);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.22), inset 0 0.5px 0 rgba(255, 255, 255, 0.08);
 }
 .guide-card::after {
     content: ''; position: absolute; top: 0; left: 0; right: 0; height: 50%; border-radius: 24px 24px 0 0; pointer-events: none;

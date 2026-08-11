@@ -1,9 +1,11 @@
 """
-验证码服务模块：生成带干扰线条的数学题验证码图片。
+验证码服务模块：生成四位字符验证码图片（大写字母+小写字母+数字组合）。
 
-图片直接返回 base64 编码，不保存文件，减少服务器开销。
-验证码答案存于服务端内存（CaptchaService 单例），返回随机 captcha_id
-供前端提交时携带，校验后一次性删除防止重放攻击，避免被 curl 等工具绕过。
+- 每个字符独立随机倾斜（-35° ~ +35°），字体粗大清晰
+- 一条随机倾斜的粗干扰线
+- 图片直接返回 base64 编码，不保存文件，减少服务器开销
+- 验证码答案存于服务端内存（CaptchaService 单例），返回随机 captcha_id
+- 供前端提交时携带，校验后一次性删除防止重放攻击，避免被 curl 等工具绕过
 """
 
 import io
@@ -50,29 +52,26 @@ def _check_pil():
     return _pil_available
 
 
-def generate_math_captcha(
-    width: int = 200,
-    height: int = 50,
-    min_num: int = 1,
-    max_num: int = 9,
-    line_count: int = 6,
-    point_count: int = 120,
+# 排除易混淆字符：0/O/o、1/I/l、2/Z、5/S/s、8/B
+_CAPTCHA_CHARS = 'ABCDEFGHJKMNPQRTUVWXYabcdefghjkmnpqrtuvwxy34679'
+
+
+def generate_char_captcha(
+    width: int = 220,
+    height: int = 70,
 ) -> Tuple[str, str]:
     """
-    生成一位数加减法验证码图片。
+    生成四位字符验证码图片。
 
-    使用一位数运算（1-9），随机加减，答案范围 0-18。
+    每个字符从大写字母、小写字母、数字中随机选取，单独渲染并旋转
+    -35° ~ +35°，字体粗大清晰。图片包含一条随机倾斜的粗干扰线。
 
     Args:
         width: 图片宽度
         height: 图片高度
-        min_num: 最小数字（默认单位数 1）
-        max_num: 最大数字（默认单位数 9）
-        line_count: 干扰线条数量
-        point_count: 干扰点数量
 
     Returns:
-        (answer, base64_image): 答案字符串和 base64 编码的图片
+        (code, base64_image): 验证码字符串和 base64 编码的图片
 
     Raises:
         RuntimeError: Pillow 库未安装
@@ -80,101 +79,83 @@ def generate_math_captcha(
     if not _check_pil():
         raise RuntimeError("Pillow 库未安装，请运行: pip install Pillow")
 
-    # 生成随机一位数加减法（答案范围 0-18）
-    a = random.randint(min_num, max_num)
-    b = random.randint(min_num, max_num)
-    if random.choice(['+', '-']) == '+':
-        answer = str(a + b)
-        question = f"{a} + {b} = ?"
-    else:
-        # 减法保证结果非负：大数减小数
-        if a < b:
-            a, b = b, a
-        answer = str(a - b)
-        question = f"{a} - {b} = ?"
+    # 生成 4 位随机字符
+    code = ''.join(random.choices(_CAPTCHA_CHARS, k=4))
 
-    # 创建图片
-    img = Image.new('RGB', (width, height), color=(240, 240, 240))
+    # 创建浅色背景图片
+    img = Image.new('RGB', (width, height), color=(248, 246, 240))
     draw = ImageDraw.Draw(img)
 
-    # 尝试使用系统字体，失败则使用默认字体
-    font_size = max(18, height // 2)
+    # 加载粗体字体
+    font_size = 40
     try:
-        font_paths = [
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-            "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
-            "C:\\Windows\\Fonts\\Arial.ttf",
-            "/System/Library/Fonts/Helvetica.ttc",
-        ]
-        font = None
-        for path in font_paths:
-            try:
-                font = ImageFont.truetype(path, font_size)
-                break
-            except Exception:
-                continue
-        if font is None:
-            font = ImageFont.load_default()
+        font = ImageFont.truetype(
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", font_size
+        )
     except Exception:
         font = ImageFont.load_default()
 
-    # 绘制干扰点（随机分布，密度与图片面积成正比）
-    point_count = max(50, (width * height) // 80)
-    for _ in range(point_count):
+    # ---- 绘制微弱背景噪点 ----
+    for _ in range((width * height) // 80):
         x = random.randint(0, width - 1)
         y = random.randint(0, height - 1)
-        color = (random.randint(150, 200), random.randint(150, 200), random.randint(150, 200))
-        draw.point((x, y), fill=color)
+        c = random.randint(195, 215)
+        draw.point((x, y), fill=(c, c, c))
 
-    # 绘制干扰线
-    for _ in range(line_count):
-        x1 = random.randint(0, width // 2)
-        y1 = random.randint(0, height - 1)
-        x2 = random.randint(width // 2, width - 1)
-        y2 = random.randint(0, height - 1)
-        color = (random.randint(100, 180), random.randint(100, 180), random.randint(100, 180))
-        draw.line((x1, y1, x2, y2), fill=color, width=1)
+    # ---- 绘制一条随机倾斜的粗干扰线 ----
+    line_width = random.randint(3, 5)
+    # 线从左侧到右侧，随机倾斜穿行
+    x1 = random.randint(0, width // 4)
+    y1 = random.randint(0, height - 1)
+    x2 = random.randint(width * 3 // 4, width - 1)
+    y2 = random.randint(0, height - 1)
+    # 线条颜色：中灰色，比字符浅
+    lc = random.randint(140, 185)
+    draw.line((x1, y1, x2, y2), fill=(lc, lc, lc), width=line_width)
 
-    # 绘制文字（居中，每个字符独立颜色，实现字母变色效果）
-    # 先测量总宽度，计算居中起始 x
-    char_widths = []
-    total_width = 0
-    for ch in question:
-        ch_bbox = draw.textbbox((0, 0), ch, font=font)
-        cw = ch_bbox[2] - ch_bbox[0]
-        char_widths.append(cw)
-        total_width += cw
-    x = (width - total_width) // 2
-    text_bbox = draw.textbbox((0, 0), question, font=font)
-    text_height = text_bbox[3] - text_bbox[1]
-    base_y = (height - text_height) // 2 - 2
+    # ---- 绘制每个字符（独立旋转 + 粘贴） ----
+    # 每个字符的分配宽度
+    cell_w = width // 4
+    # 垂直居中偏移微调
+    for i, ch in enumerate(code):
+        # 为每个字符创建独立透明画布
+        ch_size = font_size + 16
+        ch_img = Image.new('RGBA', (ch_size, ch_size), (0, 0, 0, 0))
+        ch_draw = ImageDraw.Draw(ch_img)
 
-    for i, ch in enumerate(question):
-        # 每个字符随机颜色（鲜艳，避免太浅）
-        r = random.randint(20, 200)
-        g = random.randint(20, 200)
-        b = random.randint(20, 200)
+        # 字符颜色：深色，保证清晰可辨
+        r = random.randint(30, 90)
+        g = random.randint(30, 90)
+        b = random.randint(30, 90)
+        # 确保颜色足够深
+        if r + g + b > 240:
+            factor = 200 / (r + g + b)
+            r, g, b = int(r * factor), int(g * factor), int(b * factor)
         char_color = (r, g, b)
 
-        # 轻微上下抖动（-2 ~ +2 像素）
-        jitter_y = random.randint(-2, 2)
+        # 绘制字符到独立画布
+        ch_draw.text((6, 4), ch, font=font, fill=char_color)
 
-        # 阴影颜色（基于字符颜色调暗）
-        shadow_color = (max(0, r - 120), max(0, g - 120), max(0, b - 120))
+        # 随机旋转 -35° ~ +35°
+        angle = random.randint(-35, 35)
+        rotated = ch_img.rotate(
+            angle, expand=True, resample=Image.BICUBIC,
+            fillcolor=(0, 0, 0, 0)
+        )
 
-        # 绘制阴影
-        draw.text((x + 1, base_y + jitter_y + 1), ch, font=font, fill=shadow_color)
-        # 绘制主文字
-        draw.text((x, base_y + jitter_y), ch, font=font, fill=char_color)
+        # 计算粘贴位置
+        paste_x = cell_w * i + (cell_w - rotated.width) // 2
+        paste_y = (height - rotated.height) // 2 + random.randint(-4, 4)
 
-        x += char_widths[i] + 1
+        # 粘贴到主图（使用 alpha 通道作为遮罩）
+        img.paste(rotated, (paste_x, paste_y), rotated)
 
     # 转换为 base64
     buffer = io.BytesIO()
     img.save(buffer, format='PNG', optimize=True)
     base64_data = base64.b64encode(buffer.getvalue()).decode('utf-8')
 
-    return answer, f"data:image/png;base64,{base64_data}"
+    return code, f"data:image/png;base64,{base64_data}"
 
 
 def verify_captcha(user_input: str, answer: str, created_at: float = None) -> bool:
@@ -256,7 +237,7 @@ class CaptchaService:
         Returns:
             (captcha_id, answer, image_base64): UUID 验证码 ID、答案、base64 图片
         """
-        answer, image_data = generate_math_captcha()
+        answer, image_data = generate_char_captcha()
         captcha_id = str(uuid.uuid4())
         now = time.time()
         with self._lock:

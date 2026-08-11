@@ -302,9 +302,12 @@ export ENABLE_SSL=1 && python app.py
 
 ### 磨砂玻璃效果（Glassmorphism）
 
-- `backdrop-filter: blur(32px) saturate(220%) brightness(108%)`
-- 低透明度 `rgba` 背景 + 24px 圆角
-- 动态背景光球（CSS `@keyframes` 动画）
+- **真实酸蚀刻玻璃质感**：`background: linear-gradient()` 渐变背景替代纯色，模拟光线透过玻璃的漫射效果
+- `backdrop-filter: blur(48px) saturate(100%)` — 降低饱和度，更自然通透
+- 超低透明度 `rgba(0.10)` 背景 + 光线散射伪元素（`radial-gradient` 模拟漫射光）
+- 边缘光晕伪元素（`mask-composite` 渐变边框，模拟玻璃切割面折射）
+- 动态背景光球（CSS `@keyframes` 动画），降低透明度使光晕更柔和
+- 全局细微噪点纹理（SVG `feTurbulence`），模拟蚀刻玻璃表面微观散射
 
 ### 交互效果
 
