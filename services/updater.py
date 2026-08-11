@@ -779,7 +779,7 @@ def _run_update():
 
         # 6. 运行静态资源构建脚本（下载外部 CDN 资源到本地，生成静态 CSS/JS 文件）
         try:
-            build_script = os.path.join(APP_ROOT, 'scripts', 'build_static.py')
+            build_script = os.path.join(APP_ROOT, 'scripts', 'build', 'build_static.py')
             if os.path.isfile(build_script):
                 _add_event('log', {'message': '正在构建静态资源...'})
                 build_result = subprocess.run(
@@ -791,7 +791,7 @@ def _run_update():
                 else:
                     _add_event('log', {'message': f'⚠ 静态资源构建警告: {build_result.stderr[:200]}'})
             else:
-                _add_event('log', {'message': '⚠ 未找到构建脚本: scripts/build_static.py'})
+                _add_event('log', {'message': '⚠ 未找到构建脚本: scripts/build/build_static.py'})
         except subprocess.TimeoutExpired:
             _add_event('log', {'message': '⚠ 静态资源构建超时（180s），跳过'})
         except Exception as e:

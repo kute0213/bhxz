@@ -10,7 +10,7 @@ env/
 ENV/
 *.egg-info/
 dist/
-build/
+/build/
 
 # 数据库文件
 *.duckdb
@@ -47,13 +47,12 @@ Thumbs.db
 
 # Trae spec 文档
 .trae/
-# 但允许跟踪测试脚本
-!.trae/server-test/
 .trae-html-share-packages/
 /.trae-html-share-packages
 
 # Node.js
 node_modules/
+scripts/build/node_modules/
 
 # 静态资源构建产物（大文件排除）
 static/lib/monaco/

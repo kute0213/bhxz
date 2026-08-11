@@ -23,7 +23,7 @@ python app.py
 首次运行或更新后，需要构建静态资源（将 CDN 库下载到本地）：
 
 ```bash
-python scripts/build_static.py
+python scripts/build/build_static.py
 ```
 
 这会下载以下资源到 `static/lib/`：
@@ -96,7 +96,20 @@ python scripts/build_static.py
 │   └── public/                   #   公开文件管理
 │
 ├── scripts/                      # 构建与维护脚本
-│   └── build_static.py           #   静态资源构建（下载 CDN 资源到本地）
+│   ├── build/                    #   构建工具
+│   │   ├── build_static.py       #     静态资源构建（下载 CDN 资源到本地）
+│   │   ├── build-tailwind.sh     #     Tailwind CSS 构建
+│   │   ├── package.json          #     npm 依赖
+│   │   ├── tailwind.config.js    #     Tailwind 配置
+│   │   └── tailwind-source.css   #     Tailwind 入口 CSS
+│   └── tests/                    #   自动化测试套件
+│       ├── run_all.py            #     测试运行器
+│       ├── test_basic.py         #     基础测试（应用启动、路由可达性）
+│       ├── test_admin.py         #     管理后台测试
+│       ├── test_captcha.py       #     验证码测试
+│       ├── test_routes.py        #     路由可达性测试
+│       ├── test_services.py      #     服务层测试
+│       └── test_user.py          #     用户系统测试
 │
 ├── templates/                    # Jinja2 模板
 │   ├── base.html                 #   基础模板
@@ -127,7 +140,7 @@ python scripts/build_static.py
 │   ├── DEVELOPMENT.md            #   开发准则
 │   └── cmd-guide.md              #   CMD 控制台使用说明
 │
-├── .trae/server-test/            # 自动化测试套件
+├── scripts/                      # 构建与测试脚本（详见上方）
 ├── uploads/                      # 用户上传文件
 ├── backups/db/                   # 数据库备份
 └── ssl/                          # SSL 证书
@@ -363,15 +376,15 @@ export ENABLE_SSL=1 && python app.py
 
 当升级第三方库版本时：
 
-1. 修改 `scripts/build_static.py` 中的版本号
-2. 运行 `python scripts/build_static.py` 重新下载
+1. 修改 `scripts/build/build_static.py` 中的版本号
+2. 运行 `python scripts/build/build_static.py` 重新下载
 3. 提交 `static/lib/` 目录到 Git（`static/lib/monaco/` 除外）
 
 一键更新功能会自动执行此流程。
 
 #### 添加新的外部资源
 
-1. 在 `scripts/build_static.py` 中添加下载函数
+1. 在 `scripts/build/build_static.py` 中添加下载函数
 2. 在模板中使用 `url_for('static', filename='lib/...')` 引用
 3. 确保更新前已运行构建脚本
 

@@ -143,14 +143,14 @@ workspace/
 ├── static/                   # 静态资源（CSS/JS）
 ├── templates/                # Jinja2 模板
 ├── docs/                     # 项目文档
-└── .trae/server-test/        # 自动化测试
+└── scripts/tests/          # 自动化测试
 ```
 
 ## 新增功能的流程
 
 1. 在 `services/` 中创建或扩展对应的服务函数
 2. 在 `routes/` 中创建薄层路由，调用服务函数
-3. 在 `.trae/server-test/` 中编写测试覆盖
+3. 在 `scripts/tests/` 中编写测试覆盖
 
 ## 代码复用原则
 
@@ -164,10 +164,10 @@ workspace/
 
 ## 测试规范
 
-测试文件位于 `.trae/server-test/`，使用 `pytest` 运行：
+测试文件位于 `scripts/tests/`，运行：
 
 ```bash
-cd .trae/server-test && python run_all.py
+python scripts/tests/run_all.py
 ```
 
 每个测试函数应：
@@ -235,12 +235,12 @@ add_column_if_not_exists('表名', '列名', '类型 DEFAULT 默认值')
 
 ### 1. 新增路由时必须同步更新检测脚本
 
-所有路由必须注册到 `.trae/server-test/test_routes.py` 的 `ROUTES` 列表中，否则路由检测将无法覆盖新增路由。
+所有路由必须注册到 `scripts/tests/test_routes.py` 的 `ROUTES` 列表中，否则路由检测将无法覆盖新增路由。
 
 **每次新增路由流程：**
 1. 在 `routes/` 中注册新路由
-2. 在 `.trae/server-test/test_routes.py` 的 `ROUTES` 列表中添加对应条目
-3. 运行 `cd .trae/server-test && python test_routes.py` 验证新路由可达
+2. 在 `scripts/tests/test_routes.py` 的 `ROUTES` 列表中添加对应条目
+3. 运行 `python scripts/tests/test_routes.py` 验证新路由可达
 4. 提交代码
 
 ### 2. ROUTES 条目格式

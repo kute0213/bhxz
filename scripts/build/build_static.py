@@ -4,7 +4,7 @@
 每次更新后自动运行，确保网站不依赖外部 CDN 加载，提升页面响应速度。
 
 使用方式：
-    python scripts/build_static.py
+    python scripts/build/build_static.py
 
 运行后会生成：
     static/lib/highlight/     - Highlight.js 代码高亮
@@ -226,7 +226,7 @@ def download_fonts():
     # 英文字体: -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica Neue, Arial
     css_lines = [
         '/*',
-        ' * 自动生成的字体定义 — 由 scripts/build_static.py 生成',
+        ' * 自动生成的字体定义 — 由 scripts/build/build_static.py 生成',
         ' *',
         ' * 使用系统字体栈，无需下载任何字体文件：',
         ' *   - Windows: Microsoft YaHei, SimHei',
