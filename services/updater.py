@@ -2,23 +2,31 @@
 一键更新服务：从 GitHub 获取最新代码，全量同步到本地，自动重启。
 
 安全策略：
-- 克隆 GitHub 仓库，遍历仓库根目录所有项目
+- 下载 GitHub 仓库 ZIP 压缩包，使用系统临时目录解压
+- 遍历仓库根目录所有项目
 - 每个项目：如果不在不替换列表 → 删除本地版本 → 复制新版本
 - 不替换的文件列表可在管理后台一键更新页面设置
 - 更新后自动重启进程
 - 跨平台兼容（Windows/Linux/macOS）
 - 自动检测最快代理（带详细日志）
+- 无需安装 Git，纯 HTTP 下载
+
+下载方式（替代 git clone）：
+- 使用 ZIP 压缩包下载（archive/refs/heads/main.zip），纯 HTTP 请求
+- 代理兼容性更好（git 协议常被屏蔽，HTTP 更稳定）
+- 最后兜底直连 GitHub 原始归档
 """
 
 import os
 import sys
-import re
 import shutil
+import zipfile
 import tempfile
 import threading
 import time
 import json
 import subprocess
+import random
 from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError
 from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
@@ -33,6 +41,10 @@ APP_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 # GitHub 仓库地址
 GITHUB_REPO = 'https://github.com/kute0213/bhxz.git'
 
+# ZIP 压缩包路径（用于 HTTP 下载，替代 git clone）
+# 下载后解压，顶层目录名为 kute0213-bhxz-main
+REPO_ARCHIVE_PATH = 'kute0213/bhxz/archive/refs/heads/main.zip'
+
 # 默认不替换的路径（相对项目根目录），运行时还会合并设置的排除列表
 DEFAULT_PROTECTED_PATHS = [
     'site.duckdb',
@@ -46,9 +58,9 @@ DEFAULT_PROTECTED_PATHS = [
 ]
 
 # 默认 GitHub 代理列表（仅代理，不包含直连 — 直连在用户环境不可用）
-# 格式：(名称, 代理前缀URL, 克隆URL模板)
+# 格式：(名称, 代理前缀URL, 下载URL模板)
 # 代理前缀URL: 代理服务的首页，用于检测代理是否可达（不包含 /https://github.com 后缀）
-# 克隆URL模板: 实际用于 git clone 的完整 URL，{repo} 会被替换为仓库路径
+# 下载URL模板: 实际用于 HTTP 下载的完整 URL，{repo} 会被替换为仓库归档路径
 # 按可靠性排序，最快的在前，分批检测时第一批命中即可早停
 DEFAULT_PROXY_LIST = [
     ('github.akams.cn',   'https://github.akams.cn/',            'https://github.akams.cn/{repo}'),
@@ -249,8 +261,121 @@ def _get_urlerror_reason(e):
     return str(e)[:60]
 
 
+# ---------------------------------------------------------------------------
+# ZIP 下载（替代 git clone）
+# ---------------------------------------------------------------------------
+
+def _download_zip(url, dest_path, progress_callback=None, timeout=60):
+    """通过 HTTP 下载 ZIP 压缩包到本地路径。
+
+    使用 urllib（Python 内置），无需外部依赖。
+    支持 Content-Length 进度回调。
+
+    参数:
+        url: 下载 URL
+        dest_path: 本地保存路径
+        progress_callback: 进度回调函数，接收 0-100 的浮点数
+        timeout: 超时秒数（默认 60s）
+
+    返回:
+        True 表示下载成功，False 表示失败
+    """
+    ctx = _create_ssl_context()
+    try:
+        req = Request(url, method='GET')
+        req.add_header('User-Agent', 'Mozilla/5.0 (compatible; bhxz-updater)')
+        req.add_header('Accept', 'application/zip,*/*')
+
+        resp = urlopen(req, context=ctx, timeout=timeout)
+        total = resp.headers.get('Content-Length')
+        total = int(total) if total else 0
+
+        downloaded = 0
+        chunk_size = 128 * 1024  # 128KB
+
+        with open(dest_path, 'wb') as f:
+            while True:
+                chunk = resp.read(chunk_size)
+                if not chunk:
+                    break
+                f.write(chunk)
+                downloaded += len(chunk)
+                if total > 0 and progress_callback:
+                    # 每 5% 回调一次，避免过于频繁
+                    pct = downloaded / total * 100
+                    if int(pct) % 5 == 0 or pct >= 99:
+                        progress_callback(min(pct, 100))
+
+        # 验证文件是否有效 ZIP
+        if os.path.getsize(dest_path) == 0:
+            return False
+        try:
+            with zipfile.ZipFile(dest_path, 'r') as zf:
+                if zf.testzip() is not None:
+                    return False  # 损坏的 ZIP
+        except zipfile.BadZipFile:
+            return False
+
+        return True
+    except HTTPError as e:
+        # HTTP 错误（4xx/5xx）— 代理可达但资源不可达
+        return False
+    except (URLError, OSError, Exception):
+        return False
+
+
+def _extract_zip(zip_path, dest_dir):
+    """解压 GitHub ZIP 压缩包，自动处理顶层目录嵌套。
+
+    GitHub 的 ZIP 归档包含一个顶层目录（如 kute0213-bhxz-main），
+    此函数跳过顶层目录，直接将仓库内容提取到 dest_dir。
+
+    参数:
+        zip_path: ZIP 文件路径
+        dest_dir: 目标目录（必须已存在）
+    """
+    # 先找出顶层目录
+    top_level = None
+    try:
+        with zipfile.ZipFile(zip_path, 'r') as zf:
+            for name in zf.namelist():
+                parts = name.replace('\\', '/').split('/')
+                if parts[0]:
+                    top_level = parts[0]
+                    break
+
+            if top_level:
+                # 跳过顶层目录，提取所有文件
+                for name in zf.namelist():
+                    if name.endswith('/'):
+                        continue  # 跳过目录条目
+                    # 规范化路径分隔符
+                    norm_name = name.replace('\\', '/')
+                    # 跳过顶层目录
+                    if norm_name.startswith(top_level + '/'):
+                        rel_name = norm_name[len(top_level) + 1:]
+                    else:
+                        rel_name = norm_name
+                    if not rel_name:
+                        continue
+                    target = os.path.join(dest_dir, rel_name)
+                    os.makedirs(os.path.dirname(target), exist_ok=True)
+                    with zf.open(name) as src, open(target, 'wb') as dst:
+                        dst.write(src.read())
+            else:
+                # 没有顶层目录，直接全部解压
+                zf.extractall(dest_dir)
+    except Exception:
+        raise
+
+
+def _make_zip_path():
+    """生成唯一的临时 ZIP 文件路径。"""
+    return os.path.join(tempfile.gettempdir(), f'bhxz_update_{random.randint(100000, 999999)}.zip')
+
+
 def detect_fastest_proxy(proxy_list=None, timeout=3):
-    """检测所有可用的 GitHub 代理，返回排序后的可用列表 [(名称, 代理首页URL, 克隆模板URL, 延迟), ...]。
+    """检测所有可用的 GitHub 代理，返回排序后的可用列表 [(名称, 代理首页URL, 下载模板URL, 延迟), ...]。
 
     分批检测 + 早停策略：
     - 每批最多 8 个代理并行测试
@@ -260,11 +385,11 @@ def detect_fastest_proxy(proxy_list=None, timeout=3):
 
     参数:
         proxy_list: 待检测的代理列表，默认使用 DEFAULT_PROXY_LIST
-                    格式: [(名称, 代理首页URL, 克隆模板URL), ...]
+                    格式: [(名称, 代理首页URL, 下载模板URL), ...]
         timeout: 整体超时秒数（默认 3s）
 
     返回:
-        [(名称, 代理首页URL, 克隆模板URL, 延迟秒数), ...] 按延迟升序排列
+        [(名称, 代理首页URL, 下载模板URL, 延迟秒数), ...] 按延迟升序排列
     """
     if proxy_list is None:
         proxy_list = DEFAULT_PROXY_LIST
@@ -375,63 +500,6 @@ def _is_protected(rel_path, protected_paths=None):
 
 
 # ---------------------------------------------------------------------------
-# Git 查找（跨平台）
-# ---------------------------------------------------------------------------
-
-def _find_git():
-    """查找系统上的 Git 可执行文件路径。
-
-    优先使用 PATH 中的 git，Windows 上额外检查常见安装路径。
-    返回完整路径字符串，未找到则返回 None。
-    """
-    # 1. 优先检查 PATH
-    git = shutil.which('git')
-    if git:
-        return os.path.abspath(git)
-
-    # 2. Windows 上检查常见安装路径
-    if sys.platform == 'win32':
-        common_paths = [
-            r'C:\Program Files\Git\bin\git.exe',
-            r'C:\Program Files (x86)\Git\bin\git.exe',
-            r'C:\Program Files\Git\cmd\git.exe',
-            r'C:\Program Files (x86)\Git\cmd\git.exe',
-            os.path.expanduser(r'~\AppData\Local\Programs\Git\bin\git.exe'),
-            os.path.expanduser(r'~\AppData\Local\Programs\Git\cmd\git.exe'),
-            os.path.expanduser(r'~\scoop\apps\git\current\bin\git.exe'),
-            os.path.expanduser(r'~\scoop\apps\git\current\cmd\git.exe'),
-        ]
-        for p in common_paths:
-            if os.path.isfile(p):
-                return p
-
-        # 3. 尝试从注册表读取 Git 安装路径
-        try:
-            import winreg
-            for key in [winreg.HKEY_LOCAL_MACHINE, winreg.HKEY_CURRENT_USER]:
-                for subkey in [
-                    r'SOFTWARE\GitForWindows',
-                    r'SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Git_is1',
-                ]:
-                    try:
-                        with winreg.OpenKey(key, subkey) as reg_key:
-                            install_path, _ = winreg.QueryValueEx(reg_key, 'InstallPath')
-                            if install_path:
-                                exe = os.path.join(install_path, 'bin', 'git.exe')
-                                if os.path.isfile(exe):
-                                    return exe
-                                exe = os.path.join(install_path, 'cmd', 'git.exe')
-                                if os.path.isfile(exe):
-                                    return exe
-                    except (OSError, ValueError):
-                        continue
-        except ImportError:
-            pass
-
-    return None
-
-
-# ---------------------------------------------------------------------------
 # 核心更新逻辑
 # ---------------------------------------------------------------------------
 
@@ -469,17 +537,17 @@ def _run_update():
                     name, url = name.strip(), url.strip()
                     if name and url:
                         base = url.rstrip('/')
-                        # 自动构造克隆模板
-                        clone_template = base + '/{repo}'
+                        # 自动构造下载模板
+                        download_template = base + '/{repo}'
                         replaced = False
                         for i, (n, *_rest) in enumerate(proxy_list):
                             if n == name:
-                                # 保留原有的 clone_template，只更新 base_url
-                                proxy_list[i] = (name, base + '/', clone_template)
+                                # 保留原有的 download_template，只更新 base_url
+                                proxy_list[i] = (name, base + '/', download_template)
                                 replaced = True
                                 break
                         if not replaced:
-                            proxy_list.append((name, base + '/', clone_template))
+                            proxy_list.append((name, base + '/', download_template))
 
             # 读取自定义启动命令
             start_command = get_config_value('START_COMMAND', '')
@@ -490,17 +558,7 @@ def _run_update():
         if start_command:
             _add_event('log', {'message': f'✓ 自定义启动命令: {start_command}'})
 
-        # 1. 检测 git
-        git_path = _find_git()
-        if not git_path:
-            raise RuntimeError(
-                '未找到 Git，请先安装 Git（https://git-scm.com/downloads）'
-                '并确保 Git 已添加到系统 PATH 环境变量中'
-            )
-
-        _add_event('log', {'message': f'✓ Git 路径: {git_path}'})
-
-        # 2. 检测可用代理（分批检测，每批 8 个，超时 2.5s）
+        # 1. 检测可用代理（分批检测，每批 8 个，超时 2.5s）
         _add_event('progress', {'percent': 3, 'message': f'正在检测 {len(proxy_list)} 个 GitHub 代理...'})
         _add_event('log', {'message': f'╔══ 开始代理检测（共 {len(proxy_list)} 个，分批 8 个，超时 2.5s，早停 3 个）'})
         # 压缩日志：不逐条输出所有代理 URL，防止日志刷屏
@@ -550,121 +608,94 @@ def _run_update():
         if len(available_proxies) > 5:
             _add_event('log', {'message': f'→ 以及另外 {len(available_proxies) - 5} 个可用代理'})
 
-        # 3. 按速度顺序尝试克隆
-        clone_success = False
+        # 2. 按速度顺序尝试下载 ZIP 压缩包（替代 git clone）
+        #    纯 HTTP 下载，兼容性更好，无需安装 git
+        download_success = False
         last_error = ''
         temp_dir = None
+        zip_path = None
         total_attempts = len(available_proxies)
 
-        # 复用克隆函数（内部定义，捕获 stderr 到 stderr_lines）
-        CLONE_RANGE = 70
-        stderr_lines = []
-        stderr_lock = threading.Lock()
-
-        def _parse_line(buf):
-            nonlocal last_clone_pct
-            text = buf.decode('utf-8', errors='replace')
-            m = re.search(r'(\d+)\s*%', text)
-            if m:
-                pct = int(m.group(1))
-                if pct != last_clone_pct:
-                    last_clone_pct = pct
-                    mapped = 5 + int(pct * CLONE_RANGE / 100)
-                    _add_event('progress', {'percent': mapped, 'message': f'正在克隆仓库... {pct}%'})
-
-        def _read_stderr(stream):
-            nonlocal last_clone_pct, line_buf
-            while True:
-                chunk = stream.read(4096)
-                if not chunk:
-                    break
-                for byte in chunk:
-                    if byte == 0x0d:
-                        text = line_buf.decode('utf-8', errors='replace').strip()
-                        if text:
-                            with stderr_lock:
-                                stderr_lines.append(text)
-                        _parse_line(line_buf)
-                        line_buf = b''
-                    elif byte == 0x0a:
-                        text = line_buf.decode('utf-8', errors='replace').strip()
-                        if text:
-                            with stderr_lock:
-                                stderr_lines.append(text)
-                        line_buf = b''
-                    else:
-                        line_buf += bytes([byte])
-            if line_buf:
-                text = line_buf.decode('utf-8', errors='replace').strip()
-                if text:
-                    with stderr_lock:
-                        stderr_lines.append(text)
-
-        for attempt_idx, (name, base_url, clone_template, elapsed) in enumerate(available_proxies):
-            # 使用 clone_template 替换 {repo} 占位符
-            cur_clone_url = clone_template.replace('{repo}', 'kute0213/bhxz.git')
+        for attempt_idx, (name, base_url, download_template, elapsed) in enumerate(available_proxies):
+            # 构建 ZIP 下载 URL
+            zip_url = download_template.replace('{repo}', REPO_ARCHIVE_PATH)
 
             _add_event('log', {'message': f'{"─" * 40}'})
             hint = '首选' if attempt_idx == 0 else '备用'
-            _add_event('log', {'message': f'克隆尝试 #{attempt_idx + 1}: {name} （{hint}，延迟 {elapsed:.1f}s）'})
-            _add_event('progress', {'percent': 5, 'message': f'正在从 {name} 克隆仓库...'})
-            _add_event('log', {'message': f'  克隆 URL: {cur_clone_url}'})
+            _add_event('log', {'message': f'下载尝试 #{attempt_idx + 1}: {name} （{hint}，延迟 {elapsed:.1f}s）'})
+            _add_event('progress', {'percent': 5, 'message': f'正在从 {name} 下载更新包...'})
+            _add_event('log', {'message': f'  下载 URL: {zip_url}'})
 
-            temp_dir = tempfile.mkdtemp(prefix='bhxz_update_')
-            git_cmd = [git_path, 'clone', '--depth', '1', '--single-branch', '--progress',
-                       cur_clone_url, temp_dir]
-            env = os.environ.copy()
-            env['GIT_TERMINAL_PROMPT'] = '0'
-            env['GIT_ASKPASS'] = 'echo'
+            zip_path = _make_zip_path()
+            download_start = time.time()
 
-            if sys.platform == 'win32':
-                _git_dir = os.path.dirname(os.path.dirname(git_path))
-                for p in [os.path.join(_git_dir, 'bin'), os.path.join(_git_dir, 'cmd')]:
-                    if os.path.isdir(p) and p not in env.get('PATH', ''):
-                        env['PATH'] = os.pathsep.join([p, env.get('PATH', '')])
+            def _dl_progress(pct):
+                mapped = 5 + int(pct * 65 / 100)
+                _add_event('progress', {'percent': mapped, 'message': f'正在下载更新包... {int(pct)}%'})
 
-            _add_event('log', {'message': f'  执行: {" ".join(git_cmd[:3])} ...'})
-            clone_start = time.time()
-            proc = subprocess.Popen(git_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                                    bufsize=0, env=env)
+            try:
+                success = _download_zip(zip_url, zip_path, progress_callback=_dl_progress, timeout=30)
+                if success:
+                    download_elapsed = time.time() - download_start
+                    _add_event('log', {'message': f'✓ {name} 下载成功（耗时 {download_elapsed:.1f}s）'})
+                    _add_event('progress', {'percent': 70, 'message': '下载完成，正在解压...'})
 
-            # 重置进度变量
-            last_clone_pct = -1
-            line_buf = b''
-            stderr_lines.clear()
+                    # 解压到临时目录
+                    temp_dir = tempfile.mkdtemp(prefix='bhxz_update_')
+                    _add_event('log', {'message': '正在解压更新包...'})
+                    _extract_zip(zip_path, temp_dir)
 
-            stderr_thread = threading.Thread(target=_read_stderr, args=(proc.stderr,), daemon=True)
-            stderr_thread.start()
-            proc.wait()
-            stderr_thread.join(timeout=5)
-            clone_elapsed = time.time() - clone_start
-
-            if proc.returncode == 0:
-                clone_success = True
-                _add_event('log', {'message': f'✓ {name} 克隆成功（耗时 {clone_elapsed:.1f}s）'})
-                break
-            else:
-                with stderr_lock:
-                    last_error = '\n'.join(stderr_lines[-10:]) if stderr_lines else f'{name} 克隆失败'
-                _add_event('log', {'message': f'✗ {name} 克隆失败（耗时 {clone_elapsed:.1f}s）'})
-                _add_event('log', {'message': f'  错误: {last_error[:200]}'})
-                if temp_dir:
+                    download_success = True
+                    break
+                else:
+                    download_elapsed = time.time() - download_start
+                    last_error = f'{name} 下载失败'
+                    _add_event('log', {'message': f'✗ {name} 下载失败（耗时 {download_elapsed:.1f}s）'})
+            except Exception as e:
+                last_error = str(e)[:200]
+                _add_event('log', {'message': f'✗ {name} 下载异常: {last_error}'})
+            finally:
+                # 清理临时 ZIP 文件
+                if zip_path and os.path.isfile(zip_path):
                     try:
-                        shutil.rmtree(temp_dir)
+                        os.remove(zip_path)
                     except Exception:
                         pass
-                    temp_dir = None
-                continue
+                    zip_path = None
 
-        _add_event('log', {'message': f'{"─" * 40}'})
+        # 如果所有代理都失败，尝试直连 GitHub 下载
+        if not download_success:
+            _add_event('log', {'message': f'{"─" * 40}'})
+            _add_event('log', {'message': '尝试直接下载 GitHub 原始归档（无代理）...'})
+            direct_url = f'https://github.com/{REPO_ARCHIVE_PATH}'
+            _add_event('log', {'message': f"  下载 URL: {direct_url}"})
 
-        if not clone_success:
+            zip_path = _make_zip_path()
+            try:
+                success = _download_zip(direct_url, zip_path, timeout=15)
+                if success:
+                    _add_event('log', {'message': '✓ 直接下载成功'})
+                    temp_dir = tempfile.mkdtemp(prefix='bhxz_update_')
+                    _extract_zip(zip_path, temp_dir)
+                    download_success = True
+                else:
+                    last_error = '直接下载失败'
+            except Exception as e:
+                last_error = str(e)[:200]
+            finally:
+                if zip_path and os.path.isfile(zip_path):
+                    try:
+                        os.remove(zip_path)
+                    except Exception:
+                        pass
+
+        if not download_success:
             raise RuntimeError(
-                f'已尝试 {total_attempts} 个代理，全部失败。\n'
+                f'已尝试 {total_attempts} 个代理及直连，全部失败。\n'
                 f'最后错误: {last_error[:300]}'
             )
 
-        _add_event('progress', {'percent': 72, 'message': '克隆完成，正在同步文件...'})
+        _add_event('progress', {'percent': 72, 'message': '下载完成，正在同步文件...'})
 
         # 4. 列出仓库根目录下的所有项目（排除 .git）
         repo_items = sorted([
