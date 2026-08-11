@@ -73,11 +73,11 @@ def _urlretrieve(url, dest_path, desc=''):
                     break
                 f.write(chunk)
         if desc:
-            print(f'  ✓ {desc}')
+            print(f'  [OK] {desc}')
         return True
     except Exception as e:
         if desc:
-            print(f'  ✗ {desc}: {type(e).__name__}: {str(e)[:60]}')
+            print(f'  [FAIL] {desc}: {type(e).__name__}: {str(e)[:60]}')
         return False
 
 
@@ -96,11 +96,11 @@ def _download_with_redirect(url, dest_path, desc=''):
                     break
                 f.write(chunk)
         if desc:
-            print(f'  ✓ {desc}')
+            print(f'  [OK] {desc}')
         return True
     except Exception as e:
         if desc:
-            print(f'  ✗ {desc}: {type(e).__name__}: {str(e)[:60]}')
+            print(f'  [FAIL] {desc}: {type(e).__name__}: {str(e)[:60]}')
         return False
 
 
@@ -267,7 +267,7 @@ def download_fonts():
                     with zf.open(name) as src, open(dest, 'wb') as dst:
                         dst.write(src.read())
                     extracted += 1
-                print(f'  ✓ 解压 {extracted} 个 JetBrains Mono woff2 文件')
+                print(f'  [OK] 解压 {extracted} 个 JetBrains Mono woff2 文件')
 
                 # 添加 @font-face 到 fonts.css
                 css_lines.append('/* JetBrains Mono (本地) */')
@@ -306,10 +306,10 @@ def download_fonts():
                     imported += 1
 
                 if imported:
-                    print(f'  ✓ 添加 {imported} 个 JetBrains Mono @font-face 定义')
+                    print(f'  [OK] 添加 {imported} 个 JetBrains Mono @font-face 定义')
 
         except Exception as e:
-            print(f'  ✗ 解压 JetBrains Mono 失败: {e}')
+            print(f'  [FAIL] 解压 JetBrains Mono 失败: {e}')
         finally:
             # 删除 zip 文件
             try:
@@ -317,7 +317,7 @@ def download_fonts():
             except Exception:
                 pass
     else:
-        print('  ⚠ JetBrains Mono 下载失败，使用系统等宽字体')
+        print('  [WARN] JetBrains Mono 下载失败，使用系统等宽字体')
         css_lines.append('/* JetBrains Mono 下载失败，使用系统字体 */')
         css_lines.append('')
 
@@ -325,7 +325,7 @@ def download_fonts():
     fonts_css_path = os.path.join(fonts_dir, 'fonts.css')
     with open(fonts_css_path, 'w', encoding='utf-8') as f:
         f.write('\n'.join(css_lines))
-    print(f'  ✓ 生成 fonts.css')
+    print(f'  [OK] 生成 fonts.css')
 
 
 # ---------------------------------------------------------------------------
@@ -350,7 +350,7 @@ def download_monaco():
     success = _download_with_redirect(MONACO_TGZ_URL, tgz_path, 'monaco-editor.tgz')
 
     if not success:
-        print('  ✗ Monaco Editor 下载失败')
+        print('  [FAIL] Monaco Editor 下载失败')
         print('  提示: 网站仍使用 CDN 加载 Monaco')
         # 清理空目录
         try:
@@ -383,12 +383,12 @@ def download_monaco():
                         size_mb += os.path.getsize(fp)
                     except Exception:
                         pass
-            print(f'  ✓ Monaco Editor 已复制到 static/lib/monaco/ ({size_mb / 1024 / 1024:.1f} MB)')
+            print(f'  [OK] Monaco Editor 已复制到 static/lib/monaco/ ({size_mb / 1024 / 1024:.1f} MB)')
         else:
-            print(f'  ✗ 未找到 min/vs 目录: {src_vs}')
+            print(f'  [FAIL] 未找到 min/vs 目录: {src_vs}')
 
     except Exception as e:
-        print(f'  ✗ 解压 Monaco Editor 失败: {e}')
+        print(f'  [FAIL] 解压 Monaco Editor 失败: {e}')
 
     finally:
         # 清理临时文件
@@ -416,7 +416,7 @@ def generate_version_file():
     dest = os.path.join(LIB_DIR, 'lib-version.json')
     with open(dest, 'w') as f:
         json.dump(version, f, ensure_ascii=False, indent=2)
-    print(f'\n  ✓ 生成 lib-version.json')
+    print(f'\n  [OK] 生成 lib-version.json')
 
 
 # ---------------------------------------------------------------------------
