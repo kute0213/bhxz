@@ -21,7 +21,7 @@ import json
 import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError
 from urllib.request import Request, urlopen
-from urllib.error import URLError
+from urllib.error import URLError, HTTPError
 
 # ---------------------------------------------------------------------------
 # 配置
@@ -46,17 +46,25 @@ DEFAULT_PROTECTED_PATHS = [
 ]
 
 # 默认 GitHub 代理列表（仅代理，不包含直连 — 直连在用户环境不可用）
+# 格式：(名称, 代理前缀URL, 克隆URL模板)
+# 代理前缀URL: 代理服务的首页，用于检测代理是否可达（不包含 /https://github.com 后缀）
+# 克隆URL模板: 实际用于 git clone 的完整 URL，{repo} 会被替换为仓库路径
 DEFAULT_PROXY_LIST = [
-    ('ghp.ci', 'https://ghp.ci/https://github.com'),
-    ('github.moeyy.xyz', 'https://github.moeyy.xyz/https://github.com'),
-    ('mirror.ghproxy.com', 'https://mirror.ghproxy.com/https://github.com'),
-    ('ghproxy.alphavps.workers.dev', 'https://ghproxy.alphavps.workers.dev/https://github.com'),
-    ('ghproxy.guidao.workers.dev', 'https://ghproxy.guidao.workers.dev/https://github.com'),
-    ('gh-proxy.netlify.app', 'https://gh-proxy.netlify.app/https://github.com'),
-    ('gh.dcm.so', 'https://gh.dcm.so/https://github.com'),
-    ('gh.idayer.com', 'https://gh.idayer.com/https://github.com'),
-    ('github.akams.cn', 'https://github.akams.cn/https://github.com'),
-    ('ghfast.top', 'https://ghfast.top/https://github.com'),
+    ('ghp.ci',            'https://ghp.ci/',                      'https://ghp.ci/{repo}'),
+    ('github.moeyy.xyz',  'https://github.moeyy.xyz/',           'https://github.moeyy.xyz/{repo}'),
+    ('mirror.ghproxy.com','https://mirror.ghproxy.com/',          'https://mirror.ghproxy.com/{repo}'),
+    ('gh-proxy.netlify.app','https://gh-proxy.netlify.app/',      'https://gh-proxy.netlify.app/{repo}'),
+    ('gh.dcm.so',         'https://gh.dcm.so/',                   'https://gh.dcm.so/{repo}'),
+    ('gh.idayer.com',     'https://gh.idayer.com/',               'https://gh.idayer.com/{repo}'),
+    ('github.akams.cn',   'https://github.akams.cn/',            'https://github.akams.cn/{repo}'),
+    ('ghfast.top',        'https://ghfast.top/',                  'https://ghfast.top/{repo}'),
+    ('ghproxy.net',       'https://ghproxy.net/',                 'https://ghproxy.net/{repo}'),
+    ('hub.gitmirror.com', 'https://hub.gitmirror.com/',           'https://hub.gitmirror.com/{repo}'),
+    ('ghproxy.cxkpro.top','https://ghproxy.cxkpro.top/',         'https://ghproxy.cxkpro.top/{repo}'),
+    ('gh-proxy.lhr.ltd',  'https://gh-proxy.lhr.ltd/',           'https://gh-proxy.lhr.ltd/{repo}'),
+    ('gitproxy.188706.xyz','https://gitproxy.188706.xyz/',       'https://gitproxy.188706.xyz/{repo}'),
+    ('gh.zwy.one',        'https://gh.zwy.one/',                 'https://gh.zwy.one/{repo}'),
+    ('ghproxy.yaoyaoling.net','https://ghproxy.yaoyaoling.net/', 'https://ghproxy.yaoyaoling.net/{repo}'),
 ]
 
 # ---------------------------------------------------------------------------
@@ -122,51 +130,73 @@ _proxy_test_results = []
 _proxy_test_lock = threading.Lock()
 
 
-def _build_test_url(proxy_name, proxy_url):
-    """根据代理类型构建测试 URL。"""
-    base = proxy_url.rstrip('/')
-    if 'github.com' in base:
-        # 本身就是 github.com 的变体
-        return base + '/'
-    else:
-        # 前缀式代理：测试 https://代理/https://github.com/
-        return base + '/https://github.com/'
+def _build_test_url(proxy_base_url):
+    """构建测试 URL：直接使用代理首页 URL（轻量，不跟随重定向）。"""
+    return proxy_base_url.rstrip('/') + '/'
 
 
-def _test_proxy_timeout(proxy_name, proxy_url, timeout=4):
+def _test_proxy_timeout(proxy_name, proxy_base_url, proxy_clone_template, timeout=4):
     """测试代理的响应时间，返回详细结果字典。
 
-    返回:
-        {
-            'name': 代理名称,
-            'url': 代理URL,
-            'test_url': 实际测试URL,
-            'elapsed': 响应秒数（失败则为 timeout 值）,
-            'status': 'success' 或 'fail',
-            'error': 错误描述（成功时为空字符串）,
-        }
-    """
-    test_url = _build_test_url(proxy_name, proxy_url)
+    关键改进：
+    - 使用 GET 请求（HEAD 请求很多代理不支持，会导致误判）
+    - 不跟随 HTTP 重定向，代理返回 3xx 说明代理本身可用
+    - HTTPError（4xx/5xx）单独处理：代理返回了响应说明可达，不判为失败
+    - 只有网络级错误（DNS/连接超时/SSL握手失败）才判为失败
 
+    返回结果字典:
+        status: 'success' 表示代理可达，'fail' 表示代理不可达
+    """
+    test_url = _build_test_url(proxy_base_url)
+
+    # 自定义 opener：不跟随重定向
+    from urllib.request import build_opener, HTTPRedirectHandler, HTTPSHandler
+
+    class NoRedirectHandler(HTTPRedirectHandler):
+        def redirect_request(self, req, fp, code, msg, headers, newurl):
+            return None  # 不跟随重定向
+        def http_error_302(self, req, fp, code, msg, headers):
+            return fp  # 返回响应本身，不抛异常
+        http_error_301 = http_error_303 = http_error_307 = http_error_308 = http_error_302
+
+    ctx = _create_ssl_context()
+    opener = build_opener(NoRedirectHandler, HTTPSHandler(context=ctx))
+
+    start = time.time()
     try:
         req = Request(test_url, method='GET')
         req.add_header('User-Agent', 'Mozilla/5.0')
-        start = time.time()
-        resp = urlopen(req, timeout=timeout)
+        resp = opener.open(req, timeout=timeout)
         elapsed = time.time() - start
+        # 2xx/3xx 响应 = 代理可达
         return {
             'name': proxy_name,
-            'url': proxy_url,
+            'url': proxy_base_url,
+            'clone_template': proxy_clone_template,
             'test_url': test_url,
             'elapsed': round(elapsed, 2),
             'status': 'success',
-            'error': '',
+            'error': f'HTTP {resp.status}',
+        }
+    except HTTPError as e:
+        elapsed = time.time() - start
+        # HTTPError（4xx/5xx）: 代理服务器有响应，说明代理本身是可达的！
+        return {
+            'name': proxy_name,
+            'url': proxy_base_url,
+            'clone_template': proxy_clone_template,
+            'test_url': test_url,
+            'elapsed': round(elapsed, 2),
+            'status': 'success',
+            'error': f'HTTP {e.code} (proxy reachable)',
         }
     except URLError as e:
+        # URLError: 网络级错误，代理不可达
         reason = _get_urlerror_reason(e)
         return {
             'name': proxy_name,
-            'url': proxy_url,
+            'url': proxy_base_url,
+            'clone_template': proxy_clone_template,
             'test_url': test_url,
             'elapsed': timeout,
             'status': 'fail',
@@ -175,30 +205,32 @@ def _test_proxy_timeout(proxy_name, proxy_url, timeout=4):
     except OSError as e:
         return {
             'name': proxy_name,
-            'url': proxy_url,
+            'url': proxy_base_url,
+            'clone_template': proxy_clone_template,
             'test_url': test_url,
             'elapsed': timeout,
             'status': 'fail',
             'error': f'OSError: {e.strerror or str(e)[:60]}',
         }
-    except ValueError as e:
-        return {
-            'name': proxy_name,
-            'url': proxy_url,
-            'test_url': test_url,
-            'elapsed': timeout,
-            'status': 'fail',
-            'error': f'ValueError: {str(e)[:60]}',
-        }
     except Exception as e:
         return {
             'name': proxy_name,
-            'url': proxy_url,
+            'url': proxy_base_url,
+            'clone_template': proxy_clone_template,
             'test_url': test_url,
             'elapsed': timeout,
             'status': 'fail',
             'error': f'{type(e).__name__}: {str(e)[:80]}',
         }
+
+
+def _create_ssl_context():
+    """创建宽松的 SSL 上下文，兼容一些代理证书问题。"""
+    import ssl
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    return ctx
 
 
 def _get_urlerror_reason(e):
@@ -217,22 +249,23 @@ def _get_urlerror_reason(e):
 
 
 def detect_fastest_proxy(proxy_list=None, timeout=4):
-    """检测所有可用的 GitHub 代理，返回排序后的可用列表 [(名称, URL, 延迟), ...]。
+    """检测所有可用的 GitHub 代理，返回排序后的可用列表 [(名称, 代理首页URL, 克隆模板URL, 延迟), ...]。
 
     使用异步方式（ThreadPoolExecutor + 整体超时），确保在 timeout 秒内返回。
 
-    特点：
-    - 并行检测所有代理
-    - 整体超时控制，严格在 timeout 秒内完成
-    - 记录每个代理的详细测试结果（包括测试URL、错误原因）
-    - 至少返回一个结果（直连兜底）
+    关键改进：
+    - 测试代理的首页而不是代理后的 GitHub 页面，更快更可靠
+    - 不跟随 HTTP 重定向，代理返回任何状态码（2xx/3xx）都视为可用
+    - 使用 HEAD 请求进一步减少数据传输
+    - 宽松的 SSL 上下文，避免证书问题
 
     参数:
         proxy_list: 待检测的代理列表，默认使用 DEFAULT_PROXY_LIST
-        timeout: 整体超时秒数（默认 4s，同时也是每个代理的单次超时）
+                    格式: [(名称, 代理首页URL, 克隆模板URL), ...]
+        timeout: 整体超时秒数（默认 4s）
 
     返回:
-        [(名称, URL, 延迟秒数), ...] 按延迟升序排列
+        [(名称, 代理首页URL, 克隆模板URL, 延迟秒数), ...] 按延迟升序排列
     """
     if proxy_list is None:
         proxy_list = DEFAULT_PROXY_LIST
@@ -242,8 +275,8 @@ def detect_fastest_proxy(proxy_list=None, timeout=4):
 
     with ThreadPoolExecutor(max_workers=min(len(proxy_list), 50)) as executor:
         future_map = {
-            executor.submit(_test_proxy_timeout, name, url, timeout): (name, url)
-            for name, url in proxy_list
+            executor.submit(_test_proxy_timeout, name, base_url, clone_template, timeout): (name, base_url)
+            for name, base_url, clone_template in proxy_list
         }
 
         deadline = time.time() + timeout
@@ -277,7 +310,7 @@ def detect_fastest_proxy(proxy_list=None, timeout=4):
                 'test_url': r['test_url'],
                 'elapsed': f'{r["elapsed"]:.1f}s',
                 'status': 'success',
-                'error': '',
+                'error': r['error'],
             })
         for r in fail_results:
             _proxy_test_results.append({
@@ -290,7 +323,7 @@ def detect_fastest_proxy(proxy_list=None, timeout=4):
             })
 
     # 返回可用代理列表
-    available = [(r['name'], r['url'], r['elapsed']) for r in success_results]
+    available = [(r['name'], r['url'], r['clone_template'], r['elapsed']) for r in success_results]
 
     return available
 
@@ -403,6 +436,8 @@ def _run_update():
                         protected_paths.append(p)
 
             # 读取自定义代理
+            # 配置格式：name=base_url（每行一个）
+            # 例如：myproxy=https://myproxy.example.com/
             proxies_raw = get_config_value('GITHUB_PROXIES', '')
             if proxies_raw:
                 for line in proxies_raw.strip().split('\n'):
@@ -412,14 +447,18 @@ def _run_update():
                     name, url = line.split('=', 1)
                     name, url = name.strip(), url.strip()
                     if name and url:
+                        base = url.rstrip('/')
+                        # 自动构造克隆模板
+                        clone_template = base + '/{repo}'
                         replaced = False
-                        for i, (n, u) in enumerate(proxy_list):
+                        for i, (n, *_rest) in enumerate(proxy_list):
                             if n == name:
-                                proxy_list[i] = (name, url)
+                                # 保留原有的 clone_template，只更新 base_url
+                                proxy_list[i] = (name, base + '/', clone_template)
                                 replaced = True
                                 break
                         if not replaced:
-                            proxy_list.append((name, url))
+                            proxy_list.append((name, base + '/', clone_template))
 
             # 读取自定义启动命令
             start_command = get_config_value('START_COMMAND', '')
@@ -442,12 +481,12 @@ def _run_update():
 
         # 2. 检测可用代理（并行检测，3s 超时）
         _add_event('progress', {'percent': 3, 'message': f'正在检测 {len(proxy_list)} 个 GitHub 代理...'})
-        _add_event('log', {'message': f'╔══ 开始代理检测（共 {len(proxy_list)} 个，超时 3s）'})
-        for i, (name, url) in enumerate(proxy_list, 1):
-            test_url = _build_test_url(name, url)
+        _add_event('log', {'message': f'╔══ 开始代理检测（共 {len(proxy_list)} 个，超时 4s）'})
+        for i, (name, base_url, _) in enumerate(proxy_list, 1):
+            test_url = _build_test_url(base_url)
             _add_event('log', {'message': f'║  [{i:2d}] {name:25s} → {test_url}'})
 
-        available_proxies = detect_fastest_proxy(proxy_list=proxy_list, timeout=3)
+        available_proxies = detect_fastest_proxy(proxy_list=proxy_list, timeout=4)
 
         # 记录详细结果
         success_count = 0
@@ -530,16 +569,13 @@ def _run_update():
                     with stderr_lock:
                         stderr_lines.append(text)
 
-        for attempt_idx, (name, url, _) in enumerate(available_proxies):
-            base = url.rstrip('/')
-            if 'github.com' in base:
-                cur_clone_url = base + '/kute0213/bhxz.git'
-            else:
-                cur_clone_url = base + '/https://github.com/kute0213/bhxz.git'
+        for attempt_idx, (name, base_url, clone_template, elapsed) in enumerate(available_proxies):
+            # 使用 clone_template 替换 {repo} 占位符
+            cur_clone_url = clone_template.replace('{repo}', 'kute0213/bhxz.git')
 
             _add_event('log', {'message': f'{"─" * 40}'})
             hint = '首选' if attempt_idx == 0 else '备用'
-            _add_event('log', {'message': f'克隆尝试 #{attempt_idx + 1}: {name} （{hint}）'})
+            _add_event('log', {'message': f'克隆尝试 #{attempt_idx + 1}: {name} （{hint}，延迟 {elapsed:.1f}s）'})
             _add_event('progress', {'percent': 5, 'message': f'正在从 {name} 克隆仓库...'})
             _add_event('log', {'message': f'  克隆 URL: {cur_clone_url}'})
 
