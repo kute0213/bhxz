@@ -98,7 +98,6 @@ python scripts/build/build_static.py
 ├── scripts/                      # 构建与维护脚本
 │   ├── build/                    #   构建工具
 │   │   ├── build_static.py       #     静态资源构建（下载 CDN 资源到本地）
-│   │   ├── build-tailwind.sh     #     Tailwind CSS 构建
 │   │   ├── package.json          #     npm 依赖
 │   │   ├── tailwind.config.js    #     Tailwind 配置
 │   │   └── tailwind-source.css   #     Tailwind 入口 CSS
@@ -135,7 +134,6 @@ python scripts/build/build_static.py
 │       └── monaco/               #   Monaco Editor（.gitignore 排除）
 │
 ├── docs/                         # Markdown 文档
-│   ├── README.md                 #   项目说明副本
 │   ├── CHANGELOG.md              #   更新日志
 │   ├── DEVELOPMENT.md            #   开发准则
 │   └── cmd-guide.md              #   CMD 控制台使用说明

@@ -1,5 +1,0 @@
-User-agent: *
-Disallow: /admin/
-Allow: /
-Crawl-delay: 1
-Sitemap: https://bhxz.tw.kg/guides
