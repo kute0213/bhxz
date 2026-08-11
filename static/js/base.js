@@ -7,7 +7,10 @@
  * 依赖：Tailwind CSS CDN、Lucide CDN（在 base.html 中加载）
  * ============================================================ */
 
-lucide.createIcons();
+// 安全初始化 lucide 图标（CDN 可能加载失败）
+if (typeof lucide !== 'undefined' && lucide.createIcons) {
+    try { lucide.createIcons(); } catch (_) {}
+}
 
 // 移动端菜单控制
 var mobileMenuBtn = document.getElementById('mobile-menu-btn');
@@ -51,7 +54,8 @@ document.addEventListener('keydown', function (e) {
 
 // 页面加载/跳转过渡动画
 (function () {
-    var pageContent = document.querySelector('main.page-content');
+    try {
+        var pageContent = document.querySelector('main.page-content');
 
     // 页面加载完成时触发入场动画
     function triggerEnter() {
@@ -97,6 +101,16 @@ document.addEventListener('keydown', function (e) {
             });
         }
     });
+} catch (e) {
+    console.error('页面过渡动画初始化失败:', e);
+    // 捕获异常后直接显示页面
+    var pc = document.querySelector('main.page-content');
+    if (pc) {
+        pc.style.opacity = '1';
+        pc.style.transform = 'translateY(0)';
+        pc.classList.add('page-ready');
+    }
+}
 })();
 
 // ============================================
@@ -223,8 +237,8 @@ var CustomModal = (function () {
         var iconName = iconMap[type] || 'info';
         modalIcon.className = 'modal-icon ' + type;
         modalIcon.innerHTML = '<i data-lucide="' + iconName + '" class="w-5 h-5"></i>';
-        if (window.lucide) {
-            lucide.createIcons({ root: modalIcon });
+        if (typeof lucide !== 'undefined' && lucide.createIcons) {
+            try { lucide.createIcons({ root: modalIcon }); } catch (_) {}
         }
     }
 
@@ -431,8 +445,8 @@ var Toast = (function () {
         toast.innerHTML = '<i data-lucide="' + iconName + '" class="w-5 h-5"></i><span>' + message + '</span>';
 
         container.appendChild(toast);
-        if (window.lucide) {
-            lucide.createIcons({ root: toast });
+        if (typeof lucide !== 'undefined' && lucide.createIcons) {
+            try { lucide.createIcons({ root: toast }); } catch (_) {}
         }
 
         requestAnimationFrame(function () {
@@ -713,9 +727,9 @@ var CodeBlocks = (function () {
         });
 
         // 触发 highlight.js 高亮
-        if (typeof hljs !== 'undefined') {
+        if (typeof hljs !== 'undefined' && hljs.highlightElement) {
             root.querySelectorAll('pre code').forEach(function (el) {
-                hljs.highlightElement(el);
+                try { hljs.highlightElement(el); } catch (_) {}
             });
         }
     }

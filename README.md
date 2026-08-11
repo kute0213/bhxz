@@ -18,6 +18,24 @@ python app.py
 
 默认 HTTP 模式，端口 5000。
 
+### 构建静态资源
+
+首次运行或更新后，需要构建静态资源（将 CDN 库下载到本地）：
+
+```bash
+python scripts/build_static.py
+```
+
+这会下载以下资源到 `static/lib/`：
+- **Highlight.js** — 代码语法高亮
+- **Lucide Icons** — 图标库
+- **Marked.js** — Markdown 渲染
+- **JetBrains Mono** — 编程字体
+- **Monaco Editor** — 代码编辑器（较大，约 12MB，需 npm）
+
+> 所有中文字体使用系统字体栈（各平台预装），**零下载、零延迟**。
+> 一键更新时会自动运行构建脚本，无需手动操作。
+
 ### 默认管理员
 
 首次启动自动创建：
@@ -77,6 +95,9 @@ python app.py
 │   ├── docs/                     #   文档系统
 │   └── public/                   #   公开文件管理
 │
+├── scripts/                      # 构建与维护脚本
+│   └── build_static.py           #   静态资源构建（下载 CDN 资源到本地）
+│
 ├── templates/                    # Jinja2 模板
 │   ├── base.html                 #   基础模板
 │   ├── admin/                    #   管理后台模板（17个页面）
@@ -89,10 +110,16 @@ python app.py
 │   │   ├── tailwind.css          #   Tailwind CSS（构建生成）
 │   │   ├── style.css             #   主样式
 │   │   └── base.css              #   全局样式
-│   └── js/
-│       ├── base.js               #   全局脚本（弹窗/Toast/导航/验证码）
-│       ├── main.js               #   全局交互
-│       └── cmd/                  #   CMD 控制台模块（10个文件）
+│   ├── js/
+│   │   ├── base.js               #   全局脚本（弹窗/Toast/导航/验证码）
+│   │   ├── main.js               #   全局交互
+│   │   └── cmd/                  #   CMD 控制台模块（10个文件）
+│   └── lib/                      # 第三方库（由 build_static.py 生成）
+│       ├── highlight/            #   Highlight.js 代码高亮
+│       ├── lucide/               #   Lucide 图标库
+│       ├── marked/               #   Marked.js Markdown 渲染
+│       ├── fonts/                #   字体定义（系统字体栈 + JetBrains Mono）
+│       └── monaco/               #   Monaco Editor（.gitignore 排除）
 │
 ├── docs/                         # Markdown 文档
 │   ├── README.md                 #   项目说明副本
@@ -323,10 +350,34 @@ export ENABLE_SSL=1 && python app.py
 
 ### 性能优化
 
+- **零外部依赖**：所有 CDN 资源（Highlight.js、Lucide、Marked.js、Monaco Editor）下载到本地，无外部网络请求
+- **系统字体栈**：中文字体使用各平台预装字体（PingFang SC / Microsoft YaHei / Noto Sans CJK），零下载、零延迟
 - `overflow-x: clip` 替代 `hidden`（消除滚动回弹）
 - 尊重 `prefers-reduced-motion`（无障碍用户自动禁用动画）
 - 触控设备降级光晕效果
 - `IntersectionObserver` 触发后立即 `unobserve`
+
+### 代码维护说明
+
+#### 静态资源更新
+
+当升级第三方库版本时：
+
+1. 修改 `scripts/build_static.py` 中的版本号
+2. 运行 `python scripts/build_static.py` 重新下载
+3. 提交 `static/lib/` 目录到 Git（`static/lib/monaco/` 除外）
+
+一键更新功能会自动执行此流程。
+
+#### 添加新的外部资源
+
+1. 在 `scripts/build_static.py` 中添加下载函数
+2. 在模板中使用 `url_for('static', filename='lib/...')` 引用
+3. 确保更新前已运行构建脚本
+
+#### 引用规则
+
+所有静态资源必须通过 `url_for('static', filename='...')` 引用，禁止硬编码路径或外部 CDN URL。
 
 ## 部署
 

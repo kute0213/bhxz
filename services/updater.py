@@ -49,22 +49,23 @@ DEFAULT_PROTECTED_PATHS = [
 # 格式：(名称, 代理前缀URL, 克隆URL模板)
 # 代理前缀URL: 代理服务的首页，用于检测代理是否可达（不包含 /https://github.com 后缀）
 # 克隆URL模板: 实际用于 git clone 的完整 URL，{repo} 会被替换为仓库路径
+# 按可靠性排序，最快的在前，分批检测时第一批命中即可早停
 DEFAULT_PROXY_LIST = [
-    ('ghp.ci',            'https://ghp.ci/',                      'https://ghp.ci/{repo}'),
-    ('github.moeyy.xyz',  'https://github.moeyy.xyz/',           'https://github.moeyy.xyz/{repo}'),
+    ('github.akams.cn',   'https://github.akams.cn/',            'https://github.akams.cn/{repo}'),
+    ('gh.idayer.com',     'https://gh.idayer.com/',               'https://gh.idayer.com/{repo}'),
+    ('ghproxy.net',       'https://ghproxy.net/',                 'https://ghproxy.net/{repo}'),
+    ('ghfast.top',        'https://ghfast.top/',                  'https://ghfast.top/{repo}'),
+    ('ghproxy.cxkpro.top','https://ghproxy.cxkpro.top/',         'https://ghproxy.cxkpro.top/{repo}'),
     ('mirror.ghproxy.com','https://mirror.ghproxy.com/',          'https://mirror.ghproxy.com/{repo}'),
     ('gh-proxy.netlify.app','https://gh-proxy.netlify.app/',      'https://gh-proxy.netlify.app/{repo}'),
-    ('gh.dcm.so',         'https://gh.dcm.so/',                   'https://gh.dcm.so/{repo}'),
-    ('gh.idayer.com',     'https://gh.idayer.com/',               'https://gh.idayer.com/{repo}'),
-    ('github.akams.cn',   'https://github.akams.cn/',            'https://github.akams.cn/{repo}'),
-    ('ghfast.top',        'https://ghfast.top/',                  'https://ghfast.top/{repo}'),
-    ('ghproxy.net',       'https://ghproxy.net/',                 'https://ghproxy.net/{repo}'),
-    ('hub.gitmirror.com', 'https://hub.gitmirror.com/',           'https://hub.gitmirror.com/{repo}'),
-    ('ghproxy.cxkpro.top','https://ghproxy.cxkpro.top/',         'https://ghproxy.cxkpro.top/{repo}'),
-    ('gh-proxy.lhr.ltd',  'https://gh-proxy.lhr.ltd/',           'https://gh-proxy.lhr.ltd/{repo}'),
-    ('gitproxy.188706.xyz','https://gitproxy.188706.xyz/',       'https://gitproxy.188706.xyz/{repo}'),
+    ('github.moeyy.xyz',  'https://github.moeyy.xyz/',           'https://github.moeyy.xyz/{repo}'),
+    ('ghp.ci',            'https://ghp.ci/',                      'https://ghp.ci/{repo}'),
     ('gh.zwy.one',        'https://gh.zwy.one/',                 'https://gh.zwy.one/{repo}'),
+    ('gh.dcm.so',         'https://gh.dcm.so/',                   'https://gh.dcm.so/{repo}'),
+    ('hub.gitmirror.com', 'https://hub.gitmirror.com/',           'https://hub.gitmirror.com/{repo}'),
     ('ghproxy.yaoyaoling.net','https://ghproxy.yaoyaoling.net/', 'https://ghproxy.yaoyaoling.net/{repo}'),
+    ('gitproxy.188706.xyz','https://gitproxy.188706.xyz/',       'https://gitproxy.188706.xyz/{repo}'),
+    ('gh-proxy.lhr.ltd',  'https://gh-proxy.lhr.ltd/',           'https://gh-proxy.lhr.ltd/{repo}'),
 ]
 
 # ---------------------------------------------------------------------------
@@ -248,21 +249,19 @@ def _get_urlerror_reason(e):
     return str(e)[:60]
 
 
-def detect_fastest_proxy(proxy_list=None, timeout=4):
+def detect_fastest_proxy(proxy_list=None, timeout=3):
     """检测所有可用的 GitHub 代理，返回排序后的可用列表 [(名称, 代理首页URL, 克隆模板URL, 延迟), ...]。
 
-    使用异步方式（ThreadPoolExecutor + 整体超时），确保在 timeout 秒内返回。
-
-    关键改进：
-    - 测试代理的首页而不是代理后的 GitHub 页面，更快更可靠
-    - 不跟随 HTTP 重定向，代理返回任何状态码（2xx/3xx）都视为可用
-    - 使用 HEAD 请求进一步减少数据传输
-    - 宽松的 SSL 上下文，避免证书问题
+    分批检测 + 早停策略：
+    - 每批最多 8 个代理并行测试
+    - 找到 3 个可用代理后立即停止
+    - 单代理超时 2.5s，整体控制在 3s 内
+    - 低并发，避免给服务器网络带来太大压力
 
     参数:
         proxy_list: 待检测的代理列表，默认使用 DEFAULT_PROXY_LIST
                     格式: [(名称, 代理首页URL, 克隆模板URL), ...]
-        timeout: 整体超时秒数（默认 4s）
+        timeout: 整体超时秒数（默认 3s）
 
     返回:
         [(名称, 代理首页URL, 克隆模板URL, 延迟秒数), ...] 按延迟升序排列
@@ -272,26 +271,48 @@ def detect_fastest_proxy(proxy_list=None, timeout=4):
 
     all_results = []
     lock = threading.Lock()
+    stop_flag = threading.Event()  # 提前停止信号
 
-    with ThreadPoolExecutor(max_workers=min(len(proxy_list), 50)) as executor:
-        future_map = {
-            executor.submit(_test_proxy_timeout, name, base_url, clone_template, timeout): (name, base_url)
-            for name, base_url, clone_template in proxy_list
-        }
+    BATCH_SIZE = 8
+    EARLY_STOP_COUNT = 3
+    PROXY_TIMEOUT = min(timeout, 2.5)
 
-        deadline = time.time() + timeout
-        try:
-            for future in as_completed(future_map, timeout=timeout):
-                try:
-                    result = future.result(timeout=max(0.1, deadline - time.time()))
-                    with lock:
-                        all_results.append(result)
-                except Exception:
-                    pass
-        except TimeoutError:
-            # 整体超时：取消所有未完成的任务
-            for f in future_map:
-                f.cancel()
+    # 分批检测
+    for batch_start in range(0, len(proxy_list), BATCH_SIZE):
+        if stop_flag.is_set():
+            break
+
+        batch = proxy_list[batch_start:batch_start + BATCH_SIZE]
+
+        with ThreadPoolExecutor(max_workers=BATCH_SIZE) as executor:
+            future_map = {
+                executor.submit(_test_proxy_timeout, name, base_url, ct, PROXY_TIMEOUT): (name, base_url)
+                for name, base_url, ct in batch
+            }
+
+            deadline = time.time() + PROXY_TIMEOUT
+            try:
+                for future in as_completed(future_map, timeout=PROXY_TIMEOUT):
+                    if stop_flag.is_set():
+                        for f in future_map:
+                            f.cancel()
+                        break
+                    try:
+                        result = future.result(timeout=max(0.05, deadline - time.time()))
+                        with lock:
+                            all_results.append(result)
+                        # 检查是否达到早停条件
+                        success_count = sum(1 for r in all_results if r['status'] == 'success')
+                        if success_count >= EARLY_STOP_COUNT:
+                            stop_flag.set()
+                            for f in future_map:
+                                f.cancel()
+                            break
+                    except Exception:
+                        pass
+            except TimeoutError:
+                for f in future_map:
+                    f.cancel()
 
     # 按状态和延迟排序（成功的在前，按延迟升序；失败的在后，按名称排序）
     success_results = [r for r in all_results if r['status'] == 'success']
@@ -479,27 +500,37 @@ def _run_update():
 
         _add_event('log', {'message': f'✓ Git 路径: {git_path}'})
 
-        # 2. 检测可用代理（并行检测，3s 超时）
+        # 2. 检测可用代理（分批检测，每批 8 个，超时 2.5s）
         _add_event('progress', {'percent': 3, 'message': f'正在检测 {len(proxy_list)} 个 GitHub 代理...'})
-        _add_event('log', {'message': f'╔══ 开始代理检测（共 {len(proxy_list)} 个，超时 4s）'})
-        for i, (name, base_url, _) in enumerate(proxy_list, 1):
-            test_url = _build_test_url(base_url)
-            _add_event('log', {'message': f'║  [{i:2d}] {name:25s} → {test_url}'})
+        _add_event('log', {'message': f'╔══ 开始代理检测（共 {len(proxy_list)} 个，分批 8 个，超时 2.5s，早停 3 个）'})
+        # 压缩日志：不逐条输出所有代理 URL，防止日志刷屏
+        _add_event('log', {'message': f'║  首批检测前 8 个: {", ".join(n for n, *_ in proxy_list[:8])}'})
+        if len(proxy_list) > 8:
+            _add_event('log', {'message': f'║  剩余 {len(proxy_list) - 8} 个代理作为备用批次'})
 
-        available_proxies = detect_fastest_proxy(proxy_list=proxy_list, timeout=4)
+        available_proxies = detect_fastest_proxy(proxy_list=proxy_list, timeout=3)
 
         # 记录详细结果
         success_count = 0
         fail_count = 0
+        success_details = []
+        fail_details = []
         with _proxy_test_lock:
             for r in _proxy_test_results:
                 if r['status'] == 'success':
                     success_count += 1
-                    _add_event('log', {'message': f'║  ✓ {r["name"]:25s} {r["elapsed"]:>6s}  {r["test_url"]}'})
+                    success_details.append(f'{r["name"]}({r["elapsed"]})')
                 else:
                     fail_count += 1
-                    _add_event('log', {'message': f'║  ✗ {r["name"]:25s} {r["elapsed"]:>6s}  {r["error"][:60]}'})
+                    fail_details.append(f'{r["name"]}({r["error"][:30]})')
 
+        # 只显示成功代理和失败数量
+        if success_details:
+            _add_event('log', {'message': f'║  ✓ 可用代理 ({success_count}): {", ".join(success_details[:6])}'})
+            if len(success_details) > 6:
+                _add_event('log', {'message': f'║    ... 还有 {len(success_details) - 6} 个可用'})
+        if fail_details:
+            _add_event('log', {'message': f'║  ✗ 不可用: {fail_count} 个（{fail_details[0]}）'})
         _add_event('log', {'message': f'╚══ 代理检测完成：可用 {success_count} 个，不可用 {fail_count} 个'})
 
         if not available_proxies:
@@ -514,7 +545,7 @@ def _run_update():
             raise RuntimeError(err_msg)
 
         # 速度排名
-        rank_parts = [f'{i+1}. {n} ({e:.1f}s)' for i, (n, _, e) in enumerate(available_proxies[:5])]
+        rank_parts = [f'{i+1}. {n} ({e:.1f}s)' for i, (n, *_, e) in enumerate(available_proxies[:5])]
         _add_event('log', {'message': f'→ 代理速度排名: {"; ".join(rank_parts)}'})
         if len(available_proxies) > 5:
             _add_event('log', {'message': f'→ 以及另外 {len(available_proxies) - 5} 个可用代理'})
@@ -744,7 +775,29 @@ def _run_update():
             pass
 
         _add_event('log', {'message': f'✓ 同步完成，共处理 {processed} 个文件'})
-        _add_event('progress', {'percent': 97, 'message': '同步完成，正在准备重启...'})
+        _add_event('progress', {'percent': 97, 'message': '同步完成，正在构建静态资源...'})
+
+        # 6. 运行静态资源构建脚本（下载外部 CDN 资源到本地，生成静态 CSS/JS 文件）
+        try:
+            build_script = os.path.join(APP_ROOT, 'scripts', 'build_static.py')
+            if os.path.isfile(build_script):
+                _add_event('log', {'message': '正在构建静态资源...'})
+                build_result = subprocess.run(
+                    [sys.executable, build_script],
+                    capture_output=True, text=True, timeout=180,
+                )
+                if build_result.returncode == 0:
+                    _add_event('log', {'message': '✓ 静态资源构建完成'})
+                else:
+                    _add_event('log', {'message': f'⚠ 静态资源构建警告: {build_result.stderr[:200]}'})
+            else:
+                _add_event('log', {'message': '⚠ 未找到构建脚本: scripts/build_static.py'})
+        except subprocess.TimeoutExpired:
+            _add_event('log', {'message': '⚠ 静态资源构建超时（180s），跳过'})
+        except Exception as e:
+            _add_event('log', {'message': f'⚠ 静态资源构建失败: {e}'})
+
+        _add_event('progress', {'percent': 99, 'message': '构建完成，正在准备重启...'})
 
         # 6. 完成
         _add_event('done', {

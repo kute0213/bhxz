@@ -54,3 +54,6 @@ Thumbs.db
 
 # Node.js
 node_modules/
+
+# 静态资源构建产物（大文件排除）
+static/lib/monaco/

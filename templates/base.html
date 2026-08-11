@@ -4,27 +4,52 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}{% endblock %} - 滨海小镇</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700;900&display=swap" rel="stylesheet">
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <!-- 本地字体定义（系统字体栈，零下载） -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='lib/fonts/fonts.css', v='1') }}">
+    <!-- 本地Lucide图标库 -->
+    <script src="{{ url_for('static', filename='lib/lucide/lucide.min.js', v='1') }}"></script>
     <!-- 关键CSS内联：防止白屏闪烁 -->
-    <style>body{background:#07120c}</style>
-    <script>document.documentElement.classList.add('js');</script>
+    <style>body{background:#07120c;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei","Noto Sans CJK SC","WenQuanYi Micro Hei","Helvetica Neue",Arial,sans-serif}</style>
+    <script>
+        document.documentElement.classList.add('js');
+        // JS 保底：1.5 秒后无论 JS 是否正常，强制显示页面内容
+        (function() {
+            var done = false;
+            function forceShow() {
+                if (done) return;
+                done = true;
+                var pc = document.querySelector('.page-content');
+                if (pc) {
+                    pc.style.setProperty('opacity', '1', 'important');
+                    pc.style.setProperty('transform', 'translateY(0)', 'important');
+                    pc.classList.add('page-ready');
+                }
+            }
+            // 1.5 秒保底
+            setTimeout(forceShow, 1500);
+            // 如果 DOMContentLoaded 后 500ms 仍未显示，也强制显示
+            document.addEventListener('DOMContentLoaded', function() {
+                setTimeout(forceShow, 500);
+            });
+            // 页面完全加载后立即确保显示
+            window.addEventListener('load', forceShow);
+        })();
+    </script>
     <style>.js .page-content{opacity:0;transform:translateY(16px)}</style>
+    <noscript><style>.page-content{opacity:1!important;transform:none!important}</style></noscript>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/tailwind.css', v='1') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='9') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css', v='12') }}">
-    <!-- Highlight.js 代码高亮 -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/python.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/bash.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/json.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/yaml.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/sql.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/javascript.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/css.min.js"></script>
+    <!-- Highlight.js 代码高亮（本地） -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='lib/highlight/github-dark.min.css', v='1') }}">
+    <script src="{{ url_for('static', filename='lib/highlight/highlight.min.js', v='1') }}"></script>
+    <script src="{{ url_for('static', filename='lib/highlight/languages/python.min.js', v='1') }}"></script>
+    <script src="{{ url_for('static', filename='lib/highlight/languages/bash.min.js', v='1') }}"></script>
+    <script src="{{ url_for('static', filename='lib/highlight/languages/json.min.js', v='1') }}"></script>
+    <script src="{{ url_for('static', filename='lib/highlight/languages/yaml.min.js', v='1') }}"></script>
+    <script src="{{ url_for('static', filename='lib/highlight/languages/sql.min.js', v='1') }}"></script>
+    <script src="{{ url_for('static', filename='lib/highlight/languages/javascript.min.js', v='1') }}"></script>
+    <script src="{{ url_for('static', filename='lib/highlight/languages/css.min.js', v='1') }}"></script>
     {% block extra_style %}{% endblock %}
 </head>
 <body>

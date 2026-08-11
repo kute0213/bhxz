@@ -114,7 +114,7 @@
 
 <style>
     /* Monaco 字体加载 */
-    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap');
+    /* JetBrains Mono 由 static/lib/fonts/fonts.css 提供（本地字体） */
 
     /* 编辑器主体撑满视口（桌面端无滚动；移动端竖向可滚动） */
     #editor-workspace {
@@ -180,8 +180,8 @@
     }
 </style>
 
-<!-- Monaco Editor Loader -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs/loader.min.js"></script>
+<!-- Monaco Editor Loader（本地） -->
+<script src="{{ url_for('static', filename='lib/monaco/vs/loader.min.js', v='1') }}"></script>
 
 <!-- CMD 模块依赖 -->
 <script src="{{ url_for('static', filename='js/cmd/terminal-core.js', v='2') }}"></script>
@@ -210,9 +210,9 @@
         __editingCmdId = {{ editing_cmd.id | tojson | safe }};
     {% endif %}
 
-    // 加载 Monaco 并初始化编辑器
+    // 加载 Monaco 并初始化编辑器（本地路径）
     require.config({
-        paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.45.0/min/vs' }
+        paths: { vs: '{{ url_for('static', filename='lib/monaco/vs') }}' }
     });
     require(['vs/editor/editor.main'], function () {
         window.ScriptEditor.init(__initialCode, {

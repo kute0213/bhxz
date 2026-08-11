@@ -192,7 +192,7 @@
     </div>
 </section>
 
-<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="{{ url_for('static', filename='lib/marked/marked.min.js', v='1') }}"></script>
 <script>
 (function() {
     const textarea = document.getElementById('md-editor');

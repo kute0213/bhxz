@@ -54,7 +54,7 @@
 .docs-sidebar-item.active { background: rgba(212,184,120,0.15); color: #d4b878; font-weight: 600; }
 </style>
 
-<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="{{ url_for('static', filename='lib/marked/marked.min.js', v='1') }}"></script>
 <script>
 (function () {
     const sidebar = document.getElementById('docs-sidebar');
