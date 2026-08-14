@@ -40,16 +40,6 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/tailwind.css', v='1') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='9') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css', v='12') }}">
-    <!-- Highlight.js 代码高亮（本地） -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='lib/highlight/github-dark.min.css', v='1') }}">
-    <script src="{{ url_for('static', filename='lib/highlight/highlight.min.js', v='1') }}"></script>
-    <script src="{{ url_for('static', filename='lib/highlight/languages/python.min.js', v='1') }}"></script>
-    <script src="{{ url_for('static', filename='lib/highlight/languages/bash.min.js', v='1') }}"></script>
-    <script src="{{ url_for('static', filename='lib/highlight/languages/json.min.js', v='1') }}"></script>
-    <script src="{{ url_for('static', filename='lib/highlight/languages/yaml.min.js', v='1') }}"></script>
-    <script src="{{ url_for('static', filename='lib/highlight/languages/sql.min.js', v='1') }}"></script>
-    <script src="{{ url_for('static', filename='lib/highlight/languages/javascript.min.js', v='1') }}"></script>
-    <script src="{{ url_for('static', filename='lib/highlight/languages/css.min.js', v='1') }}"></script>
     {% block extra_style %}{% endblock %}
 </head>
 <body>

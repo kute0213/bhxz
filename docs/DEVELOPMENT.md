@@ -294,28 +294,28 @@ def vote_poll(poll_id):
     result = svc_vote_poll(...)   # 正确调用 service
 ```
 
-### 6. Markdown 渲染与代码高亮
+### 6. Markdown 渲染与代码复制
 
 所有 Markdown 渲染页面必须遵循以下规则：
 
 **渲染流程：**
 1. 使用 `marked.js` 解析 Markdown 为 HTML
-2. 渲染完成后调用 `CodeBlocks.enhance(element)` 触发 highlight.js 语法高亮和复制按钮注入
+2. 渲染完成后调用 `CodeBlocks.enhance(element)` 注入代码块一键复制按钮
+
+> 说明：已移除 highlight.js 语法高亮以减小静态资源体积、提升性能。代码块使用原生 `<pre><code>` 
+> 渲染，仅保留一键复制功能。
 
 **已集成的 Markdown 渲染页面：**
-| 页面 | 渲染方式 | 高亮触发 |
+| 页面 | 渲染方式 | 复制触发 |
 |------|----------|----------|
 | `guides/detail.html` | 直接 `marked.parse()` | `CodeBlocks.enhance()` |
 | `discussion/detail.html` | 初始内容 + 动态回复 | `CodeBlocks.enhance()` + MutationObserver |
 | `docs.html` | 动态加载 | `CodeBlocks.enhance()` |
-| `discussion/create.html` | 实时预览（仅编辑器） | 无需高亮 |
-
-**支持高亮的语言：** Python, JavaScript, Shell/Bash, JSON, YAML, SQL, CSS
 
 **新增 Markdown 渲染页面的步骤：**
-1. 在页面中加载 `marked.js` 和 `highlight.js`（后者已在 `base.html` 全局加载）
+1. 在页面中加载 `marked.js`
 2. 使用 `marked.parse()` 渲染 Markdown 内容
-3. 渲染后立即调用 `CodeBlocks.enhance(containerElement)` 触发高亮和复制按钮
+3. 渲染后立即调用 `CodeBlocks.enhance(containerElement)` 注入复制按钮
 
 **代码复制按钮说明：**
 - 复制按钮在 `base.js` 的 `CodeBlocks` 模块中实现

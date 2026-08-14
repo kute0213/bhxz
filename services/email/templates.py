@@ -123,8 +123,8 @@ def broadcast_message(subject: str, markdown_body: str, sender_name: str = '滨�
     Returns:
         邮件 HTML 字符串
     """
-    # 将 Markdown 转为 HTML（启用常用扩展）
-    extensions = ['extra', 'codehilite', 'tables', 'fenced_code', 'toc']
+    # 将 Markdown 转为 HTML（启用常用扩展，不使用 codehilite 以保证邮件客户端兼容）
+    extensions = ['extra', 'tables', 'fenced_code', 'toc']
     try:
         rendered = md.markdown(markdown_body, extensions=extensions)
     except Exception:

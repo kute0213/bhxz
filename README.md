@@ -27,7 +27,6 @@ python scripts/build/build_static.py
 ```
 
 这会下载以下资源到 `static/lib/`：
-- **Highlight.js** — 代码语法高亮
 - **Lucide Icons** — 图标库
 - **Marked.js** — Markdown 渲染
 - **JetBrains Mono** — 编程字体
@@ -127,7 +126,6 @@ python scripts/build/build_static.py
 │   │   ├── main.js               #   全局交互
 │   │   └── cmd/                  #   CMD 控制台模块（10个文件）
 │   └── lib/                      # 第三方库（由 build_static.py 生成）
-│       ├── highlight/            #   Highlight.js 代码高亮
 │       ├── lucide/               #   Lucide 图标库
 │       ├── marked/               #   Marked.js Markdown 渲染
 │       ├── fonts/                #   字体定义（系统字体栈 + JetBrains Mono）
@@ -164,12 +162,12 @@ python scripts/build/build_static.py
 - 系统设置（在线编辑，热重载）
 - 数据库备份（手动/自动，进度条）
 - 公开文件管理
-- 广播邮件（Markdown 编辑器 + 实时预览）
+- 广播邮件（Markdown 编辑器 + 实时预览，统一组件）
 - 一键更新（从 GitHub 自动拉取 + 重启）
 
 ### 服务器指南
 - 卡片式列表页，支持置顶与按标题自动排序
-- Markdown 详情页（标题锚点、代码高亮、一键复制）
+- Markdown 详情页（标题锚点、代码一键复制）
 - 成员提交需审核，管理员直接发布
 - 封禁机制（用户名/IP，限时或永久）
 
@@ -190,7 +188,7 @@ python scripts/build/build_static.py
 - 公开页面，无需登录即可查看
 
 ### 文档系统
-- Markdown 文档渲染（marked.js + highlight.js 语法高亮）
+- Markdown 文档渲染（marked.js）
 - 代码块一键复制按钮
 - 侧边栏导航
 
@@ -361,7 +359,7 @@ export ENABLE_SSL=1 && python app.py
 
 ### 性能优化
 
-- **零外部依赖**：所有 CDN 资源（Highlight.js、Lucide、Marked.js、Monaco Editor）下载到本地，无外部网络请求
+- **零外部依赖**：所有 CDN 资源（Lucide、Marked.js、Monaco Editor）下载到本地，无外部网络请求
 - **系统字体栈**：中文字体使用各平台预装字体（PingFang SC / Microsoft YaHei / Noto Sans CJK），零下载、零延迟
 - `overflow-x: clip` 替代 `hidden`（消除滚动回弹）
 - 尊重 `prefers-reduced-motion`（无障碍用户自动禁用动画）

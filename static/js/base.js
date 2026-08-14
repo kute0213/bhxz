@@ -665,10 +665,10 @@ window.__showCaptchaModal = CaptchaModal.show;
 window.__hideCaptchaModal = CaptchaModal.hide;
 
 // ============================================
-// 代码高亮 + 一键复制
+// 代码一键复制
 // ============================================
 var CodeBlocks = (function () {
-    // 为所有 <pre><code> 块添加复制按钮并触发高亮
+    // 为所有 <pre><code> 块添加复制按钮
     function enhance(root) {
         if (!root) root = document;
         var blocks = root.querySelectorAll('pre code');
@@ -725,13 +725,6 @@ var CodeBlocks = (function () {
                 });
             });
         });
-
-        // 触发 highlight.js 高亮
-        if (typeof hljs !== 'undefined' && hljs.highlightElement) {
-            root.querySelectorAll('pre code').forEach(function (el) {
-                try { hljs.highlightElement(el); } catch (_) {}
-            });
-        }
     }
 
     // 自动增强：监听 DOM 变化（用于动态加载的内容）

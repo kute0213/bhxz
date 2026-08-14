@@ -7,7 +7,6 @@
     python scripts/build/build_static.py
 
 运行后会生成：
-    static/lib/highlight/     - Highlight.js 代码高亮
     static/lib/lucide/        - Lucide 图标库
     static/lib/marked/        - Marked.js Markdown 渲染
     static/lib/fonts/         - Google Fonts 字体文件（Noto Sans SC + JetBrains Mono）
@@ -26,7 +25,8 @@ from urllib.error import URLError, HTTPError
 # 路径配置
 # ---------------------------------------------------------------------------
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-PROJECT_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, '..'))
+# 从 scripts/build/ 上溯两级得到项目根目录（/workspace）
+PROJECT_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, '..', '..'))
 STATIC_DIR = os.path.join(PROJECT_ROOT, 'static')
 LIB_DIR = os.path.join(STATIC_DIR, 'lib')
 
@@ -105,39 +105,7 @@ def _download_with_redirect(url, dest_path, desc=''):
 
 
 # ---------------------------------------------------------------------------
-# 1. Highlight.js
-# ---------------------------------------------------------------------------
-
-HIGHLIGHT_VERSION = '11.9.0'
-HIGHLIGHT_BASE = 'https://cdnjs.cloudflare.com/ajax/libs/highlight.js'
-
-HIGHLIGHT_FILES = [
-    ('styles/github-dark.min.css', 'github-dark.min.css'),
-    ('highlight.min.js', 'highlight.min.js'),
-    ('languages/python.min.js', 'languages/python.min.js'),
-    ('languages/bash.min.js', 'languages/bash.min.js'),
-    ('languages/json.min.js', 'languages/json.min.js'),
-    ('languages/yaml.min.js', 'languages/yaml.min.js'),
-    ('languages/sql.min.js', 'languages/sql.min.js'),
-    ('languages/javascript.min.js', 'languages/javascript.min.js'),
-    ('languages/css.min.js', 'languages/css.min.js'),
-]
-
-
-def download_highlight():
-    """下载 Highlight.js 所有需要的文件。"""
-    print('\n=== Highlight.js ===', flush=True)
-    lib_dir = os.path.join(LIB_DIR, 'highlight')
-    os.makedirs(os.path.join(lib_dir, 'languages'), exist_ok=True)
-
-    for src_path, dest_name in HIGHLIGHT_FILES:
-        url = f'{HIGHLIGHT_BASE}/{HIGHLIGHT_VERSION}/{src_path}'
-        dest = os.path.join(lib_dir, dest_name)
-        _urlretrieve(url, dest, f'highlight.js/{dest_name}')
-
-
-# ---------------------------------------------------------------------------
-# 2. Lucide Icons
+# 1. Lucide Icons
 # ---------------------------------------------------------------------------
 
 LUCIDE_URL = 'https://unpkg.com/lucide@latest'
@@ -175,7 +143,7 @@ def download_lucide():
 
 
 # ---------------------------------------------------------------------------
-# 3. Marked.js
+# 2. Marked.js
 # ---------------------------------------------------------------------------
 
 MARKED_URL = 'https://cdn.jsdelivr.net/npm/marked/marked.min.js'
@@ -192,7 +160,7 @@ def download_marked():
 
 
 # ---------------------------------------------------------------------------
-# 4. 字体处理
+# 3. 字体处理
 # ---------------------------------------------------------------------------
 # 注意：Noto Sans SC（CJK 字体）在 Google Fonts 中被拆分为大量
 # unicode-range 子集（~50+ 文件/字重），下载全部子集不现实。
@@ -329,7 +297,7 @@ def download_fonts():
 
 
 # ---------------------------------------------------------------------------
-# 5. Monaco Editor (HTTP 下载，无需 npm)
+# 4. Monaco Editor (HTTP 下载，无需 npm)
 # ---------------------------------------------------------------------------
 
 MONACO_VERSION = '0.45.0'
@@ -403,14 +371,13 @@ def download_monaco():
 
 
 # ---------------------------------------------------------------------------
-# 6. 生成静态资源版本文件
+# 5. 生成静态资源版本文件
 # ---------------------------------------------------------------------------
 
 def generate_version_file():
     """生成 lib-version.json，记录构建时间和版本，用于模板缓存刷新。"""
     version = {
         'built_at': time.strftime('%Y-%m-%d %H:%M:%S'),
-        'highlight_version': HIGHLIGHT_VERSION,
         'monaco_version': MONACO_VERSION,
     }
     dest = os.path.join(LIB_DIR, 'lib-version.json')
@@ -433,22 +400,19 @@ def main():
     # 确保 lib 目录存在
     os.makedirs(LIB_DIR, exist_ok=True)
 
-    # 1. Highlight.js
-    download_highlight()
-
-    # 2. Lucide Icons
+    # 1. Lucide Icons
     download_lucide()
 
-    # 3. Marked.js
+    # 2. Marked.js
     download_marked()
 
-    # 4. Google Fonts
+    # 3. Google Fonts
     download_fonts()
 
-    # 5. Monaco Editor（HTTP 下载，无需 npm）
+    # 4. Monaco Editor（HTTP 下载，无需 npm）
     download_monaco()
 
-    # 6. 版本文件
+    # 5. 版本文件
     generate_version_file()
 
     # 统计
