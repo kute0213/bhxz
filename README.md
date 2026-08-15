@@ -108,7 +108,8 @@ python scripts/build/build_static.py
 │       ├── test_captcha.py       #     验证码测试
 │       ├── test_routes.py        #     路由可达性测试
 │       ├── test_services.py      #     服务层测试
-│       └── test_user.py          #     用户系统测试
+│       ├── test_user.py          #     用户系统测试
+│       └── test_updater.py       #     一键更新下载进度测试
 │
 ├── templates/                    # Jinja2 模板
 │   ├── base.html                 #   基础模板
@@ -164,7 +165,7 @@ python scripts/build/build_static.py
 - 数据库备份（手动/自动，进度条）
 - 公开文件管理
 - 广播邮件（Markdown 编辑器 + 实时预览，统一组件）
-- 一键更新（从 GitHub 自动拉取 + 重启）
+- 一键更新（从 GitHub 自动拉取 + 实时进度条 + 自动重启）
 
 ### 服务器指南
 - 卡片式列表页，支持置顶与按标题自动排序

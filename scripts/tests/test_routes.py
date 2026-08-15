@@ -19,6 +19,7 @@
 import os
 import sys
 import json
+import re
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, PROJECT_ROOT)
@@ -194,6 +195,65 @@ def test_all_routes():
         raise AssertionError(f"路由检测失败: {failed} 个路由不可达")
 
 
+def test_authenticated_pages_render():
+    """登录后渲染关键页面必须返回 200，捕获模板/端点 500。
+
+    背景：`/settings` 曾因路由函数名与模板 `url_for` 端点不一致，
+    在登录后渲染时抛 BuildError 返回 500，但匿名可达性测试（预期 302）
+    无法发现。此测试通过注入会话，验证登录后页面能正常渲染。
+    """
+    client = _app.test_client()
+    with client.session_transaction() as sess:
+        sess['user_id'] = 1
+        sess['username'] = 'admin'
+        sess['is_admin'] = True
+
+    pages = [
+        '/settings',
+        '/discussion',
+        '/community',
+        '/performance',
+    ]
+    failed_pages = []
+    for path in pages:
+        try:
+            resp = client.get(path, follow_redirects=False)
+            if resp.status_code != 200:
+                failed_pages.append(f"{path} -> {resp.status_code}")
+        except Exception as e:
+            failed_pages.append(f"{path} -> 异常: {e}")
+
+    if failed_pages:
+        raise AssertionError("登录后页面渲染失败: " + "; ".join(failed_pages))
+
+
+def test_template_urlfor_endpoints_resolve():
+    """模板中所有 url_for 端点必须已注册，防止 BuildError 导致 500。
+
+    对应开发准则易错点 #1：路由函数名 ≡ 模板 url_for 端点名。
+    """
+    registered = set()
+    for rule in _app.url_map.iter_rules():
+        if rule.endpoint and not rule.endpoint.startswith('static'):
+            registered.add(rule.endpoint)
+
+    templates_dir = os.path.join(PROJECT_ROOT, 'templates')
+    missing = set()
+    for root, _dirs, files in os.walk(templates_dir):
+        for f in files:
+            if not f.endswith('.html'):
+                continue
+            with open(os.path.join(root, f), encoding='utf-8') as fh:
+                content = fh.read()
+            for m in re.finditer(r"url_for\(['\"]([a-z_]+)\.([a-zA-Z_]+)", content):
+                endpoint = m.group(1) + '.' + m.group(2)
+                if endpoint not in registered:
+                    missing.add(os.path.join(root, f).replace(PROJECT_ROOT, '') + ': ' + endpoint)
+
+    if missing:
+        raise AssertionError("模板引用了未注册的端点（将导致 500）:\n" + "\n".join(sorted(missing)))
+
+
 # 运行所有测试
 if __name__ == '__main__':
     setup()
@@ -202,6 +262,8 @@ if __name__ == '__main__':
     print("=" * 60)
     print()
     test_all_routes()
+    test_authenticated_pages_render()
+    test_template_urlfor_endpoints_resolve()
     print()
     print("=" * 60)
     print("  所有路由检测通过！")

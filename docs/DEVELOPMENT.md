@@ -207,6 +207,7 @@ def create_poll():                # 端点 → community.create_poll
 - [ ] 每个 `@蓝图.route()` 的函数名都对应模板中的 `url_for('蓝图名.函数名')`
 - [ ] 不要加 `_view`、`_handler`、`_action` 等后缀（除非模板也用了这个后缀）
 - [ ] 当路由函数名与 service 导入的函数名冲突时，用 `import ... as svc_xxx` 解决
+- [ ] 已运行 `python scripts/tests/run_all.py`，其中 `test_routes.py` 会自动校验模板中所有 `url_for` 端点均已注册，并验证登录后关键页面渲染返回 200（可捕获此类 500）
 
 ### 2. 模板渲染必须端到端验证
 

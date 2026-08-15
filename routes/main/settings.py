@@ -7,7 +7,10 @@ from flask import render_template, request, redirect, url_for, session, flash
 from core.auth import login_required, get_current_user
 from services.email import normalize_email
 from services.user_service import (
-    change_username, change_password, change_email, delete_account,
+    change_username as svc_change_username,
+    change_password as svc_change_password,
+    change_email as svc_change_email,
+    delete_account as svc_delete_account,
 )
 from routes.main import main_bp
 
@@ -25,9 +28,9 @@ def settings():
 
 @main_bp.route('/settings/username', methods=['POST'])
 @login_required
-def change_username_view():
+def change_username():
     user = get_current_user()
-    success, message = change_username(
+    success, message = svc_change_username(
         user_id=user['id'],
         current_username=user['username'],
         new_username=request.form.get('new_username', '').strip(),
@@ -41,9 +44,9 @@ def change_username_view():
 
 @main_bp.route('/settings/password', methods=['POST'])
 @login_required
-def change_password_view():
+def change_password():
     user = get_current_user()
-    success, message = change_password(
+    success, message = svc_change_password(
         user_id=user['id'],
         username=user['username'],
         current_password=request.form.get('current_password', ''),
@@ -56,9 +59,9 @@ def change_password_view():
 
 @main_bp.route('/settings/email', methods=['POST'])
 @login_required
-def change_email_view():
+def change_email():
     user = get_current_user()
-    success, message = change_email(
+    success, message = svc_change_email(
         user_id=user['id'],
         username=user['username'],
         new_email=normalize_email(request.form.get('new_email', '')),
@@ -72,9 +75,9 @@ def change_email_view():
 
 @main_bp.route('/settings/delete', methods=['POST'])
 @login_required
-def delete_account_view():
+def delete_account():
     user = get_current_user()
-    success, message = delete_account(
+    success, message = svc_delete_account(
         user_id=user['id'],
         username=user['username'],
         confirm_username=request.form.get('confirm_username', '').strip(),

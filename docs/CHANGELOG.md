@@ -3,6 +3,12 @@
 ## [Unreleased]
 
 ### 优化
+- 一键更新下载进度条优化：成功开始下载 ZIP 压缩包后进度条正常实时推进
+  - 服务器未返回 `Content-Length` 时按估算大小推进进度，避免进度条卡死
+  - 改用"变化阈值"触发回调（每 1% 或每 512KB），进度平滑且不漏最终值
+  - 下载完成时强制回调 100，避免进度跳变
+  - 直连 GitHub 下载路径同样接入进度回调，不再无进度显示
+  - 新增 `scripts/tests/test_updater.py` 覆盖 Content-Length 已知/未知两种下载场景
 - 磨砂玻璃 UI 全面升级：去除塑料感，模拟真实酸蚀刻玻璃效果
   - 卡片/按钮/弹窗/输入框/导航栏改用 `linear-gradient` 渐变背景，替代纯色 `rgba`
   - 降低 `backdrop-filter` 饱和度（`saturate(220%)` → `saturate(100%)`），效果更自然通透
@@ -22,6 +28,8 @@
 - 邮箱唯一性检查：注册和修改邮箱时检查邮箱是否已被其他账号使用，确保一个邮箱仅可注册一个账号
 
 ### 修复
+- 彻底修复端点名不一致导致的 500：除 `/settings` 外，`routes/discussion/api.py` 的 `delete_reply`/`toggle_pin`/`toggle_lock`/`delete_topic` 原带 `_view` 后缀，与模板 `url_for('discussion.delete_reply')` 等端点不匹配，讨论区删除/置顶/锁定操作会抛 `BuildError`。已统一移除 `_view` 后缀并对 service 导入用别名（`svc_*`）避免递归
+- 新增回归测试防止此类低级 bug 再现：`test_routes.py` 增加「登录后渲染关键页面返回 200」与「模板中所有 `url_for` 端点必须已注册」两项检测
 - 修复管理后台「删除用户」接口对任何用户均返回 500：`routes/admin/users.py` 漏导入 Flask 的 `request` 对象导致 `NameError`
 - 修复静态资源构建脚本 `build_static.py` 项目根目录路径计算错误：原 `SCRIPT_DIR/..` 指向 `scripts/`，导致构建产物写入错误目录，全新部署无法加载静态资源
 - 新增静态检查脚本 `scripts/tests/check_undefined_names.py` 并集成进测试套件，自动扫描"使用但未定义/未导入"的名字，防止同类 NameError 运行时错误回归

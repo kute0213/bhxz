@@ -9,8 +9,12 @@ from core.auth import login_required, get_current_user
 from routes.discussion import discussion_bp
 from routes.community.helpers import _respond
 from services.discussion_service import (
-    reply_to_topic, delete_reply, toggle_pin, toggle_lock,
-    delete_topic, get_replies_page, get_new_replies,
+    reply_to_topic,
+    delete_reply as svc_delete_reply,
+    toggle_pin as svc_toggle_pin,
+    toggle_lock as svc_toggle_lock,
+    delete_topic as svc_delete_topic,
+    get_replies_page, get_new_replies,
 )
 
 
@@ -32,9 +36,9 @@ def reply(topic_id):
 
 @discussion_bp.route('/discussion/reply/<int:reply_id>/delete', methods=['POST'])
 @login_required
-def delete_reply_view(reply_id):
+def delete_reply(reply_id):
     user = get_current_user()
-    success, message = delete_reply(
+    success, message = svc_delete_reply(
         reply_id=reply_id,
         user_id=user['id'],
         is_admin=user.get('is_admin', False),
@@ -45,31 +49,31 @@ def delete_reply_view(reply_id):
 
 @discussion_bp.route('/discussion/<int:topic_id>/pin', methods=['POST'])
 @login_required
-def toggle_pin_view(topic_id):
+def toggle_pin(topic_id):
     user = get_current_user()
     if not user.get('is_admin'):
         abort(403)
-    success, message = toggle_pin(topic_id, request.remote_addr)
+    success, message = svc_toggle_pin(topic_id, request.remote_addr)
     return _respond(message, 'success' if success else 'error',
                     redirect_to=url_for('discussion.detail', topic_id=topic_id))
 
 
 @discussion_bp.route('/discussion/<int:topic_id>/lock', methods=['POST'])
 @login_required
-def toggle_lock_view(topic_id):
+def toggle_lock(topic_id):
     user = get_current_user()
     if not user.get('is_admin'):
         abort(403)
-    success, message = toggle_lock(topic_id, request.remote_addr)
+    success, message = svc_toggle_lock(topic_id, request.remote_addr)
     return _respond(message, 'success' if success else 'error',
                     redirect_to=url_for('discussion.detail', topic_id=topic_id))
 
 
 @discussion_bp.route('/discussion/<int:topic_id>/delete', methods=['POST'])
 @login_required
-def delete_topic_view(topic_id):
+def delete_topic(topic_id):
     user = get_current_user()
-    success, message = delete_topic(
+    success, message = svc_delete_topic(
         topic_id=topic_id,
         caller_user_id=user['id'],
         is_admin=user.get('is_admin', False),

@@ -300,6 +300,11 @@ def _download_zip(url, dest_path, progress_callback=None, timeout=60):
 
     返回:
         True 表示下载成功，False 表示失败
+
+    进度回调改进：
+    - 服务器未返回 Content-Length 时，按估算大小推进进度，避免进度条卡死
+    - 使用"变化阈值"触发回调（每 1% 或每 512KB），保证平滑且不漏掉最终值
+    - 下载完成时强制回调一次 100，避免进度条跳变
     """
     ctx = _create_ssl_context()
     try:
@@ -311,8 +316,23 @@ def _download_zip(url, dest_path, progress_callback=None, timeout=60):
         total = resp.headers.get('Content-Length')
         total = int(total) if total else 0
 
+        # 无 Content-Length 时的估算大小（按 8MB 估算，避免进度条卡死）
+        estimated_total = total if total > 0 else 8 * 1024 * 1024
+
         downloaded = 0
         chunk_size = 128 * 1024  # 128KB
+        last_pct = -1.0
+        last_bytes = 0
+
+        def _report(pct):
+            nonlocal last_pct, last_bytes
+            if progress_callback is None:
+                return
+            # 每 1% 或每 512KB 触发一次，保证平滑且不漏最终值
+            if pct - last_pct >= 1.0 or downloaded - last_bytes >= 512 * 1024 or pct >= 100:
+                progress_callback(min(pct, 100))
+                last_pct = pct
+                last_bytes = downloaded
 
         with open(dest_path, 'wb') as f:
             while True:
@@ -321,11 +341,15 @@ def _download_zip(url, dest_path, progress_callback=None, timeout=60):
                     break
                 f.write(chunk)
                 downloaded += len(chunk)
-                if total > 0 and progress_callback:
-                    # 每 5% 回调一次，避免过于频繁
+                if total > 0:
                     pct = downloaded / total * 100
-                    if int(pct) % 5 == 0 or pct >= 99:
-                        progress_callback(min(pct, 100))
+                else:
+                    # 无 Content-Length：按估算大小线性增长，封顶 95%（保留解压阶段）
+                    pct = min(downloaded / estimated_total * 100, 95)
+                _report(pct)
+
+        # 下载完成，保证进度回调到 100
+        _report(100)
 
         # 验证文件是否有效 ZIP
         if os.path.getsize(dest_path) == 0:
@@ -708,8 +732,13 @@ def _run_update():
             _add_event('log', {'message': f"  下载 URL: {direct_url}"})
 
             zip_path = _make_zip_path()
+
+            def _direct_progress(pct):
+                mapped = 5 + int(pct * 65 / 100)
+                _add_event('progress', {'percent': mapped, 'message': f'正在直连下载更新包... {int(pct)}%'})
+
             try:
-                success = _download_zip(direct_url, zip_path, timeout=15)
+                success = _download_zip(direct_url, zip_path, progress_callback=_direct_progress, timeout=15)
                 if success:
                     _add_event('log', {'message': '✓ 直接下载成功'})
                     temp_dir = tempfile.mkdtemp(prefix='bhxz_update_')
