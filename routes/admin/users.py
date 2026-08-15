@@ -3,7 +3,7 @@
 薄层：仅负责 HTTP 请求解析/响应构造，业务逻辑委托给 services。
 """
 
-from flask import render_template, redirect, url_for, flash, abort
+from flask import render_template, redirect, url_for, flash, abort, request
 
 from core.auth import login_required, get_current_user
 from core.db import get_db

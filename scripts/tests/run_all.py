@@ -15,6 +15,9 @@ import traceback
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, PROJECT_ROOT)
 
+# 静态检查：未定义名称（NameError 隐患）
+from scripts.tests.check_undefined_names import check as _static_check
+
 
 def run_test_module(module_path):
     """运行单个测试模块，返回 (模块名, 成功数, 失败数, 错误信息列表)。"""
@@ -75,6 +78,17 @@ def main():
     print("  滨海小镇 自动化测试套件")
     print("=" * 60)
     print()
+
+    # 静态检查：未定义名称（防止 NameError 类运行时错误）
+    static_problems = _static_check(PROJECT_ROOT)
+    if static_problems:
+        print(f"  [FAIL] 静态检查-未定义名称: {len(static_problems)} 个问题")
+        for sp in static_problems:
+            print("    ", sp)
+        total_failed += len(static_problems)
+        all_errors.extend(static_problems)
+    else:
+        print("  [PASS] 静态检查-未定义名称")
 
     for tf in test_files:
         name, passed, failed, errors = run_test_module(tf)

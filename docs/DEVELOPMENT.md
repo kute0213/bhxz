@@ -170,6 +170,10 @@ workspace/
 python scripts/tests/run_all.py
 ```
 
+测试套件包含两类检查：
+1. **静态检查**（`check_undefined_names.py`）：扫描所有 Python 文件，找出"使用但未定义/未导入"的名字，防止 NameError 类运行时错误（如漏导入 `request`）
+2. **功能测试**：`test_*.py` 中的单元与集成测试
+
 每个测试函数应：
 - 测试成功路径
 - 测试失败路径（边界条件、权限不足、参数错误）
@@ -328,6 +332,34 @@ def vote_poll(poll_id):
 - [ ] 页面加载了 `marked.js`
 - [ ] Markdown 渲染后调用了 `CodeBlocks.enhance()`
 - [ ] 动态加载的内容会被 MutationObserver 自动捕获
+
+### 7. 路由层使用 Flask 对象必须导入（NameError 事故）
+
+路由层使用 `request`、`flash`、`redirect`、`url_for`、`abort`、`render_template`、
+`jsonify`、`session` 等 Flask 对象时，**必须**在文件顶部 `from flask import ...` 中显式导入。
+漏导入会在运行时抛 `NameError`，导致整个请求 500。
+
+```python
+# ❌ 错误：用了 request 但没导入
+from flask import render_template, redirect, url_for, flash, abort
+
+@admin_bp.route('/admin/users/<int:user_id>/delete', methods=['POST'])
+def admin_delete_user(user_id):
+    _svc_delete_user(user, user_id, request.remote_addr)  # NameError → 500
+
+# ✅ 正确
+from flask import render_template, redirect, url_for, flash, abort, request
+```
+
+> 真实事故：`routes/admin/users.py` 漏导入 `request`，导致「删除用户」接口对任何用户都返回 500。
+> 这类错误与具体数据无关，漏一行 import 就会全接口失效。
+
+**预防措施：** 静态检查脚本已集成进测试套件，会自动扫描"使用但未定义/未导入"的名字：
+`python scripts/tests/run_all.py`（内置 `check_undefined_names` 静态检查）。
+
+**检查清单：**
+- [ ] 路由层用到的每个 Flask 对象都已在 `from flask import ...` 中导入
+- [ ] 已运行 `python scripts/tests/run_all.py`（含静态检查）确认通过
 
 ## 发布与更新流程
 

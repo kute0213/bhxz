@@ -101,7 +101,8 @@ python scripts/build/build_static.py
 │   │   ├── tailwind.config.js    #     Tailwind 配置
 │   │   └── tailwind-source.css   #     Tailwind 入口 CSS
 │   └── tests/                    #   自动化测试套件
-│       ├── run_all.py            #     测试运行器
+│       ├── run_all.py            #     测试运行器（含静态检查）
+│       ├── check_undefined_names.py #  静态检查：未定义名称（NameError 隐患）
 │       ├── test_basic.py         #     基础测试（应用启动、路由可达性）
 │       ├── test_admin.py         #     管理后台测试
 │       ├── test_captcha.py       #     验证码测试
