@@ -35,6 +35,16 @@ python scripts/build/build_static.py
 > 所有中文字体使用系统字体栈（各平台预装），**零下载、零延迟**。
 > 一键更新时会自动运行构建脚本，无需手动操作。
 
+### 打包发布 zip
+
+需要离线分发时，可打包为发布 zip（排除敏感文件、数据库、上传、备份、SSL、日志与 Monaco 大文件）：
+
+```bash
+python scripts/build/package.py
+```
+
+输出到 `release/bhxz-YYYYMMDD-HHMMSS.zip`。`release/` 与 `*.zip` 已加入 `.gitignore`，不会提交到仓库。
+
 ### 默认管理员
 
 首次启动自动创建：
