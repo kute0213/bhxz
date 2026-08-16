@@ -357,6 +357,7 @@ export ENABLE_SSL=1 && python app.py
 - 边缘光晕伪元素（`mask-composite` 渐变边框，模拟玻璃切割面折射）
 - 动态背景光球（CSS `@keyframes` 动画），降低透明度使光晕更柔和
 - 全局细微噪点纹理（SVG `feTurbulence`），模拟蚀刻玻璃表面微观散射
+- **滚动收缩导航栏**：向下滚动后导航栏收缩为居中漂浮的椭圆胶囊，磨砂质感更凝实，弹性缓出动画（`prefers-reduced-motion` 可降级）
 
 ### 交互效果
 

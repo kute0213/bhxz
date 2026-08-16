@@ -39,7 +39,7 @@
     <noscript><style>.page-content{opacity:1!important;transform:none!important}</style></noscript>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/tailwind.css', v='1') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='9') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css', v='12') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css', v='13') }}">
     {% block extra_style %}{% endblock %}
 </head>
 <body>
@@ -170,7 +170,8 @@
     </nav>
 
     <!-- 主导航栏 -->
-    <nav class="glass-nav sticky top-0 z-40">
+    <nav class="glass-nav sticky top-0 z-40" id="glass-nav">
+        <div class="glass-nav-inner">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex items-center justify-between h-16 lg:h-20">
                 <!-- Logo 区域 -->
@@ -284,6 +285,7 @@
                 {% endif %}
             </div>
         </div>
+        </div>
     </nav>
 
     {% block nav %}{% endblock %}
@@ -328,7 +330,7 @@
     </div>
 
     <script src="{{ url_for('static', filename='js/base.js', v='12') }}"></script>
-    <script src="{{ url_for('static', filename='js/main.js', v='10') }}"></script>
+    <script src="{{ url_for('static', filename='js/main.js', v='11') }}"></script>
     {% block extra_script %}{% endblock %}
 </body>
 </html>

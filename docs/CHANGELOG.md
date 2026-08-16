@@ -3,6 +3,12 @@
 ## [Unreleased]
 
 ### 优化
+- 导航栏增强：向下滚动后收缩为居中漂浮的椭圆胶囊，细腻磨砂玻璃质感
+  - 滚动前为顶部通栏磨砂条，滚动超过 32px 后收缩为居中椭圆胶囊（`max-width: 68rem` + `border-radius: 999px`），两侧留白
+  - 磨砂质感更凝实：提高背景不透明度、`backdrop-filter: blur(40px) saturate(140%)`、顶部渐变高光细线、双层内阴影
+  - 弹性缓出动画（`cubic-bezier(0.22, 1, 0.36, 1)`），滚动状态切换流畅
+  - 尊重系统「减少动态效果」偏好（`prefers-reduced-motion`）
+  - 新增 `initNavShrink()`（`main.js`）监听滚动，`base.html` 导航栏包裹 `.glass-nav-inner` 胶囊容器
 - 一键更新下载进度条优化：成功开始下载 ZIP 压缩包后进度条正常实时推进
   - 服务器未返回 `Content-Length` 时按估算大小推进进度，避免进度条卡死
   - 改用"变化阈值"触发回调（每 1% 或每 512KB），进度平滑且不漏最终值

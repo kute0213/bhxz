@@ -9,6 +9,7 @@ document.addEventListener('DOMContentLoaded', function() {
     initStaggerReveal();
     initTextReveal();
     initParallax();
+    initNavShrink();
 });
 
 // ============================================
@@ -244,4 +245,42 @@ function initParallax() {
     }, { passive: true });
 
     updateParallax();
+}
+
+// ============================================
+// 导航栏收缩成椭圆胶囊
+// 向下滚动超过阈值后，给 .glass-nav 添加 .scrolled，
+// 由 CSS 完成磨砂玻璃胶囊收缩动画。
+// ============================================
+function initNavShrink() {
+    var nav = document.getElementById('glass-nav');
+    if (!nav) return;
+
+    var threshold = 32;              // 滚动超过 32px 触发收缩
+    var prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    function update() {
+        var scrolled = window.scrollY > threshold;
+        nav.classList.toggle('scrolled', scrolled);
+    }
+
+    if (prefersReduced) {
+        // 减少动态效果：仍切换状态让导航可用，但过渡由 CSS 禁用
+        update();
+        window.addEventListener('scroll', update, { passive: true });
+        return;
+    }
+
+    var ticking = false;
+    window.addEventListener('scroll', function() {
+        if (!ticking) {
+            requestAnimationFrame(function() {
+                update();
+                ticking = false;
+            });
+            ticking = true;
+        }
+    }, { passive: true });
+
+    update();
 }
