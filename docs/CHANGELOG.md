@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### 修复
+- 修复打开首页白屏：页面入场动画改用纯 CSS animation 自动播放，不再依赖 `base.js` 在 `DOMContentLoaded` 添加类显示
+  - 原实现用 `.js .page-content{opacity:0}` 常驻隐藏内容，显示依赖 body 末尾同步脚本 `base.js`；脚本加载慢/失败时内容长时间不可见 → 白屏
+  - 新实现元素首次渲染即自动播放入场动画，脚本加载问题不再导致白屏；JS 禁用时内容默认可见
+  - 同步更新 `DEVELOPMENT.md` 易错点 #4，记录避免白屏的方法
+
 ### 优化
 - 导航栏收缩动画流畅化修复：改用 `width` 数值过渡 + `translateX(-50%)` 居中，替代无法插值的 `max-width:auto`/`margin:auto`，彻底消除切换跳变
   - 弹性曲线 `cubic-bezier(0.34, 1.3, 0.64, 1)` + 0.45s，更迅捷自然，带轻微回弹

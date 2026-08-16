@@ -323,19 +323,20 @@ body::after {
 }
 .mobile-menu-overlay.active { opacity: 1; visibility: visible; }
 
-/* 页面过渡动画 - 从下往上淡入
- * 默认可见（无JS fallback），JS确认可用后执行动画 */
+/* 页面入场动画 - 从下往上淡入
+ * 采用纯 CSS animation（不依赖 JS 添加类），彻底避免白屏：
+ *  - 元素首次渲染时动画即自动播放，无需等待任何外部脚本
+ *  - base.js 加载慢/失败不再导致内容长时间 opacity:0
+ *  - 若 JS 禁用（html 无 .js 类），内容默认可见，无动画 */
 .js .page-content {
-    opacity: 0;
-    transform: translateY(16px);
-    transition: opacity 0.5s cubic-bezier(0.4, 0, 0.2, 1),
-                transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+    animation: page-in 0.45s cubic-bezier(0.4, 0, 0.2, 1) both;
 }
-.js .page-content.page-ready {
-    opacity: 1;
-    transform: translateY(0);
+@keyframes page-in {
+    from { opacity: 0; transform: translateY(12px); }
+    to { opacity: 1; transform: translateY(0); }
 }
 body.page-leaving .page-content {
+    animation: none;
     opacity: 0;
     transform: translateY(-8px);
     transition: opacity 0.3s ease, transform 0.3s ease;

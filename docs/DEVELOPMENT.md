@@ -236,6 +236,37 @@ add_column_if_not_exists('表名', '列名', '类型 DEFAULT 默认值')
 
 不要在 `CREATE TABLE IF NOT EXISTS` 中修改已有表的列定义——那对已存在的表无效。
 
+### 4. 页面入场动画不得依赖 JS 显示（避免白屏）
+
+**背景**：曾用 `opacity:0` 常驻隐藏内容、再由外部脚本在 `DOMContentLoaded` 时添加类显示。
+问题：`base.js` 是 body 末尾的**同步脚本**，它不加载完就不会触发 `DOMContentLoaded`；
+一旦脚本加载慢/失败，页面会长时间保持 `opacity:0`（黑底），表现为"打开首页白屏一下"。
+
+**正确做法**：用**纯 CSS animation 自动入场**，不依赖 JS 添加类：
+
+```css
+.js .page-content {
+    animation: page-in 0.45s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+@keyframes page-in {
+    from { opacity: 0; transform: translateY(12px); }
+    to   { opacity: 1; transform: translateY(0); }
+}
+body.page-leaving .page-content {
+    animation: none;   /* 离开动画时取消入场动画 */
+    opacity: 0;
+    transform: translateY(-8px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+}
+```
+
+**检查清单：**
+- [ ] 内容显示不依赖外部 JS 添加类（`opacity:0` 隐藏 + 类切换显示的方式慎用）
+- [ ] 入场动画用 CSS `animation` 自动播放，元素首次渲染即生效
+- [ ] 若 JS 禁用（`html` 无 `.js` 类），内容应默认可见，无动画
+- [ ] `body.page-leaving` 时用 `animation: none` 取消入场动画，避免与离场过渡冲突
+- [ ] 修改 `base.css` 后必须同步 bump `templates/base.html` 中的版本号（`v='15'`）
+
 ## 路由检测配置
 
 ### 1. 新增路由时必须同步更新检测脚本

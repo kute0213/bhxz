@@ -35,11 +35,11 @@
             window.addEventListener('load', forceShow);
         })();
     </script>
-    <style>.js .page-content{opacity:0;transform:translateY(16px)}</style>
+    <!-- 入场动画见 base.css：纯 CSS animation，不依赖 JS，避免白屏 -->
     <noscript><style>.page-content{opacity:1!important;transform:none!important}</style></noscript>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/tailwind.css', v='1') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='9') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css', v='14') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css', v='15') }}">
     {% block extra_style %}{% endblock %}
 </head>
 <body>
