@@ -3,6 +3,9 @@
 ## [Unreleased]
 
 ### 优化
+- 导航栏收缩动画流畅化修复：改用 `width` 数值过渡 + `translateX(-50%)` 居中，替代无法插值的 `max-width:auto`/`margin:auto`，彻底消除切换跳变
+  - 弹性曲线 `cubic-bezier(0.34, 1.3, 0.64, 1)` + 0.45s，更迅捷自然，带轻微回弹
+  - 新增 `will-change` 提升合成层，动画更顺滑
 - 导航栏增强：向下滚动后收缩为居中漂浮的椭圆胶囊，细腻磨砂玻璃质感
   - 滚动前为顶部通栏磨砂条，滚动超过 32px 后收缩为居中椭圆胶囊（`max-width: 68rem` + `border-radius: 999px`），两侧留白
   - 磨砂质感更凝实：提高背景不透明度、`backdrop-filter: blur(40px) saturate(140%)`、顶部渐变高光细线、双层内阴影
