@@ -9,6 +9,7 @@
   - `docs/DEVELOPMENT.md` 新增「文档写入准则」章节，明确文档结构、命名规范、内容组织与更新流程
   - 修正各处指向已删除文档的链接（README 文档索引、DEVELOPMENT 引用）
   - 复制 `README.md` 到 `docs/README.md` 作为镜像副本，并修正其内部相对链接使其在 docs/ 目录下可用
+  - 精简 CMD 控制台说明中的 MiniScript 介绍：删除大段 Python 语法教程（变量/运算/条件/循环/列表/字典/函数/类/异常等），改为一句「语法与 Python 一致」，具体语法参考 Python 文档
 - 导航栏性能优化：`.glass-nav-inner` 的 `translateX(-50%)` 改为 `translate3d(-50%,0,0)` 提升为独立合成层，并 `will-change: transform, backdrop-filter` 缓存磨砂模糊，滚动时不再逐帧重模糊；移除无益的 `will-change: width, border-radius`
   - 视觉与磨砂玻璃效果保持不变，仅降低滚动期的重绘/重合成开销
 - 重构项目文档结构，按职责拆分，消除"乱塞"：
