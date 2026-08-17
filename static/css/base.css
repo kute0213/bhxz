@@ -225,7 +225,13 @@ body::after {
     position: relative;
     width: 100%;
     margin-left: 50%;
-    transform: translateX(-50%);
+    /* 用 translate3d 提升为独立合成层：滚动时背景已被缓存，backdrop-filter 不再逐帧重模糊 */
+    transform: translate3d(-50%, 0, 0);
+    -webkit-transform: translate3d(-50%, 0, 0);
+    /* 提示浏览器为 transform 与 backdrop-filter 建立合成层，显著降低滚动时的重绘/重模糊开销 */
+    will-change: transform, backdrop-filter;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
     background: linear-gradient(180deg,
         rgba(10, 22, 15, 0.42) 0%,
         rgba(8, 18, 12, 0.28) 55%,
@@ -243,7 +249,6 @@ body::after {
         border-color 0.45s ease,
         box-shadow 0.45s cubic-bezier(0.34, 1.3, 0.64, 1),
         background 0.45s ease;
-    will-change: width, border-radius, transform;
 }
 
 /* 顶部高光细线：模拟玻璃上沿的反光 */

@@ -3,6 +3,13 @@
 ## [Unreleased]
 
 ### 优化
+- 文档体系二次整合，最终精简为单一入口：
+  - 将 `docs/ARCHITECTURE.md` 与 `docs/cmd-guide.md` 内容完整并入 `README.md`（架构、目录结构与技术栈；CMD 控制台使用说明），删除两文件
+  - `README.md` 成为唯一综合文档入口（总览/快速开始/功能/配置/API/架构/CMD 使用说明），`docs/` 仅保留开发准则与更新日志
+  - `docs/DEVELOPMENT.md` 新增「文档写入准则」章节，明确文档结构、命名规范、内容组织与更新流程
+  - 修正各处指向已删除文档的链接（README 文档索引、DEVELOPMENT 引用）
+- 导航栏性能优化：`.glass-nav-inner` 的 `translateX(-50%)` 改为 `translate3d(-50%,0,0)` 提升为独立合成层，并 `will-change: transform, backdrop-filter` 缓存磨砂模糊，滚动时不再逐帧重模糊；移除无益的 `will-change: width, border-radius`
+  - 视觉与磨砂玻璃效果保持不变，仅降低滚动期的重绘/重合成开销
 - 重构项目文档结构，按职责拆分，消除"乱塞"：
   - 新增 `docs/ARCHITECTURE.md`：架构分层、目录结构、技术栈、异步架构、数据库设计、一键更新机制（从 README/DEVELOPMENT/DEPLOYMENT 迁移）
   - `docs/DEVELOPMENT.md` 整合为「开发与部署规范」：分层规范/易错点/测试/路由检测 + 构建打包与发布流程 + 更新规则（吸收原 README 开发注意事项与 DEPLOYMENT 内容）
