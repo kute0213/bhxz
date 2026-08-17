@@ -3,6 +3,11 @@
 ## [Unreleased]
 
 ### 优化
+- 重构项目文档结构，按职责拆分，消除"乱塞"：
+  - 新增 `docs/ARCHITECTURE.md`：架构分层、目录结构、技术栈、异步架构、数据库设计、一键更新机制（从 README/DEVELOPMENT/DEPLOYMENT 迁移）
+  - `docs/DEVELOPMENT.md` 整合为「开发与部署规范」：分层规范/易错点/测试/路由检测 + 构建打包与发布流程 + 更新规则（吸收原 README 开发注意事项与 DEPLOYMENT 内容）
+  - 移除 `docs/DEPLOYMENT.md`（一键更新机制并入 ARCHITECTURE，其余并入 DEVELOPMENT）
+  - `README.md` 精简为总览 + 快速开始 + 功能特性 + 配置 + API，并补充「文档索引」统一入口
 - 图形验证码字体加大：`services/captcha.py` 字体从 40 提升到 52，画布增至 300×96，并增加左右留白避免旋转后裁切；弹窗/表单中验证码图片显示高度从 `h-16` 提升到 `h-20`，整体更清晰易读
 - 指南提交改为「点击提交审核后再弹验证码」：移除 `guides/form.html` 内联验证码字段，改为隐藏字段 + 全局 `CaptchaModal` 弹窗
   - 点击「提交审核」按钮后才弹出图形验证码，验证通过才真正提交表单

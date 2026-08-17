@@ -1,28 +1,17 @@
 # 开发准则
 
-## 架构分层
+> 本文档为**开发与部署规范**：分层规范、代码规范、易错点清单、测试与路由检测，以及构建打包与发布流程。
+> 架构分层与目录结构见 [ARCHITECTURE.md](ARCHITECTURE.md)。
 
-项目严格遵循 **MVC 式分层架构**，各层职责互不重叠：
+## 分层总览
+
+项目遵循 **MVC 式分层架构**，调用方向固定为：
 
 ```
-app.py ──→ routes/ ──→ services/ ──→ core/
-  │            │            │            │
-  │         HTTP 层     业务逻辑层    基础设施层
-  │            │            │            │
-  Flask    蓝图/路由   纯 Python 函数    DB/认证/工具
-             │            │
-         main/        process_utils.py
-         docs/        process_manager.py
-         public/      shell.py
-         admin/       user_service.py
-         api/         attachment_service.py
-         cmd/         board_service.py
-         community/   discussion_service.py
-         discussion/  poll_service.py
-         guides/      captcha.py （验证码）
-         scheduled/   ratelimit.py （限流）
-                      logger.py （日志）
+app.py ──→ routes/（HTTP 薄层）──→ services/（纯业务逻辑）──→ core/（基础设施）
 ```
+
+各层职责规约：
 
 | 层级 | 目录 | 职责 | 禁止 |
 |------|------|------|------|
@@ -94,57 +83,6 @@ def do_something(user_id, value, ip_address):
 - `core/db/` — 数据库连接封装
 - `core/auth.py` — 认证装饰器、密码哈希
 - `core/middleware.py` — 请求中间件
-
-## 目录结构
-
-```
-workspace/
-├── app.py                    # Flask 入口 + WSGI 服务器
-├── config.py                 # 全局配置
-├── requirements.txt          # Python 依赖
-├── core/                     # 基础设施层
-│   ├── db/                   #   数据库连接与 schema
-│   ├── auth.py               #   认证装饰器、密码哈希
-│   └── middleware.py         #   请求中间件
-├── services/                 # 业务逻辑层
-│   ├── user_service.py       #   用户注册/登录/改密
-│   ├── attachment_service.py #   附件上传/清理
-│   ├── board_service.py      #   征集主题 CRUD
-│   ├── discussion_service.py #   讨论区帖子管理
-│   ├── poll_service.py       #   投票业务
-│   ├── captcha.py            #   图形验证码
-│   ├── ratelimit.py          #   IP 频率限制
-│   ├── logger.py             #   操作日志
-│   ├── process_manager.py    #   子进程生命周期管理
-│   ├── process_utils.py      #   子进程工具（编码/缓冲/环境变量）
-│   ├── shell.py              #   跨平台 shell 检测
-│   ├── scheduler.py          #   定时任务调度器
-│   ├── settings_manager.py   #   系统设置管理
-│   ├── updater.py            #   自动更新
-│   ├── cmd_runner.py         #   命令执行流
-│   ├── script_store.py       #   MiniScript 脚本存储
-│   ├── email/                #   邮件服务
-│   ├── backup/               #   数据库备份
-│   ├── logging/              #   日志写入与清理
-│   ├── miniscript/           #   MiniScript 脚本引擎
-│   ├── monitoring/           #   系统监控
-│   └── terminal/             #   持久终端会话
-├── routes/                   # HTTP 路由层
-│   ├── main/                 #   首页、登录、注册、设置
-│   ├── docs/                 #   文档页面
-│   ├── public/               #   公开文件服务
-│   ├── admin/                #   管理后台
-│   ├── api/                  #   JSON API
-│   ├── cmd/                  #   命令控制台
-│   ├── community/            #   社区（投票、留言板）
-│   ├── discussion/           #   讨论区
-│   ├── guides/               #   服务器指南
-│   └── scheduled/            #   定时任务管理
-├── static/                   # 静态资源（CSS/JS）
-├── templates/                # Jinja2 模板
-├── docs/                     # 项目文档
-└── scripts/tests/          # 自动化测试
-```
 
 ## 新增功能的流程
 
@@ -267,6 +205,24 @@ body.page-leaving .page-content {
 - [ ] `body.page-leaving` 时用 `animation: none` 取消入场动画，避免与离场过渡冲突
 - [ ] 修改 `base.css` 后必须同步 bump `templates/base.html` 中的版本号（`v='15'`）
 
+### 5. 弹窗与模态框的放置位置
+
+全屏弹窗/模态框应放置在 `{% block page_modals %}` 中（在 `</main>` 之后渲染），**而非** `{% block content %}` 内，避免 `page-content` 的 `transform` 影响 `position: fixed` 定位。
+
+**检查清单：**
+- [ ] 模态框位于 `page_modals` block，不在 `content` block 内
+
+### 6. 图形验证码必须走统一模块
+
+全局验证码弹窗 HTML 位于 `base.html`，JS 逻辑位于 `base.js` 的 `CaptchaModal` 对象。页面通过 `CaptchaModal.show(hint, callback)` 或 `window.__showCaptchaModal(hint, callback)` 调用。
+
+**指南提交示例**：`guides/form.html` 不在模板内联渲染验证码，而是点击「提交审核」后再弹 `CaptchaModal`，验证通过才提交表单；验证码出错时弹窗内刷新验证码、不刷新页面，避免重置已填内容（表单保留隐藏的 `captcha`/`captcha_id` 字段）。
+
+**检查清单：**
+- [ ] 使用了全局 `CaptchaModal`，而非自行内联渲染验证码图片/输入框
+- [ ] 注入 `CaptchaModal.show` 时，若脚本位于页面中间（`base.js` 加载前），需用 `DOMContentLoaded` 包裹，确保 `CaptchaModal` 已定义
+- [ ] 验证码出错不应刷新整个页面（避免丢表单内容）
+
 ## 路由检测配置
 
 ### 1. 新增路由时必须同步更新检测脚本
@@ -338,7 +294,7 @@ def vote_poll(poll_id):
 1. 使用 `marked.js` 解析 Markdown 为 HTML
 2. 渲染完成后调用 `CodeBlocks.enhance(element)` 注入代码块一键复制按钮
 
-> 说明：已移除 highlight.js 语法高亮以减小静态资源体积、提升性能。代码块使用原生 `<pre><code>` 
+> 说明：已移除 highlight.js 语法高亮以减小静态资源体积、提升性能。代码块使用原生 `<pre><code>`
 > 渲染，仅保留一键复制功能。
 
 **已集成的 Markdown 渲染页面：**
@@ -393,39 +349,108 @@ from flask import render_template, redirect, url_for, flash, abort, request
 - [ ] 路由层用到的每个 Flask 对象都已在 `from flask import ...` 中导入
 - [ ] 已运行 `python scripts/tests/run_all.py`（含静态检查）确认通过
 
-## 发布与更新流程
+## 构建与发布
 
-### 1. 打包 ZIP 发布
-
-每次代码变更后，需要打包为 ZIP 压缩包供用户通过一键更新下载：
+### 1. 安装与启动
 
 ```bash
-# 1. 构建静态资源（下载所有 CDN 资源到本地，包括 Monaco Editor）
+pip install -r requirements.txt
+python app.py          # 默认监听 0.0.0.0:5000
+```
+
+生产环境监听端口、HTTPS、登录保护等在 `config.py` 中配置。
+
+### 2. 直接部署（CherryPy 内置）
+
+默认使用内置 Cheroot WSGI 服务器，无需反向代理即可独立运行：
+
+```bash
+python app.py                    # HTTP
+export ENABLE_SSL=1 && python app.py  # HTTPS
+```
+
+#### Nginx 反向代理（可选）
+
+生产环境推荐前置 Nginx，代理到内置服务器：
+
+```nginx
+server {
+    listen 80;
+    server_name your-domain.com;
+    client_max_body_size 50m;   # 允许大文件上传
+
+    location / {
+        proxy_pass http://127.0.0.1:5000;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        # 关键：SSE 长连接，保证实时日志/进度/终端不中断
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+        proxy_chunked_transfer_encoding off;
+    }
+}
+```
+
+> **SSE 依赖**：实时进度条、定时任务日志、交互终端均依赖 SSE 长连接，Nginx 必须
+> 关闭缓冲（`proxy_buffering off`）并调大读超时，否则连接会中断。
+
+#### 开启 HTTPS（内置服务器）
+
+1. 将证书文件放到 `ssl/` 目录：`ssl/server.crt`、`ssl/server.key`
+2. Nginx 上启用 HTTPS，将 HTTP 转 HTTPS
+
+未找到证书或未设置 `ENABLE_SSL` 时，自动回退 HTTP 模式。
+
+### 3. 构建静态资源
+
+前端使用本地化的第三方库（Lucide、marked、Monaco Editor 等），需要通过构建脚本下载：
+
+```bash
+python scripts/build/build_static.py
+```
+
+- 下载 Lucide、marked、字体及 Monaco Editor（约 12MB）到 `static/lib/`
+- 结果写入 `static/lib/lib-version.json`
+- `static/lib/monaco/`（~12MB）被 `.gitignore` 排除，**不提交到 Git**
+- 用户通过一键更新或从 GitHub 下载 ZIP 后，都需要运行此命令以补齐 Monaco
+
+### 4. 打包 ZIP 发布
+
+每次代码变更后，打包为 ZIP 压缩包供用户通过一键更新下载：
+
+```bash
+# 1. 构建静态资源（下载所有 CDN 资源到本地，包括 Monaco）
 python scripts/build/build_static.py
 
-# 2. 确认所有文件都已提交到 Git
-git status
+# 2. 打包发布 zip（自动排除敏感文件与大型目录）
+python scripts/build/package.py
 
-# 3. 推送到 GitHub（触发一键更新）
+# 3. 确认所有文件已提交并推送（触发一键更新）
+git status
 git push
 ```
 
-> **注意：** `static/lib/monaco/` 目录（~12MB）被 `.gitignore` 排除，不会提交到 Git 仓库。
-> 用户通过一键更新或从 GitHub 下载 ZIP 后，需要运行 `python scripts/build/build_static.py` 以获取 Monaco Editor。
+打包脚本自动排除：数据库、上传文件、备份、日志、SSL 证书、`.env`、Monaco、`node_modules`、`.git` 等。
 
-### 2. 一键更新机制
+### 5. 完整发布流程（示例命令）
 
-用户通过管理后台的「一键更新」功能，从 GitHub 获取最新代码：
+```bash
+cd /workspace
+python scripts/tests/run_all.py        # 1. 测试套件通过
+python scripts/build/build_static.py   # 2. 构建静态资源
+python scripts/build/package.py        # 3. 打包 zip
+git add -A                             # 4. 暂存（确认 .gitignore 生效）
+git commit -m "..."                    # 5. 提交
+git push origin main                   # 6. 推送，触发一键更新（见 ARCHITECTURE.md）
+```
 
-1. 系统自动检测最快代理，下载 GitHub 仓库的 ZIP 压缩包
-2. 解压后同步到本地（跳过受保护文件：数据库、配置、上传文件等）
-3. 自动运行 `scripts/build/build_static.py` 构建静态资源
-4. 自动重启服务器
-
-> 更新机制详见 `services/updater.py`。
-
-### 3. 更新规则
+## 更新规则
 
 - 每次代码变更后必须运行 `python scripts/build/build_static.py` 验证构建通过
 - 提交前检查 `.gitignore` 确保敏感文件不被提交
 - 推送到 GitHub 后，一键更新即可生效
+- 修改 `base.css`/`base.js` 后必须同步 bump 模板中的版本号，避免浏览器缓存
+- 一键更新的**机制原理**见 [ARCHITECTURE.md 一键更新机制](ARCHITECTURE.md#一键更新机制)

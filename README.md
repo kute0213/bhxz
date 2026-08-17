@@ -2,6 +2,16 @@
 
 基于 Flask 的 Minecraft 服务器社区门户，采用磨砂玻璃（Glassmorphism）设计风格。提供用户系统、社区投票与征集、模组介绍、管理后台、服务器性能监控、CMD 控制台与 MiniScript 脚本引擎等功能。
 
+## 文档索引
+
+| 文档 | 说明 |
+|------|------|
+| 本文档 | 项目总览、快速开始、功能特性、配置、API |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 架构分层、目录结构、技术栈、异步架构、数据库设计 |
+| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | 开发与部署规范：分层规范、易错点、测试、路由检测、构建打包与发布 |
+| [docs/CHANGELOG.md](docs/CHANGELOG.md) | 更新日志 |
+| [docs/cmd-guide.md](docs/cmd-guide.md) | CMD 控制台使用说明 |
+
 ## 快速开始
 
 ### 环境要求
@@ -59,100 +69,18 @@ python scripts/build/package.py
 
 ```
 /workspace
-├── app.py                        # 应用入口 + WSGI 服务器
-├── config.py                     # 全局配置
-├── requirements.txt              # Python 依赖
-│
-├── core/                         # 基础设施层
-│   ├── db/                       #   DuckDB 数据库连接与 schema
-│   ├── auth.py                   #   认证装饰器、密码哈希
-│   └── middleware.py             #   请求中间件
-│
-├── services/                     # 业务逻辑层（纯 Python，不依赖 Flask）
-│   ├── user_service.py           #   用户注册/登录/改密
-│   ├── attachment_service.py     #   附件上传/清理
-│   ├── board_service.py          #   征集主题 CRUD
-│   ├── discussion_service.py     #   讨论区帖子管理
-│   ├── poll_service.py           #   投票业务
-│   ├── captcha.py                #   图形验证码
-│   ├── ratelimit.py              #   IP 频率限制
-│   ├── logger.py                 #   操作日志
-│   ├── process_manager.py        #   子进程生命周期管理
-│   ├── process_utils.py          #   子进程工具（编码/缓冲/环境变量）
-│   ├── shell.py                  #   跨平台 shell 检测
-│   ├── scheduler.py              #   定时任务调度
-│   ├── settings_manager.py       #   系统设置管理
-│   ├── updater.py                #   一键更新
-│   ├── cmd_runner.py             #   命令执行
-│   ├── script_store.py           #   MiniScript 脚本存储
-│   ├── email/                    #   SMTP 邮件服务
-│   ├── terminal/                 #   持久交互式终端服务
-│   ├── miniscript/               #   MiniScript 脚本引擎
-│   ├── logging/                  #   日志服务（异步写入+自动清理）
-│   ├── backup/                   #   数据库备份
-│   └── monitoring/               #   系统监控（CPU/内存/运行时间）
-│
-├── routes/                       # HTTP 路由层（Flask Blueprint）
-│   ├── main/                     #   首页/登录/注册/设置/找回密码
-│   ├── admin/                    #   管理后台（用户/日志/模组/指南/设置/备份/CMD/讨论/广播）
-│   ├── community/                #   社区（投票/征集/留言板）
-│   ├── discussion/               #   讨论区
-│   ├── guides/                   #   服务器指南
-│   ├── cmd/                      #   CMD 控制台
-│   ├── scheduled/                #   定时任务管理
-│   ├── api/                      #   公开 API（性能/统计/验证码/邮箱）
-│   ├── docs/                     #   文档系统
-│   └── public/                   #   公开文件管理
-│
-├── scripts/                      # 构建与维护脚本
-│   ├── build/                    #   构建工具
-│   │   ├── build_static.py       #     静态资源构建（下载 CDN 资源到本地）
-│   │   ├── package.json          #     npm 依赖
-│   │   ├── tailwind.config.js    #     Tailwind 配置
-│   │   └── tailwind-source.css   #     Tailwind 入口 CSS
-│   └── tests/                    #   自动化测试套件
-│       ├── run_all.py            #     测试运行器（含静态检查）
-│       ├── check_undefined_names.py #  静态检查：未定义名称（NameError 隐患）
-│       ├── test_basic.py         #     基础测试（应用启动、路由可达性）
-│       ├── test_admin.py         #     管理后台测试
-│       ├── test_captcha.py       #     验证码测试
-│       ├── test_routes.py        #     路由可达性测试
-│       ├── test_services.py      #     服务层测试
-│       ├── test_user.py          #     用户系统测试
-│       └── test_updater.py       #     一键更新下载进度测试
-│
-├── templates/                    # Jinja2 模板
-│   ├── base.html                 #   基础模板
-│   ├── admin/                    #   管理后台模板（17个页面）
-│   ├── guides/                   #   服务器指南模板
-│   ├── discussion/               #   讨论区模板
-│   └── emails/                   #   邮件 HTML 模板
-│
-├── static/                       # 静态资源
-│   ├── css/
-│   │   ├── tailwind.css          #   Tailwind CSS（构建生成）
-│   │   ├── style.css             #   主样式
-│   │   └── base.css              #   全局样式
-│   ├── js/
-│   │   ├── base.js               #   全局脚本（弹窗/Toast/导航/验证码）
-│   │   ├── main.js               #   全局交互
-│   │   └── cmd/                  #   CMD 控制台模块（10个文件）
-│   └── lib/                      # 第三方库（由 build_static.py 生成）
-│       ├── lucide/               #   Lucide 图标库
-│       ├── marked/               #   Marked.js Markdown 渲染
-│       ├── fonts/                #   字体定义（系统字体栈 + JetBrains Mono）
-│       └── monaco/               #   Monaco Editor（.gitignore 排除）
-│
-├── docs/                         # Markdown 文档
-│   ├── CHANGELOG.md              #   更新日志
-│   ├── DEVELOPMENT.md            #   开发准则
-│   └── cmd-guide.md              #   CMD 控制台使用说明
-│
-├── scripts/                      # 构建与测试脚本（详见上方）
-├── uploads/                      # 用户上传文件
-├── backups/db/                   # 数据库备份
-└── ssl/                          # SSL 证书
+├── app.py / config.py / requirements.txt   # 入口、配置、依赖
+├── core/         # 基础设施层（DB/认证/中间件）
+├── services/     # 业务逻辑层（纯 Python，不依赖 Flask）
+├── routes/       # HTTP 路由层（Flask Blueprint）
+├── templates/    # Jinja2 模板
+├── static/       # 静态资源（CSS/JS/本地化第三方库）
+├── docs/         # 项目文档
+├── scripts/      # 构建（build/）与测试（tests/）
+└── uploads/ backups/db/ ssl/               # 运行期数据
 ```
+
+> 完整目录树与各层职责见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
 
 ## 功能特性
 
@@ -309,44 +237,6 @@ export ENABLE_SSL=1 && python app.py
 | POST | `/admin/cmd/terminal/input` | 向终端发送输入 |
 | POST | `/admin/cmd/terminal/close` | 关闭终端会话 |
 
-## 数据库
-
-使用 **DuckDB**（嵌入式 OLAP 数据库，单文件），首次启动自动建表。共 20 张表：
-
-| 表名 | 说明 | 关键约束 |
-|------|------|----------|
-| `users` | 用户 | `username` 唯一, `email` 唯一 |
-| `polls` | 投票 | — |
-| `poll_options` | 投票选项 | 外键 `poll_id` 级联删除 |
-| `poll_votes` | 投票记录 | 唯一约束 `(poll_id, user_id, option_id)` |
-| `board_topics` | 征集主题 | 外键 `user_id` |
-| `board_replies` | 征集回复 | 外键 `topic_id`，`attachment` 存 JSON |
-| `mod_intros` | 模组介绍 | — |
-| `cmd_commands` | 快捷命令 | 名称/命令/描述/排序/类型 |
-| `scripts` | 统一脚本 | name/description/content/script_type |
-| `access_logs` | 访问日志 | 含 IP 地理信息，自动清理 |
-| `scheduled_tasks` | 定时任务 | 支持间隔/每日/一次性 |
-| `scheduled_task_logs` | 任务执行日志 | 外键 `task_id` |
-| `cmd_run_logs` | CMD 执行日志 | — |
-| `db_backups` | 备份记录 | 状态/大小/耗时 |
-| `settings` | 系统设置 | key 唯一，支持热重载 |
-| `server_guides` | 服务器指南 | 支持 Markdown，审核工作流 |
-| `guide_edit_bans` | 编辑封禁 | 用户名/IP，限时/永久 |
-| `discussion_categories` | 讨论分类 | slug 唯一 |
-| `discussion_topics` | 讨论帖子 | 支持分类/标签/附件/置顶/锁定 |
-| `discussion_replies` | 讨论回复 | 外键 `topic_id`，支持附件 |
-
-### 访问日志自动清理
-
-超出 `MAX_ACCESS_LOGS`（默认 500 条）阈值时，后台线程自动删除最旧记录。
-
-### 数据库备份
-
-每日凌晨 3:00（可配置）自动执行：
-1. 清理过期日志 → CHECKPOINT → DuckDB 在线备份 → 验证 → 清理旧备份
-
-管理后台支持手动触发，显示实时进度条。
-
 ## 前端特性
 
 ### 磨砂玻璃效果（Glassmorphism）
@@ -379,7 +269,7 @@ export ENABLE_SSL=1 && python app.py
 - 触控设备降级光晕效果
 - `IntersectionObserver` 触发后立即 `unobserve`
 
-### 代码维护说明
+### 静态资源与引用规则
 
 #### 静态资源更新
 
@@ -388,8 +278,6 @@ export ENABLE_SSL=1 && python app.py
 1. 修改 `scripts/build/build_static.py` 中的版本号
 2. 运行 `python scripts/build/build_static.py` 重新下载
 3. 提交 `static/lib/` 目录到 Git（`static/lib/monaco/` 除外）
-
-一键更新功能会自动执行此流程。
 
 #### 添加新的外部资源
 
@@ -403,57 +291,18 @@ export ENABLE_SSL=1 && python app.py
 
 ## 部署
 
-### 方式一：CherryPy（内置）
+部署方式、构建静态资源、打包发布与一键更新机制详见 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)。
 
-```bash
-python app.py                    # HTTP
-export ENABLE_SSL=1 && python app.py  # HTTPS
-```
-
-### 方式二：Nginx 反向代理
-
-```nginx
-server {
-    listen 443 ssl;
-    server_name your-domain.com;
-    ssl_certificate /path/to/fullchain.pem;
-    ssl_certificate_key /path/to/private.key;
-
-    location / {
-        proxy_pass http://127.0.0.1:5000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
-```
+- 内置 Cheroot WSGI 服务器，`python app.py` 即可独立运行
+- 生产环境推荐前置 Nginx 反向代理，且必须关闭缓冲以支持 SSE 长连接
+- 构建、打包与发布流程见 [DEVELOPMENT.md 构建与发布](docs/DEVELOPMENT.md)
+- 一键更新机制原理见 [ARCHITECTURE.md 一键更新机制](docs/ARCHITECTURE.md)
 
 ## 架构
 
-### 分层设计
+架构分层、目录结构、技术栈、异步架构与数据库设计详见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)。
 
-| 层级 | 职责 |
-|------|------|
-| **入口** `app.py` | Flask 实例、蓝图注册、WSGI 服务器 |
-| **核心** `core/` | 数据库、认证、中间件 — 不含业务逻辑，不导入 services |
-| **服务** `services/` | 纯业务逻辑，Flask 无关 — 返回 `(success, data_or_error)` 元组 |
-| **路由** `routes/` | 薄层 HTTP 处理 — 参数解析、调用 service、构造响应 |
-| **视图** `templates/` `static/` | 纯展示层 |
-
-### 异步架构
-
-| 组件 | 异步方式 |
-|------|----------|
-| 定时任务调度器 | 后台线程 + ThreadPoolExecutor |
-| 日志写入器 | 队列 + 后台线程批量写入 |
-| 日志清理器 | 后台线程定期检查 |
-| IP 地理信息 | 后台线程异步更新缓存 |
-| CPU 监控 | 后台线程定期采样（2 秒） |
-| 交互式终端 | session-based shell + 后台读取线程 + SSE |
-| MiniScript | 独立子进程 + SSE 流式回流 |
-
-### 安全
+### 安全要点
 
 1. 修改 `config.py` 中的 `SECRET_KEY` 为随机强密钥
 2. 修改默认管理员密码
@@ -465,11 +314,8 @@ server {
 
 ## 开发注意事项
 
-- **弹窗定位**：全屏弹窗/模态框应放置在 `{% block page_modals %}` 中（在 `</main>` 之后渲染），而非 `{% block content %}` 内，避免 `page-content` 的 `transform` 影响 `position: fixed` 定位。
-- **图形验证码模块化**：全局验证码弹窗 HTML 位于 `base.html`，JS 逻辑位于 `base.js` 的 `CaptchaModal` 对象。页面通过 `CaptchaModal.show(hint, callback)` 或 `window.__showCaptchaModal(hint, callback)` 调用。
-- **指南提交验证码**：`guides/form.html` 不再内联渲染验证码字段，而是点击「提交审核」后再弹出 `CaptchaModal`，验证通过才提交表单；验证码出错时弹窗内刷新验证码、不刷新页面，避免重置已填内容（表单保留隐藏的 `captcha`/`captcha_id` 字段）。
-- **白屏闪烁防护**：`base.html` 的 `<head>` 中内联深色背景样式和页面过渡动画初始状态，在外部 CSS 加载前即生效。
+编写新代码前必查的**分层规范、易错点清单与测试要求**，详见 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)。
 
 ## 更新日志
 
-详见 [docs/CHANGELOG.md](file:///workspace/docs/CHANGELOG.md)。
+详见 [docs/CHANGELOG.md](docs/CHANGELOG.md)。
