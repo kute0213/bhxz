@@ -467,6 +467,7 @@ server {
 
 - **弹窗定位**：全屏弹窗/模态框应放置在 `{% block page_modals %}` 中（在 `</main>` 之后渲染），而非 `{% block content %}` 内，避免 `page-content` 的 `transform` 影响 `position: fixed` 定位。
 - **图形验证码模块化**：全局验证码弹窗 HTML 位于 `base.html`，JS 逻辑位于 `base.js` 的 `CaptchaModal` 对象。页面通过 `CaptchaModal.show(hint, callback)` 或 `window.__showCaptchaModal(hint, callback)` 调用。
+- **指南提交验证码**：`guides/form.html` 不再内联渲染验证码字段，而是点击「提交审核」后再弹出 `CaptchaModal`，验证通过才提交表单；验证码出错时弹窗内刷新验证码、不刷新页面，避免重置已填内容（表单保留隐藏的 `captcha`/`captcha_id` 字段）。
 - **白屏闪烁防护**：`base.html` 的 `<head>` 中内联深色背景样式和页面过渡动画初始状态，在外部 CSS 加载前即生效。
 
 ## 更新日志

@@ -180,7 +180,7 @@ function hidePreviewModal() {
 <div id="preview-modal" class="fixed inset-0 z-50 hidden">
     <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="hidePreviewModal()"></div>
     <div class="absolute inset-0 flex items-center justify-center p-4">
-        <div class="relative w-full max-w-3xl max-h-[85vh] overflow-y-auto pixel-card rounded-2xl p-6 sm:p-8">
+        <div class="relative w-full max-w-3xl max-h-[85vh] min-h-0 overflow-y-auto pixel-card rounded-2xl p-6 sm:p-8">
             <div class="flex items-center justify-between mb-6">
                 <h3 class="text-lg font-bold" id="preview-title"></h3>
                 <button onclick="hidePreviewModal()" class="text-cream/60 hover:text-cream p-1"><i data-lucide="x" class="w-5 h-5"></i></button>
