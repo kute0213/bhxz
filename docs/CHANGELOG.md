@@ -13,7 +13,7 @@
 - **任务级最大超时**：创建/编辑定时任务时可单独设置「最大超时时间（秒）」，超时自动终止（直接运行不受此限制）
 
 ### 优化
-- **终端升级为 PTY 伪终端**（Unix）：SSH 式交互体验，Python `input()`/readline 原生可用、输入回显与行编辑正确、清屏与 ANSI 光标控制真实响应、输出实时流式返回；移除前端强制插入的 `$` 提示符，只保留真正的命令提示符
+- **终端升级为伪终端（跨平台）**：SSH 式交互体验，Python `input()`/readline 原生可用、输入回显与行编辑正确、清屏与 ANSI 光标控制真实响应、输出实时流式返回；移除前端强制插入的 `$` 提示符，只保留真正的命令提示符。Unix/macOS 走原生 `os.openpty()`，**Windows 无 pty/termios，改用 pywinpty（ConPTY）提供同等的真伪终端**（未安装 pywinpty 时自动回退到管道实现，避免启动失败；`requirements.txt` 已按平台标记引入 `pywinpty`）
 - **清理历史遗留命名**：`CmdPresets`→`ScriptPresets`、`__abortCmdScript`→`__abortRunningScript`，删除编辑器退出上报中一处无意义的错误兜底逻辑
 - 文档体系二次整合，最终精简为单一入口：
   - 将 `docs/ARCHITECTURE.md` 与 `docs/cmd-guide.md` 内容完整并入 `README.md`（架构、目录结构与技术栈；CMD 控制台使用说明），删除两文件

@@ -11,7 +11,7 @@ import uuid
 from config import APP_ROOT
 from services.process_manager import ProcessManager
 from services.shell import detect_shell, get_shell_env
-from services.terminal.pty import PtyProcess, available as pty_available
+from services.terminal.pty import available as pty_available, create_pty
 from services.terminal.session import TerminalSession
 
 
@@ -128,14 +128,14 @@ class TerminalManager:
     def _create_session_nolock(self, sid):
         """创建新的终端会话（调用方需持有 _lock）。
 
-        Unix 下优先使用 PTY（SSH 式交互：input 回显、清屏、光标控制），
-        Windows 或 PTY 不可用时回退到管道实现。
+        Unix 使用原生 PTY；Windows 使用 pywinpty/ConPTY（同样为真伪终端）。
+        未安装 pywinpty 或平台不支持 PTY 时，回退到管道实现。
         """
         shell_args, shell_type, init_commands = detect_shell()
         env = get_shell_env()
 
         if pty_available():
-            proc_wrapper = PtyProcess()
+            proc_wrapper = create_pty()
             try:
                 proc_wrapper.start(
                     shell_args,
