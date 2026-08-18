@@ -11,13 +11,42 @@
  * 暴露：window.ScriptEditorSse
  * 依赖：window.ScriptEditor（提供 getEditor / appendOutput / clearOutput / _updateRunButton）
  *      必须在 editor.js 之前加载（函数运行时才访问 window.ScriptEditor）
- *      window.CmdModal（交互弹窗）
+ *      window.ScriptModal（交互弹窗）
  */
 window.ScriptEditorSse = (function () {
 
     // 运行状态与前端 SSE 连接控制器（仅本模块内部使用）
     let isRunning = false;
     let currentFetchController = null;
+    const _exitHandlers = {};
+
+    // 页面退出时主动通知后端终止脚本（涵盖刷新、关闭标签页、跳转、意外关闭）
+    function setupExitWatching() {
+        if (_exitHandlers.installed) return;
+        _exitHandlers.installed = true;
+
+        const notifyExit = function () {
+            // 页面卸载期间 fetch 可能被取消，用 sendBeacon 最可靠
+            if (navigator.sendBeacon) {
+                navigator.sendBeacon('/admin/script/abort-script');
+            } else {
+                fetch('/admin/script/abort-script', { method: 'POST', keepalive: true }).catch(function () {});
+            }
+        };
+
+        _exitHandlers.pagehide = function () { if (getRunning()) notifyExit(); };
+        _exitHandlers.beforeunload = function () { if (getRunning()) notifyExit(); };
+        _exitHandlers.visibility = function () {
+            // 切到后台（隐含页面不可见）时先尝试终止；回到前台前端已重建也会重新发起
+            if (document.visibilityState === 'hidden' && getRunning()) notifyExit();
+        };
+        _exitHandlers.unload = function () { if (getRunning()) notifyExit(); };
+
+        window.addEventListener('pagehide', _exitHandlers.pagehide);
+        window.addEventListener('beforeunload', _exitHandlers.beforeunload);
+        window.addEventListener('unload', _exitHandlers.unload);
+        document.addEventListener('visibilitychange', _exitHandlers.visibility);
+    }
 
     // ==================================================================
     // 脚本运行：通过后端 SSE API 执行
@@ -34,6 +63,8 @@ window.ScriptEditorSse = (function () {
 
         setRunning(true);
         window.ScriptEditor.clearOutput();
+        // 注册页面退出监听，确保退出网页即强制终止脚本（幂等，只注册一次）
+        setupExitWatching();
 
         // 显示运行命令行（终端风格）
         const scriptName = window.ScriptEditor.getCurrentFilename
@@ -43,14 +74,14 @@ window.ScriptEditorSse = (function () {
         if (window.TerminalPanel) {
             window.TerminalPanel.appendCommandLine(runCmd);
         } else {
-            window.ScriptEditor.appendOutput('$ ' + runCmd, 'info');
+            window.ScriptEditor.appendOutput(runCmd, 'info');
         }
 
         // 使用 AbortController 以便在用户点击"强制终止"时切断前端连接
         currentFetchController = new AbortController();
 
         try {
-            const resp = await fetch('/admin/cmd/run-script', {
+            const resp = await fetch('/admin/script/run-script', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ code: code }),
@@ -142,15 +173,15 @@ window.ScriptEditorSse = (function () {
                 break;
             case 'alert':
                 // 显示弹窗，不需要回传响应（后端不等待）
-                if (window.CmdModal && window.CmdModal.alert) {
-                    window.CmdModal.alert(data.title || '提示', data.message || '');
+                if (window.ScriptModal && window.ScriptModal.alert) {
+                    window.ScriptModal.alert(data.title || '提示', data.message || '');
                 }
                 break;
             case 'prompt': {
                 // 显示输入框，用户输入后回传响应
                 let value = data.default || '';
-                if (window.CmdModal && window.CmdModal.prompt) {
-                    value = await window.CmdModal.prompt(data.title || '输入', data.message || '', data.default || '');
+                if (window.ScriptModal && window.ScriptModal.prompt) {
+                    value = await window.ScriptModal.prompt(data.title || '输入', data.message || '', data.default || '');
                 }
                 await sendScriptResponse(value);
                 break;
@@ -158,8 +189,8 @@ window.ScriptEditorSse = (function () {
             case 'confirm': {
                 // 显示确认框，用户选择后回传响应
                 let ok = false;
-                if (window.CmdModal && window.CmdModal.confirm) {
-                    ok = await window.CmdModal.confirm(data.title || '确认', data.message || '');
+                if (window.ScriptModal && window.ScriptModal.confirm) {
+                    ok = await window.ScriptModal.confirm(data.title || '确认', data.message || '');
                 }
                 await sendScriptResponse(!!ok);
                 break;
@@ -178,7 +209,7 @@ window.ScriptEditorSse = (function () {
 
     async function sendScriptResponse(value) {
         try {
-            await fetch('/admin/cmd/script-response', {
+            await fetch('/admin/script/script-response', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ value: value }),
@@ -193,7 +224,7 @@ window.ScriptEditorSse = (function () {
     // ----------------------------------------------------------------
     async function abortScript() {
         try {
-            const resp = await fetch('/admin/cmd/abort-script', { method: 'POST' });
+            const resp = await fetch('/admin/script/abort-script', { method: 'POST' });
             const result = await resp.json();
             if (result.success) {
                 window.ScriptEditor.appendOutput('[已发送终止请求]', 'warning');

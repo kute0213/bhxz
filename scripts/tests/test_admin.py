@@ -105,19 +105,19 @@ def test_admin_discussion_page():
         assert resp.status_code == 200, f"讨论管理页状态码: {resp.status_code}"
 
 
-def test_admin_cmd_page():
-    """测试 CMD 控制台页面。"""
+def test_admin_script_page():
+    """测试脚本控制台页面。"""
     with _app.test_client() as client:
         _login_admin(client)
-        resp = client.get('/admin/cmd')
-        assert resp.status_code == 200, f"CMD 控制台状态码: {resp.status_code}"
+        resp = client.get('/admin/script')
+        assert resp.status_code == 200, f"脚本控制台状态码: {resp.status_code}"
 
 
 def test_admin_scheduled_page():
     """测试定时任务管理页面。"""
     with _app.test_client() as client:
         _login_admin(client)
-        resp = client.get('/admin/cmd/scheduled')
+        resp = client.get('/admin/script/scheduled')
         assert resp.status_code == 200, f"定时任务页状态码: {resp.status_code}"
 
 
@@ -176,7 +176,7 @@ if __name__ == '__main__':
         test_admin_settings_page,
         test_admin_db_backup_page,
         test_admin_discussion_page,
-        test_admin_cmd_page,
+        test_admin_script_page,
         test_admin_scheduled_page,
         test_admin_public_files_page,
         test_admin_broadcast_page,

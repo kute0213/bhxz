@@ -18,7 +18,7 @@
  *   - editor-sse.js       → window.ScriptEditorSse
  *   - editor-terminal.js  → window.TerminalPanel
  *
- * 依赖：Monaco Editor、CmdModal（window.CmdModal）
+ * 依赖：Monaco Editor、ScriptModal（window.ScriptModal）
  */
 window.ScriptEditor = (function () {
 
@@ -216,7 +216,7 @@ window.ScriptEditor = (function () {
         updateSaveStatus('saving');
         const code = editor.getValue();
         try {
-            const resp = await fetch('/admin/cmd/scripts/' + editingScript.id, {
+            const resp = await fetch('/admin/script/scripts/' + editingScript.id, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ content: code })
@@ -270,8 +270,8 @@ window.ScriptEditor = (function () {
 
         // 新脚本：弹输入框输入名称和备注
         let name = '';
-        if (window.CmdModal && window.CmdModal.prompt) {
-            name = await window.CmdModal.prompt('保存脚本', '请输入脚本名称：', '');
+        if (window.ScriptModal && window.ScriptModal.prompt) {
+            name = await window.ScriptModal.prompt('保存脚本', '请输入脚本名称：', '');
         } else {
             name = prompt('请输入脚本名称：', '');
         }
@@ -279,8 +279,8 @@ window.ScriptEditor = (function () {
 
         // 备注可选
         let description = '';
-        if (window.CmdModal && window.CmdModal.prompt) {
-            description = await window.CmdModal.prompt('保存脚本', '请输入脚本备注（可选）：', '');
+        if (window.ScriptModal && window.ScriptModal.prompt) {
+            description = await window.ScriptModal.prompt('保存脚本', '请输入脚本备注（可选）：', '');
         } else {
             description = prompt('请输入脚本备注（可选）：', '') || '';
         }
@@ -290,7 +290,7 @@ window.ScriptEditor = (function () {
 
     async function doCreateScript(name, content, description) {
         try {
-            const resp = await fetch('/admin/cmd/scripts', {
+            const resp = await fetch('/admin/script/scripts', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -324,7 +324,7 @@ window.ScriptEditor = (function () {
         if (description !== undefined) data.description = description;
 
         try {
-            const resp = await fetch('/admin/cmd/scripts/' + id, {
+            const resp = await fetch('/admin/script/scripts/' + id, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data)

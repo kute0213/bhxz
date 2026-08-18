@@ -371,6 +371,8 @@ def init_db():
     add_column_if_not_exists('scheduled_tasks', 'script_id', 'INTEGER DEFAULT NULL')
     # 定时任务改为引用 cmd_commands 表中的快捷命令
     add_column_if_not_exists('scheduled_tasks', 'command_id', 'INTEGER DEFAULT NULL')
+    # 每个定时任务独立的最大执行超时（秒），NULL 表示使用全局默认
+    add_column_if_not_exists('scheduled_tasks', 'timeout_seconds', 'INTEGER DEFAULT NULL')
     # 用户表添加 email 列
     add_column_if_not_exists('users', 'email', "VARCHAR DEFAULT ''")
 

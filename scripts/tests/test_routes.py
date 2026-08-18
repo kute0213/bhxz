@@ -113,21 +113,21 @@ ROUTES = [
     ('/api/admin/logs/refresh', 'GET', [302, 401, 403], 'admin', '日志刷新API'),
 
     # ==========================================================================
-    # cmd 蓝图 ── 命令控制台（未登录预期 302/403）
+    # script 蓝图 ── 脚本控制台（未登录预期 302/403）
     # ==========================================================================
-    ('/admin/cmd',                  'GET', [302, 401, 403], 'admin', 'CMD控制台'),
-    ('/admin/cmd/terminal-page',    'GET', [302, 401, 403], 'admin', '终端页面'),
-    ('/admin/cmd/editor',           'GET', [302, 401, 403], 'admin', '脚本编辑器'),
-    ('/admin/cmd/commands',         'GET', [302, 401, 403], 'admin', '快捷命令列表'),
-    ('/admin/cmd/scripts',          'GET', [302, 401, 403], 'admin', '脚本列表'),
+    ('/admin/script',                  'GET', [302, 401, 403], 'admin', '脚本控制台'),
+    ('/admin/script/terminal-page',    'GET', [302, 401, 403], 'admin', '终端页面'),
+    ('/admin/script/editor',           'GET', [302, 401, 403], 'admin', '脚本编辑器'),
+    ('/admin/script/commands',         'GET', [302, 401, 403], 'admin', '快捷命令列表'),
+    ('/admin/script/scripts',          'GET', [302, 401, 403], 'admin', '脚本列表'),
 
     # ==========================================================================
     # scheduled 蓝图 ── 定时任务（未登录预期 302/403）
     # ==========================================================================
-    ('/admin/cmd/scheduled',               'GET', [302, 401, 403], 'admin', '定时任务管理'),
-    ('/admin/cmd/scheduled/tasks',         'GET', [302, 401, 403], 'admin', '定时任务列表'),
-    ('/admin/cmd/scheduled/status',        'GET', [302, 401, 403], 'admin', '任务状态'),
-    ('/admin/cmd/scheduled/logs',          'GET', [302, 401, 403], 'admin', '任务日志'),
+    ('/admin/script/scheduled',               'GET', [302, 401, 403], 'admin', '定时任务管理'),
+    ('/admin/script/scheduled/tasks',         'GET', [302, 401, 403], 'admin', '定时任务列表'),
+    ('/admin/script/scheduled/status',        'GET', [302, 401, 403], 'admin', '任务状态'),
+    ('/admin/script/scheduled/logs',          'GET', [302, 401, 403], 'admin', '任务日志'),
 
     # ==========================================================================
     # 静态文件

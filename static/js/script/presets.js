@@ -4,15 +4,15 @@
  * 功能：
  *   - 增删改查一键命令（Shell 命令，存储在数据库）
  *   - 脚本列表展示和运行（从文件系统读取）
- *   - 运行普通 CMD 命令（前端通过 SSE 流式执行）
- *   - 运行 Python 脚本（通过后端 SSE API /admin/cmd/run-script 执行）
+ *   - 运行普通脚本命令（前端通过 SSE 流式执行）
+ *   - 运行 Python 脚本（通过后端 SSE API /admin/script/run-script 执行）
  *
  * 类型判断：
  *   - Shell 命令：存储在 cmd_commands 表中，描述不以 [脚本] 开头
  *   - 脚本：存储在文件系统 scripts/ 目录下
  */
 
-window.CmdPresets = (function () {
+window.ScriptPresets = (function () {
     let listContainer = null;
     let scriptListContainer = null;
     let addBtn = null;
@@ -35,17 +35,17 @@ window.CmdPresets = (function () {
     function init(options) {
         listContainer = document.getElementById('preset-list');
         scriptListContainer = document.getElementById('script-list');
-        addBtn = document.getElementById('add-cmd-btn');
+        addBtn = document.getElementById('add-script-btn');
         modal = document.getElementById('cmd-modal');
-        modalTitle = document.getElementById('cmd-modal-title');
+        modalTitle = document.getElementById('script-modal-title');
         form = document.getElementById('cmd-form');
-        formId = document.getElementById('cmd-form-id');
-        formName = document.getElementById('cmd-form-name');
-        formCmd = document.getElementById('cmd-form-command');
-        formDesc = document.getElementById('cmd-form-desc');
-        formSort = document.getElementById('cmd-form-sort');
-        formType = document.getElementById('cmd-form-type');
-        cancelBtn = document.getElementById('cmd-modal-cancel');
+        formId = document.getElementById('script-form-id');
+        formName = document.getElementById('script-form-name');
+        formCmd = document.getElementById('script-form-command');
+        formDesc = document.getElementById('script-form-desc');
+        formSort = document.getElementById('script-form-sort');
+        formType = document.getElementById('script-form-type');
+        cancelBtn = document.getElementById('script-modal-cancel');
 
         onRunCommand = options && options.onRunCommand;
         onRunScript = options && options.onRunScript;
@@ -66,8 +66,8 @@ window.CmdPresets = (function () {
     function load() {
         // 并行加载：Shell 命令 + 脚本列表
         Promise.all([
-            fetch('/admin/cmd/commands').then(r => r.json()),
-            fetch('/admin/cmd/scripts').then(r => r.json()).catch(() => ({ scripts: [] }))
+            fetch('/admin/script/commands').then(r => r.json()),
+            fetch('/admin/script/scripts').then(r => r.json()).catch(() => ({ scripts: [] }))
         ]).then(([cmdData, scriptData]) => {
             // 筛选出 Shell 命令（排除脚本类型）
             const allCommands = cmdData.commands || [];
@@ -130,7 +130,7 @@ window.CmdPresets = (function () {
             btn.addEventListener('click', () => {
                 const id = btn.closest('[data-script-id]').dataset.scriptId;
                 if (id) {
-                    window.location.href = '/admin/cmd/editor?id=' + encodeURIComponent(id);
+                    window.location.href = '/admin/script/editor?id=' + encodeURIComponent(id);
                 }
             });
         });
@@ -141,18 +141,18 @@ window.CmdPresets = (function () {
                 const id = btn.closest('[data-script-id]').dataset.scriptId;
                 const script = scripts.find(s => String(s.id) === String(id));
                 if (!script) return;
-                const ok = await window.CmdModal.confirm('删除脚本', '确定删除脚本 "' + script.name + '"？');
+                const ok = await window.ScriptModal.confirm('删除脚本', '确定删除脚本 "' + script.name + '"？');
                 if (!ok) return;
                 try {
-                    const r = await fetch('/admin/cmd/scripts/' + id, { method: 'DELETE' });
+                    const r = await fetch('/admin/script/scripts/' + id, { method: 'DELETE' });
                     const data = await r.json();
                     if (data.success) {
                         load();
                     } else {
-                        window.CmdModal.alert('删除失败', data.message || '未知错误');
+                        window.ScriptModal.alert('删除失败', data.message || '未知错误');
                     }
                 } catch (err) {
-                    window.CmdModal.alert('网络错误', err.message);
+                    window.ScriptModal.alert('网络错误', err.message);
                 }
             });
         });
@@ -165,7 +165,7 @@ window.CmdPresets = (function () {
                 if (!script) return;
 
                 try {
-                    const r = await fetch('/admin/cmd/scripts/' + id);
+                    const r = await fetch('/admin/script/scripts/' + id);
                     const data = await r.json();
                     if (data.script && onRunScript) {
                         onRunScript({
@@ -177,7 +177,7 @@ window.CmdPresets = (function () {
                         });
                     }
                 } catch (err) {
-                    window.CmdModal.alert('加载失败', '加载脚本失败: ' + err.message);
+                    window.ScriptModal.alert('加载失败', '加载脚本失败: ' + err.message);
                 }
             });
         });
@@ -199,20 +199,20 @@ window.CmdPresets = (function () {
 
         listContainer.innerHTML = commands.map(cmd => {
             return `
-            <div class="pixel-card rounded-xl p-4" data-cmd-id="${cmd.id}">
+            <div class="pixel-card rounded-xl p-4" data-script-id="${cmd.id}">
                 <div class="flex items-start justify-between gap-2 mb-2">
                     <div class="flex-1 min-w-0">
                         <div class="flex items-center gap-2 mb-1">
                             <h3 class="font-bold text-cream truncate">${escapeHtml(cmd.name)}</h3>
-                            <span class="text-[10px] bg-forest-600/50 text-cream/70 px-1.5 py-0.5 rounded">CMD</span>
+                            <span class="text-[10px] bg-forest-600/50 text-cream/70 px-1.5 py-0.5 rounded">Shell</span>
                         </div>
                         ${cmd.description ? `<p class="text-cream/50 text-xs truncate">${escapeHtml(cmd.description)}</p>` : ''}
                     </div>
                     <div class="flex gap-1 flex-shrink-0">
-                        <button class="cmd-edit-btn p-1.5 text-cream/50 hover:text-gold-400 transition-colors" title="编辑">
+                        <button class="script-edit-btn p-1.5 text-cream/50 hover:text-gold-400 transition-colors" title="编辑">
                             <i data-lucide="edit-2" class="w-4 h-4"></i>
                         </button>
-                        <button class="cmd-delete-btn p-1.5 text-cream/50 hover:text-red-400 transition-colors" title="删除">
+                        <button class="script-delete-btn p-1.5 text-cream/50 hover:text-red-400 transition-colors" title="删除">
                             <i data-lucide="trash" class="w-4 h-4"></i>
                         </button>
                     </div>
@@ -220,7 +220,7 @@ window.CmdPresets = (function () {
                 <div class="bg-black/30 rounded px-3 py-2 mb-3 font-mono text-xs text-cream/70 overflow-x-auto whitespace-pre-wrap max-h-20">
 ${escapeHtml(cmd.command)}
                 </div>
-                <button class="cmd-run-preset-btn w-full py-2 bg-forest-700/50 border border-cream/10 text-cream rounded-lg hover:bg-forest-600/50 transition-colors text-sm font-medium flex items-center justify-center gap-2">
+                <button class="script-run-preset-btn w-full py-2 bg-forest-700/50 border border-cream/10 text-cream rounded-lg hover:bg-forest-600/50 transition-colors text-sm font-medium flex items-center justify-center gap-2">
                     <i data-lucide="play" class="w-4 h-4 text-gold-400"></i>
                     运行
                 </button>
@@ -230,38 +230,38 @@ ${escapeHtml(cmd.command)}
 
         if (window.lucide) lucide.createIcons();
 
-        listContainer.querySelectorAll('.cmd-edit-btn').forEach(btn => {
+        listContainer.querySelectorAll('.script-edit-btn').forEach(btn => {
             btn.addEventListener('click', () => {
-                const id = parseInt(btn.closest('[data-cmd-id]').dataset.cmdId);
+                const id = parseInt(btn.closest('[data-script-id]').dataset.cmdId);
                 const cmd = commands.find(c => c.id === id);
                 if (cmd) openModal(cmd);
             });
         });
 
-        listContainer.querySelectorAll('.cmd-delete-btn').forEach(btn => {
+        listContainer.querySelectorAll('.script-delete-btn').forEach(btn => {
             btn.addEventListener('click', async () => {
-                const id = parseInt(btn.closest('[data-cmd-id]').dataset.cmdId);
+                const id = parseInt(btn.closest('[data-script-id]').dataset.cmdId);
                 const cmd = commands.find(c => c.id === id);
                 if (!cmd) return;
-                const ok = await window.CmdModal.confirm('删除快捷命令', '确定删除 "' + cmd.name + '"？');
+                const ok = await window.ScriptModal.confirm('删除快捷命令', '确定删除 "' + cmd.name + '"？');
                 if (!ok) return;
                 try {
-                    const r = await fetch('/admin/cmd/commands/' + id + '/delete', { method: 'POST' });
+                    const r = await fetch('/admin/script/commands/' + id + '/delete', { method: 'POST' });
                     const data = await r.json();
                     if (data.success) {
                         load();
                     } else {
-                        window.CmdModal.alert('删除失败', data.message || '未知错误');
+                        window.ScriptModal.alert('删除失败', data.message || '未知错误');
                     }
                 } catch (err) {
-                    window.CmdModal.alert('网络错误', err.message);
+                    window.ScriptModal.alert('网络错误', err.message);
                 }
             });
         });
 
-        listContainer.querySelectorAll('.cmd-run-preset-btn').forEach(btn => {
+        listContainer.querySelectorAll('.script-run-preset-btn').forEach(btn => {
             btn.addEventListener('click', () => {
-                const id = parseInt(btn.closest('[data-cmd-id]').dataset.cmdId);
+                const id = parseInt(btn.closest('[data-script-id]').dataset.cmdId);
                 const cmd = commands.find(c => c.id === id);
                 if (!cmd) return;
                 if (onRunCommand) onRunCommand(cmd);
@@ -307,7 +307,7 @@ ${escapeHtml(cmd.command)}
             sort_order: parseInt(formSort.value) || 0
         };
 
-        const url = id ? '/admin/cmd/commands/' + id : '/admin/cmd/commands';
+        const url = id ? '/admin/script/commands/' + id : '/admin/script/commands';
         const method = id ? 'PUT' : 'POST';
 
         try {
@@ -321,10 +321,10 @@ ${escapeHtml(cmd.command)}
                 closeModal();
                 load();
             } else {
-                window.CmdModal.alert('保存失败', result.message || '未知错误');
+                window.ScriptModal.alert('保存失败', result.message || '未知错误');
             }
         } catch (err) {
-            window.CmdModal.alert('网络错误', err.message);
+            window.ScriptModal.alert('网络错误', err.message);
         }
     }
 

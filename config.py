@@ -31,10 +31,10 @@ LOG_CLEANUP_INTERVAL = 300  # 5 分钟
 # 定时任务调度器配置
 # ---------------------------------------------------------------------------
 
-# 调度器检查间隔（秒），后台线程每隔此时间扫描一次到期任务
-TASK_SCHEDULER_INTERVAL = 10
+# 调度器检查间隔（秒），后台线程每隔此时间判断一次到期的定时任务
+TASK_SCHEDULER_INTERVAL = 1
 
-# 单个定时任务执行超时（秒）
+# 定时任务默认执行超时（秒）；每个任务可用 timeout_seconds 单独覆盖
 TASK_EXECUTION_TIMEOUT = 300
 
 # 定时任务执行线程池大小
@@ -69,15 +69,6 @@ BACKUP_CHECKPOINT = True
 # ---------------------------------------------------------------------------
 # MiniScript 脚本执行引擎配置
 # ---------------------------------------------------------------------------
-
-# 脚本默认执行超时（秒），超时后子进程被强制终止
-SCRIPT_DEFAULT_TIMEOUT = 30
-
-# 脚本最大允许执行超时（秒），脚本内 set_timeout() 不能超过此值
-SCRIPT_MAX_TIMEOUT = 300
-
-# 脚本最大循环迭代次数（防止死循环）
-SCRIPT_MAX_LOOP_ITER = 100000
 
 # 脚本执行器并发数量限制（同时运行的脚本子进程数）
 SCRIPT_EXECUTOR_POOL_SIZE = 2
@@ -193,7 +184,7 @@ SETTINGS_REGISTRY = [
     ('LOG_CLEANUP_INTERVAL', 300, 'int', '日志清理间隔（秒）', '后台线程每隔此时间检查一次日志数量', '日志清理'),
 
     # 定时任务
-    ('TASK_SCHEDULER_INTERVAL', 10, 'int', '任务调度间隔（秒）', '后台线程每隔此时间扫描一次到期任务', '定时任务'),
+    ('TASK_SCHEDULER_INTERVAL', 1, 'int', '任务调度间隔（秒）', '后台线程每隔此时间判断一次到期的定时任务', '定时任务'),
     ('TASK_EXECUTION_TIMEOUT', 300, 'int', '任务执行超时（秒）', '单个定时任务执行超时后自动终止', '定时任务'),
     ('TASK_EXECUTOR_POOL_SIZE', 4, 'int', '任务执行线程池大小', '同时执行的定时任务数量上限', '定时任务'),
 
@@ -205,9 +196,6 @@ SETTINGS_REGISTRY = [
     ('BACKUP_CHECKPOINT', True, 'bool', '备份前执行 CHECKPOINT', '将 WAL 合并到主文件，减小数据库体积', '数据库备份'),
 
     # 脚本执行
-    ('SCRIPT_DEFAULT_TIMEOUT', 30, 'int', '脚本默认超时（秒）', '脚本执行默认超时时间', '脚本执行'),
-    ('SCRIPT_MAX_TIMEOUT', 300, 'int', '脚本最大超时（秒）', '脚本内 set_timeout() 不能超过此值', '脚本执行'),
-    ('SCRIPT_MAX_LOOP_ITER', 100000, 'int', '脚本最大循环次数', '防止脚本死循环，超过后自动终止', '脚本执行'),
     ('SCRIPT_EXECUTOR_POOL_SIZE', 2, 'int', '脚本执行并发数', '同时运行的脚本子进程数上限', '脚本执行'),
 
     # 安全

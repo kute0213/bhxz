@@ -5,15 +5,15 @@
     <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="text-center mb-8 sm:mb-10">
             <h1 class="text-2xl sm:text-3xl font-bold mb-3">定时任务管理</h1>
-            <p class="text-cream/60 text-sm sm:text-base">设置定时执行的 CMD 命令，支持间隔执行、每日定时、一次性执行</p>
+            <p class="text-cream/60 text-sm sm:text-base">设置定时执行的脚本命令，支持间隔执行、每日定时、一次性执行</p>
         </div>
 
         <!-- 顶部操作栏 -->
         <div class="flex flex-wrap gap-3 mb-6 justify-center sm:justify-start">
-            <a href="{{ url_for('cmd.cmd_page') }}"
+            <a href="{{ url_for('script.script_page') }}"
                class="px-5 py-2.5 bg-forest-700/60 border border-cream/10 text-cream rounded-lg hover:bg-forest-600/60 transition-colors flex items-center gap-2">
                 <i data-lucide="arrow-left" class="w-5 h-5"></i>
-                返回 CMD 控制台
+                返回 脚本控制台
             </a>
             <button id="create-task-btn"
                     class="px-5 py-2.5 bg-gold-400 text-forest-900 font-bold rounded-lg hover:bg-gold-500 transition-colors flex items-center gap-2">
@@ -25,6 +25,22 @@
                 <i data-lucide="scroll-text" class="w-5 h-5"></i>
                 执行日志
             </button>
+        </div>
+
+        <!-- 运行中任务 -->
+        <div id="running-panel" class="hidden mb-6 bg-forest-700/30 border border-blue-400/20 rounded-xl p-4">
+            <div class="flex items-center gap-2 mb-3">
+                <span class="relative flex h-2.5 w-2.5">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                    <span class="relative inline-flex rounded-full h-2.5 w-2.5 bg-blue-400"></span>
+                </span>
+                <h2 class="font-bold text-blue-200">运行中任务</h2>
+                <span id="running-count" class="text-xs text-blue-300/70">(0)</span>
+                <span class="text-xs text-cream/40">= 立即执行启动、无超时限制</span>
+            </div>
+            <div id="running-list" class="space-y-2">
+                <!-- 由 JS 动态填充 -->
+            </div>
         </div>
 
         <!-- 任务列表 -->
@@ -40,9 +56,9 @@
     </div>
 </section>
 
-<script src="{{ url_for('static', filename='js/cmd/modal.js', v='4') }}"></script>
-<script src="{{ url_for('static', filename='js/cmd/scheduled.js', v='5') }}"></script>
-<script src="{{ url_for('static', filename='js/cmd/scheduled-logs.js', v='2') }}"></script>
+<script src="{{ url_for('static', filename='js/script/modal.js', v='4') }}"></script>
+<script src="{{ url_for('static', filename='js/script/scheduled.js', v='6') }}"></script>
+<script src="{{ url_for('static', filename='js/script/scheduled-logs.js', v='2') }}"></script>
 {% endblock %}
 
 {% block page_modals %}
@@ -91,6 +107,12 @@
                 <label class="block text-sm font-medium text-cream/70 mb-1" id="time-label">执行时间</label>
                 <input type="datetime-local" id="task-execute-at"
                        class="w-full px-3 py-2 bg-forest-900/60 border border-cream/10 rounded-lg text-cream focus:border-gold-400 focus:outline-none">
+            </div>
+            <div>
+                <label class="block text-sm font-medium text-cream/70 mb-1">最大超时时间（秒）</label>
+                <input type="number" id="task-timeout" min="1" placeholder="留空使用全局默认"
+                       class="w-full px-3 py-2 bg-forest-900/60 border border-cream/10 rounded-lg text-cream focus:border-gold-400 focus:outline-none">
+                <p class="text-xs text-cream/40 mt-1">定时任务运行超过此时长将被终止；「立即执行」不受此限制</p>
             </div>
             <div class="flex gap-3 pt-4">
                 <button type="submit"

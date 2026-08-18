@@ -6,7 +6,7 @@
         <!-- 顶部状态栏 -->
         <div class="flex items-center justify-between px-4 sm:px-6 py-2.5 flex-shrink-0" style="background:rgba(0,0,0,0.35);border-bottom:1px solid rgba(255,255,255,0.06);">
             <div class="flex items-center gap-3 sm:gap-5">
-                <a href="{{ url_for('cmd.cmd_page') }}" class="p-1.5 -ml-1.5 text-cream/50 hover:text-gold-400 transition-colors rounded-lg hover:bg-cream/5" title="返回 CMD 控制台">
+                <a href="{{ url_for('script.script_page') }}" class="p-1.5 -ml-1.5 text-cream/50 hover:text-gold-400 transition-colors rounded-lg hover:bg-cream/5" title="返回 脚本控制台">
                     <i data-lucide="arrow-left" class="w-4 h-4"></i>
                 </a>
                 <div class="flex items-center gap-2.5">
@@ -126,7 +126,7 @@
 {% endblock %}
 
 {% block extra_script %}
-<script src="{{ url_for('static', filename='js/cmd/terminal-core.js', v='2') }}"></script>
-<script src="{{ url_for('static', filename='js/cmd/terminal-page.js', v='1') }}"></script>
+<script src="{{ url_for('static', filename='js/script/terminal-core.js', v='2') }}"></script>
+<script src="{{ url_for('static', filename='js/script/terminal-page.js', v='1') }}"></script>
 {% endblock %}
 {% block page_modals %}{% endblock %}

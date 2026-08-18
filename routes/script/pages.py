@@ -4,13 +4,13 @@ from flask import render_template, request
 
 from core.auth import login_required
 from core.db import get_db
-from routes.cmd import cmd_bp
-from routes.cmd.script import _admin_check
+from routes.script import script_bp
+from routes.script.common import _admin_check
 
 
-@cmd_bp.route('/admin/cmd')
+@script_bp.route('/admin/script')
 @login_required
-def cmd_page():
+def script_page():
     user = _admin_check()
     conn = get_db()
     try:
@@ -29,13 +29,13 @@ def cmd_page():
     ]
 
     return render_template(
-        'admin/admin_cmd.html',
+        'admin/admin_script.html',
         user=user,
         commands=shell_commands,
     )
 
 
-@cmd_bp.route('/admin/cmd/terminal-page')
+@script_bp.route('/admin/script/terminal-page')
 @login_required
 def terminal_page():
     """独立实时终端页面。"""
@@ -43,9 +43,9 @@ def terminal_page():
     return render_template('admin/admin_terminal_page.html', user=user)
 
 
-@cmd_bp.route('/admin/cmd/editor')
+@script_bp.route('/admin/script/editor')
 @login_required
-def cmd_editor_page():
+def script_editor_page():
     """独立脚本编辑器页面。
 
     支持加载方式：
@@ -76,7 +76,7 @@ def cmd_editor_page():
             conn.close()
 
     return render_template(
-        'admin/admin_cmd_editor.html',
+        'admin/admin_script_editor.html',
         user=user,
         editing_cmd=editing_cmd,
         editing_script=editing_script,

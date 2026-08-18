@@ -42,7 +42,7 @@ class TaskScheduler:
             max_workers=TASK_EXECUTOR_POOL_SIZE,
             thread_name_prefix='task-exec',
         )
-        self._running_tasks = set()
+        self._running_tasks = {}  # task_id -> started_at（时间戳），用于并发去重与运行中列表
         self._running_lock = threading.Lock()
 
     # ------------------------------------------------------------------
@@ -71,8 +71,8 @@ class TaskScheduler:
     def _run_loop(self):
         """调度器主循环。
 
-        单次 _tick() 抛出的任何异常都被吞掉并记录，
-        绝不影响后续调度周期——这是调度器高可用的关键。
+        每 1 秒判断一次（按到期时间排队），单次 _tick() 抛出的任何异常
+        都被吞掉并记录，绝不影响后续判断——这是调度器高可用的关键。
         """
         while not self._stop_event.is_set():
             try:
@@ -82,13 +82,14 @@ class TaskScheduler:
                     f'[Scheduler] 调度异常: {e}\n{traceback.format_exc()}',
                     flush=True,
                 )
-            self._stop_event.wait(get_config_value('TASK_SCHEDULER_INTERVAL', 10))
+            self._stop_event.wait(get_config_value('TASK_SCHEDULER_INTERVAL', 1))
 
     def _tick(self):
-        """扫描到期任务并提交执行。
+        """按到期时间顺序取出当期任务并提交执行。
 
-        数据库异常被隔离，不会冒泡到 _run_loop 导致整轮跳过；
-        单个任务提交失败也不会影响其他任务。
+        只勾选 next_run_at <= now 的任务，并按 next_run_at 升序排队，
+        避免每次对整个任务表做全量扫描；配合 _running_tasks 去重，
+        保证已提交执行的任务不会被重复判断。
         """
         now = datetime.datetime.now()
         now_str = now.strftime('%Y-%m-%d %H:%M:%S')
@@ -97,14 +98,16 @@ class TaskScheduler:
             conn = get_db()
             try:
                 tasks = conn.execute(
-                    "SELECT * FROM scheduled_tasks WHERE is_enabled = 1 AND next_run_at <= ?",
+                    "SELECT * FROM scheduled_tasks WHERE is_enabled = 1 "
+                    "AND next_run_at IS NOT NULL AND next_run_at <= ? "
+                    "ORDER BY next_run_at ASC",
                     (now_str,),
                 ).fetchall()
             finally:
                 conn.close()
         except Exception as e:
             print(
-                f'[Scheduler] 扫描到期任务失败: {e}\n{traceback.format_exc()}',
+                f'[Scheduler] 判断到期任务失败: {e}\n{traceback.format_exc()}',
                 flush=True,
             )
             return
@@ -114,7 +117,7 @@ class TaskScheduler:
             with self._running_lock:
                 if task_id in self._running_tasks:
                     continue
-                self._running_tasks.add(task_id)
+                self._running_tasks[task_id] = time.time()
 
             try:
                 self._executor.submit(self._execute_task, dict(task))
@@ -125,14 +128,59 @@ class TaskScheduler:
                     flush=True,
                 )
                 with self._running_lock:
-                    self._running_tasks.discard(task_id)
+                    self._running_tasks.pop(task_id, None)
+
+    # ------------------------------------------------------------------
+    # 运行中任务列表
+    # ------------------------------------------------------------------
+
+    def get_running_tasks(self):
+        """返回当前正在执行的任务列表（含开始时间）。
+
+        Returns:
+            list[dict]: [{'task_id': int, 'name': str, 'started_at': str}]
+        """
+        ids_with_time = []
+        with self._running_lock:
+            for tid, started in self._running_tasks.items():
+                ids_with_time.append((tid, started))
+
+        result = []
+        if not ids_with_time:
+            return result
+
+        conn = None
+        try:
+            conn = get_db()
+            for tid, started in ids_with_time:
+                row = conn.execute(
+                    "SELECT name FROM scheduled_tasks WHERE id = ?", (tid,)
+                ).fetchone()
+                if row:
+                    result.append({
+                        'task_id': tid,
+                        'name': row['name'],
+                        'started_at': datetime.datetime.fromtimestamp(
+                            started
+                        ).strftime('%Y-%m-%d %H:%M:%S'),
+                    })
+        except Exception as e:
+            print(f'[Scheduler] 读取运行中任务失败: {e}', flush=True)
+        finally:
+            if conn is not None:
+                conn.close()
+        return result
 
     # ------------------------------------------------------------------
     # 任务执行
     # ------------------------------------------------------------------
 
-    def _execute_task(self, task: dict):
+    def _execute_task(self, task: dict, no_timeout=False):
         """在子线程中执行单个定时任务。
+
+        no_timeout=True 表示「直接运行」：不受超时限制，一直执行到结束
+        （用户启动自定义脚本的长时任务）。普通定时任务仍按 timeout_seconds
+        或全局默认超时执行。
 
         任何异常（执行 / 日志 / 调度更新）都被吞掉并记录，
         确保单个任务的失败不影响线程池中其他任务，也不影响调度主循环。
@@ -190,7 +238,11 @@ class TaskScheduler:
             proc_result = run_process(
                 cmd_content,
                 cwd=os.getcwd(),
-                timeout=get_config_value('TASK_EXECUTION_TIMEOUT', 300),
+                # 直接运行不受超时限制；定时任务用 timeout_seconds 或全局默认
+                timeout=None if no_timeout else (
+                    task.get('timeout_seconds')
+                    or get_config_value('TASK_EXECUTION_TIMEOUT', 300)
+                ),
             )
             output = proc_result['stdout'] + proc_result['stderr']
             exit_code = proc_result['returncode']
@@ -224,7 +276,7 @@ class TaskScheduler:
                 # 关键：无论收尾是否成功，必须从 _running_tasks 移除，
                 # 否则该任务将永远无法被再次调度
                 with self._running_lock:
-                    self._running_tasks.discard(task_id)
+                    self._running_tasks.pop(task_id, None)
 
     def _log_task_result(self, task, executed_command, output, exit_code, success,
                          started_str, finished_str, duration):
@@ -414,15 +466,16 @@ class TaskScheduler:
         with self._running_lock:
             if task_id in self._running_tasks:
                 return False
-            self._running_tasks.add(task_id)
+            self._running_tasks[task_id] = time.time()
 
         try:
-            self._executor.submit(self._execute_task, dict(task))
+            # 直接运行（立即执行）：不受超时限制，一直执行到结束
+            self._executor.submit(self._execute_task, dict(task), no_timeout=True)
         except Exception as e:
             # 线程池已关闭 / 拒绝提交：回滚状态
             print(f'[Scheduler] 触发提交失败 #{task_id}: {e}', flush=True)
             with self._running_lock:
-                self._running_tasks.discard(task_id)
+                self._running_tasks.pop(task_id, None)
             return False
         return True
 

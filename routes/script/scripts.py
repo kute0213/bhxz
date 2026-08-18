@@ -8,11 +8,11 @@ from flask import request, jsonify
 
 from core.auth import login_required
 from services import script_store
-from routes.cmd import cmd_bp
-from routes.cmd.script import _admin_check
+from routes.script import script_bp
+from routes.script.common import _admin_check
 
 
-@cmd_bp.route('/admin/cmd/scripts', methods=['GET'])
+@script_bp.route('/admin/script/scripts', methods=['GET'])
 @login_required
 def list_scripts_api():
     """获取所有脚本列表。
@@ -26,7 +26,7 @@ def list_scripts_api():
     return jsonify({'scripts': scripts})
 
 
-@cmd_bp.route('/admin/cmd/scripts/<int:script_id>', methods=['GET'])
+@script_bp.route('/admin/script/scripts/<int:script_id>', methods=['GET'])
 @login_required
 def get_script_api(script_id):
     """获取单个脚本内容。"""
@@ -37,7 +37,7 @@ def get_script_api(script_id):
     return jsonify({'script': script_info})
 
 
-@cmd_bp.route('/admin/cmd/scripts', methods=['POST'])
+@script_bp.route('/admin/script/scripts', methods=['POST'])
 @login_required
 def create_script_api():
     """创建新脚本。
@@ -75,7 +75,7 @@ def create_script_api():
         return jsonify({'success': False, 'message': f'创建失败: {e}'}), 500
 
 
-@cmd_bp.route('/admin/cmd/scripts/<int:script_id>', methods=['PUT'])
+@script_bp.route('/admin/script/scripts/<int:script_id>', methods=['PUT'])
 @login_required
 def update_script_api(script_id):
     """更新脚本。
@@ -112,8 +112,8 @@ def update_script_api(script_id):
         return jsonify({'success': False, 'message': f'更新失败: {e}'}), 500
 
 
-@cmd_bp.route('/admin/cmd/scripts/<int:script_id>', methods=['DELETE'])
-@cmd_bp.route('/admin/cmd/scripts/<int:script_id>/delete', methods=['POST'])
+@script_bp.route('/admin/script/scripts/<int:script_id>', methods=['DELETE'])
+@script_bp.route('/admin/script/scripts/<int:script_id>/delete', methods=['POST'])
 @login_required
 def delete_script_api(script_id):
     """删除脚本。

@@ -14,19 +14,19 @@ from routes.scheduled import scheduled_bp, _admin_check
 # 页面
 # ---------------------------------------------------------------------------
 
-@scheduled_bp.route('/admin/cmd/scheduled')
+@scheduled_bp.route('/admin/script/scheduled')
 @login_required
 def scheduled_page():
     """定时任务管理页面。"""
     user = _admin_check()
-    return render_template('admin/admin_cmd_scheduled.html', user=user)
+    return render_template('admin/admin_script_scheduled.html', user=user)
 
 
 # ---------------------------------------------------------------------------
 # 任务 CRUD
 # ---------------------------------------------------------------------------
 
-@scheduled_bp.route('/admin/cmd/scheduled/tasks', methods=['GET'])
+@scheduled_bp.route('/admin/script/scheduled/tasks', methods=['GET'])
 @login_required
 def list_tasks():
     """获取所有定时任务列表。"""
@@ -42,7 +42,7 @@ def list_tasks():
     return jsonify({'tasks': tasks})
 
 
-@scheduled_bp.route('/admin/cmd/scheduled/tasks', methods=['POST'])
+@scheduled_bp.route('/admin/script/scheduled/tasks', methods=['POST'])
 @login_required
 def create_task():
     """创建定时任务。"""
@@ -70,6 +70,18 @@ def create_task():
     # 间隔秒数必须为正整数，避免 0/负值导致任务死循环
     if interval_seconds < 1:
         return jsonify({'success': False, 'message': '间隔秒数必须大于 0'}), 400
+
+    # 最大超时时间（秒）：为空表示使用全局默认
+    timeout_seconds = data.get('timeout_seconds')
+    if timeout_seconds in (None, '', '0'):
+        timeout_seconds = None
+    else:
+        try:
+            timeout_seconds = int(timeout_seconds)
+        except (ValueError, TypeError):
+            return jsonify({'success': False, 'message': '最大超时时间格式无效'}), 400
+        if timeout_seconds < 1:
+            return jsonify({'success': False, 'message': '最大超时时间必须大于 0 秒'}), 400
 
     # 从 cmd_commands 表读取快捷命令
     conn = get_db()
@@ -110,10 +122,10 @@ def create_task():
         cursor.execute(
             "INSERT INTO scheduled_tasks "
             "(name, command, schedule_type, interval_seconds, execute_at, "
-            " is_enabled, next_run_at, created_at, task_type, command_id) "
-            "VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?)",
+            " is_enabled, next_run_at, created_at, task_type, command_id, timeout_seconds) "
+            "VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)",
             (name, command, schedule_type, interval_seconds,
-             execute_at or None, next_run, now, task_type, command_id),
+             execute_at or None, next_run, now, task_type, command_id, timeout_seconds),
         )
         conn.commit()
         task_id = cursor.lastrowid
@@ -132,7 +144,7 @@ def create_task():
     })
 
 
-@scheduled_bp.route('/admin/cmd/scheduled/tasks/<int:task_id>', methods=['PUT', 'POST'])
+@scheduled_bp.route('/admin/script/scheduled/tasks/<int:task_id>', methods=['PUT', 'POST'])
 @login_required
 def update_task(task_id):
     """更新定时任务。"""
@@ -162,6 +174,18 @@ def update_task(task_id):
     # 间隔秒数必须为正整数，避免 0/负值导致任务死循环
     if interval_seconds < 1:
         return jsonify({'success': False, 'message': '间隔秒数必须大于 0'}), 400
+
+    # 最大超时时间（秒）：为空表示使用全局默认
+    timeout_seconds = data.get('timeout_seconds')
+    if timeout_seconds in (None, '', '0'):
+        timeout_seconds = None
+    else:
+        try:
+            timeout_seconds = int(timeout_seconds)
+        except (ValueError, TypeError):
+            return jsonify({'success': False, 'message': '最大超时时间格式无效'}), 400
+        if timeout_seconds < 1:
+            return jsonify({'success': False, 'message': '最大超时时间必须大于 0 秒'}), 400
 
     # 从 cmd_commands 表读取快捷命令
     conn = get_db()
@@ -206,10 +230,10 @@ def update_task(task_id):
 
         conn.execute(
             "UPDATE scheduled_tasks SET name = ?, command = ?, schedule_type = ?, "
-            "interval_seconds = ?, execute_at = ?, next_run_at = ?, task_type = ?, command_id = ? "
+            "interval_seconds = ?, execute_at = ?, next_run_at = ?, task_type = ?, command_id = ?, timeout_seconds = ? "
             "WHERE id = ?",
             (name, command, schedule_type, interval_seconds,
-             execute_at or None, next_run, task_type, command_id, task_id),
+             execute_at or None, next_run, task_type, command_id, timeout_seconds, task_id),
         )
         conn.commit()
     except Exception:
@@ -226,7 +250,7 @@ def update_task(task_id):
     })
 
 
-@scheduled_bp.route('/admin/cmd/scheduled/tasks/<int:task_id>/delete',
+@scheduled_bp.route('/admin/script/scheduled/tasks/<int:task_id>/delete',
                     methods=['POST', 'DELETE'])
 @login_required
 def delete_task(task_id):
@@ -264,7 +288,7 @@ def delete_task(task_id):
     return jsonify({'success': True, 'message': '任务已删除'})
 
 
-@scheduled_bp.route('/admin/cmd/scheduled/tasks/<int:task_id>/toggle',
+@scheduled_bp.route('/admin/script/scheduled/tasks/<int:task_id>/toggle',
                     methods=['POST'])
 @login_required
 def toggle_task(task_id):
@@ -311,7 +335,7 @@ def toggle_task(task_id):
     })
 
 
-@scheduled_bp.route('/admin/cmd/scheduled/tasks/<int:task_id>/trigger',
+@scheduled_bp.route('/admin/script/scheduled/tasks/<int:task_id>/trigger',
                     methods=['POST'])
 @login_required
 def trigger_task(task_id):
@@ -327,7 +351,15 @@ def trigger_task(task_id):
     return jsonify({'success': True, 'message': '任务已触发'})
 
 
-@scheduled_bp.route('/admin/cmd/scheduled/status')
+@scheduled_bp.route('/admin/script/scheduled/running')
+@login_required
+def running_tasks():
+    """获取当前正在执行的任务列表（用于查看运行中的脚本）。"""
+    _admin_check()
+    return jsonify({'running': scheduler.get_running_tasks()})
+
+
+@scheduled_bp.route('/admin/script/scheduled/status')
 @login_required
 def tasks_status():
     """获取所有任务的最新执行状态（用于前端轮询展示）。

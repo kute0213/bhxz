@@ -18,7 +18,7 @@ class TerminalSession:
         Args:
             sid: 会话唯一标识
             shell_type: shell 类型，如 'cmd' / 'bash'
-            proc_manager: ProcessManager 实例
+            proc_manager: ProcessManager 或 PtyProcess 实例（两者接口一致）
             init_commands: 启动后需发送的初始化命令列表
         """
         self.sid = sid
@@ -51,6 +51,14 @@ class TerminalSession:
         """后台线程：持续读取 shell 输出并放入队列。"""
         while not self.closed:
             try:
+                # PTY 下 stdout 的 read 会因非阻塞语义立即返回且持续抢占；
+                # 统一先判断是否就绪，避免占用 CPU。
+                if hasattr(self._proc_manager, 'poll_ready'):
+                    if not self._proc_manager.poll_ready(timeout=0.2):
+                        # 子进程可能刚退出，短忙等其状态
+                        if not self._proc_manager.is_running():
+                            break
+                        continue
                 data = self._proc_manager.read_output(4096)
                 if not data:
                     break
@@ -116,6 +124,15 @@ class TerminalSession:
     def touch(self):
         """更新最后活动时间。"""
         self.last_active = time.time()
+
+    def set_size(self, rows, cols):
+        """调整终端窗口尺寸（PTY 下会真正生效）。"""
+        set_size = getattr(self._proc_manager, 'set_size', None)
+        if set_size:
+            try:
+                set_size(rows, cols)
+            except Exception:
+                pass
 
     def next_generation(self):
         """递增并返回新的 generation 值。

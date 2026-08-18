@@ -3,8 +3,7 @@
 使用 multiprocessing 启动独立 Python 子进程执行脚本：
 - 父进程通过 multiprocessing.Pipe 与子进程通信
 - 父进程从管道读取事件并 yield 给调用方
-- 超时后向子进程发送 terminate() 强制终止
-- 支持 abort() 强制终止
+- 支持 abort() 强制终止；不设运行时长限制
 """
 
 import os
@@ -12,8 +11,6 @@ import sys
 import time
 import threading
 import multiprocessing
-
-from config import get_config_value
 
 from services.miniscript.runner import run_script
 
@@ -27,16 +24,15 @@ class ScriptExecutor:
         self._parent_pipe = None
         self._abort_lock = threading.Lock()
         self._abort_requested = False
-        self._start_time = None
-        self._timeout = None
 
-    def execute(self, code, interactive=True, timeout=None):
+    def execute(self, code, interactive=True):
         """执行脚本，返回生成器，yield (event_type, data) 元组。
+
+        不做运行时长限制；终止由 abort() / 调用方控制。
 
         Args:
             code: Python 脚本代码字符串
             interactive: True=交互模式，False=定时模式
-            timeout: 执行超时秒数，None 用默认值
 
         Yields:
             (event_type, data) 元组，如 ('output', {'text': 'hello'})
@@ -47,20 +43,11 @@ class ScriptExecutor:
             执行器会将其转发给子进程。若调用方未调用 send()（如使用 for 循环），
             则 response 为 None，脚本会收到 None 作为交互结果。
         """
-        # 1. 确定超时
-        if timeout is None:
-            timeout = get_config_value('SCRIPT_DEFAULT_TIMEOUT', 30)
-        timeout = min(int(timeout), get_config_value('SCRIPT_MAX_TIMEOUT', 300))
-        if timeout <= 0:
-            timeout = get_config_value('SCRIPT_DEFAULT_TIMEOUT', 30)
-
-        max_loop_iter = get_config_value('SCRIPT_MAX_LOOP_ITER', 100000)
-
-        # 2. 创建管道与子进程
+        # 1. 创建管道与子进程
         parent_conn, child_conn = multiprocessing.Pipe()
         proc = multiprocessing.Process(
             target=run_script,
-            args=(code, child_conn, interactive, timeout, max_loop_iter),
+            args=(code, child_conn, interactive),
             daemon=True,
         )
 
@@ -68,8 +55,6 @@ class ScriptExecutor:
             self._abort_requested = False
             self._current_process = proc
             self._parent_pipe = parent_conn
-            self._start_time = time.time()
-            self._timeout = timeout
 
         # 启动子进程：spawn 模式下子进程会继承父进程的环境变量，
         # 因此在 start() 之前临时设置 _BH_CHILD_PROCESS=1，确保子进程
@@ -101,6 +86,7 @@ class ScriptExecutor:
             pass
 
         # 3. 主事件循环
+        last_heartbeat = time.time()
         try:
             while True:
                 # 检查终止请求
@@ -109,19 +95,14 @@ class ScriptExecutor:
                         yield ('error', {'message': '脚本执行被强制终止'})
                         break
 
-                # 检查超时
-                if self._timeout and self._start_time:
-                    elapsed = time.time() - self._start_time
-                    if elapsed > self._timeout:
-                        self._terminate_process()
-                        yield ('error', {
-                            'message': f'脚本执行超时（>{self._timeout}秒），已强制终止'
-                        })
-                        break
-
-                # 等待管道消息（带超时，便于周期性检查 abort/timeout）
+                # 等待管道消息（带超时，便于周期性检查 abort 与发送心跳）
                 try:
                     if not parent_conn.poll(0.1):
+                        # 周期性心跳：让外层 SSE 能感知连接断开，也能让连接保持活跃
+                        now = time.time()
+                        if now - last_heartbeat >= 5.0:
+                            last_heartbeat = now
+                            yield ('heartbeat', {})
                         continue
                     msg = parent_conn.recv()
                 except (EOFError, OSError):
@@ -248,8 +229,6 @@ class ScriptExecutor:
             pipe = self._parent_pipe
             self._current_process = None
             self._parent_pipe = None
-            self._start_time = None
-            self._timeout = None
 
         if proc is not None:
             try:

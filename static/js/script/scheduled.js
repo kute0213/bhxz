@@ -39,9 +39,17 @@ window.ScheduledCore = (function () {
     var taskListContainer = document.getElementById('task-list-container');
     var emptyState = document.getElementById('empty-state');
 
+    // 运行中任务
+    var runningPanel = document.getElementById('running-panel');
+    var runningList = document.getElementById('running-list');
+    var runningCount = document.getElementById('running-count');
+
     // 自动刷新相关
     var AUTO_REFRESH_INTERVAL = 15000;  // 15 秒刷新一次状态
+    var RUNNING_POLL_INTERVAL = 5000;   // 5 秒刷新一次运行中任务
     var autoRefreshTimer = null;
+    var runningPollTimer = null;
+    var runningCache = {};              // task_id -> started_at，用于卡片显示运行态
     var tasksCache = [];              // 缓存最近一次任务列表，避免重渲染打断交互
     var statusCache = {};              // 缓存任务执行状态
 
@@ -53,6 +61,7 @@ window.ScheduledCore = (function () {
         loadTasks();
         bindEvents();
         startAutoRefresh();
+        startRunningPoll();
     });
 
     function bindEvents() {
@@ -117,8 +126,78 @@ window.ScheduledCore = (function () {
         }
     }
 
+    // ------------------------------------------------------------------
+    // 运行中任务：轮询 /running，展示已启动且未结束的脚本
+    // ------------------------------------------------------------------
+
+    function startRunningPoll() {
+        stopRunningPoll();
+        pollRunning();
+        runningPollTimer = setInterval(pollRunning, RUNNING_POLL_INTERVAL);
+    }
+
+    function stopRunningPoll() {
+        if (runningPollTimer) {
+            clearInterval(runningPollTimer);
+            runningPollTimer = null;
+        }
+    }
+
+    function pollRunning() {
+        fetch('/admin/script/scheduled/running')
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                runningCache = {};
+                var list = data.running || [];
+                list.forEach(function (item) {
+                    runningCache[item.task_id] = item.started_at;
+                });
+                renderRunningPanel(list);
+                // 运行态变化时同步刷新卡片徽章
+                updateRunningBadges();
+            })
+            .catch(function () { /* 静默失败 */ });
+    }
+
+    function renderRunningPanel(list) {
+        if (!runningPanel || !runningList) return;
+        if (!list.length) {
+            runningPanel.classList.add('hidden');
+            return;
+        }
+        runningPanel.classList.remove('hidden');
+        if (runningCount) runningCount.textContent = '(' + list.length + ')';
+        runningList.innerHTML = list.map(function (item) {
+            return '<div class="flex items-center justify-between bg-forest-800/50 border border-cream/10 rounded-lg px-3 py-2">' +
+                '<div class="flex items-center gap-2 min-w-0">' +
+                    '<i data-lucide="loader" class="w-4 h-4 text-blue-300 animate-spin shrink-0"></i>' +
+                    '<span class="text-sm text-cream truncate">' + escapeHtml(item.name) + '</span>' +
+                '</div>' +
+                '<span class="text-xs text-cream/40 shrink-0 ml-3">' + escapeHtml(item.started_at) + ' 启动</span>' +
+            '</div>';
+        }).join('');
+        if (window.lucide && window.lucide.createIcons) {
+            window.lucide.createIcons();
+        }
+    }
+
+    function updateRunningBadges() {
+        var runningIds = Object.keys(runningCache);
+        if (!runningIds.length) return;
+        tasksCache.forEach(function (t) {
+            if (!runningCache[t.id]) return;
+            var card = document.querySelector('[data-task-card="' + t.id + '"]');
+            if (!card) return;
+            var badge = card.querySelector('.last-status-badge');
+            if (!badge) return;
+            badge.innerHTML =
+                '<span class="px-1.5 py-0.5 text-xs rounded-full bg-blue-500/20 text-blue-300 border border-blue-400/20">运行中</span>' +
+                '<span class="text-xs text-cream/40 ml-2">' + runningCache[t.id] + ' 启动</span>';
+        });
+    }
+
     function loadStatus() {
-        fetch('/admin/cmd/scheduled/status')
+        fetch('/admin/script/scheduled/status')
             .then(function (r) { return r.json(); })
             .then(function (data) {
                 statusCache = data.status || {};
@@ -188,7 +267,7 @@ window.ScheduledCore = (function () {
 
     function loadPresets(selectedCommandId) {
         // 定时任务只能执行快捷命令（来自 cmd_commands 表）
-        return fetch('/admin/cmd/commands')
+        return fetch('/admin/script/commands')
             .then(function (r) { return r.json(); })
             .then(function (data) {
                 if (!taskPresetSelect) return;
@@ -271,7 +350,7 @@ window.ScheduledCore = (function () {
     // ------------------------------------------------------------------
 
     function loadTasks() {
-        fetch('/admin/cmd/scheduled/tasks')
+        fetch('/admin/script/scheduled/tasks')
             .then(function (r) { return r.json(); })
             .then(function (data) {
                 renderTasks(data.tasks || []);
@@ -414,6 +493,7 @@ window.ScheduledCore = (function () {
         document.getElementById('task-schedule-type').value = 'interval';
         document.getElementById('task-interval').value = 3600;
         document.getElementById('task-execute-at').value = '';
+        document.getElementById('task-timeout').value = '';
         if (selectedScriptInfo) selectedScriptInfo.textContent = '';
         loadPresets();
         toggleScheduleConfig();
@@ -421,7 +501,7 @@ window.ScheduledCore = (function () {
     }
 
     function openEditModal(id) {
-        fetch('/admin/cmd/scheduled/tasks')
+        fetch('/admin/script/scheduled/tasks')
             .then(function (r) { return r.json(); })
             .then(function (data) {
                 var task = (data.tasks || []).find(function (t) { return t.id === id; });
@@ -434,7 +514,7 @@ window.ScheduledCore = (function () {
                 document.getElementById('task-schedule-type').value = task.schedule_type;
                 document.getElementById('task-interval').value = task.interval_seconds || 3600;
 
-                // 先调用 toggleScheduleConfig 设置 input 类型和清空值，
+                // 先用 toggleScheduleConfig 设置 input 类型和清空值，
                 // 再用任务原有 execute_at 覆盖（否则会被 toggle 清空）
                 toggleScheduleConfig();
                 var executeAtInput = document.getElementById('task-execute-at');
@@ -446,6 +526,9 @@ window.ScheduledCore = (function () {
                     var dt = task.execute_at.replace(' ', 'T').substring(0, 16);
                     executeAtInput.value = dt;
                 }
+
+                document.getElementById('task-timeout').value =
+                    task.timeout_seconds != null ? task.timeout_seconds : '';
 
                 loadPresets(task.command_id);
                 taskModal.classList.remove('hidden');
@@ -465,10 +548,17 @@ window.ScheduledCore = (function () {
         var scheduleType = document.getElementById('task-schedule-type').value;
         var intervalSeconds = parseInt(document.getElementById('task-interval').value) || 3600;
         var executeAt = document.getElementById('task-execute-at').value;
+        var timeoutRaw = document.getElementById('task-timeout').value.trim();
+        var timeoutSeconds = timeoutRaw ? parseInt(timeoutRaw) : null;
 
         // 必须选择一个快捷命令
         if (!commandId) {
-            window.CmdModal.alert('请选择', '请先选择一个快捷命令');
+            window.ScriptModal.alert('请选择', '请先选择一个快捷命令');
+            return;
+        }
+
+        if (timeoutRaw && (!timeoutSeconds || timeoutSeconds < 1)) {
+            window.ScriptModal.alert('参数无效', '最大超时时间必须为正整数秒');
             return;
         }
 
@@ -483,12 +573,13 @@ window.ScheduledCore = (function () {
             schedule_type: scheduleType,
             interval_seconds: intervalSeconds,
             execute_at: executeAt,
+            timeout_seconds: timeoutSeconds,
         };
 
         var method = id ? 'PUT' : 'POST';
         var url = id
-            ? '/admin/cmd/scheduled/tasks/' + id
-            : '/admin/cmd/scheduled/tasks';
+            ? '/admin/script/scheduled/tasks/' + id
+            : '/admin/script/scheduled/tasks';
 
         try {
             var r = await fetch(url, {
@@ -501,10 +592,10 @@ window.ScheduledCore = (function () {
                 closeTaskModal();
                 loadTasks();
             } else {
-                window.CmdModal.alert('操作失败', data.message || '操作失败');
+                window.ScriptModal.alert('操作失败', data.message || '操作失败');
             }
         } catch (err) {
-            window.CmdModal.alert('请求失败', '请求失败: ' + err);
+            window.ScriptModal.alert('请求失败', '请求失败: ' + err);
         }
     }
 
@@ -513,38 +604,38 @@ window.ScheduledCore = (function () {
     // ------------------------------------------------------------------
 
     async function deleteTask(id) {
-        var ok = await window.CmdModal.confirm('删除定时任务', '确定删除此定时任务？');
+        var ok = await window.ScriptModal.confirm('删除定时任务', '确定删除此定时任务？');
         if (!ok) return;
         try {
-            var r = await fetch('/admin/cmd/scheduled/tasks/' + id + '/delete', { method: 'POST' });
+            var r = await fetch('/admin/script/scheduled/tasks/' + id + '/delete', { method: 'POST' });
             var data = await r.json();
             if (data.success) {
                 loadTasks();
             } else {
-                window.CmdModal.alert('删除失败', data.message || '删除失败');
+                window.ScriptModal.alert('删除失败', data.message || '删除失败');
             }
         } catch (err) {
-            window.CmdModal.alert('请求失败', '请求失败: ' + err);
+            window.ScriptModal.alert('请求失败', '请求失败: ' + err);
         }
     }
 
     async function toggleTask(id) {
         try {
-            var r = await fetch('/admin/cmd/scheduled/tasks/' + id + '/toggle', { method: 'POST' });
+            var r = await fetch('/admin/script/scheduled/tasks/' + id + '/toggle', { method: 'POST' });
             var data = await r.json();
             if (data.success) {
                 loadTasks();
             } else {
-                window.CmdModal.alert('操作失败', data.message || '操作失败');
+                window.ScriptModal.alert('操作失败', data.message || '操作失败');
             }
         } catch (err) {
-            window.CmdModal.alert('请求失败', '请求失败: ' + err);
+            window.ScriptModal.alert('请求失败', '请求失败: ' + err);
         }
     }
 
     async function triggerTask(id) {
         try {
-            var r = await fetch('/admin/cmd/scheduled/tasks/' + id + '/trigger', { method: 'POST' });
+            var r = await fetch('/admin/script/scheduled/tasks/' + id + '/trigger', { method: 'POST' });
             var data = await r.json();
             if (data.success) {
                 showTaskRunning(id);
@@ -552,10 +643,10 @@ window.ScheduledCore = (function () {
                 setTimeout(loadStatus, 2000);
                 setTimeout(loadStatus, 5000);
             } else {
-                window.CmdModal.alert('触发失败', data.message || '触发失败');
+                window.ScriptModal.alert('触发失败', data.message || '触发失败');
             }
         } catch (err) {
-            window.CmdModal.alert('请求失败', '请求失败: ' + err);
+            window.ScriptModal.alert('请求失败', '请求失败: ' + err);
         }
     }
 

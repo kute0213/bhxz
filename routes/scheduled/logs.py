@@ -7,7 +7,7 @@ from core.db import get_db
 from routes.scheduled import scheduled_bp, _admin_check
 
 
-@scheduled_bp.route('/admin/cmd/scheduled/tasks/<int:task_id>/logs')
+@scheduled_bp.route('/admin/script/scheduled/tasks/<int:task_id>/logs')
 @login_required
 def task_logs(task_id):
     """获取某个任务的执行日志。"""
@@ -42,7 +42,7 @@ def task_logs(task_id):
     })
 
 
-@scheduled_bp.route('/admin/cmd/scheduled/logs')
+@scheduled_bp.route('/admin/script/scheduled/logs')
 @login_required
 def all_task_logs():
     """获取所有任务执行日志。"""
@@ -75,7 +75,7 @@ def all_task_logs():
     })
 
 
-@scheduled_bp.route('/admin/cmd/scheduled/logs/<int:log_id>')
+@scheduled_bp.route('/admin/script/scheduled/logs/<int:log_id>')
 @login_required
 def task_log_detail(log_id):
     """获取单条执行日志详情（含完整输出）。"""

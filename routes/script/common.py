@@ -12,7 +12,7 @@ from flask import (
 
 from core.auth import login_required, get_current_user
 from services.miniscript.session import ScriptSessionManager
-from routes.cmd import cmd_bp
+from routes.script import script_bp
 
 
 def _admin_check():
@@ -41,25 +41,21 @@ def _get_session_manager():
     return ScriptSessionManager(response_timeout=_RESPONSE_TIMEOUT)
 
 
-@cmd_bp.route('/admin/cmd/run-script', methods=['POST'])
+@script_bp.route('/admin/script/run-script', methods=['POST'])
 @login_required
 def run_script_sse():
     """MiniScript 脚本执行 SSE 端点。
 
     接收 JSON body {"code": "..."}，流式返回执行事件。
     事件格式: data: {"type": "output|alert|prompt|confirm|error|done", "data": {...}}\\n\\n
-    交互事件 prompt/confirm 通过 /admin/cmd/script-response 接收前端响应。
+    交互事件 prompt/confirm 通过 /admin/script/script-response 接收前端响应。
     """
     _admin_check()
     data = request.get_json() or request.form
     code = (data.get('code') or '').strip()
-    timeout = int(data.get('timeout') or 30)
 
     if not code:
         return jsonify({'success': False, 'message': '脚本代码不能为空'}), 400
-
-    if timeout > 600:
-        timeout = 600
 
     sid = _get_session_id()
     manager = _get_session_manager()
@@ -76,7 +72,7 @@ def run_script_sse():
     def generate():
         try:
             manager.clear_response(sid)
-            gen = executor.execute(code, interactive=True, timeout=timeout)
+            gen = executor.execute(code, interactive=True)
 
             # 启动生成器，获取第一个事件
             try:
@@ -86,13 +82,25 @@ def run_script_sse():
 
             while True:
                 event_type, ev_data = event
+
+                # 心跳：仅用于连接保活与失效探测，不转发给前端
+                if event_type == 'heartbeat':
+                    try:
+                        event = next(gen)
+                    except StopIteration:
+                        break
+                    continue
+
+                # 标记连接存活，供监控线程判断页面是否已退出
+                manager.touch(sid)
+
                 # 推送事件给前端；客户端断开时 yield 会抛 GeneratorExit
                 yield (
                     f"data: {json.dumps({'type': event_type, 'data': ev_data}, ensure_ascii=False)}\n\n"
                 )
 
                 if event_type in ('prompt', 'confirm'):
-                    # 交互事件：等待前端通过 /admin/cmd/script-response 发送响应
+                    # 交互事件：等待前端通过 /admin/script/script-response 发送响应
                     response = manager.wait_response(sid, event_type)
                     try:
                         event = gen.send(response)
@@ -138,7 +146,7 @@ def run_script_sse():
     )
 
 
-@cmd_bp.route('/admin/cmd/abort-script', methods=['POST'])
+@script_bp.route('/admin/script/abort-script', methods=['POST'])
 @login_required
 def abort_script():
     """终止正在执行的脚本。"""
@@ -154,7 +162,7 @@ def abort_script():
         return jsonify({'success': False, 'message': str(e)}), 500
 
 
-@cmd_bp.route('/admin/cmd/script-response', methods=['POST'])
+@script_bp.route('/admin/script/script-response', methods=['POST'])
 @login_required
 def script_response():
     """接收前端对交互事件（prompt/confirm）的响应。

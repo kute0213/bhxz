@@ -1,5 +1,5 @@
 /**
- * CMD 页内弹窗系统
+ * 脚本页内弹窗系统
  *
  * 替代原生 alert / prompt / confirm，使用符合页面磨砂风格的模态框。
  * 返回 Promise，支持 async/await 链式调用。
@@ -11,12 +11,12 @@
  *   4. 单一关闭入口：所有关闭路径（按钮、ESC、背景点击、动画结束、超时）都走 _doClose()
  *
  * 用法：
- *   CmdModal.alert('标题', '消息')           => Promise<void>
- *   CmdModal.confirm('标题', '消息')         => Promise<bool>
- *   CmdModal.prompt('标题', '消息', '默认值') => Promise<string>
+ *   ScriptModal.alert('标题', '消息')           => Promise<void>
+ *   ScriptModal.confirm('标题', '消息')         => Promise<bool>
+ *   ScriptModal.prompt('标题', '消息', '默认值') => Promise<string>
  */
 
-window.CmdModal = (function () {
+window.ScriptModal = (function () {
 
     // ============================================================
     // 状态常量
@@ -56,7 +56,7 @@ window.CmdModal = (function () {
         if (root) return;
 
         root = document.createElement('div');
-        root.id = 'cmd-modal-root';
+        root.id = 'script-modal-root';
         root.style.cssText = 'position:fixed;inset:0;z-index:9999;display:none;align-items:center;justify-content:center;';
 
         backdrop = document.createElement('div');
@@ -149,7 +149,7 @@ window.CmdModal = (function () {
         container.addEventListener('animationend', function (e) {
             // 只响应 leave 动画的结束
             if (e.target !== container) return;
-            if (state === STATE.CLOSING && e.animationName === 'cmdModalLeave') {
+            if (state === STATE.CLOSING && e.animationName === 'scriptModalLeave') {
                 finishClose();
             }
         });
@@ -158,7 +158,7 @@ window.CmdModal = (function () {
         // （onEnterEnd 自身也监听 animationcancel，这里是双保险）
         container.addEventListener('animationcancel', function (e) {
             if (e.target !== container) return;
-            if (state === STATE.OPENING && e.animationName === 'cmdModalEnter') {
+            if (state === STATE.OPENING && e.animationName === 'scriptModalEnter') {
                 // 动画被取消，直接进入 OPEN 状态，避免卡死
                 if (pendingEnterEnd) {
                     container.removeEventListener('animationend', pendingEnterEnd);
@@ -287,16 +287,16 @@ window.CmdModal = (function () {
         }
 
         // 重启动画
-        container.classList.remove('cmd-modal-leave');
-        container.classList.remove('cmd-modal-enter');
+        container.classList.remove('script-modal-leave');
+        container.classList.remove('script-modal-enter');
         void container.offsetWidth;
-        container.classList.add('cmd-modal-enter');
+        container.classList.add('script-modal-enter');
 
         // 动画结束 → 进入 OPEN 状态
         // 同时监听 animationcancel，避免 enter 动画被中途取消时监听器泄漏
         const onEnterEnd = function (e) {
             if (e.target !== container) return;
-            if (e.animationName !== 'cmdModalEnter') return;
+            if (e.animationName !== 'scriptModalEnter') return;
             // 状态守卫：若期间已被关闭，则不再切到 OPEN
             if (state !== STATE.OPENING) return;
             container.removeEventListener('animationend', onEnterEnd);
@@ -348,8 +348,8 @@ window.CmdModal = (function () {
             pendingEnterEnd = null;
         }
 
-        container.classList.remove('cmd-modal-enter');
-        container.classList.add('cmd-modal-leave');
+        container.classList.remove('script-modal-enter');
+        container.classList.add('script-modal-leave');
 
         // 超时 fallback：300ms 后强制完成关闭
         closeTimer = setTimeout(function () {
@@ -366,7 +366,7 @@ window.CmdModal = (function () {
             closeTimer = null;
         }
 
-        container.classList.remove('cmd-modal-leave');
+        container.classList.remove('script-modal-leave');
         root.style.display = 'none';
         state = STATE.CLOSED;
 

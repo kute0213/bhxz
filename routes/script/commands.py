@@ -7,11 +7,11 @@ from flask import request, jsonify
 from core.auth import login_required
 from core.db import get_db
 from services.cmd_runner import run_command_sync
-from routes.cmd import cmd_bp
-from routes.cmd.script import _admin_check
+from routes.script import script_bp
+from routes.script.common import _admin_check
 
 
-@cmd_bp.route('/admin/cmd/commands', methods=['GET'])
+@script_bp.route('/admin/script/commands', methods=['GET'])
 @login_required
 def list_commands():
     _admin_check()
@@ -27,7 +27,7 @@ def list_commands():
     return jsonify({'commands': commands})
 
 
-@cmd_bp.route('/admin/cmd/commands', methods=['POST'])
+@script_bp.route('/admin/script/commands', methods=['POST'])
 @login_required
 def create_command():
     _admin_check()
@@ -63,7 +63,7 @@ def create_command():
     return jsonify({'success': True, 'id': cmd_id, 'message': '命令已添加'})
 
 
-@cmd_bp.route('/admin/cmd/commands/<int:cmd_id>', methods=['PUT', 'POST'])
+@script_bp.route('/admin/script/commands/<int:cmd_id>', methods=['PUT', 'POST'])
 @login_required
 def update_command(cmd_id):
     _admin_check()
@@ -99,7 +99,7 @@ def update_command(cmd_id):
     return jsonify({'success': True, 'message': '命令已更新'})
 
 
-@cmd_bp.route('/admin/cmd/commands/<int:cmd_id>/delete', methods=['POST', 'DELETE'])
+@script_bp.route('/admin/script/commands/<int:cmd_id>/delete', methods=['POST', 'DELETE'])
 @login_required
 def delete_command(cmd_id):
     """删除快捷命令。
@@ -146,7 +146,7 @@ def delete_command(cmd_id):
     return jsonify({'success': True, 'message': '命令已删除'})
 
 
-@cmd_bp.route('/admin/cmd/run-preset/<int:cmd_id>', methods=['POST'])
+@script_bp.route('/admin/script/run-preset/<int:cmd_id>', methods=['POST'])
 @login_required
 def run_preset_command(cmd_id):
     """执行一键命令（同步模式，一次性返回输出）。"""

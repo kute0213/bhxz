@@ -12,8 +12,8 @@ import time
 from flask import request, Response, stream_with_context, jsonify, session
 
 from core.auth import login_required
-from routes.cmd import cmd_bp
-from routes.cmd.script import _admin_check
+from routes.script import script_bp
+from routes.script.common import _admin_check
 from services.terminal import TerminalManager
 
 
@@ -33,7 +33,7 @@ def _sse_headers():
     }
 
 
-@cmd_bp.route('/admin/cmd/terminal/stream', methods=['GET'])
+@script_bp.route('/admin/script/terminal/stream', methods=['GET'])
 @login_required
 def terminal_stream():
     """终端输出流（SSE）。"""
@@ -98,7 +98,7 @@ def terminal_stream():
     )
 
 
-@cmd_bp.route('/admin/cmd/terminal/input', methods=['POST'])
+@script_bp.route('/admin/script/terminal/input', methods=['POST'])
 @login_required
 def terminal_input():
     """向终端发送输入。"""
@@ -126,7 +126,7 @@ def terminal_input():
     return jsonify({'success': False, 'message': '会话已关闭'}), 400
 
 
-@cmd_bp.route('/admin/cmd/terminal/reset', methods=['POST'])
+@script_bp.route('/admin/script/terminal/reset', methods=['POST'])
 @login_required
 def terminal_reset():
     """重置终端（重启 shell 进程）。"""
@@ -143,9 +143,27 @@ def terminal_reset():
     return jsonify({'success': True, 'message': '终端已重置'})
 
 
-@cmd_bp.route('/admin/cmd/terminal/resize', methods=['POST'])
+@script_bp.route('/admin/script/terminal/resize', methods=['POST'])
 @login_required
 def terminal_resize():
-    """调整终端大小（预留接口）。"""
+    """调整终端窗口尺寸（PTY 会话生效，用于正确响应清屏与光标控制）。"""
     _admin_check()
+    data = request.get_json() or {}
+    try:
+        cols = int(data.get('cols', 120))
+        rows = int(data.get('rows', 24))
+    except (TypeError, ValueError):
+        return jsonify({'success': False, 'message': '尺寸格式无效'}), 400
+    if cols < 2 or rows < 2:
+        return jsonify({'success': False, 'message': '尺寸无效'}), 400
+
+    manager = TerminalManager()
+    term_session = manager.get_or_create_session(session)
+    if term_session.error:
+        return jsonify({
+            'success': False,
+            'message': f'终端不可用: {term_session.error}',
+        }), 503
+
+    term_session.set_size(rows, cols)
     return jsonify({'success': True})

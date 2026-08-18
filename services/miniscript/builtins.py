@@ -17,7 +17,6 @@ import os
 import time
 import subprocess
 
-from config import get_config_value
 from services.process_utils import decode_output, make_env
 
 
@@ -61,23 +60,11 @@ def create_builtins(output_callback, interactive=True):
         return time.time()
 
     def set_timeout(seconds):
-        """设定本次执行超时，不能超过最大允许值。"""
-        import signal as _signal
-        try:
-            secs = int(seconds)
-        except (TypeError, ValueError):
-            return
-        max_timeout = get_config_value('SCRIPT_MAX_TIMEOUT', 300)
-        if secs > max_timeout:
-            secs = max_timeout
-            output_callback('error', {
-                'message': f'set_timeout 超过最大允许值 {max_timeout}s，已自动限制为 {secs}s'
-            })
-        if secs <= 0:
-            return
-        # 更新子进程的 SIGALRM 看门狗（仅 Unix 可用）
-        if hasattr(_signal, 'SIGALRM'):
-            _signal.alarm(secs)
+        """(已废弃) 设定执行超时。
+
+        脚本不再受运行时长限制，此函数保留仅为兼容旧脚本，调用无副作用。
+        """
+        return
 
     # -----------------------------------------------------------------
     # Shell 命令

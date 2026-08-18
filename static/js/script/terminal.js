@@ -1,5 +1,5 @@
 /**
- * CMD 终端弹窗模块（持久 shell 版）
+ * 脚本终端弹窗模块（持久 shell 版）
  *
  * 功能：
  *   - 磨砂玻璃风格弹窗，与页面设计统一
@@ -18,7 +18,7 @@
  * 依赖：terminal-core.js（window.TerminalCore）
  */
 
-window.CmdTerminal = (function () {
+window.ScriptTerminal = (function () {
     const TC = window.TerminalCore;
 
     // ---- DOM 元素 ----
@@ -66,10 +66,10 @@ window.CmdTerminal = (function () {
         TC.ensureBlinkStyle();
 
         buffer = new TC.TerminalBuffer(output, { scroller: output });
-        history = new TC.CommandHistory('cmd_terminal_history');
+        history = new TC.CommandHistory('script_terminal_history');
         sseTerminal = new TC.SseTerminal({
-            url: '/admin/cmd/terminal/stream',
-            inputUrl: '/admin/cmd/terminal/input',
+            url: '/admin/script/terminal/stream',
+            inputUrl: '/admin/script/terminal/input',
             onEvent: handleSseEvent,
             onConnected: function () { updateStatus('idle'); },
             onDisconnected: function () { updateStatus('error'); },
@@ -94,10 +94,10 @@ window.CmdTerminal = (function () {
         abortBtn.style.display = 'none';
         abortBtn.innerHTML = '<i data-lucide="square" class="w-3 h-3"></i> 中止';
         abortBtn.addEventListener('click', function () {
-            if (typeof window.__abortCmdScript === 'function') {
-                window.__abortCmdScript();
+            if (typeof window.__abortRunningScript === 'function') {
+                window.__abortRunningScript();
             } else {
-                fetch('/admin/cmd/abort-script', { method: 'POST' }).catch(function () { /* ignore */ });
+                fetch('/admin/script/abort-script', { method: 'POST' }).catch(function () { /* ignore */ });
             }
             scriptRunning = false;
             if (abortBtn) abortBtn.style.display = 'none';
@@ -305,7 +305,7 @@ window.CmdTerminal = (function () {
     function runCommand(command) {
         if (!command || !command.trim()) return;
         history.add(command);
-        appendLine(command, 'input');
+        // 输入回显由 PTY 终端驱动负责，前端不重复插入
         sendText(command + '\n');
     }
 

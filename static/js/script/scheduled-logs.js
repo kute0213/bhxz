@@ -53,8 +53,8 @@ window.ScheduledLogs = (function () {
         logsPagination.innerHTML = '';
 
         var url = currentTaskId
-            ? '/admin/cmd/scheduled/tasks/' + currentTaskId + '/logs?page=' + currentPage + '&per_page=' + PER_PAGE
-            : '/admin/cmd/scheduled/logs?page=' + currentPage + '&per_page=' + PER_PAGE;
+            ? '/admin/script/scheduled/tasks/' + currentTaskId + '/logs?page=' + currentPage + '&per_page=' + PER_PAGE
+            : '/admin/script/scheduled/logs?page=' + currentPage + '&per_page=' + PER_PAGE;
 
         fetch(url)
             .then(function (r) { return r.json(); })
@@ -211,7 +211,7 @@ window.ScheduledLogs = (function () {
         outputContent.textContent = '加载中…';
         outputModal.classList.remove('hidden');
 
-        fetch('/admin/cmd/scheduled/logs/' + logId)
+        fetch('/admin/script/scheduled/logs/' + logId)
             .then(function (r) {
                 if (!r.ok) throw new Error('HTTP ' + r.status);
                 return r.json();

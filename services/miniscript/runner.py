@@ -11,8 +11,6 @@
 
 import os
 import sys
-import time
-import signal
 import traceback
 
 
@@ -74,54 +72,21 @@ def _wait_response(pipe_conn):
 
 
 # ---------------------------------------------------------------------------
-# 超时监控
-# ---------------------------------------------------------------------------
-
-def _setup_timeout_watchdog(timeout):
-    """设置 SIGALRM 超时监控（仅 Unix 可用）。
-
-    通过定时信号中断脚本执行，避免长循环阻塞。
-    """
-    if not hasattr(signal, 'SIGALRM'):
-        return  # Windows 无 SIGALRM，跳过
-
-    def _handler(signum, frame):
-        raise TimeoutError(f'脚本执行超时（>{timeout}秒）')
-
-    try:
-        signal.signal(signal.SIGALRM, _handler)
-        signal.alarm(int(timeout) if timeout else 0)
-    except Exception:
-        pass
-
-
-def _cancel_timeout_watchdog():
-    """取消 SIGALRM 超时监控。"""
-    if hasattr(signal, 'SIGALRM'):
-        try:
-            signal.alarm(0)
-        except Exception:
-            pass
-
-
-# ---------------------------------------------------------------------------
 # 子进程入口函数
 # ---------------------------------------------------------------------------
 
-def run_script(code, pipe_conn, interactive, timeout, max_loop_iter):
+def run_script(code, pipe_conn, interactive):
     """子进程入口函数。
+
+    脚本在独立子进程中执行（进程隔离是保证「不会误炸服务器」的防线）。
+    不再限制循环次数与运行时长；退出由父进程通过管道发送 abort 信号触发。
 
     Args:
         code: 脚本代码
         pipe_conn: multiprocessing.Pipe 的子进程端
         interactive: 交互模式还是定时模式
-        timeout: 执行超时
-        max_loop_iter: 最大循环迭代次数
     """
     os.environ['_BH_CHILD_PROCESS'] = '1'
-
-    if timeout and timeout > 0:
-        _setup_timeout_watchdog(timeout)
 
     try:
         # -----------------------------------------------------------------
@@ -145,27 +110,11 @@ def run_script(code, pipe_conn, interactive, timeout, max_loop_iter):
 
         builtins_dict = create_builtins(output_callback, interactive=interactive)
 
-        # 构造 __builtins__：从真实 builtins 出发，移除危险函数
-        # 注意：__import__ 和 __build_class__ 必须保留，否则 import 语句
-        # 和 class 语句无法工作。AST 沙箱已禁止脚本直接调用 __import__()
+        # 使用完整的内置函数（不再做黑名单过滤，脚本具备标准 Python 能力）
         import builtins as _builtins_mod
 
-        # 危险函数黑名单：这些会从 __builtins__ 中移除
-        # （沙箱已禁止直接调用，这里做二次防护，避免间接引用绕过）
-        _runtime_blacklist = {
-            'exec', 'eval', 'compile', 'globals', 'locals', 'vars', 'dir',
-            'getattr', 'setattr', 'delattr', 'hasattr', 'breakpoint',
-            'exit', 'quit', '__builtins__',
-        }
-
-        # 复制真实 builtins 并移除危险函数
-        safe_builtins = {}
-        for name in dir(_builtins_mod):
-            if name in _runtime_blacklist:
-                continue
-            safe_builtins[name] = getattr(_builtins_mod, name)
-
         # 用我们的 print 覆盖默认 print（输出走管道而非 stdout）
+        safe_builtins = {name: getattr(_builtins_mod, name) for name in dir(_builtins_mod)}
         safe_builtins['print'] = builtins_dict['print']
 
         # 构造脚本的全局命名空间
@@ -188,11 +137,9 @@ def run_script(code, pipe_conn, interactive, timeout, max_loop_iter):
         except KeyboardInterrupt:
             # 被 abort 或用户终止
             _send_event(pipe_conn, 'error', {'message': '脚本执行被终止'})
-        except TimeoutError as e:
-            _send_event(pipe_conn, 'error', {'message': str(e)})
         except SystemExit:
-            # 脚本调用 exit/quit（已禁用，但防御性处理）
-            _send_event(pipe_conn, 'error', {'message': '脚本调用了退出函数'})
+            # 脚本调用 exit/quit，正常放行（不再视为违规）
+            return
         except Exception as e:
             # 捕获所有异常，发送错误事件
             tb = traceback.format_exc()
@@ -210,8 +157,6 @@ def run_script(code, pipe_conn, interactive, timeout, max_loop_iter):
         except Exception:
             pass
     finally:
-        # 取消超时看门狗
-        _cancel_timeout_watchdog()
         # 通知父进程执行完成
         _send_done(pipe_conn)
         # 关闭管道子进程端

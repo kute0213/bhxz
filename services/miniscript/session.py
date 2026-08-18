@@ -37,6 +37,15 @@ class ScriptSessionManager:
         self._response_timeout = response_timeout
         self._sessions = {}
         self._lock = threading.Lock()
+        # 已开始执行但 SSE 连接失效的超时（秒）。前端退出网页后，
+        # 连接不再被 touch，超过此值即强制终止脚本。
+        self._stale_abort_timeout = 20
+
+        # 启动监控线程：回收长期无连接存活的执行会话
+        self._monitor_thread = threading.Thread(
+            target=self._monitor_loop, name='script-monitor', daemon=True
+        )
+        self._monitor_thread.start()
 
     def _get_or_create(self, sid):
         """获取或创建指定 sid 的会话状态（调用方不应长期持有返回字典）。"""
@@ -46,9 +55,41 @@ class ScriptSessionManager:
                     'executor': ScriptExecutor(),
                     'response_event': threading.Event(),
                     'response_value': None,
+                    'last_seen': 0.0,
                     'created_at': time.time(),
                 }
             return self._sessions[sid]
+
+    def touch(self, sid):
+        """标记该会话的连接仍然存活（由 SSE 流循环调用）。"""
+        state = self._get_or_create(sid)
+        with self._lock:
+            state['last_seen'] = time.time()
+
+    def _monitor_loop(self):
+        """后台监控：终止「连接已失效但仍在运行」的脚本。
+
+        覆盖意外浏览器关闭、tags 崩溃等前端无法主动发送终止信号的场景，
+        保证退出网页后脚本会被强制终止。
+        """
+        while True:
+            time.sleep(5)
+            try:
+                now = time.time()
+                stale = []
+                with self._lock:
+                    for sid, state in self._sessions.items():
+                        executor = state['executor']
+                        if executor.is_running() and \
+                                now - state['last_seen'] > self._stale_abort_timeout:
+                            stale.append(sid)
+                for sid in stale:
+                    try:
+                        self.abort(sid)
+                    except Exception:
+                        pass
+            except Exception:
+                pass
 
     def get_executor(self, sid):
         """获取指定 sid 的执行器实例。"""

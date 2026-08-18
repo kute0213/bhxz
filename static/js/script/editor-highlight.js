@@ -9,7 +9,7 @@
  *   - 状态栏错误标记
  *
  * 暴露：window.ScriptEditorHighlight
- * 依赖：Monaco Editor（由 admin_cmd_editor.html 通过 require 加载）
+ * 依赖：Monaco Editor（由 admin_script_editor.html 通过 require 加载）
  *      必须在 editor.js 之前加载
  */
 window.ScriptEditorHighlight = (function () {

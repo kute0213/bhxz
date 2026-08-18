@@ -46,8 +46,8 @@ window.TerminalPanel = (function () {
         buffer = new TC.TerminalBuffer(outputEl, { scroller: wrapperEl || outputEl });
         history = new TC.CommandHistory('terminal_history');
         sseTerminal = new TC.SseTerminal({
-            url: '/admin/cmd/terminal/stream',
-            inputUrl: '/admin/cmd/terminal/input',
+            url: '/admin/script/terminal/stream',
+            inputUrl: '/admin/script/terminal/input',
             onEvent: handleSseEvent,
             onConnected: function () {
                 clearLastLineIf('正在连接终端…');
@@ -155,7 +155,7 @@ window.TerminalPanel = (function () {
     function runCommand(cmd) {
         if (!cmd || !cmd.trim()) return;
         history.add(cmd);
-        appendCommandLine(cmd);
+        // 输入回显由 PTY 终端驱动负责，前端不重复插入
         sendText(cmd + '\n');
     }
 

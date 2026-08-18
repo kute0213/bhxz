@@ -43,16 +43,17 @@ document.addEventListener('DOMContentLoaded', function () {
         lineClass: 'term-line',
     });
 
-    const history = new TC.CommandHistory('cmd_terminal_history');
+    const history = new TC.CommandHistory('script_terminal_history');
 
     const sseTerminal = new TC.SseTerminal({
-        url: '/admin/cmd/terminal/stream',
-        inputUrl: '/admin/cmd/terminal/input',
+        url: '/admin/script/terminal/stream',
+        inputUrl: '/admin/script/terminal/input',
         onEvent: handleSseEvent,
         onConnected: function () {
             updateStatus('connected');
             hideConnectingOverlay();
             updateSessionInfo('会话已连接');
+            sendResize();
         },
         onDisconnected: function () {
             updateStatus('disconnected');
@@ -61,9 +62,6 @@ document.addEventListener('DOMContentLoaded', function () {
         },
         shouldConnect: function () { return true; },
     });
-
-    // ---- 状态 ----
-    let isRunning = false;
 
     // ---- 初始化 ----
     // 页面加载即自动连接
@@ -152,7 +150,7 @@ document.addEventListener('DOMContentLoaded', function () {
         showConnectingOverlay('正在重置会话...');
         updateSessionInfo('重置中...');
 
-        fetch('/admin/cmd/terminal/reset', { method: 'POST' })
+        fetch('/admin/script/terminal/reset', { method: 'POST' })
             .then(function (resp) { return resp.json(); })
             .then(function (data) {
                 if (data.success) {
@@ -202,7 +200,7 @@ document.addEventListener('DOMContentLoaded', function () {
     function executeCommand(command) {
         if (!command || !command.trim()) return;
         history.add(command);
-        buffer.appendLine(command, 'input');
+        // 输入交由 PTY 终端驱动回显，前端不再重复插入命令文本
         sendText(command + '\n');
         input.focus();
     }
@@ -212,15 +210,28 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     function sendInterrupt() {
+        // 发送 SIGINT；^C 回显由 PTY 终端驱动负责
         sendText('\x03');
-        buffer.appendLine('^C', 'system');
     }
+
+    // ---- 窗口尺寸同步 ----
+    function sendResize() {
+        const geometry = buffer.getGeometry ? buffer.getGeometry() : { rows: 24, cols: 120 };
+        fetch('/admin/script/terminal/resize', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cols: geometry.cols, rows: geometry.rows }),
+        }).catch(function () { /* 忽略：无 PTY 时不重要 */ });
+    }
+
+    window.addEventListener('resize', sendResize);
 
     // ---- 清屏 ----
     function clearTerminal() {
         buffer.clear();
         if (sseTerminal.isConnected()) {
-            sseTerminal.send('\x0c');
+            // 向 shell 发送 Ctrl+L，触发其真正清屏并重绘
+            sendText('\x0c');
         }
     }
 
@@ -267,37 +278,6 @@ document.addEventListener('DOMContentLoaded', function () {
 
     function hideInterruptButton() {
         if (interruptBtn) interruptBtn.style.display = 'none';
-    }
-
-    // ---- 输入事件监听（用于检测运行状态） ----
-    // 通过监听 output 事件中的文本变化来检测是否正在运行
-    // 如果输出包含 shell 提示符，则认为命令已执行完毕
-    var _origHandleOutput = buffer.handleOutput;
-    if (_origHandleOutput) {
-        buffer.handleOutput = function (text) {
-            _origHandleOutput.call(buffer, text);
-            // 检测是否包含 shell 提示符（简单启发式）
-            if (text && text.includes('$') && isRunning) {
-                // 可能命令已执行完毕，延迟检测
-                setTimeout(function () {
-                    // 检查最后几行是否有提示符
-                    isRunning = false;
-                    updateStatus('connected');
-                }, 300);
-            }
-        };
-    }
-
-    // 重写 appendLine 以跟踪运行状态
-    var _origAppendLine = buffer.appendLine;
-    if (_origAppendLine) {
-        buffer.appendLine = function (text, type) {
-            _origAppendLine.call(buffer, text, type);
-            if (type === 'input') {
-                isRunning = true;
-                updateStatus('running');
-            }
-        };
     }
 
     // ---- 暴露公共 API ----

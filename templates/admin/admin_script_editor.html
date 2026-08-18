@@ -6,7 +6,7 @@
         <!-- 顶部标题与返回（紧凑） -->
         <div class="flex items-center justify-between mb-2">
             <div class="flex items-center gap-3">
-                <a href="{{ url_for('cmd.cmd_page') }}" class="p-2 -ml-2 text-cream/60 hover:text-gold-400 transition-colors rounded-lg hover:bg-cream/5" title="返回 CMD 控制台">
+                <a href="{{ url_for('script.script_page') }}" class="p-2 -ml-2 text-cream/60 hover:text-gold-400 transition-colors rounded-lg hover:bg-cream/5" title="返回 脚本控制台">
                     <i data-lucide="arrow-left" class="w-5 h-5"></i>
                 </a>
                 <div class="w-9 h-9 bg-gold-400/15 rounded-lg flex items-center justify-center">
@@ -163,18 +163,18 @@
     #editor-output::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
     #editor-output::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
 
-    /* CmdModal 动画 */
-    #cmd-modal-root .cmd-modal-enter {
-        animation: cmdModalEnter 0.22s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    /* ScriptModal 动画 */
+    #script-modal-root .script-modal-enter {
+        animation: scriptModalEnter 0.22s cubic-bezier(0.4, 0, 0.2, 1) forwards;
     }
-    #cmd-modal-root .cmd-modal-leave {
-        animation: cmdModalLeave 0.18s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    #script-modal-root .script-modal-leave {
+        animation: scriptModalLeave 0.18s cubic-bezier(0.4, 0, 0.2, 1) forwards;
     }
-    @keyframes cmdModalEnter {
+    @keyframes scriptModalEnter {
         from { opacity: 0; transform: translateY(14px) scale(0.96); }
         to   { opacity: 1; transform: translateY(0) scale(1); }
     }
-    @keyframes cmdModalLeave {
+    @keyframes scriptModalLeave {
         from { opacity: 1; transform: translateY(0) scale(1); }
         to   { opacity: 0; transform: translateY(8px) scale(0.98); }
     }
@@ -183,13 +183,13 @@
 <!-- Monaco Editor Loader（本地） -->
 <script src="{{ url_for('static', filename='lib/monaco/vs/loader.min.js', v='1') }}"></script>
 
-<!-- CMD 模块依赖 -->
-<script src="{{ url_for('static', filename='js/cmd/terminal-core.js', v='2') }}"></script>
-<script src="{{ url_for('static', filename='js/cmd/modal.js', v='4') }}"></script>
-<script src="{{ url_for('static', filename='js/cmd/editor-highlight.js', v='12') }}"></script>
-<script src="{{ url_for('static', filename='js/cmd/editor-sse.js', v='12') }}"></script>
-<script src="{{ url_for('static', filename='js/cmd/editor-terminal.js', v='4') }}"></script>
-<script src="{{ url_for('static', filename='js/cmd/editor.js', v='15') }}"></script>
+<!-- 脚本模块依赖 -->
+<script src="{{ url_for('static', filename='js/script/terminal-core.js', v='2') }}"></script>
+<script src="{{ url_for('static', filename='js/script/modal.js', v='4') }}"></script>
+<script src="{{ url_for('static', filename='js/script/editor-highlight.js', v='12') }}"></script>
+<script src="{{ url_for('static', filename='js/script/editor-sse.js', v='13') }}"></script>
+<script src="{{ url_for('static', filename='js/script/editor-terminal.js', v='4') }}"></script>
+<script src="{{ url_for('static', filename='js/script/editor.js', v='15') }}"></script>
 
 <script>
     // 从模板注入初始代码

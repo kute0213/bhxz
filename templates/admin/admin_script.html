@@ -11,7 +11,7 @@
         <!-- 顶部操作栏 -->
         <div class="flex flex-wrap gap-3 mb-6 justify-center sm:justify-start">
             <a
-                href="{{ url_for('cmd.terminal_page') }}"
+                href="{{ url_for('script.terminal_page') }}"
                 class="px-5 py-2.5 bg-gold-400 text-forest-900 font-bold rounded-lg hover:bg-gold-500 transition-colors flex items-center gap-2"
             >
                 <i data-lucide="terminal" class="w-5 h-5"></i>
@@ -26,14 +26,14 @@
                 弹窗终端
             </button>
             <button
-                id="add-cmd-btn"
+                id="add-script-btn"
                 class="px-5 py-2.5 bg-forest-700/60 border border-cream/10 text-cream rounded-lg hover:bg-forest-600/60 transition-colors flex items-center gap-2"
             >
                 <i data-lucide="plus" class="w-5 h-5 text-gold-400"></i>
                 添加快捷命令
             </button>
             <a
-                href="{{ url_for('cmd.cmd_editor_page') }}"
+                href="{{ url_for('script.script_editor_page') }}"
                 class="px-5 py-2.5 bg-purple-600/30 border border-purple-400/30 text-purple-200 rounded-lg hover:bg-purple-600/40 transition-colors flex items-center gap-2"
             >
                 <i data-lucide="code-2" class="w-5 h-5"></i>
@@ -100,18 +100,18 @@
         from { opacity: 0; }
         to   { opacity: 1; }
     }
-    /* CmdModal 动画 */
-    #cmd-modal-root .cmd-modal-enter {
-        animation: cmdModalEnter 0.22s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    /* ScriptModal 动画 */
+    #script-modal-root .script-modal-enter {
+        animation: scriptModalEnter 0.22s cubic-bezier(0.4, 0, 0.2, 1) forwards;
     }
-    #cmd-modal-root .cmd-modal-leave {
-        animation: cmdModalLeave 0.18s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    #script-modal-root .script-modal-leave {
+        animation: scriptModalLeave 0.18s cubic-bezier(0.4, 0, 0.2, 1) forwards;
     }
-    @keyframes cmdModalEnter {
+    @keyframes scriptModalEnter {
         from { opacity: 0; transform: translateY(14px) scale(0.96); }
         to   { opacity: 1; transform: translateY(0) scale(1); }
     }
-    @keyframes cmdModalLeave {
+    @keyframes scriptModalLeave {
         from { opacity: 1; transform: translateY(0) scale(1); }
         to   { opacity: 0; transform: translateY(8px) scale(0.98); }
     }
@@ -119,11 +119,11 @@
 {% endblock %}
 
 {% block extra_script %}
-<script src="{{ url_for('static', filename='js/cmd/terminal-core.js', v='1') }}"></script>
-<script src="{{ url_for('static', filename='js/cmd/modal.js', v='4') }}"></script>
-<script src="{{ url_for('static', filename='js/cmd/terminal.js', v='5') }}"></script>
-<script src="{{ url_for('static', filename='js/cmd/presets.js', v='2') }}"></script>
-<script src="{{ url_for('static', filename='js/cmd/main.js', v='2') }}"></script>
+<script src="{{ url_for('static', filename='js/script/terminal-core.js', v='1') }}"></script>
+<script src="{{ url_for('static', filename='js/script/modal.js', v='4') }}"></script>
+<script src="{{ url_for('static', filename='js/script/terminal.js', v='6') }}"></script>
+<script src="{{ url_for('static', filename='js/script/presets.js', v='3') }}"></script>
+<script src="{{ url_for('static', filename='js/script/main.js', v='3') }}"></script>
 {% endblock %}
 
 {% block page_modals %}
@@ -187,16 +187,16 @@
 </div>
 
 <!-- 添加/编辑命令弹窗 -->
-<div id="cmd-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+<div id="script-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
     <div class="pixel-card rounded-xl p-6 w-full max-w-md">
-        <h3 id="cmd-modal-title" class="text-xl font-bold mb-4">添加快捷命令</h3>
-        <form id="cmd-form">
-            <input type="hidden" id="cmd-form-id" value="" />
+        <h3 id="script-modal-title" class="text-xl font-bold mb-4">添加快捷命令</h3>
+        <form id="script-form">
+            <input type="hidden" id="script-form-id" value="" />
             <div class="mb-4">
                 <label class="block text-sm text-cream/70 mb-1">名称</label>
                 <input
                     type="text"
-                    id="cmd-form-name"
+                    id="script-form-name"
                     class="w-full bg-black/30 border border-cream/10 rounded-lg px-4 py-2 text-cream placeholder-cream/30 focus:outline-none focus:border-gold-400/50"
                     placeholder="例如：查看磁盘空间"
                     required
@@ -205,19 +205,19 @@
             <div class="mb-4">
                 <label class="block text-sm text-cream/70 mb-1">类型</label>
                 <select
-                    id="cmd-form-type"
+                    id="script-form-type"
                     class="w-full bg-black/30 border border-cream/10 rounded-lg px-4 py-2 text-cream focus:outline-none focus:border-gold-400/50"
                 >
-                    <option value="cmd">CMD 命令（服务端执行）</option>
+                    <option value="cmd">脚本命令（服务端执行）</option>
                     <option value="script">Python 脚本（后端 SSE 执行）</option>
                 </select>
             </div>
             <div class="mb-4">
                 <label class="block text-sm text-cream/70 mb-1">内容</label>
                 <textarea
-                    id="cmd-form-command"
+                    id="script-form-command"
                     class="w-full bg-black/30 border border-cream/10 rounded-lg px-4 py-2 text-cream placeholder-cream/30 focus:outline-none focus:border-gold-400/50 font-mono text-sm"
-                    placeholder="CMD 命令或 Python 脚本代码"
+                    placeholder="脚本命令或 Python 脚本代码"
                     rows="5"
                     required
                 ></textarea>
@@ -226,7 +226,7 @@
                 <label class="block text-sm text-cream/70 mb-1">描述（可选）</label>
                 <input
                     type="text"
-                    id="cmd-form-desc"
+                    id="script-form-desc"
                     class="w-full bg-black/30 border border-cream/10 rounded-lg px-4 py-2 text-cream placeholder-cream/30 focus:outline-none focus:border-gold-400/50"
                     placeholder="简短描述"
                 />
@@ -235,7 +235,7 @@
                 <label class="block text-sm text-cream/70 mb-1">排序</label>
                 <input
                     type="number"
-                    id="cmd-form-sort"
+                    id="script-form-sort"
                     class="w-full bg-black/30 border border-cream/10 rounded-lg px-4 py-2 text-cream placeholder-cream/30 focus:outline-none focus:border-gold-400/50"
                     value="0"
                 />
@@ -243,7 +243,7 @@
             <div class="flex gap-3">
                 <button
                     type="button"
-                    id="cmd-modal-cancel"
+                    id="script-modal-cancel"
                     class="flex-1 py-2 bg-cream/10 text-cream rounded-lg hover:bg-cream/20 transition-colors"
                 >
                     取消
