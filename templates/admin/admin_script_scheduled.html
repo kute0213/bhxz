@@ -55,10 +55,12 @@
         </div>
     </div>
 </section>
+{% endblock %}
 
+{% block extra_script %}
 <script src="{{ url_for('static', filename='js/script/modal.js', v='4') }}"></script>
-<script src="{{ url_for('static', filename='js/script/scheduled.js', v='6') }}"></script>
-<script src="{{ url_for('static', filename='js/script/scheduled-logs.js', v='2') }}"></script>
+<script src="{{ url_for('static', filename='js/script/scheduled.js', v='7') }}"></script>
+<script src="{{ url_for('static', filename='js/script/scheduled-logs.js', v='3') }}"></script>
 {% endblock %}
 
 {% block page_modals %}

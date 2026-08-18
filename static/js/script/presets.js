@@ -36,9 +36,9 @@ window.ScriptPresets = (function () {
         listContainer = document.getElementById('preset-list');
         scriptListContainer = document.getElementById('script-list');
         addBtn = document.getElementById('add-script-btn');
-        modal = document.getElementById('cmd-modal');
+        modal = document.getElementById('script-modal');
         modalTitle = document.getElementById('script-modal-title');
-        form = document.getElementById('cmd-form');
+        form = document.getElementById('script-form');
         formId = document.getElementById('script-form-id');
         formName = document.getElementById('script-form-name');
         formCmd = document.getElementById('script-form-command');
@@ -232,7 +232,7 @@ ${escapeHtml(cmd.command)}
 
         listContainer.querySelectorAll('.script-edit-btn').forEach(btn => {
             btn.addEventListener('click', () => {
-                const id = parseInt(btn.closest('[data-script-id]').dataset.cmdId);
+                const id = parseInt(btn.closest('[data-script-id]').dataset.scriptId);
                 const cmd = commands.find(c => c.id === id);
                 if (cmd) openModal(cmd);
             });
@@ -240,7 +240,7 @@ ${escapeHtml(cmd.command)}
 
         listContainer.querySelectorAll('.script-delete-btn').forEach(btn => {
             btn.addEventListener('click', async () => {
-                const id = parseInt(btn.closest('[data-script-id]').dataset.cmdId);
+                const id = parseInt(btn.closest('[data-script-id]').dataset.scriptId);
                 const cmd = commands.find(c => c.id === id);
                 if (!cmd) return;
                 const ok = await window.ScriptModal.confirm('删除快捷命令', '确定删除 "' + cmd.name + '"？');
@@ -261,7 +261,7 @@ ${escapeHtml(cmd.command)}
 
         listContainer.querySelectorAll('.script-run-preset-btn').forEach(btn => {
             btn.addEventListener('click', () => {
-                const id = parseInt(btn.closest('[data-script-id]').dataset.cmdId);
+                const id = parseInt(btn.closest('[data-script-id]').dataset.scriptId);
                 const cmd = commands.find(c => c.id === id);
                 if (!cmd) return;
                 if (onRunCommand) onRunCommand(cmd);

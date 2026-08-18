@@ -101,6 +101,21 @@
 
 {% block extra_style %}
 <style>
+    /* ScriptModal 动画（脚本 alert/prompt/confirm 使用） */
+    #script-modal-root .script-modal-enter {
+        animation: scriptModalEnter 0.22s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    }
+    #script-modal-root .script-modal-leave {
+        animation: scriptModalLeave 0.18s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    }
+    @keyframes scriptModalEnter {
+        from { opacity: 0; transform: translateY(14px) scale(0.96); }
+        to   { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    @keyframes scriptModalLeave {
+        from { opacity: 1; transform: translateY(0) scale(1); }
+        to   { opacity: 0; transform: translateY(8px) scale(0.98); }
+    }
     /* 终端输出区滚动条 */
     #terminal-output::-webkit-scrollbar { width: 8px; height: 8px; }
     #terminal-output::-webkit-scrollbar-track { background: transparent; }
@@ -126,7 +141,8 @@
 {% endblock %}
 
 {% block extra_script %}
+<script src="{{ url_for('static', filename='js/script/modal.js', v='4') }}"></script>
 <script src="{{ url_for('static', filename='js/script/terminal-core.js', v='2') }}"></script>
-<script src="{{ url_for('static', filename='js/script/terminal-page.js', v='1') }}"></script>
+<script src="{{ url_for('static', filename='js/script/terminal-page.js', v='2') }}"></script>
 {% endblock %}
 {% block page_modals %}{% endblock %}

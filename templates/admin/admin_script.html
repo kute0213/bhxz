@@ -18,14 +18,6 @@
                 实时终端
             </a>
             <button
-                id="open-terminal-btn"
-                class="px-5 py-2.5 bg-gold-400/40 text-gold-300 font-bold rounded-lg hover:bg-gold-400/50 transition-colors flex items-center gap-2"
-                title="在弹窗中打开终端（旧版）"
-            >
-                <i data-lucide="maximize-2" class="w-5 h-5"></i>
-                弹窗终端
-            </button>
-            <button
                 id="add-script-btn"
                 class="px-5 py-2.5 bg-forest-700/60 border border-cream/10 text-cream rounded-lg hover:bg-forest-600/60 transition-colors flex items-center gap-2"
             >
@@ -77,29 +69,6 @@
 
 {% block extra_style %}
 <style>
-    /* 终端弹窗动画 */
-    .terminal-fade-in {
-        animation: terminalFadeIn 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-    }
-    .terminal-fade-out {
-        animation: terminalFadeOut 0.2s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-    }
-    @keyframes terminalFadeIn {
-        from { opacity: 0; transform: translateY(20px) scale(0.97); }
-        to   { opacity: 1; transform: translateY(0) scale(1); }
-    }
-    @keyframes terminalFadeOut {
-        from { opacity: 1; transform: translateY(0) scale(1); }
-        to   { opacity: 0; transform: translateY(10px) scale(0.98); }
-    }
-    /* 弹窗遮罩淡入 */
-    .modal-backdrop-fade {
-        animation: backdropFade 0.25s ease forwards;
-    }
-    @keyframes backdropFade {
-        from { opacity: 0; }
-        to   { opacity: 1; }
-    }
     /* ScriptModal 动画 */
     #script-modal-root .script-modal-enter {
         animation: scriptModalEnter 0.22s cubic-bezier(0.4, 0, 0.2, 1) forwards;
@@ -119,73 +88,12 @@
 {% endblock %}
 
 {% block extra_script %}
-<script src="{{ url_for('static', filename='js/script/terminal-core.js', v='1') }}"></script>
 <script src="{{ url_for('static', filename='js/script/modal.js', v='4') }}"></script>
-<script src="{{ url_for('static', filename='js/script/terminal.js', v='6') }}"></script>
-<script src="{{ url_for('static', filename='js/script/presets.js', v='3') }}"></script>
-<script src="{{ url_for('static', filename='js/script/main.js', v='3') }}"></script>
+<script src="{{ url_for('static', filename='js/script/presets.js', v='4') }}"></script>
+<script src="{{ url_for('static', filename='js/script/main.js', v='4') }}"></script>
 {% endblock %}
 
 {% block page_modals %}
-<!-- 终端弹窗 -->
-<div id="terminal-modal" class="fixed inset-0 z-50 hidden flex items-center justify-center p-4" style="background:rgba(0,0,0,0.4);backdrop-filter:blur(8px) saturate(120%);-webkit-backdrop-filter:blur(8px) saturate(120%);">
-    <div id="terminal-modal-content" class="pixel-card rounded-2xl w-full max-w-4xl h-[70vh] flex flex-col overflow-hidden terminal-fade-in" style="position:relative;">
-        <!-- 顶部渐变条 -->
-        <div style="height:3px;background:linear-gradient(90deg,#f4d03f,#d4a827);flex-shrink:0;"></div>
-        <!-- 标题栏（可拖拽） -->
-        <div class="terminal-title-bar flex items-center justify-between px-5 py-3 cursor-move select-none flex-shrink-0" style="background:rgba(0,0,0,0.2);">
-            <div class="flex items-center gap-3">
-                <div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background:rgba(244,208,63,0.15);">
-                    <i data-lucide="terminal" class="w-4 h-4 text-gold-400"></i>
-                </div>
-                <div>
-                    <div class="font-bold text-sm">实时终端</div>
-                    <div class="flex items-center gap-2 text-xs text-cream/50">
-                        <span class="terminal-status-dot w-2 h-2 rounded-full bg-emerald-400"></span>
-                        <span class="terminal-status-text">就绪</span>
-                        <span class="text-cream/30">·</span>
-                        <span>ESC 关闭</span>
-                    </div>
-                </div>
-            </div>
-            <button id="terminal-close-btn" class="p-1.5 text-cream/50 hover:text-cream hover:bg-cream/10 rounded-lg transition-colors">
-                <i data-lucide="x" class="w-4 h-4"></i>
-            </button>
-        </div>
-        <!-- 输出区 -->
-        <div
-            id="terminal-output"
-            class="flex-1 bg-black/60 p-4 overflow-y-auto font-mono text-xs sm:text-sm whitespace-pre-wrap min-h-0"
-            style="color:#4ade80;line-height:1.6;"
-        ></div>
-        <!-- 输入区 -->
-        <div class="p-3 border-t border-cream/10 flex gap-2 flex-shrink-0" style="background:rgba(0,0,0,0.3);">
-            <div class="flex-1 flex items-center bg-black/40 border border-cream/10 rounded-lg px-3 focus-within:border-gold-400/50 transition-colors">
-                <span class="text-emerald-400 text-xs mr-1 select-none">$</span>
-                <input
-                    id="terminal-input"
-                    type="text"
-                    class="flex-1 bg-transparent py-2 text-cream placeholder-cream/30 focus:outline-none font-mono text-sm"
-                    placeholder="输入命令... (Ctrl+L 清屏, ↑↓ 历史)"
-                />
-            </div>
-            <button
-                id="terminal-run-btn"
-                class="px-4 py-2 bg-gold-400 text-forest-900 font-bold rounded-lg hover:bg-gold-500 transition-all duration-150 active:scale-95 flex items-center gap-2 flex-shrink-0"
-            >
-                <i data-lucide="send" class="w-4 h-4"></i>
-            </button>
-            <button
-                id="terminal-clear-btn"
-                class="px-3 py-2 bg-cream/10 text-cream/70 rounded-lg hover:bg-cream/20 transition-all duration-150 active:scale-95 flex items-center gap-2 flex-shrink-0"
-                title="清屏 (Ctrl+L)"
-            >
-                <i data-lucide="trash-2" class="w-4 h-4"></i>
-            </button>
-        </div>
-    </div>
-</div>
-
 <!-- 添加/编辑命令弹窗 -->
 <div id="script-modal" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
     <div class="pixel-card rounded-xl p-6 w-full max-w-md">

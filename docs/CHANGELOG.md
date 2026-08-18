@@ -12,6 +12,14 @@
 - **直接运行任务**：任务卡片「立即执行」直接运行，不受超时限制，可一路运行到底，并在「运行中任务」中查看
 - **任务级最大超时**：创建/编辑定时任务时可单独设置「最大超时时间（秒）」，超时自动终止（直接运行不受此限制）
 
+### 移除
+- **彻底移除弹窗终端（旧版）**：删除 `static/js/script/terminal.js` 及脚本控制台页面上的弹窗终端入口/弹窗 DOM，实时终端统一收敛到**独立实时终端页面**（`/admin/script/terminal-page`）。快捷命令/脚本运行改为跳转到独立终端页并自动执行（`main.js` 通过 URL 参数 `?cmd=` / `?script=` 携带），输出实时回流显示在终端页；关闭浏览器标签即结束会话
+
+### 修复
+- 修复定时任务「创建定时任务」「执行日志」按钮无反应：`scheduled.js`/`scheduled-logs.js` 移入 `extra_script` 块，确保在 `page_modals` 弹窗 DOM 渲染后再加载绑定
+- 修复快捷命令「运行/编辑/删除」按钮无反应：`presets.js` 事件绑定读取 ID 时改用与模板一致的 `dataset.scriptId`（原误用 `dataset.cmdId`），模态框选择器同步为 `script-modal`/`script-form`
+- 修复脚本编辑器输入区无法输入：Monaco 加载路径由不存在的 `loader.min.js` 改为正确的 `loader.js`
+
 ### 优化
 - **终端升级为伪终端（跨平台）**：SSH 式交互体验，Python `input()`/readline 原生可用、输入回显与行编辑正确、清屏与 ANSI 光标控制真实响应、输出实时流式返回；移除前端强制插入的 `$` 提示符，只保留真正的命令提示符。Unix/macOS 走原生 `os.openpty()`，**Windows 无 pty/termios，改用 pywinpty（ConPTY）提供同等的真伪终端**（未安装 pywinpty 时自动回退到管道实现，避免启动失败；`requirements.txt` 已按平台标记引入 `pywinpty`）
 - **清理历史遗留命名**：`CmdPresets`→`ScriptPresets`、`__abortCmdScript`→`__abortRunningScript`，删除编辑器退出上报中一处无意义的错误兜底逻辑
