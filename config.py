@@ -235,6 +235,7 @@ SETTINGS_REGISTRY = [
     ('REPLIES_PER_PAGE', 10, 'int', '回复每页加载数量', '讨论区回复列表每次加载的回复数量', '讨论区配置'),
 
     # 一键更新
+    ('BUILD_STATIC_ON_UPDATE', False, 'bool', '更新时构建静态资源', '开启后每次更新都会重新下载外部 CDN 资源（Monaco、xterm.js 等），关闭则仅同步代码', '一键更新'),
     ('UPDATE_EXCLUDED_FILES', 'site.duckdb,site.duckdb.wal,backups,uploads,ssl,.env,.git,__pycache__', 'str', '不替换的文件/文件夹', '逗号分隔，更新时不会被删除或覆盖', '一键更新'),
     ('GITHUB_PROXIES', '', 'str', '自定义 GitHub 代理', '每行一个，格式：名称=URL。留空使用默认代理列表', '一键更新'),
     ('START_COMMAND', '{python} app.py', 'str', '自定义启动命令', '更新完成后启动服务器的命令，留空使用默认方式。关闭服务器使用自动方式。可用占位符：{python} {script} {app_root}', '一键更新'),

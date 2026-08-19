@@ -872,14 +872,22 @@ def _run_update():
             pass
 
         _add_event('log', {'message': f'✓ 同步完成，共处理 {processed} 个文件'})
-        _add_event('progress', {'percent': 97, 'message': '同步完成，正在构建静态资源...'})
 
-        # 6. 运行静态资源构建脚本（实时输出日志）
+        # 6. 检查设置，决定是否运行静态资源构建脚本
+        _build_static = False
         try:
-            build_script = os.path.join(APP_ROOT, 'scripts', 'build', 'build_static.py')
-            if os.path.isfile(build_script):
-                _add_event('log', {'message': '正在构建静态资源...'})
-                _add_event('progress', {'percent': 97, 'message': '正在构建静态资源...'})
+            from config import get_config_value
+            _build_static = get_config_value('BUILD_STATIC_ON_UPDATE', False)
+        except Exception:
+            pass
+
+        if _build_static:
+            _add_event('progress', {'percent': 97, 'message': '同步完成，正在构建静态资源...'})
+            try:
+                build_script = os.path.join(APP_ROOT, 'scripts', 'build', 'build_static.py')
+                if os.path.isfile(build_script):
+                    _add_event('log', {'message': '正在构建静态资源...'})
+                    _add_event('progress', {'percent': 97, 'message': '正在构建静态资源...'})
 
                 # 设置 PYTHONUNBUFFERED=1 强制 Python 不缓冲 stdout，
                 # 确保构建脚本的每一行输出都能被实时读取
