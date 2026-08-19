@@ -371,6 +371,45 @@ def download_monaco():
 
 
 # ---------------------------------------------------------------------------
+# 4.5 xterm.js 终端模拟器
+# ---------------------------------------------------------------------------
+
+XTERM_VERSION = '5.3.0'
+XTERM_ADDON_FIT_VERSION = '0.8.0'
+
+
+def download_xterm():
+    """下载 xterm.js 终端模拟器及其 fit 自适应插件。
+
+    实时终端 / 弹窗终端基于 xterm.js 渲染字符网格，替代自制的脆弱的
+    ANSI 渲染器，确保回车执行、光标、清屏、换行排版等在浏览器中表现一致。
+    """
+    print('\n=== xterm.js 终端 ===', flush=True)
+    lib_dir = os.path.join(LIB_DIR, 'xterm')
+    os.makedirs(lib_dir, exist_ok=True)
+
+    files = [
+        (
+            f'https://cdn.jsdelivr.net/npm/xterm@{XTERM_VERSION}/lib/xterm.min.js',
+            os.path.join(lib_dir, 'xterm.min.js'),
+            'xterm.min.js',
+        ),
+        (
+            f'https://cdn.jsdelivr.net/npm/xterm@{XTERM_VERSION}/css/xterm.min.css',
+            os.path.join(lib_dir, 'xterm.min.css'),
+            'xterm.min.css',
+        ),
+        (
+            f'https://cdn.jsdelivr.net/npm/xterm-addon-fit@{XTERM_ADDON_FIT_VERSION}/lib/xterm-addon-fit.min.js',
+            os.path.join(lib_dir, 'addon-fit.min.js'),
+            'xterm-addon-fit.min.js',
+        ),
+    ]
+    for url, dest, desc in files:
+        _download_with_redirect(url, dest, desc)
+
+
+# ---------------------------------------------------------------------------
 # 5. 生成静态资源版本文件
 # ---------------------------------------------------------------------------
 
@@ -379,6 +418,7 @@ def generate_version_file():
     version = {
         'built_at': time.strftime('%Y-%m-%d %H:%M:%S'),
         'monaco_version': MONACO_VERSION,
+        'xterm_version': XTERM_VERSION,
     }
     dest = os.path.join(LIB_DIR, 'lib-version.json')
     with open(dest, 'w') as f:
@@ -411,6 +451,9 @@ def main():
 
     # 4. Monaco Editor（HTTP 下载，无需 npm）
     download_monaco()
+
+    # 4.5 xterm.js 终端模拟器
+    download_xterm()
 
     # 5. 版本文件
     generate_version_file()

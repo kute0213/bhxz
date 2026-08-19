@@ -31,6 +31,25 @@ body::after {
         radial-gradient(ellipse 60% 80% at 80% 90%, rgba(244, 208, 63, 0.008) 0%, transparent 60%);
 }
 
+/* 背景图片（覆盖在 body 背景之上，bg-orbs 之下） */
+.bg-image-layer {
+    position: fixed; inset: 0; z-index: -2;
+    background-position: center center;
+    background-repeat: no-repeat;
+    background-size: cover;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.8s ease;
+}
+.bg-image-layer.loaded {
+    opacity: 0.6;
+}
+/* 暗化覆层，确保文字可读性 */
+.bg-image-layer::after {
+    content: ''; position: absolute; inset: 0;
+    background: rgba(7, 18, 12, 0.35);
+}
+
 /* 磨砂玻璃动态背景 - 光线透过玻璃投射的柔和光晕 */
 .bg-orbs { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
 .bg-orb {

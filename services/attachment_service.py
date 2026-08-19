@@ -6,7 +6,7 @@ import secrets
 
 from werkzeug.utils import secure_filename
 
-from config import UPLOAD_DIR
+from config import UPLOAD_ATTACHMENTS_DIR
 
 
 def save_attachments(files):
@@ -17,7 +17,7 @@ def save_attachments(files):
             safe_prefix = secrets.token_hex(8)
             clean_name = secure_filename(file.filename) or 'file'
             safe_name = safe_prefix + '_' + clean_name
-            save_path = os.path.join(UPLOAD_DIR, safe_name)
+            save_path = os.path.join(UPLOAD_ATTACHMENTS_DIR, safe_name)
             file.save(save_path)
             names.append(safe_name)
     return names
@@ -36,10 +36,11 @@ def parse_attachment_json(attachment_json):
         return [attachment_json]
 
 
-def clean_attachments(filenames):
+def clean_attachments(filenames, directory=None):
     """删除指定附件文件（忽略不存在的文件）。"""
+    base = directory or UPLOAD_ATTACHMENTS_DIR
     for fname in filenames:
-        filepath = os.path.join(UPLOAD_DIR, fname)
+        filepath = os.path.join(base, fname)
         if os.path.exists(filepath):
             try:
                 os.remove(filepath)

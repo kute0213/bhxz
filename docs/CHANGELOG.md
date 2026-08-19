@@ -3,25 +3,28 @@
 ## [Unreleased]
 
 ### 重构
+- **终端彻底升级为 xterm.js**：用业界标准的分享终端模块 `terminal-xterm.js` 替代旧版自制 ANSI 字符网格渲染器，彻底修复「回车只输入不执行」「字符排版错乱」。字符绘制、光标、清屏、行宽、输入回显与本地终端完全一致；输入走 `term.onData` 将原始字节直送后端 PTY 驱动，回车即可执行；尺寸自适应（`xterm-addon-fit`）将行列数同步到 PTY，避免换行错位与黑屏
 - **「CMD」全面改名为「脚本」**：后端包 `routes/cmd`→`routes/script`、蓝图 `cmd_bp`→`script_bp`、URL `/admin/cmd*`→`/admin/script*`，前端 `static/js/cmd`→`static/js/script`、模板 `admin_cmd_*.html`→`admin_script_*.html`，同步更新快捷命令/定时任务/终端/编辑器全部入口与可见文案，并同步测试用例与文档
 
 ### 新增
+- **复原「弹窗终端」且无独立入口**：脚本控制台不再有「实时终端」按钮；点击任意快捷命令/脚本卡片的「运行」即自动打开弹窗终端（`terminal-modal.js`）并在其中执行——Shell 命令发到共享持久 PTY 会话、脚本走后端 SSE 独立子进程。顶栏提供「中断/清屏/重置/关闭」，`Esc` 或点击遮罩可关闭
 - **MiniScript 解除安全限制**：删除 AST 沙箱校验、危险函数黑名单、双下划线属性保护、循环次数限制与运行时长限制，脚本可无限循环、无限运行；仅保留独立子进程隔离与资源访问控制作为「防误炸服务器」底线
 - **退出网页即强制终止脚本**：前端监听 `visibilitychange`/`pagehide`/`beforeunload` 主动上报终止，后端以心跳监控线程兜底，覆盖意外关闭浏览器/tab 崩溃场景
 - **定时任务调度优化**：改为按到期时间升序排队、每秒判断一次，不再每轮全表扫描；新增「运行中任务」面板，实时查看已触发的脚本
 - **直接运行任务**：任务卡片「立即执行」直接运行，不受超时限制，可一路运行到底，并在「运行中任务」中查看
 - **任务级最大超时**：创建/编辑定时任务时可单独设置「最大超时时间（秒）」，超时自动终止（直接运行不受此限制）
 
-### 移除
-- **彻底移除弹窗终端（旧版）**：删除 `static/js/script/terminal.js` 及脚本控制台页面上的弹窗终端入口/弹窗 DOM，实时终端统一收敛到**独立实时终端页面**（`/admin/script/terminal-page`）。快捷命令/脚本运行改为跳转到独立终端页并自动执行（`main.js` 通过 URL 参数 `?cmd=` / `?script=` 携带），输出实时回流显示在终端页；关闭浏览器标签即结束会话
-
 ### 修复
+- **修复实时终端「回车只输入不执行」与排版错乱**：改用 xterm.js 渲染 + PTY 字节级输入，输入回车由终端驱动真实执行并回显（详见上方「重构」）
+- **修复弹窗终端初始黑屏/尺寸为 0**：为终端容器固定高度、每次显示弹窗时重新 `fit`、并限制后端 `/resize` 只在合法尺寸（≥2×2）时回传，杜绝初始零尺寸容器触发 `400`
+- **修复 DuckDBRow 在 Debian 下 `description` 列数多于实际行数据导致 `dict(r)` 崩溃**：构造时自动以 `None` 补齐，确保 `dict(行)` 总是安全返回
 - 修复定时任务「创建定时任务」「执行日志」按钮无反应：`scheduled.js`/`scheduled-logs.js` 移入 `extra_script` 块，确保在 `page_modals` 弹窗 DOM 渲染后再加载绑定
 - 修复快捷命令「运行/编辑/删除」按钮无反应：`presets.js` 事件绑定读取 ID 时改用与模板一致的 `dataset.scriptId`（原误用 `dataset.cmdId`），模态框选择器同步为 `script-modal`/`script-form`
 - 修复脚本编辑器输入区无法输入：Monaco 加载路径由不存在的 `loader.min.js` 改为正确的 `loader.js`
 
 ### 优化
 - **终端升级为伪终端（跨平台）**：SSH 式交互体验，Python `input()`/readline 原生可用、输入回显与行编辑正确、清屏与 ANSI 光标控制真实响应、输出实时流式返回；移除前端强制插入的 `$` 提示符，只保留真正的命令提示符。Unix/macOS 走原生 `os.openpty()`，**Windows 无 pty/termios，改用 pywinpty（ConPTY）提供同等的真伪终端**（未安装 pywinpty 时自动回退到管道实现，避免启动失败；`requirements.txt` 已按平台标记引入 `pywinpty`）
+- 构建脚本 `build_static.py` 新增 xterm.js 本地化下载（`xterm.min.js`/`xterm.min.css`/`addon-fit.min.js`），写入 `static/lib/xterm/`
 - **清理历史遗留命名**：`CmdPresets`→`ScriptPresets`、`__abortCmdScript`→`__abortRunningScript`，删除编辑器退出上报中一处无意义的错误兜底逻辑
 - 文档体系二次整合，最终精简为单一入口：
   - 将 `docs/ARCHITECTURE.md` 与 `docs/cmd-guide.md` 内容完整并入 `README.md`（架构、目录结构与技术栈；CMD 控制台使用说明），删除两文件
@@ -74,7 +77,14 @@
   - 全局噪点纹理优化（`fractalNoise` 频率降低、增加去饱和度），微观蚀刻感更真实
   - 添加环境光晕叠加（`body::after`），模拟玻璃微弱冷色/暖色环境反光
   - 背景光球透明度降低（`0.85` → `0.50`），模糊半径增大（`60px` → `80px`），光晕更柔和
-  - 统一所有页面内联玻璃样式（`index.html`、`settings.html`、`guides/index.html`、`register.html`、`admin/admin_mod_intros.html`、`admin/admin_cmd.html`、`base.html`）
+  - 统一所有页面内联玻璃样式
+- `uploads/` 目录按功能分类重组：附件归 `uploads/attachments/`、背景图片归 `uploads/backgrounds/`、社区文件归 `uploads/community/`，根目录不再堆文件
+- 新增**全站背景图片**功能：可在 `config.py` 或管理后台「系统设置→背景图片」中开启/关闭
+  - 背景图片存放在 `uploads/backgrounds/`，命名规范 `bg_<比例>.jpg/webp/png`（如 `bg_16_9.jpg`）
+  - 前端自动检测屏幕宽高比（`16:9`/`16:10`/`4:3`/`9:16`/`3:4`/`1:1`），请求匹配的背景图
+  - CSS `background-size: cover` + 暗化覆层（`rgba(7,18,12,0.35)`）确保文字可读性，加载时淡入过渡
+  - 图片由 `background/<比例>` 路由提供，服务端精确匹配或降级到第一张可用背景图，无图片时静默不显示
+  - 关闭时完全恢复默认玻璃光晕背景，零开销（`index.html`、`settings.html`、`guides/index.html`、`register.html`、`admin/admin_mod_intros.html`、`admin/admin_cmd.html`、`base.html`）
 
 ### 重构
 - 统一 Markdown 编辑器组件：新建 `templates/macros/markdown_editor.html` 宏 + 共享脚本 `static/js/markdown-editor.js`，覆盖广播邮件、指南编辑、讨论帖创建等 4 个页面，消除重复的内联样式与脚本

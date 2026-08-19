@@ -44,13 +44,9 @@
             </div>
         </div>
 
-        <!-- 终端输出区 -->
-        <div class="flex-1 overflow-hidden relative" style="background:rgba(0,0,0,0.5);">
-            <div
-                id="terminal-output"
-                class="absolute inset-0 overflow-y-auto p-3 sm:p-4 font-mono text-xs sm:text-sm leading-relaxed"
-                style="color:#4ade80;"
-            ></div>
+        <!-- 终端屏幕 -->
+        <div class="flex-1 min-h-0 relative" style="background:#0b0f14;">
+            <div id="terminal-screen" class="absolute inset-0 overflow-hidden"></div>
             <!-- 连接中遮罩 -->
             <div id="term-connecting-overlay" class="absolute inset-0 flex flex-col items-center justify-center" style="background:rgba(0,0,0,0.6);">
                 <div class="w-8 h-8 border-2 border-gold-400/40 border-t-gold-400 rounded-full animate-spin mb-3"></div>
@@ -58,91 +54,27 @@
                 <div class="text-xs text-cream/30 mt-1">建立持久 Shell 会话</div>
             </div>
         </div>
-
-        <!-- 底部输入栏 -->
-        <div class="flex-shrink-0 px-3 sm:px-4 py-2.5 flex items-center gap-2" style="background:rgba(0,0,0,0.4);border-top:1px solid rgba(255,255,255,0.06);">
-            <div class="flex items-center gap-1.5 text-xs text-cream/40 font-mono flex-shrink-0">
-                <span style="color:#4ade80;">$</span>
-            </div>
-            <div class="flex-1 flex items-center min-w-0">
-                <input
-                    id="terminal-input"
-                    type="text"
-                    class="w-full bg-transparent text-cream placeholder-cream/25 outline-none font-mono text-sm"
-                    style="caret-color: #4ade80;"
-                    placeholder="输入命令，回车执行..."
-                    autocomplete="off"
-                    autocapitalize="off"
-                    autocorrect="off"
-                    spellcheck="false"
-                />
-            </div>
-            <button
-                id="terminal-run-btn"
-                class="px-3.5 py-1.5 bg-gold-400/90 text-forest-900 font-bold rounded-lg hover:bg-gold-500 transition-all duration-150 active:scale-95 flex items-center gap-2 flex-shrink-0 text-xs"
-                title="执行命令 (Enter)"
-            >
-                <i data-lucide="play" class="w-3.5 h-3.5"></i>
-                <span class="hidden sm:inline">执行</span>
-            </button>
-            <button
-                id="term-interrupt-btn"
-                class="px-3 py-1.5 bg-red-500/70 text-white rounded-lg hover:bg-red-500 transition-all duration-150 active:scale-95 flex items-center gap-2 flex-shrink-0 text-xs"
-                title="发送中断信号 (Ctrl+C)"
-                style="display:none;"
-            >
-                <i data-lucide="stop-circle" class="w-3.5 h-3.5"></i>
-                <span class="hidden sm:inline">中断</span>
-            </button>
-        </div>
     </div>
 </section>
 {% endblock %}
 
 {% block extra_style %}
+<link rel="stylesheet" href="{{ url_for('static', filename='lib/xterm/xterm.min.css', v='1') }}" />
 <style>
-    /* ScriptModal 动画（脚本 alert/prompt/confirm 使用） */
-    #script-modal-root .script-modal-enter {
-        animation: scriptModalEnter 0.22s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-    }
-    #script-modal-root .script-modal-leave {
-        animation: scriptModalLeave 0.18s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-    }
-    @keyframes scriptModalEnter {
-        from { opacity: 0; transform: translateY(14px) scale(0.96); }
-        to   { opacity: 1; transform: translateY(0) scale(1); }
-    }
-    @keyframes scriptModalLeave {
-        from { opacity: 1; transform: translateY(0) scale(1); }
-        to   { opacity: 0; transform: translateY(8px) scale(0.98); }
-    }
-    /* 终端输出区滚动条 */
-    #terminal-output::-webkit-scrollbar { width: 8px; height: 8px; }
-    #terminal-output::-webkit-scrollbar-track { background: transparent; }
-    #terminal-output::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 4px; }
-    #terminal-output::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.15); }
-
-    /* 终端输出行样式 */
-    #terminal-output .term-line { white-space: pre-wrap; word-break: break-all; min-height: 1.4em; }
-    #terminal-output .term-line.input { color: #f4d03f; }
-    #terminal-output .term-line.output { color: #4ade80; }
-    #terminal-output .term-line.error { color: #f87171; }
-    #terminal-output .term-line.warning { color: #fbbf24; }
-    #terminal-output .term-line.script { color: #c084fc; }
-    #terminal-output .term-line.system { color: #6b7280; font-style: italic; }
-
     /* 连接中动画 */
     #term-connecting-overlay { transition: opacity 0.4s ease; }
     #term-connecting-overlay.hidden { opacity: 0; pointer-events: none; }
-
+    #terminal-screen .xterm { height: 100%; }
+    #terminal-screen .xterm .xterm-viewport { height: 100% !important; }
     /* 页面过渡：终端独立页面禁用默认的 translateY 动画 */
     .page-content { opacity: 1 !important; transform: none !important; }
 </style>
 {% endblock %}
 
 {% block extra_script %}
-<script src="{{ url_for('static', filename='js/script/modal.js', v='4') }}"></script>
-<script src="{{ url_for('static', filename='js/script/terminal-core.js', v='2') }}"></script>
-<script src="{{ url_for('static', filename='js/script/terminal-page.js', v='2') }}"></script>
+<script src="{{ url_for('static', filename='lib/xterm/xterm.min.js', v='1') }}"></script>
+<script src="{{ url_for('static', filename='lib/xterm/addon-fit.min.js', v='1') }}"></script>
+<script src="{{ url_for('static', filename='js/script/terminal-xterm.js', v='1') }}"></script>
+<script src="{{ url_for('static', filename='js/script/terminal-page.js', v='3') }}"></script>
 {% endblock %}
 {% block page_modals %}{% endblock %}
