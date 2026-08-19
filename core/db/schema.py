@@ -193,19 +193,7 @@ def init_db():
                 duration_seconds DOUBLE DEFAULT 0
             )
         '''),
-        ('scripts', '''
-            CREATE SEQUENCE IF NOT EXISTS scripts_id_seq START 1;
-            CREATE TABLE IF NOT EXISTS scripts (
-                id INTEGER PRIMARY KEY DEFAULT nextval('scripts_id_seq'),
-                name VARCHAR NOT NULL,
-                description VARCHAR DEFAULT '',
-                content VARCHAR DEFAULT '',
-                script_type VARCHAR NOT NULL DEFAULT 'miniscript',
-                sort_order INTEGER DEFAULT 0,
-                created_at VARCHAR NOT NULL,
-                updated_at VARCHAR NOT NULL
-            )
-        '''),
+        
         # 数据库备份记录表
         ('db_backups', '''
             CREATE SEQUENCE IF NOT EXISTS db_backups_id_seq START 1;
@@ -368,7 +356,6 @@ def init_db():
     add_column_if_not_exists('board_replies', 'attachment', 'VARCHAR DEFAULT NULL')
     add_column_if_not_exists('cmd_commands', 'type', "VARCHAR DEFAULT 'cmd'")
     add_column_if_not_exists('scheduled_tasks', 'task_type', "VARCHAR DEFAULT 'shell'")
-    add_column_if_not_exists('scheduled_tasks', 'script_id', 'INTEGER DEFAULT NULL')
     # 定时任务改为引用 cmd_commands 表中的快捷命令
     add_column_if_not_exists('scheduled_tasks', 'command_id', 'INTEGER DEFAULT NULL')
     # 每个定时任务独立的最大执行超时（秒），NULL 表示使用全局默认
@@ -376,12 +363,7 @@ def init_db():
     # 用户表添加 email 列
     add_column_if_not_exists('users', 'email', "VARCHAR DEFAULT ''")
 
-    # ---- 迁移：scripts 表添加 content 列（数据库存储） ----
-    try:
-        from services.script_store import ensure_table
-        ensure_table()
-    except Exception as e:
-        print(f'[DB] 迁移 scripts 表失败: {e}', flush=True)
+    
 
     # ---- 默认管理员（仅在系统中没有任何管理员时才创建） ----
     cursor.execute("SELECT COUNT(*) AS c FROM users WHERE is_admin = 1")

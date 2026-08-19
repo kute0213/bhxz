@@ -8,7 +8,7 @@ from core.auth import login_required
 from core.db import get_db
 from services.cmd_runner import run_command_sync
 from routes.script import script_bp
-from routes.script.common import _admin_check
+from routes.script.terminal import _admin_check
 
 
 @script_bp.route('/admin/script/commands', methods=['GET'])

@@ -9,12 +9,19 @@
 import json
 import time
 
-from flask import request, Response, stream_with_context, jsonify, session
+from flask import request, Response, stream_with_context, jsonify, session, abort
 
-from core.auth import login_required
+from core.auth import login_required, get_current_user
 from routes.script import script_bp
-from routes.script.common import _admin_check
 from services.terminal import TerminalManager
+
+
+def _admin_check():
+    """校验当前用户是否为管理员，否则返回 403。"""
+    user = get_current_user()
+    if not user or not user['is_admin']:
+        abort(403)
+    return user
 
 
 def _sse_event(event_type, data):

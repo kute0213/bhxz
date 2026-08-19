@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% block title %}终端与脚本{% endblock %}
+{% block title %}终端控制台{% endblock %}
 {% block content %}
 <section class="page-container py-12">
     <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="text-center mb-8 sm:mb-10">
-            <h1 class="text-2xl sm:text-3xl font-bold mb-3">终端与脚本</h1>
-            <p class="text-cream/60 text-sm sm:text-base">快捷命令、脚本自动化、实时终端</p>
+            <h1 class="text-2xl sm:text-3xl font-bold mb-3">终端控制台</h1>
+            <p class="text-cream/60 text-sm sm:text-base">快捷命令、实时终端</p>
         </div>
 
         <!-- 顶部操作栏 -->
@@ -18,11 +18,11 @@
                 添加快捷命令
             </button>
             <a
-                href="{{ url_for('script.script_editor_page') }}"
-                class="px-5 py-2.5 bg-purple-600/30 border border-purple-400/30 text-purple-200 rounded-lg hover:bg-purple-600/40 transition-colors flex items-center gap-2"
+                href="{{ url_for('script.terminal_page') }}"
+                class="px-5 py-2.5 bg-emerald-600/30 border border-emerald-400/30 text-emerald-200 rounded-lg hover:bg-emerald-600/40 transition-colors flex items-center gap-2"
             >
-                <i data-lucide="code-2" class="w-5 h-5"></i>
-                脚本编辑器
+                <i data-lucide="terminal" class="w-5 h-5"></i>
+                实时终端
             </a>
             <a
                 href="{{ url_for('scheduled.scheduled_page') }}"
@@ -31,18 +31,6 @@
                 <i data-lucide="calendar-clock" class="w-5 h-5"></i>
                 定时任务
             </a>
-        </div>
-
-        <!-- 脚本列表 -->
-        <div class="mb-8">
-            <h2 class="text-lg font-bold mb-4 flex items-center gap-2">
-                <i data-lucide="file-code" class="w-5 h-5 text-purple-400"></i>
-                脚本
-                <span class="text-xs text-cream/40 font-normal">（数据库）</span>
-            </h2>
-            <div id="script-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <!-- JS 动态渲染 -->
-            </div>
         </div>
 
         <!-- 快捷命令列表 -->
@@ -114,21 +102,11 @@
                 />
             </div>
             <div class="mb-4">
-                <label class="block text-sm text-cream/70 mb-1">类型</label>
-                <select
-                    id="script-form-type"
-                    class="w-full bg-black/30 border border-cream/10 rounded-lg px-4 py-2 text-cream focus:outline-none focus:border-gold-400/50"
-                >
-                    <option value="cmd">脚本命令（服务端执行）</option>
-                    <option value="script">Python 脚本（后端 SSE 执行）</option>
-                </select>
-            </div>
-            <div class="mb-4">
                 <label class="block text-sm text-cream/70 mb-1">内容</label>
                 <textarea
                     id="script-form-command"
                     class="w-full bg-black/30 border border-cream/10 rounded-lg px-4 py-2 text-cream placeholder-cream/30 focus:outline-none focus:border-gold-400/50 font-mono text-sm"
-                    placeholder="脚本命令或 Python 脚本代码"
+                    placeholder="输入 Shell 命令"
                     rows="5"
                     required
                 ></textarea>
@@ -170,7 +148,7 @@
     </div>
 </div>
 
-<!-- 弹窗终端（无独立入口，运行快捷命令/脚本时自动打开） -->
+<!-- 弹窗终端（无独立入口，运行快捷命令时自动打开） -->
 <div id="term-modal" class="fixed inset-0 z-[60] hidden items-center justify-center p-4" style="background:rgba(0,0,0,0.72);backdrop-filter:blur(8px);">
     <div class="w-full max-w-4xl h-[82vh] flex flex-col rounded-xl overflow-hidden" style="height:82vh;min-height:420px;background:#0b0f14;border:1px solid rgba(255,255,255,0.12);box-shadow:0 25px 60px rgba(0,0,0,0.65);">
         <!-- 弹窗终端顶栏 -->
@@ -189,7 +167,7 @@
                 </div>
             </div>
             <div class="flex items-center gap-2 shrink-0">
-                <button id="term-modal-interrupt" class="px-2.5 py-1.5 text-xs text-red-200 bg-red-500/40 rounded-lg hover:bg-red-500/60 transition-colors" style="display:none;" title="终止正在运行的脚本 (Ctrl+C)">
+                <button id="term-modal-interrupt" class="px-2.5 py-1.5 text-xs text-red-200 bg-red-500/40 rounded-lg hover:bg-red-500/60 transition-colors" style="display:none;" title="发送 Ctrl+C 中断">
                     <i data-lucide="stop-circle" class="w-3.5 h-3.5 inline"></i>
                     <span class="hidden sm:inline">中断</span>
                 </button>
