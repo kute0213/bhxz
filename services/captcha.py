@@ -112,8 +112,8 @@ def generate_char_captcha(
     img = Image.new('RGB', (width, height), color=(248, 246, 240))
     draw = ImageDraw.Draw(img)
 
-    # 加载粗体字体（100 号，撑满画布）
-    font_size = 100
+    # 加载粗体字体（106 号，撑满画布）
+    font_size = 106
     try:
         # 优先使用项目内嵌字体（兼容 Windows / Linux / macOS）
         font = _load_font(font_size)
@@ -146,7 +146,7 @@ def generate_char_captcha(
     # 垂直居中偏移微调
     for i, ch in enumerate(code):
         # 为每个字符创建独立透明画布
-        ch_size = font_size + 16
+        ch_size = font_size + 14
         ch_img = Image.new('RGBA', (ch_size, ch_size), (0, 0, 0, 0))
         ch_draw = ImageDraw.Draw(ch_img)
 
