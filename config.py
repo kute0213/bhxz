@@ -4,6 +4,9 @@ import sys
 APP_ROOT = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(APP_ROOT, 'site.duckdb')
 UPLOAD_DIR = os.path.join(APP_ROOT, 'uploads')
+UPLOAD_ATTACHMENTS_DIR = os.path.join(UPLOAD_DIR, 'attachments')
+UPLOAD_BACKGROUNDS_DIR = os.path.join(UPLOAD_DIR, 'backgrounds')
+UPLOAD_COMMUNITY_DIR = os.path.join(UPLOAD_DIR, 'community')
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'pdf', 'txt', 'zip', 'rar', '7z', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'mp4', 'mp3', 'wav'}
 MAX_CONTENT_LENGTH = 100 * 1024 * 1024
 
@@ -147,6 +150,9 @@ DEBUG_MODE = False
 WORKER_THREADS = 4
 
 os.makedirs(UPLOAD_DIR, exist_ok=True)
+os.makedirs(UPLOAD_ATTACHMENTS_DIR, exist_ok=True)
+os.makedirs(UPLOAD_BACKGROUNDS_DIR, exist_ok=True)
+os.makedirs(UPLOAD_COMMUNITY_DIR, exist_ok=True)
 os.makedirs(BACKUP_DIR, exist_ok=True)
 
 
@@ -169,6 +175,16 @@ MAP_URL = 'https://map.bhxz.tw.kg'
 
 # QQ 群链接
 QQ_GROUP_URL = 'https://qun.qq.com/universal-share/share?ac=1&authKey=rMtk0BTqbTh2Dx%2BwtNX3GwhYs4NEZDPuKTO0UBHc6X2r55iPkda3lmuA9Styubor&busi_data=eyJncm91cENvZGUiOiI1OTY3OTQxMTIiLCJ0b2tlbiI6IkNUajRvZ0NJQ1dzQ3lZb0FBSzdRSElFQXdqOWZaZy9QSFRlajhuMGpIeUU5bkNyQnA1WGloQW0zcFVReXJpakoiLCJ1aW4iOiIzODQ2NDE1NDczIn0%3D&data=U8tnRnk8Yo1OQFedRkDUVccnyfIRXgZja1nQxv60UTRAphySRL7G3XPXtqrubu0Th2TJ4Q_l-BgqRjikCRI5_Q&svctype=4&tempid=h5_group_info'
+
+# ---------------------------------------------------------------------------
+# 背景图片配置
+# ---------------------------------------------------------------------------
+
+# 是否启用背景图片（关闭后显示默认玻璃光晕背景）
+ENABLE_BACKGROUND_IMAGE = False
+
+# 背景图片淡入过渡时间（毫秒）
+BACKGROUND_FADE_IN_MS = 800
 
 # ---------------------------------------------------------------------------
 # 设置注册表 —— 定义哪些配置可以通过管理后台在线编辑
@@ -232,6 +248,10 @@ SETTINGS_REGISTRY = [
     ('SERVER_PORT', 5000, 'int', '服务器监听端口', '服务器监听的端口号', '服务器配置'),
     ('DEBUG_MODE', False, 'bool', '调试模式', '开启后显示详细错误信息和自动重载', '服务器配置'),
     ('WORKER_THREADS', 4, 'int', '工作线程数', '处理请求的工作线程数量', '服务器配置'),
+
+    # 背景图片
+    ('ENABLE_BACKGROUND_IMAGE', False, 'bool', '启用背景图片', '开启后全站显示自定义背景图片，关闭则显示默认玻璃光晕背景', '背景图片'),
+    ('BACKGROUND_FADE_IN_MS', 800, 'int', '背景淡入过渡（毫秒）', '背景图片加载后的淡入过渡时间', '背景图片'),
 ]
 
 

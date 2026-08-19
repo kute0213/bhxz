@@ -10,13 +10,6 @@
 
         <!-- 顶部操作栏 -->
         <div class="flex flex-wrap gap-3 mb-6 justify-center sm:justify-start">
-            <a
-                href="{{ url_for('script.terminal_page') }}"
-                class="px-5 py-2.5 bg-gold-400 text-forest-900 font-bold rounded-lg hover:bg-gold-500 transition-colors flex items-center gap-2"
-            >
-                <i data-lucide="terminal" class="w-5 h-5"></i>
-                实时终端
-            </a>
             <button
                 id="add-script-btn"
                 class="px-5 py-2.5 bg-forest-700/60 border border-cream/10 text-cream rounded-lg hover:bg-forest-600/60 transition-colors flex items-center gap-2"
@@ -68,7 +61,13 @@
 {% endblock %}
 
 {% block extra_style %}
+<link rel="stylesheet" href="{{ url_for('static', filename='lib/xterm/xterm.min.css', v='1') }}" />
 <style>
+    /* 弹窗终端：保证 xterm 的屏幕与视口继承容器高度，否则画布高度为 0 会黑屏 */
+    #term-modal-screen .xterm { height: 100%; }
+    #term-modal-screen .xterm .xterm-viewport { height: 100% !important; }
+    #term-modal-screen .xterm-screen { height: 100% !important; }
+
     /* ScriptModal 动画 */
     #script-modal-root .script-modal-enter {
         animation: scriptModalEnter 0.22s cubic-bezier(0.4, 0, 0.2, 1) forwards;
@@ -89,8 +88,12 @@
 
 {% block extra_script %}
 <script src="{{ url_for('static', filename='js/script/modal.js', v='4') }}"></script>
+<script src="{{ url_for('static', filename='lib/xterm/xterm.min.js', v='1') }}"></script>
+<script src="{{ url_for('static', filename='lib/xterm/addon-fit.min.js', v='1') }}"></script>
+<script src="{{ url_for('static', filename='js/script/terminal-xterm.js', v='1') }}"></script>
+<script src="{{ url_for('static', filename='js/script/terminal-modal.js', v='1') }}"></script>
 <script src="{{ url_for('static', filename='js/script/presets.js', v='4') }}"></script>
-<script src="{{ url_for('static', filename='js/script/main.js', v='4') }}"></script>
+<script src="{{ url_for('static', filename='js/script/main.js', v='5') }}"></script>
 {% endblock %}
 
 {% block page_modals %}
@@ -164,6 +167,49 @@
                 </button>
             </div>
         </form>
+    </div>
+</div>
+
+<!-- 弹窗终端（无独立入口，运行快捷命令/脚本时自动打开） -->
+<div id="term-modal" class="fixed inset-0 z-[60] hidden items-center justify-center p-4" style="background:rgba(0,0,0,0.72);backdrop-filter:blur(8px);">
+    <div class="w-full max-w-4xl h-[82vh] flex flex-col rounded-xl overflow-hidden" style="height:82vh;min-height:420px;background:#0b0f14;border:1px solid rgba(255,255,255,0.12);box-shadow:0 25px 60px rgba(0,0,0,0.65);">
+        <!-- 弹窗终端顶栏 -->
+        <div class="shrink-0 flex items-center justify-between px-4 py-2.5" style="background:rgba(0,0,0,0.5);border-bottom:1px solid rgba(255,255,255,0.08);">
+            <div class="flex items-center gap-3 min-w-0">
+                <div class="w-7 h-7 rounded-lg flex items-center justify-center shrink-0" style="background:rgba(244,208,63,0.15);">
+                    <i data-lucide="terminal" class="w-4 h-4 text-gold-400"></i>
+                </div>
+                <div class="min-w-0">
+                    <div class="text-sm font-bold text-cream/90">弹窗终端</div>
+                    <div class="text-xs text-cream/50 truncate" id="term-modal-title"></div>
+                </div>
+                <div class="shrink-0 flex items-center gap-1.5 ml-2 text-xs text-cream/50">
+                    <span class="w-2 h-2 rounded-full" id="term-modal-status-dot"></span>
+                    <span id="term-modal-status-text">连接中...</span>
+                </div>
+            </div>
+            <div class="flex items-center gap-2 shrink-0">
+                <button id="term-modal-interrupt" class="px-2.5 py-1.5 text-xs text-red-200 bg-red-500/40 rounded-lg hover:bg-red-500/60 transition-colors" style="display:none;" title="终止正在运行的脚本 (Ctrl+C)">
+                    <i data-lucide="stop-circle" class="w-3.5 h-3.5 inline"></i>
+                    <span class="hidden sm:inline">中断</span>
+                </button>
+                <button id="term-modal-clear" class="px-2.5 py-1.5 text-xs text-cream/60 bg-cream/5 hover:bg-cream/10 rounded-lg transition-colors" title="清屏 (Ctrl+L)">
+                    <i data-lucide="trash-2" class="w-3.5 h-3.5 inline"></i>
+                    <span class="hidden sm:inline">清屏</span>
+                </button>
+                <button id="term-modal-reset" class="px-2.5 py-1.5 text-xs text-cream/60 bg-cream/5 hover:bg-cream/10 rounded-lg transition-colors" title="重置终端会话">
+                    <i data-lucide="refresh-cw" class="w-3.5 h-3.5 inline"></i>
+                    <span class="hidden sm:inline">重置</span>
+                </button>
+                <button id="term-modal-close" class="px-2.5 py-1.5 text-xs text-cream/60 bg-cream/5 hover:bg-cream/10 rounded-lg transition-colors" title="关闭 (Esc)">
+                    <i data-lucide="x" class="w-3.5 h-3.5 inline"></i>
+                </button>
+            </div>
+        </div>
+        <!-- xterm 屏幕 -->
+        <div class="flex-1 min-h-0 relative p-2" style="background:#0b0f14;">
+            <div id="term-modal-screen" class="absolute inset-0 overflow-hidden"></div>
+        </div>
     </div>
 </div>
 {% endblock %}

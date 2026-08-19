@@ -6,7 +6,7 @@ from flask import render_template, send_from_directory, abort
 
 from core.auth import get_current_user
 from core.db import get_db
-from config import UPLOAD_DIR
+from config import UPLOAD_ATTACHMENTS_DIR
 from routes.community import community_bp
 
 
@@ -133,4 +133,4 @@ def community_page():
 def download_attachment(filename):
     if '..' in filename or filename.startswith('/'):
         abort(404)
-    return send_from_directory(UPLOAD_DIR, filename, as_attachment=True)
+    return send_from_directory(UPLOAD_ATTACHMENTS_DIR, filename, as_attachment=True)

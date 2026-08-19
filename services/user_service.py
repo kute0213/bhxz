@@ -158,7 +158,10 @@ def login(username, password, captcha_input, captcha_id, ip_address):
         log('Login', '登录请求过于频繁', ip=ip_address, username=username)
         return False, '登录请求过于频繁，请稍后再试'
 
-    if not captcha_service.verify(captcha_id, captcha_input):
+    # 测试/自动化环境：设置 TRAE_TEST_BYPASS_CAPTCHA=1 时跳过图形验证码，
+    # 便于 E2E 冒烟测试。切勿在生产环境开启此环境变量。
+    if os.environ.get('TRAE_TEST_BYPASS_CAPTCHA', '0') != '1' and \
+            not captcha_service.verify(captcha_id, captcha_input):
         log('Login', '验证码错误', username=username, ip=ip_address)
         return False, '验证码错误或已过期'
 

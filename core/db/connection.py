@@ -81,6 +81,9 @@ class DuckDBRow:
     def __init__(self, description, values):
         self._keys = tuple(d[0] for d in description)
         self._values = tuple(values)
+        # 防御：DuckDB 某些版本/查询下 description 可能比实际行多列
+        if len(self._values) < len(self._keys):
+            self._values = self._values + (None,) * (len(self._keys) - len(self._values))
 
     def keys(self):
         return list(self._keys)

@@ -122,6 +122,18 @@ def _register_hooks(try_serve_public):
 # 后台服务
 # ---------------------------------------------------------------------------
 
+def _register_template_context():
+    """注册模板上下文处理器，使全局配置在所有模板中可用。"""
+    from config import get_config_value
+
+    @app.context_processor
+    def inject_global_config():
+        return {
+            'ENABLE_BACKGROUND_IMAGE': get_config_value('ENABLE_BACKGROUND_IMAGE', False),
+            'BACKGROUND_FADE_IN_MS': get_config_value('BACKGROUND_FADE_IN_MS', 800),
+        }
+
+
 def _start_background_services():
     """启动所有后台服务。"""
     from services.scheduler import scheduler
@@ -156,6 +168,9 @@ def _init_app():
     try_serve_public = _register_blueprints()
 
     _register_hooks(try_serve_public)
+
+    # 注册模板上下文处理器
+    _register_template_context()
 
     print('[INFO] 正在启动后台服务...', flush=True)
     _start_background_services()

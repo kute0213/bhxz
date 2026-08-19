@@ -32,8 +32,51 @@
                 setTimeout(forceShow, 500);
             });
             // 页面完全加载后立即确保显示
-            window.addEventListener('load', forceShow);
+        window.addEventListener('load', forceShow);
         })();
+
+        // 背景图片：根据屏幕比例自动加载匹配图片
+        var bgEnabled = {{ 'true' if ENABLE_BACKGROUND_IMAGE else 'false' }};
+        if (bgEnabled) {
+            (function() {
+                var layer = document.getElementById('bg-image-layer');
+                if (!layer) return;
+                var fadeMs = {{ BACKGROUND_FADE_IN_MS }};
+                layer.style.transition = 'opacity ' + (fadeMs || 800) + 'ms ease';
+
+                function loadBg() {
+                    var w = window.innerWidth;
+                    var h = window.innerHeight;
+                    if (w < 1 || h < 1) { setTimeout(loadBg, 200); return; }
+                    var ratio = (w / h).toFixed(2);
+                    var ratioKey;
+                    if (ratio > 1.7) ratioKey = '16_9';
+                    else if (ratio > 1.5) ratioKey = '16_10';
+                    else if (ratio > 1.3) ratioKey = '4_3';
+                    else if (ratio > 1.1) ratioKey = '3_2';
+                    else if (ratio < 0.6) ratioKey = '9_16';
+                    else if (ratio < 0.8) ratioKey = '3_4';
+                    else ratioKey = '1_1';
+
+                    var img = new Image();
+                    img.onload = function() {
+                        layer.style.backgroundImage = 'url(' + img.src + ')';
+                        layer.classList.add('loaded');
+                    };
+                    img.onerror = function() {
+                        // 加载失败：静默降级，不显示背景图片
+                        layer.style.display = 'none';
+                    };
+                    img.src = '/background/' + ratioKey;
+                }
+
+                if (document.readyState === 'complete') {
+                    loadBg();
+                } else {
+                    window.addEventListener('load', loadBg);
+                }
+            })();
+        }
     </script>
     <!-- 入场动画见 base.css：纯 CSS animation，不依赖 JS，避免白屏 -->
     <noscript><style>.page-content{opacity:1!important;transform:none!important}</style></noscript>
@@ -45,6 +88,11 @@
 <body>
     <!-- 鼠标跟随光晕 -->
     <div class="mouse-glow" id="mouse-glow"></div>
+
+    <!-- 背景图片（仅在启用时显示，位于 bg-orbs 下方） -->
+    {% if ENABLE_BACKGROUND_IMAGE %}
+    <div class="bg-image-layer" id="bg-image-layer"></div>
+    {% endif %}
 
     <!-- 动态背景 -->
     <div class="bg-orbs">
