@@ -9,6 +9,7 @@
 """
 
 import io
+import os
 import base64
 import random
 import time
@@ -52,6 +53,31 @@ def _check_pil():
     return _pil_available
 
 
+# 项目内嵌字体路径（跨平台兼容）
+_FONT_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    'static', 'lib', 'fonts', 'DejaVuSans-Bold.ttf'
+)
+
+
+def _load_font(size: int):
+    """加载粗体验证码字体，按优先级尝试：
+    1. 项目内嵌字体（static/lib/fonts/DejaVuSans-Bold.ttf）
+    2. 常见 Linux 路径
+    3. 常见 macOS 路径
+    """
+    paths = [
+        _FONT_PATH,
+        '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf',
+        '/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf',
+        '/Library/Fonts/DejaVuSans-Bold.ttf',
+    ]
+    for path in paths:
+        if os.path.isfile(path):
+            return ImageFont.truetype(path, size)
+    raise FileNotFoundError('未找到 DejaVuSans-Bold.ttf 字体文件')
+
+
 # 排除易混淆字符：0/O/o、1/I/l、2/Z、5/S/s、8/B
 _CAPTCHA_CHARS = 'ABCDEFGHJKMNPQRTUVWXYabcdefghjkmnpqrtuvwxy34679'
 
@@ -89,9 +115,8 @@ def generate_char_captcha(
     # 加载粗体字体（80 号，画布降低后比例更优）
     font_size = 80
     try:
-        font = ImageFont.truetype(
-            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", font_size
-        )
+        # 优先使用项目内嵌字体（兼容 Windows / Linux / macOS）
+        font = _load_font(font_size)
     except Exception:
         font = ImageFont.load_default()
 
