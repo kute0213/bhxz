@@ -87,9 +87,9 @@ window.ScriptTerminalModal = (function () {
         document.body.style.overflow = 'hidden';
         mountIfNeeded();
         // 每次显示都重新 fit：确保 xterm 画布尺寸跟随容器，避免黑屏/尺寸为 0
-        setTimeout(function () {
+        requestAnimationFrame(function () {
             if (t) { t.fit(); t.focus(); }
-        }, 80);
+        });
     }
 
     function close() {

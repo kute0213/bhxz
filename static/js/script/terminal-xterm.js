@@ -73,6 +73,55 @@ window.TerminalXterm = (function () {
         var connected = false;
         var closed = false;   // dispose 后禁止重连
 
+        // ---- 自适应尺寸 ----
+        var fitRafId = null;
+        var winResizeHandler = null;
+        var ro = null;
+        var io = null;
+
+        function fit() {
+            if (!fitAddon) return;
+            try { fitAddon.fit(); } catch (_) {}
+        }
+
+        function requestFit() {
+            if (fitRafId) return;
+            fitRafId = requestAnimationFrame(function () {
+                fitRafId = null;
+                fit();
+            });
+        }
+
+        // 1) ResizeObserver：容器尺寸变化时自动 fit
+        if (typeof ResizeObserver !== 'undefined') {
+            ro = new ResizeObserver(function () { requestFit(); });
+            ro.observe(container);
+        }
+
+        // 2) 窗口 resize 兜底
+        winResizeHandler = function () { requestFit(); };
+        window.addEventListener('resize', winResizeHandler);
+
+        // 3) IntersectionObserver：终端进入可见区域时重新 fit（弹窗场景关键）
+        if (typeof IntersectionObserver !== 'undefined') {
+            io = new IntersectionObserver(function (entries) {
+                if (entries.some(function (e) { return e.isIntersecting; })) {
+                    requestFit();
+                }
+            });
+            io.observe(container);
+        }
+
+        // 4) 初始 fit：双重 RAF 确保布局完成后才计算
+        (function initialFit() {
+            requestAnimationFrame(function () {
+                fit();
+                requestAnimationFrame(function () {
+                    fit();
+                });
+            });
+        })();
+
         // ---- SSE 实时输出流 ----
         var es = null;
         var reconnectTimer = null;
@@ -155,22 +204,6 @@ window.TerminalXterm = (function () {
             postJson(RESIZE_URL, { cols: cols, rows: rows });
         });
 
-        function fit() {
-            if (!fitAddon) return;
-            try {
-                fitAddon.fit();
-            } catch (_) { /* 容器尚不可见时失败可忽略 */ }
-        }
-
-        var ro = null;
-        if (typeof ResizeObserver !== 'undefined') {
-            ro = new ResizeObserver(function () { fit(); });
-            ro.observe(container);
-        }
-        // 首次 fit，先延迟到布局完成
-        setTimeout(fit, 120);
-        setTimeout(fit, 400);
-
         // ------------------------------------------------------------
         return {
             term: term,
@@ -191,8 +224,11 @@ window.TerminalXterm = (function () {
                 closed = true;
                 manualClose = true;
                 if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
-                tearDownSse();
+                if (fitRafId) { cancelAnimationFrame(fitRafId); fitRafId = null; }
+                if (winResizeHandler) { window.removeEventListener('resize', winResizeHandler); winResizeHandler = null; }
                 if (ro) { ro.disconnect(); ro = null; }
+                if (io) { io.disconnect(); io = null; }
+                tearDownSse();
                 try { term.dispose(); } catch (_) {}
             },
         };

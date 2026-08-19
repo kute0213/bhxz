@@ -80,12 +80,11 @@ document.addEventListener('DOMContentLoaded', function () {
         // 服务端重启 shell 后旧 SSE 结束并重连，onConnected 会隐藏遮罩
     });
 
-    // 页面切换回来时检查连接
+    // 页面切换回来时重新 fit 确保尺寸正确
     document.addEventListener('visibilitychange', function () {
-        if (document.visibilityState === 'visible' && tx && !tx.isConnected()) {
-            tx.dispose();
-            tx = TX.attach(screen, {});
-            tx.connect();
+        if (document.visibilityState === 'visible' && tx) {
+            tx.fit();
+            tx.focus();
         }
     });
 
