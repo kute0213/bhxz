@@ -57,8 +57,8 @@ _CAPTCHA_CHARS = 'ABCDEFGHJKMNPQRTUVWXYabcdefghjkmnpqrtuvwxy34679'
 
 
 def generate_char_captcha(
-    width: int = 300,
-    height: int = 96,
+    width: int = 400,
+    height: int = 128,
 ) -> Tuple[str, str]:
     """
     生成四位字符验证码图片。
@@ -86,8 +86,8 @@ def generate_char_captcha(
     img = Image.new('RGB', (width, height), color=(248, 246, 240))
     draw = ImageDraw.Draw(img)
 
-    # 加载粗体字体（60 号，保证清晰可辨）
-    font_size = 52
+    # 加载粗体字体（68 号，保证清晰可辨）
+    font_size = 68
     try:
         font = ImageFont.truetype(
             "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", font_size
@@ -117,7 +117,7 @@ def generate_char_captcha(
     # 每个字符的分配宽度
     cell_w = width // 4
     # 左右留白，避免旋转后首尾字符被裁切
-    pad = 10
+    pad = 14
     # 垂直居中偏移微调
     for i, ch in enumerate(code):
         # 为每个字符创建独立透明画布
@@ -136,7 +136,7 @@ def generate_char_captcha(
         char_color = (r, g, b)
 
         # 绘制字符到独立画布
-        ch_draw.text((6, 4), ch, font=font, fill=char_color)
+        ch_draw.text((8, 6), ch, font=font, fill=char_color)
 
         # 随机旋转 -35° ~ +35°
         angle = random.randint(-35, 35)
