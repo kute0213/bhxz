@@ -889,54 +889,54 @@ def _run_update():
                     _add_event('log', {'message': '正在构建静态资源...'})
                     _add_event('progress', {'percent': 97, 'message': '正在构建静态资源...'})
 
-                # 设置 PYTHONUNBUFFERED=1 强制 Python 不缓冲 stdout，
-                # 确保构建脚本的每一行输出都能被实时读取
-                build_env = {**os.environ, 'PYTHONUNBUFFERED': '1'}
-                proc = subprocess.Popen(
-                    [sys.executable, build_script],
-                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                    text=True, bufsize=1,  # 行缓冲
-                    env=build_env,
-                )
+                    # 设置 PYTHONUNBUFFERED=1 强制 Python 不缓冲 stdout，
+                    # 确保构建脚本的每一行输出都能被实时读取
+                    build_env = {**os.environ, 'PYTHONUNBUFFERED': '1'}
+                    proc = subprocess.Popen(
+                        [sys.executable, build_script],
+                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                        text=True, bufsize=1,  # 行缓冲
+                        env=build_env,
+                    )
 
-                # 实时读取输出并发送 SSE 事件
-                build_ok = False
-                try:
-                    for line in iter(proc.stdout.readline, ''):
-                        line = line.rstrip('\n\r')
-                        if line:
-                            _add_event('log', {'message': f'  | {line}'})
-                            # 根据阶段更新进度
-                            if '=== Highlight.js ===' in line:
-                                _add_event('progress', {'percent': 97, 'message': '构建中: Highlight.js...'})
-                            elif '=== Lucide Icons ===' in line:
-                                _add_event('progress', {'percent': 97, 'message': '构建中: Lucide 图标...'})
-                            elif '=== Marked.js ===' in line:
-                                _add_event('progress', {'percent': 97, 'message': '构建中: Marked.js...'})
-                            elif '=== 字体 ===' in line:
-                                _add_event('progress', {'percent': 98, 'message': '构建中: 字体...'})
-                            elif '=== Monaco Editor ===' in line:
-                                _add_event('progress', {'percent': 98, 'message': '构建中: Monaco Editor...'})
-                            elif '构建完成' in line:
-                                _add_event('progress', {'percent': 99, 'message': '静态资源构建完成'})
-                    proc.wait(timeout=180)
-                    build_ok = proc.returncode == 0
-                except subprocess.TimeoutExpired:
-                    proc.kill()
-                    raise
-                finally:
-                    proc.stdout.close()
+                    # 实时读取输出并发送 SSE 事件
+                    build_ok = False
+                    try:
+                        for line in iter(proc.stdout.readline, ''):
+                            line = line.rstrip('\n\r')
+                            if line:
+                                _add_event('log', {'message': f'  | {line}'})
+                                # 根据阶段更新进度
+                                if '=== Highlight.js ===' in line:
+                                    _add_event('progress', {'percent': 97, 'message': '构建中: Highlight.js...'})
+                                elif '=== Lucide Icons ===' in line:
+                                    _add_event('progress', {'percent': 97, 'message': '构建中: Lucide 图标...'})
+                                elif '=== Marked.js ===' in line:
+                                    _add_event('progress', {'percent': 97, 'message': '构建中: Marked.js...'})
+                                elif '=== 字体 ===' in line:
+                                    _add_event('progress', {'percent': 98, 'message': '构建中: 字体...'})
+                                elif '=== Monaco Editor ===' in line:
+                                    _add_event('progress', {'percent': 98, 'message': '构建中: Monaco Editor...'})
+                                elif '构建完成' in line:
+                                    _add_event('progress', {'percent': 99, 'message': '静态资源构建完成'})
+                        proc.wait(timeout=180)
+                        build_ok = proc.returncode == 0
+                    except subprocess.TimeoutExpired:
+                        proc.kill()
+                        raise
+                    finally:
+                        proc.stdout.close()
 
-                if build_ok:
-                    _add_event('log', {'message': '[OK] 静态资源构建完成'})
+                    if build_ok:
+                        _add_event('log', {'message': '[OK] 静态资源构建完成'})
+                    else:
+                        _add_event('log', {'message': '[WARN] 静态资源构建完成（有警告）'})
                 else:
-                    _add_event('log', {'message': '[WARN] 静态资源构建完成（有警告）'})
-            else:
-                _add_event('log', {'message': '[WARN] 未找到构建脚本: scripts/build/build_static.py'})
-        except subprocess.TimeoutExpired:
-            _add_event('log', {'message': '[WARN] 静态资源构建超时（180s），跳过'})
-        except Exception as e:
-            _add_event('log', {'message': f'[WARN] 静态资源构建失败: {e}'})
+                    _add_event('log', {'message': '[WARN] 未找到构建脚本: scripts/build/build_static.py'})
+            except subprocess.TimeoutExpired:
+                _add_event('log', {'message': '[WARN] 静态资源构建超时（180s），跳过'})
+            except Exception as e:
+                _add_event('log', {'message': f'[WARN] 静态资源构建失败: {e}'})
 
         _add_event('progress', {'percent': 99, 'message': '构建完成，正在准备重启...'})
 
