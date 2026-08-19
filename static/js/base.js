@@ -92,9 +92,10 @@ document.addEventListener('keydown', function (e) {
         }, 350);
     });
 
-    // 浏览器后退时重新触发入场动画
+    // 浏览器前进/后退可能直接恢复离场时的页面快照，必须先清理离场状态。
     window.addEventListener('pageshow', function (e) {
-        if (e.persisted && pageContent) {
+        document.body.classList.remove('page-leaving');
+        if (pageContent) {
             pageContent.classList.remove('page-ready');
             requestAnimationFrame(function () {
                 pageContent.classList.add('page-ready');
