@@ -86,8 +86,8 @@ def generate_char_captcha(
     img = Image.new('RGB', (width, height), color=(248, 246, 240))
     draw = ImageDraw.Draw(img)
 
-    # 加载粗体字体（68 号，保证清晰可辨）
-    font_size = 68
+    # 加载粗体字体（82 号，保证清晰可辨）
+    font_size = 82
     try:
         font = ImageFont.truetype(
             "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", font_size
@@ -136,7 +136,7 @@ def generate_char_captcha(
         char_color = (r, g, b)
 
         # 绘制字符到独立画布
-        ch_draw.text((8, 6), ch, font=font, fill=char_color)
+        ch_draw.text((10, 8), ch, font=font, fill=char_color)
 
         # 随机旋转 -35° ~ +35°
         angle = random.randint(-35, 35)
