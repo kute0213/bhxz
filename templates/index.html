@@ -1,4 +1,4 @@
-<html data-immersive-translate-page-theme="light"><head><style data-id="immersive-translate-input-injected-css"></style></head><body>{% extends "base.html" %}
+{% extends "base.html" %}
 {% block title %}首页{% endblock %}
 {% block extra_style %}
     <style>
@@ -12,71 +12,7 @@
             background: radial-gradient(ellipse at center top, rgba(103, 232, 249, 0.10), transparent 60%);
             pointer-events: none;
         }
-        .glow-text { text-shadow: 0 0 22px rgba(103, 232, 249, 0.24), 0 0 46px rgba(139, 92, 246, 0.14); }
-        .section-fade { opacity: 0; transform: translateY(28px); transition: opacity 0.5s ease, transform 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
-        .section-fade.visible { opacity: 1; transform: translateY(0); }
-        .feature-icon {
-            width: 52px; height: 52px; display: flex; align-items: center; justify-content: center;
-            background: linear-gradient(135deg, rgba(103, 232, 249, 0.13), rgba(139, 92, 246, 0.12));
-            backdrop-filter: blur(12px) saturate(110%);
-            -webkit-backdrop-filter: blur(12px) saturate(110%);
-            border: 1px solid rgba(103, 232, 249, 0.20);
-            border-radius: 14px !important;
-            box-shadow: none;
-            position: relative;
-            overflow: hidden;
-        }
-        .highlight-card {
-            background: linear-gradient(145deg, rgba(71, 82, 103, 0.97) 0%, rgba(55, 65, 84, 0.97) 100%);
-            backdrop-filter: blur(24px) saturate(105%);
-            -webkit-backdrop-filter: blur(24px) saturate(105%);
-            border: 1px solid rgba(255, 255, 255, 0.12);
-            border-radius: 18px !important;
-            box-shadow:
-                0 12px 30px rgba(18, 22, 31, 0.22),
-                inset 0 1px 0 rgba(255, 255, 255, 0.08);
-            position: relative; overflow: hidden;
-            transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
-        }
-        .highlight-card::after {
-            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 50%; border-radius: 24px 24px 0 0; pointer-events: none;
-            background: linear-gradient(180deg, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0) 100%);
-        }
-        .highlight-card:hover {
-            border-color: rgba(103, 232, 249, 0.30);
-            transform: translateY(-4px);
-            box-shadow:
-                0 18px 42px rgba(16, 20, 29, 0.30),
-                0 0 22px rgba(103, 232, 249, 0.07),
-                inset 0 1px 0 rgba(255, 255, 255, 0.14);
-        }
-        body.has-background-image .highlight-card {
-            background: linear-gradient(145deg, rgba(68, 79, 100, 0.87), rgba(51, 61, 80, 0.89));
-            backdrop-filter: blur(30px) saturate(112%);
-            -webkit-backdrop-filter: blur(30px) saturate(112%);
-        }
-        .highlight-card-top-bar {
-            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
-            background: linear-gradient(90deg, #67e8f9, #8b5cf6);
-            border-radius: 24px 24px 0 0;
-            z-index: 1;
-        }
-        @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
-        .float-animation { animation: float 3s ease-in-out infinite; }
-        @keyframes pulse-glow {
-            0%, 100% { box-shadow: 0 0 18px rgba(103, 232, 249, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.08); }
-            50% { box-shadow: 0 0 30px rgba(139, 92, 246, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.1); }
-        }
-        .pulse-glow { animation: pulse-glow 2.4s ease-in-out infinite; }
-        .glass-footer {
-            background: linear-gradient(180deg, rgba(45, 53, 69, 0.82) 0%, rgba(36, 43, 56, 0.94) 100%);
-            backdrop-filter: blur(28px) saturate(100%);
-            -webkit-backdrop-filter: blur(28px) saturate(100%);
-            border-top: 1px solid rgba(255, 255, 255, 0.10);
-        }
     </style>
-{% endblock %}
-{% block nav %}
 {% endblock %}
 {% block content %}
     {% if user %}
@@ -422,4 +358,3 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 </script>
 {% endblock %}
-</body></html>

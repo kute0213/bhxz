@@ -61,7 +61,7 @@ def test_404_page():
 def test_static_css():
     """测试静态 CSS 文件可访问。"""
     with _app.test_client() as client:
-        resp = client.get('/static/css/style.css')
+        resp = client.get('/static/css/base.css')
         assert resp.status_code in (200, 304), f"CSS 状态码: {resp.status_code}"
 
 

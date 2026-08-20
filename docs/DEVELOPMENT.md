@@ -266,7 +266,7 @@ body.page-leaving .page-content {
 ('/admin', 'GET', [302, 401, 403], 'admin', '管理后台'),
 
 # 静态文件
-('/static/css/style.css', 'GET', [200, 304], False, 'CSS文件'),
+('/static/css/base.css', 'GET', [200, 304], False, 'CSS文件'),
 ```
 
 ### 3. 规则
