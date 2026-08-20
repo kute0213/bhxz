@@ -11,6 +11,81 @@
                 <p class="text-cream/60 text-sm mt-1">在线编辑系统配置，修改后立即生效（热重载）</p>
             </div>
 
+            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% for category, message in messages %}
+            <div class="mb-5 p-4 rounded-xl text-sm {% if category == 'error' %}bg-red-900/40 border border-red-500/30 text-red-200{% else %}bg-green-900/40 border border-green-500/30 text-green-200{% endif %}">
+                {{ message }}
+            </div>
+            {% endfor %}
+            {% endwith %}
+
+            <div class="pixel-card rounded-xl overflow-hidden mb-6">
+                <div class="px-4 sm:px-6 py-4 border-b border-cream/10 bg-forest-900/30">
+                    <h2 class="text-lg font-bold flex items-center gap-2">
+                        <i data-lucide="image" class="w-5 h-5 text-gold-400"></i>全站首页背景
+                    </h2>
+                    <p class="text-xs text-cream/50 mt-1">仅管理员可更换，所有访客和用户共用同一张首页背景。</p>
+                </div>
+                <div class="p-4 sm:p-6 grid md:grid-cols-[minmax(0,1fr)_18rem] gap-6 items-center">
+                    <div class="rounded-xl overflow-hidden border border-cream/10 bg-forest-950/40 aspect-video flex items-center justify-center">
+                        {% if site_background_active_key %}
+                        <img src="{{ url_for('main.site_background', v=site_background_version) }}" alt="全站首页背景预览" class="w-full h-full object-cover">
+                        {% else %}
+                        <div class="text-center text-cream/40 px-4">
+                            <i data-lucide="image-off" class="w-9 h-9 mx-auto mb-2"></i>
+                            <p class="text-sm">当前使用站点默认背景</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                    <div class="space-y-3">
+                        <form method="POST" action="{{ url_for('admin.upload_site_background') }}" enctype="multipart/form-data" class="space-y-3">
+                            <input type="file" name="background" required accept="image/png,image/jpeg,image/gif,image/webp" class="input-field w-full px-3 py-2.5 rounded-lg text-sm">
+                            <button type="submit" class="btn-primary w-full py-2.5 rounded-lg font-bold inline-flex items-center justify-center gap-2">
+                                <i data-lucide="upload" class="w-4 h-4"></i>上传新背景
+                            </button>
+                        </form>
+                        {% if site_background_active_key %}
+                        <form method="POST" action="{{ url_for('admin.delete_site_background') }}" onsubmit="return confirm('确定恢复站点默认背景吗？');">
+                            <button type="submit" class="w-full py-2.5 rounded-lg text-sm border border-red-500/30 bg-red-500/15 hover:bg-red-500/25 text-red-200 transition-colors inline-flex items-center justify-center gap-2">
+                                <i data-lucide="rotate-ccw" class="w-4 h-4"></i>恢复默认背景
+                            </button>
+                        </form>
+                        {% endif %}
+                        <p class="text-xs text-cream/40">新图会保留到 MinIO 图库中，上传后自动设为当前背景。</p>
+                    </div>
+                </div>
+                <div class="px-4 sm:px-6 pb-6">
+                    <div class="flex items-center justify-between gap-3 mb-3">
+                        <h3 class="font-bold text-sm">已有背景图</h3>
+                        <span class="text-xs text-cream/40">共 {{ site_background_gallery|length }} 张</span>
+                    </div>
+                    {% if site_background_gallery_error %}
+                    <div class="p-3 rounded-lg bg-red-900/30 border border-red-500/25 text-red-200 text-sm">{{ site_background_gallery_error }}</div>
+                    {% elif site_background_gallery %}
+                    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                        {% for background in site_background_gallery %}
+                        <div class="rounded-xl overflow-hidden border {% if background.key == site_background_active_key %}border-gold-400 ring-1 ring-gold-400/50{% else %}border-cream/10{% endif %} bg-forest-950/40">
+                            <div class="aspect-video relative">
+                                <img src="{{ url_for('main.site_background_option', key=background.key, v=background.version) }}" alt="背景图" loading="lazy" class="w-full h-full object-cover">
+                                {% if background.key == site_background_active_key %}
+                                <span class="absolute top-2 right-2 px-2 py-1 rounded-md bg-gold-500 text-forest-950 text-xs font-bold">当前使用</span>
+                                {% endif %}
+                            </div>
+                            <form method="POST" action="{{ url_for('admin.select_site_background') }}" class="p-2">
+                                <input type="hidden" name="object_key" value="{{ background.key }}">
+                                <button type="submit" {% if background.key == site_background_active_key %}disabled{% endif %} class="w-full py-2 rounded-lg text-xs font-medium {% if background.key == site_background_active_key %}bg-gold-500/15 text-gold-400 cursor-default{% else %}btn-secondary{% endif %}">
+                                    {% if background.key == site_background_active_key %}已选中{% else %}使用这张{% endif %}
+                                </button>
+                            </form>
+                        </div>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div class="p-6 rounded-xl border border-dashed border-cream/15 text-center text-cream/40 text-sm">还没有已上传的背景图</div>
+                    {% endif %}
+                </div>
+            </div>
+
             <!-- 操作栏 -->
             <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
                 <div class="flex items-center gap-3 min-w-0">

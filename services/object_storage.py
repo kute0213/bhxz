@@ -139,8 +139,18 @@ class ObjectStorageService:
 
     def save_user_image(self, user_id, kind, upload):
         """转换并覆盖保存用户图片，返回数据库使用的对象键。"""
-        data = self._convert_image(upload, kind)
         object_key = f'users/{int(user_id)}/{kind}.webp'
+        self._save_image(object_key, kind, upload)
+        return object_key
+
+    def save_site_background(self, object_key, upload):
+        """转换并覆盖保存管理员配置的全站背景。"""
+        self._save_image(object_key, 'background', upload)
+        return object_key
+
+    def _save_image(self, object_key, kind, upload):
+        """校验、转换并写入指定 MinIO 对象键。"""
+        data = self._convert_image(upload, kind)
         self._ensure_bucket()
         try:
             self._get_client().put_object(
@@ -152,7 +162,6 @@ class ObjectStorageService:
             )
         except Exception as exc:
             raise ObjectStorageError(f'图片上传到 MinIO 失败：{exc}') from exc
-        return object_key
 
     def get_object(self, object_key):
         """读取私有对象，返回 (bytes, content_type)。"""
@@ -170,6 +179,41 @@ class ObjectStorageService:
             if response is not None:
                 response.close()
                 response.release_conn()
+
+    def object_exists(self, object_key):
+        """检查对象是否存在。"""
+        if not object_key:
+            return False
+        try:
+            self._ensure_bucket()
+            self._get_client().stat_object(MINIO_BUCKET, object_key)
+            return True
+        except Exception:
+            return False
+
+    def list_objects(self, prefix):
+        """列出指定前缀下的图片，新上传的排在前面。"""
+        self._ensure_bucket()
+        try:
+            items = []
+            for item in self._get_client().list_objects(
+                MINIO_BUCKET, prefix=prefix, recursive=True
+            ):
+                if not item.object_name.endswith('.webp'):
+                    continue
+                items.append({
+                    'key': item.object_name,
+                    'size': item.size,
+                    'last_modified': item.last_modified,
+                    'version': int(item.last_modified.timestamp()) if item.last_modified else 0,
+                })
+            return sorted(
+                items,
+                key=lambda item: item['version'],
+                reverse=True,
+            )
+        except Exception as exc:
+            raise ObjectStorageError(f'读取 MinIO 背景图库失败：{exc}') from exc
 
     def delete_object(self, object_key):
         """删除对象；对象键为空时视为无需处理。"""

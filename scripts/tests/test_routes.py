@@ -53,9 +53,9 @@ ROUTES = [
     # 需登录
     ('/settings',      'GET', [302, 401],        True,     '设置页（未登录跳转登录页）'),
     ('/media/avatar/999999', 'GET', [404],       False,    '不存在的用户头像'),
-    ('/media/background', 'GET', [302, 401],     True,     '当前用户个性背景'),
+    ('/media/site-background', 'GET', [404],     False,    '未配置的全站首页背景'),
+    ('/media/site-background-option', 'GET', [404], False,  '无效的背景图库预览'),
     ('/settings/avatar', 'POST', [302, 401],     True,     '上传用户头像'),
-    ('/home/background', 'POST', [302, 401],     True,     '上传主页背景'),
 
     # ==========================================================================
     # community 蓝图 ── 社区首页 / 投票 / 留言板
@@ -89,6 +89,9 @@ ROUTES = [
     ('/admin/logs',           'GET', [302, 401, 403], 'admin',  '访问日志'),
     ('/admin/db-backup',      'GET', [302, 401, 403], 'admin',  '数据库备份'),
     ('/admin/settings',       'GET', [302, 401, 403], 'admin',  '系统设置'),
+    ('/admin/settings/background', 'POST', [302, 401, 403], 'admin', '上传全站首页背景'),
+    ('/admin/settings/background/select', 'POST', [302, 401, 403], 'admin', '选择已有首页背景'),
+    ('/admin/settings/background/delete', 'POST', [302, 401, 403], 'admin', '恢复默认首页背景'),
     ('/admin/broadcast',      'GET', [302, 401, 403], 'admin',  '广播邮件'),
     ('/admin/discussion',     'GET', [302, 401, 403], 'admin',  '讨论管理'),
     ('/admin/update',         'GET', [302, 401, 403], 'admin',  '一键更新'),

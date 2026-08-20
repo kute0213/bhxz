@@ -48,11 +48,11 @@ def _clean_user_attachments(conn, user_id):
 def _get_user_media_keys(conn, user_id):
     """读取账号关联的 MinIO 对象键，供数据库提交后清理。"""
     row = conn.execute(
-        "SELECT avatar_key, background_key FROM users WHERE id = ?", (user_id,)
+        "SELECT avatar_key FROM users WHERE id = ?", (user_id,)
     ).fetchone()
     if not row:
         return []
-    return [key for key in (row['avatar_key'], row['background_key']) if key]
+    return [row['avatar_key']] if row['avatar_key'] else []
 
 
 def _clean_user_media(keys, user_id):

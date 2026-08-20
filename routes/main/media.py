@@ -1,4 +1,4 @@
-"""用户头像与主页背景路由。"""
+"""用户头像与全站主页背景路由。"""
 
 from io import BytesIO
 
@@ -6,14 +6,16 @@ from flask import abort, flash, redirect, request, send_file, url_for
 
 from core.auth import get_current_user, login_required
 from core.db import get_db
+from config import SITE_BACKGROUND_PREFIX
 from routes.main import main_bp
 from services.logger import log
 from services.object_storage import ObjectStorageError, object_storage
+from services.settings_manager import get_setting
 
 
 def _update_user_object_key(user_id, column, object_key):
     """仅允许更新已声明的用户图片列。"""
-    if column not in ('avatar_key', 'background_key'):
+    if column != 'avatar_key':
         raise ValueError('非法的用户图片字段')
     with get_db() as conn:
         conn.execute(f'UPDATE users SET {column} = ? WHERE id = ?', (object_key, user_id))
@@ -45,14 +47,35 @@ def user_avatar(user_id):
     return _serve_private_image(row['avatar_key'], f'avatar-{user_id}.webp')
 
 
-@main_bp.route('/media/background')
-@login_required
-def user_background():
-    """只允许登录用户读取自己的个性背景。"""
-    user = get_current_user()
-    if not user or not user.get('background_key'):
+@main_bp.route('/media/site-background')
+def site_background():
+    """读取管理员配置的全站首页背景。"""
+    object_key = get_setting('SITE_BACKGROUND_ACTIVE_KEY', '')
+    if not _is_site_background_key(object_key):
         abort(404)
-    return _serve_private_image(user['background_key'], f'background-{user["id"]}.webp')
+    response = _serve_private_image(object_key, 'site-background.webp')
+    response.headers['Cache-Control'] = 'public, max-age=86400'
+    return response
+
+
+def _is_site_background_key(object_key):
+    """限制只能读取站点背景图库中的 WebP 对象。"""
+    return bool(
+        object_key
+        and object_key.startswith(SITE_BACKGROUND_PREFIX)
+        and object_key.endswith('.webp')
+    )
+
+
+@main_bp.route('/media/site-background-option')
+def site_background_option():
+    """读取管理后台图库预览图。"""
+    object_key = (request.args.get('key') or '').strip()
+    if not _is_site_background_key(object_key):
+        abort(404)
+    response = _serve_private_image(object_key, 'site-background-option.webp')
+    response.headers['Cache-Control'] = 'public, max-age=86400'
+    return response
 
 
 @main_bp.route('/settings/avatar', methods=['POST'])
@@ -82,35 +105,4 @@ def delete_avatar():
         log('UserMedia', '用户头像删除失败', user_id=user['id'], error=str(exc))
         flash('头像删除失败，请稍后重试', 'error')
     return redirect(url_for('main.settings', tab='avatar'))
-
-
-@main_bp.route('/home/background', methods=['POST'])
-@login_required
-def upload_background():
-    user = get_current_user()
-    try:
-        object_key = object_storage.save_user_image(
-            user['id'], 'background', request.files.get('background')
-        )
-        _update_user_object_key(user['id'], 'background_key', object_key)
-        log('UserMedia', '主页背景上传成功', user_id=user['id'], username=user['username'])
-        flash('主页背景更新成功！', 'success')
-    except ObjectStorageError as exc:
-        log('UserMedia', '主页背景上传失败', user_id=user['id'], error=str(exc))
-        flash(str(exc), 'error')
-    return redirect(url_for('main.home'))
-
-
-@main_bp.route('/home/background/delete', methods=['POST'])
-@login_required
-def delete_background():
-    user = get_current_user()
-    try:
-        object_storage.delete_object(user.get('background_key'))
-        _update_user_object_key(user['id'], 'background_key', '')
-        flash('主页背景已恢复为默认样式', 'success')
-    except ObjectStorageError as exc:
-        log('UserMedia', '主页背景删除失败', user_id=user['id'], error=str(exc))
-        flash('背景删除失败，请稍后重试', 'error')
-    return redirect(url_for('main.home'))
 

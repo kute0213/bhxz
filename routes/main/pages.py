@@ -15,6 +15,8 @@ from routes.main import main_bp
 @main_bp.route('/')
 def home():
     user = get_current_user()
+    background_version = get_config_value('SITE_BACKGROUND_VERSION', '')
+    background_key = get_config_value('SITE_BACKGROUND_ACTIVE_KEY', '')
     conn = get_db()
     try:
         mod_intros = conn.execute(
@@ -28,8 +30,8 @@ def home():
         map_url=get_config_value('MAP_URL', 'https://map.bhxz.tw.kg'),
         qq_group_url=get_config_value('QQ_GROUP_URL', ''),
         page_background_url=(
-            url_for('main.user_background')
-            if user and user.get('background_key') else ''
+            url_for('main.site_background', v=background_version)
+            if background_version and background_key else ''
         ),
     )
 

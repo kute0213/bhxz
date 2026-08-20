@@ -29,6 +29,11 @@ MINIO_SECURE = os.environ.get('MINIO_SECURE', '0').lower() in ('1', 'true', 'yes
 
 # 用户图片只允许常见静态格式，上传后会统一转换为 WebP 再写入 MinIO。
 USER_IMAGE_MAX_BYTES = 10 * 1024 * 1024
+# 全站首页背景图库的 MinIO 对象前缀。
+SITE_BACKGROUND_PREFIX = 'site/backgrounds/'
+
+# 当前指定的唯一管理员账号（大小写不敏感）。
+PRIMARY_ADMIN_USERNAME = 'LunSir'
 
 # Session 密钥（硬编码默认值，无需环境变量，开箱即用）
 SECRET_KEY = 'mc_server_site_random_secret_key_2024'

@@ -92,7 +92,7 @@ def get_current_user():
     conn = get_db()
     try:
         user = conn.execute(
-            "SELECT id, username, email, avatar_key, background_key, is_admin "
+            "SELECT id, username, email, avatar_key, is_admin "
             "FROM users WHERE id = ?",
             (session['user_id'],),
         ).fetchone()

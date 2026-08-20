@@ -52,7 +52,6 @@ def init_db():
                 password_hash VARCHAR NOT NULL,
                 email VARCHAR DEFAULT '',
                 avatar_key VARCHAR DEFAULT '',
-                background_key VARCHAR DEFAULT '',
                 is_admin INTEGER DEFAULT 0,
                 created_at VARCHAR NOT NULL
             )
@@ -364,16 +363,30 @@ def init_db():
     add_column_if_not_exists('scheduled_tasks', 'timeout_seconds', 'INTEGER DEFAULT NULL')
     # 用户表添加 email 列
     add_column_if_not_exists('users', 'email', "VARCHAR DEFAULT ''")
-    # 用户头像与个性背景只保存 MinIO 对象键，图片内容不写入数据库。
+    # 用户头像只保存 MinIO 对象键，图片内容不写入数据库。
     add_column_if_not_exists('users', 'avatar_key', "VARCHAR DEFAULT ''")
-    add_column_if_not_exists('users', 'background_key', "VARCHAR DEFAULT ''")
 
     
 
-    # ---- 默认管理员（仅在系统中没有任何管理员时才创建） ----
-    cursor.execute("SELECT COUNT(*) AS c FROM users WHERE is_admin = 1")
-    admin_row = cursor.fetchone()
-    if admin_row and admin_row[0] == 0:
+    # ---- 唯一管理员 ----
+    # LunSir 已存在时收敛所有管理权限；不存在时保留旧管理员，
+    # 避免因账号尚未注册导致后台无人可登录。
+    from config import PRIMARY_ADMIN_USERNAME
+    cursor.execute(
+        "SELECT id FROM users WHERE lower(username) = lower(?) LIMIT 1",
+        (PRIMARY_ADMIN_USERNAME,),
+    )
+    primary_admin = cursor.fetchone()
+    if primary_admin:
+        cursor.execute(
+            "UPDATE users SET is_admin = CASE WHEN id = ? THEN 1 ELSE 0 END",
+            (primary_admin[0],),
+        )
+        conn.commit()
+    else:
+        cursor.execute("SELECT COUNT(*) AS c FROM users WHERE is_admin = 1")
+        admin_row = cursor.fetchone()
+    if not primary_admin and admin_row and admin_row[0] == 0:
         cursor.execute(
             "INSERT OR IGNORE INTO users (username, password_hash, is_admin, created_at) VALUES (?, ?, ?, ?)",
             ('admin', hashlib.sha256('admin1324'.encode('utf-8')).hexdigest(), 1, datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
