@@ -2,8 +2,9 @@ import os
 import sys
 import signal
 import socket
-from flask import Flask, render_template, abort
+from flask import Flask, render_template
 from config import SECRET_KEY, MAX_CONTENT_LENGTH
+
 
 # 项目根目录（确保工作目录正确，不受快捷方式启动影响）
 _APP_ROOT = os.path.dirname(os.path.abspath(__file__))
@@ -58,69 +59,34 @@ app.config['SESSION_COOKIE_SECURE'] = os.environ.get('ENABLE_SSL', '0').lower() 
 
 
 # ---------------------------------------------------------------------------
-# 蓝图注册
+# 应用初始化
 # ---------------------------------------------------------------------------
 
-def _register_blueprints():
-    """注册所有蓝图。"""
-    from routes.main import main_bp
-    from routes.community import community_bp
-    from routes.admin import admin_bp
-    from routes.api import api_bp, admin_api_bp, captcha_bp, email_code_bp
-    from routes.script import script_bp
-    from routes.scheduled import scheduled_bp
-    from routes.docs import docs_bp
-    from routes.guides import guides_bp
-    from routes.discussion import discussion_bp
-    from routes.public import public_bp, try_serve_public
+def _init_app():
+    """初始化应用：数据库、蓝图、钩子、后台服务。仅在主进程执行。"""
+    from core.db import init_db
 
-    blueprints = [
-        public_bp, main_bp, community_bp, admin_bp,
-        api_bp, admin_api_bp, captcha_bp, email_code_bp,
-        script_bp, scheduled_bp, docs_bp, guides_bp, discussion_bp,
-    ]
-    for bp in blueprints:
-        app.register_blueprint(bp)
-    print(f'[INFO] 蓝图注册完成，共 {len(blueprints)} 个', flush=True)
+    # 确保工作目录始终是项目根目录（避免快捷方式启动时跑到桌面）
+    os.chdir(_APP_ROOT)
 
-    return try_serve_public
+    print('[INFO] 正在初始化数据库...', flush=True)
+    init_db()
+    print('[INFO] 数据库初始化完成', flush=True)
 
+    print('[INFO] 正在注册蓝图...', flush=True)
+    from routes.registry import register_blueprints
+    try_serve_public = register_blueprints(app)
 
-# ---------------------------------------------------------------------------
-# 请求钩子
-# ---------------------------------------------------------------------------
+    print('[INFO] 正在注册请求钩子...', flush=True)
+    from core.middleware import register_hooks
+    register_hooks(app, try_serve_public)
 
-def _register_hooks(try_serve_public):
-    """注册 before_request 钩子。"""
-    from core.middleware import log_access
+    # 注册模板上下文处理器
+    _register_template_context()
 
-    @app.before_request
-    def serve_public_files_hook():
-        from flask import request
-        from werkzeug.exceptions import HTTPException
-        path = request.path
-        if path.startswith('/static/') or path.startswith('/admin') or \
-           path.startswith('/api/') or path.startswith('/cmd/') or \
-           path.startswith('/scheduled') or path.startswith('/community') or \
-           path.startswith('/docs') or path in ('/login', '/register', '/logout',
-                                                '/settings', '/performance'):
-            return None
-        try:
-            resp = try_serve_public(path.lstrip('/'))
-            if resp is not None:
-                return resp
-        except HTTPException:
-            raise
-        except Exception:
-            pass
-        return None
+    print('[INFO] 正在启动后台服务...', flush=True)
+    _start_background_services()
 
-    app.before_request(log_access)
-
-
-# ---------------------------------------------------------------------------
-# 后台服务
-# ---------------------------------------------------------------------------
 
 def _register_template_context():
     """注册模板上下文处理器，使全局配置在所有模板中可用。"""
@@ -140,40 +106,15 @@ def _start_background_services():
     from services.logging import log_cleaner, log_writer
     from services.backup import BackupScheduler
     from services.email import email_service
+    from services.sitemap_cache import sitemap_cache
 
     log_writer.start()
     log_cleaner.start()
     scheduler.start()
     BackupScheduler().start()
     email_service.start()
+    sitemap_cache.start()
     print('[INFO] 后台服务启动完成', flush=True)
-
-
-# ---------------------------------------------------------------------------
-# 应用初始化
-# ---------------------------------------------------------------------------
-
-def _init_app():
-    """初始化应用：数据库、蓝图、钩子、后台服务。仅在主进程执行。"""
-    from core.db import init_db
-
-    # 确保工作目录始终是项目根目录（避免快捷方式启动时跑到桌面）
-    os.chdir(_APP_ROOT)
-
-    print('[INFO] 正在初始化数据库...', flush=True)
-    init_db()
-    print('[INFO] 数据库初始化完成', flush=True)
-
-    print('[INFO] 正在注册蓝图...', flush=True)
-    try_serve_public = _register_blueprints()
-
-    _register_hooks(try_serve_public)
-
-    # 注册模板上下文处理器
-    _register_template_context()
-
-    print('[INFO] 正在启动后台服务...', flush=True)
-    _start_background_services()
 
 
 if not _is_child:
@@ -266,11 +207,13 @@ def _graceful_shutdown(signum, frame):
     print(f'\n[INFO] 收到信号 {signum}，正在关闭服务器...', flush=True)
     from services.logging import log_writer, log_cleaner
     from services.scheduler import scheduler
+    from services.sitemap_cache import sitemap_cache
     from core.db import get_db
 
     log_writer.stop()
     log_cleaner.stop()
     scheduler.stop()
+    sitemap_cache.stop()
     try:
         conn = get_db()
         conn.commit()

@@ -211,6 +211,10 @@ SETTINGS_REGISTRY = [
     ('BACKUP_CLEAN_LOGS', True, 'bool', '备份前清理日志', '执行备份前自动清理过期日志', '数据库备份'),
     ('BACKUP_CHECKPOINT', True, 'bool', '备份前执行 CHECKPOINT', '将 WAL 合并到主文件，减小数据库体积', '数据库备份'),
 
+    # Sitemap
+    ('SITEMAP_REFRESH_TIME', '03:00', 'time', 'Sitemap 刷新时间', '站点地图每天自动刷新的时间（HH:MM 格式）', 'Sitemap'),
+    ('SITE_URL', 'http://localhost:5000', 'str', '站点域名', 'Sitemap 中使用的完整域名（含协议和端口，如 https://bhxz.tw.kg）', 'Sitemap'),
+
     # 脚本执行
     ('SCRIPT_EXECUTOR_POOL_SIZE', 2, 'int', '脚本执行并发数', '同时运行的脚本子进程数上限', '脚本执行'),
 
