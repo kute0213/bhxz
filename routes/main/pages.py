@@ -5,7 +5,7 @@
 
 import os
 
-from flask import render_template, send_from_directory, abort, make_response, url_for
+from flask import render_template, send_from_directory, abort, make_response
 from core.auth import get_current_user
 from core.db import get_db
 from config import get_config_value, UPLOAD_BACKGROUNDS_DIR
@@ -15,8 +15,6 @@ from routes.main import main_bp
 @main_bp.route('/')
 def home():
     user = get_current_user()
-    background_version = get_config_value('SITE_BACKGROUND_VERSION', '')
-    background_key = get_config_value('SITE_BACKGROUND_ACTIVE_KEY', '')
     conn = get_db()
     try:
         mod_intros = conn.execute(
@@ -29,10 +27,6 @@ def home():
         'index.html', user=user, mod_intros=mod_intros,
         map_url=get_config_value('MAP_URL', 'https://map.bhxz.tw.kg'),
         qq_group_url=get_config_value('QQ_GROUP_URL', ''),
-        page_background_url=(
-            url_for('main.site_background', v=background_version)
-            if background_version and background_key else ''
-        ),
     )
 
 

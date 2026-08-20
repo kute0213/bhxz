@@ -87,24 +87,6 @@ def test_admin_settings_page():
         _login_admin(client)
         resp = client.get('/admin/settings')
         assert resp.status_code == 200, f"系统设置页状态码: {resp.status_code}"
-        html = resp.get_data(as_text=True)
-        assert '全站首页背景' in html
-        assert '/admin/settings/background' in html
-
-
-def test_site_background_admin_only():
-    """普通用户不能上传或删除全站背景。"""
-    with _app.test_client() as client:
-        with client.session_transaction() as sess:
-            sess['user_id'] = 9999
-            sess['username'] = 'normal_user'
-            sess['is_admin'] = False
-        upload_resp = client.post('/admin/settings/background', data={})
-        select_resp = client.post('/admin/settings/background/select', data={})
-        delete_resp = client.post('/admin/settings/background/delete', data={})
-        assert upload_resp.status_code == 403
-        assert select_resp.status_code == 403
-        assert delete_resp.status_code == 403
 
 
 def test_admin_db_backup_page():
@@ -192,7 +174,6 @@ if __name__ == '__main__':
         test_admin_mod_intros_page,
         test_admin_guides_page,
         test_admin_settings_page,
-        test_site_background_admin_only,
         test_admin_db_backup_page,
         test_admin_discussion_page,
         test_admin_script_page,

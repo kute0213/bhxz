@@ -1,18 +1,14 @@
-"""管理后台 - 系统设置与全站背景管理。
+"""管理后台 - 系统设置。
 
 提供设置的读取、保存、重置接口，支持通过管理后台在线编辑配置。
 """
-
-import time
-import uuid
 
 from flask import request, jsonify, render_template, abort, flash, redirect, url_for
 
 from core.auth import login_required, get_current_user
 from routes.admin import admin_bp
-from config import SETTINGS_REGISTRY, SITE_BACKGROUND_PREFIX, get_config_value
+from config import SETTINGS_REGISTRY, get_config_value
 from services.logger import log
-from services.object_storage import ObjectStorageError, object_storage
 from services.settings_manager import settings_manager
 
 
@@ -29,87 +25,7 @@ def _admin_check():
 def admin_settings_page():
     """系统设置页面。"""
     user = _admin_check()
-    active_key = get_config_value('SITE_BACKGROUND_ACTIVE_KEY', '')
-    gallery = []
-    gallery_error = ''
-    try:
-        gallery = object_storage.list_objects(SITE_BACKGROUND_PREFIX)
-    except ObjectStorageError as exc:
-        gallery_error = str(exc)
-    return render_template(
-        'admin/admin_settings.html',
-        user=user,
-        site_background_version=get_config_value('SITE_BACKGROUND_VERSION', ''),
-        site_background_active_key=active_key,
-        site_background_gallery=gallery,
-        site_background_gallery_error=gallery_error,
-    )
-
-
-@admin_bp.route('/admin/settings/background', methods=['POST'])
-@login_required
-def upload_site_background():
-    """仅管理员可上传新图，旧图保留在背景图库。"""
-    user = _admin_check()
-    try:
-        object_key = f'{SITE_BACKGROUND_PREFIX}{uuid.uuid4().hex}.webp'
-        object_storage.save_site_background(
-            object_key, request.files.get('background')
-        )
-        # 新图上传后直接设为全站背景，并刷新浏览器缓存版本。
-        settings_manager.bulk_set({
-            'SITE_BACKGROUND_ACTIVE_KEY': object_key,
-            'SITE_BACKGROUND_VERSION': str(int(time.time() * 1000)),
-        })
-        log('AdminMedia', '全站首页背景更新成功',
-            user_id=user['id'], username=user['username'])
-        flash('全站首页背景更新成功！', 'success')
-    except ObjectStorageError as exc:
-        log('AdminMedia', '全站首页背景更新失败',
-            user_id=user['id'], error=str(exc))
-        flash(str(exc), 'error')
-    return redirect(url_for('admin.admin_settings_page'))
-
-
-@admin_bp.route('/admin/settings/background/select', methods=['POST'])
-@login_required
-def select_site_background():
-    """从已上传的 MinIO 图库中切换全站背景。"""
-    user = _admin_check()
-    object_key = (request.form.get('object_key') or '').strip()
-    if not object_key.startswith(SITE_BACKGROUND_PREFIX) or not object_key.endswith('.webp'):
-        abort(400)
-    if not object_storage.object_exists(object_key):
-        flash('选择的背景图不存在', 'error')
-        return redirect(url_for('admin.admin_settings_page'))
-
-    settings_manager.bulk_set({
-        'SITE_BACKGROUND_ACTIVE_KEY': object_key,
-        'SITE_BACKGROUND_VERSION': str(int(time.time() * 1000)),
-    })
-    log('AdminMedia', '全站首页背景切换成功',
-        user_id=user['id'], username=user['username'], object_key=object_key)
-    flash('全站首页背景已切换', 'success')
-    return redirect(url_for('admin.admin_settings_page'))
-
-
-@admin_bp.route('/admin/settings/background/delete', methods=['POST'])
-@login_required
-def delete_site_background():
-    """仅管理员可恢复站点默认背景。"""
-    user = _admin_check()
-    try:
-        # 恢复默认只取消当前选中项，图库中的已上传图片保留供下次选择。
-        settings_manager.delete('SITE_BACKGROUND_ACTIVE_KEY')
-        settings_manager.delete('SITE_BACKGROUND_VERSION')
-        log('AdminMedia', '全站首页背景已恢复默认',
-            user_id=user['id'], username=user['username'])
-        flash('全站首页背景已恢复为默认样式', 'success')
-    except ObjectStorageError as exc:
-        log('AdminMedia', '全站首页背景删除失败',
-            user_id=user['id'], error=str(exc))
-        flash('背景删除失败，请稍后重试', 'error')
-    return redirect(url_for('admin.admin_settings_page'))
+    return render_template('admin/admin_settings.html', user=user)
 
 
 @admin_bp.route('/admin/api/settings')
@@ -257,7 +173,7 @@ def api_reset_all_settings():
     configurable_keys = {reg[0] for reg in SETTINGS_REGISTRY}
     deleted_count = 0
     for s in all_settings:
-        # 只重置界面中声明的配置，不能删除背景版本等内部状态。
+        # 只重置界面中声明的配置
         if s['key'] not in configurable_keys:
             continue
         try:

@@ -8,7 +8,6 @@ from flask import abort, current_app, flash, redirect, request, send_file, url_f
 from config import UPLOAD_DIR, USER_IMAGE_MAX_BYTES
 from core.auth import get_current_user, login_required
 from core.db import get_db
-from config import SITE_BACKGROUND_PREFIX
 from routes.main import main_bp
 from services.logger import log
 from PIL import Image, ImageOps, UnidentifiedImageError

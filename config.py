@@ -17,8 +17,6 @@ MAX_CONTENT_LENGTH = 100 * 1024 * 1024
 
 # 用户图片（头像/背景）最大字节数
 USER_IMAGE_MAX_BYTES = 10 * 1024 * 1024
-# 全站首页背景图库的 MinIO 对象前缀。
-SITE_BACKGROUND_PREFIX = 'site/backgrounds/'
 
 # 当前指定的唯一管理员账号（大小写不敏感）。
 PRIMARY_ADMIN_USERNAME = 'LunSir'
