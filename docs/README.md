@@ -1,6 +1,6 @@
 # 滨海小镇 - Minecraft 服务器社区网站
 
-基于 Flask 的 Minecraft 服务器社区门户，采用磨砂玻璃（Glassmorphism）设计风格。提供用户系统、社区投票与征集、模组介绍、管理后台、服务器性能监控、终端控制台等功能。
+基于 Flask 的 Minecraft 服务器社区门户，采用磨砂玻璃（Glassmorphism）设计风格。提供用户系统、模组介绍、管理后台、服务器性能监控、终端控制台等功能。
 
 ## 文档索引
 
@@ -92,10 +92,6 @@ python scripts/build/package.py
 - 找回密码（邮箱验证码 + 图形验证码双重验证）
 - 账户设置（修改用户名/密码/邮箱/注销）
 - 邮箱唯一性约束（一个邮箱仅可注册一个账号）
-
-### 社区互动
-- 投票（单选/多选，管理员创建/启停）
-- 征集（主题+回复，支持多附件上传）
 
 ### 管理后台
 - 用户管理、访问日志、模组介绍管理
@@ -198,24 +194,15 @@ export ENABLE_SSL=1 && python app.py
 |------|------|
 | `GET /api/performance` | 服务器性能数据（CPU/内存/运行时间） |
 | `GET /api/stats` | 网站统计数据 |
-| `GET /api/polls` | 投票数据（含选项/百分比/用户投票状态） |
 | `GET /api/captcha/generate` | 生成图形验证码 |
 | `POST /api/captcha/verify` | 验证图形验证码 |
 | `POST /api/email/send-code` | 发送邮箱验证码 |
 | `GET /api/email/check-enabled` | 检查邮件功能是否启用 |
 
-### 社区 AJAX 端点
+### 讨论区 AJAX 端点
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| POST | `/poll/create` | 创建投票（管理员） |
-| POST | `/poll/<id>/vote` | 投票 |
-| POST | `/poll/<id>/delete` | 删除投票（管理员） |
-| POST | `/poll/<id>/toggle` | 启用/禁用投票（管理员） |
-| POST | `/board/create` | 创建征集（管理员） |
-| POST | `/board/<id>/reply` | 回复征集（支持多附件） |
-| POST | `/board/<id>/delete` | 删除征集（管理员） |
-| POST | `/board/reply/<id>/delete` | 删除回复 |
 | POST | `/discussion/<id>/reply` | 回复帖子 |
 | POST | `/discussion/reply/<id>/delete` | 删除回复 |
 | GET | `/discussion/<id>/api/replies` | 分页获取回复 |
@@ -323,9 +310,9 @@ app.py ──→ routes/ ──→ services/ ──→ core/
          public/      shell.py
          admin/       user_service.py
          api/         attachment_service.py
-         cmd/         board_service.py
-         community/   discussion_service.py
-         discussion/  poll_service.py
+         cmd/         discussion_service.py
+         community/
+         discussion/
          guides/      captcha.py （验证码）
          scheduled/   ratelimit.py （限流）
                       logger.py （日志）
@@ -379,7 +366,7 @@ workspace/
 │   ├── admin/                #   管理后台
 │   ├── api/                  #   JSON API
 │   ├── cmd/                  #   命令控制台
-│   ├── community/            #   社区（投票、留言板）
+│   ├── community/            #   文件下载
 │   ├── discussion/           #   讨论区
 │   ├── guides/               #   服务器指南
 │   └── scheduled/            #   定时任务管理
@@ -427,11 +414,6 @@ workspace/
 | 表名 | 说明 | 关键约束 |
 |------|------|----------|
 | `users` | 用户 | `username` 唯一, `email` 唯一 |
-| `polls` | 投票 | — |
-| `poll_options` | 投票选项 | 外键 `poll_id` 级联删除 |
-| `poll_votes` | 投票记录 | 唯一约束 `(poll_id, user_id, option_id)` |
-| `board_topics` | 征集主题 | 外键 `user_id` |
-| `board_replies` | 征集回复 | 外键 `topic_id`，`attachment` 存 JSON |
 | `mod_intros` | 模组介绍 | — |
 | `cmd_commands` | 快捷命令 | 名称/命令/描述/排序/类型 |
 | `scripts` | 统一脚本 | name/description/content/script_type |

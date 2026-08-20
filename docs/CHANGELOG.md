@@ -3,8 +3,9 @@
 ## [Unreleased]
 
 ### 移除
-- **彻底删除 MinIO 对象存储**：移除 `services/object_storage.py`、`config.py` 中 MinIO 相关配置、`app.py` 中 MinIO 初始化检查、`routes/main/media.py` 中 MinIO 引用改为本地文件存储、`services/user_service.py` 中 MinIO 清理逻辑改为本地文件清理、`requirements.txt` 中 `minio` 依赖；删除 `.env.example` 和 `docs/MINIO.md`
+- **彻底删除 MinIO 对象存储**：移除 `services/object_storage.py`、`config.py` 中 MinIO 相关配置、`app.py` 中 MinIO 初始化检查、`routes/main/media.py` 中 MinIO 引用改为本地文件存储、`services/user_service.py` 中 MinIO 清理逻辑改为本地文件清理；删除 `.env.example` 和 `docs/MINIO.md`
 - **移除系统设置中的背景图片开关**：从 `SETTINGS_REGISTRY` 中移除 `ENABLE_BACKGROUND_IMAGE` 和 `BACKGROUND_FADE_IN_MS`，首页背景只保留上传按钮 + 图片预览弹窗
+- **删除投票与征集功能**：彻底移除 `routes/community/polls.py`、`routes/community/board.py`、`services/poll_service.py`、`services/board_service.py`、`templates/community.html`，从数据库 schema 中移除 `polls`、`poll_options`、`poll_votes`、`board_topics`、`board_replies` 表，从导航和首页移除入口链接
 
 ### 优化
 - **首页背景图片交互优化**：上传改用 XHR 异步 + 进度条，新增预览弹窗，点击预览按钮即可查看大图
@@ -16,6 +17,7 @@
 - **「CMD」全面改名为「脚本」**：后端包 `routes/cmd`→`routes/script`、蓝图 `cmd_bp`→`script_bp`、URL `/admin/cmd*`→`/admin/script*`，前端 `static/js/cmd`→`static/js/script`、模板 `admin_cmd_*.html`→`admin_script_*.html`，同步更新快捷命令/定时任务/终端/编辑器全部入口与可见文案，并同步测试用例与文档
 
 ### 新增
+- **更新脚本机制**：创建 `scripts/uploads.py`，每次一键更新完成后自动执行（不存在则跳过），用于清理旧数据、迁移文件等；`scripts/migrate_uploads.py` 委托 `uploads.py` 并可触发静态资源构建
 - **复原「弹窗终端」且无独立入口**：脚本控制台不再有「实时终端」按钮；点击任意快捷命令/脚本卡片的「运行」即自动打开弹窗终端（`terminal-modal.js`）并在其中执行——Shell 命令发到共享持久 PTY 会话、脚本走后端 SSE 独立子进程。顶栏提供「中断/清屏/重置/关闭」，`Esc` 或点击遮罩可关闭
 - **MiniScript 解除安全限制**：删除 AST 沙箱校验、危险函数黑名单、双下划线属性保护、循环次数限制与运行时长限制，脚本可无限循环、无限运行；仅保留独立子进程隔离与资源访问控制作为「防误炸服务器」底线
 - **退出网页即强制终止脚本**：前端监听 `visibilitychange`/`pagehide`/`beforeunload` 主动上报终止，后端以心跳监控线程兜底，覆盖意外关闭浏览器/tab 崩溃场景

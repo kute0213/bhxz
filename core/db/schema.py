@@ -67,58 +67,6 @@ def init_db():
                 created_at VARCHAR NOT NULL
             )
         '''),
-        ('polls', '''
-            CREATE SEQUENCE IF NOT EXISTS polls_id_seq START 1;
-            CREATE TABLE IF NOT EXISTS polls (
-                id INTEGER PRIMARY KEY DEFAULT nextval('polls_id_seq'),
-                title VARCHAR NOT NULL,
-                description VARCHAR,
-                is_active INTEGER DEFAULT 1,
-                is_multiple INTEGER DEFAULT 0,
-                created_at VARCHAR NOT NULL
-            )
-        '''),
-        ('poll_options', '''
-            CREATE SEQUENCE IF NOT EXISTS poll_options_id_seq START 1;
-            CREATE TABLE IF NOT EXISTS poll_options (
-                id INTEGER PRIMARY KEY DEFAULT nextval('poll_options_id_seq'),
-                poll_id INTEGER NOT NULL,
-                option_text VARCHAR NOT NULL,
-                vote_count INTEGER DEFAULT 0
-            )
-        '''),
-        ('poll_votes', '''
-            CREATE SEQUENCE IF NOT EXISTS poll_votes_id_seq START 1;
-            CREATE TABLE IF NOT EXISTS poll_votes (
-                id INTEGER PRIMARY KEY DEFAULT nextval('poll_votes_id_seq'),
-                poll_id INTEGER NOT NULL,
-                user_id INTEGER NOT NULL,
-                option_id INTEGER NOT NULL,
-                created_at VARCHAR NOT NULL,
-                UNIQUE(poll_id, user_id, option_id)
-            )
-        '''),
-        ('board_topics', '''
-            CREATE SEQUENCE IF NOT EXISTS board_topics_id_seq START 1;
-            CREATE TABLE IF NOT EXISTS board_topics (
-                id INTEGER PRIMARY KEY DEFAULT nextval('board_topics_id_seq'),
-                user_id INTEGER NOT NULL,
-                title VARCHAR NOT NULL,
-                description VARCHAR,
-                is_active INTEGER DEFAULT 1,
-                created_at VARCHAR NOT NULL
-            )
-        '''),
-        ('board_replies', '''
-            CREATE SEQUENCE IF NOT EXISTS board_replies_id_seq START 1;
-            CREATE TABLE IF NOT EXISTS board_replies (
-                id INTEGER PRIMARY KEY DEFAULT nextval('board_replies_id_seq'),
-                topic_id INTEGER NOT NULL,
-                user_id INTEGER NOT NULL,
-                content VARCHAR NOT NULL,
-                created_at VARCHAR NOT NULL
-            )
-        '''),
         ('access_logs', '''
             CREATE SEQUENCE IF NOT EXISTS access_logs_id_seq START 1;
             CREATE TABLE IF NOT EXISTS access_logs (
@@ -354,7 +302,6 @@ def init_db():
             except Exception as e:
                 print(f'[DB] 添加列 {table}.{column} 失败: {e}', flush=True)
 
-    add_column_if_not_exists('board_replies', 'attachment', 'VARCHAR DEFAULT NULL')
     add_column_if_not_exists('cmd_commands', 'type', "VARCHAR DEFAULT 'cmd'")
     add_column_if_not_exists('scheduled_tasks', 'task_type', "VARCHAR DEFAULT 'shell'")
     # 定时任务改为引用 cmd_commands 表中的快捷命令

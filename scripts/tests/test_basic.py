@@ -111,15 +111,6 @@ def test_api_stats():
         assert data is not None, "响应不是 JSON"
 
 
-def test_api_polls():
-    """测试投票数据 API。"""
-    with _app.test_client() as client:
-        resp = client.get('/api/polls')
-        assert resp.status_code == 200, f"投票 API 状态码: {resp.status_code}"
-        data = resp.get_json()
-        assert data is not None, "响应不是 JSON"
-
-
 def test_docs_page():
     """测试文档页面。"""
     with _app.test_client() as client:
@@ -139,13 +130,6 @@ def test_guides_page():
     with _app.test_client() as client:
         resp = client.get('/guides')
         assert resp.status_code == 200, f"指南页面状态码: {resp.status_code}"
-
-
-def test_community_page():
-    """测试社区页面。"""
-    with _app.test_client() as client:
-        resp = client.get('/community')
-        assert resp.status_code == 200, f"社区页面状态码: {resp.status_code}"
 
 
 def test_admin_redirect():
@@ -178,11 +162,9 @@ if __name__ == '__main__':
         test_api_check_email,
         test_api_performance,
         test_api_stats,
-        test_api_polls,
         test_docs_page,
         test_discussion_page,
         test_guides_page,
-        test_community_page,
         test_admin_redirect,
         test_settings_redirect,
     ]

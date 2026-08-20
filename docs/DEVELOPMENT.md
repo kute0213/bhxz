@@ -127,8 +127,7 @@ def do_something(user_id, value, ip_address):
 
 - 附件处理始终使用 `services/attachment_service.py`
 - 用户操作始终使用 `services/user_service.py`
-- 投票操作始终使用 `services/poll_service.py`
-- 征集操作始终使用 `services/board_service.py`
+
 - 讨论区操作始终使用 `services/discussion_service.py`
 
 ## 测试规范
@@ -157,21 +156,6 @@ python scripts/tests/run_all.py
 
 Flask 默认以**函数名**作为端点名（`蓝图名.函数名`），模板中 `url_for('蓝图名.函数名')` 必须与之完全一致。
 
-```python
-# ❌ 错误：函数名带 _view 后缀，模板却用 url_for('community.create_poll')
-@community_bp.route('/poll/create', methods=['POST'])
-def create_poll_view():          # 端点 → community.create_poll_view
-    ...
-
-# ✅ 正确：函数名就是模板要用的名字
-@community_bp.route('/poll/create', methods=['POST'])
-def create_poll():                # 端点 → community.create_poll
-    ...
-
-# 模板中必须一致：
-# <form action="{{ url_for('community.create_poll') }}">
-```
-
 **检查清单：**
 - [ ] 每个 `@蓝图.route()` 的函数名都对应模板中的 `url_for('蓝图名.函数名')`
 - [ ] 不要加 `_view`、`_handler`、`_action` 等后缀（除非模板也用了这个后缀）
@@ -184,7 +168,7 @@ def create_poll():                # 端点 → community.create_poll
 
 ```bash
 # 匿名访问
-curl -s -o /dev/null -w "%{http_code}" http://localhost:5000/community
+curl -s -o /dev/null -w "%{http_code}" http://localhost:5000/discussion
 # 应返回 200
 ```
 
@@ -273,7 +257,7 @@ body.page-leaving .page-content {
 # 认证要求: False=公开, True=需登录, 'admin'=需管理员权限
 
 # 公开页面
-('/community', 'GET', [200], False, '社区首页'),
+('/discussion', 'GET', [200], False, '讨论区'),
 
 # 需登录（未登录预期 302 跳转）
 ('/settings', 'GET', [302, 401], True, '设置页'),
@@ -298,24 +282,6 @@ body.page-leaving .page-content {
 - [ ] 新路由已在 `ROUTES` 列表中添加
 - [ ] 预期状态码正确（公开页面 200，认证页面 302/401/403）
 - [ ] 已运行 `python test_routes.py` 验证通过
-
-### 5. 路由函数名避免与 service 导入名冲突
-
-```python
-# ❌ 错误：视图函数 vote_poll 与导入的 vote_poll 同名
-from services.poll_service import vote_poll
-
-@community_bp.route('/poll/<int:poll_id>/vote', methods=['POST'])
-def vote_poll(poll_id):           # 覆盖了 import 的 vote_poll！
-    result = vote_poll(...)       # 递归调用自身，报错
-
-# ✅ 正确：用别名
-from services.poll_service import vote_poll as svc_vote_poll
-
-@community_bp.route('/poll/<int:poll_id>/vote', methods=['POST'])
-def vote_poll(poll_id):
-    result = svc_vote_poll(...)   # 正确调用 service
-```
 
 ### 6. Markdown 渲染与代码复制
 
@@ -485,3 +451,30 @@ git push origin main                   # 6. 推送，触发一键更新（见 RE
 - 推送到 GitHub 后，一键更新即可生效
 - 修改 `base.css`/`base.js` 后必须同步 bump 模板中的版本号，避免浏览器缓存
 - 一键更新的**机制原理**见 [README.md 一键更新机制](../README.md#一键更新机制)
+
+### 更新脚本机制
+
+每次一键更新完成（文件同步完成后、服务器重启前），会自动尝试运行 `scripts/uploads.py`：
+
+- 如果 `scripts/uploads.py` 存在，则执行它，用于清理旧数据、迁移文件等
+- 如果 `scripts/uploads.py` 不存在，则静默跳过，不影响更新流程
+- 执行超时 120 秒，超时后自动跳过并继续重启
+
+**`scripts/uploads.py` 职责：**
+
+1. **清理旧数据**：删除已废弃功能的数据（如投票、征集等）及其关联的附件文件
+2. **迁移文件**：将 `uploads/` 根目录中散乱的文件按功能分类迁移到子目录
+3. 在更新完成后自动运行，无需手动调用
+
+**`scripts/migrate_uploads.py` 职责：**
+
+1. 委托 `scripts/uploads.py` 执行清理与迁移
+2. 可选构建静态资源（`--build` 参数触发 `scripts/build/build_static.py`）
+3. 用于需要手动迁移的场景，或作为一键更新的补充
+
+**开发准则：**
+
+- 新增需要更新后自动清理的数据时，在 `scripts/uploads.py` 的 `_clean_polls_data()` 类似函数中添加对应逻辑
+- 新增文件分类目录时，在 `scripts/uploads.py` 的文件迁移部分添加对应规则
+- 确保 `scripts/uploads.py` 可独立运行且幂等（多次运行不影响结果）
+- 不需要自动运行脚本时，删除 `scripts/uploads.py` 即可（更新器自动跳过）

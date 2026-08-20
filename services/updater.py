@@ -938,6 +938,41 @@ def _run_update():
             except Exception as e:
                 _add_event('log', {'message': f'[WARN] 静态资源构建失败: {e}'})
 
+        # 7. 尝试运行 scripts/uploads.py（清理旧数据 + 迁移文件）
+        _add_event('progress', {'percent': 98, 'message': '正在运行清理与迁移脚本...'})
+        _add_event('log', {'message': '正在检查 scripts/uploads.py...'})
+        try:
+            uploads_script = os.path.join(APP_ROOT, 'scripts', 'uploads.py')
+            if os.path.isfile(uploads_script):
+                _add_event('log', {'message': '运行 scripts/uploads.py...'})
+                _add_event('progress', {'percent': 98, 'message': '正在运行清理与迁移脚本...'})
+                uploads_env = {**os.environ, 'PYTHONUNBUFFERED': '1'}
+                proc = subprocess.Popen(
+                    [sys.executable, uploads_script],
+                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                    text=True, bufsize=1,
+                    env=uploads_env,
+                )
+                try:
+                    for line in iter(proc.stdout.readline, ''):
+                        line = line.rstrip('\n\r')
+                        if line:
+                            _add_event('log', {'message': f'  | {line}'})
+                    proc.wait(timeout=120)
+                    if proc.returncode == 0:
+                        _add_event('log', {'message': '[OK] 清理与迁移完成'})
+                    else:
+                        _add_event('log', {'message': f'[WARN] 清理脚本返回码: {proc.returncode}'})
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+                    _add_event('log', {'message': '[WARN] 清理脚本超时（120s），跳过'})
+                finally:
+                    proc.stdout.close()
+            else:
+                _add_event('log', {'message': '  scripts/uploads.py 不存在，跳过'})
+        except Exception as e:
+            _add_event('log', {'message': f'[WARN] 运行清理脚本失败: {e}'})
+
         _add_event('progress', {'percent': 99, 'message': '构建完成，正在准备重启...'})
 
         # 6. 完成
