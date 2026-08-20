@@ -158,6 +158,20 @@ def _start_background_services():
     print('[INFO] 后台服务启动完成', flush=True)
 
 
+def _init_object_storage():
+    """启动时主动检查 MinIO；存储故障不影响网站其他功能启动。"""
+    from config import MINIO_BUCKET, MINIO_ENDPOINT
+    from services.object_storage import ObjectStorageError, object_storage
+
+    print(f'[INFO] 正在连接 MinIO: {MINIO_ENDPOINT}/{MINIO_BUCKET} ...', flush=True)
+    try:
+        object_storage.initialize()
+        print(f'[INFO] MinIO 连接成功，Bucket: {MINIO_BUCKET}', flush=True)
+    except ObjectStorageError as exc:
+        # 头像和背景图暂时不可用时，保留网站其他功能便于排查配置。
+        print(f'[WARNING] MinIO 连接失败：{exc}', flush=True)
+
+
 # ---------------------------------------------------------------------------
 # 应用初始化
 # ---------------------------------------------------------------------------
@@ -172,6 +186,8 @@ def _init_app():
     print('[INFO] 正在初始化数据库...', flush=True)
     init_db()
     print('[INFO] 数据库初始化完成', flush=True)
+
+    _init_object_storage()
 
     print('[INFO] 正在注册蓝图...', flush=True)
     try_serve_public = _register_blueprints()

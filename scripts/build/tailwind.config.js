@@ -1,8 +1,10 @@
 /** @type {import('tailwindcss').Config} */
+const path = require('path');
+
 module.exports = {
   content: [
-    './templates/**/*.html',
-    './static/js/**/*.js',
+    path.join(__dirname, '../../templates/**/*.html'),
+    path.join(__dirname, '../../static/js/**/*.js'),
   ],
   theme: {
     extend: {

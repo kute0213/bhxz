@@ -38,7 +38,11 @@
 
             <div class="flex items-center gap-3 text-xs text-cream/50 mb-4 flex-wrap">
                 <span class="flex items-center gap-1">
+                    {% if topic.avatar_key %}
+                    <img src="{{ url_for('main.user_avatar', user_id=topic.user_id) }}" alt="{{ topic.username }}的头像" class="w-5 h-5 rounded-full object-cover">
+                    {% else %}
                     <i data-lucide="user" class="w-3 h-3"></i>
+                    {% endif %}
                     {{ topic.username }}
                 </span>
                 <span>{{ topic.created_at }}</span>
@@ -329,11 +333,14 @@ document.addEventListener('DOMContentLoaded', function() {
                 '<i data-lucide="x" class="w-3 h-3"></i> 删除</button>';
         }
         var initials = r.username ? r.username.charAt(0).toUpperCase() : '?';
+        var avatarHtml = r.avatar_key
+            ? '<img src="/media/avatar/' + r.user_id + '" alt="" class="w-8 h-8 rounded-full object-cover border border-gold-400/30">'
+            : '<div class="w-8 h-8 bg-gold-400/20 rounded-full flex items-center justify-center text-sm font-bold text-gold-400">' + escapeHtml(initials) + '</div>';
 
         return '<div class="pixel-card rounded-xl p-5" id="reply-' + r.id + '">' +
             '<div class="flex items-center justify-between mb-3">' +
             '  <div class="flex items-center gap-2">' +
-            '    <div class="w-8 h-8 bg-gold-400/20 rounded-full flex items-center justify-center text-sm font-bold text-gold-400">' + escapeHtml(initials) + '</div>' +
+            '    ' + avatarHtml +
             '    <div>' +
             '      <span class="text-sm font-medium text-cream">' + escapeHtml(r.username) + '</span>' +
             '      <span class="text-xs text-cream/40 ml-2">' + escapeHtml(r.created_at || '') + '</span>' +

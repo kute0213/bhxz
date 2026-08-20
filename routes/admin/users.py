@@ -21,7 +21,7 @@ def admin_users():
     conn = get_db()
     try:
         users_list = conn.execute(
-            "SELECT id, username, is_admin, created_at FROM users ORDER BY id DESC"
+            "SELECT id, username, avatar_key, is_admin, created_at FROM users ORDER BY id DESC"
         ).fetchall()
         users_list = [dict(u) for u in users_list]
     finally:

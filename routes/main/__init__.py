@@ -11,3 +11,4 @@ main_bp = Blueprint('main', __name__)
 from routes.main import pages     # noqa: E402,F401
 from routes.main import auth      # noqa: E402,F401
 from routes.main import settings  # noqa: E402,F401
+from routes.main import media     # noqa: E402,F401

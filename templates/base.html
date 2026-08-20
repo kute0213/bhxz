@@ -36,9 +36,11 @@
         })();
 
         // 背景图片：根据屏幕比例自动加载匹配图片
-        var bgEnabled = {{ 'true' if ENABLE_BACKGROUND_IMAGE else 'false' }};
+        var pageBackgroundUrl = {{ page_background_url|default('', true)|tojson }};
+        var bgEnabled = {{ 'true' if ENABLE_BACKGROUND_IMAGE else 'false' }} || Boolean(pageBackgroundUrl);
         if (bgEnabled) {
-            (function() {
+            (function initBackgroundWhenReady() {
+                function initBackground() {
                 var layer = document.getElementById('bg-image-layer');
                 if (!layer) return;
                 var fadeMs = {{ BACKGROUND_FADE_IN_MS }};
@@ -67,7 +69,7 @@
                         // 加载失败：静默降级，不显示背景图片
                         layer.style.display = 'none';
                     };
-                    img.src = '/background/' + ratioKey;
+                    img.src = pageBackgroundUrl || ('/background/' + ratioKey);
                 }
 
                 if (document.readyState === 'complete') {
@@ -75,22 +77,29 @@
                 } else {
                     window.addEventListener('load', loadBg);
                 }
+                }
+
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', initBackground);
+                } else {
+                    initBackground();
+                }
             })();
         }
     </script>
     <!-- 入场动画见 base.css：纯 CSS animation，不依赖 JS，避免白屏 -->
     <noscript><style>.page-content{opacity:1!important;transform:none!important}</style></noscript>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/tailwind.css', v='3') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/tailwind.css', v='4') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='9') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css', v='18') }}">
     {% block extra_style %}{% endblock %}
 </head>
-<body{% if ENABLE_BACKGROUND_IMAGE %} class="has-background-image"{% endif %}>
+<body{% if ENABLE_BACKGROUND_IMAGE or page_background_url|default('', true) %} class="has-background-image"{% endif %}>
     <!-- 鼠标跟随光晕 -->
     <div class="mouse-glow" id="mouse-glow"></div>
 
     <!-- 背景图片（仅在启用时显示，位于 bg-orbs 下方） -->
-    {% if ENABLE_BACKGROUND_IMAGE %}
+    {% if ENABLE_BACKGROUND_IMAGE or page_background_url|default('', true) %}
     <div class="bg-image-layer" id="bg-image-layer"></div>
     {% endif %}
 
@@ -149,9 +158,11 @@
             {% if user %}
             <div class="pixel-card rounded-xl p-4 mb-6">
                 <div class="flex items-center gap-3 mb-3">
-                    <div class="w-12 h-12 bg-gold-400/20 rounded-full flex items-center justify-center text-lg font-bold text-gold-400">
-                        {{ user.username[0] }}
-                    </div>
+                    {% if user.avatar_key %}
+                    <img src="{{ url_for('main.user_avatar', user_id=user.id) }}" alt="{{ user.username }}的头像" class="w-12 h-12 rounded-full object-cover border border-gold-400/30">
+                    {% else %}
+                    <div class="w-12 h-12 bg-gold-400/20 rounded-full flex items-center justify-center text-lg font-bold text-gold-400">{{ user.username[0] }}</div>
+                    {% endif %}
                     <div>
                         <div class="font-bold text-gold-400">{{ user.username }}</div>
                         {% if user.is_admin %}<span class="text-xs bg-red-500/20 text-red-300 px-2 py-0.5 rounded">服主</span>{% endif %}
@@ -258,9 +269,11 @@
                 <div class="hidden lg:flex items-center gap-4 pl-6 border-l border-gold-400/10">
                     {% if user %}
                     <div class="flex items-center gap-3">
-                        <div class="w-8 h-8 bg-gold-400/20 rounded-full flex items-center justify-center text-sm font-bold text-gold-400">
-                            {{ user.username[0] }}
-                        </div>
+                        {% if user.avatar_key %}
+                        <img src="{{ url_for('main.user_avatar', user_id=user.id) }}" alt="{{ user.username }}的头像" class="w-8 h-8 rounded-full object-cover border border-gold-400/30">
+                        {% else %}
+                        <div class="w-8 h-8 bg-gold-400/20 rounded-full flex items-center justify-center text-sm font-bold text-gold-400">{{ user.username[0] }}</div>
+                        {% endif %}
                         <span class="text-cream/80 text-sm">
                             <span class="text-gold-400 font-medium">{{ user.username }}</span>
                             {% if user.is_admin %}<span class="text-xs bg-red-500/20 text-red-300 px-2 py-0.5 rounded ml-1">服主</span>{% endif %}
@@ -286,9 +299,11 @@
                 <div class="hidden md:flex lg:hidden items-center gap-3">
                     {% if user %}
                     <div class="flex items-center gap-2">
-                        <div class="w-8 h-8 bg-gold-400/20 rounded-full flex items-center justify-center text-sm font-bold text-gold-400">
-                            {{ user.username[0] }}
-                        </div>
+                        {% if user.avatar_key %}
+                        <img src="{{ url_for('main.user_avatar', user_id=user.id) }}" alt="{{ user.username }}的头像" class="w-8 h-8 rounded-full object-cover border border-gold-400/30">
+                        {% else %}
+                        <div class="w-8 h-8 bg-gold-400/20 rounded-full flex items-center justify-center text-sm font-bold text-gold-400">{{ user.username[0] }}</div>
+                        {% endif %}
                         <span class="text-gold-400 text-sm font-medium hidden sm:inline">{{ user.username }}</span>
                     </div>
                     <a href="{{ url_for('main.settings') }}" class="text-cream/60 hover:text-gold-400 transition-colors p-1">

@@ -51,6 +51,8 @@ def init_db():
                 username VARCHAR UNIQUE NOT NULL,
                 password_hash VARCHAR NOT NULL,
                 email VARCHAR DEFAULT '',
+                avatar_key VARCHAR DEFAULT '',
+                background_key VARCHAR DEFAULT '',
                 is_admin INTEGER DEFAULT 0,
                 created_at VARCHAR NOT NULL
             )
@@ -362,6 +364,9 @@ def init_db():
     add_column_if_not_exists('scheduled_tasks', 'timeout_seconds', 'INTEGER DEFAULT NULL')
     # 用户表添加 email 列
     add_column_if_not_exists('users', 'email', "VARCHAR DEFAULT ''")
+    # 用户头像与个性背景只保存 MinIO 对象键，图片内容不写入数据库。
+    add_column_if_not_exists('users', 'avatar_key', "VARCHAR DEFAULT ''")
+    add_column_if_not_exists('users', 'background_key', "VARCHAR DEFAULT ''")
 
     
 

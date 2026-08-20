@@ -15,6 +15,7 @@ from services.email import normalize_email, email_code_service
 from services.ratelimit import register_limiter, login_limiter
 from services.logger import log
 from services.attachment_service import clean_attachment_json
+from services.object_storage import ObjectStorageError, object_storage
 
 
 # ---------------------------------------------------------------------------
@@ -42,6 +43,26 @@ def _clean_user_attachments(conn, user_id):
         for rr in reply_rows:
             if rr['attachment']:
                 clean_attachment_json(rr['attachment'])
+
+
+def _get_user_media_keys(conn, user_id):
+    """读取账号关联的 MinIO 对象键，供数据库提交后清理。"""
+    row = conn.execute(
+        "SELECT avatar_key, background_key FROM users WHERE id = ?", (user_id,)
+    ).fetchone()
+    if not row:
+        return []
+    return [key for key in (row['avatar_key'], row['background_key']) if key]
+
+
+def _clean_user_media(keys, user_id):
+    """账号删除成功后清理 MinIO 图片；异常不回滚已完成的账号注销。"""
+    for object_key in keys:
+        try:
+            object_storage.delete_object(object_key)
+        except ObjectStorageError as exc:
+            log('UserMedia', '账号图片清理失败', user_id=user_id,
+                object_key=object_key, error=str(exc))
 
 
 # ---------------------------------------------------------------------------
@@ -449,6 +470,7 @@ def delete_account(user_id, username, confirm_username, ip_address):
 
     conn = get_db()
     try:
+        media_keys = _get_user_media_keys(conn, user_id)
         # 清理附件
         _clean_user_attachments(conn, user_id)
 
@@ -470,6 +492,7 @@ def delete_account(user_id, username, confirm_username, ip_address):
         conn.execute("DELETE FROM board_replies WHERE user_id = ?", (user_id,))
         conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
         conn.commit()
+        _clean_user_media(media_keys, user_id)
         log('DeleteAccount', '账号注销成功', user_id=user_id, username=username, ip=ip_address)
         return True, '账号已注销'
     except Exception:
@@ -492,6 +515,7 @@ def admin_delete_user(admin_user, target_user_id, ip_address):
 
     conn = get_db()
     try:
+        media_keys = _get_user_media_keys(conn, target_user_id)
         # 清理用户附件
         _clean_user_attachments(conn, target_user_id)
 
@@ -507,6 +531,7 @@ def admin_delete_user(admin_user, target_user_id, ip_address):
         conn.execute("DELETE FROM board_topics WHERE user_id = ?", (target_user_id,))
         conn.execute("DELETE FROM users WHERE id = ?", (target_user_id,))
         conn.commit()
+        _clean_user_media(media_keys, target_user_id)
         log('Admin', '删除用户', admin_user=admin_user['username'],
             target_user_id=target_user_id, ip=ip_address)
         return True, '用户已删除'

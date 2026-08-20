@@ -79,6 +79,33 @@
 {% block nav %}
 {% endblock %}
 {% block content %}
+    {% if user %}
+    <div class="fixed top-24 right-4 z-30 flex items-center gap-2">
+        <form method="POST" action="{{ url_for('main.upload_background') }}" enctype="multipart/form-data">
+            <label class="btn-secondary px-4 py-2.5 rounded-xl text-sm inline-flex items-center gap-2 cursor-pointer shadow-lg">
+                <i data-lucide="image-plus" class="w-4 h-4"></i>
+                更换背景
+                <input type="file" name="background" accept="image/png,image/jpeg,image/gif,image/webp" required class="hidden" onchange="this.form.submit()">
+            </label>
+        </form>
+        {% if user.background_key %}
+        <form method="POST" action="{{ url_for('main.delete_background') }}">
+            <button type="submit" class="btn-secondary p-2.5 rounded-xl shadow-lg" title="恢复默认背景">
+                <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+            </button>
+        </form>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+    <div class="fixed top-40 right-4 z-40 max-w-sm p-4 rounded-xl text-sm shadow-xl {% if category == 'error' %}bg-red-900/90 border border-red-500/40 text-red-200{% else %}bg-green-900/90 border border-green-500/40 text-green-200{% endif %}">
+        {{ message }}
+    </div>
+    {% endfor %}
+    {% endwith %}
+
     <!-- Hero Section -->
     <section class="hero-bg min-h-screen flex items-center justify-center relative">
         <div class="max-w-5xl mx-auto px-6 text-center relative z-10 pt-20 lg:pt-24">

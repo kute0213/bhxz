@@ -33,9 +33,11 @@
                 <h1 class="text-2xl sm:text-3xl font-bold mb-2">账户设置</h1>
                 <p class="text-cream/60">管理你的账户信息</p>
                 <div class="mt-4 flex items-center justify-center gap-2">
-                    <div class="w-10 h-10 bg-gold-400/20 rounded-full flex items-center justify-center text-lg font-bold text-gold-400">
-                        {{ user.username[0] }}
-                    </div>
+                    {% if user.avatar_key %}
+                    <img src="{{ url_for('main.user_avatar', user_id=user.id) }}" alt="当前头像" class="w-10 h-10 rounded-full object-cover border border-gold-400/30">
+                    {% else %}
+                    <div class="w-10 h-10 bg-gold-400/20 rounded-full flex items-center justify-center text-lg font-bold text-gold-400">{{ user.username[0] }}</div>
+                    {% endif %}
                     <span class="text-lg font-medium break-all">{{ user.username }}</span>
                     {% if user.is_admin %}<span class="text-xs bg-red-500/20 text-red-300 px-2 py-0.5 rounded">服主</span>{% endif %}
                 </div>
@@ -55,6 +57,9 @@
             {% endwith %}
 
             <div class="flex gap-2 mb-6 border-b border-forest-700 pb-2 flex-wrap">
+                <button class="tab-btn px-4 py-2 rounded-lg text-sm font-medium transition-all border-2 border-transparent" data-tab="avatar">
+                    <i data-lucide="image" class="w-4 h-4 inline mr-1"></i>头像
+                </button>
                 <button class="tab-btn active px-4 py-2 rounded-lg text-sm font-medium transition-all border-2 border-transparent" data-tab="username">
                     <i data-lucide="user" class="w-4 h-4 inline mr-1"></i>修改用户名
                 </button>
@@ -67,6 +72,33 @@
                 <button class="tab-btn px-4 py-2 rounded-lg text-sm font-medium transition-all border-2 border-transparent" data-tab="delete">
                     <i data-lucide="trash-2" class="w-4 h-4 inline mr-1"></i>注销账号
                 </button>
+            </div>
+
+            <div id="tab-avatar" class="tab-content">
+                <div class="pixel-card rounded-xl p-6">
+                    <h2 class="text-xl font-bold mb-4 flex items-center gap-2">
+                        <i data-lucide="image" class="w-5 h-5 text-gold-400"></i>账户头像
+                    </h2>
+                    <p class="text-cream/60 text-sm mb-6">支持 PNG、JPG、GIF、WebP，最大 10MB；上传后会裁剪为正方形并安全存入 MinIO。</p>
+                    <div class="flex flex-col sm:flex-row items-center gap-6 mb-6">
+                        {% if user.avatar_key %}
+                        <img src="{{ url_for('main.user_avatar', user_id=user.id) }}" alt="当前头像" class="w-28 h-28 rounded-2xl object-cover border border-gold-400/30 shadow-lg">
+                        {% else %}
+                        <div class="w-28 h-28 rounded-2xl bg-gold-400/20 flex items-center justify-center text-4xl font-bold text-gold-400">{{ user.username[0] }}</div>
+                        {% endif %}
+                        <div class="flex-1 w-full">
+                            <form method="POST" action="{{ url_for('main.upload_avatar') }}" enctype="multipart/form-data" class="space-y-4">
+                                <input type="file" name="avatar" required accept="image/png,image/jpeg,image/gif,image/webp" class="input-field w-full px-4 py-3 rounded-lg">
+                                <button type="submit" class="btn-primary w-full py-3 rounded-lg font-bold">上传新头像</button>
+                            </form>
+                            {% if user.avatar_key %}
+                            <form method="POST" action="{{ url_for('main.delete_avatar') }}" class="mt-3">
+                                <button type="submit" class="btn-secondary w-full py-2.5 rounded-lg text-sm">恢复默认头像</button>
+                            </form>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <div id="tab-username" class="tab-content active">

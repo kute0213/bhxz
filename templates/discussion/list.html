@@ -63,7 +63,11 @@
                     </div>
                     <div class="flex items-center gap-3 mt-2 text-xs text-cream/50">
                         <span class="flex items-center gap-1">
+                            {% if topic.avatar_key %}
+                            <img src="{{ url_for('main.user_avatar', user_id=topic.user_id) }}" alt="" class="w-4 h-4 rounded-full object-cover">
+                            {% else %}
                             <i data-lucide="user" class="w-3 h-3"></i>
+                            {% endif %}
                             {{ topic.username }}
                         </span>
                         <span>{{ topic.created_at[:10] }}</span>

@@ -122,7 +122,7 @@ def get_topics_page(category_id, page):
     try:
         if category_id:
             rows = conn.execute(
-                """SELECT t.*, u.username, c.name AS category_name,
+                """SELECT t.*, u.username, u.avatar_key, c.name AS category_name,
                           (SELECT COUNT(*) FROM discussion_replies r WHERE r.topic_id = t.id) AS reply_count
                    FROM discussion_topics t
                    JOIN users u ON t.user_id = u.id
@@ -134,7 +134,7 @@ def get_topics_page(category_id, page):
             ).fetchall()
         else:
             rows = conn.execute(
-                """SELECT t.*, u.username, c.name AS category_name,
+                """SELECT t.*, u.username, u.avatar_key, c.name AS category_name,
                           (SELECT COUNT(*) FROM discussion_replies r WHERE r.topic_id = t.id) AS reply_count
                    FROM discussion_topics t
                    JOIN users u ON t.user_id = u.id
@@ -159,7 +159,7 @@ def get_topic_detail(topic_id):
     conn = get_db()
     try:
         topic = conn.execute(
-            """SELECT t.*, u.username
+            """SELECT t.*, u.username, u.avatar_key
                FROM discussion_topics t
                JOIN users u ON t.user_id = u.id
                WHERE t.id = ?""",
@@ -472,7 +472,7 @@ def get_replies_page(topic_id, page):
 
         offset = (page - 1) * per_page
         rows = conn.execute(
-            """SELECT r.id, r.content, r.attachment, r.created_at, r.user_id, u.username
+            """SELECT r.id, r.content, r.attachment, r.created_at, r.user_id, u.username, u.avatar_key
                FROM discussion_replies r
                JOIN users u ON r.user_id = u.id
                WHERE r.topic_id = ?
@@ -501,7 +501,7 @@ def get_new_replies(topic_id, last_id):
     conn = get_db()
     try:
         rows = conn.execute(
-            """SELECT r.id, r.content, r.attachment, r.created_at, r.user_id, u.username
+            """SELECT r.id, r.content, r.attachment, r.created_at, r.user_id, u.username, u.avatar_key
                FROM discussion_replies r
                JOIN users u ON r.user_id = u.id
                WHERE r.topic_id = ? AND r.id > ?
