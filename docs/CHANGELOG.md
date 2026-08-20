@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### 移除
+- **彻底删除 MinIO 对象存储**：移除 `services/object_storage.py`、`config.py` 中 MinIO 相关配置、`app.py` 中 MinIO 初始化检查、`routes/main/media.py` 中 MinIO 引用改为本地文件存储、`services/user_service.py` 中 MinIO 清理逻辑改为本地文件清理、`requirements.txt` 中 `minio` 依赖；删除 `.env.example` 和 `docs/MINIO.md`
+- **移除系统设置中的背景图片开关**：从 `SETTINGS_REGISTRY` 中移除 `ENABLE_BACKGROUND_IMAGE` 和 `BACKGROUND_FADE_IN_MS`，首页背景只保留上传按钮 + 图片预览弹窗
+
+### 优化
+- **首页背景图片交互优化**：上传改用 XHR 异步 + 进度条，新增预览弹窗，点击预览按钮即可查看大图
+- **全站文件上传进度条**：全局进度条自动拦截所有 `multipart/form-data` 表单提交，显示实时上传进度
+- **指南卡片金色上边框优化**：渐变两端淡出，增加柔光晕效果，与玻璃质感卡片更融合
+
 ### 重构
 - **终端彻底升级为 xterm.js**：用业界标准的分享终端模块 `terminal-xterm.js` 替代旧版自制 ANSI 字符网格渲染器，彻底修复「回车只输入不执行」「字符排版错乱」。字符绘制、光标、清屏、行宽、输入回显与本地终端完全一致；输入走 `term.onData` 将原始字节直送后端 PTY 驱动，回车即可执行；尺寸自适应（`xterm-addon-fit`）将行列数同步到 PTY，避免换行错位与黑屏
 - **「CMD」全面改名为「脚本」**：后端包 `routes/cmd`→`routes/script`、蓝图 `cmd_bp`→`script_bp`、URL `/admin/cmd*`→`/admin/script*`，前端 `static/js/cmd`→`static/js/script`、模板 `admin_cmd_*.html`→`admin_script_*.html`，同步更新快捷命令/定时任务/终端/编辑器全部入口与可见文案，并同步测试用例与文档

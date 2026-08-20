@@ -363,7 +363,7 @@ def init_db():
     add_column_if_not_exists('scheduled_tasks', 'timeout_seconds', 'INTEGER DEFAULT NULL')
     # 用户表添加 email 列
     add_column_if_not_exists('users', 'email', "VARCHAR DEFAULT ''")
-    # 用户头像只保存 MinIO 对象键，图片内容不写入数据库。
+# 用户头像与个性背景只保存本地文件路径，图片内容不写入数据库。
     add_column_if_not_exists('users', 'avatar_key', "VARCHAR DEFAULT ''")
 
     

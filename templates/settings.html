@@ -79,7 +79,7 @@
                     <h2 class="text-xl font-bold mb-4 flex items-center gap-2">
                         <i data-lucide="image" class="w-5 h-5 text-gold-400"></i>账户头像
                     </h2>
-                    <p class="text-cream/60 text-sm mb-6">支持 PNG、JPG、GIF、WebP，最大 10MB；上传后会裁剪为正方形并安全存入 MinIO。</p>
+                    <p class="text-cream/60 text-sm mb-6">支持 PNG、JPG、GIF、WebP，最大 10MB；上传后会裁剪为正方形并安全存储。</p>
                     <div class="flex flex-col sm:flex-row items-center gap-6 mb-6">
                         {% if user.avatar_key %}
                         <img src="{{ url_for('main.user_avatar', user_id=user.id) }}" alt="当前头像" class="w-28 h-28 rounded-2xl object-cover border border-gold-400/30 shadow-lg">

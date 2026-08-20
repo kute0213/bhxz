@@ -15,19 +15,7 @@ UPLOAD_COMMUNITY_DIR = os.path.join(UPLOAD_DIR, 'community')
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'pdf', 'txt', 'zip', 'rar', '7z', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'mp4', 'mp3', 'wav'}
 MAX_CONTENT_LENGTH = 100 * 1024 * 1024
 
-# ---------------------------------------------------------------------------
-# MinIO 对象存储配置
-# ---------------------------------------------------------------------------
-
-# 网站运行在宿主机时使用 127.0.0.1:9000；运行在 Docker 且加入
-# binhai-internal 网络时，通过环境变量改为 minio:9000。
-MINIO_ENDPOINT = os.environ.get('MINIO_ENDPOINT', '127.0.0.1:9000').strip()
-MINIO_ACCESS_KEY = os.environ.get('MINIO_ACCESS_KEY', '').strip()
-MINIO_SECRET_KEY = os.environ.get('MINIO_SECRET_KEY', '').strip()
-MINIO_BUCKET = os.environ.get('MINIO_BUCKET', 'binhai').strip()
-MINIO_SECURE = os.environ.get('MINIO_SECURE', '0').lower() in ('1', 'true', 'yes', 'on')
-
-# 用户图片只允许常见静态格式，上传后会统一转换为 WebP 再写入 MinIO。
+# 用户图片（头像/背景）最大字节数
 USER_IMAGE_MAX_BYTES = 10 * 1024 * 1024
 # 全站首页背景图库的 MinIO 对象前缀。
 SITE_BACKGROUND_PREFIX = 'site/backgrounds/'
@@ -94,27 +82,7 @@ BACKUP_CLEAN_LOGS = True
 # 数据库优化时是否执行 CHECKPOINT （将 WAL 合并到主文件，减少文件大小）
 BACKUP_CHECKPOINT = True
 
-# ---------------------------------------------------------------------------
-# MiniScript 脚本执行引擎配置
-# ---------------------------------------------------------------------------
-
-# 脚本执行器并发数量限制（同时运行的脚本子进程数）
-SCRIPT_EXECUTOR_POOL_SIZE = 2
-
-# ---------------------------------------------------------------------------
-# 脚本存储配置
-# ---------------------------------------------------------------------------
-
-# MiniScript 脚本文件后缀
-SCRIPT_MS_EXTENSION = '.py'
-
-# Shell 命令脚本文件后缀（None 表示自动检测：Windows 用 .bat，其他用 .sh）
-SCRIPT_SHELL_EXTENSION = None  # None = 自动检测
-
-# 脚本文件名日期格式（用于自动生成文件名）
-SCRIPT_FILENAME_DATE_FORMAT = '%Y%m%d'
-
-# ---------------------------------------------------------------------------
+# ===========================================================================
 # 安全配置
 # ---------------------------------------------------------------------------
 
@@ -202,16 +170,6 @@ MAP_URL = 'https://map.bhxz.tw.kg'
 QQ_GROUP_URL = 'https://qun.qq.com/universal-share/share?ac=1&authKey=rMtk0BTqbTh2Dx%2BwtNX3GwhYs4NEZDPuKTO0UBHc6X2r55iPkda3lmuA9Styubor&busi_data=eyJncm91cENvZGUiOiI1OTY3OTQxMTIiLCJ0b2tlbiI6IkNUajRvZ0NJQ1dzQ3lZb0FBSzdRSElFQXdqOWZaZy9QSFRlajhuMGpIeUU5bkNyQnA1WGloQW0zcFVReXJpakoiLCJ1aW4iOiIzODQ2NDE1NDczIn0%3D&data=U8tnRnk8Yo1OQFedRkDUVccnyfIRXgZja1nQxv60UTRAphySRL7G3XPXtqrubu0Th2TJ4Q_l-BgqRjikCRI5_Q&svctype=4&tempid=h5_group_info'
 
 # ---------------------------------------------------------------------------
-# 背景图片配置
-# ---------------------------------------------------------------------------
-
-# 是否启用背景图片（关闭后显示默认玻璃光晕背景）
-ENABLE_BACKGROUND_IMAGE = False
-
-# 背景图片淡入过渡时间（毫秒）
-BACKGROUND_FADE_IN_MS = 800
-
-# ---------------------------------------------------------------------------
 # 设置注册表 —— 定义哪些配置可以通过管理后台在线编辑
 # ---------------------------------------------------------------------------
 
@@ -236,12 +194,9 @@ SETTINGS_REGISTRY = [
     ('BACKUP_CLEAN_LOGS', True, 'bool', '备份前清理日志', '执行备份前自动清理过期日志', '数据库备份'),
     ('BACKUP_CHECKPOINT', True, 'bool', '备份前执行 CHECKPOINT', '将 WAL 合并到主文件，减小数据库体积', '数据库备份'),
 
-    # Sitemap
+# Sitemap
     ('SITEMAP_REFRESH_TIME', '03:00', 'time', 'Sitemap 刷新时间', '站点地图每天自动刷新的时间（HH:MM 格式）', 'Sitemap'),
     ('SITE_URL', 'http://localhost:5000', 'str', '站点域名', 'Sitemap 中使用的完整域名（含协议和端口，如 https://bhxz.tw.kg）', 'Sitemap'),
-
-    # 脚本执行
-    ('SCRIPT_EXECUTOR_POOL_SIZE', 2, 'int', '脚本执行并发数', '同时运行的脚本子进程数上限', '脚本执行'),
 
     # 安全
     ('SESSION_LIFETIME', 604800, 'int', '会话有效期（秒）', '登录会话过期时间，默认 7 天', '安全配置'),
@@ -279,10 +234,7 @@ SETTINGS_REGISTRY = [
     ('DEBUG_MODE', False, 'bool', '调试模式', '开启后显示详细错误信息和自动重载', '服务器配置'),
     ('WORKER_THREADS', 4, 'int', '工作线程数', '处理请求的工作线程数量', '服务器配置'),
 
-    # 背景图片
-    ('ENABLE_BACKGROUND_IMAGE', False, 'bool', '启用背景图片', '开启后全站显示自定义背景图片，关闭则显示默认玻璃光晕背景', '背景图片'),
-    ('BACKGROUND_FADE_IN_MS', 800, 'int', '背景淡入过渡（毫秒）', '背景图片加载后的淡入过渡时间', '背景图片'),
-]
+    ]
 
 
 def get_config_value(key: str, default=None):

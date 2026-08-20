@@ -1,34 +1,48 @@
-"""用户头像与全站主页背景路由。"""
+"""用户头像与主页背景路由（本地文件存储）。"""
 
+import os
 from io import BytesIO
 
-from flask import abort, flash, redirect, request, send_file, url_for
+from flask import abort, current_app, flash, redirect, request, send_file, url_for
 
+from config import UPLOAD_DIR, USER_IMAGE_MAX_BYTES
 from core.auth import get_current_user, login_required
 from core.db import get_db
 from config import SITE_BACKGROUND_PREFIX
 from routes.main import main_bp
 from services.logger import log
-from services.object_storage import ObjectStorageError, object_storage
-from services.settings_manager import get_setting
+from PIL import Image, ImageOps, UnidentifiedImageError
+
+_MEDIA_DIR = os.path.join(UPLOAD_DIR, 'media')
+_IMAGE_SPECS = {
+    'avatar': {'size': (512, 512), 'quality': 88, 'crop': True},
+    'background': {'size': (2560, 1440), 'quality': 90, 'crop': False},
+}
+
+
+def _user_media_dir(user_id):
+    d = os.path.join(_MEDIA_DIR, str(user_id))
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
+def _media_path(user_id, kind):
+    return os.path.join(_user_media_dir(user_id), f'{kind}.webp')
 
 
 def _update_user_object_key(user_id, column, object_key):
-    """仅允许更新已声明的用户图片列。"""
-    if column != 'avatar_key':
+    if column not in ('avatar_key', 'background_key'):
         raise ValueError('非法的用户图片字段')
     with get_db() as conn:
         conn.execute(f'UPDATE users SET {column} = ? WHERE id = ?', (object_key, user_id))
 
 
-def _serve_private_image(object_key, filename):
-    try:
-        data, content_type = object_storage.get_object(object_key)
-    except ObjectStorageError:
+def _serve_local_image(filepath, filename):
+    if not os.path.isfile(filepath):
         abort(404)
     response = send_file(
-        BytesIO(data),
-        mimetype=content_type,
+        filepath,
+        mimetype='image/webp',
         download_name=filename,
         max_age=0,
     )
@@ -39,43 +53,69 @@ def _serve_private_image(object_key, filename):
 
 @main_bp.route('/media/avatar/<int:user_id>')
 def user_avatar(user_id):
-    """通过站内代理读取用户头像，MinIO Bucket 无需公开。"""
     with get_db() as conn:
         row = conn.execute('SELECT avatar_key FROM users WHERE id = ?', (user_id,)).fetchone()
     if not row or not row['avatar_key']:
         abort(404)
-    return _serve_private_image(row['avatar_key'], f'avatar-{user_id}.webp')
+    return _serve_local_image(row['avatar_key'], f'avatar-{user_id}.webp')
 
 
-@main_bp.route('/media/site-background')
-def site_background():
-    """读取管理员配置的全站首页背景。"""
-    object_key = get_setting('SITE_BACKGROUND_ACTIVE_KEY', '')
-    if not _is_site_background_key(object_key):
+@main_bp.route('/media/background')
+@login_required
+def user_background():
+    user = get_current_user()
+    if not user or not user.get('background_key'):
         abort(404)
-    response = _serve_private_image(object_key, 'site-background.webp')
-    response.headers['Cache-Control'] = 'public, max-age=86400'
-    return response
+    return _serve_local_image(user['background_key'], f'background-{user["id"]}.webp')
 
 
-def _is_site_background_key(object_key):
-    """限制只能读取站点背景图库中的 WebP 对象。"""
-    return bool(
-        object_key
-        and object_key.startswith(SITE_BACKGROUND_PREFIX)
-        and object_key.endswith('.webp')
-    )
+def _read_upload(upload):
+    if not upload or not upload.filename:
+        raise ValueError('请选择图片')
+
+    raw = upload.stream.read(USER_IMAGE_MAX_BYTES + 1)
+    if not raw:
+        raise ValueError('上传的图片为空')
+    if len(raw) > USER_IMAGE_MAX_BYTES:
+        raise ValueError('图片不能超过 10MB')
+    return raw
 
 
-@main_bp.route('/media/site-background-option')
-def site_background_option():
-    """读取管理后台图库预览图。"""
-    object_key = (request.args.get('key') or '').strip()
-    if not _is_site_background_key(object_key):
-        abort(404)
-    response = _serve_private_image(object_key, 'site-background-option.webp')
-    response.headers['Cache-Control'] = 'public, max-age=86400'
-    return response
+def _convert_image(upload, kind):
+    spec = _IMAGE_SPECS.get(kind)
+    if not spec:
+        raise ValueError('不支持的图片类型')
+
+    raw = _read_upload(upload)
+    try:
+        image = Image.open(BytesIO(raw))
+        if image.width * image.height > 40_000_000:
+            raise ValueError('图片像素过大，请压缩后重试')
+        image.verify()
+        image = Image.open(BytesIO(raw))
+        image = ImageOps.exif_transpose(image)
+        image.load()
+    except ValueError:
+        raise
+    except Image.DecompressionBombError as exc:
+        raise ValueError('图片像素过大，请压缩后重试') from exc
+    except (UnidentifiedImageError, OSError, ValueError) as exc:
+        raise ValueError('文件不是有效的图片') from exc
+
+    if spec['crop']:
+        image = ImageOps.fit(image, spec['size'], method=Image.Resampling.LANCZOS)
+    else:
+        image.thumbnail(spec['size'], Image.Resampling.LANCZOS)
+
+    if image.mode not in ('RGB', 'RGBA'):
+        image = image.convert('RGBA' if 'transparency' in image.info else 'RGB')
+
+    output = BytesIO()
+    image.save(output, format='WEBP', quality=spec['quality'], method=6)
+    data = output.getvalue()
+    if not data:
+        raise ValueError('图片处理失败')
+    return data
 
 
 @main_bp.route('/settings/avatar', methods=['POST'])
@@ -83,11 +123,14 @@ def site_background_option():
 def upload_avatar():
     user = get_current_user()
     try:
-        object_key = object_storage.save_user_image(user['id'], 'avatar', request.files.get('avatar'))
-        _update_user_object_key(user['id'], 'avatar_key', object_key)
+        data = _convert_image(request.files.get('avatar'), 'avatar')
+        filepath = _media_path(user['id'], 'avatar')
+        with open(filepath, 'wb') as f:
+            f.write(data)
+        _update_user_object_key(user['id'], 'avatar_key', filepath)
         log('UserMedia', '用户头像上传成功', user_id=user['id'], username=user['username'])
         flash('头像更新成功！', 'success')
-    except ObjectStorageError as exc:
+    except ValueError as exc:
         log('UserMedia', '用户头像上传失败', user_id=user['id'], error=str(exc))
         flash(str(exc), 'error')
     return redirect(url_for('main.settings', tab='avatar'))
@@ -98,11 +141,45 @@ def upload_avatar():
 def delete_avatar():
     user = get_current_user()
     try:
-        object_storage.delete_object(user.get('avatar_key'))
+        filepath = user.get('avatar_key', '')
+        if filepath and os.path.isfile(filepath):
+            os.remove(filepath)
         _update_user_object_key(user['id'], 'avatar_key', '')
         flash('头像已恢复为默认样式', 'success')
-    except ObjectStorageError as exc:
+    except Exception as exc:
         log('UserMedia', '用户头像删除失败', user_id=user['id'], error=str(exc))
         flash('头像删除失败，请稍后重试', 'error')
     return redirect(url_for('main.settings', tab='avatar'))
 
+@main_bp.route('/home/background', methods=['POST'])
+@login_required
+def upload_background():
+    user = get_current_user()
+    try:
+        data = _convert_image(request.files.get('background'), 'background')
+        filepath = _media_path(user['id'], 'background')
+        with open(filepath, 'wb') as f:
+            f.write(data)
+        _update_user_object_key(user['id'], 'background_key', filepath)
+        log('UserMedia', '主页背景上传成功', user_id=user['id'], username=user['username'])
+        flash('主页背景更新成功！', 'success')
+    except ValueError as exc:
+        log('UserMedia', '主页背景上传失败', user_id=user['id'], error=str(exc))
+        flash(str(exc), 'error')
+    return redirect(url_for('main.home'))
+
+
+@main_bp.route('/home/background/delete', methods=['POST'])
+@login_required
+def delete_background():
+    user = get_current_user()
+    try:
+        filepath = user.get('background_key', '')
+        if filepath and os.path.isfile(filepath):
+            os.remove(filepath)
+        _update_user_object_key(user['id'], 'background_key', '')
+        flash('主页背景已恢复为默认样式', 'success')
+    except Exception as exc:
+        log('UserMedia', '主页背景删除失败', user_id=user['id'], error=str(exc))
+        flash('背景删除失败，请稍后重试', 'error')
+    return redirect(url_for('main.home'))

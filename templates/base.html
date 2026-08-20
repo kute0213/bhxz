@@ -37,14 +37,12 @@
 
         // 背景图片：根据屏幕比例自动加载匹配图片
         var pageBackgroundUrl = {{ page_background_url|default('', true)|tojson }};
-        var bgEnabled = {{ 'true' if ENABLE_BACKGROUND_IMAGE else 'false' }} || Boolean(pageBackgroundUrl);
-        if (bgEnabled) {
+        if (pageBackgroundUrl) {
             (function initBackgroundWhenReady() {
                 function initBackground() {
                 var layer = document.getElementById('bg-image-layer');
                 if (!layer) return;
-                var fadeMs = {{ BACKGROUND_FADE_IN_MS }};
-                layer.style.transition = 'opacity ' + (fadeMs || 800) + 'ms ease';
+                layer.style.transition = 'opacity 800ms ease';
 
                 function loadBg() {
                     var w = window.innerWidth;
@@ -66,7 +64,6 @@
                         layer.classList.add('loaded');
                     };
                     img.onerror = function() {
-                        // 加载失败：静默降级，不显示背景图片
                         layer.style.display = 'none';
                     };
                     img.src = pageBackgroundUrl || ('/background/' + ratioKey);
@@ -94,12 +91,12 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css', v='18') }}">
     {% block extra_style %}{% endblock %}
 </head>
-<body{% if ENABLE_BACKGROUND_IMAGE or page_background_url|default('', true) %} class="has-background-image"{% endif %}>
+<body{% if page_background_url|default('', true) %} class="has-background-image"{% endif %}>
     <!-- 鼠标跟随光晕 -->
     <div class="mouse-glow" id="mouse-glow"></div>
 
     <!-- 背景图片（仅在启用时显示，位于 bg-orbs 下方） -->
-    {% if ENABLE_BACKGROUND_IMAGE or page_background_url|default('', true) %}
+    {% if page_background_url|default('', true) %}
     <div class="bg-image-layer" id="bg-image-layer"></div>
     {% endif %}
 

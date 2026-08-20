@@ -15,7 +15,7 @@ from services.email import normalize_email, email_code_service
 from services.ratelimit import register_limiter, login_limiter
 from services.logger import log
 from services.attachment_service import clean_attachment_json
-from services.object_storage import ObjectStorageError, object_storage
+
 
 
 # ---------------------------------------------------------------------------
@@ -46,7 +46,7 @@ def _clean_user_attachments(conn, user_id):
 
 
 def _get_user_media_keys(conn, user_id):
-    """读取账号关联的 MinIO 对象键，供数据库提交后清理。"""
+    """读取账号关联的图片文件路径，供数据库提交后清理。"""
     row = conn.execute(
         "SELECT avatar_key FROM users WHERE id = ?", (user_id,)
     ).fetchone()
@@ -56,13 +56,15 @@ def _get_user_media_keys(conn, user_id):
 
 
 def _clean_user_media(keys, user_id):
-    """账号删除成功后清理 MinIO 图片；异常不回滚已完成的账号注销。"""
-    for object_key in keys:
+    """账号删除成功后清理本地图片文件；异常不回滚已完成的账号注销。"""
+    import os
+    for filepath in keys:
         try:
-            object_storage.delete_object(object_key)
-        except ObjectStorageError as exc:
+            if filepath and os.path.isfile(filepath):
+                os.remove(filepath)
+        except Exception as exc:
             log('UserMedia', '账号图片清理失败', user_id=user_id,
-                object_key=object_key, error=str(exc))
+                filepath=filepath, error=str(exc))
 
 
 # ---------------------------------------------------------------------------

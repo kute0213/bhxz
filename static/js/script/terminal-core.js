@@ -1,7 +1,7 @@
 /**
  * terminal-core.js — 终端核心逻辑复用库
  *
- * 抽取 terminal.js 与 editor-terminal.js 的公共部分：
+ * 终端核心逻辑：
  *   - ANSI 颜色/样式解析与 CSS 生成
  *   - 终端输出缓冲区（含 \r / \n / \b / \x0c / ANSI 控制序列处理）
  *   - SSE 连接管理（连接、断线重连、心跳看门狗、待发送队列）
