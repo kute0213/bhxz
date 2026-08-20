@@ -199,7 +199,7 @@
             <!-- 移动端底部按钮 -->
             <div class="mt-8 space-y-3">
                 {% if user %}
-                <a href="{{ url_for('main.logout') }}" class="flex items-center justify-center gap-2 w-full px-4 py-3 rounded-lg text-red-300 border border-red-500/20 hover:bg-red-500/10 transition-colors">
+                <a href="{{ url_for('main.logout') }}" data-logout-confirm class="flex items-center justify-center gap-2 w-full px-4 py-3 rounded-lg text-red-300 border border-red-500/20 hover:bg-red-500/10 transition-colors">
                     <i data-lucide="log-out" class="w-5 h-5"></i>
                     <span>退出登录</span>
                 </a>
@@ -269,7 +269,7 @@
                     <a href="{{ url_for('main.settings') }}" class="text-cream/60 hover:text-gold-400 text-sm transition-colors">
                         <i data-lucide="settings" class="w-5 h-5"></i>
                     </a>
-                    <a href="{{ url_for('main.logout') }}" class="text-red-300 hover:text-red-400 text-sm transition-colors">
+                    <a href="{{ url_for('main.logout') }}" data-logout-confirm class="text-red-300 hover:text-red-400 text-sm transition-colors">
                         退出
                     </a>
                     {% else %}
@@ -294,7 +294,7 @@
                     <a href="{{ url_for('main.settings') }}" class="text-cream/60 hover:text-gold-400 transition-colors p-1">
                         <i data-lucide="settings" class="w-5 h-5"></i>
                     </a>
-                    <a href="{{ url_for('main.logout') }}" class="text-red-300 hover:text-red-400 text-sm">退出</a>
+                    <a href="{{ url_for('main.logout') }}" data-logout-confirm class="text-red-300 hover:text-red-400 text-sm">退出</a>
                     {% else %}
                     <a href="{{ url_for('main.login') }}" class="btn-secondary px-3 py-1.5 rounded-lg text-sm">登录</a>
                     <a href="{{ url_for('main.register') }}" class="btn-primary px-3 py-1.5 rounded-lg text-sm font-bold">注册</a>
@@ -377,7 +377,7 @@
         </div>
     </div>
 
-    <script src="{{ url_for('static', filename='js/base.js', v='14') }}"></script>
+    <script src="{{ url_for('static', filename='js/base.js', v='15') }}"></script>
     <script src="{{ url_for('static', filename='js/main.js', v='11') }}"></script>
     {% if login_welcome_username %}
     <script>

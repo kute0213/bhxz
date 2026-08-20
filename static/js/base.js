@@ -537,6 +537,32 @@ var Toast = (function () {
     };
 })();
 
+// ============================================
+// 退出登录确认：取消时保留当前会话，确认后才跳转退出路由
+// ============================================
+(function initLogoutConfirm() {
+    document.querySelectorAll('a[data-logout-confirm]').forEach(function (link) {
+        link.addEventListener('click', function (e) {
+            e.preventDefault();
+            // 阻止全站页面跳转动画提前访问 logout，必须等待用户明确确认。
+            e.stopPropagation();
+
+            CustomModal.confirm('退出后需要重新登录，是否确认退出？', {
+                title: '退出登录',
+                type: 'question',
+                confirmText: '确认',
+                cancelText: '取消',
+                trigger: link,
+                callback: function (confirmed) {
+                    if (confirmed) {
+                        window.location.href = link.href;
+                    }
+                }
+            });
+        });
+    });
+})();
+
 (function initCustomConfirm() {
     function processForm(form) {
         var onsubmit = form.getAttribute('onsubmit');
