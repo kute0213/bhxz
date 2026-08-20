@@ -1,7 +1,9 @@
 from functools import wraps
 import hashlib
+import hmac
 from flask import session, redirect, url_for, request, g, jsonify, abort
 from core.db import get_db
+from werkzeug.security import check_password_hash, generate_password_hash
 
 
 def _is_json_request():
@@ -15,8 +17,8 @@ def _is_json_request():
 
 
 def hash_password(password: str) -> str:
-    """统一密码哈希算法（SHA-256）。"""
-    return hashlib.sha256(password.encode('utf-8')).hexdigest()
+    """使用带随机盐的自适应算法生成密码哈希。"""
+    return generate_password_hash(password, method='scrypt')
 
 
 def validate_password(password: str) -> str | None:
@@ -29,8 +31,16 @@ def validate_password(password: str) -> str | None:
 
 
 def verify_password(password: str, password_hash: str) -> bool:
-    """校验密码是否匹配哈希值。"""
-    return hash_password(password) == password_hash
+    """校验密码，并兼容历史版本保存的 SHA-256 哈希。"""
+    if not password_hash:
+        return False
+    if len(password_hash) == 64 and all(c in '0123456789abcdef' for c in password_hash.lower()):
+        legacy_hash = hashlib.sha256(password.encode('utf-8')).hexdigest()
+        return hmac.compare_digest(legacy_hash, password_hash)
+    try:
+        return check_password_hash(password_hash, password)
+    except (TypeError, ValueError):
+        return False
 
 
 def login_required(f):
@@ -82,7 +92,8 @@ def get_current_user():
     conn = get_db()
     try:
         user = conn.execute(
-            "SELECT id, username, email, is_admin FROM users WHERE id = ?",
+            "SELECT id, username, email, avatar_key, background_key, is_admin "
+            "FROM users WHERE id = ?",
             (session['user_id'],),
         ).fetchone()
     finally:

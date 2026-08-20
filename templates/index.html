@@ -9,32 +9,32 @@
         .hero-bg::before {
             content: '';
             position: absolute; top: 0; left: 0; right: 0; bottom: 0;
-            background: radial-gradient(ellipse at center top, rgba(244, 208, 63, 0.04), transparent 60%);
+            background: radial-gradient(ellipse at center top, rgba(103, 232, 249, 0.10), transparent 60%);
             pointer-events: none;
         }
-        .glow-text { text-shadow: 0 0 20px rgba(244, 208, 63, 0.35), 0 0 40px rgba(244, 208, 63, 0.2); }
+        .glow-text { text-shadow: 0 0 22px rgba(103, 232, 249, 0.24), 0 0 46px rgba(139, 92, 246, 0.14); }
         .section-fade { opacity: 0; transform: translateY(28px); transition: opacity 0.5s ease, transform 0.5s cubic-bezier(0.4, 0, 0.2, 1); }
         .section-fade.visible { opacity: 1; transform: translateY(0); }
         .feature-icon {
             width: 52px; height: 52px; display: flex; align-items: center; justify-content: center;
-            background: linear-gradient(135deg, rgba(244, 208, 63, 0.08) 0%, rgba(244, 208, 63, 0.04) 100%);
+            background: linear-gradient(135deg, rgba(103, 232, 249, 0.13), rgba(139, 92, 246, 0.12));
             backdrop-filter: blur(12px) saturate(110%);
             -webkit-backdrop-filter: blur(12px) saturate(110%);
-            border: 1px solid rgba(244, 208, 63, 0.12);
-            border-radius: 16px !important;
-            box-shadow: inset 0 0.5px 0 rgba(255, 255, 255, 0.06), 0 2px 12px rgba(0, 0, 0, 0.12);
+            border: 1px solid rgba(103, 232, 249, 0.20);
+            border-radius: 14px !important;
+            box-shadow: none;
             position: relative;
             overflow: hidden;
         }
         .highlight-card {
-            background: linear-gradient(145deg, rgba(10, 24, 16, 0.15) 0%, rgba(15, 30, 20, 0.08) 50%, rgba(10, 24, 16, 0.15) 100%);
-            backdrop-filter: blur(40px) saturate(100%);
-            -webkit-backdrop-filter: blur(40px) saturate(100%);
-            border: 1px solid rgba(255, 255, 255, 0.03);
-            border-radius: 24px !important;
+            background: linear-gradient(145deg, rgba(71, 82, 103, 0.97) 0%, rgba(55, 65, 84, 0.97) 100%);
+            backdrop-filter: blur(24px) saturate(105%);
+            -webkit-backdrop-filter: blur(24px) saturate(105%);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: 18px !important;
             box-shadow:
-                0 8px 32px rgba(0, 0, 0, 0.18),
-                inset 0 0.5px 0 rgba(255, 255, 255, 0.06);
+                0 12px 30px rgba(18, 22, 31, 0.22),
+                inset 0 1px 0 rgba(255, 255, 255, 0.08);
             position: relative; overflow: hidden;
             transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
         }
@@ -43,37 +43,69 @@
             background: linear-gradient(180deg, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0) 100%);
         }
         .highlight-card:hover {
-            border-color: rgba(244, 208, 63, 0.3);
+            border-color: rgba(103, 232, 249, 0.30);
             transform: translateY(-4px);
             box-shadow:
-                0 20px 56px rgba(0, 0, 0, 0.4),
-                0 0 30px rgba(244, 208, 63, 0.08),
+                0 18px 42px rgba(16, 20, 29, 0.30),
+                0 0 22px rgba(103, 232, 249, 0.07),
                 inset 0 1px 0 rgba(255, 255, 255, 0.14);
+        }
+        body.has-background-image .highlight-card {
+            background: linear-gradient(145deg, rgba(68, 79, 100, 0.87), rgba(51, 61, 80, 0.89));
+            backdrop-filter: blur(30px) saturate(112%);
+            -webkit-backdrop-filter: blur(30px) saturate(112%);
         }
         .highlight-card-top-bar {
             content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
-            background: linear-gradient(90deg, #f4d03f, #d4a827);
+            background: linear-gradient(90deg, #67e8f9, #8b5cf6);
             border-radius: 24px 24px 0 0;
             z-index: 1;
         }
         @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
         .float-animation { animation: float 3s ease-in-out infinite; }
         @keyframes pulse-glow {
-            0%, 100% { box-shadow: 0 0 20px rgba(244, 208, 63, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.08); }
-            50% { box-shadow: 0 0 36px rgba(244, 208, 63, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1); }
+            0%, 100% { box-shadow: 0 0 18px rgba(103, 232, 249, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.08); }
+            50% { box-shadow: 0 0 30px rgba(139, 92, 246, 0.24), inset 0 1px 0 rgba(255, 255, 255, 0.1); }
         }
         .pulse-glow { animation: pulse-glow 2.4s ease-in-out infinite; }
         .glass-footer {
-            background: linear-gradient(180deg, rgba(7, 18, 12, 0.35) 0%, rgba(7, 18, 12, 0.15) 100%);
+            background: linear-gradient(180deg, rgba(45, 53, 69, 0.82) 0%, rgba(36, 43, 56, 0.94) 100%);
             backdrop-filter: blur(28px) saturate(100%);
             -webkit-backdrop-filter: blur(28px) saturate(100%);
-            border-top: 1px solid rgba(244, 208, 63, 0.06);
+            border-top: 1px solid rgba(255, 255, 255, 0.10);
         }
     </style>
 {% endblock %}
 {% block nav %}
 {% endblock %}
 {% block content %}
+    {% if user %}
+    <div class="fixed top-24 right-4 z-30 flex items-center gap-2">
+        <form method="POST" action="{{ url_for('main.upload_background') }}" enctype="multipart/form-data">
+            <label class="btn-secondary px-4 py-2.5 rounded-xl text-sm inline-flex items-center gap-2 cursor-pointer shadow-lg">
+                <i data-lucide="image-plus" class="w-4 h-4"></i>
+                更换背景
+                <input type="file" name="background" accept="image/png,image/jpeg,image/gif,image/webp" required class="hidden" onchange="this.form.submit()">
+            </label>
+        </form>
+        {% if user.background_key %}
+        <form method="POST" action="{{ url_for('main.delete_background') }}">
+            <button type="submit" class="btn-secondary p-2.5 rounded-xl shadow-lg" title="恢复默认背景">
+                <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
+            </button>
+        </form>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+    <div class="fixed top-40 right-4 z-40 max-w-sm p-4 rounded-xl text-sm shadow-xl {% if category == 'error' %}bg-red-900/90 border border-red-500/40 text-red-200{% else %}bg-green-900/90 border border-green-500/40 text-green-200{% endif %}">
+        {{ message }}
+    </div>
+    {% endfor %}
+    {% endwith %}
+
     <!-- Hero Section -->
     <section class="hero-bg min-h-screen flex items-center justify-center relative">
         <div class="max-w-5xl mx-auto px-6 text-center relative z-10 pt-20 lg:pt-24">

@@ -204,9 +204,11 @@
                             <div class="bg-forest-900/50 rounded-lg p-4">
                                 <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
                                     <div class="flex items-center gap-2">
-                                        <div class="w-8 h-8 bg-gold-400/20 rounded-full flex items-center justify-center text-xs font-bold text-gold-400">
-                                            {{ reply.username[0] }}
-                                        </div>
+                                        {% if reply.avatar_key %}
+                                        <img src="{{ url_for('main.user_avatar', user_id=reply.user_id) }}" alt="{{ reply.username }}的头像" class="w-8 h-8 rounded-full object-cover border border-gold-400/30">
+                                        {% else %}
+                                        <div class="w-8 h-8 bg-gold-400/20 rounded-full flex items-center justify-center text-xs font-bold text-gold-400">{{ reply.username[0] }}</div>
+                                        {% endif %}
                                         <span class="text-sm font-medium text-gold-400">{{ reply.username }}</span>
                                         <span class="text-xs text-cream/40">{{ reply.created_at }}</span>
                                     </div>

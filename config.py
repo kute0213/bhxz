@@ -1,7 +1,12 @@
 import os
 import sys
 
+from dotenv import load_dotenv
+
 APP_ROOT = os.path.dirname(os.path.abspath(__file__))
+# 本地开发配置写在项目根目录 .env；系统环境变量优先，不会被文件覆盖。
+load_dotenv(os.path.join(APP_ROOT, '.env'), override=False)
+
 DB_PATH = os.path.join(APP_ROOT, 'site.duckdb')
 UPLOAD_DIR = os.path.join(APP_ROOT, 'uploads')
 UPLOAD_ATTACHMENTS_DIR = os.path.join(UPLOAD_DIR, 'attachments')
@@ -9,6 +14,21 @@ UPLOAD_BACKGROUNDS_DIR = os.path.join(UPLOAD_DIR, 'backgrounds')
 UPLOAD_COMMUNITY_DIR = os.path.join(UPLOAD_DIR, 'community')
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'pdf', 'txt', 'zip', 'rar', '7z', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'mp4', 'mp3', 'wav'}
 MAX_CONTENT_LENGTH = 100 * 1024 * 1024
+
+# ---------------------------------------------------------------------------
+# MinIO 对象存储配置
+# ---------------------------------------------------------------------------
+
+# 网站运行在宿主机时使用 127.0.0.1:9000；运行在 Docker 且加入
+# binhai-internal 网络时，通过环境变量改为 minio:9000。
+MINIO_ENDPOINT = os.environ.get('MINIO_ENDPOINT', '127.0.0.1:9000').strip()
+MINIO_ACCESS_KEY = os.environ.get('MINIO_ACCESS_KEY', '').strip()
+MINIO_SECRET_KEY = os.environ.get('MINIO_SECRET_KEY', '').strip()
+MINIO_BUCKET = os.environ.get('MINIO_BUCKET', 'binhai').strip()
+MINIO_SECURE = os.environ.get('MINIO_SECURE', '0').lower() in ('1', 'true', 'yes', 'on')
+
+# 用户图片只允许常见静态格式，上传后会统一转换为 WebP 再写入 MinIO。
+USER_IMAGE_MAX_BYTES = 10 * 1024 * 1024
 
 # Session 密钥（硬编码默认值，无需环境变量，开箱即用）
 SECRET_KEY = 'mc_server_site_random_secret_key_2024'

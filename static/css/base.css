@@ -5,19 +5,31 @@
  * ============================================================ */
 
 body {
-    font-family: 'Noto Sans SC', sans-serif;
-    color: #e8e4d9;
-    background: #07120c;
+    font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+    color: #f3f6fb;
+    background: linear-gradient(145deg, #424b5d 0%, #384152 48%, #303747 100%);
     position: relative;
     min-height: 100vh;
     overflow-x: clip;
     overscroll-behavior-y: none;
 }
+
+/* 电竞风字体层级：拉丁字符使用本地 JetBrains Mono，中文自动回退到系统黑体。 */
+h1, h2, h3,
+.glass-nav,
+.btn-primary,
+.btn-secondary,
+.btn-danger {
+    font-family: "JetBrains Mono", "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+}
+h1 { letter-spacing: 0.035em; }
+h2, h3 { letter-spacing: 0.02em; }
+.glass-nav a, .btn-primary, .btn-secondary, .btn-danger { letter-spacing: 0.015em; }
 /* 细微噪点纹理 - 模拟磨砂玻璃蚀刻表面微观散射 */
 body::before {
     content: ''; position: fixed; inset: 0; z-index: 9998;
     pointer-events: none;
-    opacity: 0.035;
+    opacity: 0.018;
     background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
     background-repeat: repeat;
     background-size: 200px 200px;
@@ -27,8 +39,11 @@ body::after {
     content: ''; position: fixed; inset: 0; z-index: -1;
     pointer-events: none;
     background:
-        radial-gradient(ellipse 80% 60% at 20% 10%, rgba(200, 225, 210, 0.015) 0%, transparent 60%),
-        radial-gradient(ellipse 60% 80% at 80% 90%, rgba(244, 208, 63, 0.008) 0%, transparent 60%);
+        linear-gradient(rgba(103, 232, 249, 0.025) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(139, 92, 246, 0.022) 1px, transparent 1px),
+        radial-gradient(ellipse 75% 55% at 12% 5%, rgba(103, 232, 249, 0.11) 0%, transparent 62%),
+        radial-gradient(ellipse 65% 70% at 92% 90%, rgba(139, 92, 246, 0.10) 0%, transparent 64%);
+    background-size: 64px 64px, 64px 64px, auto, auto;
 }
 
 /* 背景图片（覆盖在 body 背景之上，bg-orbs 之下） */
@@ -42,12 +57,23 @@ body::after {
     transition: opacity 0.8s ease;
 }
 .bg-image-layer.loaded {
-    opacity: 0.6;
+    opacity: 0.42;
 }
 /* 暗化覆层，确保文字可读性 */
 .bg-image-layer::after {
     content: ''; position: absolute; inset: 0;
-    background: rgba(7, 18, 12, 0.35);
+    background: rgba(38, 44, 58, 0.28);
+}
+
+/* 启用可更换背景图时，提高图片存在感，同时保留内容可读性。 */
+body.has-background-image .bg-image-layer.loaded { opacity: 0.76; }
+body.has-background-image .bg-image-layer::after {
+    background: linear-gradient(135deg, rgba(36, 43, 56, 0.44), rgba(48, 57, 74, 0.30));
+}
+body.has-background-image .pixel-card {
+    background: linear-gradient(145deg, rgba(65, 75, 95, 0.86), rgba(49, 58, 76, 0.88));
+    backdrop-filter: blur(30px) saturate(112%);
+    -webkit-backdrop-filter: blur(30px) saturate(112%);
 }
 
 /* 磨砂玻璃动态背景 - 光线透过玻璃投射的柔和光晕 */
@@ -56,9 +82,9 @@ body::after {
     position: absolute; border-radius: 50%; filter: blur(80px);
     will-change: transform;
 }
-.bg-orb-1 { width: 550px; height: 550px; background: radial-gradient(circle, rgba(26, 71, 42, 0.50), transparent 70%); top: -120px; left: -100px; animation: orbFloat1 35s ease-in-out infinite; }
-.bg-orb-2 { width: 650px; height: 650px; background: radial-gradient(circle, rgba(45, 90, 61, 0.40), transparent 70%); bottom: -180px; right: -150px; animation: orbFloat2 40s ease-in-out infinite; }
-.bg-orb-3 { width: 400px; height: 400px; background: radial-gradient(circle, rgba(244, 208, 63, 0.15), transparent 70%); top: 35%; left: 45%; animation: orbFloat3 30s ease-in-out infinite; }
+.bg-orb-1 { width: 550px; height: 550px; background: radial-gradient(circle, rgba(103, 232, 249, 0.15), transparent 70%); top: -120px; left: -100px; animation: orbFloat1 35s ease-in-out infinite; }
+.bg-orb-2 { width: 650px; height: 650px; background: radial-gradient(circle, rgba(139, 92, 246, 0.13), transparent 70%); bottom: -180px; right: -150px; animation: orbFloat2 40s ease-in-out infinite; }
+.bg-orb-3 { width: 400px; height: 400px; background: radial-gradient(circle, rgba(96, 165, 250, 0.08), transparent 70%); top: 35%; left: 45%; animation: orbFloat3 30s ease-in-out infinite; }
 
 @keyframes orbFloat1 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(60px, 40px) scale(1.1); } }
 @keyframes orbFloat2 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(-50px,-40px) scale(1.15); } }
@@ -68,18 +94,17 @@ body::after {
 .pixel-card {
     background: linear-gradient(
         145deg,
-        rgba(10, 24, 16, 0.10) 0%,
-        rgba(15, 30, 20, 0.06) 40%,
-        rgba(8, 18, 12, 0.10) 100%
+        rgba(67, 77, 97, 0.95) 0%,
+        rgba(52, 61, 79, 0.95) 100%
     );
-    backdrop-filter: blur(48px) saturate(100%);
-    -webkit-backdrop-filter: blur(48px) saturate(100%);
-    border: 1px solid rgba(255, 255, 255, 0.03);
-    border-radius: 24px !important;
+    backdrop-filter: blur(24px) saturate(105%);
+    -webkit-backdrop-filter: blur(24px) saturate(105%);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    border-radius: 16px !important;
     position: relative;
     box-shadow:
-        0 4px 24px rgba(0, 0, 0, 0.12),
-        inset 0 0.5px 0 rgba(255, 255, 255, 0.06);
+        0 12px 30px rgba(19, 23, 32, 0.20),
+        inset 0 1px 0 rgba(255, 255, 255, 0.07);
     transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1),
                 box-shadow 0.4s cubic-bezier(0.22, 1, 0.36, 1),
                 background 0.4s ease;
@@ -93,7 +118,7 @@ body::after {
     border-radius: inherit;
     background: radial-gradient(
         ellipse at 20% 15%,
-        rgba(255, 255, 255, 0.04) 0%,
+        rgba(255, 255, 255, 0.06) 0%,
         rgba(255, 255, 255, 0.01) 30%,
         transparent 60%
     );
@@ -110,11 +135,11 @@ body::after {
     padding: 1px;
     background: linear-gradient(
         135deg,
-        rgba(255, 255, 255, 0.06) 0%,
-        rgba(255, 255, 255, 0.02) 30%,
+        rgba(103, 232, 249, 0.16) 0%,
+        rgba(103, 232, 249, 0.03) 28%,
         rgba(255, 255, 255, 0.00) 50%,
-        rgba(255, 255, 255, 0.02) 70%,
-        rgba(255, 255, 255, 0.05) 100%
+        rgba(139, 92, 246, 0.04) 72%,
+        rgba(139, 92, 246, 0.15) 100%
     );
     -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
     -webkit-mask-composite: xor;
@@ -130,52 +155,51 @@ body::after {
 .pixel-card:hover {
     background: linear-gradient(
         145deg,
-        rgba(10, 24, 16, 0.14) 0%,
-        rgba(15, 30, 20, 0.08) 40%,
-        rgba(8, 18, 12, 0.14) 100%
+        rgba(72, 83, 104, 0.97) 0%,
+        rgba(57, 67, 86, 0.97) 100%
     );
     transform: translateY(-2px);
     box-shadow:
-        0 12px 40px rgba(0, 0, 0, 0.18),
+        0 16px 38px rgba(18, 22, 31, 0.27),
         inset 0 0.5px 0 rgba(255, 255, 255, 0.08);
 }
 
 /* 磨砂玻璃按钮 - 模拟蚀刻玻璃质感 */
 .btn-primary {
-    background: linear-gradient(135deg, rgba(244, 208, 63, 0.08) 0%, rgba(244, 208, 63, 0.04) 100%);
+    background: linear-gradient(135deg, #67e8f9 0%, #8b5cf6 100%);
     backdrop-filter: blur(20px) saturate(110%);
     -webkit-backdrop-filter: blur(20px) saturate(110%);
-    border: 1px solid rgba(244, 208, 63, 0.15);
-    border-radius: 14px !important;
-    color: #f4d03f; font-weight: 700;
+    border: 1px solid rgba(182, 245, 255, 0.52);
+    border-radius: 12px !important;
+    color: #171c29; font-weight: 700;
     position: relative;
     transition: transform 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
-    box-shadow: 0 2px 12px rgba(244, 208, 63, 0.04), inset 0 0.5px 0 rgba(255,255,255,0.06);
+    box-shadow: 0 5px 16px rgba(59, 130, 246, 0.16);
     overflow: hidden;
 }
 .btn-primary:hover {
-    background: linear-gradient(135deg, rgba(244, 208, 63, 0.14) 0%, rgba(244, 208, 63, 0.08) 100%);
-    border-color: rgba(244, 208, 63, 0.25);
+    background: linear-gradient(135deg, #8ceefa 0%, #a77cf8 100%);
+    border-color: rgba(215, 249, 255, 0.72);
     transform: translateY(-1px);
-    box-shadow: 0 6px 20px rgba(244, 208, 63, 0.08), inset 0 0.5px 0 rgba(255,255,255,0.08);
+    box-shadow: 0 8px 22px rgba(103, 232, 249, 0.16), 0 4px 16px rgba(139, 92, 246, 0.14);
 }
 .btn-primary:active { transform: translateY(0); }
 
 .btn-secondary {
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.01) 100%);
+    background: rgba(255, 255, 255, 0.08);
     backdrop-filter: blur(20px) saturate(110%);
     -webkit-backdrop-filter: blur(20px) saturate(110%);
-    border: 1px solid rgba(244, 208, 63, 0.08);
-    border-radius: 14px !important;
-    color: #e8e4d9; font-weight: 500;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 12px !important;
+    color: #f3f6fb; font-weight: 500;
     position: relative;
     transition: transform 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.10), inset 0 0.5px 0 rgba(255,255,255,0.04);
+    box-shadow: 0 3px 10px rgba(18, 22, 31, 0.14);
     overflow: hidden;
 }
 .btn-secondary:hover {
-    background: linear-gradient(135deg, rgba(244, 208, 63, 0.06) 0%, rgba(244, 208, 63, 0.03) 100%);
-    border-color: rgba(244, 208, 63, 0.18);
+    background: rgba(255, 255, 255, 0.14);
+    border-color: rgba(103, 232, 249, 0.34);
     transform: translateY(-1px);
     box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15), inset 0 0.5px 0 rgba(255,255,255,0.06);
 }
@@ -203,21 +227,60 @@ body::after {
 
 /* 磨砂玻璃输入框 */
 .input-field {
-    background: linear-gradient(135deg, rgba(6, 16, 10, 0.20) 0%, rgba(6, 16, 10, 0.12) 100%);
+    background: rgba(39, 47, 63, 0.82);
     backdrop-filter: blur(16px) saturate(100%);
     -webkit-backdrop-filter: blur(16px) saturate(100%);
-    border: 1px solid rgba(255, 255, 255, 0.04);
-    border-radius: 14px !important;
-    color: #e8e4d9;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 12px !important;
+    color: #f3f6fb;
     transition: border-color 0.2s ease, box-shadow 0.2s ease;
-    box-shadow: inset 0 1px 4px rgba(0, 0, 0, 0.12);
+    box-shadow: inset 0 1px 3px rgba(20, 27, 33, 0.18);
 }
 .input-field:focus {
-    border-color: rgba(244, 208, 63, 0.20);
+    border-color: rgba(103, 232, 249, 0.72);
     outline: none;
-    box-shadow: 0 0 0 2px rgba(244, 208, 63, 0.04), inset 0 1px 4px rgba(0, 0, 0, 0.15);
+    box-shadow: 0 0 0 3px rgba(103, 232, 249, 0.10), inset 0 1px 4px rgba(0, 0, 0, 0.15);
 }
-.input-field::placeholder { color: rgba(232, 228, 217, 0.20); }
+.input-field::placeholder { color: rgba(243, 246, 251, 0.40); }
+
+/* 密码强度：规则与服务端保持一致，额外用数字、符号和长度区分等级。 */
+.password-strength {
+    margin-top: 10px;
+}
+.password-strength-bars {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 5px;
+}
+.password-strength-bar {
+    height: 4px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.12);
+    transition: background 0.2s ease, transform 0.2s ease;
+}
+.password-strength[data-level="1"] .password-strength-bar:nth-child(-n+1) { background: #f87171; }
+.password-strength[data-level="2"] .password-strength-bar:nth-child(-n+2) { background: #fbbf24; }
+.password-strength[data-level="3"] .password-strength-bar:nth-child(-n+3) { background: #60a5fa; }
+.password-strength[data-level="4"] .password-strength-bar:nth-child(-n+4) { background: #4ade80; }
+.password-strength-meta {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-top: 7px;
+    font-size: 12px;
+    line-height: 1.4;
+}
+.password-strength-label { color: rgba(243, 246, 251, 0.72); }
+.password-strength-hint { color: rgba(243, 246, 251, 0.48); text-align: right; }
+.password-strength[data-level="1"] .password-strength-label { color: #fca5a5; }
+.password-strength[data-level="2"] .password-strength-label { color: #fcd34d; }
+.password-strength[data-level="3"] .password-strength-label { color: #93c5fd; }
+.password-strength[data-level="4"] .password-strength-label { color: #86efac; }
+
+@media (max-width: 420px) {
+    .password-strength-meta { flex-direction: column; gap: 3px; }
+    .password-strength-hint { text-align: left; }
+}
 
 /* =========================================================
  * 玻璃导航栏 —— 滚动后收缩成椭圆胶囊
@@ -252,16 +315,15 @@ body::after {
     backface-visibility: hidden;
     -webkit-backface-visibility: hidden;
     background: linear-gradient(180deg,
-        rgba(10, 22, 15, 0.42) 0%,
-        rgba(8, 18, 12, 0.28) 55%,
-        rgba(8, 18, 12, 0.34) 100%);
+        rgba(36, 43, 56, 0.98) 0%,
+        rgba(45, 53, 69, 0.98) 100%);
     backdrop-filter: blur(40px) saturate(140%);
     -webkit-backdrop-filter: blur(40px) saturate(140%);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.11);
     box-shadow:
         inset 0 1px 0 rgba(255, 255, 255, 0.05),
         inset 0 -1px 0 rgba(0, 0, 0, 0.18),
-        0 2px 20px rgba(0, 0, 0, 0.14);
+        0 4px 20px rgba(16, 20, 29, 0.28);
     transition:
         width 0.45s cubic-bezier(0.34, 1.3, 0.64, 1),
         border-radius 0.45s cubic-bezier(0.34, 1.3, 0.64, 1),
@@ -297,20 +359,19 @@ body::after {
     border: 1px solid rgba(255, 255, 255, 0.08);
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
     background: linear-gradient(180deg,
-        rgba(12, 26, 18, 0.68) 0%,
-        rgba(9, 20, 14, 0.52) 55%,
-        rgba(10, 22, 15, 0.6) 100%);
+        rgba(48, 57, 74, 0.99) 0%,
+        rgba(36, 43, 56, 0.99) 100%);
     box-shadow:
         inset 0 1px 0 rgba(255, 255, 255, 0.09),
         inset 0 -1px 0 rgba(0, 0, 0, 0.2),
-        0 16px 48px rgba(0, 0, 0, 0.38),
-        0 4px 16px rgba(0, 0, 0, 0.22);
+        0 14px 36px rgba(15, 18, 27, 0.34),
+        0 4px 14px rgba(15, 18, 27, 0.22);
     pointer-events: auto;
 }
 
 /* 滚动后：胶囊内图标 hover 光晕更细腻 */
 .glass-nav.scrolled .glass-nav-inner a:hover {
-    text-shadow: 0 0 12px rgba(244, 208, 63, 0.35);
+    text-shadow: 0 0 12px rgba(103, 232, 249, 0.24);
 }
 
 /* 平板端快捷导航分隔线：滚动成胶囊后弱化，避免割裂椭圆轮廓 */
@@ -328,10 +389,10 @@ body::after {
 
 /* 玻璃移动端菜单 */
 .mobile-menu {
-    background: linear-gradient(180deg, rgba(8, 18, 12, 0.25) 0%, rgba(8, 18, 12, 0.15) 100%);
+    background: linear-gradient(180deg, rgba(45, 53, 69, 0.99) 0%, rgba(51, 60, 78, 0.99) 100%);
     backdrop-filter: blur(40px) saturate(100%);
     -webkit-backdrop-filter: blur(40px) saturate(100%);
-    border-left: 1px solid rgba(255, 255, 255, 0.03);
+    border-left: 1px solid rgba(255, 255, 255, 0.12);
     transform: translateX(100%);
     transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     border-radius: 28px 0 0 28px;
@@ -369,7 +430,7 @@ body.page-leaving .page-content {
 /* 过渡遮罩 - 渐入渐出 */
 .page-transition-overlay {
     position: fixed; inset: 0; z-index: 9999;
-    background: #07120c;
+    background: #384152;
     opacity: 0; pointer-events: none;
     transition: opacity 0.3s ease;
 }
@@ -381,7 +442,7 @@ body.page-leaving .page-transition-overlay {
 
 /* 玻璃表格行 hover */
 .glass-table-row:hover {
-    background: rgba(244, 208, 63, 0.06);
+    background: rgba(103, 232, 249, 0.055);
 }
 
 /* 滚动渐入动画 */
@@ -424,13 +485,12 @@ body.page-leaving .page-transition-overlay {
 .modal-box {
     background: linear-gradient(
         145deg,
-        rgba(10, 24, 16, 0.20) 0%,
-        rgba(15, 30, 20, 0.12) 50%,
-        rgba(10, 24, 16, 0.20) 100%
+        rgba(68, 78, 98, 0.99) 0%,
+        rgba(52, 61, 79, 0.99) 100%
     );
     backdrop-filter: blur(48px) saturate(100%);
     -webkit-backdrop-filter: blur(48px) saturate(100%);
-    border: 1px solid rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.14);
     border-radius: 28px !important;
     position: relative;
     box-shadow:
@@ -464,7 +524,7 @@ body.page-leaving .page-transition-overlay {
 }
 .modal-header {
     padding: 24px 28px 18px;
-    border-bottom: 1px solid rgba(244, 208, 63, 0.1);
+    border-bottom: 1px solid rgba(103, 232, 249, 0.12);
     display: flex; align-items: center; gap: 14px;
 }
 .modal-icon {
@@ -481,11 +541,11 @@ body.page-leaving .page-transition-overlay {
     border: 1px solid rgba(239, 68, 68, 0.25);
 }
 .modal-icon.info {
-    background: rgba(244, 208, 63, 0.18);
-    color: #f4d03f;
+    background: rgba(103, 232, 249, 0.14);
+    color: #67e8f9;
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(244, 208, 63, 0.25);
+    border: 1px solid rgba(103, 232, 249, 0.24);
 }
 .modal-icon.success {
     background: rgba(34, 197, 94, 0.18);
@@ -495,17 +555,17 @@ body.page-leaving .page-transition-overlay {
     border: 1px solid rgba(34, 197, 94, 0.25);
 }
 .modal-title {
-    font-size: 19px; font-weight: 700; color: #e8e4d9;
+    font-size: 19px; font-weight: 700; color: #f3f6fb;
 }
 .modal-body {
     padding: 24px 28px;
-    color: rgba(232, 228, 217, 0.82);
+    color: rgba(243, 246, 251, 0.82);
     font-size: 15px;
     line-height: 1.7;
 }
 .modal-footer {
     padding: 18px 28px 24px;
-    border-top: 1px solid rgba(244, 208, 63, 0.1);
+    border-top: 1px solid rgba(139, 92, 246, 0.14);
     display: flex; gap: 12px; justify-content: flex-end;
 }
 .modal-footer .btn-primary,
@@ -559,13 +619,13 @@ body.page-leaving .page-transition-overlay {
     pointer-events: none;
 }
 .toast {
-    background: linear-gradient(135deg, rgba(10, 24, 16, 0.25) 0%, rgba(10, 24, 16, 0.15) 100%);
+    background: linear-gradient(135deg, rgba(67, 77, 97, 0.99) 0%, rgba(52, 61, 79, 0.99) 100%);
     backdrop-filter: blur(28px) saturate(100%);
     -webkit-backdrop-filter: blur(28px) saturate(100%);
-    border: 1px solid rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.14);
     border-radius: 16px !important;
     padding: 14px 24px;
-    color: #e8e4d9;
+    color: #f3f6fb;
     font-size: 14px;
     position: relative;
     display: flex; align-items: center; gap: 12px;
@@ -615,8 +675,8 @@ body.page-leaving .page-transition-overlay {
 .toast.success i { color: #86efac; }
 .toast.error { border-color: rgba(239, 68, 68, 0.3); }
 .toast.error i { color: #fca5a5; }
-.toast.warning { border-color: rgba(244, 208, 63, 0.3); }
-.toast.warning i { color: #f4d03f; }
+.toast.warning { border-color: rgba(251, 191, 36, 0.34); }
+.toast.warning i { color: #fbbf24; }
 
 /* 图片加载淡入 */
 img {
@@ -641,7 +701,7 @@ img {
     position: fixed;
     width: 500px; height: 500px;
     border-radius: 50%;
-    background: radial-gradient(circle, rgba(244, 208, 63, 0.07), transparent 65%);
+    background: radial-gradient(circle, rgba(242, 189, 114, 0.06), transparent 65%);
     pointer-events: none;
     z-index: 0;
     transform: translate3d(-250px, -250px, 0);
@@ -713,11 +773,11 @@ img {
     border-radius: inherit;
     background: conic-gradient(
         transparent,
-        rgba(244, 208, 63, 0.4),
+        rgba(103, 232, 249, 0.34),
         transparent,
-        rgba(244, 208, 63, 0.2),
+        rgba(139, 92, 246, 0.20),
         transparent,
-        rgba(244, 208, 63, 0.4),
+        rgba(103, 232, 249, 0.34),
         transparent
     );
     z-index: -1;
@@ -786,7 +846,7 @@ img {
 .upload-progress-fill {
     height: 100%;
     width: 0%;
-    background: linear-gradient(90deg, #f4d03f, #d4a827);
+    background: linear-gradient(90deg, #67e8f9, #8b5cf6);
     border-radius: 3px;
     transition: width 0.2s ease;
     position: relative;

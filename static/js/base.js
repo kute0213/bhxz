@@ -12,6 +12,72 @@ if (typeof lucide !== 'undefined' && lucide.createIcons) {
     try { lucide.createIcons(); } catch (_) {}
 }
 
+// 密码强度展示：必需规则与 core.auth.validate_password 保持一致。
+(function initPasswordStrengthIndicators() {
+    document.querySelectorAll('input[data-password-strength]').forEach(function(input) {
+        if (input.dataset.strengthInitialized === 'true') return;
+        input.dataset.strengthInitialized = 'true';
+
+        var indicator = document.createElement('div');
+        indicator.className = 'password-strength';
+        indicator.dataset.level = '0';
+        indicator.setAttribute('aria-live', 'polite');
+        indicator.innerHTML =
+            '<div class="password-strength-bars" aria-hidden="true">' +
+                '<span class="password-strength-bar"></span>'.repeat(4) +
+            '</div>' +
+            '<div class="password-strength-meta">' +
+                '<span class="password-strength-label">密码强度：未输入</span>' +
+                '<span class="password-strength-hint">至少 8 位且包含字母</span>' +
+            '</div>';
+        input.insertAdjacentElement('afterend', indicator);
+
+        var label = indicator.querySelector('.password-strength-label');
+        var hint = indicator.querySelector('.password-strength-hint');
+
+        function updateStrength() {
+            var password = input.value || '';
+            if (!password) {
+                indicator.dataset.level = '0';
+                label.textContent = '密码强度：未输入';
+                hint.textContent = '至少 8 位且包含字母';
+                return;
+            }
+
+            var hasLetter = /\p{L}/u.test(password);
+            var hasNumber = /\d/.test(password);
+            var hasSymbol = /[^A-Za-z0-9]/.test(password);
+            var hasMixedCase = /[a-z]/.test(password) && /[A-Z]/.test(password);
+            var validLength = password.length >= 8;
+            var level = 1;
+
+            if (validLength && hasLetter) {
+                level = 2;
+                if (hasNumber || hasSymbol || hasMixedCase) level = 3;
+                if (password.length >= 12 && hasNumber && hasSymbol && hasMixedCase) level = 4;
+            }
+
+            var labels = ['', '弱', '一般', '中等', '强'];
+            indicator.dataset.level = String(level);
+            label.textContent = '密码强度：' + labels[level];
+
+            var missing = [];
+            if (!validLength) missing.push('至少 8 位');
+            if (!hasLetter) missing.push('包含字母');
+            if (missing.length) {
+                hint.textContent = '还需：' + missing.join('、');
+            } else if (level < 4) {
+                hint.textContent = '可加入大小写字母、数字和符号增强';
+            } else {
+                hint.textContent = '密码强度良好';
+            }
+        }
+
+        input.addEventListener('input', updateStrength);
+        updateStrength();
+    });
+})();
+
 // 移动端菜单控制
 var mobileMenuBtn = document.getElementById('mobile-menu-btn');
 var mobileCloseBtn = document.getElementById('mobile-close-btn');
@@ -469,6 +535,32 @@ var Toast = (function () {
         warning: function (msg, duration) { show(msg, 'warning', duration); },
         info: function (msg, duration) { show(msg, 'info', duration); }
     };
+})();
+
+// ============================================
+// 退出登录确认：取消时保留当前会话，确认后才跳转退出路由
+// ============================================
+(function initLogoutConfirm() {
+    document.querySelectorAll('a[data-logout-confirm]').forEach(function (link) {
+        link.addEventListener('click', function (e) {
+            e.preventDefault();
+            // 阻止全站页面跳转动画提前访问 logout，必须等待用户明确确认。
+            e.stopPropagation();
+
+            CustomModal.confirm('退出后需要重新登录，是否确认退出？', {
+                title: '退出登录',
+                type: 'question',
+                confirmText: '确认',
+                cancelText: '取消',
+                trigger: link,
+                callback: function (confirmed) {
+                    if (confirmed) {
+                        window.location.href = link.href;
+                    }
+                }
+            });
+        });
+    });
 })();
 
 (function initCustomConfirm() {

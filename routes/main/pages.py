@@ -5,7 +5,7 @@
 
 import os
 
-from flask import render_template, send_from_directory, abort, make_response
+from flask import render_template, send_from_directory, abort, make_response, url_for
 from core.auth import get_current_user
 from core.db import get_db
 from config import get_config_value, UPLOAD_BACKGROUNDS_DIR
@@ -27,6 +27,10 @@ def home():
         'index.html', user=user, mod_intros=mod_intros,
         map_url=get_config_value('MAP_URL', 'https://map.bhxz.tw.kg'),
         qq_group_url=get_config_value('QQ_GROUP_URL', ''),
+        page_background_url=(
+            url_for('main.user_background')
+            if user and user.get('background_key') else ''
+        ),
     )
 
 

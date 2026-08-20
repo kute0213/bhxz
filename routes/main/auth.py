@@ -10,7 +10,7 @@ from core.auth import get_current_user
 from config import get_config_value, REGISTER_VERIFY_CODE
 from services.email import normalize_email
 from services.user_service import (
-    register, login, forgot_password,
+    register, login, forgot_password, check_username_available,
 )
 from services.logger import log
 from routes.main import main_bp
@@ -31,6 +31,7 @@ def _is_safe_redirect_url(target: str) -> bool:
 def register_view():
     email_verify_enabled = get_config_value('REGISTER_EMAIL_VERIFY', False)
     group_code_verified = session.get('group_code_verified', False)
+    show_back_to_login = request.args.get('source') == 'login'
 
     if request.method == 'POST':
         success, result = register(
@@ -44,21 +45,39 @@ def register_view():
             email_code=request.form.get('email_code', '').strip(),
             ip_address=request.remote_addr,
             email_verify_enabled=email_verify_enabled,
+            group_code_verified=group_code_verified,
         )
         if not success:
-            return render_template('register.html', error=result,
-                                   email_verify_enabled=email_verify_enabled,
-                                   group_code_verified=group_code_verified)
+            return render_template(
+                'register.html', error=result,
+                email_verify_enabled=email_verify_enabled,
+                group_code_verified=group_code_verified,
+                show_back_to_login=show_back_to_login,
+                submitted_username=request.form.get('username', '').strip(),
+                submitted_email=normalize_email(request.form.get('email', '')),
+            )
         # 自动登录
         session.clear()
         session['user_id'] = result['user_id']
         session['username'] = result['username']
         session['is_admin'] = result['is_admin']
+        session['login_welcome_username'] = result['username']
         session.permanent = True
         return redirect(url_for('main.home'))
 
-    return render_template('register.html', email_verify_enabled=email_verify_enabled,
-                           group_code_verified=group_code_verified)
+    return render_template(
+        'register.html',
+        email_verify_enabled=email_verify_enabled,
+        group_code_verified=group_code_verified,
+        show_back_to_login=show_back_to_login,
+    )
+
+
+@main_bp.route('/api/username/check')
+def check_username():
+    """供注册页实时查询用户名是否可用，最终仍以注册写入校验为准。"""
+    available, message = check_username_available(request.args.get('username', ''))
+    return jsonify({'available': available, 'message': message})
 
 
 @main_bp.route('/api/verify-group-code', methods=['POST'])
@@ -97,12 +116,17 @@ def login_view():
             ip_address=request.remote_addr,
         )
         if not success:
-            return render_template('login.html', error=result)
+            return render_template(
+                'login.html', error=result,
+                submitted_username=request.form.get('username', '').strip(),
+                submitted_next=request.form.get('next', ''),
+            )
 
         session.clear()
         session['user_id'] = result['user_id']
         session['username'] = result['username']
         session['is_admin'] = result['is_admin']
+        session['login_welcome_username'] = result['username']
         session.permanent = True
 
         next_page = request.args.get('next') or request.form.get('next')

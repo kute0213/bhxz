@@ -68,7 +68,7 @@ def community_page():
 
         # ---- 留言板：批量查询回复避免 N+1 ----
         topic_rows = conn.execute("""
-            SELECT t.*, u.username,
+            SELECT t.*, u.username, u.avatar_key,
                    (SELECT COUNT(*) FROM board_replies r WHERE r.topic_id = t.id) AS reply_count
             FROM board_topics t
             JOIN users u ON t.user_id = u.id
@@ -84,7 +84,7 @@ def community_page():
             # 使用窗口函数 row_number() 限定每个 topic 的回复数
             reply_rows = conn.execute(
                 f"""
-                SELECT r.*, u.username
+                SELECT r.*, u.username, u.avatar_key
                 FROM (
                     SELECT *,
                            ROW_NUMBER() OVER (PARTITION BY topic_id ORDER BY id DESC) AS rn

@@ -7,7 +7,7 @@ import json
 import os
 from datetime import datetime
 
-from core.auth import hash_password, validate_password
+from core.auth import hash_password, validate_password, verify_password
 from core.db import get_db
 from config import REGISTER_VERIFY_CODE, UPLOAD_DIR, get_config_value
 from services.captcha import captcha_service
@@ -15,6 +15,7 @@ from services.email import normalize_email, email_code_service
 from services.ratelimit import register_limiter, login_limiter
 from services.logger import log
 from services.attachment_service import clean_attachment_json
+from services.object_storage import ObjectStorageError, object_storage
 
 
 # ---------------------------------------------------------------------------
@@ -44,12 +45,54 @@ def _clean_user_attachments(conn, user_id):
                 clean_attachment_json(rr['attachment'])
 
 
+def _get_user_media_keys(conn, user_id):
+    """读取账号关联的 MinIO 对象键，供数据库提交后清理。"""
+    row = conn.execute(
+        "SELECT avatar_key, background_key FROM users WHERE id = ?", (user_id,)
+    ).fetchone()
+    if not row:
+        return []
+    return [key for key in (row['avatar_key'], row['background_key']) if key]
+
+
+def _clean_user_media(keys, user_id):
+    """账号删除成功后清理 MinIO 图片；异常不回滚已完成的账号注销。"""
+    for object_key in keys:
+        try:
+            object_storage.delete_object(object_key)
+        except ObjectStorageError as exc:
+            log('UserMedia', '账号图片清理失败', user_id=user_id,
+                object_key=object_key, error=str(exc))
+
+
 # ---------------------------------------------------------------------------
 # 注册
 # ---------------------------------------------------------------------------
 
+def check_username_available(username):
+    """按不区分大小写的规则检查用户名是否可以注册。"""
+    username = (username or '').strip()
+    if len(username) < 2 or len(username) > 20:
+        return False, '用户名长度应为 2-20 个字符'
+
+    try:
+        with get_db() as conn:
+            existing = conn.execute(
+                "SELECT id FROM users WHERE lower(username) = lower(?) LIMIT 1",
+                (username,)
+            ).fetchone()
+    except Exception as exc:
+        log('Register', '用户名可用性查询失败', username=username, error=str(exc))
+        return False, '暂时无法检查用户名，请稍后重试'
+
+    if existing:
+        return False, '该用户名已被注册'
+    return True, '该用户名可用'
+
+
 def register(username, password, confirm, verify_code, captcha_input, captcha_id,
-             email, email_code, ip_address, email_verify_enabled):
+             email, email_code, ip_address, email_verify_enabled,
+             group_code_verified=False):
     """注册用户。返回 (success, data_or_error)。"""
 
     # IP 频率限制
@@ -71,11 +114,13 @@ def register(username, password, confirm, verify_code, captcha_input, captcha_id
         log('Register', '两次密码不一致', username=username, ip=ip_address)
         return False, '两次输入的密码不一致'
 
-    if verify_code != REGISTER_VERIFY_CODE:
+    # Web 端以服务端 session 中的验证结果为准；保留 verify_code 兼容服务层调用。
+    if not group_code_verified and verify_code != REGISTER_VERIFY_CODE:
         log('Register', '群内验证码错误', username=username, ip=ip_address)
         return False, '群内验证码错误，请在QQ群公告中获取正确验证码'
 
-    # 邮箱验证（仅在开启时要求）
+    # 邮箱验证（仅在开启时要求）。这里只检查输入，验证码在数据库校验后验证，
+    # 避免用户名或邮箱已存在时提前消费验证码。
     if email_verify_enabled:
         if not email:
             log('Register', '邮箱为空', username=username, ip=ip_address)
@@ -83,9 +128,6 @@ def register(username, password, confirm, verify_code, captcha_input, captcha_id
         if not email_code:
             log('Register', '邮箱验证码为空', username=username, ip=ip_address)
             return False, '请输入邮箱验证码'
-        if not email_code_service.verify(email, email_code):
-            log('Register', '邮箱验证码错误', username=username, email=email, ip=ip_address)
-            return False, '邮箱验证码错误或已过期'
     else:
         email = ''
 
@@ -94,40 +136,48 @@ def register(username, password, confirm, verify_code, captcha_input, captcha_id
         log('Register', '图形验证码错误', username=username, ip=ip_address)
         return False, '验证码错误或已过期'
 
-    conn = get_db()
     try:
-        existing = conn.execute(
-            "SELECT id FROM users WHERE username = ?", (username,)
-        ).fetchone()
-        if existing:
-            log('Register', '用户名已被注册', username=username, ip=ip_address)
-            return False, '该用户名已被注册'
-
-        if email:
-            email_exists = conn.execute(
-                "SELECT id FROM users WHERE email = ? AND email != ''",
-                (email,)
+        # 注册检查与写入必须持有同一数据库锁，避免并发请求交叉使用共享游标。
+        with get_db() as conn:
+            existing = conn.execute(
+                "SELECT id FROM users WHERE lower(username) = lower(?) LIMIT 1",
+                (username,)
             ).fetchone()
-            if email_exists:
-                log('Register', '邮箱已被注册', email=email, ip=ip_address)
-                return False, '该邮箱已被其他账号使用，一个邮箱只可注册一个账号'
+            if existing:
+                log('Register', '用户名已被注册', username=username, ip=ip_address)
+                return False, '该用户名已被注册'
 
-        password_hash = hash_password(password)
-        now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        conn.execute(
-            "INSERT INTO users (username, password_hash, email, created_at) VALUES (?, ?, ?, ?)",
-            (username, password_hash, email, now)
-        )
-        conn.commit()
+            if email:
+                email_exists = conn.execute(
+                    "SELECT id FROM users WHERE email = ? AND email != ''",
+                    (email,)
+                ).fetchone()
+                if email_exists:
+                    log('Register', '邮箱已被注册', email=email, ip=ip_address)
+                    return False, '该邮箱已被其他账号使用，一个邮箱只可注册一个账号'
 
-        # 验证成功后消耗验证码
+            if email_verify_enabled and not email_code_service.verify(
+                    email, email_code, purpose='注册', consume=False):
+                log('Register', '邮箱验证码错误', username=username, email=email, ip=ip_address)
+                return False, '邮箱验证码错误或已过期'
+
+            password_hash = hash_password(password)
+            now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            conn.execute(
+                "INSERT INTO users (username, password_hash, email, created_at) VALUES (?, ?, ?, ?)",
+                (username, password_hash, email, now)
+            )
+
+            # 在释放数据库锁前读取本次插入结果，避免共享游标被其他线程覆盖。
+            new_user = conn.execute(
+                "SELECT id, username, is_admin FROM users WHERE username = ?",
+                (username,)
+            ).fetchone()
+
+        # 数据库事务成功后才消费验证码，失败时用户可直接重试。
         captcha_service.consume(captcha_id)
-
-        # 获取新用户信息
-        new_user = conn.execute(
-            "SELECT id, username, is_admin FROM users WHERE username = ?",
-            (username,)
-        ).fetchone()
+        if email_verify_enabled:
+            email_code_service.consume(email, email_code, purpose='注册')
 
         log('Register', '注册成功', username=username, user_id=new_user['id'],
             email=email, ip=ip_address)
@@ -136,15 +186,9 @@ def register(username, password, confirm, verify_code, captcha_input, captcha_id
             'username': new_user['username'],
             'is_admin': bool(new_user['is_admin']),
         }
-    except Exception:
-        try:
-            conn.rollback()
-        except Exception:
-            pass
-        log('Register', '注册异常', username=username, ip=ip_address)
+    except Exception as exc:
+        log('Register', '注册异常', username=username, ip=ip_address, error=str(exc))
         return False, '注册失败，请稍后重试'
-    finally:
-        conn.close()
 
 
 # ---------------------------------------------------------------------------
@@ -158,6 +202,10 @@ def login(username, password, captcha_input, captcha_id, ip_address):
         log('Login', '登录请求过于频繁', ip=ip_address, username=username)
         return False, '登录请求过于频繁，请稍后再试'
 
+    if not username or not password:
+        log('Login', '用户名或密码为空', ip=ip_address)
+        return False, '请输入用户名和密码'
+
     # 测试/自动化环境：设置 TRAE_TEST_BYPASS_CAPTCHA=1 时跳过图形验证码，
     # 便于 E2E 冒烟测试。切勿在生产环境开启此环境变量。
     if os.environ.get('TRAE_TEST_BYPASS_CAPTCHA', '0') != '1' and \
@@ -165,28 +213,37 @@ def login(username, password, captcha_input, captcha_id, ip_address):
         log('Login', '验证码错误', username=username, ip=ip_address)
         return False, '验证码错误或已过期'
 
-    if not username or not password:
-        log('Login', '用户名或密码为空', ip=ip_address)
-        return False, '请输入用户名和密码'
+    # 一次图形验证码只允许发起一次登录尝试，防止重复用于密码枚举。
+    if os.environ.get('TRAE_TEST_BYPASS_CAPTCHA', '0') != '1':
+        captcha_service.consume(captcha_id)
 
-    password_hash = hash_password(password)
-    conn = get_db()
     try:
-        user = conn.execute(
-            "SELECT id, username, is_admin FROM users WHERE username = ? AND password_hash = ?",
-            (username, password_hash)
-        ).fetchone()
-    except Exception:
-        user = None
-    finally:
-        try:
-            conn.close()
-        except Exception:
-            pass
+        # 共享 DuckDB 游标的 execute/fetch 必须处于同一锁区间。
+        with get_db() as conn:
+            user = conn.execute(
+                "SELECT id, username, password_hash, is_admin FROM users "
+                "WHERE lower(username) = lower(?) LIMIT 1",
+                (username,)
+            ).fetchone()
+    except Exception as exc:
+        log('Login', '查询用户失败', username=username, ip=ip_address, error=str(exc))
+        return False, '登录服务暂时不可用，请稍后再试'
 
-    if not user:
+    if not user or not verify_password(password, user['password_hash']):
         log('Login', '用户名或密码错误', username=username, ip=ip_address)
         return False, '用户名或密码错误'
+
+    # 历史 SHA-256 密码在首次成功登录时透明升级，不影响旧账号使用。
+    if len(user['password_hash']) == 64:
+        try:
+            with get_db() as conn:
+                conn.execute(
+                    "UPDATE users SET password_hash = ? WHERE id = ?",
+                    (hash_password(password), user['id'])
+                )
+        except Exception as exc:
+            log('Login', '升级密码哈希失败', username=username, user_id=user['id'],
+                ip=ip_address, error=str(exc))
 
     log('Login', '登录成功', username=username, user_id=user['id'],
         ip=ip_address, is_admin=user['is_admin'])
@@ -220,7 +277,7 @@ def forgot_password(username, email, captcha_input, captcha_id, email_code,
     conn = get_db()
     try:
         user = conn.execute(
-            "SELECT id, email FROM users WHERE username = ?",
+            "SELECT id, email FROM users WHERE lower(username) = lower(?) LIMIT 1",
             (username,)
         ).fetchone()
     finally:
@@ -242,7 +299,7 @@ def forgot_password(username, email, captcha_input, captcha_id, email_code,
         log('ForgotPassword', '邮箱验证码为空', username=username, ip=ip_address)
         return False, '请输入邮箱验证码'
 
-    if not email_code_service.verify(email, email_code):
+    if not email_code_service.verify(email, email_code, purpose='找回密码'):
         log('ForgotPassword', '邮箱验证码错误', username=username, email=email, ip=ip_address)
         return False, '邮箱验证码错误或已过期'
 
@@ -284,17 +341,17 @@ def change_username(user_id, current_username, new_username, current_password, i
     if not current_password:
         return False, '请输入当前密码'
 
-    pwd_hash = hash_password(current_password)
     conn = get_db()
     try:
         db_user = conn.execute(
             "SELECT password_hash FROM users WHERE id = ?", (user_id,)
         ).fetchone()
-        if not db_user or db_user['password_hash'] != pwd_hash:
+        if not db_user or not verify_password(current_password, db_user['password_hash']):
             return False, '当前密码错误'
 
         existing = conn.execute(
-            "SELECT id FROM users WHERE username = ?", (new_username,)
+            "SELECT id FROM users WHERE lower(username) = lower(?) LIMIT 1",
+            (new_username,)
         ).fetchone()
         if existing and existing['id'] != user_id:
             return False, '该用户名已被使用'
@@ -330,13 +387,12 @@ def change_password(user_id, username, current_password, new_password, confirm_p
     if new_password != confirm_password:
         return False, '两次输入的新密码不一致'
 
-    pwd_hash = hash_password(current_password)
     conn = get_db()
     try:
         db_user = conn.execute(
             "SELECT password_hash FROM users WHERE id = ?", (user_id,)
         ).fetchone()
-        if not db_user or db_user['password_hash'] != pwd_hash:
+        if not db_user or not verify_password(current_password, db_user['password_hash']):
             return False, '当前密码错误'
 
         new_hash = hash_password(new_password)
@@ -362,13 +418,12 @@ def change_email(user_id, username, new_email, email_code, current_password, ip_
     if not current_password:
         return False, '请输入当前密码'
 
-    pwd_hash = hash_password(current_password)
     conn = get_db()
     try:
         db_user = conn.execute(
             "SELECT password_hash FROM users WHERE id = ?", (user_id,)
         ).fetchone()
-        if not db_user or db_user['password_hash'] != pwd_hash:
+        if not db_user or not verify_password(current_password, db_user['password_hash']):
             return False, '当前密码错误'
 
         if not new_email:
@@ -378,7 +433,7 @@ def change_email(user_id, username, new_email, email_code, current_password, ip_
         if get_config_value('EMAIL_ENABLED', False) and get_config_value('REGISTER_EMAIL_VERIFY', False):
             if not email_code:
                 return False, '请输入邮箱验证码'
-            if not email_code_service.verify(new_email, email_code):
+            if not email_code_service.verify(new_email, email_code, purpose='修改邮箱'):
                 return False, '邮箱验证码错误或已过期'
 
         # 邮箱唯一性检查
@@ -415,6 +470,7 @@ def delete_account(user_id, username, confirm_username, ip_address):
 
     conn = get_db()
     try:
+        media_keys = _get_user_media_keys(conn, user_id)
         # 清理附件
         _clean_user_attachments(conn, user_id)
 
@@ -436,6 +492,7 @@ def delete_account(user_id, username, confirm_username, ip_address):
         conn.execute("DELETE FROM board_replies WHERE user_id = ?", (user_id,))
         conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
         conn.commit()
+        _clean_user_media(media_keys, user_id)
         log('DeleteAccount', '账号注销成功', user_id=user_id, username=username, ip=ip_address)
         return True, '账号已注销'
     except Exception:
@@ -458,6 +515,7 @@ def admin_delete_user(admin_user, target_user_id, ip_address):
 
     conn = get_db()
     try:
+        media_keys = _get_user_media_keys(conn, target_user_id)
         # 清理用户附件
         _clean_user_attachments(conn, target_user_id)
 
@@ -473,6 +531,7 @@ def admin_delete_user(admin_user, target_user_id, ip_address):
         conn.execute("DELETE FROM board_topics WHERE user_id = ?", (target_user_id,))
         conn.execute("DELETE FROM users WHERE id = ?", (target_user_id,))
         conn.commit()
+        _clean_user_media(media_keys, target_user_id)
         log('Admin', '删除用户', admin_user=admin_user['username'],
             target_user_id=target_user_id, ip=ip_address)
         return True, '用户已删除'

@@ -23,7 +23,7 @@ from routes.main import main_bp
 @login_required
 def settings():
     user = get_current_user()
-    return render_template('settings.html', user=user)
+    return render_template('settings.html', user=user, tab=request.args.get('tab', 'username'))
 
 
 @main_bp.route('/settings/username', methods=['POST'])

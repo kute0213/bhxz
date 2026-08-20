@@ -35,7 +35,7 @@ class EmailCodeService:
     - 内存存储验证码，不持久化
     - 60 秒发送冷却时间，防止恶意刷邮件
     - 5 分钟过期，超时自动失效
-    - verify() 验证成功后立即删除，防止重放
+    - 验证成功后可在业务提交成功时显式消费，避免中途失败导致验证码丢失
     - 后台线程定期清理过期项，避免内存泄漏
     """
 
@@ -111,6 +111,7 @@ class EmailCodeService:
         with self._lock:
             self._codes[email] = {
                 'code': code,
+                'purpose': purpose,
                 'expire': now + self._expire_seconds,
                 'sent_at': now,
             }
@@ -128,8 +129,9 @@ class EmailCodeService:
 
         return True, '验证码已发送，请查收邮箱'
 
-    def verify(self, email: str, code: str) -> bool:
-        """验证验证码是否正确且未过期。"""
+    def verify(self, email: str, code: str, purpose: str | None = None,
+               consume: bool = True) -> bool:
+        """验证验证码是否正确且未过期；默认验证成功后立即消费。"""
         with self._lock:
             entry = self._codes.get(email)
             if not entry:
@@ -139,9 +141,15 @@ class EmailCodeService:
                 return False
             if entry['code'] != code:
                 return False
-            # 验证成功后删除
-            del self._codes[email]
+            if purpose is not None and entry.get('purpose') != purpose:
+                return False
+            if consume:
+                del self._codes[email]
             return True
+
+    def consume(self, email: str, code: str, purpose: str | None = None) -> bool:
+        """仅在验证码仍匹配时消费，供业务成功提交后调用。"""
+        return self.verify(email, code, purpose=purpose, consume=True)
 
     def cleanup_expired(self):
         """清理过期的验证码。"""

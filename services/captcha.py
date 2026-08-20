@@ -1,7 +1,7 @@
 """
-验证码服务模块：生成四位字符验证码图片（大写字母+小写字母+数字组合）。
+验证码服务模块：生成四位字符验证码图片（大小写字母+数字组合）。
 
-- 每个字符独立随机倾斜（-35° ~ +35°），字体粗大清晰
+- 每个字符独立随机倾斜（-22° ~ +22°），字体粗大清晰
 - 一条随机倾斜的粗干扰线
 - 图片直接返回 base64 编码，不保存文件，减少服务器开销
 - 验证码答案存于服务端内存（CaptchaService 单例），返回随机 captcha_id
@@ -78,8 +78,9 @@ def _load_font(size: int):
     raise FileNotFoundError('未找到 DejaVuSans-Bold.ttf 字体文件')
 
 
-# 排除易混淆字符：0/O/o、1/I/l、2/Z、5/S/s、8/B
-_CAPTCHA_CHARS = 'ABCDEFGHJKMNPQRTUVWXYabcdefghjkmnpqrtuvwxy34679'
+# 图片混合大小写字母和数字，并排除易混淆项：0/O/o、1/I/l、2/Z、5/S/s、8/B。
+# 服务端校验不区分大小写，同一个字母输入大写或小写都能通过。
+_CAPTCHA_CHARS = 'ACDEFGHJKMNPQRTUVWXYacdefghjkmnpqrtuvwxy34679'
 
 
 def generate_char_captcha(
@@ -89,8 +90,8 @@ def generate_char_captcha(
     """
     生成四位字符验证码图片。
 
-    每个字符从大写字母、小写字母、数字中随机选取，单独渲染并旋转
-    -35° ~ +35°，字体粗大清晰。图片包含一条随机倾斜的粗干扰线。
+    每个字符从大小写字母、数字中随机选取，单独渲染并轻微旋转，
+    字体粗大清晰。图片包含一条随机倾斜的干扰线。
 
     Args:
         width: 图片宽度
@@ -112,8 +113,8 @@ def generate_char_captcha(
     img = Image.new('RGB', (width, height), color=(248, 246, 240))
     draw = ImageDraw.Draw(img)
 
-    # 加载粗体字体（106 号，撑满画布）
-    font_size = 106
+    # 字号与单字符格宽匹配，避免旋转后首尾字符被画布裁掉。
+    font_size = 78
     try:
         # 优先使用项目内嵌字体（兼容 Windows / Linux / macOS）
         font = _load_font(font_size)
@@ -138,16 +139,19 @@ def generate_char_captcha(
     lc = random.randint(140, 185)
     draw.line((x1, y1, x2, y2), fill=(lc, lc, lc), width=line_width)
 
-    # ---- 绘制每个字符（独立旋转 + 粘贴） ----
-    # 每个字符的分配宽度
+    # ---- 绘制每个字符（紧边界画布、独立旋转、按格居中） ----
     cell_w = width // 4
-    # 左右留白，避免旋转后首尾字符被裁切
-    pad = 10
-    # 垂直居中偏移微调
     for i, ch in enumerate(code):
-        # 为每个字符创建独立透明画布
-        ch_size = font_size + 14
-        ch_img = Image.new('RGBA', (ch_size, ch_size), (0, 0, 0, 0))
+        # 根据实际字形创建紧边界画布，避免旋转透明大画布造成字符重叠和裁切。
+        bbox = font.getbbox(ch)
+        glyph_w = bbox[2] - bbox[0]
+        glyph_h = bbox[3] - bbox[1]
+        glyph_pad = 10
+        ch_img = Image.new(
+            'RGBA',
+            (glyph_w + glyph_pad * 2, glyph_h + glyph_pad * 2),
+            (0, 0, 0, 0),
+        )
         ch_draw = ImageDraw.Draw(ch_img)
 
         # 字符颜色：深色，保证清晰可辨
@@ -160,19 +164,25 @@ def generate_char_captcha(
             r, g, b = int(r * factor), int(g * factor), int(b * factor)
         char_color = (r, g, b)
 
-        # 绘制字符到独立画布
-        ch_draw.text((14, 12), ch, font=font, fill=char_color)
+        ch_draw.text(
+            (glyph_pad - bbox[0], glyph_pad - bbox[1]),
+            ch,
+            font=font,
+            fill=char_color,
+        )
 
-        # 随机旋转 -35° ~ +35°
-        angle = random.randint(-35, 35)
+        # 轻微旋转保留辨识度，同时提供基本的机器识别干扰。
+        angle = random.randint(-22, 22)
         rotated = ch_img.rotate(
             angle, expand=True, resample=Image.BICUBIC,
             fillcolor=(0, 0, 0, 0)
         )
 
         # 计算粘贴位置
-        paste_x = pad + cell_w * i + (cell_w - rotated.width) // 2
+        paste_x = cell_w * i + (cell_w - rotated.width) // 2
+        paste_x = max(0, min(width - rotated.width, paste_x))
         paste_y = (height - rotated.height) // 2 + random.randint(-4, 4)
+        paste_y = max(0, min(height - rotated.height, paste_y))
 
         # 粘贴到主图（使用 alpha 通道作为遮罩）
         img.paste(rotated, (paste_x, paste_y), rotated)
@@ -204,7 +214,7 @@ def verify_captcha(user_input: str, answer: str, created_at: float = None) -> bo
     # 时间戳校验：超过 300 秒视为过期
     if created_at is not None and (time.time() - created_at) > 300:
         return False
-    return user_input.strip() == answer.strip()
+    return user_input.strip().casefold() == answer.strip().casefold()
 
 
 class CaptchaService:
@@ -312,7 +322,10 @@ class CaptchaService:
             if time.time() > entry['expire']:
                 _log('Verify', '验证码已过期', captcha_id=captcha_id)
                 return False
-            result = user_input.strip() == entry['answer'].strip()
+            result = (
+                user_input.strip().casefold()
+                == entry['answer'].strip().casefold()
+            )
             if not result:
                 _log('Verify', '验证码答案错误', captcha_id=captcha_id)
             return result

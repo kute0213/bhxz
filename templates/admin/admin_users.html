@@ -44,9 +44,11 @@
                                 <td class="px-4 py-3 text-cream/80">{{ u.id }}</td>
                                 <td class="px-4 py-3">
                                     <div class="flex items-center gap-2">
-                                        <div class="w-7 h-7 bg-gold-400/20 rounded-full flex items-center justify-center text-xs font-bold text-gold-400">
-                                            {{ u.username[0] }}
-                                        </div>
+                                        {% if u.avatar_key %}
+                                        <img src="{{ url_for('main.user_avatar', user_id=u.id) }}" alt="{{ u.username }}的头像" class="w-7 h-7 rounded-full object-cover border border-gold-400/30">
+                                        {% else %}
+                                        <div class="w-7 h-7 bg-gold-400/20 rounded-full flex items-center justify-center text-xs font-bold text-gold-400">{{ u.username[0] }}</div>
+                                        {% endif %}
                                         <span class="text-cream/90 break-all">{{ u.username }}</span>
                                     </div>
                                 </td>

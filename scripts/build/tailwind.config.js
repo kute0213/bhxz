@@ -1,15 +1,17 @@
 /** @type {import('tailwindcss').Config} */
+const path = require('path');
+
 module.exports = {
   content: [
-    './templates/**/*.html',
-    './static/js/**/*.js',
+    path.join(__dirname, '../../templates/**/*.html'),
+    path.join(__dirname, '../../static/js/**/*.js'),
   ],
   theme: {
     extend: {
       colors: {
-        forest: { 900: '#0d1b0f', 800: '#1a2f1a', 700: '#1a472a', 600: '#2d5a3d' },
-        gold: { 400: '#f4d03f', 500: '#d4a827' },
-        cream: '#e8e4d9',
+        forest: { 900: '#242b38', 800: '#30394a', 700: '#465268', 600: '#5a6882' },
+        gold: { 400: '#67e8f9', 500: '#8b5cf6' },
+        cream: '#f3f6fb',
       },
       fontFamily: {
         sans: ['Noto Sans SC', 'sans-serif'],

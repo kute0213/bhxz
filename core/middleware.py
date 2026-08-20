@@ -18,6 +18,40 @@ ROUTE_PREFIXES = (
     '/static/', '/admin', '/api/', '/cmd/',
     '/scheduled', '/community', '/docs',
     '/login', '/register', '/logout', '/settings', '/performance',
+)
+
+
+def register_hooks(app, try_serve_public):
+    """注册所有请求钩子。
+
+    Args:
+        app: Flask 应用实例
+        try_serve_public: 公共文件服务函数（由 routes.public 提供）
+    """
+
+    @app.before_request
+    def serve_public_files_hook():
+        """优先检查公共静态文件，避免与蓝图路由冲突。"""
+        path = request.path
+        if path.startswith(ROUTE_PREFIXES):
+            return None
+        try:
+            resp = try_serve_public(path.lstrip('/'))
+            if resp is not None:
+                return resp
+        except HTTPException:
+            raise
+        except Exception:
+            pass
+        return None
+
+    app.before_request(log_access)
+
+# 跳过公共文件服务的路径前缀（这些路径由 Flask 蓝图处理）
+ROUTE_PREFIXES = (
+    '/static/', '/admin', '/api/', '/cmd/',
+    '/scheduled', '/community', '/docs',
+    '/login', '/register', '/logout', '/settings', '/performance',
     '/sitemap.xml',
 )
 

@@ -51,6 +51,50 @@ def test_login():
     with _app.test_client() as client:
         resp = client.get('/login')
         assert resp.status_code == 200
+        html = resp.get_data(as_text=True)
+        assert 'aria-label="关闭登录窗口"' in html
+        assert '/register?source=login' in html
+        assert 'id="toggle-password"' in html
+        assert 'id="remember-username"' in html
+        assert 'binhaiRememberedUsername' in html
+
+
+def test_register_navigation_controls():
+    """主页直达注册不显示返回按钮，登录页进入注册才显示。"""
+    with _app.test_client() as client:
+        direct_resp = client.get('/register')
+        direct_html = direct_resp.get_data(as_text=True)
+        assert direct_resp.status_code == 200
+        assert '返回上一步' not in direct_html
+        assert 'aria-label="关闭注册窗口"' in direct_html
+        assert 'id="username-availability"' in direct_html
+        assert 'data-password-strength' in direct_html
+
+        from_login_resp = client.get('/register?source=login')
+        from_login_html = from_login_resp.get_data(as_text=True)
+        assert from_login_resp.status_code == 200
+        assert '返回上一步' in from_login_html
+        assert 'title="返回登录页"' in from_login_html
+
+
+def test_username_availability_check():
+    """用户名可用性查询必须直连数据库并且不区分大小写。"""
+    with _app.test_client() as client:
+        used_resp = client.get('/api/username/check?username=ADMIN')
+        assert used_resp.status_code == 200
+        assert used_resp.get_json() == {
+            'available': False,
+            'message': '该用户名已被注册',
+        }
+
+        username = 'available_' + os.urandom(4).hex()
+        available_resp = client.get('/api/username/check', query_string={'username': username})
+        assert available_resp.status_code == 200
+        assert available_resp.get_json()['available'] is True
+
+        invalid_resp = client.get('/api/username/check?username=a')
+        assert invalid_resp.status_code == 200
+        assert invalid_resp.get_json()['available'] is False
 
 
 def test_login_bad_credentials():
@@ -70,6 +114,19 @@ def test_forgot_password_page():
     with _app.test_client() as client:
         resp = client.get('/forgot-password')
         assert resp.status_code == 200, f"找回密码页状态码: {resp.status_code}"
+        assert 'data-password-strength' in resp.get_data(as_text=True)
+
+
+def test_settings_password_strength():
+    """账户设置的新密码输入框也应启用强度展示。"""
+    with _app.test_client() as client:
+        with client.session_transaction() as sess:
+            sess['user_id'] = 1
+            sess['username'] = 'admin'
+            sess['is_admin'] = True
+        resp = client.get('/settings')
+        assert resp.status_code == 200
+        assert 'data-password-strength' in resp.get_data(as_text=True)
 
 
 def test_register_duplicate_username():
@@ -155,6 +212,71 @@ def test_validate_group_code_check():
         assert 'verified' in data
 
 
+def test_register_uses_verified_session():
+    """群码验证后刷新页面，注册仍应使用服务端 session 中的验证状态。"""
+    from unittest.mock import patch
+
+    with _app.test_client() as client:
+        with client.session_transaction() as sess:
+            sess['group_code_verified'] = True
+
+        with patch('routes.main.auth.register') as register_mock:
+            register_mock.return_value = (False, '测试中止')
+            resp = client.post('/register', data={
+                'username': 'session_user',
+                'password': TEST_PASS,
+                'confirm': TEST_PASS,
+            })
+
+        assert resp.status_code == 200
+        assert register_mock.call_args.kwargs['group_code_verified'] is True
+
+
+def test_login_welcome_message_is_one_time():
+    """登录成功后欢迎语应带用户名，并且刷新后不重复展示。"""
+    from unittest.mock import patch
+
+    with _app.test_client() as client:
+        with patch('routes.main.auth.login') as login_mock:
+            login_mock.return_value = (True, {
+                'user_id': 1,
+                'username': 'WelcomeUser',
+                'is_admin': True,
+            })
+            response = client.post('/login', data={
+                'username': 'WelcomeUser',
+                'password': TEST_PASS,
+            }, follow_redirects=True)
+
+        html = response.get_data(as_text=True)
+        assert 'Toast.success(' in html
+        assert 'WelcomeUser' in html
+
+        refreshed_html = client.get('/').get_data(as_text=True)
+        assert 'Toast.success(' not in refreshed_html
+
+
+def test_email_code_rejects_unknown_purpose():
+    """邮箱验证码用途必须来自白名单，防止绕过注册前置校验。"""
+    with _app.test_client() as client:
+        resp = client.post('/api/email/send-code', json={
+            'email': 'user@example.com',
+            'purpose': '任意用途',
+        })
+        assert resp.status_code == 400
+        assert resp.get_json()['message'] == '不支持的验证码用途'
+
+
+def test_change_email_code_requires_login():
+    """修改邮箱验证码不能由未登录用户请求。"""
+    with _app.test_client() as client:
+        resp = client.post('/api/email/send-code', json={
+            'email': 'user@example.com',
+            'purpose': '修改邮箱',
+        })
+        assert resp.status_code == 401
+
+
 def test_admin_user_exists():
     """测试系统中至少有一个管理员用户。"""
     conn = get_db()
@@ -174,13 +296,20 @@ if __name__ == '__main__':
     test_functions = [
         test_register,
         test_login,
+        test_register_navigation_controls,
+        test_username_availability_check,
         test_login_bad_credentials,
+        test_login_welcome_message_is_one_time,
         test_forgot_password_page,
+        test_settings_password_strength,
         test_register_duplicate_username,
         test_register_short_username,
         test_register_password_mismatch,
         test_validate_group_code,
         test_validate_group_code_check,
+        test_register_uses_verified_session,
+        test_email_code_rejects_unknown_purpose,
+        test_change_email_code_requires_login,
         test_admin_user_exists,
     ]
     for func in test_functions:
