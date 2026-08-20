@@ -4,7 +4,6 @@ import signal
 import socket
 import threading
 from flask import Flask, render_template
-from flask import Flask, render_template
 from config import SECRET_KEY, MAX_CONTENT_LENGTH
 
 
@@ -66,33 +65,14 @@ _shutdown_lock = threading.Lock()
 
 
 # ---------------------------------------------------------------------------
-# 应用初始化
-# ---------------------------------------------------------------------------
-
-def _init_app():
-    """初始化应用：数据库、蓝图、钩子、后台服务。仅在主进程执行。"""
-    from core.db import init_db
-
-    # 确保工作目录始终是项目根目录（避免快捷方式启动时跑到桌面）
-    os.chdir(_APP_ROOT)
-
-
-# ---------------------------------------------------------------------------
 # 请求钩子
 # ---------------------------------------------------------------------------
 
 def _register_hooks(try_serve_public):
-    from core.middleware import register_hooks
-    register_hooks(app, try_serve_public)
+    """统一注册请求钩子。"""
     print('[INFO] 正在注册请求钩子...', flush=True)
     from core.middleware import register_hooks
     register_hooks(app, try_serve_public)
-
-    # 注册模板上下文处理器
-    _register_template_context()
-
-    print('[INFO] 正在启动后台服务...', flush=True)
-    _start_background_services()
 
 
 # ---------------------------------------------------------------------------
@@ -163,7 +143,8 @@ def _init_app():
     _init_object_storage()
 
     print('[INFO] 正在注册蓝图...', flush=True)
-    try_serve_public = _register_blueprints()
+    from routes.registry import register_blueprints
+    try_serve_public = register_blueprints(app)
 
     _register_hooks(try_serve_public)
 
