@@ -1,9 +1,51 @@
+"""请求中间件 —— 访问日志记录、公共文件服务、请求钩子注册。
+
+设计原则：所有请求钩子在此模块集中管理，避免在 app.py 中散落。
+"""
+
 from flask import request, session
+from werkzeug.exceptions import HTTPException
+
 from services.ip import get_client_ip, get_ip_info
 from services.logging import log_writer
 
+# 跳过日志记录的路径前缀
 SKIP_PATHS = ('/static/', '/favicon.ico', '/uploads/',
               '/api/admin/logs/refresh', '/api/performance')
+
+# 跳过公共文件服务的路径前缀（这些路径由 Flask 蓝图处理）
+ROUTE_PREFIXES = (
+    '/static/', '/admin', '/api/', '/cmd/',
+    '/scheduled', '/community', '/docs',
+    '/login', '/register', '/logout', '/settings', '/performance',
+)
+
+
+def register_hooks(app, try_serve_public):
+    """注册所有请求钩子。
+
+    Args:
+        app: Flask 应用实例
+        try_serve_public: 公共文件服务函数（由 routes.public 提供）
+    """
+
+    @app.before_request
+    def serve_public_files_hook():
+        """优先检查公共静态文件，避免与蓝图路由冲突。"""
+        path = request.path
+        if path.startswith(ROUTE_PREFIXES):
+            return None
+        try:
+            resp = try_serve_public(path.lstrip('/'))
+            if resp is not None:
+                return resp
+        except HTTPException:
+            raise
+        except Exception:
+            pass
+        return None
+
+    app.before_request(log_access)
 
 
 def log_access():

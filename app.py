@@ -3,7 +3,7 @@ import sys
 import signal
 import socket
 import threading
-from flask import Flask, render_template, abort
+from flask import Flask, render_template
 from config import SECRET_KEY, MAX_CONTENT_LENGTH
 
 # 项目根目录（确保工作目录正确，不受快捷方式启动影响）
@@ -93,35 +93,12 @@ def _register_blueprints():
 
 
 # ---------------------------------------------------------------------------
-# 请求钩子
+# 请求钩子 —— 统一委托给 core.middleware
 # ---------------------------------------------------------------------------
 
 def _register_hooks(try_serve_public):
-    """注册 before_request 钩子。"""
-    from core.middleware import log_access
-
-    @app.before_request
-    def serve_public_files_hook():
-        from flask import request
-        from werkzeug.exceptions import HTTPException
-        path = request.path
-        if path.startswith('/static/') or path.startswith('/admin') or \
-           path.startswith('/api/') or path.startswith('/cmd/') or \
-           path.startswith('/scheduled') or path.startswith('/community') or \
-           path.startswith('/docs') or path in ('/login', '/register', '/logout',
-                                                '/settings', '/performance'):
-            return None
-        try:
-            resp = try_serve_public(path.lstrip('/'))
-            if resp is not None:
-                return resp
-        except HTTPException:
-            raise
-        except Exception:
-            pass
-        return None
-
-    app.before_request(log_access)
+    from core.middleware import register_hooks
+    register_hooks(app, try_serve_public)
 
 
 # ---------------------------------------------------------------------------
