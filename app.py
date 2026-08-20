@@ -2,6 +2,7 @@ import os
 import sys
 import signal
 import socket
+import threading
 from flask import Flask, render_template, abort
 from config import SECRET_KEY, MAX_CONTENT_LENGTH
 
@@ -55,6 +56,11 @@ app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 # HTTPS 环境下启用 Secure 标志，防止会话 Cookie 被中间人劫持
 app.config['SESSION_COOKIE_SECURE'] = os.environ.get('ENABLE_SSL', '0').lower() in ('1', 'true', 'yes', 'on')
+
+# Cheroot 实例必须在信号处理函数中显式 stop，否则其工作线程会阻止 Python 退出。
+_server = None
+_shutdown_started = False
+_shutdown_lock = threading.Lock()
 
 
 # ---------------------------------------------------------------------------
@@ -125,12 +131,15 @@ def _register_hooks(try_serve_public):
 def _register_template_context():
     """注册模板上下文处理器，使全局配置在所有模板中可用。"""
     from config import get_config_value
+    from flask import session
 
     @app.context_processor
     def inject_global_config():
         return {
             'ENABLE_BACKGROUND_IMAGE': get_config_value('ENABLE_BACKGROUND_IMAGE', False),
             'BACKGROUND_FADE_IN_MS': get_config_value('BACKGROUND_FADE_IN_MS', 800),
+            # 登录欢迎语只展示一次，避免刷新页面后重复打扰用户。
+            'login_welcome_username': session.pop('login_welcome_username', None),
         }
 
 
@@ -208,6 +217,7 @@ def is_port_in_use(port):
 
 def run_server(port=5000):
     """使用 Cheroot 作为 WSGI 服务器，可选 SSL。"""
+    global _server
     from cheroot.wsgi import Server
 
     print(f'[INFO] 工作目录: {os.getcwd()}', flush=True)
@@ -230,6 +240,7 @@ def run_server(port=5000):
         request_queue_size=100,
         numthreads=20,
     )
+    _server = server
 
     if has_ssl:
         print(f'[INFO] HTTPS 模式运行 (端口 {port})', flush=True)
@@ -251,33 +262,69 @@ def run_server(port=5000):
     try:
         server.start()
     except KeyboardInterrupt:
-        print('\n[INFO] 服务器已停止', flush=True)
+        # 未安装信号处理器的嵌入式运行场景仍需要进入统一关闭流程。
+        _shutdown_application(signal.SIGINT)
     except Exception as e:
         print(f'[ERROR] 服务器启动失败: {e}', flush=True)
         raise
+    finally:
+        _shutdown_application()
 
 
 # ---------------------------------------------------------------------------
 # 优雅关闭
 # ---------------------------------------------------------------------------
 
-def _graceful_shutdown(signum, frame):
-    """收到终止信号时优雅关闭服务器。"""
-    print(f'\n[INFO] 收到信号 {signum}，正在关闭服务器...', flush=True)
+def _shutdown_application(signum=None):
+    """幂等地停止 HTTP 服务、后台服务并提交剩余数据库事务。"""
+    global _shutdown_started
+
+    with _shutdown_lock:
+        if _shutdown_started:
+            return
+        _shutdown_started = True
+
+    if signum is not None:
+        print(f'\n[INFO] 收到信号 {signum}，正在关闭服务器...', flush=True)
+
     from services.logging import log_writer, log_cleaner
     from services.scheduler import scheduler
+    from services.backup import BackupScheduler
+    from services.email import email_service
     from core.db import get_db
 
-    log_writer.stop()
-    log_cleaner.stop()
+    # 先停止接收新请求，Cheroot 会关闭监听 socket 并回收工作线程。
+    if _server is not None:
+        try:
+            _server.stop()
+        except Exception as exc:
+            print(f'[WARNING] HTTP 服务关闭异常: {exc}', flush=True)
+
+    BackupScheduler().stop()
+    email_service.stop()
     scheduler.stop()
+    log_cleaner.stop()
+    # 日志写入器最后停止，尽量落下其他服务关闭过程中产生的日志。
+    log_writer.stop()
     try:
         conn = get_db()
         conn.commit()
-    except Exception:
-        pass
+    except Exception as exc:
+        print(f'[WARNING] 关闭前提交数据库失败: {exc}', flush=True)
     print('[INFO] 服务器已关闭', flush=True)
-    sys.exit(0)
+
+
+def _graceful_shutdown(signum, frame):
+    """收到终止信号时触发统一关闭流程。"""
+    # 不在 Python 信号回调栈内同步 join Cheroot 工作线程，否则 Windows 下
+    # 可能因主线程仍停留在 serve() 中而互相等待。独立线程完成实际回收。
+    shutdown_thread = threading.Thread(
+        target=_shutdown_application,
+        args=(signum,),
+        name='app-shutdown',
+        daemon=False,
+    )
+    shutdown_thread.start()
 
 
 signal.signal(signal.SIGTERM, _graceful_shutdown)

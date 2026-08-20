@@ -5,13 +5,15 @@
         <div class="max-w-md w-full mx-4 sm:mx-6">
             <div class="pixel-card rounded-xl p-5 sm:p-8">
                 <div class="absolute top-4 left-4 right-4 flex items-center justify-between z-10">
-                    <button type="button" id="register-back-step" class="btn-secondary inline-flex items-center gap-1.5 px-3 py-2 text-sm" title="返回上一步">
+                    {% if show_back_to_login %}
+                    <a href="{{ url_for('main.login') }}" class="btn-secondary inline-flex items-center gap-1.5 px-3 py-2 text-sm" title="返回登录页">
                         <i data-lucide="arrow-left" class="w-4 h-4"></i>
                         <span>返回上一步</span>
-                    </button>
-                    <button type="button" class="register-close btn-secondary inline-flex items-center justify-center w-9 h-9" title="关闭注册窗口" aria-label="关闭注册窗口">
+                    </a>
+                    {% endif %}
+                    <a href="{{ url_for('main.home') }}" class="ml-auto btn-secondary inline-flex items-center justify-center w-9 h-9" title="关闭并返回主页" aria-label="关闭注册窗口">
                         <i data-lucide="x" class="w-5 h-5"></i>
-                    </button>
+                    </a>
                 </div>
 
                 <div class="text-center mb-6 sm:mb-8 pt-12">
@@ -29,27 +31,26 @@
                 {% endif %}
 
                 <form method="POST" class="space-y-5" id="register-form">
-                    <!-- 群内验证码（前端验证通过后填入，随表单提交） -->
-                    <input type="hidden" name="verify_code" id="verify-code-hidden" value="">
                     <!-- 图形验证码（前端弹窗验证后填入，随表单提交） -->
                     <input type="hidden" name="captcha_id" id="captcha-id-hidden" value="">
                     <input type="hidden" name="captcha" id="captcha-hidden" value="">
                     <div>
                         <label class="block text-sm font-medium mb-2 text-cream/80">用户名</label>
-                        <input type="text" name="username" required minlength="2" maxlength="20" class="input-field w-full px-4 py-3 rounded-lg" placeholder="2-20 个字符">
+                        <input type="text" id="register-username" name="username" required minlength="2" maxlength="20" autocomplete="username" value="{{ submitted_username|default('', true) }}" class="input-field w-full px-4 py-3 rounded-lg" placeholder="2-20 个字符">
+                        <p id="username-availability" class="mt-2 text-xs text-cream/50 min-h-[1rem]" aria-live="polite"></p>
                     </div>
                     <div>
                         <label class="block text-sm font-medium mb-2 text-cream/80">密码</label>
-                        <input type="password" name="password" required minlength="8" class="input-field w-full px-4 py-3 rounded-lg" placeholder="至少 8 位，需包含字母">
+                        <input type="password" name="password" required minlength="8" autocomplete="new-password" data-password-strength class="input-field w-full px-4 py-3 rounded-lg" placeholder="至少 8 位，需包含字母">
                     </div>
                     <div>
                         <label class="block text-sm font-medium mb-2 text-cream/80">确认密码</label>
-                        <input type="password" name="confirm" required minlength="8" class="input-field w-full px-4 py-3 rounded-lg" placeholder="再次输入密码">
+                        <input type="password" name="confirm" required minlength="8" autocomplete="new-password" class="input-field w-full px-4 py-3 rounded-lg" placeholder="再次输入密码">
                     </div>
                     {% if email_verify_enabled %}
                     <div>
                         <label class="block text-sm font-medium mb-2 text-cream/80">邮箱地址</label>
-                        <input type="email" name="email" required class="input-field w-full px-4 py-3 rounded-lg" placeholder="请输入邮箱地址">
+                        <input type="email" name="email" required autocomplete="email" value="{{ submitted_email|default('', true) }}" class="input-field w-full px-4 py-3 rounded-lg" placeholder="请输入邮箱地址">
                     </div>
                     <div>
                         <label class="block text-sm font-medium mb-2 text-cream/80">邮箱验证码</label>
@@ -61,7 +62,7 @@
                         </div>
                     </div>
                     {% endif %}
-                    <button type="submit" class="btn-primary w-full py-3 rounded-lg font-bold">
+                    <button type="submit" id="register-submit" class="btn-primary w-full py-3 rounded-lg font-bold">
                         <i data-lucide="user-plus" class="w-5 h-5 inline mr-1"></i>注册
                     </button>
                 </form>
@@ -81,13 +82,15 @@
 <div id="group-code-modal" style="display: {% if group_code_verified %}none{% else %}block{% endif %}; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.4); backdrop-filter: blur(8px) saturate(120%); -webkit-backdrop-filter: blur(8px) saturate(120%); z-index: 50;">
     <div class="pixel-card" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); max-width: 28rem; width: calc(100% - 2rem); padding: 1.5rem;">
         <div class="absolute top-4 left-4 right-4 flex items-center justify-between z-10">
-            <button type="button" id="group-code-back" class="btn-secondary inline-flex items-center gap-1.5 px-3 py-2 text-sm" title="返回上一步">
+            {% if show_back_to_login %}
+            <a href="{{ url_for('main.login') }}" class="btn-secondary inline-flex items-center gap-1.5 px-3 py-2 text-sm" title="返回登录页">
                 <i data-lucide="arrow-left" class="w-4 h-4"></i>
                 <span>返回上一步</span>
-            </button>
-            <button type="button" class="register-close btn-secondary inline-flex items-center justify-center w-9 h-9" title="关闭注册窗口" aria-label="关闭注册窗口">
+            </a>
+            {% endif %}
+            <a href="{{ url_for('main.home') }}" class="ml-auto btn-secondary inline-flex items-center justify-center w-9 h-9" title="关闭并返回主页" aria-label="关闭注册窗口">
                 <i data-lucide="x" class="w-5 h-5"></i>
-            </button>
+            </a>
         </div>
 
         <div class="text-center mb-6 pt-12">
@@ -116,18 +119,83 @@
 
 {% block extra_script %}
 <script>
+// 用户名输入停止后查询数据库；注册提交时服务端还会再次校验，防止并发绕过。
+(function() {
+    const form = document.getElementById('register-form');
+    const input = document.getElementById('register-username');
+    const status = document.getElementById('username-availability');
+    const submitBtn = document.getElementById('register-submit');
+    if (!form || !input || !status || !submitBtn) return;
+
+    let availability = 'unknown';
+    let timer = null;
+    let requestVersion = 0;
+
+    function show(message, state) {
+        status.textContent = message;
+        status.className = 'mt-2 text-xs min-h-[1rem] ' + (
+            state === 'available' ? 'text-green-400' :
+            state === 'unavailable' ? 'text-red-400' : 'text-cream/50'
+        );
+    }
+
+    function checkUsername() {
+        const username = input.value.trim();
+        const version = ++requestVersion;
+        if (username.length < 2 || username.length > 20) {
+            availability = 'unavailable';
+            submitBtn.disabled = true;
+            show(username ? '用户名长度应为 2-20 个字符' : '', 'unavailable');
+            return;
+        }
+
+        availability = 'checking';
+        submitBtn.disabled = true;
+        show('正在检查用户名...', 'checking');
+        fetch({{ url_for('main.check_username')|tojson }} + '?username=' + encodeURIComponent(username))
+            .then(function(res) { return res.json(); })
+            .then(function(data) {
+                if (version !== requestVersion) return;
+                availability = data.available ? 'available' : 'unavailable';
+                submitBtn.disabled = !data.available;
+                show(data.message || (data.available ? '该用户名可用' : '该用户名不可用'), availability);
+            })
+            .catch(function() {
+                if (version !== requestVersion) return;
+                availability = 'unavailable';
+                submitBtn.disabled = true;
+                show('暂时无法检查用户名，请稍后重试', 'unavailable');
+            });
+    }
+
+    input.addEventListener('input', function() {
+        availability = 'unknown';
+        submitBtn.disabled = true;
+        clearTimeout(timer);
+        timer = setTimeout(checkUsername, 300);
+    });
+
+    // 此监听器先于验证码弹窗注册，用户名未确认可用时直接阻止提交。
+    form.addEventListener('submit', function(e) {
+        if (availability !== 'available') {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            Toast.warning(availability === 'checking' ? '请等待用户名检查完成' : '请先使用可用的用户名');
+            input.focus();
+        }
+    });
+
+    if (input.value.trim()) {
+        checkUsername();
+    }
+})();
+
 // 群内验证码弹窗逻辑：验证通过后前端保存验证码值，后续请求直接回传
 (function() {
     const modal = document.getElementById('group-code-modal');
     const input = document.getElementById('group-code-input');
     const submitBtn = document.getElementById('group-code-submit');
-    const groupCodeBackBtn = document.getElementById('group-code-back');
-    const closeButtons = document.querySelectorAll('.register-close');
-    const backStepBtn = document.getElementById('register-back-step');
     const formSection = document.getElementById('register-form-section');
-    const verifyCodeHidden = document.getElementById('verify-code-hidden');
-
-    var savedGroupCode = '';
 
     function showModal() {
         modal.style.display = 'block';
@@ -138,13 +206,6 @@
         modal.style.display = 'none';
         formSection.style.display = 'flex';
         if (window.lucide) lucide.createIcons();
-    }
-
-    function backToGroupCodeStep() {
-        formSection.style.display = 'none';
-        if (verifyCodeHidden) verifyCodeHidden.value = '';
-        savedGroupCode = '';
-        showModal();
     }
 
     function verifyCode() {
@@ -164,8 +225,6 @@
         .then(function(res) { return res.json(); })
         .then(function(data) {
             if (data.success) {
-                savedGroupCode = code;
-                if (verifyCodeHidden) verifyCodeHidden.value = code;
                 Toast.success('验证成功');
                 hideModal();
             } else {
@@ -184,25 +243,6 @@
     }
 
     submitBtn.addEventListener('click', verifyCode);
-    if (backStepBtn) backStepBtn.addEventListener('click', backToGroupCodeStep);
-    if (groupCodeBackBtn) {
-        groupCodeBackBtn.addEventListener('click', function() {
-            if (window.history.length > 1) {
-                window.history.back();
-            } else {
-                window.location.href = {{ url_for('main.login')|tojson }};
-            }
-        });
-    }
-    closeButtons.forEach(function(button) {
-        button.addEventListener('click', function() {
-            // 浏览器仅允许脚本打开的标签页直接关闭；普通打开时回到登录页。
-            window.close();
-            setTimeout(function() {
-                window.location.replace({{ url_for('main.login')|tojson }});
-            }, 100);
-        });
-    });
     input.addEventListener('keydown', function(e) {
         if (e.key === 'Enter') verifyCode();
     });
@@ -211,7 +251,6 @@
         .then(function(res) { return res.json(); })
         .then(function(data) {
             if (data.verified) {
-                savedGroupCode = window.__getGroupCodeCache || '';
                 modal.style.display = 'none';
                 formSection.style.display = 'flex';
                 if (window.lucide) lucide.createIcons();
@@ -230,7 +269,6 @@
         if (window.lucide) lucide.createIcons();
     }
 
-    window.__getGroupCode = function() { return savedGroupCode; };
 })();
 
 // 邮箱验证码发送：点击发送按钮 → 弹出图形验证码弹窗（使用 base.js 的 CaptchaModal）
@@ -245,8 +283,6 @@
             return;
         }
         var email = emailInput.value.trim();
-        var groupCode = (typeof window.__getGroupCode === 'function') ? window.__getGroupCode() : '';
-
         window.__showCaptchaModal('请完成图形验证码以发送邮箱验证码', function(captchaId, captchaValue) {
             // 验证通过后，调用发送邮箱验证码 API
             fetch('/api/email/send-code', {
@@ -256,8 +292,7 @@
                     email: email,
                     purpose: '注册',
                     captcha: captchaValue,
-                    captcha_id: captchaId,
-                    verify_code: groupCode
+                    captcha_id: captchaId
                 })
             })
             .then(function(res) { return res.json(); })

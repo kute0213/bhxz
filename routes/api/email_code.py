@@ -1,11 +1,11 @@
 """邮箱验证码 API 路由。"""
 
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, session
 
 from services.email import email_code_service, normalize_email, email_service
 from services.captcha import captcha_service
 from services.logger import log
-from config import get_config_value, REGISTER_VERIFY_CODE
+from config import get_config_value
 
 
 email_code_bp = Blueprint('email_code', __name__)
@@ -41,7 +41,7 @@ def send_email_code():
         "purpose": "注册",         // 可选，默认 "注册"
         "captcha": "1234",         // 图形验证码
         "captcha_id": "uuid",      // 验证码 ID（服务端内存存储）
-        "verify_code": "binhai_xz" // 群内验证码
+        // 注册场景要求当前 session 已通过群内验证码
     }
 
     返回 JSON:
@@ -55,7 +55,12 @@ def send_email_code():
     purpose = data.get('purpose') or '注册'
     captcha_input = (data.get('captcha') or '').strip()
     captcha_id = (data.get('captcha_id') or '').strip()
-    verify_code = (data.get('verify_code') or '').strip()
+
+    if purpose not in ('注册', '找回密码', '修改邮箱'):
+        return jsonify({'success': False, 'message': '不支持的验证码用途'}), 400
+
+    if purpose == '修改邮箱' and 'user_id' not in session:
+        return jsonify({'success': False, 'message': '请先登录'}), 401
 
     if not email:
         log('EmailCode', '邮箱为空', ip=request.remote_addr)
@@ -66,7 +71,7 @@ def send_email_code():
         return jsonify({'success': False, 'message': '邮箱格式不正确'}), 400
 
     # 群内验证码校验（仅注册场景需要）
-    if purpose == '注册' and verify_code != REGISTER_VERIFY_CODE:
+    if purpose == '注册' and not session.get('group_code_verified', False):
         log('EmailCode', '群内验证码错误', email=email, purpose=purpose, ip=request.remote_addr)
         return jsonify({'success': False, 'message': '群内验证码错误，请在QQ群公告中获取正确验证码'}), 400
 

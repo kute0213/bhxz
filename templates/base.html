@@ -9,7 +9,7 @@
     <!-- 本地Lucide图标库 -->
     <script src="{{ url_for('static', filename='lib/lucide/lucide.min.js', v='1') }}"></script>
     <!-- 关键CSS内联：防止白屏闪烁 -->
-    <style>body{background:#07120c;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei","Noto Sans CJK SC","WenQuanYi Micro Hei","Helvetica Neue",Arial,sans-serif}</style>
+    <style>body{background:#384152;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei","Noto Sans CJK SC","WenQuanYi Micro Hei","Helvetica Neue",Arial,sans-serif}</style>
     <script>
         document.documentElement.classList.add('js');
         // JS 保底：1.5 秒后无论 JS 是否正常，强制显示页面内容
@@ -80,12 +80,12 @@
     </script>
     <!-- 入场动画见 base.css：纯 CSS animation，不依赖 JS，避免白屏 -->
     <noscript><style>.page-content{opacity:1!important;transform:none!important}</style></noscript>
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/tailwind.css', v='1') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/tailwind.css', v='3') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v='9') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css', v='16') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css', v='18') }}">
     {% block extra_style %}{% endblock %}
 </head>
-<body>
+<body{% if ENABLE_BACKGROUND_IMAGE %} class="has-background-image"{% endif %}>
     <!-- 鼠标跟随光晕 -->
     <div class="mouse-glow" id="mouse-glow"></div>
 
@@ -347,7 +347,7 @@
 
     <!-- 图形验证码弹窗（全局共享，由 base.js 的 CaptchaModal 控制） -->
     <div id="captcha-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.4); backdrop-filter: blur(8px) saturate(120%); -webkit-backdrop-filter: blur(8px) saturate(120%); z-index: 51;">
-        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: linear-gradient(145deg, rgba(10, 24, 16, 0.22) 0%, rgba(15, 30, 20, 0.14) 50%, rgba(10, 24, 16, 0.22) 100%); backdrop-filter: blur(40px) saturate(100%); -webkit-backdrop-filter: blur(40px) saturate(100%); border: 1px solid rgba(255, 255, 255, 0.03); border-radius: 24px; box-shadow: 0 16px 64px rgba(0, 0, 0, 0.30), inset 0 0.5px 0 rgba(255, 255, 255, 0.06); max-width: 28rem; width: calc(100% - 2rem); padding: 1.5rem;">
+        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: linear-gradient(145deg, rgba(68, 78, 98, 0.99) 0%, rgba(52, 61, 79, 0.99) 100%); backdrop-filter: blur(28px) saturate(105%); -webkit-backdrop-filter: blur(28px) saturate(105%); border: 1px solid rgba(255, 255, 255, 0.11); border-radius: 16px; box-shadow: 0 16px 48px rgba(15, 18, 27, 0.34); max-width: 28rem; width: calc(100% - 2rem); padding: 1.5rem;">
             <div class="text-center mb-6">
                 <div class="w-14 h-14 mx-auto bg-gold-400/20 rounded-full flex items-center justify-center mb-4">
                     <i data-lucide="shield" class="w-7 h-7 text-gold-400"></i>
@@ -365,7 +365,7 @@
                 </div>
                 <div>
                     <label class="block text-sm font-medium mb-2 text-cream/80">验证码</label>
-                    <input type="text" id="modal-captcha-input" class="input-field w-full px-4 py-3 rounded-lg" placeholder="请输入验证码" autocomplete="off" maxlength="5">
+                    <input type="text" id="modal-captcha-input" class="input-field w-full px-4 py-3 rounded-lg" placeholder="请输入验证码（不区分大小写）" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="4">
                 </div>
                 <button type="button" id="modal-captcha-submit" class="btn-primary w-full py-3 rounded-lg font-bold">
                     验证
@@ -377,8 +377,13 @@
         </div>
     </div>
 
-    <script src="{{ url_for('static', filename='js/base.js', v='13') }}"></script>
+    <script src="{{ url_for('static', filename='js/base.js', v='14') }}"></script>
     <script src="{{ url_for('static', filename='js/main.js', v='11') }}"></script>
+    {% if login_welcome_username %}
+    <script>
+        Toast.success({{ ('欢迎来到滨海小镇，' ~ login_welcome_username)|tojson }});
+    </script>
+    {% endif %}
     {% block extra_script %}{% endblock %}
 </body>
 </html>

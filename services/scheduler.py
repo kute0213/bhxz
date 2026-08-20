@@ -62,7 +62,8 @@ class TaskScheduler:
         self._stop_event.set()
         if self._thread:
             self._thread.join(timeout=5)
-        self._executor.shutdown(wait=False)
+        # 取消尚未开始的任务；正在执行的任务仍按原有超时策略自行结束。
+        self._executor.shutdown(wait=False, cancel_futures=True)
 
     # ------------------------------------------------------------------
     # 调度主循环
