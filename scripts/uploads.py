@@ -275,28 +275,29 @@ def _migrate_uploads():
 # ============================================================================
 
 def _promote_kute_mc():
-    """将 kute_mc 用户提升为最高权限（is_admin = 1）。"""
+    """将 kute_mc[库禾] 用户提升为最高权限（is_admin = 1）。"""
     try:
         from core.db.connection import get_db
         conn = get_db()
         cursor = conn.cursor()
 
-        # 查找 kute_mc 用户
-        cursor.execute("SELECT id, username, is_admin FROM users WHERE lower(username) = lower('kute_mc')")
+        cursor.execute(
+            "SELECT id, username, is_admin FROM users WHERE lower(username) = lower('kute_mc[库禾]')"
+        )
         row = cursor.fetchone()
         if row:
             if row['is_admin'] == 1:
-                print(f'  -> kute_mc (#{row["id"]}) 已是管理员')
+                print(f'  -> {row["username"]} (#{row["id"]}) 已是管理员')
             else:
                 cursor.execute("UPDATE users SET is_admin = 1 WHERE id = ?", (row['id'],))
                 conn.commit()
-                print(f'  -> kute_mc (#{row["id"]}) 已提升为管理员')
+                print(f'  -> {row["username"]} (#{row["id"]}) 已提升为管理员')
         else:
-            print('  -> kute_mc 用户不存在，跳过')
+            print('  -> kute_mc[库禾] 用户不存在，跳过')
 
         conn.close()
     except Exception as e:
-        print(f'  [WARN] 提升 kute_mc 失败: {e}')
+        print(f'  [WARN] 提升 kute_mc[库禾] 失败: {e}')
 
 
 def _ensure_sitemap_dir():

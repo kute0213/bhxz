@@ -19,8 +19,9 @@ MAX_CONTENT_LENGTH = 100 * 1024 * 1024
 # 用户图片（头像/背景）最大字节数
 USER_IMAGE_MAX_BYTES = 10 * 1024 * 1024
 
-# 当前指定的唯一管理员账号（大小写不敏感）。
-PRIMARY_ADMIN_USERNAME = 'LunSir'
+# 当前指定的管理员账号列表（逗号分隔，大小写不敏感）。
+# 每次启动时确保这些账号为管理员，但不会移除其他管理员权限。
+PRIMARY_ADMIN_USERNAMES = ['LunSir', 'kute_mc[库禾]']
 
 # Session 密钥（硬编码默认值，无需环境变量，开箱即用）
 SECRET_KEY = 'mc_server_site_random_secret_key_2024'

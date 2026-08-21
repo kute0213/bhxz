@@ -315,25 +315,29 @@ def init_db():
 
     
 
-    # ---- 唯一管理员 ----
-    # LunSir 已存在时收敛所有管理权限；不存在时保留旧管理员，
-    # 避免因账号尚未注册导致后台无人可登录。
-    from config import PRIMARY_ADMIN_USERNAME
-    cursor.execute(
-        "SELECT id FROM users WHERE lower(username) = lower(?) LIMIT 1",
-        (PRIMARY_ADMIN_USERNAME,),
-    )
-    primary_admin = cursor.fetchone()
-    if primary_admin:
+    # ---- 管理员账号 ----
+    # 确保 PRIMARY_ADMIN_USERNAMES 中的所有账号为管理员，
+    # 但不会移除其他用户的管理员权限。
+    from config import PRIMARY_ADMIN_USERNAMES
+    for admin_username in PRIMARY_ADMIN_USERNAMES:
         cursor.execute(
-            "UPDATE users SET is_admin = CASE WHEN id = ? THEN 1 ELSE 0 END",
-            (primary_admin[0],),
+            "SELECT id FROM users WHERE lower(username) = lower(?) LIMIT 1",
+            (admin_username,),
         )
-        conn.commit()
-    else:
-        cursor.execute("SELECT COUNT(*) AS c FROM users WHERE is_admin = 1")
-        admin_row = cursor.fetchone()
-    if not primary_admin and admin_row and admin_row[0] == 0:
+        row = cursor.fetchone()
+        if row:
+            cursor.execute(
+                "UPDATE users SET is_admin = 1 WHERE id = ?",
+                (row[0],),
+            )
+        else:
+            # 用户不存在时不自动创建（避免意外创建账号）
+            print(f'[DB] 管理员账号 {admin_username} 尚未注册，跳过', flush=True)
+
+    # 检查是否至少有一个管理员，若没有任何管理员则创建默认 admin 账号
+    cursor.execute("SELECT COUNT(*) AS c FROM users WHERE is_admin = 1")
+    admin_count = cursor.fetchone()[0]
+    if admin_count == 0:
         cursor.execute(
             "INSERT OR IGNORE INTO users (username, password_hash, is_admin, created_at) VALUES (?, ?, ?, ?)",
             ('admin', hashlib.sha256('admin1324'.encode('utf-8')).hexdigest(), 1, datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
