@@ -113,6 +113,59 @@ def _start_background_services():
 
 
 # ---------------------------------------------------------------------------
+# 启动迁移
+# ---------------------------------------------------------------------------
+
+def _run_pending_migrations():
+    """检查并执行标记为待处理的清理与迁移脚本。
+
+    在 init_db() 之前执行，此时服务器尚未打开数据库连接，无锁冲突。
+    子进程内会自行初始化数据库连接。
+    一键更新在 updater.py 中设置 UPLOADS_MIGRATION_PENDING=1 标记，
+    重启后在此处执行，避免在服务器运行中直接操作数据库导致锁冲突。
+    """
+    try:
+        from services.settings_manager import get_setting, set_setting
+        if get_setting('UPLOADS_MIGRATION_PENDING', '0') != '1':
+            return
+
+        print('[INFO] 检测到待执行的清理与迁移任务，正在运行...', flush=True)
+        uploads_script = os.path.join(_APP_ROOT, 'scripts', 'uploads.py')
+        if not os.path.isfile(uploads_script):
+            print('[WARN] scripts/uploads.py 不存在，跳过迁移', flush=True)
+            try:
+                set_setting('UPLOADS_MIGRATION_PENDING', '0')
+            except Exception:
+                pass
+            return
+
+        import subprocess
+        proc = subprocess.Popen(
+            [sys.executable, uploads_script],
+            stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            text=True, bufsize=1,
+        )
+        for line in iter(proc.stdout.readline, ''):
+            line = line.rstrip('\n\r')
+            if line:
+                print(f'  | {line}', flush=True)
+        proc.wait(timeout=120)
+        if proc.returncode == 0:
+            print('[OK] 清理与迁移完成', flush=True)
+        else:
+            print(f'[WARN] 清理脚本返回码: {proc.returncode}', flush=True)
+        proc.stdout.close()
+
+        # 清除标记，避免下次启动重复执行
+        try:
+            set_setting('UPLOADS_MIGRATION_PENDING', '0')
+        except Exception:
+            pass
+    except Exception as e:
+        print(f'[WARN] 执行清理与迁移失败: {e}', flush=True)
+
+
+# ---------------------------------------------------------------------------
 # 应用初始化
 # ---------------------------------------------------------------------------
 
@@ -122,6 +175,10 @@ def _init_app():
 
     # 确保工作目录始终是项目根目录（避免快捷方式启动时跑到桌面）
     os.chdir(_APP_ROOT)
+
+    # 检查是否有待执行的清理与迁移脚本（由一键更新标记）
+    # 在 init_db() 之前执行，此时服务器尚未打开数据库连接，无锁冲突
+    _run_pending_migrations()
 
     print('[INFO] 正在初始化数据库...', flush=True)
     init_db()
