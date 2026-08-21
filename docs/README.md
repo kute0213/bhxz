@@ -255,7 +255,7 @@ export ENABLE_SSL=1 && python app.py
 ### 性能优化
 
 - **零外部依赖**：所有 CDN 资源（Lucide、Marked.js、Monaco Editor）下载到本地，无外部网络请求
-- **系统字体栈**：中文字体使用各平台预装字体（PingFang SC / Microsoft YaHei / Noto Sans CJK），零下载、零延迟
+- **系统字体栈**：中文字体使用各平台预装字体（PingFang SC / Noto Sans CJK），零下载、零延迟
 - `overflow-x: clip` 替代 `hidden`（消除滚动回弹）
 - 尊重 `prefers-reduced-motion`（无障碍用户自动禁用动画）
 - 触控设备降级光晕效果
