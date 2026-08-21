@@ -164,24 +164,24 @@ body.has-background-image .pixel-card {
         inset 0 0.5px 0 rgba(255, 255, 255, 0.08);
 }
 
-/* 磨砂玻璃按钮 - 模拟蚀刻玻璃质感 */
+/* 磨砂玻璃按钮 - 紫色蚀刻玻璃质感 */
 .btn-primary {
-    background: linear-gradient(135deg, #67e8f9 0%, #8b5cf6 100%);
+    background: rgba(139, 92, 246, 0.12);
     backdrop-filter: blur(20px) saturate(110%);
     -webkit-backdrop-filter: blur(20px) saturate(110%);
-    border: 1px solid rgba(182, 245, 255, 0.52);
+    border: 1px solid rgba(139, 92, 246, 0.25);
     border-radius: 12px !important;
-    color: #171c29; font-weight: 700;
+    color: #e8e0f8; font-weight: 600;
     position: relative;
-    transition: transform 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
-    box-shadow: 0 5px 16px rgba(59, 130, 246, 0.16);
+    transition: transform 0.2s ease, background 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    box-shadow: 0 4px 14px rgba(139, 92, 246, 0.08);
     overflow: hidden;
 }
 .btn-primary:hover {
-    background: linear-gradient(135deg, #8ceefa 0%, #a77cf8 100%);
-    border-color: rgba(215, 249, 255, 0.72);
+    background: rgba(139, 92, 246, 0.20);
+    border-color: rgba(139, 92, 246, 0.40);
     transform: translateY(-1px);
-    box-shadow: 0 8px 22px rgba(103, 232, 249, 0.16), 0 4px 16px rgba(139, 92, 246, 0.14);
+    box-shadow: 0 8px 24px rgba(139, 92, 246, 0.12), inset 0 0.5px 0 rgba(255,255,255,0.06);
 }
 .btn-primary:active { transform: translateY(0); }
 
@@ -798,7 +798,9 @@ body.has-background-image .highlight-card {
 }
 .highlight-card-top-bar {
     position: absolute; top: 0; left: 0; right: 0; height: 3px;
-    background: linear-gradient(90deg, #67e8f9, #8b5cf6);
+    background: rgba(139, 92, 246, 0.45);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
     border-radius: 24px 24px 0 0;
     z-index: 1;
 }
@@ -984,7 +986,7 @@ body.has-background-image .highlight-card {
 .upload-progress-fill {
     height: 100%;
     width: 0%;
-    background: linear-gradient(90deg, #67e8f9, #8b5cf6);
+    background: rgba(139, 92, 246, 0.50);
     border-radius: 3px;
     transition: width 0.2s ease;
     position: relative;

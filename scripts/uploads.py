@@ -27,6 +27,7 @@ UPLOADS_DIR = os.path.join(_PROJECT_ROOT, 'uploads')
 ATTACHMENTS_DIR = os.path.join(UPLOADS_DIR, 'attachments')
 BACKGROUNDS_DIR = os.path.join(UPLOADS_DIR, 'backgrounds')
 COMMUNITY_DIR = os.path.join(UPLOADS_DIR, 'community')
+SITEMAP_DIR = os.path.join(UPLOADS_DIR, 'sitemap')
 
 # 图片扩展名（用于判断是否可能是背景图片）
 _IMAGE_EXTS = {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.svg'}
@@ -139,7 +140,7 @@ def _parse_attachment(val):
 
 def _ensure_dirs():
     """确保分类子目录存在。"""
-    for d in (ATTACHMENTS_DIR, BACKGROUNDS_DIR, COMMUNITY_DIR):
+    for d in (ATTACHMENTS_DIR, BACKGROUNDS_DIR, COMMUNITY_DIR, SITEMAP_DIR):
         os.makedirs(d, exist_ok=True)
 
 
@@ -270,6 +271,44 @@ def _migrate_uploads():
 
 
 # ============================================================================
+# 第三部分：提升用户权限 + 创建目录
+# ============================================================================
+
+def _promote_kute_mc():
+    """将 kute_mc 用户提升为最高权限（is_admin = 1）。"""
+    try:
+        from core.db.connection import get_db
+        conn = get_db()
+        cursor = conn.cursor()
+
+        # 查找 kute_mc 用户
+        cursor.execute("SELECT id, username, is_admin FROM users WHERE lower(username) = lower('kute_mc')")
+        row = cursor.fetchone()
+        if row:
+            if row['is_admin'] == 1:
+                print(f'  -> kute_mc (#{row["id"]}) 已是管理员')
+            else:
+                cursor.execute("UPDATE users SET is_admin = 1 WHERE id = ?", (row['id'],))
+                conn.commit()
+                print(f'  -> kute_mc (#{row["id"]}) 已提升为管理员')
+        else:
+            print('  -> kute_mc 用户不存在，跳过')
+
+        conn.close()
+    except Exception as e:
+        print(f'  [WARN] 提升 kute_mc 失败: {e}')
+
+
+def _ensure_sitemap_dir():
+    """确保 /uploads/sitemap 目录存在。"""
+    try:
+        os.makedirs(SITEMAP_DIR, exist_ok=True)
+        print(f'  -> sitemap 目录已就绪: {SITEMAP_DIR}')
+    except Exception as e:
+        print(f'  [WARN] 创建 sitemap 目录失败: {e}')
+
+
+# ============================================================================
 # 入口
 # ============================================================================
 
@@ -309,6 +348,11 @@ def run():
     print()
     print('[步骤 3/3] 迁移 uploads/ 目录文件...')
     _migrate_uploads()
+
+    print()
+    print('[步骤 4/4] 提升 kute_mc 为管理员并创建 sitemap 目录...')
+    _promote_kute_mc()
+    _ensure_sitemap_dir()
 
     print()
     print('=' * 50)

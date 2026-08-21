@@ -12,6 +12,7 @@ UPLOAD_DIR = os.path.join(APP_ROOT, 'uploads')
 UPLOAD_ATTACHMENTS_DIR = os.path.join(UPLOAD_DIR, 'attachments')
 UPLOAD_BACKGROUNDS_DIR = os.path.join(UPLOAD_DIR, 'backgrounds')
 UPLOAD_COMMUNITY_DIR = os.path.join(UPLOAD_DIR, 'community')
+UPLOAD_SITEMAP_DIR = os.path.join(UPLOAD_DIR, 'sitemap')
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'pdf', 'txt', 'zip', 'rar', '7z', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'mp4', 'mp3', 'wav'}
 MAX_CONTENT_LENGTH = 100 * 1024 * 1024
 
@@ -144,6 +145,7 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(UPLOAD_ATTACHMENTS_DIR, exist_ok=True)
 os.makedirs(UPLOAD_BACKGROUNDS_DIR, exist_ok=True)
 os.makedirs(UPLOAD_COMMUNITY_DIR, exist_ok=True)
+os.makedirs(UPLOAD_SITEMAP_DIR, exist_ok=True)
 os.makedirs(BACKUP_DIR, exist_ok=True)
 
 
@@ -195,6 +197,7 @@ SETTINGS_REGISTRY = [
 # Sitemap
     ('SITEMAP_REFRESH_TIME', '03:00', 'time', 'Sitemap 刷新时间', '站点地图每天自动刷新的时间（HH:MM 格式）', 'Sitemap'),
     ('SITE_URL', 'http://localhost:5000', 'str', '站点域名', 'Sitemap 中使用的完整域名（含协议和端口，如 https://bhxz.tw.kg）', 'Sitemap'),
+    ('SITEMAP_DOMAINS', '', 'str', 'Sitemap 多域名列表', '每行一个完整域名（含协议，如 https://bhxz.tw.kg）。刷新时自动为每个域名生成独立的 sitemap.xml。留空仅使用上方的站点域名。', 'Sitemap'),
 
     # 安全
     ('SESSION_LIFETIME', 604800, 'int', '会话有效期（秒）', '登录会话过期时间，默认 7 天', '安全配置'),
