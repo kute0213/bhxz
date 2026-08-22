@@ -13,6 +13,7 @@ from services.captcha import captcha_service, verify_captcha
 from services.email import email_code_service
 from services.attachment_service import parse_attachment_json, save_attachments, clean_attachments
 from services.user_service import register, login, change_password, change_username
+from services import music_service
 from config import REGISTER_VERIFY_CODE
 
 
@@ -235,6 +236,86 @@ def test_duplicate_email_check():
         conn.close()
 
 
+def _insert_music(user_id, username, status, title='审核测试'):
+    """直接插入一条音频记录，返回 music_id。"""
+    conn = get_db()
+    conn.execute(
+        "INSERT INTO music (user_id, username, title, file_path, status, created_at) "
+        "VALUES (?, ?, ?, '', ?, ?)",
+        (user_id, username, title, status, time.strftime('%Y-%m-%d %H:%M:%S')),
+    )
+    conn.commit()
+    music_id = conn.execute("SELECT MAX(id) FROM music").fetchone()[0]
+    conn.close()
+    return music_id
+
+
+def test_music_status_machine():
+    """公开音频审核状态机：私有→待审核→(通过/驳回)→私有，含权限与边界失败路径。"""
+    owner = 10001
+    stranger = 10002
+    music_id = None
+    try:
+        # 私有 → 申请公开（待审核）
+        music_id = _insert_music(owner, 'owner', music_service.STATUS_PRIVATE)
+        success, _msg = music_service.toggle_music_public(music_id, owner, False, '127.0.0.1')
+        assert success is True, "私有音频申请公开应成功"
+        assert music_service.get_music(music_id)['status'] == music_service.STATUS_PENDING
+
+        # 待审核仍在待审核队列、不在公开列表
+        assert any(m['id'] == music_id for m in music_service.get_pending_musics())
+        assert all(m['id'] != music_id for m in music_service.get_public_musics())
+
+        # 待审核 → 转为私有
+        success, _msg = music_service.toggle_music_public(music_id, owner, False, '127.0.0.1')
+        assert success is True, "待审核音频转私有应成功"
+        assert music_service.get_music(music_id)['status'] == music_service.STATUS_PRIVATE
+
+        # 私有 → 待审核 → 管理员通过 → 已公开
+        music_service.toggle_music_public(music_id, owner, False, '127.0.0.1')
+        success, _msg = music_service.review_music(music_id, True, 'admin', '127.0.0.1')
+        assert success is True, "管理员通过审核应成功"
+        assert music_service.get_music(music_id)['status'] == music_service.STATUS_PUBLIC
+        assert any(m['id'] == music_id for m in music_service.get_public_musics())
+
+        # 已公开 → 转为私有 → 再申请 → 管理员驳回 → 已驳回
+        music_service.toggle_music_public(music_id, owner, False, '127.0.0.1')
+        assert music_service.get_music(music_id)['status'] == music_service.STATUS_PRIVATE
+        music_service.toggle_music_public(music_id, owner, False, '127.0.0.1')
+        assert music_service.get_music(music_id)['status'] == music_service.STATUS_PENDING
+        success, _msg = music_service.review_music(music_id, False, 'admin', '127.0.0.1')
+        assert success is True, "管理员驳回审核应成功"
+        assert music_service.get_music(music_id)['status'] == music_service.STATUS_REJECTED
+        assert all(m['id'] != music_id for m in music_service.get_public_musics())
+
+        # 已驳回 → 转为私有
+        success, _msg = music_service.toggle_music_public(music_id, owner, False, '127.0.0.1')
+        assert success is True, "已驳回音频转私有应成功"
+        assert music_service.get_music(music_id)['status'] == music_service.STATUS_PRIVATE
+
+        # 失败路径：非上传者无权限切换/审核
+        music_service.toggle_music_public(music_id, owner, False, '127.0.0.1')  # → 待审核
+        success, _msg = music_service.toggle_music_public(music_id, stranger, False, '127.0.0.1')
+        assert success is False, "非上传者切换状态应失败"
+
+        # 失败路径：非待审核状态不可审核
+        music_service.review_music(music_id, True, 'admin', '127.0.0.1')  # → 已公开
+        success, _msg = music_service.review_music(music_id, False, 'admin', '127.0.0.1')
+        assert success is False, "已公开音频不可再次审核"
+
+        # 失败路径：不存在的音频
+        success, _msg = music_service.toggle_music_public(999999, owner, False, '127.0.0.1')
+        assert success is False, "切换不存在的音频应失败"
+        success, _msg = music_service.review_music(999999, True, 'admin', '127.0.0.1')
+        assert success is False, "审核不存在的音频应失败"
+    finally:
+        if music_id:
+            conn = get_db()
+            conn.execute("DELETE FROM music WHERE id = ?", (music_id,))
+            conn.commit()
+            conn.close()
+
+
 # 运行所有测试
 if __name__ == '__main__':
     setup()
@@ -250,6 +331,7 @@ if __name__ == '__main__':
         test_register_and_login_success,
         test_change_password_validation,
         test_duplicate_email_check,
+        test_music_status_machine,
     ]
     for func in test_functions:
         try:

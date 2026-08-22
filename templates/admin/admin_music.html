@@ -9,7 +9,7 @@
                     <i data-lucide="arrow-left" class="w-4 h-4 inline mr-1"></i>返回管理中心
                 </a>
                 <h1 class="text-xl sm:text-2xl font-bold">大喇叭音频管理</h1>
-                <p class="text-cream/60 text-sm mt-1">共 {{ musics|length }} 个音频，可下架任意音频</p>
+                <p class="text-cream/60 text-sm mt-1">共 {{ musics|length }} 个音频，{{ pending_musics|length }} 个待审核</p>
             </div>
             <a href="{{ url_for('main.music_page') }}" class="btn-secondary px-4 py-2 rounded-lg text-sm">
                 <i data-lucide="music" class="w-4 h-4 inline mr-1"></i>前往大喇叭音频板块
@@ -29,6 +29,67 @@
         {% endif %}
         {% endwith %}
 
+        <!-- 待审核队列 -->
+        <div class="mb-10">
+            <h2 class="text-lg font-bold mb-4 flex items-center gap-2">
+                <i data-lucide="clock" class="w-5 h-5 text-gold-400"></i>
+                待审核公开申请
+                {% if pending_musics %}
+                <span class="px-2 py-0.5 rounded-full text-xs font-bold bg-yellow-500/20 text-yellow-300 border border-yellow-500/30">{{ pending_musics|length }}</span>
+                {% endif %}
+            </h2>
+            {% if pending_musics %}
+            <div class="space-y-3">
+                {% for m in pending_musics %}
+                <div class="pixel-card rounded-xl p-4 flex flex-wrap items-center gap-4">
+                    <div class="w-10 h-10 bg-yellow-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <i data-lucide="music" class="w-5 h-5 text-yellow-400"></i>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="font-bold text-cream truncate">{{ m.title }}</div>
+                        <div class="text-xs text-cream/50 mt-1 flex items-center gap-3">
+                            <span class="flex items-center gap-1"><i data-lucide="user" class="w-3 h-3"></i>{{ m.username or '未知' }}</span>
+                            <span>ID {{ m.id }}</span>
+                            <span>{{ (m.created_at or '')[:10] }}</span>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 flex-shrink-0">
+                        <button type="button"
+                                class="copy-link-btn px-3 py-2 rounded-lg text-xs border border-cream/20 text-cream/70 hover:text-cream hover:border-cream/40 transition-colors flex items-center gap-1.5"
+                                data-url="{{ request.host_url.rstrip('/') }}/music/{{ m.id }}.m3u8">
+                            <i data-lucide="copy" class="w-3.5 h-3.5"></i>复制链接
+                        </button>
+                        <audio controls preload="none" class="h-9 w-32 sm:w-44">
+                            <source src="{{ url_for('main.serve_music_playlist', music_id=m.id) }}" type="application/vnd.apple.mpegurl">
+                        </audio>
+                        <form method="POST" action="{{ url_for('admin.admin_music_review', music_id=m.id) }}" class="inline">
+                            <input type="hidden" name="action" value="approve">
+                            <button type="submit"
+                                    class="px-3 py-2 rounded-lg text-xs border border-green-500/30 text-green-300 hover:bg-green-500/10 transition-colors flex items-center gap-1.5">
+                                <i data-lucide="check" class="w-3.5 h-3.5"></i>通过
+                            </button>
+                        </form>
+                        <form method="POST" action="{{ url_for('admin.admin_music_review', music_id=m.id) }}" class="inline"
+                              onsubmit="return confirm('确定驳回此公开申请吗？用户可将音频转为私有或删除。')">
+                            <input type="hidden" name="action" value="reject">
+                            <button type="submit"
+                                    class="px-3 py-2 rounded-lg text-xs border border-red-500/30 text-red-300 hover:bg-red-500/10 transition-colors flex items-center gap-1.5">
+                                <i data-lucide="x" class="w-3.5 h-3.5"></i>驳回
+                            </button>
+                        </form>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="pixel-card rounded-xl p-8 text-center">
+                <i data-lucide="check-circle" class="w-8 h-8 mx-auto text-cream/20 mb-2"></i>
+                <p class="text-cream/50">暂无待审核的公开申请</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- 全部音频 -->
         {% if musics %}
         <div class="pixel-card rounded-xl overflow-hidden">
             <div class="overflow-x-auto">
@@ -53,8 +114,12 @@
                             </td>
                             <td class="px-4 py-3 text-cream/70">{{ m.username or '未知' }}</td>
                             <td class="px-4 py-3 text-center">
-                                {% if m.is_public %}
-                                <span class="inline-block px-2 py-1 bg-green-500/20 text-green-300 rounded text-xs font-medium">公开</span>
+                                {% if m.status == 2 %}
+                                <span class="inline-block px-2 py-1 bg-green-500/20 text-green-300 rounded text-xs font-medium">已公开</span>
+                                {% elif m.status == 1 %}
+                                <span class="inline-block px-2 py-1 bg-yellow-500/20 text-yellow-300 rounded text-xs font-medium">待审核</span>
+                                {% elif m.status == 3 %}
+                                <span class="inline-block px-2 py-1 bg-red-500/20 text-red-300 rounded text-xs font-medium">已驳回</span>
                                 {% else %}
                                 <span class="inline-block px-2 py-1 bg-cream/10 text-cream/60 rounded text-xs font-medium">私有</span>
                                 {% endif %}

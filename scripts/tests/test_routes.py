@@ -94,6 +94,7 @@ ROUTES = [
     ('/admin/broadcast',      'GET', [302, 401, 403], 'admin',  '广播邮件'),
     ('/admin/discussion',     'GET', [302, 401, 403], 'admin',  '讨论管理'),
     ('/admin/music',          'GET', [302, 401, 403], 'admin',  '大喇叭音频管理'),
+    ('/admin/music/999999/review', 'POST', [302, 401, 403], 'admin', '大喇叭音频审核（通过/驳回）'),
     ('/admin/update',         'GET', [302, 401, 403], 'admin',  '一键更新'),
     ('/admin/public-files',   'GET', [302, 401, 403], 'admin',  '公开文件管理'),
 

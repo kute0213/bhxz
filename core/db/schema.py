@@ -271,6 +271,7 @@ def init_db():
             )
         '''),
         # 大喇叭音频表（上传音频转码为 HLS，供游戏内大喇叭播放）
+        # status: 0=私有 1=待审核 2=已公开 3=已驳回
         ('music', '''
             CREATE SEQUENCE IF NOT EXISTS music_id_seq START 1;
             CREATE TABLE IF NOT EXISTS music (
@@ -279,7 +280,7 @@ def init_db():
                 username VARCHAR DEFAULT '',
                 title VARCHAR NOT NULL,
                 file_path VARCHAR DEFAULT '',
-                is_public INTEGER DEFAULT 0,
+                status INTEGER DEFAULT 0,
                 created_at VARCHAR NOT NULL
             )
         '''),
@@ -325,6 +326,16 @@ def init_db():
     add_column_if_not_exists('users', 'email', "VARCHAR DEFAULT ''")
 # 用户头像与个性背景只保存本地文件路径，图片内容不写入数据库。
     add_column_if_not_exists('users', 'avatar_key', "VARCHAR DEFAULT ''")
+
+    # ---- 大喇叭音频：公开审核机制迁移 ----
+    # 老库使用 is_public（0/1）标记公开，新库改用 status（0=私有 1=待审核 2=已公开 3=已驳回）
+    add_column_if_not_exists('music', 'status', 'INTEGER DEFAULT 0')
+    try:
+        # 历史已公开音频（is_public=1）直接迁移为「已通过」状态，立即在公开列表可见
+        cursor.execute("UPDATE music SET status = 2 WHERE status = 0 AND is_public = 1")
+        conn.commit()
+    except Exception as e:
+        print(f'[DB] 迁移 music 公开状态失败: {e}', flush=True)
 
     
 

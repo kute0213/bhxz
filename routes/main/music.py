@@ -15,8 +15,8 @@ from services import music_service
 
 
 def _can_access(music, user):
-    """是否有权限播放音频：公开任意访问；私有仅本人或管理员。"""
-    if music['is_public']:
+    """是否有权限播放音频：已公开任意访问；其余仅本人或管理员。"""
+    if music['status'] == music_service.STATUS_PUBLIC:
         return True
     if not user:
         return False
@@ -55,10 +55,17 @@ def upload_music():
     )
     if success:
         base = request.host_url.rstrip('/')
-        flash(
-            f'音频上传成功！播放链接：{base}/music/{result["music_id"]}.m3u8',
-            'success',
-        )
+        if is_public:
+            flash(
+                f'音频上传成功并已提交公开审核，审核通过后将在游戏内大喇叭展示。'
+                f'播放链接：{base}/music/{result["music_id"]}.m3u8',
+                'success',
+            )
+        else:
+            flash(
+                f'音频上传成功！播放链接：{base}/music/{result["music_id"]}.m3u8',
+                'success',
+            )
     else:
         flash(result, 'error')
     return redirect(url_for('main.music_page'))

@@ -13,13 +13,48 @@ from services import music_service
 @admin_bp.route('/admin/music')
 @login_required
 def admin_music_list():
-    """管理员查看所有音频。"""
+    """管理员查看所有音频 + 待审核队列。"""
     user = get_current_user()
     if not user or not user['is_admin']:
         abort(403)
 
+    pending_musics = music_service.get_pending_musics()
     musics = music_service.get_all_musics()
-    return render_template('admin/admin_music.html', user=user, musics=musics)
+    return render_template(
+        'admin/admin_music.html',
+        user=user,
+        pending_musics=pending_musics,
+        musics=musics,
+    )
+
+
+@admin_bp.route('/admin/music/<int:music_id>/review', methods=['POST'])
+@login_required
+def admin_music_review(music_id):
+    """管理员审核公开申请：通过 / 驳回。"""
+    user = get_current_user()
+    if not user or not user['is_admin']:
+        abort(403)
+
+    action = request.form.get('action', '')
+    if action == 'approve':
+        success, message = music_service.review_music(
+            music_id, approve=True,
+            reviewer_username=user['username'],
+            ip_address=request.remote_addr,
+        )
+    elif action == 'reject':
+        success, message = music_service.review_music(
+            music_id, approve=False,
+            reviewer_username=user['username'],
+            ip_address=request.remote_addr,
+        )
+    else:
+        flash('无效的操作', 'error')
+        return redirect(url_for('admin.admin_music_list'))
+
+    flash(message, 'success' if success else 'error')
+    return redirect(url_for('admin.admin_music_list'))
 
 
 @admin_bp.route('/admin/music/<int:music_id>/delete', methods=['POST'])

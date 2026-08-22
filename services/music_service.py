@@ -18,6 +18,20 @@ from services.logger import log
 # HLS 分片时长（秒）
 HLS_SEGMENT_SECONDS = 10
 
+# 音频状态：0=私有 1=待审核 2=已公开 3=已驳回
+STATUS_PRIVATE = 0
+STATUS_PENDING = 1
+STATUS_PUBLIC = 2
+STATUS_REJECTED = 3
+
+# 状态显示文案
+STATUS_LABELS = {
+    STATUS_PRIVATE: '私有',
+    STATUS_PENDING: '待审核',
+    STATUS_PUBLIC: '已公开',
+    STATUS_REJECTED: '已驳回',
+}
+
 
 def _now():
     return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -33,12 +47,13 @@ def _music_dir(music_id):
 # ---------------------------------------------------------------------------
 
 def get_public_musics():
-    """获取所有公开音频（游戏内大喇叭列表）。"""
+    """获取所有已通过审核的公开音频（游戏内大喇叭列表）。"""
     conn = get_db()
     try:
         rows = conn.execute(
-            "SELECT id, user_id, username, title, is_public, created_at "
-            "FROM music WHERE is_public = 1 ORDER BY id DESC"
+            "SELECT id, user_id, username, title, status, created_at "
+            "FROM music WHERE status = ? ORDER BY id DESC",
+            (STATUS_PUBLIC,),
         ).fetchall()
         return [dict(r) for r in rows]
     finally:
@@ -50,9 +65,23 @@ def get_user_musics(user_id):
     conn = get_db()
     try:
         rows = conn.execute(
-            "SELECT id, user_id, username, title, is_public, created_at "
+            "SELECT id, user_id, username, title, status, created_at "
             "FROM music WHERE user_id = ? ORDER BY id DESC",
             (user_id,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def get_pending_musics():
+    """获取所有待审核音频（管理员审核队列）。"""
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            "SELECT id, user_id, username, title, status, created_at "
+            "FROM music WHERE status = ? ORDER BY id DESC",
+            (STATUS_PENDING,),
         ).fetchall()
         return [dict(r) for r in rows]
     finally:
@@ -64,7 +93,7 @@ def get_all_musics():
     conn = get_db()
     try:
         rows = conn.execute(
-            "SELECT id, user_id, username, title, is_public, created_at "
+            "SELECT id, user_id, username, title, status, created_at "
             "FROM music ORDER BY id DESC"
         ).fetchall()
         return [dict(r) for r in rows]
@@ -77,7 +106,7 @@ def get_music(music_id):
     conn = get_db()
     try:
         row = conn.execute(
-            "SELECT id, user_id, username, title, file_path, is_public, created_at "
+            "SELECT id, user_id, username, title, file_path, status, created_at "
             "FROM music WHERE id = ?",
             (music_id,),
         ).fetchone()
@@ -156,12 +185,14 @@ def upload_music(user_id, username, title, is_public, upload_file, ip_address):
             raise RuntimeError(f'音频转码失败：{detail}')
 
         # 3. 插入数据库记录，获取音频 ID
+        #    申请公开 → 待审核；仅自己使用 → 私有
+        status = STATUS_PENDING if is_public else STATUS_PRIVATE
         conn = get_db()
         try:
             cursor = conn.execute(
-                "INSERT INTO music (user_id, username, title, file_path, is_public, created_at) "
+                "INSERT INTO music (user_id, username, title, file_path, status, created_at) "
                 "VALUES (?, ?, ?, '', ?, ?)",
-                (user_id, username, title, 1 if is_public else 0, _now()),
+                (user_id, username, title, status, _now()),
             )
             conn.commit()
             music_id = cursor.lastrowid
@@ -191,7 +222,7 @@ def upload_music(user_id, username, title, is_public, upload_file, ip_address):
             conn.close()
 
         log('Music', '上传大喇叭音频', music_id=music_id, user_id=user_id,
-            username=username, title=title, is_public=is_public, ip=ip_address)
+            username=username, title=title, status=status, ip=ip_address)
         return True, {'music_id': music_id, 'title': title}
     except Exception as e:
         # 清理：删除临时目录；若已插入数据库记录则同步删除记录与文件
@@ -251,7 +282,11 @@ def delete_music(music_id, user_id, is_admin, ip_address):
 
 
 def toggle_music_public(music_id, user_id, is_admin, ip_address):
-    """切换音频公开/私有状态。返回 (success, message)。"""
+    """切换音频公开/私有状态。返回 (success, message)。
+
+    - 私有 → 申请公开（进入待审核，管理员审核通过后才公开）
+    - 待审核/已公开/已驳回 → 转为私有（仅自己可见）
+    """
     music = get_music(music_id)
     if not music:
         return False, '音频不存在'
@@ -259,11 +294,16 @@ def toggle_music_public(music_id, user_id, is_admin, ip_address):
     if not is_admin and music['user_id'] != user_id:
         return False, '无权修改该音频'
 
-    new_status = 0 if music['is_public'] else 1
+    # 私有 → 申请公开（待审核）；其余状态 → 转为私有
+    if music['status'] == STATUS_PRIVATE:
+        new_status = STATUS_PENDING
+    else:
+        new_status = STATUS_PRIVATE
+
     conn = get_db()
     try:
         conn.execute(
-            "UPDATE music SET is_public = ? WHERE id = ?",
+            "UPDATE music SET status = ? WHERE id = ?",
             (new_status, music_id),
         )
         conn.commit()
@@ -274,7 +314,40 @@ def toggle_music_public(music_id, user_id, is_admin, ip_address):
     conn.close()
 
     log('Music', '切换音频公开状态', music_id=music_id, user_id=user_id,
-        is_public=new_status, ip=ip_address)
-    if new_status:
-        return True, '已公开，所有用户可在游戏内大喇叭看到并播放'
-    return True, '已设为私有，仅自己可见'
+        status=new_status, ip=ip_address)
+    if new_status == STATUS_PRIVATE:
+        return True, '已转为私有，仅自己可见'
+    return True, '已申请公开，审核通过后将展示在游戏内大喇叭音频列表'
+
+
+def review_music(music_id, approve, reviewer_username, ip_address):
+    """管理员审核公开申请。返回 (success, message)。
+
+    approve=True 通过 → 已公开；approve=False 驳回 → 已驳回（用户可转为私有或删除）。
+    仅待审核状态的音频可被审核。
+    """
+    music = get_music(music_id)
+    if not music:
+        return False, '音频不存在'
+    if music['status'] != STATUS_PENDING:
+        return False, '该音频不在待审核状态'
+
+    new_status = STATUS_PUBLIC if approve else STATUS_REJECTED
+    conn = get_db()
+    try:
+        conn.execute(
+            "UPDATE music SET status = ? WHERE id = ?",
+            (new_status, music_id),
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        conn.close()
+        return False, '操作失败'
+    conn.close()
+
+    log('Music', '审核公开音频', music_id=music_id, approve=approve,
+        reviewer=reviewer_username, title=music['title'], ip=ip_address)
+    if approve:
+        return True, '已通过审核，音频已在游戏内大喇叭公开'
+    return True, '已驳回，用户可将音频转为私有或删除'
