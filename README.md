@@ -77,7 +77,8 @@ python scripts/build/package.py
 ├── uploads/      # 运行期上传数据
 │   ├── attachments/    # 留言板/讨论区附件
 │   ├── backgrounds/    # 全站背景图片（bg_16_9.jpg 等）
-│   └── community/      # 社区资源
+│   ├── community/      # 社区资源
+│   └── music/          # 大喇叭音频（每个音频一个 ID 目录，含 m3u8 与 ts 分片）
 ├── backups/      # 数据库备份
 └── ssl/          # HTTPS 证书（可选）
 ```
@@ -100,6 +101,7 @@ python scripts/build/package.py
 - 用户管理、访问日志、模组介绍管理
 - 服务器指南 CRUD + 审核工作流 + 编辑封禁
 - 讨论区管理（帖子置顶/锁定/删除 + 分类管理）
+- 大喇叭音频管理（查看全部音频，一键下架）
 - 脚本控制台（实时终端 + 快捷命令 + 定时任务）
 - 系统设置（在线编辑，热重载，含背景图片开关）
 - 数据库备份（手动/自动，进度条）
@@ -117,6 +119,14 @@ python scripts/build/package.py
 - 分类筛选、置顶优先、分页加载
 - 回复实时刷新（默认 5 秒）
 - Markdown 编辑 + 附件上传
+
+### 大喇叭音频
+- 「大喇叭音频」板块：上传音频自动转码为 HLS（m3u8），生成 `http://<主机>/music/<编号>.m3u8` 播放链接
+- 支持 mp3 / wav / ogg / m4a / flac，单文件不超过 100MB（依赖系统 ffmpeg）
+- 用户可选择是否公开：公开后所有用户可在游戏内大喇叭音频列表看到并播放，私有仅本人可见
+- 公开 JSON API（`/api/music/list`）供游戏端获取音频列表与播放链接
+- 管理员可在后台查看全部音频并一键下架（删除数据库记录并同步删除音频文件）
+- 音频文件存放在 `uploads/music/<音频ID>/`，删除记录时自动清理对应目录，无文件残留
 
 ### 终端控制台与快捷命令
 - 实时终端（持久 shell 会话，SSE 流式输出）
@@ -155,6 +165,8 @@ python scripts/build/package.py
 |--------|------|--------|
 | `DB_PATH` | 数据库文件路径 | `./site.duckdb` |
 | `UPLOAD_DIR` | 上传文件目录 | `./uploads` |
+| `UPLOAD_MUSIC_DIR` | 大喇叭音频存放目录 | `./uploads/music` |
+| `MUSIC_ALLOWED_EXTENSIONS` | 大喇叭音频允许上传的格式 | `mp3/wav/ogg/m4a/flac` |
 | `MAX_CONTENT_LENGTH` | 最大上传大小 | 100 MB |
 | `SECRET_KEY` | Session 密钥 | `mc_server_site_random_secret_key_2024` |
 | `REGISTER_VERIFY_CODE` | 注册验证码 | `binhai_xz` |
@@ -196,6 +208,7 @@ export ENABLE_SSL=1 && python app.py
 |------|------|
 | `GET /api/performance` | 服务器性能数据（CPU/内存/运行时间） |
 | `GET /api/stats` | 网站统计数据 |
+| `GET /api/music/list` | 大喇叭音频列表（仅公开音频，含 m3u8 播放链接） |
 | `GET /api/polls` | 投票数据（含选项/百分比/用户投票状态） |
 | `GET /api/captcha/generate` | 生成图形验证码 |
 | `POST /api/captcha/verify` | 验证图形验证码 |
@@ -350,6 +363,7 @@ workspace/
 │   ├── board_service.py      #   征集主题 CRUD
 │   ├── discussion_service.py #   讨论区帖子管理
 │   ├── poll_service.py       #   投票业务
+│   ├── music_service.py      #   大喇叭音频上传/转码/删除
 │   ├── captcha.py            #   图形验证码
 │   ├── ratelimit.py          #   IP 频率限制
 │   ├── logger.py             #   操作日志
@@ -414,7 +428,7 @@ workspace/
 
 ### 数据库
 
-使用 **DuckDB**（嵌入式 OLAP 数据库，单文件），首次启动自动建表。共 19 张表：
+使用 **DuckDB**（嵌入式 OLAP 数据库，单文件），首次启动自动建表。共 20 张表：
 
 | 表名 | 说明 | 关键约束 |
 |------|------|----------|
@@ -437,6 +451,7 @@ workspace/
 | `discussion_categories` | 讨论分类 | slug 唯一 |
 | `discussion_topics` | 讨论帖子 | 支持分类/标签/附件/置顶/锁定 |
 | `discussion_replies` | 讨论回复 | 外键 `topic_id`，支持附件 |
+| `music` | 大喇叭音频 | `is_public` 控制公开，删除记录时同步删除 `uploads/music/<ID>/` 文件目录 |
 
 #### 访问日志自动清理
 

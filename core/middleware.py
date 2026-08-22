@@ -18,7 +18,7 @@ ROUTE_PREFIXES = (
     '/static/', '/admin', '/api/', '/cmd/',
     '/scheduled', '/community', '/docs',
     '/login', '/register', '/logout', '/settings', '/performance',
-    '/sitemap.xml',
+    '/music', '/sitemap.xml',
 )
 
 

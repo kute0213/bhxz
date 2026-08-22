@@ -270,6 +270,19 @@ def init_db():
                 updated_at VARCHAR NOT NULL
             )
         '''),
+        # 大喇叭音频表（上传音频转码为 HLS，供游戏内大喇叭播放）
+        ('music', '''
+            CREATE SEQUENCE IF NOT EXISTS music_id_seq START 1;
+            CREATE TABLE IF NOT EXISTS music (
+                id INTEGER PRIMARY KEY DEFAULT nextval('music_id_seq'),
+                user_id INTEGER NOT NULL,
+                username VARCHAR DEFAULT '',
+                title VARCHAR NOT NULL,
+                file_path VARCHAR DEFAULT '',
+                is_public INTEGER DEFAULT 0,
+                created_at VARCHAR NOT NULL
+            )
+        '''),
     ]
 
     for table_name, ddl in tables:

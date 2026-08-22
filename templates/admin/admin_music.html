@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}大喇叭音频管理{% endblock %}
+{% block content %}
+<section class="page-container py-12">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-8">
+            <div>
+                <a href="{{ url_for('admin.admin_page') }}" class="text-gold-400 hover:text-gold-300 text-sm mb-2 inline-block">
+                    <i data-lucide="arrow-left" class="w-4 h-4 inline mr-1"></i>返回管理中心
+                </a>
+                <h1 class="text-xl sm:text-2xl font-bold">大喇叭音频管理</h1>
+                <p class="text-cream/60 text-sm mt-1">共 {{ musics|length }} 个音频，可下架任意音频</p>
+            </div>
+            <a href="{{ url_for('main.music_page') }}" class="btn-secondary px-4 py-2 rounded-lg text-sm">
+                <i data-lucide="music" class="w-4 h-4 inline mr-1"></i>前往大喇叭音频板块
+            </a>
+        </div>
+
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        {% for category, message in messages %}
+        <div class="mb-4 p-4 rounded-lg text-sm flex items-center gap-2
+                    {% if category == 'error' %}bg-red-900/30 border border-red-500/30 text-red-300
+                    {% else %}bg-green-900/30 border border-green-500/30 text-green-300{% endif %}">
+            <i data-lucide="{% if category == 'error' %}alert-circle{% else %}check-circle{% endif %}" class="w-5 h-5 flex-shrink-0"></i>
+            {{ message }}
+        </div>
+        {% endfor %}
+        {% endif %}
+        {% endwith %}
+
+        {% if musics %}
+        <div class="pixel-card rounded-xl overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="border-b border-forest-700/50">
+                            <th class="text-left px-4 py-3 text-cream/60 font-medium">ID</th>
+                            <th class="text-left px-4 py-3 text-cream/60 font-medium">音频名称</th>
+                            <th class="text-left px-4 py-3 text-cream/60 font-medium">上传者</th>
+                            <th class="text-center px-4 py-3 text-cream/60 font-medium">状态</th>
+                            <th class="text-left px-4 py-3 text-cream/60 font-medium">上传时间</th>
+                            <th class="text-right px-4 py-3 text-cream/60 font-medium">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for m in musics %}
+                        <tr class="border-b border-forest-700/30 hover:bg-forest-800/30">
+                            <td class="px-4 py-3 text-cream/60">{{ m.id }}</td>
+                            <td class="px-4 py-3">
+                                <div class="text-cream/90">{{ m.title[:40] }}{% if m.title|length > 40 %}...{% endif %}</div>
+                                <div class="text-xs text-cream/50 mt-0.5">{{ request.host_url.rstrip('/') }}/music/{{ m.id }}.m3u8</div>
+                            </td>
+                            <td class="px-4 py-3 text-cream/70">{{ m.username or '未知' }}</td>
+                            <td class="px-4 py-3 text-center">
+                                {% if m.is_public %}
+                                <span class="inline-block px-2 py-1 bg-green-500/20 text-green-300 rounded text-xs font-medium">公开</span>
+                                {% else %}
+                                <span class="inline-block px-2 py-1 bg-cream/10 text-cream/60 rounded text-xs font-medium">私有</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-4 py-3 text-cream/60">{{ m.created_at[:10] }}</td>
+                            <td class="px-4 py-3">
+                                <div class="flex items-center justify-end gap-2">
+                                    <form method="POST" action="{{ url_for('admin.admin_music_delete', music_id=m.id) }}" class="inline"
+                                          onsubmit="return confirm('确定要下架（删除）此音频吗？将同步删除数据库记录和音频文件，无法恢复。')">
+                                        <button type="submit"
+                                                class="px-2 py-1 rounded text-xs border border-red-500/30 text-red-300 hover:bg-red-500/10 transition-colors flex items-center gap-1"
+                                                title="下架（删除）">
+                                            <i data-lucide="trash-2" class="w-3 h-3"></i>下架
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% else %}
+        <div class="pixel-card rounded-xl p-12 text-center">
+            <i data-lucide="music" class="w-12 h-12 mx-auto text-cream/20 mb-4"></i>
+            <p class="text-cream/50">暂无音频</p>
+        </div>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

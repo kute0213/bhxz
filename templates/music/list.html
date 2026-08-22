@@ -1,0 +1,221 @@
+{% extends "base.html" %}
+{% block title %}大喇叭音频{% endblock %}
+{% block content %}
+<section class="page-container py-12">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        {% for category, message in messages %}
+        <div class="mb-4 p-4 rounded-2xl text-sm flex items-center gap-2
+                    {% if category == 'error' %}bg-red-900/30 border border-red-500/30 text-red-300
+                    {% else %}bg-green-900/30 border border-green-500/30 text-green-300{% endif %}">
+            <i data-lucide="{% if category == 'error' %}alert-circle{% else %}check-circle{% endif %}" class="w-5 h-5 flex-shrink-0"></i>
+            {{ message }}
+        </div>
+        {% endfor %}
+        {% endif %}
+        {% endwith %}
+
+        <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
+            <div>
+                <h1 class="text-2xl sm:text-3xl font-bold">大喇叭音频</h1>
+                <p class="text-cream/60 text-sm mt-1">上传音频，供游戏内大喇叭播放</p>
+            </div>
+            {% if user %}
+            <button id="show-upload-btn" class="btn-primary px-5 py-2.5 rounded-lg text-sm font-bold flex items-center gap-2">
+                <i data-lucide="upload" class="w-4 h-4"></i>
+                上传音频
+            </button>
+            {% else %}
+            <a href="{{ url_for('main.login') }}" class="btn-primary px-5 py-2.5 rounded-lg text-sm font-bold">登录后上传</a>
+            {% endif %}
+        </div>
+
+        <!-- 上传表单（仅登录用户，默认收起） -->
+        {% if user %}
+        <div id="upload-panel" class="pixel-card rounded-xl p-5 sm:p-6 mb-8 hidden">
+            <h2 class="text-lg font-bold mb-4 flex items-center gap-2">
+                <i data-lucide="upload" class="w-5 h-5 text-gold-400"></i>
+                上传音频
+            </h2>
+            <form method="POST" action="{{ url_for('main.upload_music') }}" enctype="multipart/form-data" class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium mb-2 text-cream/80">音频名称</label>
+                    <input type="text" name="title" maxlength="60" required placeholder="例如：开服主题曲"
+                           class="input-field w-full px-4 py-3 rounded-lg">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-2 text-cream/80">音频文件</label>
+                    <input type="file" name="audio_file" accept=".mp3,.wav,.ogg,.m4a,.flac,audio/*" required
+                           class="input-field w-full px-4 py-3 rounded-lg">
+                    <p class="text-cream/50 text-xs mt-1">支持 mp3 / wav / ogg / m4a / flac，单文件不超过 100MB，上传后自动转码为 m3u8</p>
+                </div>
+                <label class="flex items-center gap-3 cursor-pointer select-none">
+                    <input type="checkbox" name="is_public" value="1"
+                           class="w-4 h-4 rounded accent-amber-400">
+                    <span class="text-sm text-cream/80">
+                        公开音频（所有用户可在游戏内大喇叭看到并播放）
+                    </span>
+                </label>
+                <button type="submit" class="btn-primary w-full py-3 rounded-lg font-bold">
+                    上传并转码
+                </button>
+            </form>
+        </div>
+        {% endif %}
+
+        <!-- 公开音频列表 -->
+        <div class="mb-10">
+            <h2 class="text-lg font-bold mb-4 flex items-center gap-2">
+                <i data-lucide="music" class="w-5 h-5 text-gold-400"></i>
+                公开音频（游戏内大喇叭）
+            </h2>
+            {% if public_musics %}
+            <div class="space-y-3">
+                {% for m in public_musics %}
+                <div class="pixel-card rounded-xl p-4 flex items-center gap-4">
+                    <div class="w-10 h-10 bg-gold-400/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <i data-lucide="music" class="w-5 h-5 text-gold-400"></i>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="font-bold text-cream truncate">{{ m.title }}</div>
+                        <div class="text-xs text-cream/50 mt-1 flex items-center gap-3">
+                            <span class="flex items-center gap-1">
+                                <i data-lucide="user" class="w-3 h-3"></i>{{ m.username }}
+                            </span>
+                            <span>{{ (m.created_at or '')[:10] }}</span>
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2 flex-shrink-0">
+                        <button type="button"
+                                class="copy-link-btn px-3 py-2 rounded-lg text-xs border border-cream/20 text-cream/70 hover:text-cream hover:border-cream/40 transition-colors flex items-center gap-1.5"
+                                data-url="{{ request.host_url.rstrip('/') }}/music/{{ m.id }}.m3u8">
+                            <i data-lucide="copy" class="w-3.5 h-3.5"></i>复制链接
+                        </button>
+                        <audio controls preload="none" class="h-9 w-32 sm:w-44">
+                            <source src="{{ url_for('main.serve_music_playlist', music_id=m.id) }}" type="application/vnd.apple.mpegurl">
+                        </audio>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="pixel-card rounded-xl p-12 text-center">
+                <i data-lucide="music" class="w-12 h-12 mx-auto text-cream/20 mb-4"></i>
+                <p class="text-cream/50">暂无公开音频</p>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- 我的音频 -->
+        {% if user %}
+        <div>
+            <h2 class="text-lg font-bold mb-4 flex items-center gap-2">
+                <i data-lucide="folder-open" class="w-5 h-5 text-gold-400"></i>
+                我的音频
+            </h2>
+            {% if my_musics %}
+            <div class="space-y-3">
+                {% for m in my_musics %}
+                <div class="pixel-card rounded-xl p-4 flex items-center gap-4">
+                    <div class="w-10 h-10 bg-gold-400/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <i data-lucide="music" class="w-5 h-5 text-gold-400"></i>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="font-bold text-cream truncate">
+                            {{ m.title }}
+                            {% if m.is_public %}
+                            <span class="ml-1 px-2 py-0.5 rounded text-xs font-bold bg-green-500/20 text-green-300 border border-green-500/30">公开</span>
+                            {% else %}
+                            <span class="ml-1 px-2 py-0.5 rounded text-xs font-bold bg-cream/10 text-cream/60 border border-cream/20">私有</span>
+                            {% endif %}
+                        </div>
+                        <div class="text-xs text-cream/50 mt-1">{{ (m.created_at or '')[:10] }}</div>
+                    </div>
+                    <div class="flex items-center gap-2 flex-shrink-0">
+                        <button type="button"
+                                class="copy-link-btn px-3 py-2 rounded-lg text-xs border border-cream/20 text-cream/70 hover:text-cream hover:border-cream/40 transition-colors flex items-center gap-1.5"
+                                data-url="{{ request.host_url.rstrip('/') }}/music/{{ m.id }}.m3u8">
+                            <i data-lucide="copy" class="w-3.5 h-3.5"></i>复制链接
+                        </button>
+                        <form method="POST" action="{{ url_for('main.toggle_music_public', music_id=m.id) }}" class="inline">
+                            <button type="submit"
+                                    class="px-3 py-2 rounded-lg text-xs border transition-colors flex items-center gap-1.5
+                                           {% if m.is_public %}border-yellow-500/30 text-yellow-300 hover:bg-yellow-500/10
+                                           {% else %}border-green-500/30 text-green-300 hover:bg-green-500/10{% endif %}"
+                                    title="{% if m.is_public %}设为私有{% else %}设为公开{% endif %}">
+                                <i data-lucide="{% if m.is_public %}eye-off{% else %}eye{% endif %}" class="w-3.5 h-3.5"></i>
+                                {% if m.is_public %}转为私有{% else %}转为公开{% endif %}
+                            </button>
+                        </form>
+                        <form method="POST" action="{{ url_for('main.delete_music', music_id=m.id) }}" class="inline"
+                              onsubmit="return confirm('确定要删除此音频吗？删除后无法恢复。')">
+                            <button type="submit"
+                                    class="px-3 py-2 rounded-lg text-xs border border-red-500/30 text-red-300 hover:bg-red-500/10 transition-colors flex items-center gap-1.5"
+                                    title="删除">
+                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>删除
+                            </button>
+                        </form>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="pixel-card rounded-xl p-10 text-center">
+                <i data-lucide="folder-open" class="w-10 h-10 mx-auto text-cream/20 mb-3"></i>
+                <p class="text-cream/50">你还没有上传音频</p>
+            </div>
+            {% endif %}
+        </div>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_script %}
+<script>
+(function () {
+    // 上传表单展开/收起
+    var panel = document.getElementById('upload-panel');
+    var btn = document.getElementById('show-upload-btn');
+    if (panel && btn) {
+        btn.addEventListener('click', function () {
+            var hidden = panel.classList.contains('hidden');
+            panel.classList.toggle('hidden');
+            btn.querySelector('i').setAttribute('data-lucide', hidden ? 'x' : 'upload');
+            if (typeof lucide !== 'undefined' && lucide.createIcons) {
+                try { lucide.createIcons(); } catch (_) {}
+            }
+            if (hidden) {
+                var input = panel.querySelector('input[type="file"]');
+                if (input) input.focus();
+            }
+        });
+    }
+
+    // 复制播放链接
+    document.querySelectorAll('.copy-link-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var url = btn.getAttribute('data-url') || '';
+            function done(ok) {
+                if (typeof Toast !== 'undefined') {
+                    if (ok) Toast.success('播放链接已复制'); else Toast.error('复制失败，请手动复制');
+                }
+            }
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(url).then(function () { done(true); }, function () { done(false); });
+            } else {
+                var ta = document.createElement('textarea');
+                ta.value = url;
+                ta.style.position = 'fixed';
+                ta.style.opacity = '0';
+                document.body.appendChild(ta);
+                ta.select();
+                try { done(document.execCommand('copy')); } catch (_) { done(false); }
+                document.body.removeChild(ta);
+            }
+        });
+    });
+})();
+</script>
+{% endblock %}

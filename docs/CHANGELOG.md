@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### 新增
+- **「大喇叭音频」板块**：注册用户可上传音频（mp3/wav/ogg/m4a/flac，单文件 ≤100MB），上传后由 ffmpeg 自动转码为 HLS（m3u8 + ts 分片），生成 `http://<主机>/music/<编号>.m3u8` 播放链接并告知用户
+- **音频列表与公开控制**：板块内展示全部公开音频与「我的音频」列表，用户可随时切换公开/私有；公开后所有用户（含未登录）可在游戏内大喇叭音频列表看到并播放
+- **公开 JSON API**：新增 `GET /api/music/list`，返回公开音频列表及 m3u8 播放链接（相对/绝对地址），供游戏端调用，遵循现有 API 规范
+- **管理员后台管理**：新增「大喇叭音频管理」页，管理员可查看全部音频并一键下架（删除）
+- **删除同步清理文件**：音频在数据库删除记录时同步删除 `uploads/music/<ID>/` 目录，无文件残留；数据库表 `music` 记录上传者/标题/公开状态/时间
+
 ### 优化
 - **统一全站进度条为磨砂玻璃质感**：新增 `.progress-track` / `.progress-fill` 组件（半透明磨砂轨道 + 渐变流光扫过动画 + 顶部高光 + 柔光晕），提供 `gold / green / blue / purple / red / yellow` 六种颜色变体与 `xs / sm / md / lg` 四档尺寸；一键更新、数据库备份、CPU/内存监控、背景上传、附件上传等所有进度条统一改用该组件，视觉一致且不削弱原有动效
 - **充分使用模板宏**：新增 `templates/macros/progress.html` 进度条宏 `progress_track()`，`admin_update.html`、`admin_db_backup.html`、`performance.html`、`index.html` 统一通过宏生成进度条，消除重复的内联样式代码
