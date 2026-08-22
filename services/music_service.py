@@ -12,11 +12,8 @@ import uuid
 from datetime import datetime
 
 from core.db import get_db
-from config import UPLOAD_MUSIC_DIR, MUSIC_ALLOWED_EXTENSIONS
+from config import UPLOAD_MUSIC_DIR, MUSIC_ALLOWED_EXTENSIONS, FFMPEG_BIN
 from services.logger import log
-
-# ffmpeg 可执行文件（系统 PATH 中查找）
-FFMPEG_BIN = 'ffmpeg'
 
 # HLS 分片时长（秒）
 HLS_SEGMENT_SECONDS = 10

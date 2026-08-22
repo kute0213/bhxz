@@ -20,6 +20,14 @@ ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'pdf', 'txt', 'zip', 
 MUSIC_ALLOWED_EXTENSIONS = {'mp3', 'wav', 'ogg', 'm4a', 'flac'}
 MAX_CONTENT_LENGTH = 100 * 1024 * 1024
 
+# 大喇叭音频：内置 ffmpeg 可执行文件路径
+# Windows 调用 <项目根>/scripts/ffmpeg/ffmpeg.exe，Linux/macOS 调用 <项目根>/scripts/ffmpeg/ffmpeg。
+# 未随项目内置该二进制时，自动回退到系统 PATH 中的 ffmpeg。
+FFMPEG_DIR = os.path.join(APP_ROOT, 'scripts', 'ffmpeg')
+FFMPEG_BIN = os.path.join(FFMPEG_DIR, 'ffmpeg.exe') if sys.platform.startswith('win') else os.path.join(FFMPEG_DIR, 'ffmpeg')
+if not os.path.isfile(FFMPEG_BIN):
+    FFMPEG_BIN = 'ffmpeg'
+
 # 用户图片（头像/背景）最大字节数
 USER_IMAGE_MAX_BYTES = 10 * 1024 * 1024
 

@@ -122,7 +122,8 @@ python scripts/build/package.py
 
 ### 大喇叭音频
 - 「大喇叭音频」板块：上传音频自动转码为 HLS（m3u8），生成 `http://<主机>/music/<编号>.m3u8` 播放链接
-- 支持 mp3 / wav / ogg / m4a / flac，单文件不超过 100MB（依赖系统 ffmpeg）
+- 支持 mp3 / wav / ogg / m4a / flac，单文件不超过 100MB（依赖 ffmpeg）
+- 自动调用内置 ffmpeg：Windows 用 `scripts/ffmpeg/ffmpeg.exe`，Linux/macOS 用 `scripts/ffmpeg/ffmpeg`，未内置时回退系统 PATH 中的 `ffmpeg`
 - 用户可选择是否公开：公开后所有用户可在游戏内大喇叭音频列表看到并播放，私有仅本人可见
 - 公开 JSON API（`/api/music/list`）供游戏端获取音频列表与播放链接
 - 管理员可在后台查看全部音频并一键下架（删除数据库记录并同步删除音频文件）
@@ -167,6 +168,7 @@ python scripts/build/package.py
 | `UPLOAD_DIR` | 上传文件目录 | `./uploads` |
 | `UPLOAD_MUSIC_DIR` | 大喇叭音频存放目录 | `./uploads/music` |
 | `MUSIC_ALLOWED_EXTENSIONS` | 大喇叭音频允许上传的格式 | `mp3/wav/ogg/m4a/flac` |
+| `FFMPEG_BIN` | 大喇叭音频转码用的 ffmpeg | 优先 `scripts/ffmpeg/ffmpeg(.exe)`，否则系统 PATH |
 | `MAX_CONTENT_LENGTH` | 最大上传大小 | 100 MB |
 | `SECRET_KEY` | Session 密钥 | `mc_server_site_random_secret_key_2024` |
 | `REGISTER_VERIFY_CODE` | 注册验证码 | `binhai_xz` |
