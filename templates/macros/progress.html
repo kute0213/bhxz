@@ -1,0 +1,16 @@
+{# ============================================================
+   统一进度条宏（磨砂玻璃质感）
+   用法：
+     {{ progress_track(id='progress-bar', variant='gold', size='lg', width='0%') }}
+   参数：
+     id      - 进度条内部填充元素的 DOM id（JS 更新宽度用）
+     variant - 颜色：gold | green | blue | purple | red（默认 gold）
+     size    - 尺寸：xs | sm | md | lg（默认 md）
+     width   - 初始宽度（默认 0%）
+   样式定义见 static/css/base.css 的「统一进度条组件」。
+   ============================================================ #}
+{% macro progress_track(id, variant='gold', size='md', width='0%') -%}
+<div class="progress-track {{ size }}">
+    <div id="{{ id }}" class="progress-fill {{ variant }}" style="width: {{ width }}"></div>
+</div>
+{%- endmacro %}

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "macros/progress.html" import progress_track %}
 {% block title %}数据库备份{% endblock %}
 {% block content %}
     <section class="page-container py-12">
@@ -68,9 +69,7 @@
                         <span id="progress-message" class="text-cream/70">准备中...</span>
                         <span id="progress-percent" class="text-gold-400 font-medium">0%</span>
                     </div>
-                    <div class="w-full h-3 bg-forest-900/60 rounded-full overflow-hidden">
-                        <div id="progress-bar" class="h-full bg-gradient-to-r from-gold-500 to-gold-400 transition-all duration-300 ease-out rounded-full" style="width: 0%"></div>
-                    </div>
+                    {{ progress_track(id='progress-bar', variant='gold', size='md') }}
                 </div>
 
                 <button id="btn-start-backup" class="px-6 py-3 bg-gold-500 hover:bg-gold-400 text-forest-900 font-bold rounded-xl transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]">

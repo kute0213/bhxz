@@ -371,16 +371,17 @@ workspace/
 │   ├── public/               #   公开文件服务
 │   ├── admin/                #   管理后台
 │   ├── api/                  #   JSON API
-│   ├── cmd/                  #   命令控制台
-│   ├── community/            #   社区（投票、留言板）
+│   ├── script/               #   脚本控制台
 │   ├── discussion/           #   讨论区
 │   ├── guides/               #   服务器指南
 │   └── scheduled/            #   定时任务管理
 ├── static/                   # 静态资源（CSS/JS）
-│   ├── css/                  #   样式（tailwind/style/base）
+│   ├── css/                  #   样式（tailwind/base）
 │   ├── js/                   #   脚本（base/main/script）
 │   └── lib/                  #   本地化第三方库（构建生成）
 ├── templates/                # Jinja2 模板
+│   ├── macros/               #   通用模板宏（进度条等）
+│   └── ...                   #   页面模板
 ├── docs/                     # 项目文档
 └── scripts/
     ├── build/                #   构建脚本

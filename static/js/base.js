@@ -200,7 +200,7 @@ document.addEventListener('keydown', function (e) {
         if (!wrapper) {
             wrapper = document.createElement('div');
             wrapper.className = 'upload-progress-wrapper';
-            wrapper.innerHTML = '<div class="upload-progress-bar"><div class="upload-progress-fill"></div></div><div class="upload-progress-text"><span class="upload-percent">0%</span><span class="upload-status">上传中...</span></div>';
+            wrapper.innerHTML = '<div class="upload-progress-bar"><div class="upload-progress-fill purple"></div></div><div class="upload-progress-text"><span class="upload-percent">0%</span><span class="upload-status">上传中...</span></div>';
             var submitBtn = form.querySelector('button[type="submit"], input[type="submit"]');
             if (submitBtn && submitBtn.parentElement) {
                 submitBtn.parentElement.insertBefore(wrapper, submitBtn.nextSibling);
@@ -251,14 +251,14 @@ document.addEventListener('keydown', function (e) {
 
         xhr.addEventListener('error', function () {
             statusEl.textContent = '上传失败';
-            fill.style.background = '#ef4444';
+            fill.className = 'upload-progress-fill red';
             if (submitBtn) {
                 submitBtn.disabled = false;
                 submitBtn.style.opacity = '';
             }
             setTimeout(function () {
                 wrapper.classList.remove('active');
-                fill.style.background = '';
+                fill.className = 'upload-progress-fill purple';
             }, 2000);
         });
 

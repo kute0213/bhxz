@@ -226,7 +226,7 @@ def _collect_domains() -> list:
     domains = set()
 
     # 1) 主站点域名
-    site_url = get_config_value('SITE_URL', '').rstrip('/')
+    site_url = get_config_value('SITE_URL', '').strip().rstrip('/')
     if site_url:
         domains.add(site_url)
 
@@ -243,7 +243,7 @@ def _collect_domains() -> list:
 
 def _get_default_base_url() -> str:
     """获取默认的 base_url。"""
-    site_url = get_config_value('SITE_URL', '').rstrip('/')
+    site_url = get_config_value('SITE_URL', '').strip().rstrip('/')
     if site_url:
         return site_url
     return 'http://localhost:5000'

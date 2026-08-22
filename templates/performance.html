@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "macros/progress.html" import progress_track %}
 {% block title %}服务器状态{% endblock %}
 {% block content %}
     <section class="page-container py-12">
@@ -38,9 +39,7 @@
                     <span class="text-cream/80 font-medium">CPU 负载</span>
                     <span id="cpu-usage-text" class="text-gold-400 font-bold">--%</span>
                 </div>
-                <div class="h-4 bg-forest-700/50 rounded-full overflow-hidden">
-                    <div id="cpu-bar" class="h-full bg-gradient-to-r from-green-500 to-green-400 transition-all duration-500 rounded-full" style="width: 0%"></div>
-                </div>
+                {{ progress_track(id='cpu-bar', variant='green', size='lg') }}
             </div>
 
             <!-- 内存信息 -->
@@ -51,9 +50,7 @@
                     </span>
                     <span id="mem-text" class="text-cream/60 text-sm">--</span>
                 </div>
-                <div class="h-4 bg-forest-700/50 rounded-full overflow-hidden">
-                    <div id="mem-bar" class="h-full bg-gradient-to-r from-blue-500 to-blue-400 transition-all duration-500 rounded-full" style="width: 0%"></div>
-                </div>
+                {{ progress_track(id='mem-bar', variant='blue', size='lg') }}
                 <div class="grid grid-cols-3 gap-4 mt-4 text-center">
                     <div>
                         <div class="text-cream/60 text-xs mb-1">总内存</div>
@@ -105,11 +102,11 @@
                 const cpuBar = document.getElementById('cpu-bar');
                 cpuBar.style.width = Math.min(data.cpu_usage, 100) + '%';
                 if (data.cpu_usage > 80) {
-                    cpuBar.className = 'h-full bg-gradient-to-r from-red-500 to-red-400 transition-all duration-500 rounded-full';
+                    cpuBar.className = 'progress-fill red';
                 } else if (data.cpu_usage > 50) {
-                    cpuBar.className = 'h-full bg-gradient-to-r from-yellow-500 to-yellow-400 transition-all duration-500 rounded-full';
+                    cpuBar.className = 'progress-fill yellow';
                 } else {
-                    cpuBar.className = 'h-full bg-gradient-to-r from-green-500 to-green-400 transition-all duration-500 rounded-full';
+                    cpuBar.className = 'progress-fill green';
                 }
             } else {
                 // CPU 数据不可用时清空显示，避免误导用户使用旧值
@@ -145,11 +142,11 @@
                 const memBar = document.getElementById('mem-bar');
                 memBar.style.width = Math.min(data.memory.usage, 100) + '%';
                 if (data.memory.usage > 80) {
-                    memBar.className = 'h-full bg-gradient-to-r from-red-500 to-red-400 transition-all duration-500 rounded-full';
+                    memBar.className = 'progress-fill red';
                 } else if (data.memory.usage > 50) {
-                    memBar.className = 'h-full bg-gradient-to-r from-yellow-500 to-yellow-400 transition-all duration-500 rounded-full';
+                    memBar.className = 'progress-fill yellow';
                 } else {
-                    memBar.className = 'h-full bg-gradient-to-r from-blue-500 to-blue-400 transition-all duration-500 rounded-full';
+                    memBar.className = 'progress-fill blue';
                 }
             }
         }

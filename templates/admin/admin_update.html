@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "macros/progress.html" import progress_track %}
 {% block title %}一键更新{% endblock %}
 {% block content %}
 <section class="page-container py-12">
@@ -29,10 +30,7 @@
             </h2>
 
             <!-- 进度条 -->
-            <div class="w-full bg-cream/10 rounded-full h-4 mb-3 overflow-hidden">
-                <div id="progress-bar" class="h-full rounded-full transition-all duration-500 ease-out"
-                     style="width: 0%; background: linear-gradient(90deg, #fbbf24, #f59e0b);"></div>
-            </div>
+            {{ progress_track(id='progress-bar', variant='gold', size='lg') }}
 
             <!-- 进度文字 -->
             <div id="progress-text" class="text-sm text-cream/60 text-center"></div>
@@ -275,7 +273,7 @@ function handleDone(success, message, error) {
 
     if (success) {
         bar.style.width = '100%';
-        bar.style.background = 'linear-gradient(90deg, #22c55e, #16a34a)';
+        bar.className = 'progress-fill green';
         text.textContent = message || '更新成功！服务器即将重启...';
         text.className = 'text-sm text-green-400 text-center';
 
@@ -294,7 +292,7 @@ function handleDone(success, message, error) {
         waitForServerRestart();
     } else {
         bar.style.width = '100%';
-        bar.style.background = 'linear-gradient(90deg, #ef4444, #dc2626)';
+        bar.className = 'progress-fill red';
         text.textContent = '更新失败';
         text.className = 'text-sm text-red-400 text-center';
 

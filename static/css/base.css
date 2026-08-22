@@ -967,29 +967,92 @@ body.has-background-image .highlight-card {
     contain-intrinsic-size: 0 300px;
 }
 
-/* 上传进度条 */
-.upload-progress-wrapper {
-    display: none;
-    margin-top: 8px;
-}
-.upload-progress-wrapper.active {
-    display: block;
-}
+/* ============================================================
+ * 统一进度条组件（磨砂玻璃质感，全站通用）
+ * ------------------------------------------------------------
+ * 结构：
+ *   <div class="progress-track [size]">
+ *       <div class="progress-fill [variant]" style="width: N%"></div>
+ *   </div>
+ * 尺寸：.xs(6px) .sm(8px) .md(12px) .lg(16px)，默认 12px
+ * 颜色：.gold .green .blue .purple .red，默认 gold
+ * 说明：上传进度条（.upload-progress-*）复用同一套视觉。
+ * ============================================================ */
+.progress-track,
 .upload-progress-bar {
     width: 100%;
-    height: 6px;
-    background: rgba(255, 255, 255, 0.06);
-    border-radius: 3px;
+    height: 12px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.05), rgba(255,255,255,0.02));
+    border: 1px solid rgba(255, 255, 255, 0.09);
+    border-radius: 999px;
     overflow: hidden;
     position: relative;
+    backdrop-filter: blur(12px) saturate(120%);
+    -webkit-backdrop-filter: blur(12px) saturate(120%);
+    box-shadow:
+        inset 0 1px 3px rgba(0, 0, 0, 0.35),
+        inset 0 -1px 1px rgba(255, 255, 255, 0.04);
 }
+.progress-track.xs { height: 6px; }
+.progress-track.sm { height: 8px; }
+.progress-track.md { height: 12px; }
+.progress-track.lg { height: 16px; }
+
+.progress-fill,
 .upload-progress-fill {
     height: 100%;
     width: 0%;
-    background: rgba(139, 92, 246, 0.50);
-    border-radius: 3px;
-    transition: width 0.2s ease;
+    border-radius: 999px;
     position: relative;
+    overflow: hidden;
+    transition: width 0.45s cubic-bezier(0.4, 0, 0.2, 1);
+    /* 默认金色渐变 */
+    background: linear-gradient(90deg, #fbbf24, #f59e0b);
+    box-shadow: 0 0 10px rgba(251, 191, 36, 0.35);
+}
+.progress-fill.gold,
+.progress-fill.gold + .glow,
+.upload-progress-fill.gold { background: linear-gradient(90deg, #fbbf24, #f59e0b); box-shadow: 0 0 10px rgba(251, 191, 36, 0.35); }
+.progress-fill.green,
+.progress-fill.green + .glow,
+.upload-progress-fill.green { background: linear-gradient(90deg, #34d399, #10b981); box-shadow: 0 0 10px rgba(52, 211, 153, 0.35); }
+.progress-fill.blue,
+.progress-fill.blue + .glow,
+.upload-progress-fill.blue { background: linear-gradient(90deg, #60a5fa, #3b82f6); box-shadow: 0 0 10px rgba(96, 165, 250, 0.35); }
+.progress-fill.purple,
+.progress-fill.purple + .glow,
+.upload-progress-fill.purple { background: linear-gradient(90deg, #a78bfa, #8b5cf6); box-shadow: 0 0 10px rgba(167, 139, 250, 0.35); }
+.progress-fill.red,
+.progress-fill.red + .glow,
+.upload-progress-fill.red { background: linear-gradient(90deg, #f87171, #ef4444); box-shadow: 0 0 10px rgba(248, 113, 113, 0.35); }
+.progress-fill.yellow,
+.progress-fill.yellow + .glow,
+.upload-progress-fill.yellow { background: linear-gradient(90deg, #facc15, #eab308); box-shadow: 0 0 10px rgba(250, 204, 21, 0.35); }
+
+/* 流光扫过动画（增强质感，不削弱效果） */
+.progress-fill::before,
+.upload-progress-fill::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.45), transparent);
+    animation: progressShine 1.8s ease-in-out infinite;
+}
+/* 顶部高光 + 底部内阴影，增强立体玻璃感 */
+.progress-fill::after,
+.upload-progress-fill::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 40%;
+    border-radius: 999px;
+    background: linear-gradient(180deg, rgba(255,255,255,0.4), transparent);
+    opacity: 0.5;
+    pointer-events: none;
+}
+@keyframes progressShine {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
 }
 /* ============================================================
  * 代码块样式 - 复制按钮 + 高亮优化
@@ -1058,17 +1121,6 @@ pre::-webkit-scrollbar-thumb:hover {
     background: rgba(255, 255, 255, 0.2);
 }
 
-.upload-progress-fill::after {
-    content: '';
-    position: absolute;
-    top: 0; left: 0; right: 0; bottom: 0;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
-    animation: progressShine 1.5s ease-in-out infinite;
-}
-@keyframes progressShine {
-    0% { transform: translateX(-100%); }
-    100% { transform: translateX(100%); }
-}
 .upload-progress-text {
     font-size: 11px;
     color: rgba(232, 228, 217, 0.5);
