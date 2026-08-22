@@ -5,7 +5,6 @@
 ### 新增
 - **「大喇叭音频」板块**：注册用户可上传音频（mp3/wav/ogg/m4a/flac，单文件 ≤100MB），上传后由 ffmpeg 自动转码为 HLS（m3u8 + ts 分片），生成 `http://<主机>/music/<编号>.m3u8` 播放链接并告知用户
 - **音频列表与公开控制**：板块内展示全部公开音频与「我的音频」列表，用户可随时切换公开/私有；公开后所有用户（含未登录）可在游戏内大喇叭音频列表看到并播放
-- **公开 JSON API**：新增 `GET /api/music/list`，返回公开音频列表及 m3u8 播放链接（相对/绝对地址），供游戏端调用，遵循现有 API 规范
 - **管理员后台管理**：新增「大喇叭音频管理」页，管理员可查看全部音频并一键下架（删除）
 - **删除同步清理文件**：音频在数据库删除记录时同步删除 `uploads/music/<ID>/` 目录，无文件残留；数据库表 `music` 记录上传者/标题/公开状态/时间
 - **内置 ffmpeg 自动调用**：Windows 调用 `scripts/ffmpeg/ffmpeg.exe`，Linux/macOS 调用 `scripts/ffmpeg/ffmpeg`，未内置时回退系统 PATH 中的 `ffmpeg`（config 新增 `FFMPEG_DIR`/`FFMPEG_BIN`）

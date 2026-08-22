@@ -125,7 +125,6 @@ python scripts/build/package.py
 - 支持 mp3 / wav / ogg / m4a / flac，单文件不超过 100MB（依赖 ffmpeg）
 - 自动调用内置 ffmpeg：Windows 用 `scripts/ffmpeg/ffmpeg.exe`，Linux/macOS 用 `scripts/ffmpeg/ffmpeg`，未内置时回退系统 PATH 中的 `ffmpeg`
 - 用户可选择是否公开：公开后所有用户可在游戏内大喇叭音频列表看到并播放，私有仅本人可见
-- 公开 JSON API（`/api/music/list`）供游戏端获取音频列表与播放链接
 - 管理员可在后台查看全部音频并一键下架（删除数据库记录并同步删除音频文件）
 - 音频文件存放在 `uploads/music/<音频ID>/`，删除记录时自动清理对应目录，无文件残留
 
@@ -210,7 +209,6 @@ export ENABLE_SSL=1 && python app.py
 |------|------|
 | `GET /api/performance` | 服务器性能数据（CPU/内存/运行时间） |
 | `GET /api/stats` | 网站统计数据 |
-| `GET /api/music/list` | 大喇叭音频列表（仅公开音频，含 m3u8 播放链接） |
 | `GET /api/polls` | 投票数据（含选项/百分比/用户投票状态） |
 | `GET /api/captcha/generate` | 生成图形验证码 |
 | `POST /api/captcha/verify` | 验证图形验证码 |

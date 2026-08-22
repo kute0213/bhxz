@@ -1,12 +1,11 @@
-"""公开 API 路由：性能监控、统计数据、大喇叭音频列表。"""
+"""公开 API 路由：性能监控、统计数据。"""
 
 from datetime import datetime, timezone
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify
 from core.db import get_db
 from services.monitoring import (
     get_cpu_usage, get_cpu_temperature, get_memory_info, get_system_info
 )
-from services import music_service
 
 api_bp = Blueprint('api', __name__, url_prefix='/api')
 
@@ -44,31 +43,5 @@ def api_stats():
     finally:
         conn.close()
     return jsonify(stats)
-
-
-# ---------------------------------------------------------------------------
-# 大喇叭音频
-# ---------------------------------------------------------------------------
-
-@api_bp.route('/music/list')
-def api_music_list():
-    """获取所有公开的大喇叭音频列表（游戏内大喇叭使用，无需登录）。
-
-    返回每个音频的播放链接（m3u8）。链接同时提供相对路径与基于当前
-    请求 Host 的绝对地址，游戏端可任选其一拼接。
-    """
-    musics = music_service.get_public_musics()
-    base = request.host_url.rstrip('/')
-    items = []
-    for m in musics:
-        items.append({
-            'id': m['id'],
-            'title': m['title'],
-            'username': m['username'],
-            'created_at': m['created_at'],
-            'url': f'/music/{m["id"]}.m3u8',
-            'url_absolute': f'{base}/music/{m["id"]}.m3u8',
-        })
-    return jsonify({'success': True, 'count': len(items), 'musics': items})
 
 
