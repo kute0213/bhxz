@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### 修复
+- **修复播放器进度条圆点不跟随进度、倍速/音量弹层被卡片遮挡**：
+  - 进度条圆点（`.mp-thumb`）此前始终停在进度条最前端——`setFill()` 只更新了填充条宽度，从未更新圆点的 `left` 位置，现已同步设置 `thumb.style.left = pct%`，圆点随播放进度实时移动（拖动 seek 时同样跟随）
+  - 倍速/音量弹层向上展开时被卡片裁切/遮挡——根因是 `.pixel-card` 上 `contain: paint` 与 `content-visibility: auto` 会强制裁切溢出内容，`overflow:visible` 无法覆盖；现为内含播放器的卡片显式添加 `.music-card` 修饰类，降级为 `contain: layout style` + `content-visibility: visible`，弹层可正常越出卡片边界显示（`static/css/base.css`，`templates/music/list.html`、`templates/music/my.html`、`templates/admin/admin_music.html` 同步添加类）
+
 ### 新增
 - **复制音频时长（秒）按钮**：公开音频列表 / 我的音频 / 管理员审核队列中的每个音频新增「时长 Ns」按钮，点击一键复制**以秒为单位的音频总时长**（如 `215`）。时长由 HLS 播放列表各分片 `EXTINF` 累计得出（`services/music_service.py` 新增 `get_music_duration_seconds` 与 `attach_durations`，公开列表/我的音频/管理后台路由统一调用补充 `duration_seconds` 字段），对所有音频（含历史数据）都适用、无需存库迁移；复制逻辑由 `static/js/base.js` 新增的全局事件委托（`.copy-duration-btn`）统一处理，任意页面/动态加载的按钮均可一键复制并 Toast 提示已复制秒数；模板宏新增 `music_duration_button`（`templates/macros/music_macros.html`），三个页面入口同步接入
 

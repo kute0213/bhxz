@@ -119,6 +119,7 @@
             var t = self.audio.currentTime;
             var pct = (d > 0 && isFinite(d)) ? Math.min(100, (t / d) * 100) : 0;
             if (self.el.fill) self.el.fill.style.width = pct + '%';
+            if (self.el.thumb) self.el.thumb.style.left = pct + '%';
             if (self.el.current) self.el.current.textContent = formatTime(t);
         }
         function setBuffered() {

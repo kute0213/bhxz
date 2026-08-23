@@ -412,6 +412,15 @@ body.has-background-image .pixel-card {
     .music-player { min-width: 0; width: 100%; }
 }
 
+/* 大喇叭音频卡片（内含 .music-player）：
+ * 解除默认 contain:paint 与 content-visibility 的溢出裁切，
+ * 否则播放器向上展开的倍速/音量弹层会被卡片边界遮挡/裁切。
+ * （overflow:visible 无法覆盖 contain:paint，必须显式降级） */
+.pixel-card.music-card {
+    contain: layout style;
+    content-visibility: visible;
+}
+
 /* 磨砂玻璃按钮 - 紫色蚀刻玻璃质感 */
 .btn-primary {
     background: rgba(139, 92, 246, 0.12);
