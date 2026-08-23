@@ -27,6 +27,10 @@ FFMPEG_DIR = os.path.join(APP_ROOT, 'scripts', 'ffmpeg')
 FFMPEG_BIN = os.path.join(FFMPEG_DIR, 'ffmpeg.exe') if sys.platform.startswith('win') else os.path.join(FFMPEG_DIR, 'ffmpeg')
 if not os.path.isfile(FFMPEG_BIN):
     FFMPEG_BIN = 'ffmpeg'
+# ffprobe 用于探测音频时长（上传进度百分比），与 ffmpeg 同目录，未内置时回退系统 PATH
+FFPROBE_BIN = os.path.join(FFMPEG_DIR, 'ffprobe.exe') if sys.platform.startswith('win') else os.path.join(FFMPEG_DIR, 'ffprobe')
+if not os.path.isfile(FFPROBE_BIN):
+    FFPROBE_BIN = 'ffprobe'
 
 # ffmpeg 音频转码的线程数：0 = 自动按 CPU 核数，1 = 单线程（降级）
 # 注意：每个上传任务都是独立 ffmpeg 子进程、独立输出目录，互不共享文件，

@@ -3,7 +3,9 @@
 ## [Unreleased]
 
 ### 新增
-- **「大喇叭音频」板块**：注册用户可上传音频（mp3/wav/ogg/m4a/flac，单文件 ≤100MB），上传后由 ffmpeg 自动转码为 HLS（m3u8 + ts 分片），生成 `http://<主机>/music/<编号>.m3u8` 播放链接并告知用户
+- **音频独立上传页与详细进度条**：上传从列表页内嵌面板拆分为独立页面 `/music/upload`（`templates/music/upload.html` + `static/js/music_upload.js`），列表页/「我的音频」页改为跳转独立上传页；采用「异步任务 + 轮询进度」——上传请求立即返回 `task_id`，后台线程执行 ffmpeg 转码，前端分两阶段展示进度条（文件上传百分比 + 转码百分比），`ffprobe` 探测音频时长、解析 ffmpeg `-progress` 输出实时计算转码进度，成功后展示播放链接并可复制/再传一个，失败展示错误并可一键重试（`services/music_service.py` 新增 `start_upload`/`_run_upload_task`/`get_upload_progress`/`_probe_duration`，`config.py` 新增 `FFPROBE_BIN`，每个上传任务独立临时目录与 ffmpeg 子进程，多用户并发互不冲突）
+- **自定义音量增益**：上传前可拖动滑块或点快捷预设设置音量增益（-12 ~ +12 dB，0 为不调整），转码时经 ffmpeg `volume` 滤镜写入 HLS 产物；上传后上传者本人或管理员可在「我的音频」/管理后台重新调整并即时重新转码（`POST /music/<id>/gain`，`music_service.update_gain()` 在独立临时目录重新转码后一次性替换产物、保留源文件）；`music` 表新增 `gain` 字段持久化（含迁移）
+- **「我的音频」页与管理后台音量增益编辑**：`templates/music/my.html` 与 `templates/admin/admin_music.html` 为每个音频新增增益输入框与「音量」应用按钮，`next` 参数保持跳回来源页
 - **音频列表与公开控制**：板块内展示全部公开音频与「我的音频」列表，用户可随时切换公开/私有；公开后所有用户（含未登录）可在游戏内大喇叭音频列表看到并播放
 - **管理员后台管理**：新增「大喇叭音频管理」页，管理员可查看全部音频并一键下架（删除）
 - **删除同步清理文件**：音频在数据库删除记录时同步删除 `uploads/music/<ID>/` 目录，无文件残留；数据库表 `music` 记录上传者/标题/公开状态/时间

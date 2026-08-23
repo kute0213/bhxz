@@ -28,48 +28,15 @@
                     <i data-lucide="folder-open" class="w-4 h-4"></i>
                     我的音频
                 </a>
-                <button id="show-upload-btn" class="btn-primary px-5 py-2.5 rounded-lg text-sm font-bold flex items-center gap-2">
+                <a href="{{ url_for('main.upload_music_page') }}" class="btn-primary px-5 py-2.5 rounded-lg text-sm font-bold flex items-center gap-2">
                     <i data-lucide="upload" class="w-4 h-4"></i>
                     上传音频
-                </button>
+                </a>
                 {% else %}
                 <a href="{{ url_for('main.login') }}" class="btn-primary px-5 py-2.5 rounded-lg text-sm font-bold">登录后上传</a>
                 {% endif %}
             </div>
         </div>
-
-        <!-- 上传表单（仅登录用户，默认收起） -->
-        {% if user %}
-        <div id="upload-panel" class="pixel-card rounded-xl p-5 sm:p-6 mb-8 hidden">
-            <h2 class="text-lg font-bold mb-4 flex items-center gap-2">
-                <i data-lucide="upload" class="w-5 h-5 text-gold-400"></i>
-                上传音频
-            </h2>
-            <form method="POST" action="{{ url_for('main.upload_music') }}" enctype="multipart/form-data" class="space-y-4">
-                <div>
-                    <label class="block text-sm font-medium mb-2 text-cream/80">音频名称</label>
-                    <input type="text" name="title" maxlength="60" required placeholder="例如：开服主题曲"
-                           class="input-field w-full px-4 py-3 rounded-lg">
-                </div>
-                <div>
-                    <label class="block text-sm font-medium mb-2 text-cream/80">音频文件</label>
-                    <input type="file" name="audio_file" accept=".mp3,.wav,.ogg,.m4a,.flac,audio/*" required
-                           class="input-field w-full px-4 py-3 rounded-lg">
-                    <p class="text-cream/50 text-xs mt-1">支持 mp3 / wav / ogg / m4a / flac，单文件不超过 100MB，上传后自动转码为 m3u8</p>
-                </div>
-                <label class="flex items-center gap-3 cursor-pointer select-none">
-                    <input type="checkbox" name="is_public" value="1"
-                           class="w-4 h-4 rounded accent-amber-400">
-                    <span class="text-sm text-cream/80">
-                        申请公开音频（需管理员审核，审核通过后所有用户可在游戏内大喇叭看到并播放）
-                    </span>
-                </label>
-                <button type="submit" class="btn-primary w-full py-3 rounded-lg font-bold">
-                    上传并转码
-                </button>
-            </form>
-        </div>
-        {% endif %}
 
         <!-- 公开音频列表 -->
         <div class="mb-10">
@@ -132,31 +99,6 @@
 {% block extra_script %}
 <script>
 (function () {
-    var panel = document.getElementById('upload-panel');
-    var btn = document.getElementById('show-upload-btn');
-    if (panel && btn) {
-        // 从「我的音频」页跳转 #upload-panel 时自动展开上传面板
-        if (location.hash === '#upload-panel') {
-            panel.classList.remove('hidden');
-            btn.querySelector('i').setAttribute('data-lucide', 'x');
-            if (typeof lucide !== 'undefined' && lucide.createIcons) {
-                try { lucide.createIcons(); } catch (_) {}
-            }
-        }
-        btn.addEventListener('click', function () {
-            var hidden = panel.classList.contains('hidden');
-            panel.classList.toggle('hidden');
-            btn.querySelector('i').setAttribute('data-lucide', hidden ? 'x' : 'upload');
-            if (typeof lucide !== 'undefined' && lucide.createIcons) {
-                try { lucide.createIcons(); } catch (_) {}
-            }
-            if (hidden) {
-                var input = panel.querySelector('input[type="file"]');
-                if (input) input.focus();
-            }
-        });
-    }
-
     // 复制播放链接
     document.querySelectorAll('.copy-link-btn').forEach(function (btn) {
         btn.addEventListener('click', function () {

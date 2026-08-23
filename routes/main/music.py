@@ -1,12 +1,22 @@
-"""大喇叭音频路由：板块页面、上传、播放、删除、公开切换。
+"""大喇叭音频路由：板块页面、独立上传页、上传进度、播放、删除、公开切换、音量增益。
 
 薄层：仅负责 HTTP 请求解析/响应构造，业务逻辑委托给 services。
 播放链接格式：/music/<音频ID>.m3u8（公开音频所有人可播，私有仅本人/管理员可播）。
+上传采用异步任务：POST /music/upload 返回 task_id，前端轮询 /music/upload/progress/<task_id>。
 """
 
 import os
 
-from flask import render_template, request, redirect, url_for, flash, abort, send_file
+from flask import (
+    render_template,
+    request,
+    redirect,
+    url_for,
+    flash,
+    abort,
+    send_file,
+    jsonify,
+)
 
 from core.auth import login_required, get_current_user
 from config import UPLOAD_MUSIC_DIR
@@ -25,7 +35,7 @@ def _can_access(music, user):
 
 @main_bp.route('/music')
 def music_page():
-    """大喇叭音频板块：公开音频列表（支持按名称搜索）+ 上传表单。"""
+    """大喇叭音频板块：公开音频列表（支持按名称搜索）。"""
     user = get_current_user()
     keyword = request.args.get('q', '').strip()
     public_musics = music_service.get_public_musics(keyword)
@@ -50,6 +60,19 @@ def my_music_page():
     )
 
 
+@main_bp.route('/music/upload')
+@login_required
+def upload_music_page():
+    """大喇叭音频上传页：独立页面，含详细进度条与音量增益设置。"""
+    user = get_current_user()
+    return render_template(
+        'music/upload.html',
+        user=user,
+        gain_min=music_service.GAIN_MIN,
+        gain_max=music_service.GAIN_MAX,
+    )
+
+
 def _redirect_back(default='main.music_page'):
     """返回操作来源页（next 参数须为站内相对路径），否则回到公开音频列表。"""
     next_url = (request.form.get('next') or request.args.get('next') or '').strip()
@@ -61,35 +84,52 @@ def _redirect_back(default='main.music_page'):
 @main_bp.route('/music/upload', methods=['POST'])
 @login_required
 def upload_music():
+    """开始异步上传任务（AJAX）。成功返回 {task_id}，失败返回 {error}。"""
     user = get_current_user()
     title = request.form.get('title', '').strip()
     is_public = request.form.get('is_public') in ('1', 'on', 'true')
+    gain = request.form.get('gain', '0')
     upload_file = request.files.get('audio_file')
 
-    success, result = music_service.upload_music(
+    success, result = music_service.start_upload(
         user_id=user['id'],
         username=user['username'],
         title=title,
         is_public=is_public,
+        gain=gain,
         upload_file=upload_file,
         ip_address=request.remote_addr,
     )
     if success:
-        base = request.host_url.rstrip('/')
-        if is_public:
-            flash(
-                f'音频上传成功并已提交公开审核，审核通过后将在游戏内大喇叭展示。'
-                f'播放链接：{base}/music/{result["music_id"]}.m3u8',
-                'success',
-            )
-        else:
-            flash(
-                f'音频上传成功！播放链接：{base}/music/{result["music_id"]}.m3u8',
-                'success',
-            )
-    else:
-        flash(result, 'error')
-    return redirect(url_for('main.music_page'))
+        return jsonify({'task_id': result['task_id']})
+    return jsonify({'error': result}), 400
+
+
+@main_bp.route('/music/upload/progress/<task_id>')
+@login_required
+def upload_music_progress(task_id):
+    """查询上传任务进度（AJAX 轮询），返回 JSON。"""
+    task = music_service.get_upload_progress(task_id)
+    if not task:
+        return jsonify({'status': 'error', 'message': '任务不存在或已过期'}), 404
+    return jsonify(task)
+
+
+@main_bp.route('/music/<int:music_id>/gain', methods=['POST'])
+@login_required
+def update_music_gain(music_id):
+    """调整音频音量增益（重新转码）。上传者本人或管理员可操作。"""
+    user = get_current_user()
+    gain = request.form.get('gain', '0')
+    success, message = music_service.update_gain(
+        music_id=music_id,
+        gain=gain,
+        user_id=user['id'],
+        is_admin=bool(user.get('is_admin')),
+        ip_address=request.remote_addr,
+    )
+    flash(message, 'success' if success else 'error')
+    return _redirect_back()
 
 
 @main_bp.route('/music/<int:music_id>/toggle', methods=['POST'])

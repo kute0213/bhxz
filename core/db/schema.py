@@ -281,6 +281,7 @@ def init_db():
                 title VARCHAR NOT NULL,
                 file_path VARCHAR DEFAULT '',
                 status INTEGER DEFAULT 0,
+                gain REAL DEFAULT 0,
                 created_at VARCHAR NOT NULL
             )
         '''),
@@ -336,6 +337,9 @@ def init_db():
         conn.commit()
     except Exception as e:
         print(f'[DB] 迁移 music 公开状态失败: {e}', flush=True)
+
+    # ---- 大喇叭音频：音量增益（dB），默认 0（不调整） ----
+    add_column_if_not_exists('music', 'gain', 'REAL DEFAULT 0')
 
     
 

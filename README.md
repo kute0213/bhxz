@@ -125,6 +125,8 @@ python scripts/build/package.py
 - **审核结果邮件通知**：管理员通过/驳回公开申请后，自动向上传者邮箱发送磨砂玻璃风格的审核结果邮件（通过 / 未通过状态卡），邮件未启用或上传者无邮箱时自动跳过
 - **公开音频名称搜索**：公开音频列表支持按名称模糊搜索（`/music?q=关键词`），无结果时给出空态提示
 - 音频状态：私有 / 待审核 / 已公开 / 已驳回，用户可在独立的「我的音频」页（`/music/my`）中查看并管理（播放链接、申请公开/转为私有、删除）
+- **独立上传页与详细进度条**：上传入口跳转独立页面 `/music/upload`（`templates/music/upload.html` + `static/js/music_upload.js`），异步上传并分两阶段展示进度条——文件上传百分比 + ffmpeg 转码百分比（ffprobe 探测时长、解析 `-progress` 输出实时计算），成功后展示播放链接，失败可一键重试
+- **自定义音量增益**：上传前可拖动滑块预设音量增益（-12 ~ +12 dB，0 为不调整），转码时经 ffmpeg `volume` 滤镜写入；上传后上传者本人或管理员可在「我的音频」/管理后台重新调整并即时重新转码（`music` 表新增 `gain` 字段持久化）
 - 管理员可在后台审核公开申请、查看全部音频并一键下架（删除数据库记录并同步删除音频文件）
 - 音频文件存放在 `uploads/music/<音频ID>/`，删除记录时自动清理对应目录，无文件残留
 - **ffmpeg 多线程转码**：上传转码统一加 `-threads` 参数（`FFMPEG_THREADS`），每个上传任务是独立 ffmpeg 子进程与独立输出目录，多用户同时上传天然并行，不会出现「文件正在使用」冲突
@@ -169,6 +171,7 @@ python scripts/build/package.py
 | `UPLOAD_MUSIC_DIR` | 大喇叭音频存放目录 | `./uploads/music` |
 | `MUSIC_ALLOWED_EXTENSIONS` | 大喇叭音频允许上传的格式 | `mp3/wav/ogg/m4a/flac` |
 | `FFMPEG_BIN` | 大喇叭音频转码用的 ffmpeg | 优先 `scripts/ffmpeg/ffmpeg(.exe)`，否则系统 PATH |
+| `FFPROBE_BIN` | 探测音频时长（转码进度百分比）用的 ffprobe | 优先 `scripts/ffmpeg/ffprobe(.exe)`，否则系统 PATH |
 | `FFMPEG_THREADS` | ffmpeg 音频转码线程数 | `0`（自动按 CPU 核数） |
 | `MAX_CONTENT_LENGTH` | 最大上传大小 | 100 MB |
 | `SECRET_KEY` | Session 密钥 | `mc_server_site_random_secret_key_2024` |
@@ -227,6 +230,16 @@ export ENABLE_SSL=1 && python app.py
 | POST | `/discussion/<id>/pin` | 置顶/取消置顶（管理员） |
 | POST | `/discussion/<id>/lock` | 锁定/解锁（管理员） |
 | POST | `/discussion/<id>/delete` | 删除帖子 |
+
+### 大喇叭音频 AJAX 端点
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/music/upload` | 开始异步上传（返回 `{task_id}`，转码在后台执行） |
+| GET | `/music/upload/progress/<task_id>` | 查询上传/转码进度（JSON） |
+| POST | `/music/<id>/gain` | 调整音量增益（上传者或管理员，重新转码） |
+| POST | `/music/<id>/toggle` | 申请公开 / 转为私有 |
+| POST | `/music/<id>/delete` | 删除音频（本人或管理员） |
 
 ### 终端控制台 API（管理员）
 
@@ -439,7 +452,7 @@ workspace/
 | `discussion_categories` | 讨论分类 | slug 唯一 |
 | `discussion_topics` | 讨论帖子 | 支持分类/标签/附件/置顶/锁定 |
 | `discussion_replies` | 讨论回复 | 外键 `topic_id`，支持附件 |
-| `music` | 大喇叭音频 | `status` 状态机（0=私有/1=待审核/2=已公开/3=已驳回），删除记录时同步删除 `uploads/music/<ID>/` 文件目录 |
+| `music` | 大喇叭音频 | `status` 状态机（0=私有/1=待审核/2=已公开/3=已驳回），`gain` 音量增益（dB，默认 0），删除记录时同步删除 `uploads/music/<ID>/` 文件目录 |
 
 #### 访问日志自动清理
 

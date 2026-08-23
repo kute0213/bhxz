@@ -392,6 +392,95 @@ def test_music_author_email():
         conn.close()
 
 
+def test_music_gain_clamp():
+    """音量增益范围限制：-12 ~ +12，四舍五入到 0.1。"""
+    assert music_service._clamp_gain(0) == 0.0
+    assert music_service._clamp_gain(6) == 6.0
+    assert music_service._clamp_gain(-3) == -3.0
+    assert music_service._clamp_gain(50) == music_service.GAIN_MAX
+    assert music_service._clamp_gain(-50) == music_service.GAIN_MIN
+    assert music_service._clamp_gain(6.26) == 6.3  # 四舍五入到 0.1
+    assert music_service._clamp_gain(6.24) == 6.2
+
+
+def test_music_build_transcode_cmd():
+    """转码命令：增益为 0 不添加 volume 滤镜，非 0 添加对应 dB。"""
+    src = '/tmp/a.mp3'
+    playlist = '/tmp/index.m3u8'
+    seg = '/tmp/seg_%03d.ts'
+
+    cmd0 = music_service._build_transcode_cmd(src, playlist, seg, 0)
+    assert '-filter:a' not in cmd0, "增益为 0 不应添加 volume 滤镜"
+
+    cmd6 = music_service._build_transcode_cmd(src, playlist, seg, 6)
+    assert '-filter:a' in cmd6
+    assert cmd6[cmd6.index('-filter:a') + 1] == 'volume=+6.00dB'
+
+    cmdm3 = music_service._build_transcode_cmd(src, playlist, seg, -3)
+    assert cmdm3[cmdm3.index('-filter:a') + 1] == 'volume=-3.00dB'
+
+
+def test_music_update_gain_validation():
+    """音量增益调整的校验与权限失败路径（不触发真实转码）。"""
+    owner = 30001
+    stranger = 30002
+    music_id = None
+    try:
+        # 不存在的音频
+        success, msg = music_service.update_gain(999999, 6, owner, False, '127.0.0.1')
+        assert success is False and '不存在' in msg
+
+        # 无源文件目录的音频 → 找不到源文件（不会触发 ffmpeg）
+        music_id = _insert_music(owner, 'owner', music_service.STATUS_PRIVATE)
+        success, msg = music_service.update_gain(music_id, 6, owner, False, '127.0.0.1')
+        assert success is False and '源文件' in msg
+
+        # 非上传者无权修改
+        success, msg = music_service.update_gain(music_id, 6, stranger, False, '127.0.0.1')
+        assert success is False and '无权' in msg
+
+        # 管理员可发起（此处仍会因缺源文件而失败，但非权限问题）
+        success, msg = music_service.update_gain(music_id, 6, stranger, True, '127.0.0.1')
+        assert success is False and '源文件' in msg
+
+        # 非法增益格式
+        success, msg = music_service.update_gain(music_id, 'abc', owner, False, '127.0.0.1')
+        assert success is False and '格式' in msg
+    finally:
+        if music_id:
+            conn = get_db()
+            conn.execute("DELETE FROM music WHERE id = ?", (music_id,))
+            conn.commit()
+            conn.close()
+
+
+def test_music_start_upload_validation():
+    """异步上传参数校验（不触发真实转码/文件落盘）。"""
+    ip = '127.0.0.1'
+
+    # 无文件
+    success, msg = music_service.start_upload(1, 'u', '标题', False, 0, None, ip)
+    assert success is False and '选择' in msg
+
+    # 无标题
+    class FakeFile:
+        filename = 'a.mp3'
+        def save(self, path):
+            raise AssertionError('不应触发文件保存')
+
+    success, msg = music_service.start_upload(1, 'u', '', False, 0, FakeFile(), ip)
+    assert success is False and '名称' in msg
+
+    # 不支持的扩展名
+    class FakeBadFile:
+        filename = 'a.exe'
+        def save(self, path):
+            raise AssertionError('不应触发文件保存')
+
+    success, msg = music_service.start_upload(1, 'u', '标题', False, 0, FakeBadFile(), ip)
+    assert success is False and '格式' in msg
+
+
 # 运行所有测试
 if __name__ == '__main__':
     setup()
@@ -410,6 +499,10 @@ if __name__ == '__main__':
         test_music_status_machine,
         test_music_review_email_builder,
         test_music_author_email,
+        test_music_gain_clamp,
+        test_music_build_transcode_cmd,
+        test_music_update_gain_validation,
+        test_music_start_upload_validation,
     ]
     for func in test_functions:
         try:

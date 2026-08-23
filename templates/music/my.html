@@ -27,7 +27,7 @@
                 </h1>
                 <p class="text-cream/60 text-sm mt-1">管理你上传的全部音频</p>
             </div>
-            <a href="{{ url_for('main.music_page') }}#upload-panel" class="btn-primary px-5 py-2.5 rounded-lg text-sm font-bold flex items-center gap-2">
+            <a href="{{ url_for('main.upload_music_page') }}" class="btn-primary px-5 py-2.5 rounded-lg text-sm font-bold flex items-center gap-2">
                 <i data-lucide="upload" class="w-4 h-4"></i>
                 上传音频
             </a>
@@ -53,6 +53,17 @@
                 </div>
                 <div class="flex items-center gap-2 flex-shrink-0">
                     {{ music_copy_link_button(request.host_url.rstrip('/') ~ '/music/' ~ m.id ~ '.m3u8') }}
+                    <form method="POST" action="{{ url_for('main.update_music_gain', music_id=m.id) }}" class="inline-flex items-center gap-1"
+                          title="调整音量增益（dB，-12 ~ +12，0 为原始音量）">
+                        <input type="hidden" name="next" value="{{ url_for('main.my_music_page') }}">
+                        <input type="number" name="gain" value="{{ m.gain }}" min="-12" max="12" step="0.5"
+                               class="input-field w-20 px-2 py-2 rounded-lg text-xs text-center">
+                        <button type="submit"
+                                class="px-2.5 py-2 rounded-lg text-xs border border-cream/20 text-cream/70 hover:text-cream hover:border-gold-400/40 transition-colors flex items-center gap-1"
+                                title="应用音量增益（会重新转码）">
+                            <i data-lucide="volume-2" class="w-3.5 h-3.5"></i>音量
+                        </button>
+                    </form>
                     <form method="POST" action="{{ url_for('main.toggle_music_public', music_id=m.id) }}" class="inline">
                         <input type="hidden" name="next" value="{{ url_for('main.my_music_page') }}">
                         <button type="submit"
@@ -81,7 +92,7 @@
         <div class="pixel-card rounded-xl p-12 text-center">
             <i data-lucide="folder-open" class="w-12 h-12 mx-auto text-cream/20 mb-4"></i>
             <p class="text-cream/50">你还没有上传音频</p>
-            <a href="{{ url_for('main.music_page') }}" class="btn-primary inline-flex px-5 py-2.5 mt-5 rounded-lg text-sm font-bold items-center gap-2">
+            <a href="{{ url_for('main.upload_music_page') }}" class="btn-primary inline-flex px-5 py-2.5 mt-5 rounded-lg text-sm font-bold items-center gap-2">
                 <i data-lucide="upload" class="w-4 h-4"></i>去上传
             </a>
         </div>

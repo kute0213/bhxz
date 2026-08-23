@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block title %}上传音频{% endblock %}
+{% block content %}
+<section class="page-container py-12">
+    <div class="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="mb-6">
+            <a href="{{ url_for('main.music_page') }}" class="text-gold-400 hover:text-gold-300 text-sm mb-2 inline-block">
+                <i data-lucide="arrow-left" class="w-4 h-4 inline mr-1"></i>返回大喇叭音频
+            </a>
+            <h1 class="text-2xl sm:text-3xl font-bold flex items-center gap-2">
+                <i data-lucide="upload" class="w-6 h-6 text-gold-400"></i>上传音频
+            </h1>
+            <p class="text-cream/60 text-sm mt-1">上传音频，供游戏内大喇叭播放；上传后自动转码为 m3u8</p>
+        </div>
+
+        <!-- 上传表单 -->
+        <div id="upload-card" class="pixel-card rounded-xl p-5 sm:p-6">
+            <form id="upload-form" class="space-y-5">
+                <div>
+                    <label class="block text-sm font-medium mb-2 text-cream/80">音频名称</label>
+                    <input type="text" id="title-input" name="title" maxlength="60" required placeholder="例如：开服主题曲"
+                           class="input-field w-full px-4 py-3 rounded-lg">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-2 text-cream/80">音频文件</label>
+                    <input type="file" id="file-input" name="audio_file" accept=".mp3,.wav,.ogg,.m4a,.flac,audio/*" required
+                           class="input-field w-full px-4 py-3 rounded-lg">
+                    <p class="text-cream/50 text-xs mt-1">支持 mp3 / wav / ogg / m4a / flac，单文件不超过 100MB，上传后自动转码为 m3u8</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium mb-2 text-cream/80">
+                        音量增益
+                        <span id="gain-value" class="ml-2 px-2 py-0.5 rounded text-xs font-bold bg-gold-400/15 text-gold-300 border border-gold-400/25">0 dB（不变）</span>
+                    </label>
+                    <input type="range" id="gain-input" name="gain" min="{{ gain_min }}" max="{{ gain_max }}" step="0.5" value="0"
+                           class="w-full accent-amber-400">
+                    <div class="flex items-center justify-between text-xs text-cream/50 mt-1">
+                        <span>-{{ gain_min|int }} dB（更小）</span>
+                        <span class="flex items-center gap-1.5">
+                            {% for preset in [-6, -3, 0, 3, 6] %}
+                            <button type="button" data-gain="{{ preset }}" class="gain-preset px-2 py-0.5 rounded text-xs border border-cream/20 text-cream/70 hover:text-cream hover:border-gold-400/40 transition-colors">
+                                {{ preset|string }}{% if preset > 0 %}+{% endif %}
+                            </button>
+                            {% endfor %}
+                        </span>
+                        <span>+{{ gain_max|int }} dB（更大）</span>
+                    </div>
+                    <p class="text-cream/50 text-xs mt-2">音量太小时调大（正数），音量太响/爆音时调小（负数），0 dB 表示不调整。调整会写入转码结果，播放时生效。</p>
+                </div>
+                <label class="flex items-center gap-3 cursor-pointer select-none">
+                    <input type="checkbox" id="is-public-input" name="is_public" value="1"
+                           class="w-4 h-4 rounded accent-amber-400">
+                    <span class="text-sm text-cream/80">
+                        申请公开音频（需管理员审核，审核通过后所有用户可在游戏内大喇叭看到并播放）
+                    </span>
+                </label>
+                <button type="submit" id="submit-btn" class="btn-primary w-full py-3 rounded-lg font-bold flex items-center justify-center gap-2">
+                    <i data-lucide="upload" class="w-4 h-4"></i>
+                    上传并转码
+                </button>
+            </form>
+        </div>
+
+        <!-- 进度面板（上传 + 转码双阶段详细进度条） -->
+        <div id="progress-card" class="pixel-card rounded-xl p-5 sm:p-6 mt-6 hidden">
+            <h2 class="text-lg font-bold mb-4 flex items-center gap-2">
+                <i data-lucide="loader-2" id="progress-icon" class="w-5 h-5 text-gold-400 animate-spin"></i>
+                <span id="progress-title">正在上传…</span>
+            </h2>
+
+            <!-- 阶段一：文件上传 -->
+            <div id="upload-phase" class="mb-4">
+                <div class="flex items-center justify-between text-xs text-cream/60 mb-1.5">
+                    <span class="flex items-center gap-1.5">
+                        <i data-lucide="upload-cloud" class="w-3.5 h-3.5"></i>上传文件
+                    </span>
+                    <span id="upload-percent-text">0%</span>
+                </div>
+                <div class="h-3 rounded-full bg-forest-800/80 overflow-hidden border border-forest-700/50">
+                    <div id="upload-bar" class="h-full bg-gradient-to-r from-gold-400 to-amber-300 rounded-full transition-all duration-200" style="width:0%"></div>
+                </div>
+            </div>
+
+            <!-- 阶段二：ffmpeg 转码 -->
+            <div id="transcode-phase" class="mb-4 hidden">
+                <div class="flex items-center justify-between text-xs text-cream/60 mb-1.5">
+                    <span class="flex items-center gap-1.5">
+                        <i data-lucide="cpu" class="w-3.5 h-3.5"></i>ffmpeg 转码
+                    </span>
+                    <span id="transcode-percent-text">0%</span>
+                </div>
+                <div class="h-3 rounded-full bg-forest-800/80 overflow-hidden border border-forest-700/50">
+                    <div id="transcode-bar" class="h-full bg-gradient-to-r from-green-400 to-emerald-300 rounded-full transition-all duration-200" style="width:0%"></div>
+                </div>
+                <p id="transcode-status" class="text-xs text-cream/50 mt-1.5">正在准备转码…</p>
+            </div>
+
+            <p id="progress-hint" class="text-xs text-cream/50"></p>
+        </div>
+
+        <!-- 成功卡片 -->
+        <div id="success-card" class="pixel-card rounded-xl p-6 mt-6 hidden">
+            <div class="flex items-start gap-4">
+                <div class="w-11 h-11 bg-green-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <i data-lucide="check-circle" class="w-6 h-6 text-green-400"></i>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <h3 class="font-bold text-lg" id="success-title">上传成功！</h3>
+                    <p class="text-sm text-cream/60 mt-1" id="success-desc"></p>
+                    <div class="mt-3 flex flex-wrap items-center gap-2">
+                        <button type="button" id="copy-link-btn"
+                                class="copy-link-btn px-4 py-2 rounded-lg text-sm border border-cream/20 text-cream/80 hover:text-cream hover:border-gold-400/40 transition-colors flex items-center gap-2">
+                            <i data-lucide="copy" class="w-4 h-4"></i>复制播放链接
+                        </button>
+                        <a href="{{ url_for('main.my_music_page') }}" class="btn-secondary px-4 py-2 rounded-lg text-sm flex items-center gap-2">
+                            <i data-lucide="folder-open" class="w-4 h-4"></i>前往我的音频
+                        </a>
+                        <button type="button" id="upload-another-btn" class="btn-primary px-4 py-2 rounded-lg text-sm flex items-center gap-2">
+                            <i data-lucide="upload" class="w-4 h-4"></i>再传一个
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 失败卡片 -->
+        <div id="error-card" class="pixel-card rounded-xl p-6 mt-6 hidden">
+            <div class="flex items-start gap-4">
+                <div class="w-11 h-11 bg-red-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <i data-lucide="alert-circle" class="w-6 h-6 text-red-400"></i>
+                </div>
+                <div class="flex-1 min-w-0">
+                    <h3 class="font-bold text-lg text-red-300">上传失败</h3>
+                    <p class="text-sm text-cream/60 mt-1 break-all" id="error-desc"></p>
+                    <button type="button" id="error-retry-btn" class="btn-primary px-4 py-2 rounded-lg text-sm mt-3 flex items-center gap-2">
+                        <i data-lucide="rotate-ccw" class="w-4 h-4"></i>重新上传
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_script %}
+<script src="{{ url_for('static', filename='js/music_upload.js', v='1') }}"></script>
+{% endblock %}
