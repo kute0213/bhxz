@@ -1,7 +1,7 @@
 """邮件 HTML 模板模块 —— 使用 Jinja2 模板渲染符合滨海小镇风格的邮件内容。
 
 所有邮件模板存放在 templates/emails/ 目录下：
-- base.html              公共外层容器 + 样式（暗绿金黄磨砂玻璃风格）
+- base.html              公共外层容器 + 样式（暗灰蓝金黄磨砂玻璃风格，与官网一致）
 - verification_code.html 验证码邮件
 - guide_review_pending.html 新指南待审核通知
 - guide_review_result.html  指南审核结果通知
@@ -52,7 +52,7 @@ def verification_code(code: str, purpose: str, expire_minutes: int) -> str:
     return _render(
         'verification_code.html',
         title=f'{purpose}验证码',
-        title_color='#f4d03f',
+        title_color='#fbbf24',
         code=code,
         purpose=purpose,
         expire_minutes=expire_minutes,
@@ -73,7 +73,7 @@ def guide_review_pending(title: str, author_name: str, is_edit: bool = False) ->
     return _render(
         'guide_review_pending.html',
         title='新指南待审核',
-        title_color='#f4d03f',
+        title_color='#fbbf24',
         guide_title=title,
         author_name=author_name,
         action='修改了' if is_edit else '提交了',
@@ -164,7 +164,7 @@ def broadcast_message(subject: str, markdown_body: str, sender_name: str = '滨�
     return _render(
         'broadcast_message.html',
         title=subject,
-        title_color='#f4d03f',
+        title_color='#fbbf24',
         sender_name=sender_name,
         rendered_markdown=rendered,
     )

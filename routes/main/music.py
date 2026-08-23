@@ -1,4 +1,4 @@
-"""大喇叭音频路由：板块页面、独立上传页、上传进度、播放、删除、公开切换、音量增益。
+"""大喇叭音频路由：板块页面、独立上传页、上传进度、播放、删除、公开切换。
 
 薄层：仅负责 HTTP 请求解析/响应构造，业务逻辑委托给 services。
 播放链接格式：/music/<音频ID>.m3u8（公开音频所有人可播，私有仅本人/管理员可播）。
@@ -63,13 +63,11 @@ def my_music_page():
 @main_bp.route('/music/upload')
 @login_required
 def upload_music_page():
-    """大喇叭音频上传页：独立页面，含详细进度条与音量增益设置。"""
+    """大喇叭音频上传页：独立页面，含详细进度条。"""
     user = get_current_user()
     return render_template(
         'music/upload.html',
         user=user,
-        gain_min=music_service.GAIN_MIN,
-        gain_max=music_service.GAIN_MAX,
     )
 
 
@@ -88,7 +86,6 @@ def upload_music():
     user = get_current_user()
     title = request.form.get('title', '').strip()
     is_public = request.form.get('is_public') in ('1', 'on', 'true')
-    gain = request.form.get('gain', '0')
     upload_file = request.files.get('audio_file')
 
     success, result = music_service.start_upload(
@@ -96,7 +93,6 @@ def upload_music():
         username=user['username'],
         title=title,
         is_public=is_public,
-        gain=gain,
         upload_file=upload_file,
         ip_address=request.remote_addr,
     )
@@ -113,23 +109,6 @@ def upload_music_progress(task_id):
     if not task:
         return jsonify({'status': 'error', 'message': '任务不存在或已过期'}), 404
     return jsonify(task)
-
-
-@main_bp.route('/music/<int:music_id>/gain', methods=['POST'])
-@login_required
-def update_music_gain(music_id):
-    """调整音频音量增益（重新转码）。上传者本人或管理员可操作。"""
-    user = get_current_user()
-    gain = request.form.get('gain', '0')
-    success, message = music_service.update_gain(
-        music_id=music_id,
-        gain=gain,
-        user_id=user['id'],
-        is_admin=bool(user.get('is_admin')),
-        ip_address=request.remote_addr,
-    )
-    flash(message, 'success' if success else 'error')
-    return _redirect_back()
 
 
 @main_bp.route('/music/<int:music_id>/toggle', methods=['POST'])

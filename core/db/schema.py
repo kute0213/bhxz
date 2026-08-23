@@ -271,7 +271,7 @@ def init_db():
             )
         '''),
         # 大喇叭音频表（上传音频转码为 HLS，供游戏内大喇叭播放）
-        # status: 0=私有 1=待审核 2=已公开 3=已驳回
+        # status: 0=私有 1=待审核 2=已公开（3=已驳回，仅遗留老数据保留，新驳回直接转为私有）
         ('music', '''
             CREATE SEQUENCE IF NOT EXISTS music_id_seq START 1;
             CREATE TABLE IF NOT EXISTS music (
@@ -281,7 +281,6 @@ def init_db():
                 title VARCHAR NOT NULL,
                 file_path VARCHAR DEFAULT '',
                 status INTEGER DEFAULT 0,
-                gain REAL DEFAULT 0,
                 created_at VARCHAR NOT NULL
             )
         '''),
@@ -329,7 +328,7 @@ def init_db():
     add_column_if_not_exists('users', 'avatar_key', "VARCHAR DEFAULT ''")
 
     # ---- 大喇叭音频：公开审核机制迁移 ----
-    # 老库使用 is_public（0/1）标记公开，新库改用 status（0=私有 1=待审核 2=已公开 3=已驳回）
+    # 老库使用 is_public（0/1）标记公开，新库改用 status（0=私有 1=待审核 2=已公开）
     add_column_if_not_exists('music', 'status', 'INTEGER DEFAULT 0')
     try:
         # 历史已公开音频（is_public=1）直接迁移为「已通过」状态，立即在公开列表可见
@@ -338,10 +337,7 @@ def init_db():
     except Exception as e:
         print(f'[DB] 迁移 music 公开状态失败: {e}', flush=True)
 
-    # ---- 大喇叭音频：音量增益（dB），默认 0（不调整） ----
-    add_column_if_not_exists('music', 'gain', 'REAL DEFAULT 0')
-
-    
+    # ---- 大喇叭音频：音量增益功能已彻底移除（旧库遗留 gain 列仅保留字段，不再使用） ----
 
     # ---- 管理员账号 ----
     # 确保 PRIMARY_ADMIN_USERNAMES 中的所有账号为管理员，

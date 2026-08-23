@@ -2,7 +2,7 @@
 
 {% block content %}
 <p class="mail-muted" style="margin:0 0 12px 0;">
-    来自 <b style="color:#f4d03f;">{{ sender_name }}</b> 的全体广播：
+    来自 <b class="mail-name">{{ sender_name }}</b> 的全体广播：
 </p>
 <div class="mail-content">
     {{ rendered_markdown | safe }}

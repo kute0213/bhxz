@@ -1,4 +1,4 @@
-/* 大喇叭音频上传页：表单校验、音量增益滑块、双阶段详细进度条。
+/* 大喇叭音频上传页：表单校验、双阶段详细进度条。
  *
  * 流程：
  *   1. 提交表单 → XMLHttpRequest 上传文件（阶段一：文件上传进度条）
@@ -30,35 +30,10 @@
     var transcodePercentText = document.getElementById('transcode-percent-text');
 
     var submitBtn = document.getElementById('submit-btn');
-    var gainInput = document.getElementById('gain-input');
-    var gainValue = document.getElementById('gain-value');
     var hint = document.getElementById('progress-hint');
 
     var pollTimer = null;
     var uploading = false;
-
-    // ------------------------------------------------------------------
-    // 音量增益滑块：实时显示 dB 值 + 快捷预设按钮
-    // ------------------------------------------------------------------
-    function formatGain(value) {
-        var n = parseFloat(value) || 0;
-        if (n === 0) return '0 dB（不变）';
-        return (n > 0 ? '+' : '') + n.toFixed(1) + ' dB';
-    }
-
-    function refreshGain() {
-        if (gainInput && gainValue) gainValue.textContent = formatGain(gainInput.value);
-    }
-
-    if (gainInput) gainInput.addEventListener('input', refreshGain);
-    document.querySelectorAll('.gain-preset').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-            if (!gainInput) return;
-            gainInput.value = btn.getAttribute('data-gain');
-            refreshGain();
-        });
-    });
-    refreshGain();
 
     // ------------------------------------------------------------------
     // 页面状态切换
@@ -77,6 +52,7 @@
         uploadBar.style.width = '0%';
         uploadPercentText.textContent = '0%';
         transcodeBar.style.width = '0%';
+        transcodeBar.classList.remove('is-indeterminate');
         transcodePercentText.textContent = '0%';
         transcodeStatus.textContent = '正在准备转码…';
         if (hint) hint.textContent = '';
@@ -90,6 +66,8 @@
         uploadBar.style.width = '100%';
         uploadPercentText.textContent = '100%';
         progressTitle.textContent = '正在转码…';
+        // 尚未有真实百分比时显示不确定态动画进度条，避免「只有文字没有进度条」
+        transcodeBar.classList.add('is-indeterminate');
         transcodeStatus.textContent = message || '正在准备转码…';
     }
 
@@ -150,7 +128,8 @@
                         showSuccess(task.music_id, task.title || '', task.status === 'done');
                         return;
                     }
-                    // transcoding
+                    // transcoding：有真实百分比后切换为精确进度
+                    transcodeBar.classList.remove('is-indeterminate');
                     var percent = Math.min(99, Math.max(0, task.percent || 0));
                     transcodeBar.style.width = percent + '%';
                     transcodePercentText.textContent = Math.round(percent) + '%';
@@ -194,7 +173,6 @@
         var formData = new FormData();
         formData.append('title', titleInput.value.trim());
         formData.append('audio_file', fileInput.files[0]);
-        formData.append('gain', gainInput ? gainInput.value : '0');
         var isPublicEl = document.getElementById('is-public-input');
         if (isPublicEl && isPublicEl.checked) formData.append('is_public', '1');
 
@@ -268,7 +246,6 @@
         hideAll();
         setBusy(false);
         form.reset();
-        refreshGain();
         refreshIcons();
     }
 

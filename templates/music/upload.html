@@ -27,26 +27,6 @@
                            class="input-field w-full px-4 py-3 rounded-lg">
                     <p class="text-cream/50 text-xs mt-1">支持 mp3 / wav / ogg / m4a / flac，单文件不超过 100MB，上传后自动转码为 m3u8</p>
                 </div>
-                <div>
-                    <label class="block text-sm font-medium mb-2 text-cream/80">
-                        音量增益
-                        <span id="gain-value" class="ml-2 px-2 py-0.5 rounded text-xs font-bold bg-gold-400/15 text-gold-300 border border-gold-400/25">0 dB（不变）</span>
-                    </label>
-                    <input type="range" id="gain-input" name="gain" min="{{ gain_min }}" max="{{ gain_max }}" step="0.5" value="0"
-                           class="w-full accent-amber-400">
-                    <div class="flex items-center justify-between text-xs text-cream/50 mt-1">
-                        <span>-{{ gain_min|int }} dB（更小）</span>
-                        <span class="flex items-center gap-1.5">
-                            {% for preset in [-6, -3, 0, 3, 6] %}
-                            <button type="button" data-gain="{{ preset }}" class="gain-preset px-2 py-0.5 rounded text-xs border border-cream/20 text-cream/70 hover:text-cream hover:border-gold-400/40 transition-colors">
-                                {{ preset|string }}{% if preset > 0 %}+{% endif %}
-                            </button>
-                            {% endfor %}
-                        </span>
-                        <span>+{{ gain_max|int }} dB（更大）</span>
-                    </div>
-                    <p class="text-cream/50 text-xs mt-2">音量太小时调大（正数），音量太响/爆音时调小（负数），0 dB 表示不调整。调整会写入转码结果，播放时生效。</p>
-                </div>
                 <label class="flex items-center gap-3 cursor-pointer select-none">
                     <input type="checkbox" id="is-public-input" name="is_public" value="1"
                            class="w-4 h-4 rounded accent-amber-400">
@@ -143,5 +123,19 @@
 {% endblock %}
 
 {% block extra_script %}
+<style>
+    /* 转码阶段不确定态进度条：真实百分比未知时显示滑动的光带动画 */
+    #transcode-bar.is-indeterminate {
+        background-image: linear-gradient(90deg,
+            transparent 0%, rgba(52, 211, 153, 0.15) 20%, #34d399 50%,
+            rgba(52, 211, 153, 0.15) 80%, transparent 100%);
+        background-size: 200% 100%;
+        animation: transcode-indeterminate 1.2s linear infinite;
+    }
+    @keyframes transcode-indeterminate {
+        from { background-position: 200% 0; }
+        to { background-position: -200% 0; }
+    }
+</style>
 <script src="{{ url_for('static', filename='js/music_upload.js', v='1') }}"></script>
 {% endblock %}

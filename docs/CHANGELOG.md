@@ -3,14 +3,12 @@
 ## [Unreleased]
 
 ### 新增
-- **音频独立上传页与详细进度条**：上传从列表页内嵌面板拆分为独立页面 `/music/upload`（`templates/music/upload.html` + `static/js/music_upload.js`），列表页/「我的音频」页改为跳转独立上传页；采用「异步任务 + 轮询进度」——上传请求立即返回 `task_id`，后台线程执行 ffmpeg 转码，前端分两阶段展示进度条（文件上传百分比 + 转码百分比），`ffprobe` 探测音频时长、解析 ffmpeg `-progress` 输出实时计算转码进度，成功后展示播放链接并可复制/再传一个，失败展示错误并可一键重试（`services/music_service.py` 新增 `start_upload`/`_run_upload_task`/`get_upload_progress`/`_probe_duration`，`config.py` 新增 `FFPROBE_BIN`，每个上传任务独立临时目录与 ffmpeg 子进程，多用户并发互不冲突）
-- **自定义音量增益**：上传前可拖动滑块或点快捷预设设置音量增益（-12 ~ +12 dB，0 为不调整），转码时经 ffmpeg `volume` 滤镜写入 HLS 产物；上传后上传者本人或管理员可在「我的音频」/管理后台重新调整并即时重新转码（`POST /music/<id>/gain`，`music_service.update_gain()` 在独立临时目录重新转码后一次性替换产物、保留源文件）；`music` 表新增 `gain` 字段持久化（含迁移）
-- **「我的音频」页与管理后台音量增益编辑**：`templates/music/my.html` 与 `templates/admin/admin_music.html` 为每个音频新增增益输入框与「音量」应用按钮，`next` 参数保持跳回来源页
+- **音频独立上传页与详细进度条**：上传从列表页内嵌面板拆分为独立页面 `/music/upload`（`templates/music/upload.html` + `static/js/music_upload.js`），列表页/「我的音频」页改为跳转独立上传页；采用「异步任务 + 轮询进度」——上传请求立即返回 `task_id`，后台线程执行 ffmpeg 转码，前端分两阶段展示进度条（文件上传百分比 + ffmpeg 转码进度条），`ffprobe` 探测音频时长、解析 ffmpeg `-progress` 输出实时计算转码进度；**转码阶段在真实百分比未知时显示不确定态滑动动画进度条（`.is-indeterminate`），不再只有文字百分比**，成功后展示播放链接并可复制/再传一个，失败展示错误并可一键重试（`services/music_service.py` 新增 `start_upload`/`_run_upload_task`/`get_upload_progress`/`_probe_duration`，`config.py` 新增 `FFPROBE_BIN`，每个上传任务独立临时目录与 ffmpeg 子进程，多用户并发互不冲突）
 - **音频列表与公开控制**：板块内展示全部公开音频与「我的音频」列表，用户可随时切换公开/私有；公开后所有用户（含未登录）可在游戏内大喇叭音频列表看到并播放
 - **管理员后台管理**：新增「大喇叭音频管理」页，管理员可查看全部音频并一键下架（删除）
 - **删除同步清理文件**：音频在数据库删除记录时同步删除 `uploads/music/<ID>/` 目录，无文件残留；数据库表 `music` 记录上传者/标题/公开状态/时间
 - **内置 ffmpeg 自动调用**：Windows 调用 `scripts/ffmpeg/ffmpeg.exe`，Linux/macOS 调用 `scripts/ffmpeg/ffmpeg`，未内置时回退系统 PATH 中的 `ffmpeg`（config 新增 `FFMPEG_DIR`/`FFMPEG_BIN`）
-- **公开音频审核机制**：申请公开的音频进入「待审核」，管理员在后台可试听并选择通过/驳回；通过后才在游戏内大喇叭展示，驳回后用户可转为私有或删除；已公开转私有再申请公开需重新审核。`music` 表以 `status`（0=私有 1=待审核 2=已公开 3=已驳回）替代 `is_public`，历史公开数据自动迁移为「已通过」
+- **公开音频审核机制**：申请公开的音频进入「待审核」，管理员在后台可试听并选择通过/驳回；通过后才在游戏内大喇叭展示，**驳回后音频自动转为私有**（用户可重新申请公开或删除）；已公开转私有再申请公开需重新审核。`music` 表以 `status`（0=私有 1=待审核 2=已公开，历史 3=已驳回 数据归并为私有）替代 `is_public`，历史公开数据自动迁移为「已通过」
 - **音频审核结果邮件通知**：管理员通过/驳回公开申请后，自动向上传者邮箱发送审核结果邮件（后台线程异步发送，不阻塞请求）；邮件未启用或上传者无邮箱时自动跳过。`services/email/templates.py` 新增 `music_review_result()` 构建函数与 `templates/emails/music_review_result.html` 模板，`services/music_service.py` 新增 `get_author_email()` 查询上传者邮箱
 - **公开音频名称搜索**：公开音频列表支持按名称模糊搜索（`GET /music?q=关键词`，`get_public_musics()` 新增 keyword 参数），展示搜索结果数与无结果空态，支持一键清除
 - **「我的音频」独立页面**：原内嵌在公开列表页的「我的音频」拆分为单独页面 `/music/my`（`templates/music/my.html` + `static/js/music_my.js`），公开页顶部提供入口；公开/私有切换与删除操作通过 `next` 参数跳回来源页；公开页上传面板支持 `#upload-panel` 锚点自动展开
@@ -19,6 +17,7 @@
 - **一键更新保护本地资产**：更新同步新增「本地独有文件暂存恢复」机制——同步前暂存本地存在而仓库中没有的文件（如 `scripts/ffmpeg/` 下未入库的二进制），复制完成后自动恢复，解决更新后 ffmpeg 文件夹等本地资产被误删的问题（`services/updater.py` 新增 `_preserve_local_only`/`_restore_local_only`）
 
 ### 优化
+- **邮件模板与官网风格完全一致**：`templates/emails/base.html` 配色由暗绿改为与官网 `static/css/base.css` 一致的**暗灰蓝 + 金色（#fbbf24）磨砂玻璃**——背景深灰蓝渐变 + 靛蓝/紫/金三色光晕、卡片玻璃渐变、金色顶部高光描边、光线散射层与噪点纹理，标题/链接/强调块统一金色；通过/失败/待审核状态卡分别用绿/红/金，验证码、指南审核、音频审核、广播邮件全部复用同一外层模板
 - **管理中心数据统计调整**：移除已删除功能（投票活动/投票次数/征集/征集回复）的统计卡片，修复因 `polls`/`board_*` 表已从 schema 移除导致的管理中心 500 错误；新增「大喇叭音频」总数与「待审核大喇叭音频」数量统计（`routes/admin/pages.py` 与 `templates/admin/admin.html`）
 - **邮件模板统一磨砂玻璃风格**：`templates/emails/base.html` 重做为暗绿金黄玻璃卡片，新增背景光晕、噪点纹理、光线散射层、顶部高光描边与通过/失败状态卡样式（`.mail-status-success` / `.mail-status-fail`），验证码 / 指南审核 / 音频审核 / 广播邮件共用同一外层与样式
 - **邮件 HTML 全面统一风格**：`guide_review_result.html` 改用通过/失败状态卡（与音频审核邮件一致），`guide_review_pending.html` 新增待审核状态卡（`.mail-status-pending` 金黄色样式 + 时钟图标），`broadcast_message.html` 移除内联样式改为复用基础样式类（`mail-muted`/`mail-content`），所有邮件模板视觉风格统一
@@ -34,6 +33,8 @@
 - **彻底删除 MinIO 对象存储**：移除 `services/object_storage.py`、`config.py` 中 MinIO 相关配置、`app.py` 中 MinIO 初始化检查、`routes/main/media.py` 中 MinIO 引用改为本地文件存储、`services/user_service.py` 中 MinIO 清理逻辑改为本地文件清理；删除 `.env.example` 和 `docs/MINIO.md`
 - **移除系统设置中的背景图片开关**：从 `SETTINGS_REGISTRY` 中移除 `ENABLE_BACKGROUND_IMAGE` 和 `BACKGROUND_FADE_IN_MS`，首页背景只保留上传按钮 + 图片预览弹窗
 - **删除投票与征集功能**：彻底移除 `routes/community/polls.py`、`routes/community/board.py`、`services/poll_service.py`、`services/board_service.py`、`templates/community.html`，从数据库 schema 中移除 `polls`、`poll_options`、`poll_votes`、`board_topics`、`board_replies` 表，从导航和首页移除入口链接
+- **彻底删除音频声音增益功能**：移除 `music` 表 `gain` 字段（迁移与插入代码）、`services/music_service.py` 中 `_clamp_gain`/`update_gain` 及 `_build_transcode_cmd`/`start_upload` 的 gain 参数与 `volume` 滤镜、`routes/main/music.py` 中 `POST /music/<id>/gain` 路由、`templates/music/upload.html` 音量增益滑块、`templates/music/my.html` 与 `templates/admin/admin_music.html` 的增益输入框、`static/js/music_upload.js` 增益逻辑与相关测试；上传转码保持纯 ffmpeg AAC/HLS 转码
+- **驳回后音频自动转为私有**：管理员驳回公开申请后音频直接转为「私有」（`review_music` 由旧状态 3=已驳回 改为 0=私有），用户可重新申请公开或删除；历史「已驳回」（status=3）数据在展示与切换逻辑中归并为私有处理
 
 ### 优化
 - **首页背景图片交互优化**：上传改用 XHR 异步 + 进度条，新增预览弹窗，点击预览按钮即可查看大图

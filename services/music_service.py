@@ -1,4 +1,4 @@
-"""大喇叭音频业务服务：上传转码 HLS、列表查询、删除、音量增益调整。
+"""大喇叭音频业务服务：上传转码 HLS、列表查询、删除、公开审核。
 
 所有函数为 Flask 无关的纯业务逻辑，返回 (success, data_or_error) 元组。
 音频文件存放在 uploads/music/<音频ID>/ 目录，播放链接格式：
@@ -30,7 +30,7 @@ from services.logger import log
 # HLS 分片时长（秒）
 HLS_SEGMENT_SECONDS = 10
 
-# 音频状态：0=私有 1=待审核 2=已公开 3=已驳回
+# 音频状态：0=私有 1=待审核 2=已公开（3=已驳回 仅遗留老数据，新驳回直接转为私有）
 STATUS_PRIVATE = 0
 STATUS_PENDING = 1
 STATUS_PUBLIC = 2
@@ -43,10 +43,6 @@ STATUS_LABELS = {
     STATUS_PUBLIC: '已公开',
     STATUS_REJECTED: '已驳回',
 }
-
-# 音量增益范围（dB）：负数为减小音量，正数为增大音量，0 表示不调整
-GAIN_MIN = -12.0
-GAIN_MAX = 12.0
 
 # 上传任务在内存中的保留时间（秒），超过后自动清理
 _UPLOAD_TASK_TTL = 3600
@@ -73,7 +69,7 @@ def get_public_musics(keyword=''):
     """获取所有已通过审核的公开音频（游戏内大喇叭列表），支持按名称模糊搜索。"""
     conn = get_db()
     try:
-        sql = ("SELECT id, user_id, username, title, status, gain, created_at "
+        sql = ("SELECT id, user_id, username, title, status, created_at "
                "FROM music WHERE status = ?")
         params = [STATUS_PUBLIC]
         kw = (keyword or '').strip()
@@ -92,7 +88,7 @@ def get_user_musics(user_id):
     conn = get_db()
     try:
         rows = conn.execute(
-            "SELECT id, user_id, username, title, status, gain, created_at "
+            "SELECT id, user_id, username, title, status, created_at "
             "FROM music WHERE user_id = ? ORDER BY id DESC",
             (user_id,),
         ).fetchall()
@@ -106,7 +102,7 @@ def get_pending_musics():
     conn = get_db()
     try:
         rows = conn.execute(
-            "SELECT id, user_id, username, title, status, gain, created_at "
+            "SELECT id, user_id, username, title, status, created_at "
             "FROM music WHERE status = ? ORDER BY id DESC",
             (STATUS_PENDING,),
         ).fetchall()
@@ -120,7 +116,7 @@ def get_all_musics():
     conn = get_db()
     try:
         rows = conn.execute(
-            "SELECT id, user_id, username, title, status, gain, created_at "
+            "SELECT id, user_id, username, title, status, created_at "
             "FROM music ORDER BY id DESC"
         ).fetchall()
         return [dict(r) for r in rows]
@@ -133,7 +129,7 @@ def get_music(music_id):
     conn = get_db()
     try:
         row = conn.execute(
-            "SELECT id, user_id, username, title, file_path, status, gain, created_at "
+            "SELECT id, user_id, username, title, file_path, status, created_at "
             "FROM music WHERE id = ?",
             (music_id,),
         ).fetchone()
@@ -162,7 +158,7 @@ def get_author_email(music_id):
 
 
 # ---------------------------------------------------------------------------
-# 上传 / 转码（含音量增益）
+# 上传 / 转码
 # ---------------------------------------------------------------------------
 
 def _rewrite_playlist_segments(playlist_path, music_id):
@@ -181,11 +177,6 @@ def _rewrite_playlist_segments(playlist_path, music_id):
             out.append(line)
     with open(playlist_path, 'w', encoding='utf-8') as f:
         f.write('\n'.join(out) + '\n')
-
-
-def _clamp_gain(gain):
-    """将音量增益（dB）限制在合法范围内，四舍五入到 0.1。0 表示不调整。"""
-    return round(max(GAIN_MIN, min(GAIN_MAX, gain)), 1)
 
 
 def _probe_duration(src_path):
@@ -207,21 +198,17 @@ def _probe_duration(src_path):
     return None
 
 
-def _build_transcode_cmd(src_path, playlist_path, seg_pattern, gain):
+def _build_transcode_cmd(src_path, playlist_path, seg_pattern):
     """构造 ffmpeg 转码命令：音频统一转 AAC 并生成 HLS（m3u8 + ts）。
 
-    gain 为音量增益（dB），0 表示不调整；-progress pipe:1 输出机器可读进度，
-    -loglevel error 保证 stderr 仅包含错误信息（避免管道缓冲阻塞）。
+    -progress pipe:1 输出机器可读进度，-loglevel error 保证 stderr 仅包含
+    错误信息（避免管道缓冲阻塞）。
     """
     cmd = [
         FFMPEG_BIN, '-y', '-loglevel', 'error', '-nostats',
         '-i', src_path, '-vn',
         '-threads', str(FFMPEG_THREADS),
         '-c:a', 'aac', '-b:a', '128k', '-ac', '2',
-    ]
-    if gain:
-        cmd += ['-filter:a', f'volume={gain:+.2f}dB']
-    cmd += [
         '-hls_time', str(HLS_SEGMENT_SECONDS),
         '-hls_list_size', '0',
         '-hls_segment_filename', seg_pattern,
@@ -231,14 +218,14 @@ def _build_transcode_cmd(src_path, playlist_path, seg_pattern, gain):
     return cmd
 
 
-def _insert_music_record(user_id, username, title, status, gain):
+def _insert_music_record(user_id, username, title, status):
     """插入音频记录并返回 ID；失败抛异常。"""
     conn = get_db()
     try:
         cursor = conn.execute(
-            "INSERT INTO music (user_id, username, title, file_path, status, gain, created_at) "
-            "VALUES (?, ?, ?, '', ?, ?, ?)",
-            (user_id, username, title, status, gain, _now()),
+            "INSERT INTO music (user_id, username, title, file_path, status, created_at) "
+            "VALUES (?, ?, ?, '', ?, ?)",
+            (user_id, username, title, status, _now()),
         )
         conn.commit()
         return cursor.lastrowid
@@ -280,14 +267,12 @@ def _cleanup_music_record(music_id):
     shutil.rmtree(_music_dir(music_id), ignore_errors=True)
 
 
-def upload_music(user_id, username, title, is_public, upload_file, ip_address, gain=0.0):
+def upload_music(user_id, username, title, is_public, upload_file, ip_address):
     """同步上传音频并转码为 HLS（m3u8）。返回 (success, data_or_error)。
 
     流程：保存源文件 → ffmpeg 转码 HLS → 插入数据库记录获取 ID →
     改写 m3u8 分片为绝对 URL → 临时目录重命名为 <ID> 目录。
     任一步失败都会清理已产生的临时文件与数据库记录。
-
-    gain 为音量增益（dB，-12~12），0 表示不调整。
     """
     if not upload_file or not upload_file.filename:
         return False, '请选择要上传的音频文件'
@@ -298,11 +283,6 @@ def upload_music(user_id, username, title, is_public, upload_file, ip_address, g
     ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
     if ext not in MUSIC_ALLOWED_EXTENSIONS:
         return False, f'不支持的音频格式，仅支持：{"、".join(sorted(MUSIC_ALLOWED_EXTENSIONS))}'
-
-    try:
-        gain = _clamp_gain(float(gain or 0))
-    except (TypeError, ValueError):
-        gain = 0.0
 
     work_dir = os.path.join(UPLOAD_MUSIC_DIR, f'.tmp_{uuid.uuid4().hex}')
     os.makedirs(work_dir, exist_ok=True)
@@ -316,7 +296,7 @@ def upload_music(user_id, username, title, is_public, upload_file, ip_address, g
         # 2. ffmpeg 转码为 HLS（音频统一转 AAC，生成 m3u8 + ts 分片）
         playlist_path = os.path.join(work_dir, 'index.m3u8')
         seg_pattern = os.path.join(work_dir, 'seg_%03d.ts')
-        cmd = _build_transcode_cmd(src_path, playlist_path, seg_pattern, gain)
+        cmd = _build_transcode_cmd(src_path, playlist_path, seg_pattern)
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
         if proc.returncode != 0 or not os.path.isfile(playlist_path):
             detail = (proc.stderr or proc.stdout or '')[-400:]
@@ -324,7 +304,7 @@ def upload_music(user_id, username, title, is_public, upload_file, ip_address, g
 
         # 3. 插入数据库记录，获取音频 ID
         status = STATUS_PENDING if is_public else STATUS_PRIVATE
-        music_id = _insert_music_record(user_id, username, title, status, gain)
+        music_id = _insert_music_record(user_id, username, title, status)
         if not music_id:
             raise RuntimeError('音频记录创建失败')
 
@@ -332,7 +312,7 @@ def upload_music(user_id, username, title, is_public, upload_file, ip_address, g
         _finalize_music_files(work_dir, music_id)
 
         log('Music', '上传大喇叭音频', music_id=music_id, user_id=user_id,
-            username=username, title=title, status=status, gain=gain, ip=ip_address)
+            username=username, title=title, status=status, ip=ip_address)
         return True, {'music_id': music_id, 'title': title}
     except Exception as e:
         # 清理：删除临时目录；若已插入数据库记录则同步删除记录与文件
@@ -345,7 +325,7 @@ def upload_music(user_id, username, title, is_public, upload_file, ip_address, g
 # 异步上传（独立页面 + 详细进度条）
 # ---------------------------------------------------------------------------
 
-def start_upload(user_id, username, title, is_public, gain, upload_file, ip_address):
+def start_upload(user_id, username, title, is_public, upload_file, ip_address):
     """开始异步上传任务，立即返回 task_id，转码在后台线程执行。
 
     返回 (True, {'task_id': ...})；参数校验失败返回 (False, 错误信息)。
@@ -361,11 +341,6 @@ def start_upload(user_id, username, title, is_public, gain, upload_file, ip_addr
     ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
     if ext not in MUSIC_ALLOWED_EXTENSIONS:
         return False, f'不支持的音频格式，仅支持：{"、".join(sorted(MUSIC_ALLOWED_EXTENSIONS))}'
-
-    try:
-        gain = _clamp_gain(float(gain or 0))
-    except (TypeError, ValueError):
-        gain = 0.0
 
     task_id = uuid.uuid4().hex
     work_dir = os.path.join(UPLOAD_MUSIC_DIR, f'.tmp_{task_id}')
@@ -392,7 +367,7 @@ def start_upload(user_id, username, title, is_public, gain, upload_file, ip_addr
     # 后台线程执行转码，避免阻塞上传请求
     threading.Thread(
         target=_run_upload_task,
-        args=(task_id, user_id, username, title, is_public, gain,
+        args=(task_id, user_id, username, title, is_public,
               work_dir, src_path, ip_address),
         daemon=True,
     ).start()
@@ -415,13 +390,13 @@ def _set_task(task_id, **kwargs):
             _upload_tasks[task_id].update(kwargs)
 
 
-def _run_upload_task(task_id, user_id, username, title, is_public, gain,
+def _run_upload_task(task_id, user_id, username, title, is_public,
                      work_dir, src_path, ip_address):
     """后台线程：运行 ffmpeg 转码，解析 -progress 输出，成功后落库。"""
     try:
         playlist_path = os.path.join(work_dir, 'index.m3u8')
         seg_pattern = os.path.join(work_dir, 'seg_%03d.ts')
-        cmd = _build_transcode_cmd(src_path, playlist_path, seg_pattern, gain)
+        cmd = _build_transcode_cmd(src_path, playlist_path, seg_pattern)
 
         with _upload_tasks_lock:
             duration = _upload_tasks.get(task_id, {}).get('duration')
@@ -461,13 +436,13 @@ def _run_upload_task(task_id, user_id, username, title, is_public, gain,
 
         # 落库 + 文件整理
         status = STATUS_PENDING if is_public else STATUS_PRIVATE
-        music_id = _insert_music_record(user_id, username, title, status, gain)
+        music_id = _insert_music_record(user_id, username, title, status)
         if not music_id:
             raise RuntimeError('音频记录创建失败')
         _finalize_music_files(work_dir, music_id)
 
         log('Music', '上传大喇叭音频', music_id=music_id, user_id=user_id,
-            username=username, title=title, status=status, gain=gain, ip=ip_address)
+            username=username, title=title, status=status, ip=ip_address)
         _set_task(task_id, status='done', percent=100, message='转码完成', music_id=music_id)
     except Exception as e:
         shutil.rmtree(work_dir, ignore_errors=True)
@@ -481,89 +456,6 @@ def get_upload_progress(task_id):
     with _upload_tasks_lock:
         task = _upload_tasks.get(task_id)
         return dict(task) if task else None
-
-
-# ---------------------------------------------------------------------------
-# 音量增益调整（重新转码）
-# ---------------------------------------------------------------------------
-
-def _find_source_file(music_dir):
-    """在音频目录中查找源文件（source.<ext>），找不到返回 None。"""
-    if not os.path.isdir(music_dir):
-        return None
-    for name in os.listdir(music_dir):
-        if name.startswith('source.'):
-            return os.path.join(music_dir, name)
-    return None
-
-
-def update_gain(music_id, gain, user_id, is_admin, ip_address):
-    """按新的音量增益重新转码音频。返回 (success, message)。
-
-    权限：管理员可调整任意音频；普通用户仅可调整自己上传的音频。
-    重新转码在独立临时目录完成后一次性替换产物，避免播放中断；
-    源文件（source.*）保留在音频目录中，不会被覆盖。
-    """
-    music = get_music(music_id)
-    if not music:
-        return False, '音频不存在'
-    if not is_admin and music['user_id'] != user_id:
-        return False, '无权修改该音频'
-
-    try:
-        gain = _clamp_gain(float(gain or 0))
-    except (TypeError, ValueError):
-        return False, '音量增益格式不正确'
-
-    final_dir = _music_dir(music_id)
-    src_path = _find_source_file(final_dir)
-    if not src_path:
-        return False, '找不到该音频的源文件，无法重新转码'
-
-    work_dir = os.path.join(UPLOAD_MUSIC_DIR, f'.tmp_gain_{uuid.uuid4().hex}')
-    os.makedirs(work_dir, exist_ok=True)
-    try:
-        playlist_path = os.path.join(work_dir, 'index.m3u8')
-        seg_pattern = os.path.join(work_dir, 'seg_%03d.ts')
-        cmd = _build_transcode_cmd(src_path, playlist_path, seg_pattern, gain)
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
-        if proc.returncode != 0 or not os.path.isfile(playlist_path):
-            detail = (proc.stderr or proc.stdout or '')[-400:]
-            raise RuntimeError(f'重新转码失败：{detail}')
-
-        _rewrite_playlist_segments(playlist_path, music_id)
-
-        # 替换最终目录中的旧产物（保留源文件）
-        for name in os.listdir(final_dir):
-            if name == os.path.basename(src_path):
-                continue
-            fp = os.path.join(final_dir, name)
-            try:
-                if os.path.isdir(fp):
-                    shutil.rmtree(fp, ignore_errors=True)
-                else:
-                    os.remove(fp)
-            except OSError:
-                pass
-        for name in os.listdir(work_dir):
-            shutil.move(os.path.join(work_dir, name), os.path.join(final_dir, name))
-
-        conn = get_db()
-        try:
-            conn.execute("UPDATE music SET gain = ? WHERE id = ?", (gain, music_id))
-            conn.commit()
-        finally:
-            conn.close()
-
-        log('Music', '调整音频音量增益', music_id=music_id, user_id=user_id,
-            is_admin=is_admin, gain=gain, ip=ip_address)
-        if gain == 0:
-            return True, '已恢复原始音量'
-        return True, f'音量增益已调整为 {gain:+.1f} dB'
-    except Exception as e:
-        return False, str(e)
-    finally:
-        shutil.rmtree(work_dir, ignore_errors=True)
 
 
 # ---------------------------------------------------------------------------
@@ -612,7 +504,7 @@ def toggle_music_public(music_id, user_id, is_admin, ip_address):
     """切换音频公开/私有状态。返回 (success, message)。
 
     - 私有 → 申请公开（进入待审核，管理员审核通过后才公开）
-    - 待审核/已公开/已驳回 → 转为私有（仅自己可见）
+    - 待审核 / 已公开 / 历史已驳回 → 转为私有（仅自己可见）
     """
     music = get_music(music_id)
     if not music:
@@ -650,7 +542,8 @@ def toggle_music_public(music_id, user_id, is_admin, ip_address):
 def review_music(music_id, approve, reviewer_username, ip_address):
     """管理员审核公开申请。返回 (success, message)。
 
-    approve=True 通过 → 已公开；approve=False 驳回 → 已驳回（用户可转为私有或删除）。
+    approve=True 通过 → 已公开；approve=False 驳回 → 自动转为私有
+    （用户仍可在「我的音频」中重新申请公开或删除）。
     仅待审核状态的音频可被审核。
     """
     music = get_music(music_id)
@@ -659,7 +552,7 @@ def review_music(music_id, approve, reviewer_username, ip_address):
     if music['status'] != STATUS_PENDING:
         return False, '该音频不在待审核状态'
 
-    new_status = STATUS_PUBLIC if approve else STATUS_REJECTED
+    new_status = STATUS_PUBLIC if approve else STATUS_PRIVATE
     conn = get_db()
     try:
         conn.execute(
@@ -677,4 +570,4 @@ def review_music(music_id, approve, reviewer_username, ip_address):
         reviewer=reviewer_username, title=music['title'], ip=ip_address)
     if approve:
         return True, '已通过审核，音频已在游戏内大喇叭公开'
-    return True, '已驳回，用户可将音频转为私有或删除'
+    return True, '已驳回，音频已转为私有，用户可重新申请公开'
