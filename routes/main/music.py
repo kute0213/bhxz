@@ -25,16 +25,37 @@ def _can_access(music, user):
 
 @main_bp.route('/music')
 def music_page():
-    """大喇叭音频板块：公开音频列表 + 我的音频 + 上传表单。"""
+    """大喇叭音频板块：公开音频列表（支持按名称搜索）+ 上传表单。"""
     user = get_current_user()
-    public_musics = music_service.get_public_musics()
-    my_musics = music_service.get_user_musics(user['id']) if user else []
+    keyword = request.args.get('q', '').strip()
+    public_musics = music_service.get_public_musics(keyword)
     return render_template(
         'music/list.html',
         user=user,
         public_musics=public_musics,
+        keyword=keyword,
+    )
+
+
+@main_bp.route('/music/my')
+@login_required
+def my_music_page():
+    """我的音频：独立页面，展示当前用户上传的全部音频。"""
+    user = get_current_user()
+    my_musics = music_service.get_user_musics(user['id'])
+    return render_template(
+        'music/my.html',
+        user=user,
         my_musics=my_musics,
     )
+
+
+def _redirect_back(default='main.music_page'):
+    """返回操作来源页（next 参数须为站内相对路径），否则回到公开音频列表。"""
+    next_url = (request.form.get('next') or request.args.get('next') or '').strip()
+    if next_url.startswith('/') and not next_url.startswith('//'):
+        return redirect(next_url)
+    return redirect(url_for(default))
 
 
 @main_bp.route('/music/upload', methods=['POST'])
@@ -82,7 +103,7 @@ def toggle_music_public(music_id):
         ip_address=request.remote_addr,
     )
     flash(message, 'success' if success else 'error')
-    return redirect(url_for('main.music_page'))
+    return _redirect_back()
 
 
 @main_bp.route('/music/<int:music_id>/delete', methods=['POST'])
@@ -96,7 +117,7 @@ def delete_music(music_id):
         ip_address=request.remote_addr,
     )
     flash(message, 'success' if success else 'error')
-    return redirect(url_for('main.music_page'))
+    return _redirect_back()
 
 
 # ---------------------------------------------------------------------------

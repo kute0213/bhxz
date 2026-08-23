@@ -46,15 +46,19 @@ def _music_dir(music_id):
 # 查询
 # ---------------------------------------------------------------------------
 
-def get_public_musics():
-    """获取所有已通过审核的公开音频（游戏内大喇叭列表）。"""
+def get_public_musics(keyword=''):
+    """获取所有已通过审核的公开音频（游戏内大喇叭列表），支持按名称模糊搜索。"""
     conn = get_db()
     try:
-        rows = conn.execute(
-            "SELECT id, user_id, username, title, status, created_at "
-            "FROM music WHERE status = ? ORDER BY id DESC",
-            (STATUS_PUBLIC,),
-        ).fetchall()
+        sql = ("SELECT id, user_id, username, title, status, created_at "
+               "FROM music WHERE status = ?")
+        params = [STATUS_PUBLIC]
+        kw = (keyword or '').strip()
+        if kw:
+            sql += " AND title LIKE ?"
+            params.append(f'%{kw}%')
+        sql += " ORDER BY id DESC"
+        rows = conn.execute(sql, params).fetchall()
         return [dict(r) for r in rows]
     finally:
         conn.close()

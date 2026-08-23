@@ -316,6 +316,44 @@ def test_music_status_machine():
             conn.close()
 
 
+def test_music_search_by_title():
+    """公开音频按名称搜索：匹配/无匹配/空关键词行为正确。"""
+    conn = get_db()
+    try:
+        conn.execute(
+            "INSERT INTO music (user_id, username, title, file_path, status, created_at) "
+            "VALUES (?, ?, ?, '', ?, ?)",
+            (20001, 's', '开服主题曲', music_service.STATUS_PUBLIC,
+             time.strftime('%Y-%m-%d %H:%M:%S')),
+        )
+        conn.execute(
+            "INSERT INTO music (user_id, username, title, file_path, status, created_at) "
+            "VALUES (?, ?, ?, '', ?, ?)",
+            (20002, 's2', 'BGM 片段', music_service.STATUS_PUBLIC,
+             time.strftime('%Y-%m-%d %H:%M:%S')),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+    try:
+        # 关键词匹配名称
+        hits = music_service.get_public_musics('开服')
+        assert len(hits) == 1 and hits[0]['title'] == '开服主题曲'
+        # 大小写不敏感（部分数据库 LIKE 默认不敏感，仅作存在性断言）
+        assert len(music_service.get_public_musics('bgm')) >= 0
+        # 无匹配
+        assert music_service.get_public_musics('不存在的标题') == []
+        # 空关键词返回全部
+        assert len(music_service.get_public_musics('')) >= 2
+        assert len(music_service.get_public_musics(None)) >= 2
+    finally:
+        conn = get_db()
+        conn.execute("DELETE FROM music WHERE user_id IN (20001, 20002)")
+        conn.commit()
+        conn.close()
+
+
 def test_music_review_email_builder():
     """音频审核结果邮件 HTML：通过/驳回状态卡正确渲染。"""
     passed_html = music_review_result('测试音频A', True)

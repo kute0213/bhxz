@@ -23,10 +23,16 @@
                 <p class="text-cream/60 text-sm mt-1">上传音频，供游戏内大喇叭播放</p>
             </div>
             {% if user %}
-            <button id="show-upload-btn" class="btn-primary px-5 py-2.5 rounded-lg text-sm font-bold flex items-center gap-2">
-                <i data-lucide="upload" class="w-4 h-4"></i>
-                上传音频
-            </button>
+            <div class="flex items-center gap-2">
+                <a href="{{ url_for('main.my_music_page') }}" class="btn-secondary px-4 py-2.5 rounded-lg text-sm font-bold flex items-center gap-2">
+                    <i data-lucide="folder-open" class="w-4 h-4"></i>
+                    我的音频
+                </a>
+                <button id="show-upload-btn" class="btn-primary px-5 py-2.5 rounded-lg text-sm font-bold flex items-center gap-2">
+                    <i data-lucide="upload" class="w-4 h-4"></i>
+                    上传音频
+                </button>
+            </div>
             {% else %}
             <a href="{{ url_for('main.login') }}" class="btn-primary px-5 py-2.5 rounded-lg text-sm font-bold">登录后上传</a>
             {% endif %}
@@ -67,10 +73,28 @@
 
         <!-- 公开音频列表 -->
         <div class="mb-10">
-            <h2 class="text-lg font-bold mb-4 flex items-center gap-2">
-                <i data-lucide="music" class="w-5 h-5 text-gold-400"></i>
-                公开音频（游戏内大喇叭）
-            </h2>
+            <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+                <h2 class="text-lg font-bold flex items-center gap-2">
+                    <i data-lucide="music" class="w-5 h-5 text-gold-400"></i>
+                    公开音频（游戏内大喇叭）
+                </h2>
+                <form method="GET" action="{{ url_for('main.music_page') }}" class="flex items-center gap-2">
+                    <div class="relative">
+                        <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-cream/40"></i>
+                        <input type="text" name="q" value="{{ keyword }}" maxlength="60" placeholder="搜索音频名称…"
+                               class="input-field pl-9 py-2 rounded-lg text-sm w-48 sm:w-64">
+                    </div>
+                    <button type="submit" class="btn-secondary px-4 py-2 rounded-lg text-sm flex items-center gap-1.5">
+                        <i data-lucide="search" class="w-4 h-4"></i>搜索
+                    </button>
+                    {% if keyword %}
+                    <a href="{{ url_for('main.music_page') }}" class="px-3 py-2 rounded-lg text-xs text-cream/50 hover:text-cream transition-colors">清除</a>
+                    {% endif %}
+                </form>
+            </div>
+            {% if keyword %}
+            <p class="text-sm text-cream/60 mb-3">搜索「{{ keyword }}」找到 {{ public_musics|length }} 条结果</p>
+            {% endif %}
             {% if public_musics %}
             <div class="space-y-3">
                 {% for m in public_musics %}
@@ -97,68 +121,10 @@
             {% else %}
             <div class="pixel-card rounded-xl p-12 text-center">
                 <i data-lucide="music" class="w-12 h-12 mx-auto text-cream/20 mb-4"></i>
-                <p class="text-cream/50">暂无公开音频</p>
+                <p class="text-cream/50">{% if keyword %}没有找到匹配「{{ keyword }}」的公开音频{% else %}暂无公开音频{% endif %}</p>
             </div>
             {% endif %}
         </div>
-
-        <!-- 我的音频 -->
-        {% if user %}
-        <div>
-            <h2 class="text-lg font-bold mb-4 flex items-center gap-2">
-                <i data-lucide="folder-open" class="w-5 h-5 text-gold-400"></i>
-                我的音频
-            </h2>
-            {% if my_musics %}
-            <div class="space-y-3">
-                {% for m in my_musics %}
-                <div class="pixel-card rounded-xl p-4 flex items-center gap-4">
-                    <div class="w-10 h-10 bg-gold-400/20 rounded-lg flex items-center justify-center flex-shrink-0">
-                        <i data-lucide="music" class="w-5 h-5 text-gold-400"></i>
-                    </div>
-                    <div class="flex-1 min-w-0">
-                        <div class="font-bold text-cream truncate flex flex-wrap items-center gap-2">
-                            {{ m.title }}
-                            {{ music_status_badge(m.status) }}
-                        </div>
-                        <div class="text-xs text-cream/50 mt-1">
-                            {{ (m.created_at or '')[:10] }}
-                            {% if m.status == 1 %}· 等待管理员审核{% endif %}
-                            {% if m.status == 3 %}· 审核未通过，可转为私有或删除{% endif %}
-                        </div>
-                    </div>
-                    <div class="flex items-center gap-2 flex-shrink-0">
-                        {{ music_copy_link_button(request.host_url.rstrip('/') ~ '/music/' ~ m.id ~ '.m3u8') }}
-                        <form method="POST" action="{{ url_for('main.toggle_music_public', music_id=m.id) }}" class="inline">
-                            <button type="submit"
-                                    class="px-3 py-2 rounded-lg text-xs border transition-colors flex items-center gap-1.5
-                                           {% if m.status == 0 %}border-green-500/30 text-green-300 hover:bg-green-500/10
-                                           {% else %}border-yellow-500/30 text-yellow-300 hover:bg-yellow-500/10{% endif %}"
-                                    title="{% if m.status == 0 %}申请公开（需审核）{% else %}转为私有{% endif %}">
-                                <i data-lucide="{% if m.status == 0 %}eye{% else %}eye-off{% endif %}" class="w-3.5 h-3.5"></i>
-                                {% if m.status == 0 %}申请公开{% else %}转为私有{% endif %}
-                            </button>
-                        </form>
-                        <form method="POST" action="{{ url_for('main.delete_music', music_id=m.id) }}" class="inline"
-                              onsubmit="return confirm('确定要删除此音频吗？删除后无法恢复。')">
-                            <button type="submit"
-                                    class="px-3 py-2 rounded-lg text-xs border border-red-500/30 text-red-300 hover:bg-red-500/10 transition-colors flex items-center gap-1.5"
-                                    title="删除">
-                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>删除
-                            </button>
-                        </form>
-                    </div>
-                </div>
-                {% endfor %}
-            </div>
-            {% else %}
-            <div class="pixel-card rounded-xl p-10 text-center">
-                <i data-lucide="folder-open" class="w-10 h-10 mx-auto text-cream/20 mb-3"></i>
-                <p class="text-cream/50">你还没有上传音频</p>
-            </div>
-            {% endif %}
-        </div>
-        {% endif %}
     </div>
 </section>
 {% endblock %}
@@ -166,10 +132,17 @@
 {% block extra_script %}
 <script>
 (function () {
-    // 上传表单展开/收起
     var panel = document.getElementById('upload-panel');
     var btn = document.getElementById('show-upload-btn');
     if (panel && btn) {
+        // 从「我的音频」页跳转 #upload-panel 时自动展开上传面板
+        if (location.hash === '#upload-panel') {
+            panel.classList.remove('hidden');
+            btn.querySelector('i').setAttribute('data-lucide', 'x');
+            if (typeof lucide !== 'undefined' && lucide.createIcons) {
+                try { lucide.createIcons(); } catch (_) {}
+            }
+        }
         btn.addEventListener('click', function () {
             var hidden = panel.classList.contains('hidden');
             panel.classList.toggle('hidden');
