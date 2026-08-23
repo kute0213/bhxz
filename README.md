@@ -1,6 +1,6 @@
 # 滨海小镇 - Minecraft 服务器社区网站
 
-基于 Flask 的 Minecraft 服务器社区门户，采用磨砂玻璃（Glassmorphism）设计风格。提供用户系统、社区投票与征集、模组介绍、管理后台、服务器性能监控、终端控制台等功能。
+基于 Flask 的 Minecraft 服务器社区门户，采用磨砂玻璃（Glassmorphism）设计风格。提供用户系统、模组介绍、管理后台、服务器性能监控、终端控制台等功能。
 
 ## 文档索引
 
@@ -93,15 +93,12 @@ python scripts/build/package.py
 - 账户设置（修改用户名/密码/邮箱/注销）
 - 邮箱唯一性约束（一个邮箱仅可注册一个账号）
 
-### 社区互动
-- 投票（单选/多选，管理员创建/启停）
-- 征集（主题+回复，支持多附件上传）
-
 ### 管理后台
 - 用户管理、访问日志、模组介绍管理
 - 服务器指南 CRUD + 审核工作流 + 编辑封禁
 - 讨论区管理（帖子置顶/锁定/删除 + 分类管理）
 - 大喇叭音频管理（公开申请审核、查看全部音频、一键下架）
+- 管理中心数据统计（含大喇叭音频总数与待审核数量）
 - 脚本控制台（实时终端 + 快捷命令 + 定时任务）
 - 系统设置（在线编辑，热重载，含背景图片开关）
 - 数据库备份（手动/自动，进度条）
@@ -214,7 +211,6 @@ export ENABLE_SSL=1 && python app.py
 |------|------|
 | `GET /api/performance` | 服务器性能数据（CPU/内存/运行时间） |
 | `GET /api/stats` | 网站统计数据 |
-| `GET /api/polls` | 投票数据（含选项/百分比/用户投票状态） |
 | `GET /api/captcha/generate` | 生成图形验证码 |
 | `POST /api/captcha/verify` | 验证图形验证码 |
 | `POST /api/email/send-code` | 发送邮箱验证码 |
@@ -224,14 +220,6 @@ export ENABLE_SSL=1 && python app.py
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| POST | `/poll/create` | 创建投票（管理员） |
-| POST | `/poll/<id>/vote` | 投票 |
-| POST | `/poll/<id>/delete` | 删除投票（管理员） |
-| POST | `/poll/<id>/toggle` | 启用/禁用投票（管理员） |
-| POST | `/board/create` | 创建征集（管理员） |
-| POST | `/board/<id>/reply` | 回复征集（支持多附件） |
-| POST | `/board/<id>/delete` | 删除征集（管理员） |
-| POST | `/board/reply/<id>/delete` | 删除回复 |
 | POST | `/discussion/<id>/reply` | 回复帖子 |
 | POST | `/discussion/reply/<id>/delete` | 删除回复 |
 | GET | `/discussion/<id>/api/replies` | 分页获取回复 |
@@ -367,9 +355,7 @@ workspace/
 ├── services/                 # 业务逻辑层
 │   ├── user_service.py       #   用户注册/登录/改密
 │   ├── attachment_service.py #   附件上传/清理
-│   ├── board_service.py      #   征集主题 CRUD
 │   ├── discussion_service.py #   讨论区帖子管理
-│   ├── poll_service.py       #   投票业务
 │   ├── music_service.py      #   大喇叭音频上传/转码/删除
 │   ├── captcha.py            #   图形验证码
 │   ├── ratelimit.py          #   IP 频率限制
@@ -435,16 +421,11 @@ workspace/
 
 ### 数据库
 
-使用 **DuckDB**（嵌入式 OLAP 数据库，单文件），首次启动自动建表。共 20 张表：
+使用 **DuckDB**（嵌入式 OLAP 数据库，单文件），首次启动自动建表。共 17 张表：
 
 | 表名 | 说明 | 关键约束 |
 |------|------|----------|
 | `users` | 用户 | `username` 唯一, `email` 唯一 |
-| `polls` | 投票 | — |
-| `poll_options` | 投票选项 | 外键 `poll_id` 级联删除 |
-| `poll_votes` | 投票记录 | 唯一约束 `(poll_id, user_id, option_id)` |
-| `board_topics` | 征集主题 | 外键 `user_id` |
-| `board_replies` | 征集回复 | 外键 `topic_id`，`attachment` 存 JSON |
 | `mod_intros` | 模组介绍 | — |
 | `cmd_commands` | 快捷命令 | 名称/命令/描述/排序 |
 | `access_logs` | 访问日志 | 含 IP 地理信息，自动清理 |

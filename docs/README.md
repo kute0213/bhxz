@@ -340,9 +340,8 @@ workspace/
 ├── services/                 # 业务逻辑层
 │   ├── user_service.py       #   用户注册/登录/改密
 │   ├── attachment_service.py #   附件上传/清理
-│   ├── board_service.py      #   征集主题 CRUD
 │   ├── discussion_service.py #   讨论区帖子管理
-│   ├── poll_service.py       #   投票业务
+│   ├── music_service.py      #   大喇叭音频上传/转码/删除
 │   ├── captcha.py            #   图形验证码
 │   ├── ratelimit.py          #   IP 频率限制
 │   ├── logger.py             #   操作日志
@@ -410,7 +409,7 @@ workspace/
 
 ### 数据库
 
-使用 **DuckDB**（嵌入式 OLAP 数据库，单文件），首次启动自动建表。共 20 张表：
+使用 **DuckDB**（嵌入式 OLAP 数据库，单文件），首次启动自动建表。共 15 张表：
 
 | 表名 | 说明 | 关键约束 |
 |------|------|----------|

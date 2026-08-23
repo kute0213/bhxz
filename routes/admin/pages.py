@@ -18,10 +18,8 @@ def admin_page():
     try:
         stats = {
             'total_users': conn.execute("SELECT COUNT(*) AS c FROM users").fetchone()['c'],
-            'total_polls': conn.execute("SELECT COUNT(*) AS c FROM polls").fetchone()['c'],
-            'total_votes': conn.execute("SELECT COUNT(*) AS c FROM poll_votes").fetchone()['c'],
-            'total_board_topics': conn.execute("SELECT COUNT(*) AS c FROM board_topics").fetchone()['c'],
-            'total_board_replies': conn.execute("SELECT COUNT(*) AS c FROM board_replies").fetchone()['c'],
+            'total_music': conn.execute("SELECT COUNT(*) AS c FROM music").fetchone()['c'],
+            'pending_music': conn.execute("SELECT COUNT(*) AS c FROM music WHERE status = 1").fetchone()['c'],
             'total_mod_intros': conn.execute("SELECT COUNT(*) AS c FROM mod_intros").fetchone()['c'],
             'total_guides': conn.execute("SELECT COUNT(*) AS c FROM server_guides").fetchone()['c'],
             'pending_guides': conn.execute("SELECT COUNT(*) AS c FROM server_guides WHERE status = 'pending'").fetchone()['c'],

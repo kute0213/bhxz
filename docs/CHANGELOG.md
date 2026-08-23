@@ -17,6 +17,7 @@
 - **一键更新保护本地资产**：更新同步新增「本地独有文件暂存恢复」机制——同步前暂存本地存在而仓库中没有的文件（如 `scripts/ffmpeg/` 下未入库的二进制），复制完成后自动恢复，解决更新后 ffmpeg 文件夹等本地资产被误删的问题（`services/updater.py` 新增 `_preserve_local_only`/`_restore_local_only`）
 
 ### 优化
+- **管理中心数据统计调整**：移除已删除功能（投票活动/投票次数/征集/征集回复）的统计卡片，修复因 `polls`/`board_*` 表已从 schema 移除导致的管理中心 500 错误；新增「大喇叭音频」总数与「待审核大喇叭音频」数量统计（`routes/admin/pages.py` 与 `templates/admin/admin.html`）
 - **邮件模板统一磨砂玻璃风格**：`templates/emails/base.html` 重做为暗绿金黄玻璃卡片，新增背景光晕、噪点纹理、光线散射层、顶部高光描边与通过/失败状态卡样式（`.mail-status-success` / `.mail-status-fail`），验证码 / 指南审核 / 音频审核 / 广播邮件共用同一外层与样式
 - **邮件 HTML 全面统一风格**：`guide_review_result.html` 改用通过/失败状态卡（与音频审核邮件一致），`guide_review_pending.html` 新增待审核状态卡（`.mail-status-pending` 金黄色样式 + 时钟图标），`broadcast_message.html` 移除内联样式改为复用基础样式类（`mail-muted`/`mail-content`），所有邮件模板视觉风格统一
 - **大喇叭音频页充分使用模板宏**：新增 `templates/macros/music_macros.html`，提取音频状态徽章（`music_status_badge`）、复制链接按钮（`music_copy_link_button`）、HLS 播放器（`music_audio_player`）为公共宏，`music/list.html` 与 `admin/admin_music.html` 统一调用，消除重复的内联代码；播放器补充磨砂玻璃质感样式（`.music-audio`）
