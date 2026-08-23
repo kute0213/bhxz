@@ -12,16 +12,13 @@
 - **音频审核结果邮件通知**：管理员通过/驳回公开申请后，自动向上传者邮箱发送审核结果邮件（后台线程异步发送，不阻塞请求）；邮件未启用或上传者无邮箱时自动跳过。`services/email/templates.py` 新增 `music_review_result()` 构建函数与 `templates/emails/music_review_result.html` 模板，`services/music_service.py` 新增 `get_author_email()` 查询上传者邮箱
 - **公开音频名称搜索**：公开音频列表支持按名称模糊搜索（`GET /music?q=关键词`，`get_public_musics()` 新增 keyword 参数），展示搜索结果数与无结果空态，支持一键清除
 - **「我的音频」独立页面**：原内嵌在公开列表页的「我的音频」拆分为单独页面 `/music/my`（`templates/music/my.html` + `static/js/music_my.js`），公开页顶部提供入口；公开/私有切换与删除操作通过 `next` 参数跳回来源页；公开页上传面板支持 `#upload-panel` 锚点自动展开
-- **直播台作为音频子页面**：移除直播台页顶部「上传音频」按钮，改为在大喇叭音频页顶部提供「实时直播台」入口按钮（含未登录用户也可进入收听）；直播台页保留「返回大喇叭音频」链接
-- **导航栏移除直播台入口**：直播台仅作为大喇叭音频子页面存在，侧边栏/顶栏/移动端导航的「实时直播台」入口全部移除
 - **一键更新支持子目录不替换**：不替换列表现支持子目录路径（如 `scripts/ffmpeg`），命中后该子目录删除/复制阶段均跳过，完全保持本地现状（不被覆盖、不新增仓库文件、本地独有文件保留）；重构同步为 `_sync_item`（`_rmtree_skip_protected`/`_copy_tree_skip_protected`，删除带 Windows 文件占用重试），新增 3 个子目录/本地独有文件保护测试
-- **大喇叭实时直播台**：官网「实时直播台」专属页面（大喇叭板块下），所有登录用户均可开播，浏览器麦克风（MediaRecorder 每 2 秒分片）→ 常驻 ffmpeg 实时封装为「央视同款」标准 HLS 直播流（滑动窗口 + 短分片 + 周期刷新），输出 m3u8 直播 URL 供游戏内大喇叭实时播放。`services/live_service.py` 单例管理所有直播
-- **多路主播同时直播**：直播服务重构为多路并发——每路直播拥有独立输出目录、独立 ffmpeg 进程、独立 m3u8 播放列表与推流令牌，不同用户可同时开播互不冲突；同一用户同时只允许一路；断线（默认 20s 未推流）或超长（默认 6h）自动结束清理。播放链接格式 `http://<主机>/music/live/<直播ID>/playlist.m3u8`
-- **ffmpeg 多线程转码**：新增 `FFMPEG_THREADS` 配置（0=自动按 CPU 核数，1=单线程降级），上传转码与直播封装统一加 `-threads` 参数；每个上传/直播任务是独立 ffmpeg 子进程与独立输出目录，多任务并发天然并行，不会出现「文件正在使用」冲突
+- **ffmpeg 多线程转码**：新增 `FFMPEG_THREADS` 配置（0=自动按 CPU 核数，1=单线程降级），上传转码统一加 `-threads` 参数；每个上传任务是独立 ffmpeg 子进程与独立输出目录，多用户同时上传天然并行，不会出现「文件正在使用」冲突
 - **一键更新保护本地资产**：更新同步新增「本地独有文件暂存恢复」机制——同步前暂存本地存在而仓库中没有的文件（如 `scripts/ffmpeg/` 下未入库的二进制），复制完成后自动恢复，解决更新后 ffmpeg 文件夹等本地资产被误删的问题（`services/updater.py` 新增 `_preserve_local_only`/`_restore_local_only`）
 
 ### 优化
 - **邮件模板统一磨砂玻璃风格**：`templates/emails/base.html` 重做为暗绿金黄玻璃卡片，新增背景光晕、噪点纹理、光线散射层、顶部高光描边与通过/失败状态卡样式（`.mail-status-success` / `.mail-status-fail`），验证码 / 指南审核 / 音频审核 / 广播邮件共用同一外层与样式
+- **邮件 HTML 全面统一风格**：`guide_review_result.html` 改用通过/失败状态卡（与音频审核邮件一致），`guide_review_pending.html` 新增待审核状态卡（`.mail-status-pending` 金黄色样式 + 时钟图标），`broadcast_message.html` 移除内联样式改为复用基础样式类（`mail-muted`/`mail-content`），所有邮件模板视觉风格统一
 - **大喇叭音频页充分使用模板宏**：新增 `templates/macros/music_macros.html`，提取音频状态徽章（`music_status_badge`）、复制链接按钮（`music_copy_link_button`）、HLS 播放器（`music_audio_player`）为公共宏，`music/list.html` 与 `admin/admin_music.html` 统一调用，消除重复的内联代码；播放器补充磨砂玻璃质感样式（`.music-audio`）
 - **统一全站进度条为磨砂玻璃质感**：新增 `.progress-track` / `.progress-fill` 组件（半透明磨砂轨道 + 渐变流光扫过动画 + 顶部高光 + 柔光晕），提供 `gold / green / blue / purple / red / yellow` 六种颜色变体与 `xs / sm / md / lg` 四档尺寸；一键更新、数据库备份、CPU/内存监控、背景上传、附件上传等所有进度条统一改用该组件，视觉一致且不削弱原有动效
 - **充分使用模板宏**：新增 `templates/macros/progress.html` 进度条宏 `progress_track()`，`admin_update.html`、`admin_db_backup.html`、`performance.html`、`index.html` 统一通过宏生成进度条，消除重复的内联样式代码
@@ -30,6 +27,7 @@
 - **清理模板冗余**：移除 `base.html` 中未被任何页面覆写的空 `{% block nav %}`；进度条颜色切换由内联 `background` 改为语义化的 `progress-fill <variant>` 类
 
 ### 移除
+- **彻底删除大喇叭实时直播台**：移除 `services/live_service.py`、`routes/main/live.py`、`templates/music/live.html`、`static/js/live.js`、`scripts/tests/test_live.py`，删除 `config.py` 中 `LIVE_BROADCAST_DIR`/`LIVE_HLS_SEGMENT_SECONDS`/`LIVE_HLS_LIST_SIZE`/`LIVE_IDLE_TIMEOUT`/`LIVE_MAX_DURATION` 等直播配置，`app.py` 移除 `live_service` 引用与清理，`routes/main/__init__.py` 移除直播路由，音频列表与管理后台移除「实时直播台」入口按钮；**保留 ffmpeg 多线程转码**（`FFMPEG_THREADS` 继续用于音频上传转码，多用户同时上传互不冲突）
 - **彻底删除 MinIO 对象存储**：移除 `services/object_storage.py`、`config.py` 中 MinIO 相关配置、`app.py` 中 MinIO 初始化检查、`routes/main/media.py` 中 MinIO 引用改为本地文件存储、`services/user_service.py` 中 MinIO 清理逻辑改为本地文件清理；删除 `.env.example` 和 `docs/MINIO.md`
 - **移除系统设置中的背景图片开关**：从 `SETTINGS_REGISTRY` 中移除 `ENABLE_BACKGROUND_IMAGE` 和 `BACKGROUND_FADE_IN_MS`，首页背景只保留上传按钮 + 图片预览弹窗
 - **删除投票与征集功能**：彻底移除 `routes/community/polls.py`、`routes/community/board.py`、`services/poll_service.py`、`services/board_service.py`、`templates/community.html`，从数据库 schema 中移除 `polls`、`poll_options`、`poll_votes`、`board_topics`、`board_replies` 表，从导航和首页移除入口链接

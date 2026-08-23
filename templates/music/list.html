@@ -23,10 +23,6 @@
                 <p class="text-cream/60 text-sm mt-1">上传音频，供游戏内大喇叭播放</p>
             </div>
             <div class="flex flex-wrap items-center gap-2">
-                <a href="{{ url_for('main.live_page') }}" class="btn-secondary px-4 py-2.5 rounded-lg text-sm font-bold flex items-center gap-2">
-                    <i data-lucide="radio" class="w-4 h-4"></i>
-                    实时直播台
-                </a>
                 {% if user %}
                 <a href="{{ url_for('main.my_music_page') }}" class="btn-secondary px-4 py-2.5 rounded-lg text-sm font-bold flex items-center gap-2">
                     <i data-lucide="folder-open" class="w-4 h-4"></i>

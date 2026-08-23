@@ -1,14 +1,29 @@
 {% extends "base.html" %}
 
 {% block content %}
-<p>您好！</p>
-<p>{{ greeting }}您提交的服务器指南：</p>
+<p>{{ greeting }}</p>
+<p>您提交的服务器指南：</p>
 <div class="mail-highlight">{{ guide_title }}</div>
-<p>{{ status }}</p>
-{% if not approved and reason %}
-<p>拒绝原因：<b>{{ reason }}</b></p>
-{% endif %}
-{% if not approved %}
-<p>您可以修改后重新提交。</p>
+{% if approved %}
+<div class="mail-status mail-status-success">
+    <span class="mail-status-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+    </span>
+    <div class="mail-status-text">
+        <div class="mail-status-title">审核通过</div>
+        <div class="mail-status-desc">该指南已发布，所有玩家均可在服务器指南板块查看。</div>
+    </div>
+</div>
+{% else %}
+<div class="mail-status mail-status-fail">
+    <span class="mail-status-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+    </span>
+    <div class="mail-status-text">
+        <div class="mail-status-title">审核未通过</div>
+        <div class="mail-status-desc">{% if reason %}拒绝原因：{{ reason }}{% else %}您的指南未通过审核。{% endif %}</div>
+    </div>
+</div>
+<p class="mail-muted">您可以修改后重新提交。</p>
 {% endif %}
 {% endblock %}

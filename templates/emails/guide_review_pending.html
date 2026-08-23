@@ -2,7 +2,15 @@
 
 {% block content %}
 <p>管理员您好，</p>
-<p>用户 <b>{{ author_name }}</b> {{ action }}服务器指南：</p>
+<div class="mail-status mail-status-pending">
+    <span class="mail-status-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+    </span>
+    <div class="mail-status-text">
+        <div class="mail-status-title">新的待审核申请</div>
+        <div class="mail-status-desc">用户 <b style="color:#f4d03f;">{{ author_name }}</b> {{ action }}服务器指南。</div>
+    </div>
+</div>
 <div class="mail-highlight">{{ guide_title }}</div>
 <p>请尽快前往管理后台审核。</p>
 {% endblock %}
