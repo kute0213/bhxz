@@ -12,7 +12,7 @@ import uuid
 from datetime import datetime
 
 from core.db import get_db
-from config import UPLOAD_MUSIC_DIR, MUSIC_ALLOWED_EXTENSIONS, FFMPEG_BIN
+from config import UPLOAD_MUSIC_DIR, MUSIC_ALLOWED_EXTENSIONS, FFMPEG_BIN, FFMPEG_THREADS
 from services.logger import log
 
 # HLS 分片时长（秒）
@@ -187,6 +187,7 @@ def upload_music(user_id, username, title, is_public, upload_file, ip_address):
         seg_pattern = os.path.join(work_dir, 'seg_%03d.ts')
         cmd = [
             FFMPEG_BIN, '-y', '-i', src_path, '-vn',
+            '-threads', str(FFMPEG_THREADS),
             '-c:a', 'aac', '-b:a', '128k', '-ac', '2',
             '-hls_time', str(HLS_SEGMENT_SECONDS),
             '-hls_list_size', '0',

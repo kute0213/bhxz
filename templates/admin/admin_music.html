@@ -15,6 +15,9 @@
             <a href="{{ url_for('main.music_page') }}" class="btn-secondary px-4 py-2 rounded-lg text-sm">
                 <i data-lucide="music" class="w-4 h-4 inline mr-1"></i>前往大喇叭音频板块
             </a>
+            <a href="{{ url_for('main.live_page') }}" class="btn-secondary px-4 py-2 rounded-lg text-sm">
+                <i data-lucide="radio" class="w-4 h-4 inline mr-1"></i>实时直播台
+            </a>
         </div>
 
         {% with messages = get_flashed_messages(with_categories=true) %}

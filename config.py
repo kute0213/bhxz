@@ -28,6 +28,23 @@ FFMPEG_BIN = os.path.join(FFMPEG_DIR, 'ffmpeg.exe') if sys.platform.startswith('
 if not os.path.isfile(FFMPEG_BIN):
     FFMPEG_BIN = 'ffmpeg'
 
+# ffmpeg 转码/直播封装的线程数：0 = 自动按 CPU 核数，1 = 单线程（降级）
+# 注意：每个上传/直播任务都是独立 ffmpeg 子进程、独立输出目录，互不共享文件，
+# 多任务并发时天然并行，不会出现「文件正在使用」冲突。
+FFMPEG_THREADS = int(os.environ.get('FFMPEG_THREADS', '0'))
+
+# 大喇叭直播台：官网实时讲话 → 游戏内大喇叭播放
+# 输出为「央视同款」标准 HLS 直播流：滑动窗口 + 每片短时 + 播放器周期刷新 m3u8
+LIVE_BROADCAST_DIR = os.path.join(UPLOAD_DIR, 'live')
+# 每个 TS 分片时长（秒），越小延迟越低，过小会放大 ffmpeg 与网络开销
+LIVE_HLS_SEGMENT_SECONDS = 2
+# 直播 m3u8 滑动窗口保留的分片数（决定追赶延迟，越小延迟越低）
+LIVE_HLS_LIST_SIZE = 6
+# 主播连续多少秒未推流视为断线，自动结束直播（秒）
+LIVE_IDLE_TIMEOUT = 20
+# 单次直播最大时长（秒），防止忘记关闭长期占用（默认 6 小时）
+LIVE_MAX_DURATION = 6 * 3600
+
 # 用户图片（头像/背景）最大字节数
 USER_IMAGE_MAX_BYTES = 10 * 1024 * 1024
 
@@ -160,6 +177,7 @@ os.makedirs(UPLOAD_BACKGROUNDS_DIR, exist_ok=True)
 os.makedirs(UPLOAD_COMMUNITY_DIR, exist_ok=True)
 os.makedirs(UPLOAD_SITEMAP_DIR, exist_ok=True)
 os.makedirs(UPLOAD_MUSIC_DIR, exist_ok=True)
+os.makedirs(LIVE_BROADCAST_DIR, exist_ok=True)
 os.makedirs(BACKUP_DIR, exist_ok=True)
 
 

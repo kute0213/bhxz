@@ -304,6 +304,7 @@ def _shutdown_application(signum=None):
     from services.backup import BackupScheduler
     from services.email import email_service
     from services.sitemap_cache import sitemap_cache
+    from services.live_service import live_service
     from core.db import get_db
 
     # 先停止接收新请求，Cheroot 会关闭监听 socket 并回收工作线程。
@@ -317,6 +318,8 @@ def _shutdown_application(signum=None):
     email_service.stop()
     scheduler.stop()
     sitemap_cache.stop()
+    # 结束正在进行的直播，清理 ffmpeg 进程与临时分片
+    live_service.cleanup()
     log_cleaner.stop()
     # 日志写入器最后停止，尽量落下其他服务关闭过程中产生的日志。
     log_writer.stop()

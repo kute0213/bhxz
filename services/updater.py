@@ -545,6 +545,55 @@ def _is_protected(rel_path, protected_paths=None):
 
 
 # ---------------------------------------------------------------------------
+# 全量同步时保留「本地独有」文件
+# ---------------------------------------------------------------------------
+# 同步策略是「删除本地版本 → 复制仓库版本」，但本地可能存在仓库里没有的资产
+# （例如 scripts/ffmpeg/ 下的 ffmpeg 二进制未入库）。若直接整目录删除会被永久
+# 丢失。因此同步前先把本地独有文件暂存，复制完成后恢复。
+
+# 这些路径不参与保留（属于可再生的构建/缓存产物，跟随仓库或运行时重建）
+_PRESERVE_IGNORE_DIRS = {'__pycache__', '.git', 'node_modules', '.pytest_cache'}
+
+
+def _preserve_local_only(dst_root, src_root, preserve_dir):
+    """把 dst_root 下、src_root 中不存在（本地独有）的路径暂存到 preserve_dir。
+
+    返回暂存了的相对路径列表；仓库版本已存在的文件不会被暂存。
+    """
+    preserved = []
+    for dirpath, dirnames, filenames in os.walk(dst_root):
+        # 就地过滤掉无需保留的目录，避免深入遍历
+        dirnames[:] = [d for d in dirnames if d not in _PRESERVE_IGNORE_DIRS]
+        for name in dirnames + filenames:
+            rel = os.path.relpath(os.path.join(dirpath, name), dst_root)
+            if os.path.lexists(os.path.join(src_root, rel)):
+                continue  # 仓库里存在 → 以仓库版本为准，不保留
+            if name.endswith(('.pyc', '.pyo')):
+                continue  # 字节码缓存可再生
+            tmp_path = os.path.join(preserve_dir, rel)
+            try:
+                os.makedirs(os.path.dirname(tmp_path), exist_ok=True)
+                shutil.move(os.path.join(dst_root, rel), tmp_path)
+                preserved.append(rel)
+            except Exception:
+                pass
+    return preserved
+
+
+def _restore_local_only(preserved, preserve_dir, dst_root):
+    """把暂存的本地独有文件恢复到 dst_root。与仓库版本冲突时以仓库为准。"""
+    for rel in preserved:
+        target = os.path.join(dst_root, rel)
+        if os.path.lexists(target):
+            continue
+        try:
+            os.makedirs(os.path.dirname(target), exist_ok=True)
+            shutil.move(os.path.join(preserve_dir, rel), target)
+        except Exception:
+            pass
+
+
+# ---------------------------------------------------------------------------
 # 核心更新逻辑
 # ---------------------------------------------------------------------------
 
@@ -809,6 +858,18 @@ def _run_update():
             _add_event('log', {'message': f'  → 同步: {item}'})
 
             # 删除本地版本（如果存在）
+            # 删除前先把「本地独有」的文件暂存（如 scripts/ffmpeg 下的二进制），
+            # 复制完成后恢复，避免仓库里没有的本地资产被误删。
+            preserve_dir = None
+            preserved = []
+            if os.path.isdir(dst) and os.path.isdir(src):
+                try:
+                    preserve_dir = tempfile.mkdtemp(prefix='bhxz_preserve_')
+                    preserved = _preserve_local_only(dst, src, preserve_dir)
+                except Exception:
+                    preserve_dir = None
+                    preserved = []
+
             if os.path.isdir(dst):
                 _add_event('log', {'message': f'    删除旧目录: {item}/'})
                 _add_event('progress', {
@@ -864,6 +925,12 @@ def _run_update():
                 except Exception:
                     pass
                 processed += 1
+
+            # 恢复本地独有文件（与仓库版本冲突时以仓库为准）
+            if preserved and preserve_dir:
+                _restore_local_only(preserved, preserve_dir, dst)
+            if preserve_dir:
+                shutil.rmtree(preserve_dir, ignore_errors=True)
 
         # 清理临时目录
         try:

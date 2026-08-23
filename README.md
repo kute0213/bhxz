@@ -130,6 +130,13 @@ python scripts/build/package.py
 - 管理员可在后台审核公开申请、查看全部音频并一键下架（删除数据库记录并同步删除音频文件）
 - 音频文件存放在 `uploads/music/<音频ID>/`，删除记录时自动清理对应目录，无文件残留
 
+### 大喇叭实时直播台
+- 「实时直播台」专属页面（大喇叭板块下）：官网实时讲话，游戏内大喇叭同步播放
+- 所有登录用户均可开播，支持**多路主播同时直播**，每路有独立播放链接 `http://<主机>/music/live/<直播ID>/playlist.m3u8`
+- 实现方式：浏览器麦克风（MediaRecorder 每 2 秒分片）→ 常驻 ffmpeg 实时封装为「央视同款」标准 HLS 直播流（滑动窗口 + 短分片 + 周期刷新），游戏端周期性拉取 m3u8 即可实时播放
+- 每路直播独立输出目录 / 独立 ffmpeg 进程 / 独立推流令牌，互不干扰；断线（默认 20s 未推流）或超长（默认 6h）自动结束清理
+- 画面/音频存在约 5~15 秒延迟，适合公告、讲解、喊话；需浏览器麦克风权限（建议 https 访问）
+
 ### 终端控制台与快捷命令
 - 实时终端（持久 shell 会话，SSE 流式输出）
 - 快捷命令管理（数据库存储，按名称排序）
@@ -170,6 +177,12 @@ python scripts/build/package.py
 | `UPLOAD_MUSIC_DIR` | 大喇叭音频存放目录 | `./uploads/music` |
 | `MUSIC_ALLOWED_EXTENSIONS` | 大喇叭音频允许上传的格式 | `mp3/wav/ogg/m4a/flac` |
 | `FFMPEG_BIN` | 大喇叭音频转码用的 ffmpeg | 优先 `scripts/ffmpeg/ffmpeg(.exe)`，否则系统 PATH |
+| `FFMPEG_THREADS` | ffmpeg 转码/直播封装线程数 | `0`（自动按 CPU 核数） |
+| `LIVE_BROADCAST_DIR` | 大喇叭直播输出目录 | `./uploads/live` |
+| `LIVE_HLS_SEGMENT_SECONDS` | 直播 TS 分片时长（秒） | `2` |
+| `LIVE_HLS_LIST_SIZE` | 直播 m3u8 滑动窗口分片数 | `6` |
+| `LIVE_IDLE_TIMEOUT` | 主播断线自动结束阈值（秒） | `20` |
+| `LIVE_MAX_DURATION` | 单场直播最大时长（秒） | `21600`（6 小时） |
 | `MAX_CONTENT_LENGTH` | 最大上传大小 | 100 MB |
 | `SECRET_KEY` | Session 密钥 | `mc_server_site_random_secret_key_2024` |
 | `REGISTER_VERIFY_CODE` | 注册验证码 | `binhai_xz` |
@@ -368,6 +381,7 @@ workspace/
 │   ├── discussion_service.py #   讨论区帖子管理
 │   ├── poll_service.py       #   投票业务
 │   ├── music_service.py      #   大喇叭音频上传/转码/删除
+│   ├── live_service.py       #   大喇叭实时直播台（多路并发 HLS 直播）
 │   ├── captcha.py            #   图形验证码
 │   ├── ratelimit.py          #   IP 频率限制
 │   ├── logger.py             #   操作日志
@@ -474,8 +488,9 @@ workspace/
 
 1. 系统自动检测最快代理，下载 GitHub 仓库的 ZIP 压缩包
 2. 解压后同步到本地（跳过受保护文件：数据库、配置、上传文件等）
-3. 自动运行 `scripts/build/build_static.py` 构建静态资源
-4. 自动重启服务器
+3. 同步前自动**暂存本地独有文件**（仓库中不存在、如 `scripts/ffmpeg/` 下未入库的二进制），复制完成后自动恢复，避免更新误删本地资产
+4. 自动运行 `scripts/build/build_static.py` 构建静态资源
+5. 自动重启服务器
 
 > 实现详见 `services/updater.py`（通过 SSE 推送实时下载进度到前端）。
 

@@ -10,6 +10,10 @@
 - **内置 ffmpeg 自动调用**：Windows 调用 `scripts/ffmpeg/ffmpeg.exe`，Linux/macOS 调用 `scripts/ffmpeg/ffmpeg`，未内置时回退系统 PATH 中的 `ffmpeg`（config 新增 `FFMPEG_DIR`/`FFMPEG_BIN`）
 - **公开音频审核机制**：申请公开的音频进入「待审核」，管理员在后台可试听并选择通过/驳回；通过后才在游戏内大喇叭展示，驳回后用户可转为私有或删除；已公开转私有再申请公开需重新审核。`music` 表以 `status`（0=私有 1=待审核 2=已公开 3=已驳回）替代 `is_public`，历史公开数据自动迁移为「已通过」
 - **音频审核结果邮件通知**：管理员通过/驳回公开申请后，自动向上传者邮箱发送审核结果邮件（后台线程异步发送，不阻塞请求）；邮件未启用或上传者无邮箱时自动跳过。`services/email/templates.py` 新增 `music_review_result()` 构建函数与 `templates/emails/music_review_result.html` 模板，`services/music_service.py` 新增 `get_author_email()` 查询上传者邮箱
+- **大喇叭实时直播台**：官网「实时直播台」专属页面（大喇叭板块下），所有登录用户均可开播，浏览器麦克风（MediaRecorder 每 2 秒分片）→ 常驻 ffmpeg 实时封装为「央视同款」标准 HLS 直播流（滑动窗口 + 短分片 + 周期刷新），输出 m3u8 直播 URL 供游戏内大喇叭实时播放。`services/live_service.py` 单例管理所有直播
+- **多路主播同时直播**：直播服务重构为多路并发——每路直播拥有独立输出目录、独立 ffmpeg 进程、独立 m3u8 播放列表与推流令牌，不同用户可同时开播互不冲突；同一用户同时只允许一路；断线（默认 20s 未推流）或超长（默认 6h）自动结束清理。播放链接格式 `http://<主机>/music/live/<直播ID>/playlist.m3u8`
+- **ffmpeg 多线程转码**：新增 `FFMPEG_THREADS` 配置（0=自动按 CPU 核数，1=单线程降级），上传转码与直播封装统一加 `-threads` 参数；每个上传/直播任务是独立 ffmpeg 子进程与独立输出目录，多任务并发天然并行，不会出现「文件正在使用」冲突
+- **一键更新保护本地资产**：更新同步新增「本地独有文件暂存恢复」机制——同步前暂存本地存在而仓库中没有的文件（如 `scripts/ffmpeg/` 下未入库的二进制），复制完成后自动恢复，解决更新后 ffmpeg 文件夹等本地资产被误删的问题（`services/updater.py` 新增 `_preserve_local_only`/`_restore_local_only`）
 
 ### 优化
 - **邮件模板统一磨砂玻璃风格**：`templates/emails/base.html` 重做为暗绿金黄玻璃卡片，新增背景光晕、噪点纹理、光线散射层、顶部高光描边与通过/失败状态卡样式（`.mail-status-success` / `.mail-status-fail`），验证码 / 指南审核 / 音频审核 / 广播邮件共用同一外层与样式
