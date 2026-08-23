@@ -26,11 +26,6 @@
                 </h1>
                 <p class="text-cream/60 text-sm mt-1">官网实时讲话，游戏内大喇叭同步播放（标准 HLS 直播流，支持多路主播同时开播）</p>
             </div>
-            {% if user %}
-            <a href="{{ url_for('main.music_page') }}" class="btn-secondary px-4 py-2 rounded-lg text-sm">
-                <i data-lucide="upload" class="w-4 h-4 inline mr-1"></i>上传音频
-            </a>
-            {% endif %}
         </div>
 
         <div id="live-broadcast"
