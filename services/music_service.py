@@ -219,18 +219,29 @@ def _build_transcode_cmd(src_path, playlist_path, seg_pattern):
 
 
 def _insert_music_record(user_id, username, title, status):
-    """插入音频记录并返回 ID；失败抛异常。"""
-    conn = get_db()
+    """插入音频记录并返回可靠 ID（并发安全）；失败抛异常。
+
+    原实现依赖 cursor.lastrowid：数据库为全局单例且共享游标，并发上传时
+    lastrowid 会被其他线程的 INSERT 覆盖，返回错误 ID，导致音频文件被写入
+    错误目录（无法播放）、删除时也清理不到对应文件。
+    现改为在持锁事务内完成 INSERT 与 lastrowid 读取（DuckDBCursor 在
+    INSERT 后立刻用 currval 计算 lastrowid），保证 ID 不被并发覆盖。
+    """
     try:
-        cursor = conn.execute(
-            "INSERT INTO music (user_id, username, title, file_path, status, created_at) "
-            "VALUES (?, ?, ?, '', ?, ?)",
-            (user_id, username, title, status, _now()),
-        )
-        conn.commit()
-        return cursor.lastrowid
-    finally:
-        conn.close()
+        with get_db() as conn:  # 持有线程锁，INSERT 与 ID 读取保持原子
+            cursor = conn.execute(
+                "INSERT INTO music (user_id, username, title, file_path, status, created_at) "
+                "VALUES (?, ?, ?, '', ?, ?)",
+                (user_id, username, title, status, _now()),
+            )
+            music_id = cursor.lastrowid
+            if not music_id:
+                raise RuntimeError('音频记录创建失败')
+            return int(music_id)
+    except RuntimeError:
+        raise
+    except Exception as e:
+        raise RuntimeError(f'插入音频记录失败: {str(e)}')
 
 
 def _finalize_music_files(work_dir, music_id):
