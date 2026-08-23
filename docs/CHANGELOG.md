@@ -182,6 +182,10 @@
 - 新增 `templates/emails/` 邮件模板目录，与页面模板分离
 - 重新生成 Tailwind CSS 静态文件（`static/css/tailwind.css`）
 
+### 修复
+- **修复音频播放器只能播放列表第一个音频**：`static/js/music_player.js` 初始化时在收起弹层代码处误引用未定义的 `root` 变量（应为 `self.root`），抛出 `ReferenceError` 中断了所有播放器的初始化循环，导致只有第一个 `.music-player` 被实例化、其余播放器无法播放；改为 `self.root.addEventListener(...)` 后每个播放器均可独立播放
+- **修复音频倍速/音量控件被遮挡**：`.mp-speed-menu` 与 `.mp-vol-slider` 的 `z-index` 由 30 提升至 100，并移除 `.pixel-card` 的 `overflow: hidden`（改为 `visible`），弹层不再被卡片裁切、正确显示在其他内容之上
+
 ---
 
 ## [2024-01-15] 之前版本

@@ -108,7 +108,8 @@ body.has-background-image .pixel-card {
     transition: transform 0.4s cubic-bezier(0.22, 1, 0.36, 1),
                 box-shadow 0.4s cubic-bezier(0.22, 1, 0.36, 1),
                 background 0.4s ease;
-    overflow: hidden;
+    /* 移除 overflow:hidden，避免播放器弹出层（倍速/音量）被卡片裁切 */
+    overflow: visible;
 }
 /* 光线散射层 —— 模拟磨砂玻璃漫射光线 */
 .pixel-card::before {
@@ -335,7 +336,7 @@ body.has-background-image .pixel-card {
     visibility: hidden;
     pointer-events: none;
     transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s;
-    z-index: 30;
+    z-index: 100;
 }
 .mp-speed.open .mp-speed-menu {
     opacity: 1; visibility: visible; pointer-events: auto;
@@ -373,7 +374,7 @@ body.has-background-image .pixel-card {
     visibility: hidden;
     pointer-events: none;
     transition: opacity 0.15s ease, visibility 0.15s;
-    z-index: 30;
+    z-index: 100;
 }
 .mp-volume.open .mp-vol-slider { opacity: 1; visibility: visible; pointer-events: auto; }
 .mp-vol-slider::-webkit-slider-runnable-track {

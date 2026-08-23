@@ -226,7 +226,7 @@
         self.refreshMute();
 
         // 点击页面其它位置时收起弹层
-        root.addEventListener('click', function (e) {
+        self.root.addEventListener('click', function (e) {
             if (self.el.speedWrap && !self.el.speedWrap.contains(e.target)) {
                 self.el.speedWrap.classList.remove('open');
             }
