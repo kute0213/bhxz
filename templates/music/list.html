@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "macros/music_macros.html" import music_status_badge, music_copy_link_button, music_mp3_link_button, music_audio_player, music_player_assets %}
+{% from "macros/music_macros.html" import music_status_badge, music_copy_link_button, music_mp3_link_button, music_duration_button, music_audio_player, music_player_assets %}
 {% block title %}大喇叭音频{% endblock %}
 {% block content %}
 <section class="page-container py-12">
@@ -82,6 +82,7 @@
                         <div class="flex items-center gap-2 flex-shrink-0">
                             {{ music_copy_link_button(request.host_url.rstrip('/') ~ '/music/' ~ m.id ~ '.m3u8') }}
                             {{ music_mp3_link_button(m.id) }}
+                            {{ music_duration_button(m.duration_seconds) }}
                         </div>
                     </div>
                     <div class="mt-3">

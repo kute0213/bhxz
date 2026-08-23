@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### 新增
+- **复制音频时长（秒）按钮**：公开音频列表 / 我的音频 / 管理员审核队列中的每个音频新增「时长 Ns」按钮，点击一键复制**以秒为单位的音频总时长**（如 `215`）。时长由 HLS 播放列表各分片 `EXTINF` 累计得出（`services/music_service.py` 新增 `get_music_duration_seconds` 与 `attach_durations`，公开列表/我的音频/管理后台路由统一调用补充 `duration_seconds` 字段），对所有音频（含历史数据）都适用、无需存库迁移；复制逻辑由 `static/js/base.js` 新增的全局事件委托（`.copy-duration-btn`）统一处理，任意页面/动态加载的按钮均可一键复制并 Toast 提示已复制秒数；模板宏新增 `music_duration_button`（`templates/macros/music_macros.html`），三个页面入口同步接入
+
 ### 修复
 - **修复大喇叭音频并发上传时编号错乱导致无法播放、删除不清理文件**：`_insert_music_record` 原在 `conn.commit()` 之后、线程锁之外读取共享游标的 `cursor.lastrowid`，并发上传时该值会被其他线程的 INSERT 覆盖，返回错误 ID——导致音频文件被写入错误的 `<ID>` 目录（播放 404）、按真实 ID 删除时也清理不到对应目录。现改为在持锁事务（`with get_db() as conn:`）内完成 INSERT 并立刻读取 `lastrowid`（`DuckDBCursor` 在 INSERT 后即用 `currval` 计算），保证返回的 ID 与数据库记录一一对应；20 线程并发插入测试全部返回唯一且正确的 ID
 

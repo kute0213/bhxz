@@ -855,3 +855,35 @@ var CodeBlocks = (function () {
 
     return { enhance: enhance };
 })();
+
+/* ============================================================
+ * 复制音频时长（秒）—— 全站全局代理：
+ * 任何页面上的 .copy-duration-btn（大喇叭音频「时长 Ns」按钮）
+ * 点击后复制其 data-seconds 属性中的秒数到剪贴板。
+ * 使用事件委托，对动态加载的按钮同样生效。
+ * ============================================================ */
+document.addEventListener('click', function (e) {
+    var btn = e.target && e.target.closest ? e.target.closest('.copy-duration-btn') : null;
+    if (!btn) return;
+    var seconds = btn.getAttribute('data-seconds') || '';
+    if (!seconds) return;
+
+    function done(ok) {
+        if (typeof Toast !== 'undefined') {
+            if (ok) Toast.success('时长已复制：' + seconds + ' 秒');
+            else Toast.error('复制失败，请手动复制');
+        }
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(seconds).then(function () { done(true); }, function () { done(false); });
+    } else {
+        var ta = document.createElement('textarea');
+        ta.value = seconds;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        try { done(document.execCommand('copy')); } catch (_) { done(false); }
+        document.body.removeChild(ta);
+    }
+});

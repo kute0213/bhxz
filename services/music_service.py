@@ -148,6 +148,41 @@ def get_music_mp3_path(music_id):
     return os.path.join(_music_dir(music_id), 'index.mp3')
 
 
+def get_music_duration_seconds(music_id):
+    """读取 HLS 播放列表，返回音频总时长（秒，四舍五入取整）；无法读取返回 None。
+
+    时长由 m3u8 各分片 EXTINF 累计得出，供「复制时长（秒）」按钮使用；
+    对所有音频（含历史数据）都适用，无需额外存库。
+    """
+    playlist_path = get_music_file_path(music_id)
+    if not os.path.isfile(playlist_path):
+        return None
+    total = 0.0
+    try:
+        with open(playlist_path, 'r', encoding='utf-8') as f:
+            for line in f:
+                if line.startswith('#EXTINF:'):
+                    try:
+                        total += float(line.split(':', 1)[1].split(',', 1)[0])
+                    except (ValueError, IndexError):
+                        pass
+    except OSError:
+        return None
+    if total <= 0:
+        return None
+    return int(round(total))
+
+
+def attach_durations(musics):
+    """为音频列表中的每个元素补充 duration_seconds 字段（秒），便于模板展示。
+
+    返回原列表（原地补充字段），单个音频时长读取失败时为 None。
+    """
+    for m in musics or []:
+        m['duration_seconds'] = get_music_duration_seconds(m['id'])
+    return musics
+
+
 def get_author_email(music_id):
     """获取音频上传者的邮箱（用于审核结果通知），无邮箱或不存在返回空字符串。"""
     conn = get_db()

@@ -38,7 +38,7 @@ def music_page():
     """大喇叭音频板块：公开音频列表（支持按名称搜索）。"""
     user = get_current_user()
     keyword = request.args.get('q', '').strip()
-    public_musics = music_service.get_public_musics(keyword)
+    public_musics = music_service.attach_durations(music_service.get_public_musics(keyword))
     return render_template(
         'music/list.html',
         user=user,
@@ -52,7 +52,7 @@ def music_page():
 def my_music_page():
     """我的音频：独立页面，展示当前用户上传的全部音频。"""
     user = get_current_user()
-    my_musics = music_service.get_user_musics(user['id'])
+    my_musics = music_service.attach_durations(music_service.get_user_musics(user['id']))
     return render_template(
         'music/my.html',
         user=user,

@@ -459,6 +459,56 @@ def test_music_mp3_path():
         music_service._music_dir(42), 'index.mp3')
 
 
+def test_music_duration_seconds():
+    """音频总时长（秒）：从 m3u8 分片 EXTINF 累计；文件缺失/无分片返回 None。"""
+    import shutil
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        # 不存在的音频 → None
+        assert music_service.get_music_duration_seconds(999999) is None
+
+        music_id = _insert_music(10009, 'dur_owner', music_service.STATUS_PRIVATE)
+        final_dir = music_service._music_dir(music_id)
+        try:
+            # 正常：3 分片 10.0+10.0+5.5 = 25.5s → 取整 26
+            os.makedirs(final_dir, exist_ok=True)
+            with open(os.path.join(final_dir, 'index.m3u8'), 'w', encoding='utf-8') as f:
+                f.write('#EXTM3U\n'
+                        '#EXTINF:10.0,\nseg_000.ts\n'
+                        '#EXTINF:10.0,\nseg_001.ts\n'
+                        '#EXTINF:5.5,\nseg_002.ts\n'
+                        '#EXT-X-ENDLIST\n')
+            assert music_service.get_music_duration_seconds(music_id) == 26, \
+                f'应四舍五入取整为 26，实际 {music_service.get_music_duration_seconds(music_id)}'
+
+            # 分片缺失 → None（文件被删）
+            os.remove(os.path.join(final_dir, 'index.m3u8'))
+            assert music_service.get_music_duration_seconds(music_id) is None
+        finally:
+            music_service.delete_music(music_id, 10009, False, '127.0.0.1')
+            shutil.rmtree(final_dir, ignore_errors=True)
+
+
+def test_music_attach_durations():
+    """attach_durations 为列表补充 duration_seconds 字段（原地修改）。"""
+    import shutil
+    owner = 10010
+    music_id = _insert_music(owner, 'att_owner', music_service.STATUS_PRIVATE)
+    final_dir = music_service._music_dir(music_id)
+    try:
+        os.makedirs(final_dir, exist_ok=True)
+        with open(os.path.join(final_dir, 'index.m3u8'), 'w', encoding='utf-8') as f:
+            f.write('#EXTM3U\n#EXTINF:30.0,\nseg_000.ts\n#EXTINF:30.0,\nseg_001.ts\n#EXT-X-ENDLIST\n')
+        rows = [{'id': music_id}, {'id': 999999}]
+        result = music_service.attach_durations(rows)
+        assert result is rows, '应原地补充并返回同一列表'
+        assert rows[0]['duration_seconds'] == 60, f'60s 音频应为 60，实际 {rows[0]["duration_seconds"]}'
+        assert rows[1]['duration_seconds'] is None, '缺失文件的音频时长应为 None'
+    finally:
+        music_service.delete_music(music_id, owner, False, '127.0.0.1')
+        shutil.rmtree(final_dir, ignore_errors=True)
+
+
 def test_music_delete_removes_db_and_files():
     """删除音频：数据库记录与文件目录（含 HLS / MP3）都被清理。"""
     import shutil
@@ -498,6 +548,8 @@ if __name__ == '__main__':
         test_music_transcode_cmd_build,
         test_music_read_transcode_percent,
         test_music_mp3_path,
+        test_music_duration_seconds,
+        test_music_attach_durations,
         test_music_delete_removes_db_and_files,
     ]
     for func in test_functions:

@@ -50,8 +50,8 @@ def admin_music_list():
     if not user or not user['is_admin']:
         abort(403)
 
-    pending_musics = music_service.get_pending_musics()
-    musics = music_service.get_all_musics()
+    pending_musics = music_service.attach_durations(music_service.get_pending_musics())
+    musics = music_service.attach_durations(music_service.get_all_musics())
     return render_template(
         'admin/admin_music.html',
         user=user,
