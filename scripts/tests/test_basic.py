@@ -146,6 +146,55 @@ def test_settings_redirect():
         assert resp.status_code in (302, 401), f"设置页未登录状态码: {resp.status_code}"
 
 
+# 所有 HTML 响应应统一带上的安全标头（core/middleware.py 集中下发）
+_SECURITY_HEADERS = [
+    'Content-Security-Policy',
+    'X-Content-Type-Options',
+    'X-Frame-Options',
+    'Referrer-Policy',
+    'Permissions-Policy',
+    'Cross-Origin-Opener-Policy',
+]
+
+
+def test_security_headers_http():
+    """测试 HTTP 响应包含全部安全标头；HSTS 仅在 HTTPS 下发。"""
+    with _app.test_client() as client:
+        resp = client.get('/login')
+        assert resp.status_code == 200, f"登录页状态码: {resp.status_code}"
+        for header in _SECURITY_HEADERS:
+            assert header in resp.headers, f"缺少安全标头: {header}"
+        # 防 MIME 嗅探
+        assert resp.headers.get('X-Content-Type-Options') == 'nosniff'
+        # 防点击劫持
+        assert resp.headers.get('X-Frame-Options') == 'SAMEORIGIN'
+        # CSP 不应误伤站点自身功能（内联脚本/样式 + 本地资源 + HLS blob worker）
+        csp = resp.headers.get('Content-Security-Policy', '')
+        assert "script-src 'self' 'unsafe-inline'" in csp, "CSP 需放行内联脚本"
+        assert "worker-src 'self' blob:" in csp, "CSP 需放行 HLS blob worker"
+        assert "object-src 'none'" in csp, "CSP 需禁用 object"
+        # HTTP 模式下不应下发 HSTS，避免强制升级锁死 HTTP 部署
+        assert 'Strict-Transport-Security' not in resp.headers, "HTTP 响应不应包含 HSTS"
+
+
+def test_security_headers_https():
+    """测试 HTTPS 响应包含 HSTS 标头。"""
+    with _app.test_client() as client:
+        resp = client.get('/login', base_url='https://localhost')
+        assert resp.status_code == 200, f"登录页状态码: {resp.status_code}"
+        assert 'Strict-Transport-Security' in resp.headers, "HTTPS 响应应包含 HSTS"
+        assert 'max-age=' in resp.headers.get('Strict-Transport-Security', '')
+
+
+def test_security_headers_error_page():
+    """测试 404 错误页也带有安全标头。"""
+    with _app.test_client() as client:
+        resp = client.get('/nonexistent-page-12345')
+        assert resp.status_code == 404, f"404 状态码: {resp.status_code}"
+        assert 'Content-Security-Policy' in resp.headers, "404 页缺少 CSP"
+        assert 'X-Frame-Options' in resp.headers, "404 页缺少 X-Frame-Options"
+
+
 # 运行所有测试
 if __name__ == '__main__':
     setup()
@@ -167,6 +216,9 @@ if __name__ == '__main__':
         test_guides_page,
         test_admin_redirect,
         test_settings_redirect,
+        test_security_headers_http,
+        test_security_headers_https,
+        test_security_headers_error_page,
     ]
     for func in test_functions:
         try:

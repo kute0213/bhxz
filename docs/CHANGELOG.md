@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### 新增
+- **全站安全响应标头**：在 `core/middleware.py` 集中新增 `after_request` 钩子，为所有响应（HTML/JSON API/SSE 流/静态资源/错误页）统一下发安全标头——`Content-Security-Policy`（仅本站资源，禁用 `object`，限制 `form-action`/`frame-ancestors`，放行内联脚本/样式与 HLS blob worker 避免误伤自身功能）、`X-Content-Type-Options: nosniff`、`X-Frame-Options: SAMEORIGIN`、`Referrer-Policy: strict-origin-when-cross-origin`、`Permissions-Policy`（默认禁用摄像头/麦克风/定位/传感器，仅放行本域剪贴板写入）、`Cross-Origin-Opener-Policy: same-origin`，以及**仅 HTTPS 请求下发**的 `Strict-Transport-Security`（避免锁死 HTTP 部署）；新增 `test_basic.py` 三项安全标头测试
 - **音频独立上传页与详细进度条**：上传从列表页内嵌面板拆分为独立页面 `/music/upload`（`templates/music/upload.html` + `static/js/music_upload.js`），列表页/「我的音频」页改为跳转独立上传页；采用「异步任务 + 轮询进度」——上传请求立即返回 `task_id`，后台线程执行 ffmpeg 转码，前端分两阶段展示进度条（文件上传百分比 + ffmpeg 转码进度条），`ffprobe` 探测音频时长、解析 ffmpeg `-progress` 输出实时计算转码进度；**转码阶段在真实百分比未知时显示不确定态滑动动画进度条（`.is-indeterminate`），不再只有文字百分比**，成功后展示播放链接并可复制/再传一个，失败展示错误并可一键重试（`services/music_service.py` 新增 `start_upload`/`_run_upload_task`/`get_upload_progress`/`_probe_duration`，`config.py` 新增 `FFPROBE_BIN`，每个上传任务独立临时目录与 ffmpeg 子进程，多用户并发互不冲突）
 - **音频列表与公开控制**：板块内展示全部公开音频与「我的音频」列表，用户可随时切换公开/私有；公开后所有用户（含未登录）可在游戏内大喇叭音频列表看到并播放
 - **管理员后台管理**：新增「大喇叭音频管理」页，管理员可查看全部音频并一键下架（删除）

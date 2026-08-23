@@ -265,7 +265,7 @@ export ENABLE_SSL=1 && python app.py
 - 动态背景光球（CSS `@keyframes` 动画），降低透明度使光晕更柔和
 - 全局细微噪点纹理（SVG `feTurbulence`），模拟蚀刻玻璃表面微观散射
 - **滚动收缩导航栏**：向下滚动后导航栏收缩为居中漂浮的椭圆胶囊，磨砂质感更凝实，弹性缓出动画（`prefers-reduced-motion` 可降级）
-- **邮件模板同款磨砂玻璃**：`templates/emails/base.html` 统一暗绿金黄玻璃卡片（背景光晕 + 噪点纹理 + 光线散射层 + 顶部高光描边 + 状态卡），验证码 / 指南审核 / 音频审核 / 广播邮件共用同一外层与样式
+- **邮件模板同款磨砂玻璃**：`templates/emails/base.html` 统一暗灰蓝+金色磨砂玻璃卡片（背景光晕 + 噪点纹理 + 光线散射层 + 顶部高光描边 + 状态卡），验证码 / 指南审核 / 音频审核 / 广播邮件共用同一外层与样式
 - **自定义音频播放器（磨砂玻璃风格）**：大喇叭音频列表（`/music`）、我的音频（`/music/my`）、管理员审核页（`admin/admin_music.html`）均使用自研播放器替代浏览器默认控件，含进度条（点击/拖动 seek、缓冲显示）、倍速（0.5x~2x）、音量（按钮+滑块弹层，音量记忆在 localStorage）与播放/暂停，窄屏（≤480px）自动占满整行；样式见 `static/css/base.css` 的 `.music-player`，逻辑见 `static/js/music_player.js`，HLS 播放依赖本地 `static/lib/hls/hls.min.js`（构建脚本 `scripts/build/build_static.py` 自动下载）
 - **模板宏复用**：`templates/macros/music_macros.html` 提取音频状态徽章、复制链接按钮、自定义播放器（`music_audio_player`）与播放器脚本（`music_player_assets`）为公共宏，`music/list.html`、`music/my.html` 与 `admin/admin_music.html` 统一调用，消除重复代码
 
@@ -363,7 +363,7 @@ workspace/
 ├── core/                     # 基础设施层
 │   ├── db/                   #   数据库连接与 schema
 │   ├── auth.py               #   认证装饰器、密码哈希
-│   └── middleware.py         #   请求中间件
+│   └── middleware.py         #   请求中间件（访问日志 + 公共文件 + 安全响应标头）
 ├── services/                 # 业务逻辑层
 │   ├── user_service.py       #   用户注册/登录/改密
 │   ├── attachment_service.py #   附件上传/清理
@@ -483,9 +483,16 @@ workspace/
 2. 修改默认管理员密码
 3. 生产环境启用 HTTPS
 4. 图形验证码服务端内存存储，一次性删除防重放
-5. Session Cookie 启用 `HttpOnly` + `SameSite=Lax`
+5. Session Cookie 启用 `HttpOnly` + `SameSite=Lax`（HTTPS 下自动加 `Secure`）
 6. 邮箱唯一性检查（一个邮箱仅可注册一个账号）
 7. IP 频率限制（注册/登录）
+8. **全站安全响应标头**（`core/middleware.py` 集中下发，覆盖 HTML/API/SSE/静态资源）：
+   - `Content-Security-Policy`：仅允许本站脚本/样式/资源，禁用 `object`，限制 `form-action`/`frame-ancestors` 等（已放行内联脚本/样式与 HLS blob worker，避免误伤自身功能）
+   - `X-Content-Type-Options: nosniff`、`X-Frame-Options: SAMEORIGIN`（防点击劫持）
+   - `Referrer-Policy: strict-origin-when-cross-origin`（防 Referer 泄露）
+   - `Permissions-Policy`：默认禁用摄像头/麦克风/定位/传感器等，仅放行本域剪贴板写入
+   - `Cross-Origin-Opener-Policy: same-origin`（跨源隔离，防 Spectre 类窗口攻击）
+   - `Strict-Transport-Security`（HSTS）：**仅 HTTPS 请求下发**，避免 HTTP 部署被强制升级而无法访问
 
 ## 终端控制台使用说明
 
