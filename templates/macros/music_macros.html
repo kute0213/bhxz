@@ -1,11 +1,13 @@
 {# ============================================================
    大喇叭音频公共宏（磨砂玻璃风格）
    用法：
-     {% from "macros/music_macros.html" import music_status_badge, music_copy_link_button, music_audio_player %}
+     {% from "macros/music_macros.html" import music_status_badge, music_copy_link_button, music_audio_player, music_player_assets %}
    - music_status_badge(status)        音频状态徽章（0=私有 1=待审核 2=已公开 3=已驳回）
    - music_copy_link_button(url)       复制播放链接按钮（需 base.js 的 copy-link-btn 事件）
-   - music_audio_player(music_id)      HLS 音频播放器
-   样式：状态徽章/按钮见 Tailwind 类，播放器玻璃质感见 static/css/base.css 的 .music-audio。
+   - music_audio_player(music_id)      自定义音频播放器（进度/倍速/音量，HLS 播放）
+   - music_player_assets()             播放器所需脚本（hls.js + music_player.js）
+   使用 music_audio_player 的页面，须在 extra_script 块中调用 music_player_assets()。
+   样式见 static/css/base.css 的 .music-player，JS 见 static/js/music_player.js。
    ============================================================ #}
 
 {% macro music_status_badge(status) -%}
@@ -29,7 +31,40 @@
 {%- endmacro %}
 
 {% macro music_audio_player(music_id) -%}
-<audio controls preload="none" class="music-audio h-9 w-32 sm:w-44">
-    <source src="{{ url_for('main.serve_music_playlist', music_id=music_id) }}" type="application/vnd.apple.mpegurl">
-</audio>
+<div class="music-player" data-src="{{ url_for('main.serve_music_playlist', music_id=music_id) }}" data-id="{{ music_id }}">
+    <button type="button" class="mp-play" aria-label="播放">
+        <i data-lucide="play" class="mp-play-icon"></i>
+        <i data-lucide="pause" class="mp-pause-icon"></i>
+    </button>
+    <div class="mp-main">
+        <div class="mp-time">
+            <span class="mp-current">0:00</span>
+            <span class="mp-duration">0:00</span>
+        </div>
+        <div class="mp-progress" role="slider" aria-label="播放进度">
+            <span class="mp-buffered"></span>
+            <span class="mp-fill"></span>
+            <span class="mp-thumb"></span>
+        </div>
+    </div>
+    <div class="mp-controls">
+        <div class="mp-speed">
+            <button type="button" class="mp-btn mp-speed-btn" title="播放速度">1x</button>
+            <div class="mp-speed-menu"></div>
+        </div>
+        <div class="mp-volume">
+            <button type="button" class="mp-btn mp-vol-btn" title="音量">
+                <i data-lucide="volume-2" class="mp-vol-icon-on"></i>
+                <i data-lucide="volume-x" class="mp-vol-icon-off"></i>
+            </button>
+            <input type="range" class="mp-vol-slider" min="0" max="1" step="0.05" value="1" aria-label="音量">
+        </div>
+    </div>
+</div>
+{%- endmacro %}
+
+{# 播放器所需脚本：hls.js + 播放器逻辑。使用 music_audio_player 的页面在 extra_script 中调用。 #}
+{% macro music_player_assets() -%}
+<script src="{{ url_for('static', filename='lib/hls/hls.min.js', v='1') }}"></script>
+<script src="{{ url_for('static', filename='js/music_player.js', v='1') }}"></script>
 {%- endmacro %}

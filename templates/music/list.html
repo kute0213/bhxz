@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "macros/music_macros.html" import music_status_badge, music_copy_link_button, music_audio_player %}
+{% from "macros/music_macros.html" import music_status_badge, music_copy_link_button, music_audio_player, music_player_assets %}
 {% block title %}大喇叭音频{% endblock %}
 {% block content %}
 <section class="page-container py-12">
@@ -65,21 +65,25 @@
             {% if public_musics %}
             <div class="space-y-3">
                 {% for m in public_musics %}
-                <div class="pixel-card rounded-xl p-4 flex items-center gap-4">
-                    <div class="w-10 h-10 bg-gold-400/20 rounded-lg flex items-center justify-center flex-shrink-0">
-                        <i data-lucide="music" class="w-5 h-5 text-gold-400"></i>
-                    </div>
-                    <div class="flex-1 min-w-0">
-                        <div class="font-bold text-cream truncate">{{ m.title }}</div>
-                        <div class="text-xs text-cream/50 mt-1 flex items-center gap-3">
-                            <span class="flex items-center gap-1">
-                                <i data-lucide="user" class="w-3 h-3"></i>{{ m.username }}
-                            </span>
-                            <span>{{ (m.created_at or '')[:10] }}</span>
+                <div class="pixel-card rounded-xl p-4">
+                    <div class="flex items-center gap-4">
+                        <div class="w-10 h-10 bg-gold-400/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                            <i data-lucide="music" class="w-5 h-5 text-gold-400"></i>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="font-bold text-cream truncate">{{ m.title }}</div>
+                            <div class="text-xs text-cream/50 mt-1 flex items-center gap-3">
+                                <span class="flex items-center gap-1">
+                                    <i data-lucide="user" class="w-3 h-3"></i>{{ m.username }}
+                                </span>
+                                <span>{{ (m.created_at or '')[:10] }}</span>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2 flex-shrink-0">
+                            {{ music_copy_link_button(request.host_url.rstrip('/') ~ '/music/' ~ m.id ~ '.m3u8') }}
                         </div>
                     </div>
-                    <div class="flex items-center gap-2 flex-shrink-0">
-                        {{ music_copy_link_button(request.host_url.rstrip('/') ~ '/music/' ~ m.id ~ '.m3u8') }}
+                    <div class="mt-3">
                         {{ music_audio_player(m.id) }}
                     </div>
                 </div>
@@ -97,6 +101,7 @@
 {% endblock %}
 
 {% block extra_script %}
+{{ music_player_assets() }}
 <script>
 (function () {
     // 复制播放链接

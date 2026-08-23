@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "macros/music_macros.html" import music_status_badge, music_copy_link_button, music_audio_player %}
+{% from "macros/music_macros.html" import music_status_badge, music_copy_link_button, music_audio_player, music_player_assets %}
 {% block title %}大喇叭音频管理{% endblock %}
 {% block content %}
 <section class="page-container py-12">
@@ -42,36 +42,40 @@
             {% if pending_musics %}
             <div class="space-y-3">
                 {% for m in pending_musics %}
-                <div class="pixel-card rounded-xl p-4 flex flex-wrap items-center gap-4">
-                    <div class="w-10 h-10 bg-yellow-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
-                        <i data-lucide="music" class="w-5 h-5 text-yellow-400"></i>
-                    </div>
-                    <div class="flex-1 min-w-0">
-                        <div class="font-bold text-cream truncate">{{ m.title }}</div>
-                        <div class="text-xs text-cream/50 mt-1 flex items-center gap-3">
-                            <span class="flex items-center gap-1"><i data-lucide="user" class="w-3 h-3"></i>{{ m.username or '未知' }}</span>
-                            <span>ID {{ m.id }}</span>
-                            <span>{{ (m.created_at or '')[:10] }}</span>
+                <div class="pixel-card rounded-xl p-4">
+                    <div class="flex items-center gap-4">
+                        <div class="w-10 h-10 bg-yellow-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
+                            <i data-lucide="music" class="w-5 h-5 text-yellow-400"></i>
+                        </div>
+                        <div class="flex-1 min-w-0">
+                            <div class="font-bold text-cream truncate">{{ m.title }}</div>
+                            <div class="text-xs text-cream/50 mt-1 flex items-center gap-3">
+                                <span class="flex items-center gap-1"><i data-lucide="user" class="w-3 h-3"></i>{{ m.username or '未知' }}</span>
+                                <span>ID {{ m.id }}</span>
+                                <span>{{ (m.created_at or '')[:10] }}</span>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2 flex-shrink-0">
+                            {{ music_copy_link_button(request.host_url.rstrip('/') ~ '/music/' ~ m.id ~ '.m3u8') }}
+                            <form method="POST" action="{{ url_for('admin.admin_music_review', music_id=m.id) }}" class="inline">
+                                <input type="hidden" name="action" value="approve">
+                                <button type="submit"
+                                        class="px-3 py-2 rounded-lg text-xs border border-green-500/30 text-green-300 hover:bg-green-500/10 transition-colors flex items-center gap-1.5">
+                                    <i data-lucide="check" class="w-3.5 h-3.5"></i>通过
+                                </button>
+                            </form>
+                            <form method="POST" action="{{ url_for('admin.admin_music_review', music_id=m.id) }}" class="inline"
+                                  onsubmit="return confirm('确定驳回此公开申请吗？用户可将音频转为私有或删除。')">
+                                <input type="hidden" name="action" value="reject">
+                                <button type="submit"
+                                        class="px-3 py-2 rounded-lg text-xs border border-red-500/30 text-red-300 hover:bg-red-500/10 transition-colors flex items-center gap-1.5">
+                                    <i data-lucide="x" class="w-3.5 h-3.5"></i>驳回
+                                </button>
+                            </form>
                         </div>
                     </div>
-                    <div class="flex items-center gap-2 flex-shrink-0">
-                        {{ music_copy_link_button(request.host_url.rstrip('/') ~ '/music/' ~ m.id ~ '.m3u8') }}
+                    <div class="mt-3">
                         {{ music_audio_player(m.id) }}
-                        <form method="POST" action="{{ url_for('admin.admin_music_review', music_id=m.id) }}" class="inline">
-                            <input type="hidden" name="action" value="approve">
-                            <button type="submit"
-                                    class="px-3 py-2 rounded-lg text-xs border border-green-500/30 text-green-300 hover:bg-green-500/10 transition-colors flex items-center gap-1.5">
-                                <i data-lucide="check" class="w-3.5 h-3.5"></i>通过
-                            </button>
-                        </form>
-                        <form method="POST" action="{{ url_for('admin.admin_music_review', music_id=m.id) }}" class="inline"
-                              onsubmit="return confirm('确定驳回此公开申请吗？用户可将音频转为私有或删除。')">
-                            <input type="hidden" name="action" value="reject">
-                            <button type="submit"
-                                    class="px-3 py-2 rounded-lg text-xs border border-red-500/30 text-red-300 hover:bg-red-500/10 transition-colors flex items-center gap-1.5">
-                                <i data-lucide="x" class="w-3.5 h-3.5"></i>驳回
-                            </button>
-                        </form>
                     </div>
                 </div>
                 {% endfor %}
@@ -149,4 +153,8 @@
         {% endif %}
     </div>
 </section>
+{% endblock %}
+
+{% block extra_script %}
+{{ music_player_assets() }}
 {% endblock %}

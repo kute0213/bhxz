@@ -9,6 +9,7 @@
 运行后会生成：
     static/lib/lucide/        - Lucide 图标库
     static/lib/marked/        - Marked.js Markdown 渲染
+    static/lib/hls/           - hls.js HLS 播放支持（自定义音频播放器）
     static/lib/fonts/         - Google Fonts 字体文件（Noto Sans SC + JetBrains Mono）
     static/lib/monaco/        - Monaco Editor 代码编辑器（HTTP 下载，无需 npm）
 """
@@ -371,6 +372,24 @@ def download_monaco():
 
 
 # ---------------------------------------------------------------------------
+# 4.2 hls.js（自定义音频播放器的 HLS 支持）
+# ---------------------------------------------------------------------------
+
+HLS_VERSION = '1.5.13'
+
+
+def download_hls():
+    """下载 hls.js（HLS 播放支持，供自定义音频播放器使用）。"""
+    print('\n=== hls.js ===', flush=True)
+    lib_dir = os.path.join(LIB_DIR, 'hls')
+    os.makedirs(lib_dir, exist_ok=True)
+
+    url = f'https://cdn.jsdelivr.net/npm/hls.js@{HLS_VERSION}/dist/hls.min.js'
+    dest = os.path.join(lib_dir, 'hls.min.js')
+    _download_with_redirect(url, dest, 'hls.min.js')
+
+
+# ---------------------------------------------------------------------------
 # 4.5 xterm.js 终端模拟器
 # ---------------------------------------------------------------------------
 
@@ -419,6 +438,7 @@ def generate_version_file():
         'built_at': time.strftime('%Y-%m-%d %H:%M:%S'),
         'monaco_version': MONACO_VERSION,
         'xterm_version': XTERM_VERSION,
+        'hls_version': HLS_VERSION,
     }
     dest = os.path.join(LIB_DIR, 'lib-version.json')
     with open(dest, 'w') as f:
@@ -445,6 +465,9 @@ def main():
 
     # 2. Marked.js
     download_marked()
+
+    # 2.5 hls.js（自定义音频播放器）
+    download_hls()
 
     # 3. Google Fonts
     download_fonts()

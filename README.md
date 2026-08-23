@@ -124,7 +124,7 @@ python scripts/build/package.py
 - **公开需审核**：申请公开的音频进入「待审核」，管理员通过后才在游戏内大喇叭展示；驳回后用户可转为私有或删除；已公开转私有再申请公开需重新审核
 - **审核结果邮件通知**：管理员通过/驳回公开申请后，自动向上传者邮箱发送磨砂玻璃风格的审核结果邮件（通过 / 未通过状态卡），邮件未启用或上传者无邮箱时自动跳过
 - **公开音频名称搜索**：公开音频列表支持按名称模糊搜索（`/music?q=关键词`），无结果时给出空态提示
-- 音频状态：私有 / 待审核 / 已公开 / 已驳回，用户可在独立的「我的音频」页（`/music/my`）中查看并管理（播放链接、申请公开/转为私有、删除）
+- 音频状态：私有 / 待审核 / 已公开 / 已驳回，用户可在独立的「我的音频」页（`/music/my`）中查看并管理（播放链接、申请公开/转为私有、删除）；**审核未通过的音频与私有音频一样，仍可播放、复制链接、调整音量增益、转为私有或删除**
 - **独立上传页与详细进度条**：上传入口跳转独立页面 `/music/upload`（`templates/music/upload.html` + `static/js/music_upload.js`），异步上传并分两阶段展示进度条——文件上传百分比 + ffmpeg 转码百分比（ffprobe 探测时长、解析 `-progress` 输出实时计算），成功后展示播放链接，失败可一键重试
 - **自定义音量增益**：上传前可拖动滑块预设音量增益（-12 ~ +12 dB，0 为不调整），转码时经 ffmpeg `volume` 滤镜写入；上传后上传者本人或管理员可在「我的音频」/管理后台重新调整并即时重新转码（`music` 表新增 `gain` 字段持久化）
 - 管理员可在后台审核公开申请、查看全部音频并一键下架（删除数据库记录并同步删除音频文件）
@@ -268,7 +268,8 @@ export ENABLE_SSL=1 && python app.py
 - 全局细微噪点纹理（SVG `feTurbulence`），模拟蚀刻玻璃表面微观散射
 - **滚动收缩导航栏**：向下滚动后导航栏收缩为居中漂浮的椭圆胶囊，磨砂质感更凝实，弹性缓出动画（`prefers-reduced-motion` 可降级）
 - **邮件模板同款磨砂玻璃**：`templates/emails/base.html` 统一暗绿金黄玻璃卡片（背景光晕 + 噪点纹理 + 光线散射层 + 顶部高光描边 + 状态卡），验证码 / 指南审核 / 音频审核 / 广播邮件共用同一外层与样式
-- **模板宏复用**：`templates/macros/music_macros.html` 提取音频状态徽章、复制链接按钮、HLS 播放器为公共宏，`music/list.html` 与 `admin/admin_music.html` 统一调用，消除重复代码
+- **自定义音频播放器（磨砂玻璃风格）**：大喇叭音频列表（`/music`）、我的音频（`/music/my`）、管理员审核页（`admin/admin_music.html`）均使用自研播放器替代浏览器默认控件，含进度条（点击/拖动 seek、缓冲显示）、倍速（0.5x~2x）、音量（按钮+滑块弹层，音量记忆在 localStorage）与播放/暂停，窄屏（≤480px）自动占满整行；样式见 `static/css/base.css` 的 `.music-player`，逻辑见 `static/js/music_player.js`，HLS 播放依赖本地 `static/lib/hls/hls.min.js`（构建脚本 `scripts/build/build_static.py` 自动下载）
+- **模板宏复用**：`templates/macros/music_macros.html` 提取音频状态徽章、复制链接按钮、自定义播放器（`music_audio_player`）与播放器脚本（`music_player_assets`）为公共宏，`music/list.html`、`music/my.html` 与 `admin/admin_music.html` 统一调用，消除重复代码
 
 ### 交互效果
 

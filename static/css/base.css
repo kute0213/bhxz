@@ -164,18 +164,251 @@ body.has-background-image .pixel-card {
         inset 0 0.5px 0 rgba(255, 255, 255, 0.08);
 }
 
-/* 大喇叭音频播放器 - 磨砂玻璃质感 */
-.music-audio {
-    background: rgba(255, 255, 255, 0.05);
+/* ============================================================
+   大喇叭自定义音频播放器（磨砂玻璃风格）
+   结构：
+     .music-player
+       ├─ .mp-play            播放/暂停按钮
+       ├─ .mp-main
+       │    ├─ .mp-time       当前时间 / 总时长
+       │    └─ .mp-progress   进度条（点击/拖动 seek）
+       └─ .mp-controls
+            ├─ .mp-speed      倍速（弹出菜单）
+            └─ .mp-volume     音量（按钮 + 滑块弹层）
+   JS 逻辑见 static/js/music_player.js，样式与整体磨砂玻璃风格一致。
+   ============================================================ */
+.music-player {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 46px;
+    min-width: 260px;
+    max-width: 100%;
+    padding: 0 10px;
+    background: linear-gradient(145deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.03));
     border: 1px solid rgba(255, 255, 255, 0.12);
-    border-radius: 10px;
-    backdrop-filter: blur(10px) saturate(110%);
-    -webkit-backdrop-filter: blur(10px) saturate(110%);
+    border-radius: 12px;
+    backdrop-filter: blur(14px) saturate(110%);
+    -webkit-backdrop-filter: blur(14px) saturate(110%);
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    color: #f3f6fb;
+    user-select: none;
+    -webkit-user-select: none;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
-.music-audio:focus-visible {
-    outline: none;
-    border-color: rgba(244, 208, 63, 0.4);
+.music-player:focus-within { border-color: rgba(244, 208, 63, 0.45); }
+
+/* 播放/暂停按钮 */
+.mp-play {
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px;
+    background: linear-gradient(145deg, rgba(251, 191, 36, 0.22), rgba(245, 158, 11, 0.16));
+    border: 1px solid rgba(251, 191, 36, 0.35);
+    color: #fbbf24;
+    cursor: pointer;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.mp-play:hover { transform: scale(1.06); box-shadow: 0 0 12px rgba(251, 191, 36, 0.25); }
+.mp-play svg { width: 15px; height: 15px; }
+.mp-play .mp-pause-icon { display: none; }
+.music-player.is-playing .mp-play .mp-play-icon { display: none; }
+.music-player.is-playing .mp-play .mp-pause-icon { display: block; }
+.mp-play.is-loading svg { display: none; }
+.mp-play.is-loading::after {
+    content: '';
+    width: 15px; height: 15px;
+    border: 2px solid rgba(251, 191, 36, 0.25);
+    border-top-color: #fbbf24;
+    border-radius: 50%;
+    animation: mpSpin 0.8s linear infinite;
+}
+@keyframes mpSpin { to { transform: rotate(360deg); } }
+
+/* 中段：时间 + 进度条 */
+.mp-main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.mp-time {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 10px;
+    font-variant-numeric: tabular-nums;
+    color: rgba(243, 246, 251, 0.55);
+    letter-spacing: 0.02em;
+}
+.mp-progress {
+    position: relative;
+    height: 6px;
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.10);
+    cursor: pointer;
+    touch-action: none;
+}
+.mp-buffered {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.16);
+    pointer-events: none;
+}
+.mp-fill {
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    border-radius: 9999px;
+    background: linear-gradient(90deg, #fbbf24, #f59e0b);
+    box-shadow: 0 0 8px rgba(251, 191, 36, 0.35);
+    pointer-events: none;
+}
+.mp-thumb {
+    position: absolute;
+    top: 50%;
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: #fff;
+    border: 2px solid #fbbf24;
+    transform: translate(-50%, -50%);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s ease;
+}
+.mp-progress:hover .mp-thumb,
+.mp-progress.is-dragging .mp-thumb { opacity: 1; }
+
+/* 右侧控件组：倍速 + 音量 */
+.mp-controls {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.mp-btn {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 28px;
+    min-width: 28px;
+    padding: 0 6px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    background: rgba(255, 255, 255, 0.05);
+    color: rgba(243, 246, 251, 0.75);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+.mp-btn:hover { background: rgba(255, 255, 255, 0.10); color: #f3f6fb; border-color: rgba(251, 191, 36, 0.4); }
+.mp-btn svg { width: 14px; height: 14px; }
+.mp-vol-btn.is-muted { color: rgba(243, 246, 251, 0.4); border-color: rgba(255, 255, 255, 0.08); }
+.mp-vol-btn .mp-vol-icon-off { display: none; }
+.mp-vol-btn.is-muted .mp-vol-icon-on { display: none; }
+.mp-vol-btn.is-muted .mp-vol-icon-off { display: block; }
+
+/* 倍速弹出菜单 */
+.mp-speed { position: relative; }
+.mp-speed-menu {
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%) scale(0.92);
+    transform-origin: bottom center;
+    min-width: 78px;
+    padding: 4px;
+    border-radius: 10px;
+    background: linear-gradient(145deg, rgba(52, 61, 79, 0.98), rgba(40, 48, 63, 0.98));
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.3);
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s;
+    z-index: 30;
+}
+.mp-speed.open .mp-speed-menu {
+    opacity: 1; visibility: visible; pointer-events: auto;
+    transform: translateX(-50%) scale(1);
+}
+.mp-speed-menu button {
+    display: block;
+    width: 100%;
+    padding: 5px 10px;
+    border-radius: 6px;
+    text-align: center;
+    font-size: 11px;
+    color: rgba(243, 246, 251, 0.7);
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+.mp-speed-menu button:hover { background: rgba(251, 191, 36, 0.14); color: #fbbf24; }
+.mp-speed-menu button.is-active { color: #fbbf24; font-weight: 700; }
+
+/* 音量：按钮 + 弹出滑块 */
+.mp-volume { position: relative; display: flex; align-items: center; }
+.mp-vol-slider {
+    position: absolute;
+    bottom: calc(100% + 8px);
+    left: 50%;
+    transform: translateX(-50%);
+    width: 92px;
+    height: 5px;
+    margin: 0;
+    padding: 6px 0;
+    appearance: none;
+    -webkit-appearance: none;
+    background: transparent;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.15s ease, visibility 0.15s;
+    z-index: 30;
+}
+.mp-volume.open .mp-vol-slider { opacity: 1; visibility: visible; pointer-events: auto; }
+.mp-vol-slider::-webkit-slider-runnable-track {
+    height: 5px;
+    border-radius: 9999px;
+    background: linear-gradient(90deg, #fbbf24, #f59e0b);
+}
+.mp-vol-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 13px; height: 13px;
+    border-radius: 50%;
+    background: #fff;
+    border: 2px solid #fbbf24;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+    cursor: pointer;
+    margin-top: -4px;
+}
+.mp-vol-slider::-moz-range-track { height: 5px; border-radius: 9999px; background: linear-gradient(90deg, #fbbf24, #f59e0b); }
+.mp-vol-slider::-moz-range-thumb {
+    width: 13px; height: 13px; border-radius: 50%;
+    background: #fff; border: 2px solid #fbbf24; cursor: pointer;
+}
+.mp-vol-slider::-ms-track { height: 5px; background: transparent; border-color: transparent; color: transparent; }
+
+/* 播放中 / 出错状态 */
+.music-player.is-playing {
+    border-color: rgba(251, 191, 36, 0.30);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 16px rgba(251, 191, 36, 0.08);
+}
+.music-player.is-error { border-color: rgba(248, 113, 113, 0.35); }
+.music-player.is-error .mp-main { opacity: 0.55; }
+
+/* 响应式：窄屏时播放器占满整行 */
+@media (max-width: 480px) {
+    .music-player { min-width: 0; width: 100%; }
 }
 
 /* 磨砂玻璃按钮 - 紫色蚀刻玻璃质感 */

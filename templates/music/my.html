@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "macros/music_macros.html" import music_status_badge, music_copy_link_button %}
+{% from "macros/music_macros.html" import music_status_badge, music_copy_link_button, music_audio_player, music_player_assets %}
 {% block title %}我的音频{% endblock %}
 {% block content %}
 <section class="page-container py-12">
@@ -36,54 +36,59 @@
         {% if my_musics %}
         <div class="space-y-3">
             {% for m in my_musics %}
-            <div class="pixel-card rounded-xl p-4 flex items-center gap-4">
-                <div class="w-10 h-10 bg-gold-400/20 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <i data-lucide="music" class="w-5 h-5 text-gold-400"></i>
-                </div>
-                <div class="flex-1 min-w-0">
-                    <div class="font-bold text-cream truncate flex flex-wrap items-center gap-2">
-                        {{ m.title }}
-                        {{ music_status_badge(m.status) }}
+            <div class="pixel-card rounded-xl p-4">
+                <div class="flex items-start gap-4">
+                    <div class="w-10 h-10 bg-gold-400/20 rounded-lg flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <i data-lucide="music" class="w-5 h-5 text-gold-400"></i>
                     </div>
-                    <div class="text-xs text-cream/50 mt-1">
-                        {{ (m.created_at or '')[:10] }}
-                        {% if m.status == 1 %}· 等待管理员审核{% endif %}
-                        {% if m.status == 3 %}· 审核未通过，可转为私有或删除{% endif %}
+                    <div class="flex-1 min-w-0">
+                        <div class="font-bold text-cream truncate flex flex-wrap items-center gap-2">
+                            {{ m.title }}
+                            {{ music_status_badge(m.status) }}
+                        </div>
+                        <div class="text-xs text-cream/50 mt-1">
+                            {{ (m.created_at or '')[:10] }}
+                            {% if m.status == 1 %}· 等待管理员审核{% endif %}
+                            {% if m.status == 3 %}· 审核未通过，仍可播放/调整，也可转为私有或删除{% endif %}
+                        </div>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-2 flex-shrink-0">
+                        {{ music_copy_link_button(request.host_url.rstrip('/') ~ '/music/' ~ m.id ~ '.m3u8') }}
+                        <form method="POST" action="{{ url_for('main.update_music_gain', music_id=m.id) }}" class="inline-flex items-center gap-1"
+                              title="调整音量增益（dB，-12 ~ +12，0 为原始音量）">
+                            <input type="hidden" name="next" value="{{ url_for('main.my_music_page') }}">
+                            <input type="number" name="gain" value="{{ m.gain }}" min="-12" max="12" step="0.5"
+                                   class="input-field w-20 px-2 py-2 rounded-lg text-xs text-center">
+                            <button type="submit"
+                                    class="px-2.5 py-2 rounded-lg text-xs border border-cream/20 text-cream/70 hover:text-cream hover:border-gold-400/40 transition-colors flex items-center gap-1"
+                                    title="应用音量增益（会重新转码）">
+                                <i data-lucide="volume-2" class="w-3.5 h-3.5"></i>音量
+                            </button>
+                        </form>
+                        <form method="POST" action="{{ url_for('main.toggle_music_public', music_id=m.id) }}" class="inline">
+                            <input type="hidden" name="next" value="{{ url_for('main.my_music_page') }}">
+                            <button type="submit"
+                                    class="px-3 py-2 rounded-lg text-xs border transition-colors flex items-center gap-1.5
+                                           {% if m.status == 0 %}border-green-500/30 text-green-300 hover:bg-green-500/10
+                                           {% else %}border-yellow-500/30 text-yellow-300 hover:bg-yellow-500/10{% endif %}"
+                                    title="{% if m.status == 0 %}申请公开（需审核）{% else %}转为私有{% endif %}">
+                                <i data-lucide="{% if m.status == 0 %}eye{% else %}eye-off{% endif %}" class="w-3.5 h-3.5"></i>
+                                {% if m.status == 0 %}申请公开{% else %}转为私有{% endif %}
+                            </button>
+                        </form>
+                        <form method="POST" action="{{ url_for('main.delete_music', music_id=m.id) }}" class="inline"
+                              onsubmit="return confirm('确定要删除此音频吗？删除后无法恢复。')">
+                            <input type="hidden" name="next" value="{{ url_for('main.my_music_page') }}">
+                            <button type="submit"
+                                    class="px-3 py-2 rounded-lg text-xs border border-red-500/30 text-red-300 hover:bg-red-500/10 transition-colors flex items-center gap-1.5"
+                                    title="删除">
+                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>删除
+                            </button>
+                        </form>
                     </div>
                 </div>
-                <div class="flex items-center gap-2 flex-shrink-0">
-                    {{ music_copy_link_button(request.host_url.rstrip('/') ~ '/music/' ~ m.id ~ '.m3u8') }}
-                    <form method="POST" action="{{ url_for('main.update_music_gain', music_id=m.id) }}" class="inline-flex items-center gap-1"
-                          title="调整音量增益（dB，-12 ~ +12，0 为原始音量）">
-                        <input type="hidden" name="next" value="{{ url_for('main.my_music_page') }}">
-                        <input type="number" name="gain" value="{{ m.gain }}" min="-12" max="12" step="0.5"
-                               class="input-field w-20 px-2 py-2 rounded-lg text-xs text-center">
-                        <button type="submit"
-                                class="px-2.5 py-2 rounded-lg text-xs border border-cream/20 text-cream/70 hover:text-cream hover:border-gold-400/40 transition-colors flex items-center gap-1"
-                                title="应用音量增益（会重新转码）">
-                            <i data-lucide="volume-2" class="w-3.5 h-3.5"></i>音量
-                        </button>
-                    </form>
-                    <form method="POST" action="{{ url_for('main.toggle_music_public', music_id=m.id) }}" class="inline">
-                        <input type="hidden" name="next" value="{{ url_for('main.my_music_page') }}">
-                        <button type="submit"
-                                class="px-3 py-2 rounded-lg text-xs border transition-colors flex items-center gap-1.5
-                                       {% if m.status == 0 %}border-green-500/30 text-green-300 hover:bg-green-500/10
-                                       {% else %}border-yellow-500/30 text-yellow-300 hover:bg-yellow-500/10{% endif %}"
-                                title="{% if m.status == 0 %}申请公开（需审核）{% else %}转为私有{% endif %}">
-                            <i data-lucide="{% if m.status == 0 %}eye{% else %}eye-off{% endif %}" class="w-3.5 h-3.5"></i>
-                            {% if m.status == 0 %}申请公开{% else %}转为私有{% endif %}
-                        </button>
-                    </form>
-                    <form method="POST" action="{{ url_for('main.delete_music', music_id=m.id) }}" class="inline"
-                          onsubmit="return confirm('确定要删除此音频吗？删除后无法恢复。')">
-                        <input type="hidden" name="next" value="{{ url_for('main.my_music_page') }}">
-                        <button type="submit"
-                                class="px-3 py-2 rounded-lg text-xs border border-red-500/30 text-red-300 hover:bg-red-500/10 transition-colors flex items-center gap-1.5"
-                                title="删除">
-                            <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>删除
-                        </button>
-                    </form>
+                <div class="mt-3">
+                    {{ music_audio_player(m.id) }}
                 </div>
             </div>
             {% endfor %}
@@ -102,5 +107,6 @@
 {% endblock %}
 
 {% block extra_script %}
-<script src="{{ url_for('static', filename='js/music_my.js', v='1') }}"></script>
+<script src="{{ url_for('static', filename='js/music_my.js', v='2') }}"></script>
+{{ music_player_assets() }}
 {% endblock %}
