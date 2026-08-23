@@ -78,7 +78,7 @@ python scripts/build/package.py
 │   ├── attachments/    # 留言板/讨论区附件
 │   ├── backgrounds/    # 全站背景图片（bg_16_9.jpg 等）
 │   ├── community/      # 社区资源
-│   └── music/          # 大喇叭音频（每个音频一个 ID 目录，含 m3u8 与 ts 分片）
+│   └── music/          # 大喇叭音频（每个音频一个 ID 目录，含 m3u8、ts 分片与唱片 MP3）
 ├── backups/      # 数据库备份
 └── ssl/          # HTTPS 证书（可选）
 ```
@@ -118,14 +118,15 @@ python scripts/build/package.py
 - Markdown 编辑 + 附件上传
 
 ### 大喇叭音频
-- 「大喇叭音频」板块：上传音频自动转码为 HLS（m3u8），生成 `http://<主机>/music/<编号>.m3u8` 播放链接
+- 「大喇叭音频」板块：上传音频自动转码为 HLS（m3u8），生成 `http://<主机>/music/<编号>.m3u8` 播放链接；同时生成**唱片 MP3**（`http://<主机>/music/<编号>.mp3`），供游戏内「电脑」下载后烧录成唱片
 - 支持 mp3 / wav / ogg / m4a / flac，单文件不超过 100MB（依赖 ffmpeg）
 - 自动调用内置 ffmpeg：Windows 用 `scripts/ffmpeg/ffmpeg.exe`，Linux/macOS 用 `scripts/ffmpeg/ffmpeg`，未内置时回退系统 PATH 中的 `ffmpeg`
 - **公开需审核**：申请公开的音频进入「待审核」，管理员通过后才在游戏内大喇叭展示；**驳回后音频自动转为私有**（仅自己可见），用户可重新申请公开或删除；已公开转私有再申请公开需重新审核
 - **审核结果邮件通知**：管理员通过/驳回公开申请后，自动向上传者邮箱发送磨砂玻璃风格的审核结果邮件（通过 / 未通过状态卡），邮件未启用或上传者无邮箱时自动跳过
 - **公开音频名称搜索**：公开音频列表支持按名称模糊搜索（`/music?q=关键词`），无结果时给出空态提示
 - 音频状态：私有 / 待审核 / 已公开（历史遗留的「已驳回」数据归并为私有），用户可在独立的「我的音频」页（`/music/my`）中查看并管理（播放链接、申请公开/转为私有、删除）
-- **独立上传页与详细进度条**：上传入口跳转独立页面 `/music/upload`（`templates/music/upload.html` + `static/js/music_upload.js`），异步上传并分两阶段展示进度条——文件上传百分比 + ffmpeg 转码进度条（ffprobe 探测时长、解析 `-progress` 输出实时计算；真实百分比未知时显示不确定态滑动动画进度条，不再只有文字），成功后展示播放链接，失败可一键重试
+- **独立上传页与详细进度条**：上传入口跳转独立页面 `/music/upload`（`templates/music/upload.html` + `static/js/music_upload.js`），异步上传并分两阶段展示进度条——文件上传百分比 + ffmpeg 转码进度条：`ffprobe` 探测音频时长，后台线程结合 ffmpeg `-progress` 文件输出（`out_time_us`）与 m3u8 已生成分片累计时长**双源计算真实百分比**并填充进度条（取两者较大值，避免快速转码时进度条跟不上；真实百分比未知时显示不确定态滑动动画，不再只有文字），成功后展示播放链接与唱片 MP3 链接，失败可一键重试
+- **唱片 MP3 与源文件清理**：转码时一次生成 HLS 流与 192kbps 唱片 MP3（`libmp3lame` + ID3 标签），转码完成后**自动删除原上传音频源文件**与临时日志，目录内仅保留播放所需的 `index.m3u8`、`seg_*.ts` 与唱片 `index.mp3`；MP3 链接访问权限与 m3u8 播放链接一致（公开音频所有人可下载，私有仅本人/管理员）
 - 管理员可在后台审核公开申请、查看全部音频并一键下架（删除数据库记录并同步删除音频文件）
 - 音频文件存放在 `uploads/music/<音频ID>/`，删除记录时自动清理对应目录，无文件残留
 - **音频 ID 并发安全**：上传在持锁事务内完成数据库插入与 ID 读取（`with get_db()` + INSERT 后立即读 `lastrowid`），多用户同时上传也不会串号——文件目录名与数据库记录严格对应，播放链接与删除清理均可靠（修复历史并发上传导致编号错乱、无法播放、删除残留文件的问题）
@@ -237,6 +238,7 @@ export ENABLE_SSL=1 && python app.py
 |------|------|------|
 | POST | `/music/upload` | 开始异步上传（返回 `{task_id}`，转码在后台执行） |
 | GET | `/music/upload/progress/<task_id>` | 查询上传/转码进度（JSON） |
+| GET | `/music/<id>.mp3` | 下载唱片 MP3（游戏内烧录唱片；权限同 m3u8 播放链接） |
 | POST | `/music/<id>/toggle` | 申请公开 / 转为私有 |
 | POST | `/music/<id>/delete` | 删除音频（本人或管理员） |
 

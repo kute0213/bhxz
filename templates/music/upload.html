@@ -10,7 +10,7 @@
             <h1 class="text-2xl sm:text-3xl font-bold flex items-center gap-2">
                 <i data-lucide="upload" class="w-6 h-6 text-gold-400"></i>上传音频
             </h1>
-            <p class="text-cream/60 text-sm mt-1">上传音频，供游戏内大喇叭播放；上传后自动转码为 m3u8</p>
+            <p class="text-cream/60 text-sm mt-1">上传音频，供游戏内大喇叭播放；自动转码为 m3u8 流与唱片 MP3（原文件不保留）</p>
         </div>
 
         <!-- 上传表单 -->
@@ -25,7 +25,7 @@
                     <label class="block text-sm font-medium mb-2 text-cream/80">音频文件</label>
                     <input type="file" id="file-input" name="audio_file" accept=".mp3,.wav,.ogg,.m4a,.flac,audio/*" required
                            class="input-field w-full px-4 py-3 rounded-lg">
-                    <p class="text-cream/50 text-xs mt-1">支持 mp3 / wav / ogg / m4a / flac，单文件不超过 100MB，上传后自动转码为 m3u8</p>
+                    <p class="text-cream/50 text-xs mt-1">支持 mp3 / wav / ogg / m4a / flac，单文件不超过 100MB；转码后生成 m3u8 在线播放流与唱片 MP3（游戏内电脑可下载烧录唱片），原始文件自动删除</p>
                 </div>
                 <label class="flex items-center gap-3 cursor-pointer select-none">
                     <input type="checkbox" id="is-public-input" name="is_public" value="1"
@@ -92,6 +92,10 @@
                                 class="copy-link-btn px-4 py-2 rounded-lg text-sm border border-cream/20 text-cream/80 hover:text-cream hover:border-gold-400/40 transition-colors flex items-center gap-2">
                             <i data-lucide="copy" class="w-4 h-4"></i>复制播放链接
                         </button>
+                        <button type="button" id="copy-mp3-btn"
+                                class="copy-link-btn px-4 py-2 rounded-lg text-sm border border-cream/20 text-cream/80 hover:text-cream hover:border-gold-400/40 transition-colors flex items-center gap-2">
+                            <i data-lucide="disc" class="w-4 h-4"></i>复制唱片 MP3 链接
+                        </button>
                         <a href="{{ url_for('main.my_music_page') }}" class="btn-secondary px-4 py-2 rounded-lg text-sm flex items-center gap-2">
                             <i data-lucide="folder-open" class="w-4 h-4"></i>前往我的音频
                         </a>
@@ -137,5 +141,5 @@
         to { background-position: -200% 0; }
     }
 </style>
-<script src="{{ url_for('static', filename='js/music_upload.js', v='2') }}"></script>
+<script src="{{ url_for('static', filename='js/music_upload.js', v='3') }}"></script>
 {% endblock %}

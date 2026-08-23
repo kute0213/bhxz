@@ -143,6 +143,11 @@ def get_music_file_path(music_id):
     return os.path.join(_music_dir(music_id), 'index.m3u8')
 
 
+def get_music_mp3_path(music_id):
+    """获取音频 MP3（唱片）文件的绝对路径（不校验是否存在）。"""
+    return os.path.join(_music_dir(music_id), 'index.mp3')
+
+
 def get_author_email(music_id):
     """获取音频上传者的邮箱（用于审核结果通知），无邮箱或不存在返回空字符串。"""
     conn = get_db()
@@ -198,24 +203,74 @@ def _probe_duration(src_path):
     return None
 
 
-def _build_transcode_cmd(src_path, playlist_path, seg_pattern):
-    """构造 ffmpeg 转码命令：音频统一转 AAC 并生成 HLS（m3u8 + ts）。
+def _build_transcode_cmd(src_path, playlist_path, seg_pattern, mp3_path, progress_file):
+    """构造 ffmpeg 转码命令：一次运行同时生成 HLS（m3u8+ts）与 MP3（唱片）。
 
-    -progress pipe:1 输出机器可读进度，-loglevel error 保证 stderr 仅包含
-    错误信息（避免管道缓冲阻塞）。
+    - MP3 供游戏内「电脑」下载后烧录成唱片；原音频源文件转码后删除。
+    - -progress <文件> 把机器可读进度写入独立文件（ffmpeg 逐次 flush），
+      后台轮询该文件计算真实百分比；-loglevel error 使 stderr 仅含错误。
     """
     cmd = [
         FFMPEG_BIN, '-y', '-loglevel', 'error', '-nostats',
-        '-i', src_path, '-vn',
         '-threads', str(FFMPEG_THREADS),
-        '-c:a', 'aac', '-b:a', '128k', '-ac', '2',
+        '-i', src_path,
+        # 输出1：HLS 流（统一 AAC 128k，供大喇叭在线播放）
+        '-map', '0:a', '-c:a', 'aac', '-b:a', '128k', '-ac', '2',
         '-hls_time', str(HLS_SEGMENT_SECONDS),
         '-hls_list_size', '0',
         '-hls_segment_filename', seg_pattern,
-        '-progress', 'pipe:1',
         '-f', 'hls', playlist_path,
+        # 输出2：MP3（唱片文件）
+        '-map', '0:a', '-c:a', 'libmp3lame', '-b:a', '192k', '-ac', '2',
+        '-id3v2_version', '3', mp3_path,
+        '-progress', progress_file,
     ]
     return cmd
+
+
+def _read_transcode_percent(progress_file, playlist_path, duration):
+    """读取 ffmpeg 转码进度百分比（0~99），无法计算时返回 None。
+
+    优先解析 -progress 文件中的 out_time_us；同时用 m3u8 已生成分片的
+    累计时长作补充（时长探测失败时仍能给出真实进度），取两者较大值。
+    """
+    if not duration:
+        return None
+    pct = None
+    # 方法1：-progress 文件
+    try:
+        if os.path.isfile(progress_file):
+            with open(progress_file, 'r', encoding='utf-8', errors='replace') as f:
+                content = f.read()
+            for line in content.splitlines():
+                if line.startswith('out_time_us='):
+                    try:
+                        us = int(line.split('=', 1)[1])
+                    except ValueError:
+                        us = None
+                    if us is not None:
+                        pct = us / 1_000_000.0 / duration * 100
+    except Exception:
+        pct = None
+    # 方法2：m3u8 分片累计时长
+    try:
+        if os.path.isfile(playlist_path):
+            seg_dur = 0.0
+            with open(playlist_path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    if line.startswith('#EXTINF:'):
+                        try:
+                            seg_dur += float(line.split(':', 1)[1].split(',', 1)[0])
+                        except (ValueError, IndexError):
+                            pass
+            if seg_dur > 0:
+                pct2 = seg_dur / duration * 100
+                pct = max(pct or 0.0, pct2)
+    except Exception:
+        pass
+    if pct is None:
+        return None
+    return min(99.0, max(0.0, pct))
 
 
 def _insert_music_record(user_id, username, title, status):
@@ -245,9 +300,16 @@ def _insert_music_record(user_id, username, title, status):
 
 
 def _finalize_music_files(work_dir, music_id):
-    """转码完成后：改写 m3u8 绝对路径 → 目录重命名为 <ID> 目录 → 记录 file_path。"""
+    """转码完成后：删除原音频源文件与临时日志 → 改写 m3u8 绝对路径 → 目录重命名。"""
     playlist_path = os.path.join(work_dir, 'index.m3u8')
     _rewrite_playlist_segments(playlist_path, music_id)
+    # 删除原始上传文件与临时进度/错误日志，仅保留 HLS（index.m3u8 + seg_*.ts）与唱片 MP3（index.mp3）
+    for name in os.listdir(work_dir):
+        if name.startswith('source.') or name in ('progress.log', 'transcode.err'):
+            try:
+                os.remove(os.path.join(work_dir, name))
+            except OSError:
+                pass
     final_dir = _music_dir(music_id)
     if os.path.isdir(final_dir):
         shutil.rmtree(final_dir, ignore_errors=True)
@@ -304,12 +366,14 @@ def upload_music(user_id, username, title, is_public, upload_file, ip_address):
         src_path = os.path.join(work_dir, f'source.{ext}')
         upload_file.save(src_path)
 
-        # 2. ffmpeg 转码为 HLS（音频统一转 AAC，生成 m3u8 + ts 分片）
+        # 2. ffmpeg 转码：同时生成 HLS（m3u8 + ts 分片）与 MP3（唱片）
         playlist_path = os.path.join(work_dir, 'index.m3u8')
         seg_pattern = os.path.join(work_dir, 'seg_%03d.ts')
-        cmd = _build_transcode_cmd(src_path, playlist_path, seg_pattern)
+        mp3_path = os.path.join(work_dir, 'index.mp3')
+        progress_file = os.path.join(work_dir, 'progress.log')
+        cmd = _build_transcode_cmd(src_path, playlist_path, seg_pattern, mp3_path, progress_file)
         proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
-        if proc.returncode != 0 or not os.path.isfile(playlist_path):
+        if proc.returncode != 0 or not os.path.isfile(playlist_path) or not os.path.isfile(mp3_path):
             detail = (proc.stderr or proc.stdout or '')[-400:]
             raise RuntimeError(f'音频转码失败：{detail}')
 
@@ -403,49 +467,49 @@ def _set_task(task_id, **kwargs):
 
 def _run_upload_task(task_id, user_id, username, title, is_public,
                      work_dir, src_path, ip_address):
-    """后台线程：运行 ffmpeg 转码，解析 -progress 输出，成功后落库。"""
+    """后台线程：运行 ffmpeg 转码（HLS+MP3），轮询进度，成功后落库。"""
     try:
         playlist_path = os.path.join(work_dir, 'index.m3u8')
         seg_pattern = os.path.join(work_dir, 'seg_%03d.ts')
-        cmd = _build_transcode_cmd(src_path, playlist_path, seg_pattern)
+        mp3_path = os.path.join(work_dir, 'index.mp3')
+        progress_file = os.path.join(work_dir, 'progress.log')
+        err_log = os.path.join(work_dir, 'transcode.err')
+        cmd = _build_transcode_cmd(src_path, playlist_path, seg_pattern, mp3_path, progress_file)
 
         with _upload_tasks_lock:
             duration = _upload_tasks.get(task_id, {}).get('duration')
 
-        proc = subprocess.Popen(
-            cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            text=True, encoding='utf-8', errors='replace',
-        )
-        # 解析 stdout 中的 -progress 输出（key=value 行），计算转码百分比
-        out_time_us = None
-        for line in proc.stdout:
-            line = line.strip()
-            if not line or '=' not in line:
-                continue
-            key, _, value = line.partition('=')
-            if key == 'out_time_us':
-                try:
-                    out_time_us = int(value)
-                except ValueError:
-                    out_time_us = None
-            elif key == 'progress' and value == 'continue' and out_time_us and duration:
-                percent = min(99.0, round(out_time_us / 1_000_000.0 / duration * 100, 1))
-                _set_task(task_id, percent=percent, message=f'正在转码… {percent:.0f}%')
-                out_time_us = None
+        _set_task(task_id, status='transcoding', percent=0, message='正在转码… 0%')
 
-        try:
-            proc.wait(timeout=300)
-        except subprocess.TimeoutExpired:
-            proc.kill()
-            proc.wait()
-            raise RuntimeError('音频转码超时')
-        stderr = proc.stderr.read() if proc.stderr else ''
+        # stderr 写文件避免管道阻塞；实时进度改由轮询 -progress 文件与 m3u8 分片获得
+        with open(err_log, 'w', encoding='utf-8', errors='replace') as errf:
+            proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=errf)
+            deadline = time.time() + 300
+            try:
+                while proc.poll() is None:
+                    pct = _read_transcode_percent(progress_file, playlist_path, duration)
+                    if pct is not None:
+                        p = round(pct, 1)
+                        _set_task(task_id, percent=p, message=f'正在转码… {p:.0f}%')
+                    if time.time() > deadline:
+                        proc.kill()
+                        proc.wait()
+                        raise RuntimeError('音频转码超时')
+                    time.sleep(0.2)
+                proc.wait(timeout=10)
+            finally:
+                if proc.poll() is None:
+                    proc.kill()
+                    proc.wait()
 
-        if proc.returncode != 0 or not os.path.isfile(playlist_path):
+        with open(err_log, 'r', encoding='utf-8', errors='replace') as f:
+            stderr = f.read()
+
+        if proc.returncode != 0 or not os.path.isfile(playlist_path) or not os.path.isfile(mp3_path):
             detail = (stderr or '')[-400:]
             raise RuntimeError(f'音频转码失败：{detail}' if detail else '音频转码失败')
 
-        # 落库 + 文件整理
+        # 落库 + 文件整理（自动删除原音频源文件）
         status = STATUS_PENDING if is_public else STATUS_PRIVATE
         music_id = _insert_music_record(user_id, username, title, status)
         if not music_id:

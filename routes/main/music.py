@@ -163,6 +163,29 @@ def serve_music_playlist(music_id):
     return resp
 
 
+@main_bp.route('/music/<int:music_id>.mp3')
+def serve_music_mp3(music_id):
+    """MP3 唱片文件，格式：/music/<编号>.mp3。
+
+    供游戏内「电脑」下载后烧录成唱片；访问权限与 m3u8 播放链接一致。
+    """
+    music = music_service.get_music(music_id)
+    if not music:
+        abort(404)
+    user = get_current_user()
+    if not _can_access(music, user):
+        abort(404)
+
+    mp3_path = music_service.get_music_mp3_path(music_id)
+    if not os.path.isfile(mp3_path):
+        abort(404)
+
+    resp = send_file(mp3_path, mimetype='audio/mpeg')
+    # 音频内容不可变，可放心缓存
+    resp.headers['Cache-Control'] = 'public, max-age=3600'
+    return resp
+
+
 @main_bp.route('/music/<int:music_id>/<path:filename>')
 def serve_music_segment(music_id, filename):
     """HLS 分片文件，格式：/music/<编号>/<分片>.ts。"""

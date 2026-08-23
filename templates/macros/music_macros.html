@@ -4,6 +4,7 @@
      {% from "macros/music_macros.html" import music_status_badge, music_copy_link_button, music_audio_player, music_player_assets %}
    - music_status_badge(status)        音频状态徽章（0=私有 1=待审核 2=已公开，历史 3=已驳回 归并为私有）
    - music_copy_link_button(url)       复制播放链接按钮（需 base.js 的 copy-link-btn 事件）
+   - music_mp3_link_button(music_id)   复制唱片 MP3 链接按钮（游戏内电脑烧录唱片用）
    - music_audio_player(music_id)      自定义音频播放器（进度/倍速/音量，HLS 播放）
    - music_player_assets()             播放器所需脚本（hls.js + music_player.js）
    使用 music_audio_player 的页面，须在 extra_script 块中调用 music_player_assets()。
@@ -25,6 +26,15 @@
         class="copy-link-btn px-3 py-2 rounded-lg text-xs border border-cream/20 text-cream/70 hover:text-cream hover:border-cream/40 transition-colors flex items-center gap-1.5"
         data-url="{{ url }}">
     <i data-lucide="copy" class="w-3.5 h-3.5"></i>复制链接
+</button>
+{%- endmacro %}
+
+{% macro music_mp3_link_button(music_id) -%}
+<button type="button"
+        class="copy-link-btn px-3 py-2 rounded-lg text-xs border border-cream/20 text-cream/70 hover:text-cream hover:border-cream/40 transition-colors flex items-center gap-1.5"
+        data-url="{{ request.host_url.rstrip('/') ~ '/music/' ~ music_id ~ '.mp3' }}"
+        title="复制唱片 MP3 链接（游戏内电脑下载后可烧录成唱片）">
+    <i data-lucide="disc" class="w-3.5 h-3.5"></i>唱片 MP3
 </button>
 {%- endmacro %}
 

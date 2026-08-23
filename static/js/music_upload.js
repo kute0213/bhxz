@@ -82,6 +82,8 @@
         desc.textContent = '音频「' + title + '」已上传并转码完成，当前状态：' + stateText + '。';
         var copyBtn = document.getElementById('copy-link-btn');
         if (copyBtn) copyBtn.setAttribute('data-url', link);
+        var copyMp3Btn = document.getElementById('copy-mp3-btn');
+        if (copyMp3Btn) copyMp3Btn.setAttribute('data-url', location.origin + '/music/' + musicId + '.mp3');
         refreshIcons();
         if (typeof Toast !== 'undefined') Toast.success('音频上传成功');
     }
@@ -128,11 +130,17 @@
                         showSuccess(task.music_id, task.title || '', task.status === 'done');
                         return;
                     }
-                    // transcoding：有真实百分比后切换为精确进度
-                    transcodeBar.classList.remove('is-indeterminate');
+                    // transcoding：有真实百分比后切换为精确进度条，否则保持不确定态动画
                     var percent = Math.min(99, Math.max(0, task.percent || 0));
-                    transcodeBar.style.width = percent + '%';
-                    transcodePercentText.textContent = Math.round(percent) + '%';
+                    if (percent > 0) {
+                        transcodeBar.classList.remove('is-indeterminate');
+                        transcodeBar.style.width = percent + '%';
+                        transcodePercentText.textContent = Math.round(percent) + '%';
+                    } else {
+                        transcodeBar.classList.add('is-indeterminate');
+                        transcodeBar.style.width = '100%';
+                        transcodePercentText.textContent = '0%';
+                    }
                     transcodeStatus.textContent = task.message || ('正在转码… ' + Math.round(percent) + '%');
                 })
                 .catch(function () {
@@ -225,6 +233,31 @@
             function done(ok) {
                 if (typeof Toast !== 'undefined') {
                     if (ok) Toast.success('播放链接已复制'); else Toast.error('复制失败，请手动复制');
+                }
+            }
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(url).then(function () { done(true); }, function () { done(false); });
+            } else {
+                var ta = document.createElement('textarea');
+                ta.value = url;
+                ta.style.position = 'fixed';
+                ta.style.opacity = '0';
+                document.body.appendChild(ta);
+                ta.select();
+                try { done(document.execCommand('copy')); } catch (_) { done(false); }
+                document.body.removeChild(ta);
+            }
+        });
+    }
+
+    var copyMp3Btn = document.getElementById('copy-mp3-btn');
+    if (copyMp3Btn) {
+        copyMp3Btn.addEventListener('click', function () {
+            var url = copyMp3Btn.getAttribute('data-url') || '';
+            if (!url) return;
+            function done(ok) {
+                if (typeof Toast !== 'undefined') {
+                    if (ok) Toast.success('唱片 MP3 链接已复制'); else Toast.error('复制失败，请手动复制');
                 }
             }
             if (navigator.clipboard && navigator.clipboard.writeText) {

@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "macros/music_macros.html" import music_status_badge, music_copy_link_button, music_audio_player, music_player_assets %}
+{% from "macros/music_macros.html" import music_status_badge, music_copy_link_button, music_mp3_link_button, music_audio_player, music_player_assets %}
 {% block title %}大喇叭音频管理{% endblock %}
 {% block content %}
 <section class="page-container py-12">
@@ -57,6 +57,7 @@
                         </div>
                         <div class="flex items-center gap-2 flex-shrink-0">
                             {{ music_copy_link_button(request.host_url.rstrip('/') ~ '/music/' ~ m.id ~ '.m3u8') }}
+                            {{ music_mp3_link_button(m.id) }}
                             <form method="POST" action="{{ url_for('admin.admin_music_review', music_id=m.id) }}" class="inline">
                                 <input type="hidden" name="action" value="approve">
                                 <button type="submit"

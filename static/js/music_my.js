@@ -5,7 +5,7 @@
             var url = btn.getAttribute('data-url') || '';
             function done(ok) {
                 if (typeof Toast !== 'undefined') {
-                    if (ok) Toast.success('播放链接已复制'); else Toast.error('复制失败，请手动复制');
+                    if (ok) Toast.success('链接已复制'); else Toast.error('复制失败，请手动复制');
                 }
             }
             if (navigator.clipboard && navigator.clipboard.writeText) {

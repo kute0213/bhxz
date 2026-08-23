@@ -419,6 +419,63 @@ def test_music_start_upload_validation():
     assert success is False and '格式' in msg
 
 
+def test_music_transcode_cmd_build():
+    """转码命令应同时生成 HLS 与唱片 MP3，并输出 -progress 进度文件。"""
+    cmd = music_service._build_transcode_cmd(
+        '/x/a.mp3', '/x/index.m3u8', '/x/seg_%03d.ts', '/x/index.mp3', '/x/progress.log')
+    joined = ' '.join(cmd)
+    assert '-f hls' in joined and '/x/index.m3u8' in joined, '缺少 HLS 输出'
+    assert 'libmp3lame' in joined and '/x/index.mp3' in joined, '缺少 MP3 唱片输出'
+    assert '-progress' in joined and '/x/progress.log' in joined, '缺少进度文件'
+    assert 'pipe:1' not in joined, '不应再使用 pipe:1 进度'
+
+
+def test_music_read_transcode_percent():
+    """转码进度解析：-progress out_time_us 与 m3u8 分片时长取较大值。"""
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        prog = os.path.join(d, 'progress.log')
+        with open(prog, 'w', encoding='utf-8') as f:
+            f.write('frame=100\nout_time_us=15000000\nprogress=continue\n')
+        playlist = os.path.join(d, 'index.m3u8')
+        with open(playlist, 'w', encoding='utf-8') as f:
+            f.write('#EXTM3U\n#EXTINF:10.0,\nseg_000.ts\n#EXTINF:10.0,\nseg_001.ts\n#EXT-X-ENDLIST\n')
+        # duration=40s：progress=37.5%，分片累计 20s=50% → 取 50%
+        pct = music_service._read_transcode_percent(prog, playlist, 40.0)
+        assert pct is not None and abs(pct - 50.0) < 0.01, f'应取较大值 50%，实际 {pct}'
+        # duration 未知 → None
+        assert music_service._read_transcode_percent(prog, playlist, None) is None
+        # 上限 99
+        prog2 = os.path.join(d, 'progress2.log')
+        with open(prog2, 'w', encoding='utf-8') as f:
+            f.write('out_time_us=99000000\nprogress=continue\n')
+        pct = music_service._read_transcode_percent(prog2, playlist, 40.0)
+        assert pct == 99.0, f'应封顶 99%，实际 {pct}'
+
+
+def test_music_mp3_path():
+    """MP3 唱片文件路径函数。"""
+    assert music_service.get_music_mp3_path(42) == os.path.join(
+        music_service._music_dir(42), 'index.mp3')
+
+
+def test_music_delete_removes_db_and_files():
+    """删除音频：数据库记录与文件目录（含 HLS / MP3）都被清理。"""
+    import shutil
+    owner = 10003
+    music_id = _insert_music(owner, 'owner', music_service.STATUS_PRIVATE)
+    final_dir = music_service._music_dir(music_id)
+    os.makedirs(final_dir, exist_ok=True)
+    for name in ('index.m3u8', 'index.mp3', 'seg_000.ts'):
+        with open(os.path.join(final_dir, name), 'w', encoding='utf-8') as f:
+            f.write('x')
+    ok, _msg = music_service.delete_music(music_id, owner, False, '127.0.0.1')
+    assert ok is True, f'删除应成功: {_msg}'
+    assert music_service.get_music(music_id) is None, '数据库记录应被删除'
+    assert not os.path.isdir(final_dir), '文件目录应被删除'
+    shutil.rmtree(final_dir, ignore_errors=True)
+
+
 # 运行所有测试
 if __name__ == '__main__':
     setup()
@@ -438,6 +495,10 @@ if __name__ == '__main__':
         test_music_review_email_builder,
         test_music_author_email,
         test_music_start_upload_validation,
+        test_music_transcode_cmd_build,
+        test_music_read_transcode_percent,
+        test_music_mp3_path,
+        test_music_delete_removes_db_and_files,
     ]
     for func in test_functions:
         try:
