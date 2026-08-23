@@ -8,6 +8,7 @@
 
 import io
 import os
+import shutil
 import sys
 import tempfile
 import zipfile
@@ -121,3 +122,103 @@ def test_download_rejects_invalid_zip():
     finally:
         if os.path.exists(dest):
             os.remove(dest)
+
+
+def _write(path, text):
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path, 'w', encoding='utf-8') as f:
+        f.write(text)
+
+
+def _read(path):
+    with open(path, 'r', encoding='utf-8') as f:
+        return f.read()
+
+
+def test_sync_preserves_protected_subdirectory():
+    """不替换列表支持子目录：scripts/ffmpeg 保持本地现状，其余内容正常同步。
+
+    场景：
+    - 仓库 src 与本地 dst 都有 scripts/ffmpeg 子目录（内容不同）
+    - 不替换列表填 scripts/ffmpeg
+    期望：ffmpeg 子目录完全保持本地（本地二进制不被覆盖、本地独有文件不丢、
+    仓库新增文件不新增）；scripts 下其它内容跟随仓库版本；本地独有文件经暂存机制恢复。
+    """
+    src_root = tempfile.mkdtemp(prefix='bhxz_src_')
+    dst_root = tempfile.mkdtemp(prefix='bhxz_dst_')
+    try:
+        # ---- 仓库版本（src）----
+        _write(os.path.join(src_root, 'run.py'), 'repo-run')
+        _write(os.path.join(src_root, 'build', 'build_static.py'), 'repo-build')
+        _write(os.path.join(src_root, 'ffmpeg', 'ffmpeg.exe'), 'repo-ffmpeg')
+        _write(os.path.join(src_root, 'ffmpeg', 'readme.txt'), 'repo-readme')
+
+        # ---- 本地旧版本（dst）----
+        _write(os.path.join(dst_root, 'run.py'), 'old-run')
+        _write(os.path.join(dst_root, 'local_only.txt'), 'local-only')
+        _write(os.path.join(dst_root, 'ffmpeg', 'ffmpeg.exe'), 'local-ffmpeg')
+        _write(os.path.join(dst_root, 'ffmpeg', 'extra.dll'), 'local-dll')
+
+        protected = ['scripts/ffmpeg']
+        updater._sync_item(src_root, dst_root, protected, item_rel='scripts')
+
+        # 普通文件被仓库版本替换
+        assert _read(os.path.join(dst_root, 'run.py')) == 'repo-run'
+        # 本地独有文件（仓库没有）经暂存机制恢复
+        assert os.path.isfile(os.path.join(dst_root, 'local_only.txt'))
+        assert _read(os.path.join(dst_root, 'local_only.txt')) == 'local-only'
+        # 受保护子目录 ffmpeg 完全保持本地现状
+        assert _read(os.path.join(dst_root, 'ffmpeg', 'ffmpeg.exe')) == 'local-ffmpeg', \
+            '受保护子目录不应被仓库版本覆盖'
+        assert os.path.isfile(os.path.join(dst_root, 'ffmpeg', 'extra.dll')), \
+            '受保护子目录的本地独有文件应保留'
+        assert not os.path.isfile(os.path.join(dst_root, 'ffmpeg', 'readme.txt')), \
+            '受保护子目录不复制仓库内容，仓库新增的 readme.txt 不应出现'
+        # 非受保护的其它子目录正常同步
+        assert _read(os.path.join(dst_root, 'build', 'build_static.py')) == 'repo-build'
+    finally:
+        shutil.rmtree(src_root, ignore_errors=True)
+        shutil.rmtree(dst_root, ignore_errors=True)
+
+
+def test_sync_deep_protected_subdirectory():
+    """深层子目录保护：不替换列表填 scripts/ffmpeg/bin 时，仅该深层路径保持本地。"""
+    src_root = tempfile.mkdtemp(prefix='bhxz_src_')
+    dst_root = tempfile.mkdtemp(prefix='bhxz_dst_')
+    try:
+        _write(os.path.join(src_root, 'ffmpeg', 'bin', 'ffmpeg.exe'), 'repo-ffmpeg')
+        _write(os.path.join(src_root, 'ffmpeg', 'ffmpeg.cfg'), 'repo-cfg')
+        _write(os.path.join(src_root, 'ffmpeg', 'bin', 'note.txt'), 'repo-note')
+
+        _write(os.path.join(dst_root, 'ffmpeg', 'bin', 'ffmpeg.exe'), 'local-ffmpeg')
+        _write(os.path.join(dst_root, 'ffmpeg', 'bin', 'extra.dll'), 'local-dll')
+
+        protected = ['scripts/ffmpeg/bin']
+        updater._sync_item(src_root, dst_root, protected, item_rel='scripts')
+
+        # 深层受保护路径保持本地
+        assert _read(os.path.join(dst_root, 'ffmpeg', 'bin', 'ffmpeg.exe')) == 'local-ffmpeg'
+        assert os.path.isfile(os.path.join(dst_root, 'ffmpeg', 'bin', 'extra.dll'))
+        # 仓库在受保护路径之外的新增文件仍会同步
+        assert _read(os.path.join(dst_root, 'ffmpeg', 'ffmpeg.cfg')) == 'repo-cfg'
+    finally:
+        shutil.rmtree(src_root, ignore_errors=True)
+        shutil.rmtree(dst_root, ignore_errors=True)
+
+
+def test_sync_local_only_preserve_without_protected():
+    """不替换列表为空时，本地独有文件仍经暂存机制恢复（不丢失）。"""
+    src_root = tempfile.mkdtemp(prefix='bhxz_src_')
+    dst_root = tempfile.mkdtemp(prefix='bhxz_dst_')
+    try:
+        _write(os.path.join(src_root, 'run.py'), 'repo-run')
+        _write(os.path.join(dst_root, 'run.py'), 'old-run')
+        _write(os.path.join(dst_root, 'local_asset.txt'), 'keep-me')
+
+        updater._sync_item(src_root, dst_root, [])
+
+        assert _read(os.path.join(dst_root, 'run.py')) == 'repo-run'
+        assert _read(os.path.join(dst_root, 'local_asset.txt')) == 'keep-me'
+    finally:
+        shutil.rmtree(src_root, ignore_errors=True)
+        shutil.rmtree(dst_root, ignore_errors=True)

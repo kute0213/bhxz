@@ -555,15 +555,25 @@ def _is_protected(rel_path, protected_paths=None):
 _PRESERVE_IGNORE_DIRS = {'__pycache__', '.git', 'node_modules', '.pytest_cache'}
 
 
-def _preserve_local_only(dst_root, src_root, preserve_dir):
+def _preserve_local_only(dst_root, src_root, preserve_dir, protected_paths=None, item_prefix=''):
     """把 dst_root 下、src_root 中不存在（本地独有）的路径暂存到 preserve_dir。
 
+    受保护子路径（不替换列表中的子目录）保持本地现状，不参与暂存。
     返回暂存了的相对路径列表；仓库版本已存在的文件不会被暂存。
     """
+    if protected_paths is None:
+        protected_paths = DEFAULT_PROTECTED_PATHS
+
     preserved = []
     for dirpath, dirnames, filenames in os.walk(dst_root):
         # 就地过滤掉无需保留的目录，避免深入遍历
         dirnames[:] = [d for d in dirnames if d not in _PRESERVE_IGNORE_DIRS]
+        rel_dir = os.path.relpath(dirpath, dst_root)
+        # 受保护子路径保持本地现状，无需暂存（同步时也不会被删除/覆盖）
+        dirnames[:] = [
+            d for d in dirnames
+            if not _is_subdir_protected((os.path.join(rel_dir, d) if rel_dir != '.' else d), protected_paths, item_prefix)
+        ]
         for name in dirnames + filenames:
             rel = os.path.relpath(os.path.join(dirpath, name), dst_root)
             if os.path.lexists(os.path.join(src_root, rel)):
@@ -591,6 +601,139 @@ def _restore_local_only(preserved, preserve_dir, dst_root):
             shutil.move(os.path.join(preserve_dir, rel), target)
         except Exception:
             pass
+
+
+def _is_subdir_protected(rel_child, protected_paths, item_prefix=''):
+    """判断相对 item 根目录的子路径 rel_child 是否命中「不替换列表」中的子目录路径。
+
+    item_prefix 为 item 相对项目根的路径（如 scripts），受保护列表项（如 scripts/ffmpeg）
+    也相对项目根，因此判断前先拼接前缀。
+    """
+    rel = (item_prefix.rstrip('/') + '/' + rel_child) if item_prefix else rel_child
+    return _is_protected(rel, protected_paths)
+
+
+def _rmtree_skip_protected(root, protected_paths=None, item_prefix=''):
+    """删除 root 下的内容，但跳过受保护子路径（保留本地现状）。
+
+    受保护子目录不会被删除（也不深入遍历其内容）。root 变空后尝试删除 root 本身；
+    若因保留受保护子路径而无法删除则保留（后续复制阶段直接覆盖）。
+    文件被占用时重试 3 次（兼容 Windows）。
+    """
+    if protected_paths is None:
+        protected_paths = DEFAULT_PROTECTED_PATHS
+
+    def _try(func, path):
+        for attempt in range(3):
+            try:
+                func(path)
+                return True
+            except Exception:
+                time.sleep(0.5)
+        return False
+
+    for dirpath, dirnames, filenames in os.walk(root, topdown=True):
+        rel_dir = os.path.relpath(dirpath, root)
+        # 受保护子目录不深入遍历（保留其全部内容）
+        dirnames[:] = [
+            d for d in dirnames
+            if not _is_subdir_protected((os.path.join(rel_dir, d) if rel_dir != '.' else d), protected_paths, item_prefix)
+        ]
+        for fn in filenames:
+            _try(os.remove, os.path.join(dirpath, fn))
+        # 删除已空的子目录（受保护目录因内容保留通常不会为空）
+        for d in list(os.listdir(dirpath)):
+            full = os.path.join(dirpath, d)
+            if os.path.isdir(full) and not os.path.islink(full) and not os.listdir(full):
+                _try(os.rmdir, full)
+
+    # root 变空则删除 root 本身（保留受保护子路径时不会为空，跳过）
+    if os.path.isdir(root) and not os.path.islink(root):
+        try:
+            if not os.listdir(root):
+                _try(os.rmdir, root)
+        except Exception:
+            pass
+
+
+def _copy_tree_skip_protected(src, dst, protected_paths=None, item_prefix=''):
+    """把 src 目录复制到 dst，跳过受保护子路径（不覆盖本地保留的内容）。返回复制的文件数。"""
+    if protected_paths is None:
+        protected_paths = DEFAULT_PROTECTED_PATHS
+
+    copied = 0
+    for dirpath, dirnames, filenames in os.walk(src):
+        rel_dir = os.path.relpath(dirpath, src)
+        # 受保护子目录不复制（保持本地现状）
+        dirnames[:] = [
+            d for d in dirnames
+            if not _is_subdir_protected((os.path.join(rel_dir, d) if rel_dir != '.' else d), protected_paths, item_prefix)
+        ]
+        target_dir = os.path.join(dst, rel_dir) if rel_dir != '.' else dst
+        os.makedirs(target_dir, exist_ok=True)
+        for fn in filenames:
+            try:
+                shutil.copy2(os.path.join(dirpath, fn), os.path.join(target_dir, fn))
+                copied += 1
+            except Exception:
+                pass
+    return copied
+
+
+def _sync_item(src, dst, protected_paths, item_rel='', log=None):
+    """同步单个顶层项目：删除本地旧版本 → 复制仓库新版本 → 恢复本地独有文件。
+
+    - 顶层 item 命中不替换列表时由调用方跳过，本函数仅处理「顶层不保护、内部子路径可能受保护」的情况。
+    - item_rel 为 item 相对项目根的路径（如 scripts），用于把受保护子路径（如 scripts/ffmpeg）
+      从相对项目根转换为相对 item 根进行匹配。
+    - 删除与复制都会跳过受保护子路径（如 scripts/ffmpeg），使其保持本地现状。
+    - 返回复制的文件数量。
+    """
+    if log is None:
+        log = lambda msg: None
+
+    processed = 0
+    preserve_dir = None
+    preserved = []
+    if os.path.isdir(dst) and os.path.isdir(src):
+        try:
+            preserve_dir = tempfile.mkdtemp(prefix='bhxz_preserve_')
+            preserved = _preserve_local_only(dst, src, preserve_dir, protected_paths, item_prefix=item_rel)
+        except Exception:
+            preserve_dir = None
+            preserved = []
+
+    if os.path.isdir(dst):
+        log(f'删除旧目录: {os.path.basename(dst)}/')
+        _rmtree_skip_protected(dst, protected_paths, item_prefix=item_rel)
+    elif os.path.isfile(dst):
+        log(f'删除旧文件: {os.path.basename(dst)}')
+        try:
+            os.remove(dst)
+        except Exception:
+            pass
+
+    if os.path.isdir(src):
+        # 确保父目录存在
+        parent = os.path.dirname(dst) if os.path.dirname(dst) else APP_ROOT
+        os.makedirs(parent, exist_ok=True)
+        processed = _copy_tree_skip_protected(src, dst, protected_paths, item_prefix=item_rel)
+    else:
+        # 单个文件直接复制
+        os.makedirs(APP_ROOT, exist_ok=True)
+        try:
+            shutil.copy2(src, dst)
+        except Exception:
+            pass
+        processed += 1
+
+    # 恢复本地独有文件（与仓库版本冲突时以仓库为准）
+    if preserved and preserve_dir:
+        _restore_local_only(preserved, preserve_dir, dst)
+    if preserve_dir:
+        shutil.rmtree(preserve_dir, ignore_errors=True)
+
+    return processed
 
 
 # ---------------------------------------------------------------------------
@@ -856,81 +999,18 @@ def _run_update():
             dst = os.path.join(APP_ROOT, item)
 
             _add_event('log', {'message': f'  → 同步: {item}'})
+            _add_event('progress', {
+                'percent': 75 + int(processed * remaining_pct / total_files),
+                'message': f'正在同步 {item}/...',
+            })
 
-            # 删除本地版本（如果存在）
-            # 删除前先把「本地独有」的文件暂存（如 scripts/ffmpeg 下的二进制），
-            # 复制完成后恢复，避免仓库里没有的本地资产被误删。
-            preserve_dir = None
-            preserved = []
-            if os.path.isdir(dst) and os.path.isdir(src):
-                try:
-                    preserve_dir = tempfile.mkdtemp(prefix='bhxz_preserve_')
-                    preserved = _preserve_local_only(dst, src, preserve_dir)
-                except Exception:
-                    preserve_dir = None
-                    preserved = []
-
-            if os.path.isdir(dst):
-                _add_event('log', {'message': f'    删除旧目录: {item}/'})
-                _add_event('progress', {
-                    'percent': 75 + int(processed * remaining_pct / total_files),
-                    'message': f'正在删除 {item}/...',
-                })
-
-                def _onerror(func, path, exc_info):
-                    for attempt in range(3):
-                        try:
-                            time.sleep(0.5)
-                            func(path)
-                            return
-                        except Exception:
-                            pass
-
-                shutil.rmtree(dst, onerror=_onerror)
-            elif os.path.isfile(dst):
-                _add_event('log', {'message': f'    删除旧文件: {item}'})
-                try:
-                    os.remove(dst)
-                except Exception:
-                    pass
-
-            # 复制新版本
-            if os.path.isdir(src):
-                # 确保父目录存在
-                os.makedirs(os.path.dirname(dst) if os.path.dirname(dst) else APP_ROOT, exist_ok=True)
-                # 递归复制整个目录
-                for dirpath, dirnames, filenames in os.walk(src):
-                    rel_dir = os.path.relpath(dirpath, src)
-                    target_dir = os.path.join(dst, rel_dir) if rel_dir != '.' else dst
-                    os.makedirs(target_dir, exist_ok=True)
-                    for fn in filenames:
-                        src_file = os.path.join(dirpath, fn)
-                        dst_file = os.path.join(target_dir, fn)
-                        try:
-                            shutil.copy2(src_file, dst_file)
-                        except Exception:
-                            pass
-                        processed += 1
-                        if processed % max(1, total_files // 20) == 0:
-                            pct = 75 + int(processed * remaining_pct / total_files)
-                            _add_event('progress', {
-                                'percent': min(pct, 94),
-                                'message': f'正在同步 {item}/...',
-                            })
-            else:
-                # 单个文件直接复制
-                os.makedirs(APP_ROOT, exist_ok=True)
-                try:
-                    shutil.copy2(src, dst)
-                except Exception:
-                    pass
-                processed += 1
-
-            # 恢复本地独有文件（与仓库版本冲突时以仓库为准）
-            if preserved and preserve_dir:
-                _restore_local_only(preserved, preserve_dir, dst)
-            if preserve_dir:
-                shutil.rmtree(preserve_dir, ignore_errors=True)
+            # 删除本地旧版本 → 复制仓库新版本 → 恢复本地独有文件
+            # 顶层 item 不在不替换列表时，其内部子路径（如 scripts/ffmpeg）仍可能被
+            # 不替换列表保护——删除与复制都会跳过受保护子路径，使其保持本地现状。
+            processed += _sync_item(
+                src, dst, protected_paths, item_rel=item,
+                log=lambda msg: _add_event('log', {'message': f'    {msg}'}),
+            )
 
         # 清理临时目录
         try:

@@ -83,11 +83,11 @@
                 <div>
                     <label for="excluded-files" class="block text-sm font-medium mb-2">
                         不替换的文件/文件夹
-                        <span class="text-cream/50 text-xs ml-2">逗号分隔，这些路径在更新时不会被删除或覆盖</span>
+                        <span class="text-cream/50 text-xs ml-2">逗号分隔，支持子目录路径（如 scripts/ffmpeg），这些路径在更新时不会被删除或覆盖</span>
                     </label>
                     <textarea id="excluded-files" rows="3"
                               class="w-full px-3 py-2 bg-forest-900/60 border border-cream/20 rounded-lg text-sm focus:outline-none focus:border-gold-400 transition-colors resize-y font-mono"
-                              placeholder="site.duckdb,backups,uploads,ssl,.env"></textarea>
+                              placeholder="site.duckdb,backups,uploads,ssl,.env,scripts/ffmpeg"></textarea>
                 </div>
                 <!-- GitHub 代理列表 -->
                 <div>
