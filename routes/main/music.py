@@ -1,7 +1,8 @@
 """大喇叭音频路由：板块页面、独立上传页、上传进度、播放、删除、公开切换。
 
 薄层：仅负责 HTTP 请求解析/响应构造，业务逻辑委托给 services。
-播放链接格式：/music/<音频ID>.m3u8（公开音频所有人可播，私有仅本人/管理员可播）。
+播放链接格式：/music/<音频ID>.m3u8（任意音频均可凭链接访问——含私有/待审核，
+仅在公开列表中展示已公开音频；私有仅表示「不公开列出」而非「限制访问」）。
 上传采用异步任务：POST /music/upload 返回 task_id，前端轮询 /music/upload/progress/<task_id>。
 """
 
@@ -22,15 +23,6 @@ from core.auth import login_required, get_current_user
 from config import UPLOAD_MUSIC_DIR
 from routes.main import main_bp
 from services import music_service
-
-
-def _can_access(music, user):
-    """是否有权限播放音频：已公开任意访问；其余仅本人或管理员。"""
-    if music['status'] == music_service.STATUS_PUBLIC:
-        return True
-    if not user:
-        return False
-    return user['id'] == music['user_id'] or bool(user.get('is_admin'))
 
 
 @main_bp.route('/music')
@@ -145,12 +137,12 @@ def delete_music(music_id):
 
 @main_bp.route('/music/<int:music_id>.m3u8')
 def serve_music_playlist(music_id):
-    """HLS 播放列表，格式：/music/<编号>.m3u8。"""
+    """HLS 播放列表，格式：/music/<编号>.m3u8。
+
+    所有音频（含私有/待审核）均可凭链接播放，私有仅表示不在公开列表中展示。
+    """
     music = music_service.get_music(music_id)
     if not music:
-        abort(404)
-    user = get_current_user()
-    if not _can_access(music, user):
         abort(404)
 
     playlist_path = music_service.get_music_file_path(music_id)
@@ -167,13 +159,11 @@ def serve_music_playlist(music_id):
 def serve_music_mp3(music_id):
     """MP3 唱片文件，格式：/music/<编号>.mp3。
 
-    供游戏内「电脑」下载后烧录成唱片；访问权限与 m3u8 播放链接一致。
+    供游戏内「电脑」下载后烧录成唱片；访问权限与 m3u8 播放链接一致
+    （所有音频均可凭链接访问，私有仅表示不在公开列表中展示）。
     """
     music = music_service.get_music(music_id)
     if not music:
-        abort(404)
-    user = get_current_user()
-    if not _can_access(music, user):
         abort(404)
 
     mp3_path = music_service.get_music_mp3_path(music_id)
@@ -188,12 +178,12 @@ def serve_music_mp3(music_id):
 
 @main_bp.route('/music/<int:music_id>/<path:filename>')
 def serve_music_segment(music_id, filename):
-    """HLS 分片文件，格式：/music/<编号>/<分片>.ts。"""
+    """HLS 分片文件，格式：/music/<编号>/<分片>.ts。
+
+    所有音频（含私有/待审核）均可凭链接访问，私有仅表示不在公开列表中展示。
+    """
     music = music_service.get_music(music_id)
     if not music:
-        abort(404)
-    user = get_current_user()
-    if not _can_access(music, user):
         abort(404)
 
     base_dir = os.path.abspath(os.path.join(UPLOAD_MUSIC_DIR, str(music_id)))

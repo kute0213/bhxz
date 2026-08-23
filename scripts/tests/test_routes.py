@@ -267,6 +267,64 @@ def test_template_urlfor_endpoints_resolve():
         raise AssertionError("模板引用了未注册的端点（将导致 500）:\n" + "\n".join(sorted(missing)))
 
 
+def test_private_music_accessible():
+    """私有/待审核音频应可凭链接匿名访问（m3u8 / MP3 / 分片均返回 200）。
+
+    访问控制已放宽：所有音频均可直接访问（无需登录），
+    私有仅表示该音频不会出现在公开音频列表中。
+    """
+    import shutil
+    import time
+    from core.db import get_db
+    from services import music_service
+
+    # 插入一条私有音频记录
+    conn = get_db()
+    conn.execute(
+        "INSERT INTO music (user_id, username, title, file_path, status, created_at) "
+        "VALUES (?, ?, ?, '', ?, ?)",
+        (999999, 'anon_owner', '私有链接测试', music_service.STATUS_PRIVATE,
+         time.strftime('%Y-%m-%d %H:%M:%S')),
+    )
+    conn.commit()
+    music_id = conn.execute("SELECT MAX(id) FROM music").fetchone()[0]
+    conn.close()
+
+    final_dir = music_service._music_dir(music_id)
+    os.makedirs(final_dir, exist_ok=True)
+    with open(os.path.join(final_dir, 'index.m3u8'), 'w', encoding='utf-8') as f:
+        f.write('#EXTM3U\n#EXTINF:10.0,\n/music/%d/seg_000.ts\n#EXT-X-ENDLIST\n' % music_id)
+    with open(os.path.join(final_dir, 'index.mp3'), 'w', encoding='utf-8') as f:
+        f.write('ID3')
+    with open(os.path.join(final_dir, 'seg_000.ts'), 'w', encoding='utf-8') as f:
+        f.write('ts')
+
+    # 匿名（未登录）访问私有音频的播放/唱片/分片链接应全部 200
+    client = _app.test_client()
+    bad = []
+    for path, expected in [
+        ('/music/%d.m3u8' % music_id, 200),
+        ('/music/%d.mp3' % music_id, 200),
+        ('/music/%d/seg_000.ts' % music_id, 200),
+    ]:
+        try:
+            resp = client.get(path)
+            if resp.status_code != expected:
+                bad.append(f"{path} -> {resp.status_code}")
+        except Exception as e:
+            bad.append(f"{path} -> 异常: {e}")
+
+    # 清理
+    try:
+        music_service.delete_music(music_id, 999999, False, '127.0.0.1')
+    except Exception:
+        pass
+    shutil.rmtree(final_dir, ignore_errors=True)
+
+    if bad:
+        raise AssertionError("私有音频匿名访问失败: " + "; ".join(bad))
+
+
 # 运行所有测试
 if __name__ == '__main__':
     setup()
@@ -277,6 +335,7 @@ if __name__ == '__main__':
     test_all_routes()
     test_authenticated_pages_render()
     test_template_urlfor_endpoints_resolve()
+    test_private_music_accessible()
     print()
     print("=" * 60)
     print("  所有路由检测通过！")
