@@ -3,6 +3,7 @@
 ## [Unreleased]
 
 ### 修复
+- **「复制链接」按钮更名为「复制广播m3u链接」**：公开列表 / 我的音频 / 管理员审核队列 / 上传成功卡片中的广播链接复制按钮文案统一改为「复制广播m3u链接」（并补充 tooltip 说明用于游戏内大喇叭在线播放），与「唱片 MP3」「时长 Ns」按钮语义区分更清晰（`templates/macros/music_macros.html`、`templates/music/upload.html`）
 - **修复播放器进度条圆点不跟随进度、倍速/音量弹层被卡片遮挡**：
   - 进度条圆点（`.mp-thumb`）此前始终停在进度条最前端——`setFill()` 只更新了填充条宽度，从未更新圆点的 `left` 位置，现已同步设置 `thumb.style.left = pct%`，圆点随播放进度实时移动（拖动 seek 时同样跟随）
   - 倍速/音量弹层向上展开时被卡片裁切/遮挡——根因是 `.pixel-card` 上 `contain: paint` 与 `content-visibility: auto` 会强制裁切溢出内容，`overflow:visible` 无法覆盖；现为内含播放器的卡片显式添加 `.music-card` 修饰类，降级为 `contain: layout style` + `content-visibility: visible`，弹层可正常越出卡片边界显示（`static/css/base.css`，`templates/music/list.html`、`templates/music/my.html`、`templates/admin/admin_music.html` 同步添加类）
