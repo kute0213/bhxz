@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "macros/music_macros.html" import music_status_badge, music_copy_link_button, music_audio_player %}
 {% block title %}大喇叭音频管理{% endblock %}
 {% block content %}
 <section class="page-container py-12">
@@ -54,14 +55,8 @@
                         </div>
                     </div>
                     <div class="flex items-center gap-2 flex-shrink-0">
-                        <button type="button"
-                                class="copy-link-btn px-3 py-2 rounded-lg text-xs border border-cream/20 text-cream/70 hover:text-cream hover:border-cream/40 transition-colors flex items-center gap-1.5"
-                                data-url="{{ request.host_url.rstrip('/') }}/music/{{ m.id }}.m3u8">
-                            <i data-lucide="copy" class="w-3.5 h-3.5"></i>复制链接
-                        </button>
-                        <audio controls preload="none" class="h-9 w-32 sm:w-44">
-                            <source src="{{ url_for('main.serve_music_playlist', music_id=m.id) }}" type="application/vnd.apple.mpegurl">
-                        </audio>
+                        {{ music_copy_link_button(request.host_url.rstrip('/') ~ '/music/' ~ m.id ~ '.m3u8') }}
+                        {{ music_audio_player(m.id) }}
                         <form method="POST" action="{{ url_for('admin.admin_music_review', music_id=m.id) }}" class="inline">
                             <input type="hidden" name="action" value="approve">
                             <button type="submit"
@@ -114,15 +109,7 @@
                             </td>
                             <td class="px-4 py-3 text-cream/70">{{ m.username or '未知' }}</td>
                             <td class="px-4 py-3 text-center">
-                                {% if m.status == 2 %}
-                                <span class="inline-block px-2 py-1 bg-green-500/20 text-green-300 rounded text-xs font-medium">已公开</span>
-                                {% elif m.status == 1 %}
-                                <span class="inline-block px-2 py-1 bg-yellow-500/20 text-yellow-300 rounded text-xs font-medium">待审核</span>
-                                {% elif m.status == 3 %}
-                                <span class="inline-block px-2 py-1 bg-red-500/20 text-red-300 rounded text-xs font-medium">已驳回</span>
-                                {% else %}
-                                <span class="inline-block px-2 py-1 bg-cream/10 text-cream/60 rounded text-xs font-medium">私有</span>
-                                {% endif %}
+                                {{ music_status_badge(m.status) }}
                             </td>
                             <td class="px-4 py-3 text-cream/60">{{ m.created_at[:10] }}</td>
                             <td class="px-4 py-3">

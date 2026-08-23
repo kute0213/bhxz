@@ -164,6 +164,20 @@ body.has-background-image .pixel-card {
         inset 0 0.5px 0 rgba(255, 255, 255, 0.08);
 }
 
+/* 大喇叭音频播放器 - 磨砂玻璃质感 */
+.music-audio {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 10px;
+    backdrop-filter: blur(10px) saturate(110%);
+    -webkit-backdrop-filter: blur(10px) saturate(110%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+.music-audio:focus-visible {
+    outline: none;
+    border-color: rgba(244, 208, 63, 0.4);
+}
+
 /* 磨砂玻璃按钮 - 紫色蚀刻玻璃质感 */
 .btn-primary {
     background: rgba(139, 92, 246, 0.12);

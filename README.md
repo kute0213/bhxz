@@ -125,6 +125,7 @@ python scripts/build/package.py
 - 支持 mp3 / wav / ogg / m4a / flac，单文件不超过 100MB（依赖 ffmpeg）
 - 自动调用内置 ffmpeg：Windows 用 `scripts/ffmpeg/ffmpeg.exe`，Linux/macOS 用 `scripts/ffmpeg/ffmpeg`，未内置时回退系统 PATH 中的 `ffmpeg`
 - **公开需审核**：申请公开的音频进入「待审核」，管理员通过后才在游戏内大喇叭展示；驳回后用户可转为私有或删除；已公开转私有再申请公开需重新审核
+- **审核结果邮件通知**：管理员通过/驳回公开申请后，自动向上传者邮箱发送磨砂玻璃风格的审核结果邮件（通过 / 未通过状态卡），邮件未启用或上传者无邮箱时自动跳过
 - 音频状态：私有 / 待审核 / 已公开 / 已驳回，用户可在「我的音频」中查看并管理
 - 管理员可在后台审核公开申请、查看全部音频并一键下架（删除数据库记录并同步删除音频文件）
 - 音频文件存放在 `uploads/music/<音频ID>/`，删除记录时自动清理对应目录，无文件残留
@@ -262,6 +263,8 @@ export ENABLE_SSL=1 && python app.py
 - 动态背景光球（CSS `@keyframes` 动画），降低透明度使光晕更柔和
 - 全局细微噪点纹理（SVG `feTurbulence`），模拟蚀刻玻璃表面微观散射
 - **滚动收缩导航栏**：向下滚动后导航栏收缩为居中漂浮的椭圆胶囊，磨砂质感更凝实，弹性缓出动画（`prefers-reduced-motion` 可降级）
+- **邮件模板同款磨砂玻璃**：`templates/emails/base.html` 统一暗绿金黄玻璃卡片（背景光晕 + 噪点纹理 + 光线散射层 + 顶部高光描边 + 状态卡），验证码 / 指南审核 / 音频审核 / 广播邮件共用同一外层与样式
+- **模板宏复用**：`templates/macros/music_macros.html` 提取音频状态徽章、复制链接按钮、HLS 播放器为公共宏，`music/list.html` 与 `admin/admin_music.html` 统一调用，消除重复代码
 
 ### 交互效果
 

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "macros/music_macros.html" import music_status_badge, music_copy_link_button, music_audio_player %}
 {% block title %}大喇叭音频{% endblock %}
 {% block content %}
 <section class="page-container py-12">
@@ -87,14 +88,8 @@
                         </div>
                     </div>
                     <div class="flex items-center gap-2 flex-shrink-0">
-                        <button type="button"
-                                class="copy-link-btn px-3 py-2 rounded-lg text-xs border border-cream/20 text-cream/70 hover:text-cream hover:border-cream/40 transition-colors flex items-center gap-1.5"
-                                data-url="{{ request.host_url.rstrip('/') }}/music/{{ m.id }}.m3u8">
-                            <i data-lucide="copy" class="w-3.5 h-3.5"></i>复制链接
-                        </button>
-                        <audio controls preload="none" class="h-9 w-32 sm:w-44">
-                            <source src="{{ url_for('main.serve_music_playlist', music_id=m.id) }}" type="application/vnd.apple.mpegurl">
-                        </audio>
+                        {{ music_copy_link_button(request.host_url.rstrip('/') ~ '/music/' ~ m.id ~ '.m3u8') }}
+                        {{ music_audio_player(m.id) }}
                     </div>
                 </div>
                 {% endfor %}
@@ -122,17 +117,9 @@
                         <i data-lucide="music" class="w-5 h-5 text-gold-400"></i>
                     </div>
                     <div class="flex-1 min-w-0">
-                        <div class="font-bold text-cream truncate">
+                        <div class="font-bold text-cream truncate flex flex-wrap items-center gap-2">
                             {{ m.title }}
-                            {% if m.status == 2 %}
-                            <span class="ml-1 px-2 py-0.5 rounded text-xs font-bold bg-green-500/20 text-green-300 border border-green-500/30">已公开</span>
-                            {% elif m.status == 1 %}
-                            <span class="ml-1 px-2 py-0.5 rounded text-xs font-bold bg-yellow-500/20 text-yellow-300 border border-yellow-500/30">待审核</span>
-                            {% elif m.status == 3 %}
-                            <span class="ml-1 px-2 py-0.5 rounded text-xs font-bold bg-red-500/20 text-red-300 border border-red-500/30">已驳回</span>
-                            {% else %}
-                            <span class="ml-1 px-2 py-0.5 rounded text-xs font-bold bg-cream/10 text-cream/60 border border-cream/20">私有</span>
-                            {% endif %}
+                            {{ music_status_badge(m.status) }}
                         </div>
                         <div class="text-xs text-cream/50 mt-1">
                             {{ (m.created_at or '')[:10] }}
@@ -141,11 +128,7 @@
                         </div>
                     </div>
                     <div class="flex items-center gap-2 flex-shrink-0">
-                        <button type="button"
-                                class="copy-link-btn px-3 py-2 rounded-lg text-xs border border-cream/20 text-cream/70 hover:text-cream hover:border-cream/40 transition-colors flex items-center gap-1.5"
-                                data-url="{{ request.host_url.rstrip('/') }}/music/{{ m.id }}.m3u8">
-                            <i data-lucide="copy" class="w-3.5 h-3.5"></i>复制链接
-                        </button>
+                        {{ music_copy_link_button(request.host_url.rstrip('/') ~ '/music/' ~ m.id ~ '.m3u8') }}
                         <form method="POST" action="{{ url_for('main.toggle_music_public', music_id=m.id) }}" class="inline">
                             <button type="submit"
                                     class="px-3 py-2 rounded-lg text-xs border transition-colors flex items-center gap-1.5

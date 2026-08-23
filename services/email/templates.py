@@ -5,12 +5,14 @@
 - verification_code.html 验证码邮件
 - guide_review_pending.html 新指南待审核通知
 - guide_review_result.html  指南审核结果通知
+- music_review_result.html  音频公开审核结果通知
 - broadcast_message.html    管理员广播消息（Markdown）
 
-对外暴露四个构建函数，保持与原接口完全兼容：
+对外暴露五个构建函数，保持与原接口完全兼容：
 - verification_code(code, purpose, expire_minutes)        验证码邮件
 - guide_review_pending(title, author_name, is_edit)       新指南待审核通知
-- guide_review_result(title, approved, reason='')         审核结果通知
+- guide_review_result(title, approved, reason='')         指南审核结果通知
+- music_review_result(title, approved)                    音频公开审核结果通知
 - broadcast_message(subject, markdown_body, sender_name)  管理员广播消息
 """
 
@@ -109,6 +111,35 @@ def guide_review_result(title: str, approved: bool, reason: str = '') -> str:
         greeting=greeting,
         status=status,
         reason=reason,
+    )
+
+
+def music_review_result(title: str, approved: bool) -> str:
+    """构建音频公开审核结果通知邮件 HTML。
+
+    Args:
+        title: 音频标题
+        approved: 是否通过
+
+    Returns:
+        邮件 HTML 字符串
+    """
+    if approved:
+        title_text = '音频公开审核通过'
+        color = '#4ade80'
+        status = '已通过审核，现已展示在游戏内大喇叭。'
+    else:
+        title_text = '音频公开审核未通过'
+        color = '#f87171'
+        status = '未通过审核。'
+
+    return _render(
+        'music_review_result.html',
+        title=title_text,
+        title_color=color,
+        music_title=title,
+        approved=approved,
+        status=status,
     )
 
 

@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block content %}
+<p>您好！</p>
+<p>您申请公开的大喇叭音频：</p>
+<div class="mail-highlight">{{ music_title }}</div>
+{% if approved %}
+<div class="mail-status mail-status-success">
+    <span class="mail-status-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+    </span>
+    <div class="mail-status-text">
+        <div class="mail-status-title">审核通过</div>
+        <div class="mail-status-desc">该音频已展示在游戏内大喇叭，所有用户均可看到并播放。</div>
+    </div>
+</div>
+{% else %}
+<div class="mail-status mail-status-fail">
+    <span class="mail-status-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+    </span>
+    <div class="mail-status-text">
+        <div class="mail-status-title">审核未通过</div>
+        <div class="mail-status-desc">您可以将该音频转为私有，或直接删除。</div>
+    </div>
+</div>
+{% endif %}
+<p class="mail-muted">如需修改，可在「大喇叭音频 - 我的音频」中管理该音频。</p>
+{% endblock %}

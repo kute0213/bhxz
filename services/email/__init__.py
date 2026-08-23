@@ -12,5 +12,6 @@ from .templates import (
     broadcast_message,
     guide_review_pending,
     guide_review_result,
+    music_review_result,
     verification_code,
 )

@@ -120,6 +120,20 @@ def get_music_file_path(music_id):
     return os.path.join(_music_dir(music_id), 'index.m3u8')
 
 
+def get_author_email(music_id):
+    """获取音频上传者的邮箱（用于审核结果通知），无邮箱或不存在返回空字符串。"""
+    conn = get_db()
+    try:
+        row = conn.execute(
+            "SELECT u.email FROM music m LEFT JOIN users u ON m.user_id = u.id "
+            "WHERE m.id = ?",
+            (music_id,),
+        ).fetchone()
+        return (row['email'] or '') if row else ''
+    finally:
+        conn.close()
+
+
 # ---------------------------------------------------------------------------
 # 上传 / 转码
 # ---------------------------------------------------------------------------

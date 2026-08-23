@@ -10,7 +10,7 @@ sys.path.insert(0, PROJECT_ROOT)
 from core.db import init_db, get_db
 from core.auth import hash_password, validate_password, verify_password
 from services.captcha import captcha_service, verify_captcha
-from services.email import email_code_service
+from services.email import email_code_service, music_review_result
 from services.attachment_service import parse_attachment_json, save_attachments, clean_attachments
 from services.user_service import register, login, change_password, change_username
 from services import music_service
@@ -316,6 +316,44 @@ def test_music_status_machine():
             conn.close()
 
 
+def test_music_review_email_builder():
+    """音频审核结果邮件 HTML：通过/驳回状态卡正确渲染。"""
+    passed_html = music_review_result('测试音频A', True)
+    assert '音频公开审核通过' in passed_html
+    assert '测试音频A' in passed_html
+    assert 'mail-status-success' in passed_html
+    assert '审核通过' in passed_html
+
+    rejected_html = music_review_result('测试音频B', False)
+    assert '音频公开审核未通过' in rejected_html
+    assert '测试音频B' in rejected_html
+    assert 'mail-status-fail' in rejected_html
+    assert '审核未通过' in rejected_html
+
+
+def test_music_author_email():
+    """音频上传者邮箱查询：有邮箱返回、无邮箱返回空、不存在返回空。"""
+    email = 'music-author@example.com'
+    conn = get_db()
+    try:
+        conn.execute(
+            "INSERT OR IGNORE INTO users (username, password_hash, email, created_at) VALUES (?, ?, ?, ?)",
+            ('music_author', 'x', email, time.strftime('%Y-%m-%d %H:%M:%S')),
+        )
+        conn.commit()
+        row = conn.execute("SELECT id FROM users WHERE username = 'music_author'").fetchone()
+        user_id = row['id']
+
+        music_id = _insert_music(user_id, 'music_author', music_service.STATUS_PRIVATE)
+        assert music_service.get_author_email(music_id) == email
+        assert music_service.get_author_email(999999) == ''
+    finally:
+        conn.execute("DELETE FROM music WHERE username = 'music_author'")
+        conn.execute("DELETE FROM users WHERE username = 'music_author'")
+        conn.commit()
+        conn.close()
+
+
 # 运行所有测试
 if __name__ == '__main__':
     setup()
@@ -332,6 +370,8 @@ if __name__ == '__main__':
         test_change_password_validation,
         test_duplicate_email_check,
         test_music_status_machine,
+        test_music_review_email_builder,
+        test_music_author_email,
     ]
     for func in test_functions:
         try:
