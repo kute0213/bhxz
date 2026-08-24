@@ -480,28 +480,35 @@ document.addEventListener('DOMContentLoaded', function() {
     container.addEventListener('click', function(e) {
         var btn = e.target.closest('.delete-reply-btn');
         if (!btn) return;
-        if (!confirm('确定要删除此回复吗？')) return;
 
-        var replyId = btn.getAttribute('data-reply-id');
-        var url = CONFIG.deleteReplyUrl.replace('/0', '/' + replyId);
+        CustomModal.confirm('确定要删除此回复吗？', {
+            title: '删除回复',
+            trigger: btn,
+            callback: function (ok) {
+                if (!ok) return;
 
-        fetch(url, { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-            .then(function(res) { return res.json(); })
-            .then(function(data) {
-                if (data.success) {
-                    var el = document.getElementById('reply-' + replyId);
-                    if (el) {
-                        el.style.transition = 'opacity 0.3s';
-                        el.style.opacity = '0';
-                        setTimeout(function() { el.remove(); }, 300);
-                    }
-                    var current = parseInt(replyCountEl.textContent) || 0;
-                    replyCountEl.textContent = Math.max(0, current - 1);
-                } else {
-                    alert(data.message || '删除失败');
-                }
-            })
-            .catch(function() { alert('删除失败，请稍后重试'); });
+                var replyId = btn.getAttribute('data-reply-id');
+                var url = CONFIG.deleteReplyUrl.replace('/0', '/' + replyId);
+
+                fetch(url, { method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                    .then(function(res) { return res.json(); })
+                    .then(function(data) {
+                        if (data.success) {
+                            var el = document.getElementById('reply-' + replyId);
+                            if (el) {
+                                el.style.transition = 'opacity 0.3s';
+                                el.style.opacity = '0';
+                                setTimeout(function() { el.remove(); }, 300);
+                            }
+                            var current = parseInt(replyCountEl.textContent) || 0;
+                            replyCountEl.textContent = Math.max(0, current - 1);
+                        } else {
+                            Toast.error(data.message || '删除失败');
+                        }
+                    })
+                    .catch(function() { Toast.error('删除失败，请稍后重试'); });
+            }
+        });
     });
 
     // ---- 初始化 ----

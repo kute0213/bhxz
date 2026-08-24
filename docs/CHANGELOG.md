@@ -6,6 +6,12 @@
 - **手动广播邮件改为富文本（所见即所得）**：广播编辑由 Markdown 编辑器升级为 contenteditable 富文本编辑器（`templates/admin/admin_broadcast.html` 工具栏：加粗/斜体/下划线/删除线、H2/H3 标题、无序/有序列表、引用、插入链接、清除格式 + 字数统计 + 插入示例），所见即所得直接编辑排版；发送时提交 `html` 字段，后端经白名单清洗后嵌入邮件模板（`services/email/sanitize.py` 新增 `sanitize_email_html`/`html_to_plain_text`，`routes/admin/broadcast.py` 校验/清洗/纯文本兜底逻辑同步更新，`services/email/templates.py` 的 `broadcast_message()` 改为接收富文本 HTML），仅保留常见排版标签与安全 `a[href]`/`font[color]`，script/style/iframe 及 `javascript:` 链接等危险内容一律剔除，防 XSS 与邮件注入；管理中心广播邮件入口按钮下方说明文案同步更新为「向全体用户发送富文本（所见即所得）格式的邮件广播」
 - **大喇叭音频收藏**：公开音频列表 / 我的音频均提供「收藏」按钮（`templates/macros/music_macros.html` 新增 `music_favorite_button` 宏），可收藏**别人上传的公开音频**，收藏后可在「我的收藏」页（`/music/my/favorites`，`templates/music/favorites.html`）统一查看与播放（含收藏时间、上传者、标签、播放器与复制链接按钮）；同一用户对同一音频仅一条收藏（数据库新增 `music_favorites` 表，联合主键 `(user_id, music_id)`），重复点击即取消，收藏操作走 AJAX 局部刷新（`static/js/base.js` 全局事件委托）；仅已公开音频可被收藏，删除音频时自动级联清理收藏记录（`services/music_service.py` 新增 `toggle_favorite`/`get_favorite_ids`/`get_user_favorites`，`routes/main/music.py` 新增 `/music/my/favorites` 页面与 `/music/<id>/favorite` 接口）
 - **大喇叭音频标签**：上传音频时可填标签（`services/music_service.py` 新增 `parse_tags`：逗号/顿号/分号/空白分隔、自动去重、最多 10 个、每个 ≤12 字），「我的音频」与管理后台「大喇叭音频管理」可随时编辑（`static/js/base.js` 标签编辑交互 + `templates/macros/music_macros.html` 新增 `music_tags_list` 展示宏，金色徽章展示）；权限控制：普通用户仅可编辑自己上传的音频，管理员可编辑任意；**搜索可直接命中标签**——公开列表搜索 `get_public_musics(keyword)` 同时匹配 `title LIKE` 与 `tags LIKE`（数据库 `music.tags` 列，`core/db/schema.py` 自动迁移新增），不再只能搜到标题
+- **全部弹窗统一为网页内自定义弹窗（无原生弹窗）**：
+  - `templates/macros/modal.html` 新增 `modal_overlay` 宏，统一渲染自定义弹窗骨架（alert / confirm / prompt 共用磨砂玻璃风格），由 `base.html` 引入一次，替代原先内联在 base 中的弹窗 HTML
+  - `static/js/base.js` 的 `CustomModal` 升级为 **Promise + 回调双风格** API，并新增 **`prompt`** 方法（含输入框聚焦/预填/占位提示、确认返回输入值、取消返回 `null`），同时支持字符串标题简写（如 `CustomModal.confirm('...', '确认清空').then(...)`）
+  - **移除全部原生弹窗调用**：富文本广播「插入链接」的 `prompt()` 改用 `CustomModal.prompt`（`templates/admin/admin_broadcast.html`）；大喇叭音频「编辑标签」的 `prompt()` 改用 `CustomModal.prompt`（`static/js/base.js`）；讨论区「删除回复」的 `confirm()`/`alert()` 改用 `CustomModal.confirm` + `Toast.error`（`templates/discussion/detail.html`）
+  - 各页面 `onsubmit="return confirm(...)"` 删除确认仍由 `base.js` 全局拦截自动转为自定义弹窗；`static/css/base.css` 新增 `.modal-input-wrap` 输入区样式（与弹窗磨砂风格一致、金色聚焦态、窄屏适配）；`base.js` 缓存版本升至 v=19
+  - 顺带修复：管理中心广播页「清空内容」确认此前调用 `CustomModal.confirm(...).then(...)` 因旧版 `CustomModal` 不返回 Promise 而失效，升级后正常工作
 
 ### 修复
 - **全站响应式适配所有屏幕大小**：

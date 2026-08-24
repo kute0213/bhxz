@@ -286,12 +286,24 @@ var CustomModal = (function () {
     var modalTitle = document.getElementById('modal-title');
     var modalBody = document.getElementById('modal-body');
     var modalFooter = document.getElementById('modal-footer');
+    var modalInputWrap = document.getElementById('modal-input-wrap');
+    var modalInput = document.getElementById('modal-input');
     var cancelBtn = document.getElementById('modal-cancel-btn');
     var confirmBtn = document.getElementById('modal-confirm-btn');
 
     var currentCallback = null;
     var currentTrigger = null;
     var triggerRect = null;
+    var pendingResolve = null;
+    var currentShowInput = false;
+
+    // options 简写：直接传字符串作为标题（如 confirm('...', '确认清空')）
+    function normalizeOptions(options) {
+        if (typeof options === 'string') {
+            return { title: options };
+        }
+        return options || {};
+    }
 
     function setIcon(type) {
         var iconMap = {
@@ -319,9 +331,13 @@ var CustomModal = (function () {
         var cancelText = options.cancelText || '取消';
         var callback = options.callback || null;
         var trigger = options.trigger || null;
+        var showInput = !!options.showInput;
+        var inputValue = options.inputValue != null ? String(options.inputValue) : '';
+        var placeholder = options.placeholder || '';
 
         currentCallback = callback;
         currentTrigger = trigger;
+        currentShowInput = showInput;
 
         modalTitle.textContent = title;
         modalBody.textContent = content;
@@ -330,6 +346,17 @@ var CustomModal = (function () {
         confirmBtn.textContent = confirmText;
         cancelBtn.textContent = cancelText;
         cancelBtn.style.display = showCancel ? '' : 'none';
+
+        // prompt 模式：显示输入框并预填默认值
+        if (modalInputWrap && modalInput) {
+            modalInputWrap.style.display = showInput ? '' : 'none';
+            modalInput.value = inputValue;
+            modalInput.placeholder = placeholder;
+        }
+
+        var promise = new Promise(function (resolve) {
+            pendingResolve = resolve;
+        });
 
         // 从触发按钮位置放大到中间
         if (trigger) {
@@ -385,6 +412,16 @@ var CustomModal = (function () {
                 modalBox.style.opacity = '1';
             });
         }
+
+        // prompt 模式：弹窗打开后聚焦输入框
+        if (showInput && modalInput) {
+            setTimeout(function () {
+                modalInput.focus();
+                modalInput.select();
+            }, 120);
+        }
+
+        return promise;
     }
 
     function close(result) {
@@ -419,12 +456,23 @@ var CustomModal = (function () {
             modalBox.style.opacity = '';
             modalBox.style.transition = '';
 
+            // prompt 模式：确认返回输入值，取消/关闭返回 null
+            var value = result;
+            if (currentShowInput) {
+                value = result ? (modalInput ? modalInput.value : '') : null;
+            }
+
             if (currentCallback) {
-                currentCallback(result);
+                currentCallback(value);
                 currentCallback = null;
+            }
+            if (pendingResolve) {
+                pendingResolve(value);
+                pendingResolve = null;
             }
             currentTrigger = null;
             triggerRect = null;
+            currentShowInput = false;
         }, 400);
     }
 
@@ -461,8 +509,8 @@ var CustomModal = (function () {
         open: open,
         close: close,
         alert: function (message, options) {
-            options = options || {};
-            open({
+            options = normalizeOptions(options);
+            return open({
                 title: options.title || '提示',
                 content: message,
                 type: options.type || 'info',
@@ -473,14 +521,30 @@ var CustomModal = (function () {
             });
         },
         confirm: function (message, options) {
-            options = options || {};
-            open({
+            options = normalizeOptions(options);
+            return open({
                 title: options.title || '确认',
                 content: message,
                 type: options.type || 'warning',
                 showCancel: true,
                 confirmText: options.confirmText || '确定',
                 cancelText: options.cancelText || '取消',
+                trigger: options.trigger || null,
+                callback: options.callback || null
+            });
+        },
+        prompt: function (message, options) {
+            options = normalizeOptions(options);
+            return open({
+                title: options.title || '输入',
+                content: message,
+                type: options.type || 'info',
+                showCancel: true,
+                confirmText: options.confirmText || '确定',
+                cancelText: options.cancelText || '取消',
+                showInput: true,
+                inputValue: options.defaultValue != null ? options.defaultValue : '',
+                placeholder: options.placeholder || '',
                 trigger: options.trigger || null,
                 callback: options.callback || null
             });
@@ -963,7 +1027,8 @@ document.addEventListener('click', function (e) {
 /* ============================================================
  * 大喇叭音频标签编辑 —— 全站全局代理：
  * 任何页面上的 .edit-tags-btn（编辑标签按钮）
- * 点击后 prompt 输入新标签，POST 到 /music/<id>/tags 保存。
+ * 点击后弹出自定义输入框（CustomModal.prompt）编辑新标签，
+ * POST 到 /music/<id>/tags 保存。
  * 成功后在卡片内就地刷新标签徽章。
  * ============================================================ */
 (function () {
@@ -980,18 +1045,10 @@ document.addEventListener('click', function (e) {
         });
     }
 
-    document.addEventListener('click', function (e) {
-        var btn = e.target && e.target.closest ? e.target.closest('.edit-tags-btn') : null;
-        if (!btn) return;
-        var musicId = btn.getAttribute('data-id');
-        if (!musicId) return;
-        var current = btn.getAttribute('data-tags') || '';
-        var next = prompt('编辑标签（逗号分隔，最多 10 个）：', current);
-        if (next === null) return;
-
+    function saveTags(btn, musicId, next) {
         btn.disabled = true;
         var body = new URLSearchParams();
-        body.append('tags', next.trim());
+        body.append('tags', (next || '').trim());
         fetch('/music/' + encodeURIComponent(musicId) + '/tags', {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json' },
@@ -1004,17 +1061,36 @@ document.addEventListener('click', function (e) {
                 if (typeof Toast !== 'undefined') Toast.error((data && data.message) || '保存失败');
                 return;
             }
-            btn.setAttribute('data-tags', next.trim());
+            btn.setAttribute('data-tags', (next || '').trim());
             var wrap = btn.closest('.music-card') || btn.closest('tr');
             if (wrap) {
                 var container = wrap.querySelector('.tags-display');
-                if (container) renderTags(container, next.trim());
+                if (container) renderTags(container, next);
             }
             if (typeof Toast !== 'undefined') Toast.success(data.message || '标签已保存');
         })
         .catch(function () {
             btn.disabled = false;
             if (typeof Toast !== 'undefined') Toast.error('网络异常，保存失败');
+        });
+    }
+
+    document.addEventListener('click', function (e) {
+        var btn = e.target && e.target.closest ? e.target.closest('.edit-tags-btn') : null;
+        if (!btn) return;
+        var musicId = btn.getAttribute('data-id');
+        if (!musicId) return;
+        var current = btn.getAttribute('data-tags') || '';
+
+        CustomModal.prompt('编辑标签（逗号分隔，最多 10 个，每个 ≤12 字）：', {
+            title: '编辑标签',
+            defaultValue: current,
+            placeholder: '例如：BGM, 开服, 活动曲',
+            trigger: btn,
+            callback: function (value) {
+                if (value === null) return;
+                saveTags(btn, musicId, value);
+            }
         });
     });
 })();

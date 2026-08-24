@@ -1,0 +1,34 @@
+{# 全局自定义弹窗骨架（alert / confirm / prompt 通用）
+
+统一由 base.js 的 CustomModal 控制，取代原生 alert / confirm / prompt。
+所有弹窗样式统一走 .modal-overlay / .modal-box 磨砂玻璃风格，
+按钮复用 .btn-primary / .btn-secondary，输入框复用 .input-field。
+
+引入方式（仅需一次，置于页面 body 最下方）：
+    {% from 'macros/modal.html' import modal_overlay %}
+    {{ modal_overlay() }}
+
+注意：必须放在 .page-content 之外，避免受其 transform 影响导致 fixed 定位错乱。
+#}
+{% macro modal_overlay() -%}
+<!-- 自定义弹窗（CustomModal：alert / confirm / prompt 共用骨架） -->
+<div class="modal-overlay" id="custom-modal">
+    <div class="modal-box" id="modal-box">
+        <div class="modal-header">
+            <div class="modal-icon" id="modal-icon">
+                <i data-lucide="alert-circle" class="w-5 h-5"></i>
+            </div>
+            <div class="modal-title" id="modal-title">提示</div>
+        </div>
+        <div class="modal-body" id="modal-body">内容</div>
+        <div class="modal-input-wrap" id="modal-input-wrap" style="display: none;">
+            <input type="text" id="modal-input" class="input-field w-full px-4 py-3 rounded-lg"
+                   placeholder="" autocomplete="off" spellcheck="false" maxlength="200">
+        </div>
+        <div class="modal-footer" id="modal-footer">
+            <button type="button" class="btn-secondary" id="modal-cancel-btn">取消</button>
+            <button type="button" class="btn-primary" id="modal-confirm-btn">确定</button>
+        </div>
+    </div>
+</div>
+{%- endmacro %}

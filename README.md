@@ -279,6 +279,7 @@ export ENABLE_SSL=1 && python app.py
 - **自定义音频播放器（磨砂玻璃风格）**：大喇叭音频列表（`/music`）、我的音频（`/music/my`）、管理员审核页（`admin/admin_music.html`）均使用自研播放器替代浏览器默认控件，含进度条（点击/拖动 seek、缓冲显示，**圆点（thumb）跟随进度实时移动**）、倍速（0.5x~2x）、音量（按钮+滑块弹层，音量记忆在 localStorage）与播放/暂停，窄屏（≤480px）自动占满整行，且倍速/音量弹层窄屏时改为右对齐，避免超出卡片/视口被裁切；每个 `.music-player` 独立实例化并拥有独立的 HLS 实例与 `Audio` 元素，同一时间只允许一个播放器出声，列表内多个音频均可独立播放；样式见 `static/css/base.css` 的 `.music-player`（倍速/音量弹层 `z-index:100` 向上展开；内含播放器的卡片使用 `.pixel-card.music-card` 显式解除 `contain:paint`/`content-visibility` 的溢出裁切，弹层不被遮挡/裁切），逻辑见 `static/js/music_player.js`，HLS 播放依赖本地 `static/lib/hls/hls.min.js`（构建脚本 `scripts/build/build_static.py` 自动下载）
 - **全站响应式适配所有屏幕**：竖屏/窄屏（≤640px）下音频卡片操作按钮组（复制广播 m3u / 唱片 MP3 / 时长 Ns / 审核操作）通过 `.music-card-actions` 自动占满整行并换行排列，不再横向溢出被裁切导致「穿模」、无法点击；全局 `body` 增加 `overflow-wrap: break-word` 兜底长文本换行，配合 `overflow-x: clip` 杜绝横向滚动；导航栏已有桌面 / 平板 / 移动端（侧滑菜单）三套布局，管理员数据表格统一 `overflow-x-auto` 横向滚动、指南/文档 `pre/table` 自带横向滚动，全站各页面均可适配任意屏幕尺寸
 - **模板宏复用**：`templates/macros/music_macros.html` 提取音频状态徽章、复制广播 m3u 链接按钮、复制唱片 MP3 按钮、复制时长（秒）按钮、自定义播放器（`music_audio_player`）与播放器脚本（`music_player_assets`）为公共宏，`music/list.html`、`music/my.html` 与 `admin/admin_music.html` 统一调用，消除重复代码
+- **全局弹窗模板**：`templates/macros/modal.html` 提供 `modal_overlay` 宏，统一渲染自定义弹窗骨架（alert / confirm / prompt 共用），由 `base.html` 引入一次，配合 `base.js` 的 `CustomModal` 控制，取代全部原生 `alert` / `confirm` / `prompt`
 
 ### 交互效果
 
@@ -288,7 +289,7 @@ export ENABLE_SSL=1 && python app.py
 | 按钮水波纹 | CSS `ripple` 动画 |
 | 滚动淡入 | `IntersectionObserver` |
 | 页面过渡 | `requestAnimationFrame` 控制 `.page-ready` 类切换 |
-| 自定义弹窗 | 放大居中动画，触发元素位置感知 |
+| 自定义弹窗 | 磨砂玻璃风格，放大居中动画、触发元素位置感知；`CustomModal` 统一提供 alert / confirm / prompt（Promise + 回调双风格），自动拦截 `onsubmit="return confirm(...)"` 表单与 `onclick` 确认链接，全站无原生弹窗 |
 | Toast 提示 | 四种类型（success/error/warning/info） |
 
 ### 性能优化

@@ -112,24 +112,9 @@
     <!-- 移动端菜单遮罩层 -->
     <div class="mobile-menu-overlay fixed inset-0 bg-black/40 z-50" id="mobile-overlay"></div>
 
-    <!-- 自定义弹窗 -->
-    <div class="modal-overlay" id="custom-modal">
-        <div class="modal-box" id="modal-box">
-            <div class="modal-header">
-                <div class="modal-icon" id="modal-icon">
-                    <i data-lucide="alert-circle" class="w-5 h-5"></i>
-                </div>
-                <div class="modal-title" id="modal-title">提示</div>
-            </div>
-            <div class="modal-body" id="modal-body">
-                内容
-            </div>
-            <div class="modal-footer" id="modal-footer">
-                <button class="btn-secondary" id="modal-cancel-btn">取消</button>
-                <button class="btn-primary" id="modal-confirm-btn">确定</button>
-            </div>
-        </div>
-    </div>
+    <!-- 自定义弹窗（alert / confirm / prompt 通用骨架，见 macros/modal.html） -->
+    {% from 'macros/modal.html' import modal_overlay %}
+    {{ modal_overlay() }}
 
     <!-- Toast 容器 -->
     <div class="toast-container" id="toast-container"></div>
@@ -389,7 +374,7 @@
         </div>
     </div>
 
-    <script src="{{ url_for('static', filename='js/base.js', v='18') }}"></script>
+    <script src="{{ url_for('static', filename='js/base.js', v='19') }}"></script>
     <script src="{{ url_for('static', filename='js/main.js', v='11') }}"></script>
     {% if login_welcome_username %}
     <script>

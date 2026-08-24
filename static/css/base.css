@@ -521,6 +521,23 @@ body.has-background-image .pixel-card {
 }
 .input-field::placeholder { color: rgba(243, 246, 251, 0.40); }
 
+/* 自定义弹窗 prompt 输入区（CustomModal 输入框，与弹窗磨砂风格一致） */
+.modal-input-wrap {
+    padding: 2px 28px 8px;
+}
+.modal-input-wrap .input-field {
+    background: rgba(0, 0, 0, 0.28);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.25);
+}
+.modal-input-wrap .input-field:focus {
+    border-color: rgba(244, 208, 63, 0.55);
+    box-shadow: 0 0 0 3px rgba(244, 208, 63, 0.12), inset 0 1px 4px rgba(0, 0, 0, 0.15);
+}
+@media (max-width: 640px) {
+    .modal-input-wrap { padding: 0 20px 4px; }
+}
+
 /* 密码强度：规则与服务端保持一致，额外用数字、符号和长度区分等级。 */
 .password-strength {
     margin-top: 10px;

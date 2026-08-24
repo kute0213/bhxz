@@ -111,7 +111,7 @@
         </div>
     </section>
 
-    <script src="{{ url_for('static', filename='js/base.js', v='18') }}"></script>
+    <script src="{{ url_for('static', filename='js/base.js', v='19') }}"></script>
 {% endblock %}
 
 {% block page_modals %}
@@ -179,9 +179,19 @@
             var value = btn.getAttribute('data-value') || null;
             editor.focus();
             if (cmd === 'createLink') {
-                var url = prompt('请输入链接地址（http/https/mailto，或站内相对路径）：', 'https://');
-                if (!url) return;
-                value = url.trim();
+                CustomModal.prompt('请输入链接地址（http/https/mailto，或站内相对路径）：', {
+                    title: '插入链接',
+                    defaultValue: 'https://',
+                    placeholder: 'https://…',
+                    callback: function (url) {
+                        if (!url) return;
+                        url = url.trim();
+                        if (!url) return;
+                        document.execCommand('createLink', false, url);
+                        updateCount();
+                    }
+                });
+                return;
             }
             document.execCommand(cmd, false, value);
             updateCount();
