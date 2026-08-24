@@ -2,6 +2,9 @@
 
 ## [Unreleased]
 
+### 新增
+- **手动广播邮件改为富文本（所见即所得）**：广播编辑由 Markdown 编辑器升级为 contenteditable 富文本编辑器（`templates/admin/admin_broadcast.html` 工具栏：加粗/斜体/下划线/删除线、H2/H3 标题、无序/有序列表、引用、插入链接、清除格式 + 字数统计 + 插入示例），所见即所得直接编辑排版；发送时提交 `html` 字段，后端经白名单清洗后嵌入邮件模板（`services/email/sanitize.py` 新增 `sanitize_email_html`/`html_to_plain_text`，`routes/admin/broadcast.py` 校验/清洗/纯文本兜底逻辑同步更新，`services/email/templates.py` 的 `broadcast_message()` 改为接收富文本 HTML），仅保留常见排版标签与安全 `a[href]`/`font[color]`，script/style/iframe 及 `javascript:` 链接等危险内容一律剔除，防 XSS 与邮件注入
+
 ### 修复
 - **全站响应式适配所有屏幕大小**：
   - **音频卡片按钮「穿模」/无法点击**：竖屏/窄屏（≤640px）下，音频卡片操作按钮组（复制广播 m3u / 唱片 MP3 / 时长 Ns / 申请公开/审核操作）此前 `flex-shrink-0` 单行不换行，横向溢出后被 `body{overflow-x:clip}` 裁切导致按钮相互重叠、无法点击；现新增 `.music-card-actions` 样式（`static/css/base.css`）：窄屏时占满整行并自动换行排列，≥640px 恢复单行右对齐，`music/list.html`、`music/my.html`、`admin/admin_music.html` 三处卡片统一改用

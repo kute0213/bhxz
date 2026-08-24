@@ -3,6 +3,8 @@
 import os
 import sys
 import json
+import time
+from unittest import mock
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, PROJECT_ROOT)
@@ -10,6 +12,7 @@ sys.path.insert(0, PROJECT_ROOT)
 from app import app as _app
 from core.db import init_db, get_db
 from core.auth import hash_password
+from services.email import email_service
 
 
 def setup():
@@ -137,6 +140,107 @@ def test_admin_broadcast_page():
         assert resp.status_code == 200, f"广播邮件页状态码: {resp.status_code}"
 
 
+def _create_broadcast_test_user():
+    """插入一个带邮箱的测试用户（供广播发送测试），返回其 id。"""
+    conn = get_db()
+    try:
+        conn.execute("DELETE FROM users WHERE email = 'broadcast_test@example.com'")
+        pwd = hash_password('testpass')
+        conn.execute(
+            "INSERT INTO users (username, password_hash, email, is_admin, created_at) "
+            "VALUES (?, ?, ?, 0, ?)",
+            ('broadcast_test', pwd, 'broadcast_test@example.com',
+             time.strftime('%Y-%m-%d %H:%M:%S'))
+        )
+        conn.commit()
+        row = conn.execute(
+            "SELECT id FROM users WHERE email = 'broadcast_test@example.com'"
+        ).fetchone()
+        return row['id']
+    finally:
+        conn.close()
+
+
+def _delete_broadcast_test_user(user_id):
+    """清理广播测试用户。"""
+    conn = get_db()
+    try:
+        conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def test_admin_broadcast_send_success():
+    """广播邮件（富文本）发送成功：html 白名单清洗后入队。"""
+    with _app.test_client() as client:
+        _login_admin(client)
+        uid = _create_broadcast_test_user()
+        try:
+            with mock.patch.object(email_service, 'is_enabled', return_value=True), \
+                 mock.patch.object(email_service, 'send') as mock_send:
+                resp = client.post('/admin/broadcast/send', json={
+                    'subject': '维护通知',
+                    'html': '<p>今晚 <b>维护</b>！<script>alert(1)</script></p>',
+                    'confirm': 'CONFIRM',
+                })
+                assert resp.status_code == 200
+                data = resp.get_json()
+                assert data['success'] is True, data
+                assert data['count'] >= 1, data
+                # 校验入队邮件：目标用户包含在内、主题正确、HTML 已清洗
+                assert mock_send.call_count >= 1
+                sent_to = []
+                for call in mock_send.call_args_list:
+                    kwargs = call.kwargs or call[1]
+                    sent_to.append(kwargs.get('to'))
+                    assert kwargs.get('subject') == '[广播] 维护通知'
+                assert 'broadcast_test@example.com' in sent_to
+                # 目标用户的邮件 HTML 应已清洗（script 被剔除、正文保留）
+                target_kwargs = next(
+                    (c.kwargs or c[1]) for c in mock_send.call_args_list
+                    if (c.kwargs or c[1]).get('to') == 'broadcast_test@example.com'
+                )
+                html = target_kwargs.get('html') or ''
+                assert '<p>今晚 <b>维护</b>！</p>' in html
+                assert '<script>' not in html
+                # 纯文本兜底应包含正文
+                assert '今晚' in (target_kwargs.get('body') or '')
+        finally:
+            _delete_broadcast_test_user(uid)
+
+
+def test_admin_broadcast_send_invalid():
+    """广播邮件参数校验：无标题/无内容/未确认均返回失败。"""
+    with _app.test_client() as client:
+        _login_admin(client)
+        with mock.patch.object(email_service, 'is_enabled', return_value=True):
+            # 无标题
+            r = client.post('/admin/broadcast/send', json={
+                'subject': '', 'html': '<p>x</p>', 'confirm': 'CONFIRM'})
+            assert r.get_json()['success'] is False
+            # 内容为纯空白
+            r = client.post('/admin/broadcast/send', json={
+                'subject': 't', 'html': '<p>   </p>', 'confirm': 'CONFIRM'})
+            assert r.get_json()['success'] is False
+            # 未二次确认
+            r = client.post('/admin/broadcast/send', json={
+                'subject': 't', 'html': '<p>x</p>', 'confirm': 'NO'})
+            assert r.get_json()['success'] is False
+
+
+def test_admin_broadcast_send_disabled():
+    """邮件功能未启用时发送返回失败提示。"""
+    with _app.test_client() as client:
+        _login_admin(client)
+        with mock.patch.object(email_service, 'is_enabled', return_value=False):
+            r = client.post('/admin/broadcast/send', json={
+                'subject': 't', 'html': '<p>x</p>', 'confirm': 'CONFIRM'})
+            data = r.get_json()
+            assert data['success'] is False
+            assert '未启用' in data['message']
+
+
 def test_admin_update_page():
     """测试一键更新页面。"""
     with _app.test_client() as client:
@@ -180,6 +284,9 @@ if __name__ == '__main__':
         test_admin_scheduled_page,
         test_admin_public_files_page,
         test_admin_broadcast_page,
+        test_admin_broadcast_send_success,
+        test_admin_broadcast_send_invalid,
+        test_admin_broadcast_send_disabled,
         test_admin_update_page,
         test_admin_unauthorized,
         test_admin_non_admin,

@@ -6,19 +6,18 @@
 - guide_review_pending.html 新指南待审核通知
 - guide_review_result.html  指南审核结果通知
 - music_review_result.html  音频公开审核结果通知
-- broadcast_message.html    管理员广播消息（Markdown）
+- broadcast_message.html    管理员广播消息（富文本 HTML 正文）
 
 对外暴露五个构建函数，保持与原接口完全兼容：
 - verification_code(code, purpose, expire_minutes)        验证码邮件
 - guide_review_pending(title, author_name, is_edit)       新指南待审核通知
 - guide_review_result(title, approved, reason='')         指南审核结果通知
 - music_review_result(title, approved)                    音频公开审核结果通知
-- broadcast_message(subject, markdown_body, sender_name)  管理员广播消息
+- broadcast_message(subject, html_body, sender_name)  管理员广播消息（富文本 HTML）
 """
 
 import os
 
-import markdown as md
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 # 定位 templates/emails/ 目录（当前文件位于 services/email/templates.py）
@@ -143,28 +142,21 @@ def music_review_result(title: str, approved: bool) -> str:
     )
 
 
-def broadcast_message(subject: str, markdown_body: str, sender_name: str = '滨海小镇管理') -> str:
-    """构建管理员广播邮件 HTML（支持 Markdown 语法）。
+def broadcast_message(subject: str, html_body: str, sender_name: str = '滨海小镇管理') -> str:
+    """构建管理员广播邮件 HTML（正文为已清洗的富文本 HTML）。
 
     Args:
         subject: 邮件主题
-        markdown_body: Markdown 格式的正文
+        html_body: 已由 services/email/sanitize.sanitize_email_html 清洗过的富文本正文
         sender_name: 发送者显示名称
 
     Returns:
         邮件 HTML 字符串
     """
-    # 将 Markdown 转为 HTML（启用常用扩展，不使用 codehilite 以保证邮件客户端兼容）
-    extensions = ['extra', 'tables', 'fenced_code', 'toc']
-    try:
-        rendered = md.markdown(markdown_body, extensions=extensions)
-    except Exception:
-        rendered = md.markdown(markdown_body)
-
     return _render(
         'broadcast_message.html',
         title=subject,
         title_color='#fbbf24',
         sender_name=sender_name,
-        rendered_markdown=rendered,
+        body_html=html_body,
     )

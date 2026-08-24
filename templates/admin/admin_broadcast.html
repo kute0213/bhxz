@@ -9,7 +9,7 @@
                     <i data-lucide="arrow-left" class="w-4 h-4 inline mr-1"></i>返回管理中心
                 </a>
                 <h1 class="text-xl sm:text-2xl font-bold">广播邮件</h1>
-                <p class="text-cream/60 text-sm mt-1">向全体用户发送 Markdown 格式的邮件广播</p>
+                <p class="text-cream/60 text-sm mt-1">向全体用户发送富文本（所见即所得）格式的邮件广播</p>
             </div>
 
             <!-- 警告提示 -->
@@ -21,7 +21,7 @@
                 </div>
             </div>
 
-            <!-- 主体：Markdown 编辑器 -->
+            <!-- 主体：富文本编辑器 -->
             <div class="mb-6">
                 <div class="space-y-4">
                     <div>
@@ -30,13 +30,66 @@
                                class="w-full px-4 py-2 rounded-lg bg-forest-900/60 border border-forest-700/50 text-cream focus:border-gold-400/50 focus:outline-none">
                     </div>
                     <div>
-                        <label class="block text-sm text-cream/70 mb-2">广播内容（Markdown）</label>
-                        {% from "macros/markdown_editor.html" import markdown_editor %}
-                        {{ markdown_editor(editor_id='body', placeholder='# 标题&#10;&#10;这是一条 **加粗** 文字。&#10;&#10;- 列表项 1&#10;- 列表项 2&#10;&#10;`&#96;&#96;python&#10;print(\'hello\')&#10;`&#96;&#96;', show_count=true, toolbar_extra='<button id="btn-sample" type="button" class="text-gold-400/60 hover:text-gold-400">插入示例</button>') }}
+                        <label class="block text-sm text-cream/70 mb-2">广播内容（富文本）</label>
+                        <style>
+                            .rich-toolbar {
+                                display: flex; flex-wrap: wrap; gap: 4px; padding: 6px;
+                                background: rgba(10, 20, 12, 0.6);
+                                border: 1px solid rgba(255, 255, 255, 0.1); border-bottom: none;
+                                border-radius: 12px 12px 0 0;
+                            }
+                            .rich-toolbar button {
+                                display: inline-flex; align-items: center; justify-content: center;
+                                width: 32px; height: 32px; border-radius: 8px;
+                                color: rgba(232, 228, 217, 0.6); background: transparent;
+                                border: 1px solid transparent; cursor: pointer;
+                            }
+                            .rich-toolbar button:hover { background: rgba(255, 255, 255, 0.08); color: #e8e4d9; }
+                            .rich-toolbar button.active { background: rgba(251, 191, 36, 0.15); color: #fbbf24; border-color: rgba(251, 191, 36, 0.35); }
+                            .rich-toolbar .sep { width: 1px; align-self: center; height: 20px; background: rgba(255, 255, 255, 0.12); margin: 0 4px; }
+                            #rich-editor {
+                                min-height: 260px; max-height: 60vh; overflow-y: auto;
+                                background: rgba(10, 20, 12, 0.6);
+                                border: 1px solid rgba(255, 255, 255, 0.1);
+                                border-radius: 0 0 12px 12px;
+                                padding: 14px 16px; color: #e8e4d9; font-size: 0.9rem; line-height: 1.8;
+                                outline: none;
+                            }
+                            #rich-editor:empty::before { content: attr(data-placeholder); color: rgba(232, 228, 217, 0.35); pointer-events: none; }
+                            #rich-editor h1, #rich-editor h2, #rich-editor h3, #rich-editor h4 { color: #f5e6c8; margin: 0.75rem 0 0.4rem; font-weight: 600; }
+                            #rich-editor h1 { font-size: 1.5rem; }
+                            #rich-editor h2 { font-size: 1.25rem; }
+                            #rich-editor h3 { font-size: 1.1rem; }
+                            #rich-editor a { color: #d4b878; text-decoration: underline; }
+                            #rich-editor ul, #rich-editor ol { padding-left: 1.4rem; margin: 0.4rem 0; }
+                            #rich-editor blockquote { border-left: 3px solid rgba(212, 184, 120, 0.5); padding-left: 0.8rem; margin: 0.6rem 0; color: rgba(232, 228, 217, 0.65); }
+                            #rich-editor pre { background: rgba(0, 0, 0, 0.35); border-radius: 8px; padding: 0.6rem 0.8rem; overflow-x: auto; margin: 0.4rem 0; }
+                            #rich-editor code { font-family: 'Courier New', Courier, monospace; font-size: 0.85em; }
+                        </style>
+                        <div class="rich-toolbar">
+                            <button type="button" data-cmd="bold" title="加粗"><i data-lucide="bold" class="w-4 h-4"></i></button>
+                            <button type="button" data-cmd="italic" title="斜体"><i data-lucide="italic" class="w-4 h-4"></i></button>
+                            <button type="button" data-cmd="underline" title="下划线"><i data-lucide="underline" class="w-4 h-4"></i></button>
+                            <button type="button" data-cmd="strikeThrough" title="删除线"><i data-lucide="strikethrough" class="w-4 h-4"></i></button>
+                            <span class="sep"></span>
+                            <button type="button" data-cmd="formatBlock" data-value="H2" title="二级标题"><i data-lucide="heading-2" class="w-4 h-4"></i></button>
+                            <button type="button" data-cmd="formatBlock" data-value="H3" title="三级标题"><i data-lucide="heading-3" class="w-4 h-4"></i></button>
+                            <span class="sep"></span>
+                            <button type="button" data-cmd="insertUnorderedList" title="无序列表"><i data-lucide="list" class="w-4 h-4"></i></button>
+                            <button type="button" data-cmd="insertOrderedList" title="有序列表"><i data-lucide="list-ordered" class="w-4 h-4"></i></button>
+                            <button type="button" data-cmd="formatBlock" data-value="BLOCKQUOTE" title="引用"><i data-lucide="quote" class="w-4 h-4"></i></button>
+                            <button type="button" data-cmd="createLink" title="插入链接"><i data-lucide="link" class="w-4 h-4"></i></button>
+                            <button type="button" data-cmd="removeFormat" title="清除格式"><i data-lucide="eraser" class="w-4 h-4"></i></button>
+                        </div>
+                        <div id="rich-editor" contenteditable="true" data-placeholder="输入广播内容，可加粗、斜体、标题、列表、链接…"></div>
+                        <div class="text-right text-xs text-cream/40 mt-1"><span id="rich-count">0</span> 字</div>
                     </div>
                     <div class="flex flex-wrap gap-2 pt-2">
                         <button id="btn-send" class="btn-primary px-6 py-2.5 rounded-lg font-bold text-sm">
                             <i data-lucide="send" class="w-4 h-4 inline mr-1"></i>发送广播
+                        </button>
+                        <button id="btn-sample" class="btn-secondary px-4 py-2.5 rounded-lg text-sm">
+                            <i data-lucide="file-text" class="w-4 h-4 inline mr-1"></i>插入示例
                         </button>
                         <button id="btn-clear" class="btn-secondary px-4 py-2.5 rounded-lg text-sm">
                             <i data-lucide="trash-2" class="w-4 h-4 inline mr-1"></i>清空
@@ -58,8 +111,7 @@
         </div>
     </section>
 
-    <script src="{{ url_for('static', filename='lib/marked/marked.min.js', v='1') }}"></script>
-    <script src="{{ url_for('static', filename='js/markdown-editor.js', v='1') }}"></script>
+    <script src="{{ url_for('static', filename='js/base.js', v='17') }}"></script>
 {% endblock %}
 
 {% block page_modals %}
@@ -98,24 +150,43 @@
 
     var $ = function(id) { return document.getElementById(id); };
     var subject = $('subject');
-    var textarea = $('body');
+    var editor = $('rich-editor');
     var userCount = $('user-count');
     var confirmModal = $('confirm-modal');
     var confirmOk = $('confirm-ok');
     var confirmCancel = $('confirm-cancel');
+    var richCount = $('rich-count');
 
     // 确认弹窗在 page_modals 中，确保获取到
-    if (!confirmModal || !confirmOk || !confirmCancel) {
-        console.error('广播页面：确认弹窗元素未找到');
+    if (!confirmModal || !confirmOk || !confirmCancel || !editor) {
+        console.error('广播页面：关键元素未找到');
         return;
     }
 
-    // 编辑器实时预览/字数统计/同步滚动/工具栏由共享脚本 markdown-editor.js 处理，
-    // 此处仅保留广播页专属逻辑（示例、清空、历史、发送）。
-    // 程序化修改 textarea 后需派发 input 事件以触发共享预览更新。
-    function notifyEdit() {
-        textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    // --- 富文本编辑器字数统计 ---
+    function updateCount() {
+        var text = editor.innerText || editor.textContent || '';
+        richCount.textContent = text.replace(/\s/g, '').length;
     }
+    editor.addEventListener('input', updateCount);
+    updateCount();
+
+    // --- 富文本工具栏 ---
+    document.querySelectorAll('.rich-toolbar [data-cmd]').forEach(function(btn) {
+        btn.addEventListener('mousedown', function(e) { e.preventDefault(); });
+        btn.addEventListener('click', function() {
+            var cmd = btn.getAttribute('data-cmd');
+            var value = btn.getAttribute('data-value') || null;
+            editor.focus();
+            if (cmd === 'createLink') {
+                var url = prompt('请输入链接地址（http/https/mailto，或站内相对路径）：', 'https://');
+                if (!url) return;
+                value = url.trim();
+            }
+            document.execCommand(cmd, false, value);
+            updateCount();
+        });
+    });
 
     // --- 加载用户数量 ---
     fetch('/api/stats', { headers: { 'Accept': 'application/json' } })
@@ -125,11 +196,23 @@
         })
         .catch(function() { userCount.textContent = '未知'; });
 
-    // --- 插入示例 ---
+    // --- 插入示例（富文本 HTML） ---
     $('btn-sample').addEventListener('click', function() {
         subject.value = '【重要】服务器维护通知';
-        textarea.value = '# 服务器维护通知\n\n各位玩家好：\n\n服务器将于 **本周六凌晨 2:00** 进行例行维护，预计持续 **2 小时**。\n\n## 维护内容\n\n- 修复已知 Bug\n- 优化数据库性能\n- 更新模组版本\n\n## 注意事项\n\n> 维护期间无法登录服务器，请提前保存好游戏进度。\n\n如有疑问，请联系管理员。\n\n---\n\n祝游戏愉快！';
-        notifyEdit();
+        editor.innerHTML =
+            '<p>各位玩家好：</p>' +
+            '<p>服务器将于 <b>本周六凌晨 2:00</b> 进行例行维护，预计持续 <b>2 小时</b>。</p>' +
+            '<h2>维护内容</h2>' +
+            '<ul>' +
+            '<li>修复已知 Bug</li>' +
+            '<li>优化数据库性能</li>' +
+            '<li>更新模组版本</li>' +
+            '</ul>' +
+            '<h2>注意事项</h2>' +
+            '<blockquote>维护期间无法登录服务器，请提前保存好游戏进度。</blockquote>' +
+            '<p>如有疑问，请联系管理员。</p>' +
+            '<p>祝游戏愉快！</p>';
+        updateCount();
     });
 
     // --- 清空 ---
@@ -137,8 +220,8 @@
         CustomModal.confirm('确定要清空所有内容吗？', '确认清空').then(function(ok) {
             if (ok) {
                 subject.value = '';
-                textarea.value = '';
-                notifyEdit();
+                editor.innerHTML = '';
+                updateCount();
             }
         });
     });
@@ -186,7 +269,7 @@
             Toast.show('请输入广播标题', 'error');
             return;
         }
-        if (!textarea.value.trim()) {
+        if (!(editor.innerText || '').trim()) {
             Toast.show('请输入广播内容', 'error');
             return;
         }
@@ -209,7 +292,7 @@
         btn.textContent = '发送中...';
         var formData = {
             subject: subject.value.trim(),
-            body: textarea.value.trim(),
+            html: editor.innerHTML,
             confirm: 'CONFIRM'
         };
         fetch('/admin/broadcast/send', {
@@ -230,8 +313,8 @@
             if (data.success) {
                 Toast.show(data.message, 'success');
                 subject.value = '';
-                textarea.value = '';
-                notifyEdit();
+                editor.innerHTML = '';
+                updateCount();
                 loadHistory();
             } else {
                 Toast.show(data.message || '发送失败', 'error');
