@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "macros/music_macros.html" import music_status_badge, music_copy_link_button, music_mp3_link_button, music_duration_button, music_audio_player, music_player_assets %}
+{% from "macros/music_macros.html" import music_status_badge, music_copy_link_button, music_mp3_link_button, music_duration_button, music_favorite_button, music_tags_list, music_audio_player, music_player_assets %}
 {% block title %}大喇叭音频{% endblock %}
 {% block content %}
 <section class="page-container py-12">
@@ -28,6 +28,10 @@
                     <i data-lucide="folder-open" class="w-4 h-4"></i>
                     我的音频
                 </a>
+                <a href="{{ url_for('main.my_favorites_page') }}" class="btn-secondary px-4 py-2.5 rounded-lg text-sm font-bold flex items-center gap-2">
+                    <i data-lucide="heart" class="w-4 h-4"></i>
+                    我的收藏
+                </a>
                 <a href="{{ url_for('main.upload_music_page') }}" class="btn-primary px-5 py-2.5 rounded-lg text-sm font-bold flex items-center gap-2">
                     <i data-lucide="upload" class="w-4 h-4"></i>
                     上传音频
@@ -48,7 +52,7 @@
                 <form method="GET" action="{{ url_for('main.music_page') }}" class="flex items-center gap-2">
                     <div class="relative">
                         <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-cream/40"></i>
-                        <input type="text" name="q" value="{{ keyword }}" maxlength="60" placeholder="搜索音频名称…"
+                        <input type="text" name="q" value="{{ keyword }}" maxlength="60" placeholder="搜索音频名称或标签…"
                                class="input-field pl-9 py-2 rounded-lg text-sm w-48 sm:w-64">
                     </div>
                     <button type="submit" class="btn-secondary px-4 py-2 rounded-lg text-sm flex items-center gap-1.5">
@@ -78,8 +82,10 @@
                                 </span>
                                 <span>{{ (m.created_at or '')[:10] }}</span>
                             </div>
+                            {{ music_tags_list(m.tags) }}
                         </div>
                         <div class="music-card-actions">
+                            {{ music_favorite_button(m.id, m.id in favorite_ids, user) }}
                             {{ music_copy_link_button(request.host_url.rstrip('/') ~ '/music/' ~ m.id ~ '.m3u8') }}
                             {{ music_mp3_link_button(m.id) }}
                             {{ music_duration_button(m.duration_seconds) }}

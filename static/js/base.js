@@ -887,3 +887,134 @@ document.addEventListener('click', function (e) {
         document.body.removeChild(ta);
     }
 });
+
+/* ============================================================
+ * 大喇叭音频收藏 —— 全站全局代理：
+ * 任何页面上的 .favorite-btn（收藏/取消收藏按钮）
+ * 点击后调用 POST /music/<id>/favorite 切换收藏状态。
+ * 使用事件委托，对动态加载的按钮同样生效；
+ * 未登录按钮带 data-requires-login 提示跳转登录。
+ * ============================================================ */
+(function () {
+    function updateFavoriteBtn(btn, isFav) {
+        btn.setAttribute('data-state', isFav ? '1' : '0');
+        btn.setAttribute('title', isFav ? '取消收藏' : '收藏');
+        var text = btn.querySelector('.fav-text');
+        if (text) text.textContent = isFav ? '已收藏' : '收藏';
+        var icon = btn.querySelector('[data-lucide="heart"]');
+        if (icon) {
+            if (isFav) icon.classList.add('fill-amber-400');
+            else icon.classList.remove('fill-amber-400');
+        }
+        btn.classList.toggle('border-amber-400/50', isFav);
+        btn.classList.toggle('text-amber-300', isFav);
+        btn.classList.toggle('border-cream/20', !isFav);
+        btn.classList.toggle('text-cream/70', !isFav);
+    }
+
+    document.addEventListener('click', function (e) {
+        var btn = e.target && e.target.closest ? e.target.closest('.favorite-btn') : null;
+        if (!btn) return;
+        var musicId = btn.getAttribute('data-id');
+        if (!musicId) return;
+
+        if (btn.getAttribute('data-requires-login') === '1') {
+            if (typeof Toast !== 'undefined') Toast.warning('请先登录后再收藏');
+            setTimeout(function () {
+                location.href = '/login?next=' + encodeURIComponent(location.pathname + location.search);
+            }, 800);
+            return;
+        }
+
+        btn.disabled = true;
+        fetch('/music/' + encodeURIComponent(musicId) + '/favorite', {
+            method: 'POST',
+            headers: { 'Accept': 'application/json' }
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            btn.disabled = false;
+            if (!data || !data.success) {
+                if (typeof Toast !== 'undefined') Toast.error((data && data.message) || '操作失败');
+                return;
+            }
+            updateFavoriteBtn(btn, data.is_favorited);
+            if (typeof Toast !== 'undefined') Toast.success(data.message);
+            // 「我的收藏」页取消收藏时，淡出移除该卡片；无收藏时刷新显示空状态
+            if (!data.is_favorited && /\/music\/my\/favorites/.test(location.pathname)) {
+                var card = btn.closest('.music-card');
+                if (card) {
+                    card.style.transition = 'opacity .3s';
+                    card.style.opacity = '0';
+                    setTimeout(function () {
+                        card.remove();
+                        if (!document.querySelector('.music-card')) location.reload();
+                    }, 300);
+                }
+            }
+        })
+        .catch(function () {
+            btn.disabled = false;
+            if (typeof Toast !== 'undefined') Toast.error('网络异常，操作失败');
+        });
+    });
+})();
+
+/* ============================================================
+ * 大喇叭音频标签编辑 —— 全站全局代理：
+ * 任何页面上的 .edit-tags-btn（编辑标签按钮）
+ * 点击后 prompt 输入新标签，POST 到 /music/<id>/tags 保存。
+ * 成功后在卡片内就地刷新标签徽章。
+ * ============================================================ */
+(function () {
+    function renderTags(container, tags) {
+        container.innerHTML = '';
+        if (!tags) return;
+        tags.split(',').forEach(function (tag) {
+            tag = (tag || '').trim();
+            if (!tag) return;
+            var span = document.createElement('span');
+            span.className = 'inline-block px-2 py-0.5 rounded-full text-xs bg-gold-400/10 text-gold-300/90 border border-gold-400/20 mr-1 mb-1';
+            span.textContent = '#' + tag;
+            container.appendChild(span);
+        });
+    }
+
+    document.addEventListener('click', function (e) {
+        var btn = e.target && e.target.closest ? e.target.closest('.edit-tags-btn') : null;
+        if (!btn) return;
+        var musicId = btn.getAttribute('data-id');
+        if (!musicId) return;
+        var current = btn.getAttribute('data-tags') || '';
+        var next = prompt('编辑标签（逗号分隔，最多 10 个）：', current);
+        if (next === null) return;
+
+        btn.disabled = true;
+        var body = new URLSearchParams();
+        body.append('tags', next.trim());
+        fetch('/music/' + encodeURIComponent(musicId) + '/tags', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json' },
+            body: body.toString()
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            btn.disabled = false;
+            if (!data || !data.success) {
+                if (typeof Toast !== 'undefined') Toast.error((data && data.message) || '保存失败');
+                return;
+            }
+            btn.setAttribute('data-tags', next.trim());
+            var wrap = btn.closest('.music-card') || btn.closest('tr');
+            if (wrap) {
+                var container = wrap.querySelector('.tags-display');
+                if (container) renderTags(container, next.trim());
+            }
+            if (typeof Toast !== 'undefined') Toast.success(data.message || '标签已保存');
+        })
+        .catch(function () {
+            btn.disabled = false;
+            if (typeof Toast !== 'undefined') Toast.error('网络异常，保存失败');
+        });
+    });
+})();

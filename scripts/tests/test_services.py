@@ -526,6 +526,124 @@ def test_music_delete_removes_db_and_files():
     shutil.rmtree(final_dir, ignore_errors=True)
 
 
+def test_parse_tags():
+    """标签解析与清洗：分隔符、去重、限长、去空白、无效输入。"""
+    # 空 / 无效输入
+    assert music_service.parse_tags('') == ''
+    assert music_service.parse_tags(None) == ''
+    assert music_service.parse_tags('   ') == ''
+    assert music_service.parse_tags('') == ''
+
+    # 多种分隔符（逗号/全角逗号/顿号/分号/空白）
+    assert music_service.parse_tags('BGM,开服') == 'BGM,开服'
+    assert music_service.parse_tags('BGM，开服') == 'BGM,开服'
+    assert music_service.parse_tags('BGM、开服') == 'BGM,开服'
+    assert music_service.parse_tags('BGM;开服') == 'BGM,开服'
+    assert music_service.parse_tags('BGM 开服') == 'BGM,开服'
+    assert music_service.parse_tags('  开服主题曲  ') == '开服主题曲'
+
+    # 去重（含分隔空白与重复）
+    assert music_service.parse_tags('BGM,BGM,开服') == 'BGM,开服'
+    assert music_service.parse_tags('BGM, BGM, BGM') == 'BGM'
+
+    # 超过 10 个标签 → 截断为 10 个
+    many = ','.join(f'tag{i}' for i in range(20))
+    result = music_service.parse_tags(many)
+    assert len(result.split(',')) == 10
+
+    # 单个标签超长 → 截断为 12 字
+    assert music_service.parse_tags('很' * 20) == '很' * 12
+
+
+def test_music_tags_save_and_search():
+    """标签保存权限控制 + 搜索可直接通过标签命中（标题无关键词）。"""
+    owner = 20010
+    music_id = None
+    try:
+        music_id = _insert_music(owner, 'tag_owner', music_service.STATUS_PUBLIC, title='无标签标题')
+
+        # 管理员可改任意音频
+        ok, msg = music_service.set_music_tags(music_id, 9999, True, 'BGM,钢琴', '127.0.0.1')
+        assert ok is True, msg
+        assert music_service.get_music(music_id)['tags'] == 'BGM,钢琴'
+
+        # 普通用户改自己的
+        ok, msg = music_service.set_music_tags(music_id, owner, False, '开服,主题曲', '127.0.0.1')
+        assert ok is True, msg
+
+        # 普通用户无权改他人的
+        ok, msg = music_service.set_music_tags(music_id, 9999, False, 'x', '127.0.0.1')
+        assert ok is False, '非管理员不可改他人音频标签'
+        assert music_service.get_music(music_id)['tags'] == '开服,主题曲', '标签不应被无权修改'
+
+        # 不存在的音频
+        ok, msg = music_service.set_music_tags(999999, owner, False, 'x', '127.0.0.1')
+        assert ok is False
+
+        # 搜索可通过标签命中（标题不包含关键词）
+        hits = music_service.get_public_musics('开服')
+        assert any(m['id'] == music_id for m in hits), '应通过标签搜索到音频'
+        hits = music_service.get_public_musics('主题曲')
+        assert any(m['id'] == music_id for m in hits), '应通过标签搜索到音频'
+    finally:
+        if music_id:
+            conn = get_db()
+            conn.execute("DELETE FROM music WHERE id = ?", (music_id,))
+            conn.commit()
+            conn.close()
+
+
+def test_music_favorite_flow():
+    """收藏/取消收藏/我的收藏：仅公开可收藏、重复收藏自动取消、删除级联清理。"""
+    owner = 20020
+    user = 20021
+    music_id = None
+    try:
+        # 私有音频不可收藏
+        music_id = _insert_music(owner, 'fav_owner', music_service.STATUS_PRIVATE, title='私藏')
+        ok, msg, is_fav = music_service.toggle_favorite(user, music_id)
+        assert ok is False, '私有音频不可收藏'
+        assert msg == '仅可收藏已公开的音频'
+
+        # 转为公开后可收藏
+        music_service.toggle_music_public(music_id, owner, False, '127.0.0.1')
+        music_service.review_music(music_id, True, 'admin', '127.0.0.1')
+        assert music_service.get_music(music_id)['status'] == music_service.STATUS_PUBLIC
+
+        ok, msg, is_fav = music_service.toggle_favorite(user, music_id)
+        assert ok is True and is_fav is True, f'收藏应成功: {msg}'
+        assert music_id in music_service.get_favorite_ids(user)
+
+        favs = music_service.get_user_favorites(user)
+        assert any(m['id'] == music_id for m in favs), '我的收藏应包含该音频'
+        fav = next(m for m in favs if m['id'] == music_id)
+        assert fav['title'] == '私藏'
+        assert fav['username'] == 'fav_owner'
+
+        # 重复收藏自动取消
+        ok, msg, is_fav = music_service.toggle_favorite(user, music_id)
+        assert ok is True and is_fav is False, '重复收藏应取消'
+        assert music_id not in music_service.get_favorite_ids(user)
+
+        # 不存在的音频
+        ok, msg, is_fav = music_service.toggle_favorite(user, 999999)
+        assert ok is False and msg == '音频不存在'
+
+        # 重新收藏，删除音频后收藏级联清理
+        music_service.toggle_favorite(user, music_id)
+        assert music_id in music_service.get_favorite_ids(user)
+        music_service.delete_music(music_id, owner, False, '127.0.0.1')
+        assert music_id not in music_service.get_favorite_ids(user), '删除音频应级联清理收藏'
+        music_id = None
+    finally:
+        if music_id:
+            conn = get_db()
+            conn.execute("DELETE FROM music WHERE id = ?", (music_id,))
+            conn.execute("DELETE FROM music_favorites WHERE music_id = ?", (music_id,))
+            conn.commit()
+            conn.close()
+
+
 # 运行所有测试
 if __name__ == '__main__':
     setup()
@@ -551,6 +669,9 @@ if __name__ == '__main__':
         test_music_duration_seconds,
         test_music_attach_durations,
         test_music_delete_removes_db_and_files,
+        test_parse_tags,
+        test_music_tags_save_and_search,
+        test_music_favorite_flow,
     ]
     for func in test_functions:
         try:

@@ -27,15 +27,17 @@ from services import music_service
 
 @main_bp.route('/music')
 def music_page():
-    """大喇叭音频板块：公开音频列表（支持按名称搜索）。"""
+    """大喇叭音频板块：公开音频列表（支持按名称或标签搜索）。"""
     user = get_current_user()
     keyword = request.args.get('q', '').strip()
     public_musics = music_service.attach_durations(music_service.get_public_musics(keyword))
+    favorite_ids = music_service.get_favorite_ids(user['id']) if user else set()
     return render_template(
         'music/list.html',
         user=user,
         public_musics=public_musics,
         keyword=keyword,
+        favorite_ids=favorite_ids,
     )
 
 
@@ -49,6 +51,19 @@ def my_music_page():
         'music/my.html',
         user=user,
         my_musics=my_musics,
+    )
+
+
+@main_bp.route('/music/my/favorites')
+@login_required
+def my_favorites_page():
+    """我的收藏：展示当前用户收藏的音频（含别人上传的公开音频）。"""
+    user = get_current_user()
+    favorites = music_service.attach_durations(music_service.get_user_favorites(user['id']))
+    return render_template(
+        'music/favorites.html',
+        user=user,
+        favorites=favorites,
     )
 
 
@@ -77,6 +92,7 @@ def upload_music():
     """开始异步上传任务（AJAX）。成功返回 {task_id}，失败返回 {error}。"""
     user = get_current_user()
     title = request.form.get('title', '').strip()
+    tags = request.form.get('tags', '').strip()
     is_public = request.form.get('is_public') in ('1', 'on', 'true')
     upload_file = request.files.get('audio_file')
 
@@ -87,6 +103,7 @@ def upload_music():
         is_public=is_public,
         upload_file=upload_file,
         ip_address=request.remote_addr,
+        tags=tags,
     )
     if success:
         return jsonify({'task_id': result['task_id']})
@@ -101,6 +118,31 @@ def upload_music_progress(task_id):
     if not task:
         return jsonify({'status': 'error', 'message': '任务不存在或已过期'}), 404
     return jsonify(task)
+
+
+@main_bp.route('/music/<int:music_id>/favorite', methods=['POST'])
+@login_required
+def toggle_favorite(music_id):
+    """收藏 / 取消收藏音频（AJAX）。返回 JSON：{success, message, is_favorited}。"""
+    user = get_current_user()
+    success, message, is_favorited = music_service.toggle_favorite(user['id'], music_id)
+    return jsonify({'success': success, 'message': message, 'is_favorited': is_favorited})
+
+
+@main_bp.route('/music/<int:music_id>/tags', methods=['POST'])
+@login_required
+def edit_music_tags(music_id):
+    """编辑音频标签（AJAX）。返回 JSON：{success, message}。"""
+    user = get_current_user()
+    tags = request.form.get('tags', '').strip()
+    success, message = music_service.set_music_tags(
+        music_id=music_id,
+        user_id=user['id'],
+        is_admin=bool(user.get('is_admin')),
+        tags=tags,
+        ip_address=request.remote_addr,
+    )
+    return jsonify({'success': success, 'message': message})
 
 
 @main_bp.route('/music/<int:music_id>/toggle', methods=['POST'])

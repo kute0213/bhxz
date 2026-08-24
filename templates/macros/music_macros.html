@@ -6,6 +6,8 @@
    - music_copy_link_button(url)       复制广播 m3u 链接按钮（需 base.js 的 copy-link-btn 事件）
    - music_mp3_link_button(music_id)   复制唱片 MP3 链接按钮（游戏内电脑烧录唱片用）
    - music_duration_button(seconds)    复制音频总时长（秒）按钮（需 base.js 的 copy-duration-btn 事件）
+   - music_favorite_button(music_id, is_favorited, current_user)  收藏/取消收藏按钮（需 base.js 的 favorite-btn 事件）
+   - music_tags_list(tags)             标签徽章列表（tags 为逗号分隔字符串）
    - music_audio_player(music_id)      自定义音频播放器（进度/倍速/音量，HLS 播放）
    - music_player_assets()             播放器所需脚本（hls.js + music_player.js）
    使用 music_audio_player 的页面，须在 extra_script 块中调用 music_player_assets()。
@@ -48,6 +50,30 @@
         title="复制音频总时长（秒）">
     <i data-lucide="timer" class="w-3.5 h-3.5"></i>时长 {{ seconds }}s
 </button>
+{%- endif -%}
+{%- endmacro %}
+
+{% macro music_favorite_button(music_id, is_favorited, current_user) -%}
+<button type="button"
+        class="favorite-btn px-3 py-2 rounded-lg text-xs border transition-colors flex items-center gap-1.5
+               {% if is_favorited %}border-amber-400/50 text-amber-300
+               {% else %}border-cream/20 text-cream/70 hover:border-amber-400/50 hover:text-amber-300{% endif %}"
+        data-id="{{ music_id }}"
+        data-state="{% if is_favorited %}1{% else %}0{% endif %}"
+        {% if not current_user %}data-requires-login="1"{% endif %}
+        title="{% if is_favorited %}取消收藏{% else %}收藏{% endif %}">
+    <i data-lucide="heart" class="w-3.5 h-3.5 {% if is_favorited %}fill-amber-400{% endif %}"></i>
+    <span class="fav-text">{% if is_favorited %}已收藏{% else %}收藏{% endif %}</span>
+</button>
+{%- endmacro %}
+
+{% macro music_tags_list(tags) -%}
+{%- if tags -%}
+<div class="flex flex-wrap items-center gap-1.5 mt-1.5">
+    {%- for tag in tags.split(',') if tag -%}
+    <span class="inline-block px-2 py-0.5 rounded-full text-xs bg-gold-400/10 text-gold-300/90 border border-gold-400/20">#{{ tag }}</span>
+    {%- endfor -%}
+</div>
 {%- endif -%}
 {%- endmacro %}
 

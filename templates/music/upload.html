@@ -22,6 +22,12 @@
                            class="input-field w-full px-4 py-3 rounded-lg">
                 </div>
                 <div>
+                    <label class="block text-sm font-medium mb-2 text-cream/80">标签 <span class="text-cream/40 font-normal">（可选，逗号分隔，最多 10 个）</span></label>
+                    <input type="text" id="tags-input" name="tags" maxlength="100" placeholder="例如：BGM, 钢琴, 开服"
+                           class="input-field w-full px-4 py-3 rounded-lg">
+                    <p class="text-cream/50 text-xs mt-1">给音频打标签，方便其他用户按标签搜索到这首歌（搜索支持匹配标签）</p>
+                </div>
+                <div>
                     <label class="block text-sm font-medium mb-2 text-cream/80">音频文件</label>
                     <input type="file" id="file-input" name="audio_file" accept=".mp3,.wav,.ogg,.m4a,.flac,audio/*" required
                            class="input-field w-full px-4 py-3 rounded-lg">

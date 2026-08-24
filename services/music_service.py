@@ -10,6 +10,7 @@ http://<主机>/music/<音频ID>.m3u8
 """
 
 import os
+import re
 import shutil
 import subprocess
 import threading
@@ -56,6 +57,40 @@ def _now():
     return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
 
+def parse_tags(raw):
+    """解析/清洗标签：逗号/顿号/空格分隔，去重、去空白、限长（≤10 个，每个 ≤12 字）。
+
+    返回逗号分隔的规范化字符串（如 'BGM,开服,钢琴'），无效输入返回空字符串。
+    """
+    if not raw or not isinstance(raw, str):
+        return ''
+    seen, tags = [], set()
+    for part in re.split(r'[,，、;；\s]+', raw):
+        tag = part.strip()
+        if not tag:
+            continue
+        if tag not in seen:
+            seen.append(tag)
+        tags.add(tag)
+        if len(tags) >= 10:
+            break
+    # 截断单个过长标签并再次去重
+    final, seen2 = [], set()
+    for tag in seen[:10]:
+        tag = tag[:12]
+        if tag not in seen2:
+            seen2.add(tag)
+            final.append(tag)
+    return ','.join(final)
+
+
+def tags_to_list(tags):
+    """将逗号分隔的标签字符串转为列表（模板展示用），空/无效返回空列表。"""
+    if not tags or not isinstance(tags, str):
+        return []
+    return [t for t in (x.strip() for x in tags.split(',')) if t]
+
+
 def _music_dir(music_id):
     """音频文件所在目录（绝对路径），路径由音频 ID 决定。"""
     return os.path.join(UPLOAD_MUSIC_DIR, str(music_id))
@@ -66,16 +101,16 @@ def _music_dir(music_id):
 # ---------------------------------------------------------------------------
 
 def get_public_musics(keyword=''):
-    """获取所有已通过审核的公开音频（游戏内大喇叭列表），支持按名称模糊搜索。"""
+    """获取所有已通过审核的公开音频（游戏内大喇叭列表），支持按名称或标签模糊搜索。"""
     conn = get_db()
     try:
-        sql = ("SELECT id, user_id, username, title, status, created_at "
+        sql = ("SELECT id, user_id, username, title, tags, status, created_at "
                "FROM music WHERE status = ?")
         params = [STATUS_PUBLIC]
         kw = (keyword or '').strip()
         if kw:
-            sql += " AND title LIKE ?"
-            params.append(f'%{kw}%')
+            sql += " AND (title LIKE ? OR tags LIKE ?)"
+            params.extend([f'%{kw}%', f'%{kw}%'])
         sql += " ORDER BY id DESC"
         rows = conn.execute(sql, params).fetchall()
         return [dict(r) for r in rows]
@@ -88,7 +123,7 @@ def get_user_musics(user_id):
     conn = get_db()
     try:
         rows = conn.execute(
-            "SELECT id, user_id, username, title, status, created_at "
+            "SELECT id, user_id, username, title, tags, status, created_at "
             "FROM music WHERE user_id = ? ORDER BY id DESC",
             (user_id,),
         ).fetchall()
@@ -102,7 +137,7 @@ def get_pending_musics():
     conn = get_db()
     try:
         rows = conn.execute(
-            "SELECT id, user_id, username, title, status, created_at "
+            "SELECT id, user_id, username, title, tags, status, created_at "
             "FROM music WHERE status = ? ORDER BY id DESC",
             (STATUS_PENDING,),
         ).fetchall()
@@ -116,7 +151,7 @@ def get_all_musics():
     conn = get_db()
     try:
         rows = conn.execute(
-            "SELECT id, user_id, username, title, status, created_at "
+            "SELECT id, user_id, username, title, tags, status, created_at "
             "FROM music ORDER BY id DESC"
         ).fetchall()
         return [dict(r) for r in rows]
@@ -129,7 +164,7 @@ def get_music(music_id):
     conn = get_db()
     try:
         row = conn.execute(
-            "SELECT id, user_id, username, title, file_path, status, created_at "
+            "SELECT id, user_id, username, title, tags, file_path, status, created_at "
             "FROM music WHERE id = ?",
             (music_id,),
         ).fetchone()
@@ -195,6 +230,104 @@ def get_author_email(music_id):
         return (row['email'] or '') if row else ''
     finally:
         conn.close()
+
+
+# ---------------------------------------------------------------------------
+# 收藏
+# ---------------------------------------------------------------------------
+
+def toggle_favorite(user_id, music_id):
+    """收藏 / 取消收藏音频。返回 (success, message, is_favorited)。
+
+    仅已公开的音频可被收藏（收藏「别人的歌」场景）；重复收藏自动取消。
+    """
+    music = get_music(music_id)
+    if not music:
+        return False, '音频不存在', False
+    if music['status'] != STATUS_PUBLIC:
+        return False, '仅可收藏已公开的音频', False
+
+    conn = get_db()
+    try:
+        row = conn.execute(
+            "SELECT 1 FROM music_favorites WHERE user_id = ? AND music_id = ?",
+            (user_id, music_id),
+        ).fetchone()
+        if row:
+            conn.execute(
+                "DELETE FROM music_favorites WHERE user_id = ? AND music_id = ?",
+                (user_id, music_id),
+            )
+            conn.commit()
+            return True, '已取消收藏', False
+        conn.execute(
+            "INSERT INTO music_favorites (user_id, music_id, created_at) VALUES (?, ?, ?)",
+            (user_id, music_id, _now()),
+        )
+        conn.commit()
+        return True, '已收藏', True
+    except Exception as e:
+        conn.rollback()
+        return False, f'操作失败：{str(e)}', False
+    finally:
+        conn.close()
+
+
+def get_favorite_ids(user_id):
+    """获取用户已收藏的音频 ID 集合（列表页标记收藏状态用）。"""
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            "SELECT music_id FROM music_favorites WHERE user_id = ?",
+            (user_id,),
+        ).fetchall()
+        return {int(r['music_id']) for r in rows}
+    finally:
+        conn.close()
+
+
+def get_user_favorites(user_id):
+    """获取用户收藏的音频列表（含上传者与收藏时间），按收藏时间倒序。"""
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            "SELECT m.id, m.user_id, m.username, m.title, m.tags, m.status, m.created_at, "
+            "f.created_at AS fav_created_at "
+            "FROM music_favorites f JOIN music m ON m.id = f.music_id "
+            "WHERE f.user_id = ? "
+            "ORDER BY f.created_at DESC, m.id DESC",
+            (user_id,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def set_music_tags(music_id, user_id, is_admin, tags, ip_address):
+    """编辑音频标签。权限：管理员可改任意；普通用户仅可改自己上传的。返回 (success, message)。"""
+    music = get_music(music_id)
+    if not music:
+        return False, '音频不存在'
+    if not is_admin and music['user_id'] != user_id:
+        return False, '无权修改该音频'
+
+    normalized = parse_tags(tags)
+    conn = get_db()
+    try:
+        conn.execute(
+            "UPDATE music SET tags = ? WHERE id = ?",
+            (normalized, music_id),
+        )
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        conn.close()
+        return False, '保存标签失败'
+    conn.close()
+
+    log('Music', '编辑音频标签', music_id=music_id, user_id=user_id,
+        is_admin=is_admin, tags=normalized, ip=ip_address)
+    return True, '标签已保存'
 
 
 # ---------------------------------------------------------------------------
@@ -308,7 +441,7 @@ def _read_transcode_percent(progress_file, playlist_path, duration):
     return min(99.0, max(0.0, pct))
 
 
-def _insert_music_record(user_id, username, title, status):
+def _insert_music_record(user_id, username, title, status, tags=''):
     """插入音频记录并返回可靠 ID（并发安全）；失败抛异常。
 
     原实现依赖 cursor.lastrowid：数据库为全局单例且共享游标，并发上传时
@@ -320,9 +453,9 @@ def _insert_music_record(user_id, username, title, status):
     try:
         with get_db() as conn:  # 持有线程锁，INSERT 与 ID 读取保持原子
             cursor = conn.execute(
-                "INSERT INTO music (user_id, username, title, file_path, status, created_at) "
-                "VALUES (?, ?, ?, '', ?, ?)",
-                (user_id, username, title, status, _now()),
+                "INSERT INTO music (user_id, username, title, file_path, status, tags, created_at) "
+                "VALUES (?, ?, ?, '', ?, ?, ?)",
+                (user_id, username, title, status, parse_tags(tags), _now()),
             )
             music_id = cursor.lastrowid
             if not music_id:
@@ -375,7 +508,7 @@ def _cleanup_music_record(music_id):
     shutil.rmtree(_music_dir(music_id), ignore_errors=True)
 
 
-def upload_music(user_id, username, title, is_public, upload_file, ip_address):
+def upload_music(user_id, username, title, is_public, upload_file, ip_address, tags=''):
     """同步上传音频并转码为 HLS（m3u8）。返回 (success, data_or_error)。
 
     流程：保存源文件 → ffmpeg 转码 HLS → 插入数据库记录获取 ID →
@@ -414,7 +547,7 @@ def upload_music(user_id, username, title, is_public, upload_file, ip_address):
 
         # 3. 插入数据库记录，获取音频 ID
         status = STATUS_PENDING if is_public else STATUS_PRIVATE
-        music_id = _insert_music_record(user_id, username, title, status)
+        music_id = _insert_music_record(user_id, username, title, status, tags)
         if not music_id:
             raise RuntimeError('音频记录创建失败')
 
@@ -422,7 +555,7 @@ def upload_music(user_id, username, title, is_public, upload_file, ip_address):
         _finalize_music_files(work_dir, music_id)
 
         log('Music', '上传大喇叭音频', music_id=music_id, user_id=user_id,
-            username=username, title=title, status=status, ip=ip_address)
+            username=username, title=title, status=status, tags=parse_tags(tags), ip=ip_address)
         return True, {'music_id': music_id, 'title': title}
     except Exception as e:
         # 清理：删除临时目录；若已插入数据库记录则同步删除记录与文件
@@ -435,7 +568,7 @@ def upload_music(user_id, username, title, is_public, upload_file, ip_address):
 # 异步上传（独立页面 + 详细进度条）
 # ---------------------------------------------------------------------------
 
-def start_upload(user_id, username, title, is_public, upload_file, ip_address):
+def start_upload(user_id, username, title, is_public, upload_file, ip_address, tags=''):
     """开始异步上传任务，立即返回 task_id，转码在后台线程执行。
 
     返回 (True, {'task_id': ...})；参数校验失败返回 (False, 错误信息)。
@@ -478,7 +611,7 @@ def start_upload(user_id, username, title, is_public, upload_file, ip_address):
     threading.Thread(
         target=_run_upload_task,
         args=(task_id, user_id, username, title, is_public,
-              work_dir, src_path, ip_address),
+              work_dir, src_path, ip_address, tags),
         daemon=True,
     ).start()
     return True, {'task_id': task_id}
@@ -501,7 +634,7 @@ def _set_task(task_id, **kwargs):
 
 
 def _run_upload_task(task_id, user_id, username, title, is_public,
-                     work_dir, src_path, ip_address):
+                     work_dir, src_path, ip_address, tags=''):
     """后台线程：运行 ffmpeg 转码（HLS+MP3），轮询进度，成功后落库。"""
     try:
         playlist_path = os.path.join(work_dir, 'index.m3u8')
@@ -546,13 +679,13 @@ def _run_upload_task(task_id, user_id, username, title, is_public,
 
         # 落库 + 文件整理（自动删除原音频源文件）
         status = STATUS_PENDING if is_public else STATUS_PRIVATE
-        music_id = _insert_music_record(user_id, username, title, status)
+        music_id = _insert_music_record(user_id, username, title, status, tags)
         if not music_id:
             raise RuntimeError('音频记录创建失败')
         _finalize_music_files(work_dir, music_id)
 
         log('Music', '上传大喇叭音频', music_id=music_id, user_id=user_id,
-            username=username, title=title, status=status, ip=ip_address)
+            username=username, title=title, status=status, tags=parse_tags(tags), ip=ip_address)
         _set_task(task_id, status='done', percent=100, message='转码完成', music_id=music_id)
     except Exception as e:
         shutil.rmtree(work_dir, ignore_errors=True)
@@ -587,6 +720,8 @@ def delete_music(music_id, user_id, is_admin, ip_address):
     conn = get_db()
     try:
         conn.execute("DELETE FROM music WHERE id = ?", (music_id,))
+        # 同步清理该音频的所有收藏记录，避免残留脏数据
+        conn.execute("DELETE FROM music_favorites WHERE music_id = ?", (music_id,))
         conn.commit()
     except Exception:
         conn.rollback()

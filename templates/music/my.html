@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "macros/music_macros.html" import music_status_badge, music_copy_link_button, music_mp3_link_button, music_duration_button, music_audio_player, music_player_assets %}
+{% from "macros/music_macros.html" import music_status_badge, music_copy_link_button, music_mp3_link_button, music_duration_button, music_tags_list, music_audio_player, music_player_assets %}
 {% block title %}我的音频{% endblock %}
 {% block content %}
 <section class="page-container py-12">
@@ -50,11 +50,17 @@
                             {{ (m.created_at or '')[:10] }}
                             {% if m.status == 1 %}· 等待管理员审核{% endif %}
                         </div>
+                        <div class="tags-display">{{ music_tags_list(m.tags) }}</div>
                     </div>
                     <div class="music-card-actions">
                         {{ music_copy_link_button(request.host_url.rstrip('/') ~ '/music/' ~ m.id ~ '.m3u8') }}
                         {{ music_mp3_link_button(m.id) }}
                         {{ music_duration_button(m.duration_seconds) }}
+                        <button type="button"
+                                class="edit-tags-btn px-3 py-2 rounded-lg text-xs border border-cream/20 text-cream/70 hover:text-cream hover:border-cream/40 transition-colors flex items-center gap-1.5"
+                                data-id="{{ m.id }}" data-tags="{{ m.tags or '' }}" title="编辑标签">
+                            <i data-lucide="tags" class="w-3.5 h-3.5"></i>编辑标签
+                        </button>
                         <form method="POST" action="{{ url_for('main.toggle_music_public', music_id=m.id) }}" class="inline">
                             <input type="hidden" name="next" value="{{ url_for('main.my_music_page') }}">
                             <button type="submit"

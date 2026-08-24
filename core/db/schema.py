@@ -18,6 +18,11 @@ def _sync_sequence(conn, table_name):
     """
     seq_name = f"{table_name}_id_seq"
     try:
+        # 无自增 id 列的表（如联合主键关联表）无需同步序列
+        try:
+            conn.execute(f"SELECT id FROM {table_name} LIMIT 1").fetchone()
+        except Exception:
+            return
         row = conn.execute(f"SELECT MAX(id) FROM {table_name}").fetchone()
         max_id = row[0] if row and row[0] is not None else 0
         if max_id <= 0:
@@ -284,6 +289,15 @@ def init_db():
                 created_at VARCHAR NOT NULL
             )
         '''),
+        # 大喇叭音频收藏表（联合主键：同一用户对同一音频仅一条收藏记录）
+        ('music_favorites', '''
+            CREATE TABLE IF NOT EXISTS music_favorites (
+                user_id INTEGER NOT NULL,
+                music_id INTEGER NOT NULL,
+                created_at VARCHAR NOT NULL,
+                PRIMARY KEY (user_id, music_id)
+            )
+        '''),
     ]
 
     for table_name, ddl in tables:
@@ -330,6 +344,8 @@ def init_db():
     # ---- 大喇叭音频：公开审核机制迁移 ----
     # 老库使用 is_public（0/1）标记公开，新库改用 status（0=私有 1=待审核 2=已公开）
     add_column_if_not_exists('music', 'status', 'INTEGER DEFAULT 0')
+    # 大喇叭音频：标签列（逗号分隔，供搜索匹配与卡片展示）
+    add_column_if_not_exists('music', 'tags', "VARCHAR DEFAULT ''")
     try:
         # 历史已公开音频（is_public=1）直接迁移为「已通过」状态，立即在公开列表可见
         cursor.execute("UPDATE music SET status = 2 WHERE status = 0 AND is_public = 1")

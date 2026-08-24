@@ -180,6 +180,8 @@
 
         var formData = new FormData();
         formData.append('title', titleInput.value.trim());
+        var tagsInput = document.getElementById('tags-input');
+        if (tagsInput && tagsInput.value.trim()) formData.append('tags', tagsInput.value.trim());
         formData.append('audio_file', fileInput.files[0]);
         var isPublicEl = document.getElementById('is-public-input');
         if (isPublicEl && isPublicEl.checked) formData.append('is_public', '1');

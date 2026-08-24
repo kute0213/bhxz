@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% from "macros/music_macros.html" import music_status_badge, music_copy_link_button, music_mp3_link_button, music_duration_button, music_audio_player, music_player_assets %}
+{% from "macros/music_macros.html" import music_status_badge, music_copy_link_button, music_mp3_link_button, music_duration_button, music_tags_list, music_audio_player, music_player_assets %}
 {% block title %}大喇叭音频管理{% endblock %}
 {% block content %}
 <section class="page-container py-12">
@@ -54,6 +54,7 @@
                                 <span>ID {{ m.id }}</span>
                                 <span>{{ (m.created_at or '')[:10] }}</span>
                             </div>
+                            <div class="tags-display">{{ music_tags_list(m.tags) }}</div>
                         </div>
                         <div class="music-card-actions">
                             {{ music_copy_link_button(request.host_url.rstrip('/') ~ '/music/' ~ m.id ~ '.m3u8') }}
@@ -100,6 +101,7 @@
                             <th class="text-left px-4 py-3 text-cream/60 font-medium">ID</th>
                             <th class="text-left px-4 py-3 text-cream/60 font-medium">音频名称</th>
                             <th class="text-left px-4 py-3 text-cream/60 font-medium">上传者</th>
+                            <th class="text-left px-4 py-3 text-cream/60 font-medium">标签</th>
                             <th class="text-center px-4 py-3 text-cream/60 font-medium">状态</th>
                             <th class="text-left px-4 py-3 text-cream/60 font-medium">上传时间</th>
                             <th class="text-right px-4 py-3 text-cream/60 font-medium">操作</th>
@@ -114,12 +116,20 @@
                                 <div class="text-xs text-cream/50 mt-0.5">{{ request.host_url.rstrip('/') }}/music/{{ m.id }}.m3u8</div>
                             </td>
                             <td class="px-4 py-3 text-cream/70">{{ m.username or '未知' }}</td>
+                            <td class="px-4 py-3">
+                                <div class="tags-display flex flex-wrap gap-1 max-w-56">{{ music_tags_list(m.tags) }}</div>
+                            </td>
                             <td class="px-4 py-3 text-center">
                                 {{ music_status_badge(m.status) }}
                             </td>
                             <td class="px-4 py-3 text-cream/60">{{ m.created_at[:10] }}</td>
                             <td class="px-4 py-3">
                                 <div class="flex items-center justify-end gap-2">
+                                    <button type="button"
+                                            class="edit-tags-btn px-2 py-1 rounded text-xs border border-cream/20 text-cream/70 hover:text-cream hover:border-cream/40 transition-colors flex items-center gap-1"
+                                            data-id="{{ m.id }}" data-tags="{{ m.tags or '' }}" title="编辑标签">
+                                        <i data-lucide="tags" class="w-3 h-3"></i>标签
+                                    </button>
                                     <form method="POST" action="{{ url_for('admin.admin_music_delete', music_id=m.id) }}" class="inline"
                                           onsubmit="return confirm('确定要下架（删除）此音频吗？将同步删除数据库记录和音频文件，无法恢复。')">
                                         <button type="submit"
