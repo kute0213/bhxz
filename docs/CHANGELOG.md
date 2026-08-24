@@ -3,6 +3,10 @@
 ## [Unreleased]
 
 ### 修复
+- **全站响应式适配所有屏幕大小**：
+  - **音频卡片按钮「穿模」/无法点击**：竖屏/窄屏（≤640px）下，音频卡片操作按钮组（复制广播 m3u / 唱片 MP3 / 时长 Ns / 申请公开/审核操作）此前 `flex-shrink-0` 单行不换行，横向溢出后被 `body{overflow-x:clip}` 裁切导致按钮相互重叠、无法点击；现新增 `.music-card-actions` 样式（`static/css/base.css`）：窄屏时占满整行并自动换行排列，≥640px 恢复单行右对齐，`music/list.html`、`music/my.html`、`admin/admin_music.html` 三处卡片统一改用
+  - **倍速/音量弹层窄屏被裁切**：弹层靠近播放器右缘、居中展开时窄屏下会超出卡片/视口边界被裁切无法操作；`@media (max-width:480px)` 下改为右对齐（`.mp-vol-slider`/`.mp-speed-menu`），保证弹层始终落在卡片内可操作
+  - **全局兜底**：`body` 增加 `overflow-wrap: break-word`，长 URL/连续字符自动换行不再撑破布局，配合 `overflow-x: clip` 彻底杜绝页面横向滚动（所有页面共用 base 布局，导航栏桌面/平板/移动端三套 + 管理员表格 `overflow-x-auto` + 文档 `pre/table` 自带横向滚动均已覆盖）
 - **私有/待审核音频改为「凭链接任何人可访问」**：此前非公开音频仅上传者本人或管理员可播放（`_can_access` 按用户身份拦截），现移除该访问限制——所有音频（含私有/待审核）的 m3u8 播放链接、唱片 MP3、HLS 分片均可直接凭链接访问（无需登录），私有仅表示该音频不会出现在公开音频列表中，公开仍需管理员审核（`routes/main/music.py` 删除 `_can_access` 及三处播放路由的身份校验）
 - **「复制链接」按钮更名为「复制广播m3u链接」**：公开列表 / 我的音频 / 管理员审核队列 / 上传成功卡片中的广播链接复制按钮文案统一改为「复制广播m3u链接」（并补充 tooltip 说明用于游戏内大喇叭在线播放），与「唱片 MP3」「时长 Ns」按钮语义区分更清晰（`templates/macros/music_macros.html`、`templates/music/upload.html`）
 - **修复播放器进度条圆点不跟随进度、倍速/音量弹层被卡片遮挡**：

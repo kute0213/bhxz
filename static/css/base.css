@@ -11,6 +11,7 @@ body {
     position: relative;
     min-height: 100vh;
     overflow-x: clip;
+    overflow-wrap: break-word;
     overscroll-behavior-y: none;
 }
 
@@ -410,6 +411,11 @@ body.has-background-image .pixel-card {
 /* 响应式：窄屏时播放器占满整行 */
 @media (max-width: 480px) {
     .music-player { min-width: 0; width: 100%; }
+    /* 倍速/音量弹层靠近播放器右缘，窄屏时改为右对齐，
+       避免居中展开超出卡片/视口边界被裁切导致无法操作 */
+    .mp-vol-slider { left: auto; right: 2px; transform: translateX(0); }
+    .mp-speed-menu { left: auto; right: 0; transform: translateX(0) scale(0.92); }
+    .mp-speed.open .mp-speed-menu { transform: translateX(0) scale(1); }
 }
 
 /* 大喇叭音频卡片（内含 .music-player）：
@@ -419,6 +425,21 @@ body.has-background-image .pixel-card {
 .pixel-card.music-card {
     contain: layout style;
     content-visibility: visible;
+}
+
+/* 音频卡片操作按钮组（复制广播 m3u / 唱片 MP3 / 时长 Ns / 审核操作等）：
+ * 窄屏时占满整行并自动换行，避免按钮横向溢出被裁切导致「穿模」、无法点击；
+ * ≥640px 恢复单行右对齐。 */
+.music-card-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
+    flex-shrink: 0;
+}
+@media (min-width: 640px) {
+    .music-card-actions { width: auto; flex-wrap: nowrap; }
 }
 
 /* 磨砂玻璃按钮 - 紫色蚀刻玻璃质感 */
