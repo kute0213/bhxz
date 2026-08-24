@@ -340,6 +340,9 @@ def init_db():
     add_column_if_not_exists('users', 'email', "VARCHAR DEFAULT ''")
 # 用户头像与个性背景只保存本地文件路径，图片内容不写入数据库。
     add_column_if_not_exists('users', 'avatar_key', "VARCHAR DEFAULT ''")
+    # 登录失败锁定：连续失败次数 + 锁定截止时间
+    add_column_if_not_exists('users', 'login_attempts', 'INTEGER DEFAULT 0')
+    add_column_if_not_exists('users', 'locked_until', "VARCHAR DEFAULT ''")
 
     # ---- 大喇叭音频：公开审核机制迁移 ----
     # 老库使用 is_public（0/1）标记公开，新库改用 status（0=私有 1=待审核 2=已公开）

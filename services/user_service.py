@@ -9,7 +9,7 @@ from datetime import datetime
 
 from core.auth import hash_password, validate_password, verify_password
 from core.db import get_db
-from config import REGISTER_VERIFY_CODE, UPLOAD_DIR, get_config_value
+from config import REGISTER_VERIFY_CODE, UPLOAD_DIR, MAX_LOGIN_ATTEMPTS, LOGIN_LOCKOUT_TIME, get_config_value
 from services.captcha import captcha_service
 from services.email import normalize_email, email_code_service
 from services.ratelimit import register_limiter, login_limiter
@@ -219,33 +219,80 @@ def login(username, password, captcha_input, captcha_id, ip_address):
     if os.environ.get('TRAE_TEST_BYPASS_CAPTCHA', '0') != '1':
         captcha_service.consume(captcha_id)
 
+    now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
     try:
         # 共享 DuckDB 游标的 execute/fetch 必须处于同一锁区间。
         with get_db() as conn:
             user = conn.execute(
-                "SELECT id, username, password_hash, is_admin FROM users "
+                "SELECT id, username, password_hash, is_admin, "
+                "login_attempts, locked_until FROM users "
                 "WHERE lower(username) = lower(?) LIMIT 1",
                 (username,)
             ).fetchone()
-    except Exception as exc:
-        log('Login', '查询用户失败', username=username, ip=ip_address, error=str(exc))
-        return False, '登录服务暂时不可用，请稍后再试'
 
-    if not user or not verify_password(password, user['password_hash']):
-        log('Login', '用户名或密码错误', username=username, ip=ip_address)
-        return False, '用户名或密码错误'
+            if user:
+                # ---- 账户锁定检查 ----
+                locked_until_str = user['locked_until'] or ''
+                if locked_until_str and locked_until_str > now_str:
+                    log('Login', '账户已被锁定', username=username, user_id=user['id'],
+                        ip=ip_address, locked_until=locked_until_str)
+                    return False, '账户已被锁定，请稍后再试'
 
-    # 历史 SHA-256 密码在首次成功登录时透明升级，不影响旧账号使用。
-    if len(user['password_hash']) == 64:
-        try:
-            with get_db() as conn:
+                # ---- 密码校验 ----
+                if not verify_password(password, user['password_hash']):
+                    # 失败：递增 login_attempts，达到阈值时锁定
+                    new_attempts = (user['login_attempts'] or 0) + 1
+                    max_attempts = MAX_LOGIN_ATTEMPTS or 5
+                    if new_attempts >= max_attempts:
+                        lockout_seconds = LOGIN_LOCKOUT_TIME or 1800
+                        locked_until = datetime.fromtimestamp(
+                            datetime.now().timestamp() + lockout_seconds
+                        ).strftime('%Y-%m-%d %H:%M:%S')
+                        conn.execute(
+                            "UPDATE users SET login_attempts = ?, locked_until = ? WHERE id = ?",
+                            (new_attempts, locked_until, user['id'])
+                        )
+                        conn.commit()
+                        log('Login', '密码错误次数过多，账户已锁定', username=username,
+                            user_id=user['id'], ip=ip_address,
+                            attempts=new_attempts, locked_until=locked_until)
+                        return False, '密码错误次数过多，账户已被锁定，请稍后再试'
+                    else:
+                        conn.execute(
+                            "UPDATE users SET login_attempts = ? WHERE id = ?",
+                            (new_attempts, user['id'])
+                        )
+                        conn.commit()
+
+                    log('Login', '用户名或密码错误', username=username, user_id=user['id'],
+                        ip=ip_address, attempts=new_attempts)
+                    return False, '用户名或密码错误'
+
+            # 无此用户
+            if not user:
+                log('Login', '用户名或密码错误', username=username, ip=ip_address)
+                return False, '用户名或密码错误'
+
+            # ---- 登录成功：重置锁定计数 ----
+            if (user['login_attempts'] or 0) > 0 or (user['locked_until'] or ''):
+                conn.execute(
+                    "UPDATE users SET login_attempts = 0, locked_until = '' WHERE id = ?",
+                    (user['id'],)
+                )
+                conn.commit()
+
+            # 历史 SHA-256 密码在首次成功登录时透明升级，不影响旧账号使用。
+            if len(user['password_hash']) == 64:
                 conn.execute(
                     "UPDATE users SET password_hash = ? WHERE id = ?",
                     (hash_password(password), user['id'])
                 )
-        except Exception as exc:
-            log('Login', '升级密码哈希失败', username=username, user_id=user['id'],
-                ip=ip_address, error=str(exc))
+                conn.commit()
+
+    except Exception as exc:
+        log('Login', '查询用户失败', username=username, ip=ip_address, error=str(exc))
+        return False, '登录服务暂时不可用，请稍后再试'
 
     log('Login', '登录成功', username=username, user_id=user['id'],
         ip=ip_address, is_admin=user['is_admin'])

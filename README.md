@@ -9,6 +9,7 @@
 | 本文档 | 项目总览、快速开始、功能特性、配置、API、架构、终端控制台使用说明 |
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | 开发准则：分层规范、易错点、测试、路由检测、构建打包与发布、文档写入准则 |
 | [docs/CHANGELOG.md](docs/CHANGELOG.md) | 更新日志 |
+| [docs/SECURITY_REPORT.md](docs/SECURITY_REPORT.md) | 安全风险自评估报告：OWASP 逐项评估、风险清单、改进建议 |
 
 ## 快速开始
 

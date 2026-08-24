@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>网站维护中 — 滨海小镇</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+    font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+    color: #f3f6fb;
+    background: linear-gradient(145deg, #424b5d 0%, #384152 48%, #303747 100%);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow-x: hidden;
+    position: relative;
+}
+
+/* 噪点纹理 */
+body::before {
+    content: ''; position: fixed; inset: 0; z-index: 0;
+    pointer-events: none;
+    opacity: 0.018;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-repeat: repeat;
+    background-size: 200px 200px;
+}
+
+/* 环境光晕 */
+body::after {
+    content: ''; position: fixed; inset: 0; z-index: 0;
+    pointer-events: none;
+    background:
+        radial-gradient(ellipse 75% 55% at 12% 5%, rgba(103, 232, 249, 0.11) 0%, transparent 62%),
+        radial-gradient(ellipse 65% 70% at 92% 90%, rgba(139, 92, 246, 0.10) 0%, transparent 64%);
+}
+
+/* 移动光晕动画 */
+.glow-orb {
+    position: fixed;
+    border-radius: 50%;
+    pointer-events: none;
+    z-index: 0;
+    filter: blur(80px);
+    opacity: 0.15;
+    animation: glowDrift 12s ease-in-out infinite alternate;
+}
+.glow-orb-1 {
+    width: 400px; height: 400px;
+    background: rgba(244, 208, 63, 0.4);
+    top: -10%; left: -10%;
+    animation-delay: 0s;
+}
+.glow-orb-2 {
+    width: 350px; height: 350px;
+    background: rgba(103, 232, 249, 0.3);
+    bottom: -15%; right: -10%;
+    animation-delay: -6s;
+}
+@keyframes glowDrift {
+    0%   { transform: translate(0, 0) scale(1); }
+    50%  { transform: translate(60px, 40px) scale(1.1); }
+    100% { transform: translate(-30px, -20px) scale(0.95); }
+}
+
+/* 主卡片 - 磨砂玻璃 */
+.maintenance-card {
+    position: relative;
+    z-index: 1;
+    width: 92vw;
+    max-width: 520px;
+    background: linear-gradient(145deg, rgba(67, 77, 97, 0.95) 0%, rgba(52, 61, 79, 0.95) 100%);
+    backdrop-filter: blur(24px) saturate(105%);
+    -webkit-backdrop-filter: blur(24px) saturate(105%);
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    border-radius: 28px;
+    box-shadow: 0 12px 30px rgba(19, 23, 32, 0.20), inset 0 1px 0 rgba(255, 255, 255, 0.07);
+    padding: 48px 36px 40px;
+    text-align: center;
+    overflow: hidden;
+    animation: cardEnter 0.8s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+    transform-origin: center;
+}
+
+/* 光线散射层 */
+.maintenance-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: radial-gradient(ellipse at 20% 15%, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0.01) 30%, transparent 60%);
+    pointer-events: none;
+    z-index: 0;
+    mix-blend-mode: screen;
+}
+
+/* 边缘光晕 */
+.maintenance-card::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    padding: 1px;
+    background: linear-gradient(135deg, rgba(103, 232, 249, 0.16) 0%, rgba(103, 232, 249, 0.03) 28%, rgba(255, 255, 255, 0.00) 50%, rgba(139, 92, 246, 0.04) 72%, rgba(139, 92, 246, 0.15) 100%);
+    -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    -webkit-mask-composite: xor;
+    mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+    mask-composite: exclude;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.maintenance-card > * { position: relative; z-index: 2; }
+
+@keyframes cardEnter {
+    0%   { opacity: 0; transform: scale(0.92) translateY(20px); }
+    100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+/* 图标区域 */
+.icon-wrap {
+    width: 80px;
+    height: 80px;
+    margin: 0 auto 24px;
+    background: rgba(244, 208, 63, 0.12);
+    border-radius: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    animation: iconPulse 3s ease-in-out infinite;
+}
+.icon-wrap svg {
+    width: 40px;
+    height: 40px;
+    color: #f4d03f;
+}
+@keyframes iconPulse {
+    0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(244, 208, 63, 0.15); }
+    50%      { transform: scale(1.05); box-shadow: 0 0 0 16px rgba(244, 208, 63, 0); }
+}
+
+/* 标题 */
+h1 {
+    font-family: "JetBrains Mono", "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: 0.035em;
+    color: #f3f6fb;
+    margin-bottom: 12px;
+}
+
+/* 状态标签 */
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.015em;
+    font-family: "JetBrains Mono", "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+    background: rgba(244, 208, 63, 0.10);
+    border: 1px solid rgba(244, 208, 63, 0.20);
+    color: #f4d03f;
+    margin-bottom: 20px;
+}
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #f4d03f;
+    animation: dotBlink 1.6s ease-in-out infinite;
+}
+@keyframes dotBlink {
+    0%, 100% { opacity: 0.3; }
+    50%      { opacity: 1; }
+}
+
+/* 描述文字 */
+.description {
+    font-size: 15px;
+    line-height: 1.7;
+    color: rgba(243, 246, 251, 0.70);
+    margin-bottom: 28px;
+    max-width: 380px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* 分隔线 */
+.divider {
+    width: 60px;
+    height: 2px;
+    margin: 0 auto 24px;
+    background: linear-gradient(90deg, transparent, rgba(244, 208, 63, 0.5), transparent);
+    border-radius: 1px;
+}
+
+/* 预计时间 */
+.eta {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: rgba(243, 246, 251, 0.50);
+    margin-bottom: 28px;
+}
+.eta svg {
+    width: 14px;
+    height: 14px;
+    color: rgba(243, 246, 251, 0.40);
+}
+
+/* 按钮 */
+.btn-primary {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px 32px;
+    border: none;
+    border-radius: 14px;
+    font-size: 14px;
+    font-weight: 700;
+    font-family: "JetBrains Mono", "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+    letter-spacing: 0.015em;
+    cursor: pointer;
+    transition: all 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+    text-decoration: none;
+    background: linear-gradient(135deg, #f4d03f 0%, #d4a827 100%);
+    color: #1a1f2e;
+    box-shadow: 0 4px 14px rgba(244, 208, 63, 0.25);
+}
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(244, 208, 63, 0.35);
+}
+.btn-primary:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 8px rgba(244, 208, 63, 0.20);
+}
+.btn-primary svg {
+    width: 16px;
+    height: 16px;
+}
+
+/* 底部信息 */
+.footer {
+    margin-top: 32px;
+    font-size: 12px;
+    color: rgba(243, 246, 251, 0.35);
+    line-height: 1.6;
+}
+.footer a {
+    color: rgba(244, 208, 63, 0.5);
+    text-decoration: none;
+    transition: color 0.2s;
+}
+.footer a:hover {
+    color: rgba(244, 208, 63, 0.8);
+}
+
+/* 工具类 */
+.hidden { display: none; }
+
+/* 响应式 */
+@media (max-width: 640px) {
+    .maintenance-card {
+        padding: 36px 24px 32px;
+        border-radius: 20px;
+    }
+    h1 { font-size: 22px; }
+    .icon-wrap {
+        width: 64px; height: 64px;
+        border-radius: 18px;
+        margin-bottom: 20px;
+    }
+    .icon-wrap svg { width: 32px; height: 32px; }
+    .description { font-size: 14px; }
+    .btn-primary { width: 100%; justify-content: center; }
+}
+</style>
+</head>
+<body>
+
+<div class="glow-orb glow-orb-1"></div>
+<div class="glow-orb glow-orb-2"></div>
+
+<div class="maintenance-card" role="main" aria-label="网站维护中">
+
+    <!-- 图标 -->
+    <div class="icon-wrap">
+        <svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 0 0 2.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 0 0 1.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 0 0-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 0 0-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 0 0-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 0 0-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 0 0 1.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
+            <circle cx="12" cy="12" r="3"/>
+        </svg>
+    </div>
+
+    <!-- 状态标签 -->
+    <div class="status-badge">
+        <span class="status-dot"></span>
+        正在维护
+    </div>
+
+    <!-- 标题 -->
+    <h1>网站维护中</h1>
+
+    <!-- 描述 -->
+    <p class="description">
+        管理员正在对服务器进行维护<br>
+        网站暂时无法访问。
+    </p>
+
+    <!-- 分隔线 -->
+    <div class="divider"></div>
+
+    <!-- 预计时间 -->
+    <div class="eta" id="eta-container">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+        </svg>
+        <span>请稍后再来</span>
+    </div>
+
+    <!-- 底部信息 -->
+    <div class="footer">
+        <p>滨海小镇 &copy; 2026</p>
+        <p style="margin-top: 6px;">
+            <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener">鄂ICP备2026045257号</a>
+            &nbsp;·&nbsp;
+            <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener">鄂ICP备2026045257号-1</a>
+        </p>
+        <p style="margin-top: 4px; opacity: 0.6;">binhai.cloud</p>
+    </div>
+
+</div>
+
+
+
+</body>
+</html>

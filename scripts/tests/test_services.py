@@ -14,7 +14,7 @@ from services.email import email_code_service, music_review_result
 from services.attachment_service import parse_attachment_json, save_attachments, clean_attachments
 from services.user_service import register, login, change_password, change_username
 from services import music_service
-from config import REGISTER_VERIFY_CODE
+from config import REGISTER_VERIFY_CODE, MAX_LOGIN_ATTEMPTS
 
 
 def setup():
@@ -644,6 +644,67 @@ def test_music_favorite_flow():
             conn.close()
 
 
+def test_account_lockout_after_max_attempts():
+    """账户锁定机制：连续失败达到阈值后锁定，正确密码也不可登录。"""
+    old_bypass = os.environ.get('TRAE_TEST_BYPASS_CAPTCHA', '')
+    os.environ['TRAE_TEST_BYPASS_CAPTCHA'] = '1'
+    username = 'lk_' + os.urandom(4).hex()
+    password = 'LockTest123!'
+    ip = '127.0.0.100'
+    try:
+        # 注册用户
+        captcha_id, answer, _ = captcha_service.generate()
+        success, user = register(
+            username, password, password, '', answer.swapcase(),
+            captcha_id, '', '', ip, False,
+            group_code_verified=True,
+        )
+        assert success is True, user
+
+        # 逐次错误密码登录，触发锁定
+        for i in range(MAX_LOGIN_ATTEMPTS - 1):
+            success, msg = login(username, 'WrongPass', '', '', ip)
+            assert success is False, f'第 {i+1} 次错误登录应失败'
+            assert msg == '用户名或密码错误', f'第 {i+1} 次错误信息: {msg}'
+
+        # 第 N 次错误登录 → 触发锁定
+        success, msg = login(username, 'WrongPass', '', '', ip)
+        assert success is False
+        assert '已被锁定' in msg, f'第 5 次错误应触发锁定提示: {msg}'
+
+        # 锁定后即使正确密码也登录失败
+        success, msg = login(username, password, '', '', ip)
+        assert success is False
+        assert '已被锁定' in msg, f'锁定后正确密码应被拒绝: {msg}'
+
+        # 验证数据库记录
+        conn = get_db()
+        try:
+            row = conn.execute(
+                "SELECT login_attempts, locked_until FROM users WHERE username = ?",
+                (username,)
+            ).fetchone()
+            assert row is not None
+            assert row['login_attempts'] >= MAX_LOGIN_ATTEMPTS, \
+                f'登录尝试次数: {row["login_attempts"]}'
+            assert row['locked_until'] and row['locked_until'] != '', 'locked_until 应有值'
+        finally:
+            conn.close()
+    finally:
+        if old_bypass:
+            os.environ['TRAE_TEST_BYPASS_CAPTCHA'] = old_bypass
+        else:
+            os.environ.pop('TRAE_TEST_BYPASS_CAPTCHA', None)
+        # 清理测试用户
+        try:
+            conn = get_db()
+            conn.execute("DELETE FROM users WHERE username = ?", (username,))
+            conn.commit()
+            conn.close()
+        except Exception:
+            pass
+
+
 # 运行所有测试
 if __name__ == '__main__':
     setup()
@@ -672,6 +733,7 @@ if __name__ == '__main__':
         test_parse_tags,
         test_music_tags_save_and_search,
         test_music_favorite_flow,
+        test_account_lockout_after_max_attempts,
     ]
     for func in test_functions:
         try:
