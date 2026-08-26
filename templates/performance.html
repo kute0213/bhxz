@@ -102,11 +102,11 @@
                 const cpuBar = document.getElementById('cpu-bar');
                 cpuBar.style.width = Math.min(data.cpu_usage, 100) + '%';
                 if (data.cpu_usage > 80) {
-                    cpuBar.className = 'progress-fill red';
+                    cpuBar.className = 'progress-fill red no-shine';
                 } else if (data.cpu_usage > 50) {
-                    cpuBar.className = 'progress-fill yellow';
+                    cpuBar.className = 'progress-fill yellow no-shine';
                 } else {
-                    cpuBar.className = 'progress-fill green';
+                    cpuBar.className = 'progress-fill green no-shine';
                 }
             } else {
                 // CPU 数据不可用时清空显示，避免误导用户使用旧值
@@ -142,11 +142,11 @@
                 const memBar = document.getElementById('mem-bar');
                 memBar.style.width = Math.min(data.memory.usage, 100) + '%';
                 if (data.memory.usage > 80) {
-                    memBar.className = 'progress-fill red';
+                    memBar.className = 'progress-fill red no-shine';
                 } else if (data.memory.usage > 50) {
-                    memBar.className = 'progress-fill yellow';
+                    memBar.className = 'progress-fill yellow no-shine';
                 } else {
-                    memBar.className = 'progress-fill blue';
+                    memBar.className = 'progress-fill blue no-shine';
                 }
             }
         }

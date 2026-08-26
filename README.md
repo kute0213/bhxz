@@ -1,6 +1,6 @@
 # 滨海小镇 - Minecraft 服务器社区网站
 
-基于 Flask 的 Minecraft 服务器社区门户，采用黑色MC现代磨砂玻璃（Dark MC Frosted Glass）设计风格。提供用户系统、模组介绍、管理后台、服务器性能监控、终端控制台等功能。
+基于 Flask 的 Minecraft 服务器社区门户，采用现代白色扁平化磨砂玻璃（White Flat Frosted Glass）设计风格。提供用户系统、模组介绍、管理后台、服务器性能监控、终端控制台等功能。
 
 ## 文档索引
 
