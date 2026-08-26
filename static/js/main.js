@@ -12,9 +12,7 @@ document.addEventListener('DOMContentLoaded', function() {
     initNavShrink();
 });
 
-// ============================================
-// 滚动渐入（基础）
-// ============================================
+// 滚动渐入
 function initScrollAnimations() {
     var prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -41,9 +39,7 @@ function initScrollAnimations() {
     });
 }
 
-// ============================================
 // 平滑滚动
-// ============================================
 function initSmoothScroll() {
     document.querySelectorAll('a[href^="#"]').forEach(function(anchor) {
         anchor.addEventListener('click', function(e) {
@@ -60,9 +56,7 @@ function initSmoothScroll() {
     });
 }
 
-// ============================================
 // 按钮涟漪效果
-// ============================================
 function initButtonFeedback() {
     document.addEventListener('click', function(e) {
         var button = e.target.closest('.btn-primary, .btn-secondary, .btn-danger, .btn-danger-outline');
@@ -80,9 +74,7 @@ function initButtonFeedback() {
     });
 }
 
-// ============================================
 // 鼠标跟随光晕
-// ============================================
 function initMouseGlow() {
     var glow = document.getElementById('mouse-glow');
     if (!glow) return;
@@ -130,9 +122,7 @@ function initMouseGlow() {
     }
 }
 
-// ============================================
-// 高级动画：卡片交错出现
-// ============================================
+// 卡片交错出现
 function initStaggerReveal() {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
         document.querySelectorAll('.stagger-item').forEach(function(el) {
@@ -158,9 +148,7 @@ function initStaggerReveal() {
     });
 }
 
-// ============================================
-// 高级动画：文字逐词揭示
-// ============================================
+// 文字逐词揭示
 function initTextReveal() {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
         document.querySelectorAll('.text-reveal').forEach(function(el) {
@@ -206,9 +194,7 @@ function initTextReveal() {
     });
 }
 
-// ============================================
-// 高级动画：视差滚动
-// ============================================
+// 视差滚动
 function initParallax() {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 
@@ -247,11 +233,7 @@ function initParallax() {
     updateParallax();
 }
 
-// ============================================
-// 导航栏收缩成椭圆胶囊
-// 向下滚动超过阈值后，给 .glass-nav 添加 .scrolled，
-// 由 CSS 完成磨砂玻璃胶囊收缩动画。
-// ============================================
+// 导航栏收缩
 function initNavShrink() {
     var nav = document.getElementById('glass-nav');
     if (!nav) return;

@@ -1,13 +1,4 @@
-/* ============================================================
- * base.js — 全站基础脚本（由 templates/base.html 提取）
- * 包含：移动端菜单、页面过渡、附件上传进度、自定义弹窗、
- *       Toast 提示、原生 confirm 拦截替换、图形验证码弹窗
- * 暴露全局对象：CustomModal、Toast、CaptchaModal
- * 页面级脚本通过 {% block extra_script %} 注入
- * 依赖：Tailwind CSS CDN、Lucide CDN（在 base.html 中加载）
- * ============================================================ */
-
-// 安全初始化 lucide 图标（CDN 可能加载失败）
+// 安全初始化 lucide 图标
 if (typeof lucide !== 'undefined' && lucide.createIcons) {
     try { lucide.createIcons(); } catch (_) {}
 }
@@ -180,9 +171,7 @@ document.addEventListener('keydown', function (e) {
 }
 })();
 
-// ============================================
 // 附件上传进度条
-// ============================================
 (function initUploadProgress() {
     document.addEventListener('submit', function (e) {
         var form = e.target;
@@ -276,9 +265,7 @@ document.addEventListener('keydown', function (e) {
     }, true);
 })();
 
-// ============================================
-// 自定义弹窗系统 - 从按钮放大移动到中间
-// ============================================
+// 自定义弹窗系统
 var CustomModal = (function () {
     var modal = document.getElementById('custom-modal');
     var modalBox = document.getElementById('modal-box');
@@ -552,9 +539,7 @@ var CustomModal = (function () {
     };
 })();
 
-// ============================================
 // Toast 提示系统
-// ============================================
 var Toast = (function () {
     var container = document.getElementById('toast-container');
 
@@ -601,9 +586,7 @@ var Toast = (function () {
     };
 })();
 
-// ============================================
-// 退出登录确认：取消时保留当前会话，确认后才跳转退出路由
-// ============================================
+// 退出登录确认
 (function initLogoutConfirm() {
     document.querySelectorAll('a[data-logout-confirm]').forEach(function (link) {
         link.addEventListener('click', function (e) {
@@ -706,11 +689,7 @@ var Toast = (function () {
     }
 })();
 
-// ============================================
-// 图形验证码弹窗（全局共享，供注册/找回密码等页面使用）
-// 暴露全局对象：CaptchaModal
-// 页面代码通过 CaptchaModal.show(hint, callback) 调用
-// ============================================
+// 图形验证码弹窗
 var CaptchaModal = (function () {
     var modal = document.getElementById('captcha-modal');
     if (!modal) return { show: function() {}, hide: function() {} };
@@ -817,13 +796,10 @@ var CaptchaModal = (function () {
     return { show: show, hide: hide };
 })();
 
-// 向后兼容：旧的 window.__showCaptchaModal / __hideCaptchaModal 指向 CaptchaModal
 window.__showCaptchaModal = CaptchaModal.show;
 window.__hideCaptchaModal = CaptchaModal.hide;
 
-// ============================================
 // 代码一键复制
-// ============================================
 var CodeBlocks = (function () {
     // 为所有 <pre><code> 块添加复制按钮
     function enhance(root) {
@@ -920,12 +896,7 @@ var CodeBlocks = (function () {
     return { enhance: enhance };
 })();
 
-/* ============================================================
- * 复制音频时长（秒）—— 全站全局代理：
- * 任何页面上的 .copy-duration-btn（大喇叭音频「时长 Ns」按钮）
- * 点击后复制其 data-seconds 属性中的秒数到剪贴板。
- * 使用事件委托，对动态加载的按钮同样生效。
- * ============================================================ */
+// 复制音频时长（秒）
 document.addEventListener('click', function (e) {
     var btn = e.target && e.target.closest ? e.target.closest('.copy-duration-btn') : null;
     if (!btn) return;
@@ -952,13 +923,7 @@ document.addEventListener('click', function (e) {
     }
 });
 
-/* ============================================================
- * 大喇叭音频收藏 —— 全站全局代理：
- * 任何页面上的 .favorite-btn（收藏/取消收藏按钮）
- * 点击后调用 POST /music/<id>/favorite 切换收藏状态。
- * 使用事件委托，对动态加载的按钮同样生效；
- * 未登录按钮带 data-requires-login 提示跳转登录。
- * ============================================================ */
+// 大喇叭音频收藏
 (function () {
     function updateFavoriteBtn(btn, isFav) {
         btn.setAttribute('data-state', isFav ? '1' : '0');
@@ -1024,13 +989,7 @@ document.addEventListener('click', function (e) {
     });
 })();
 
-/* ============================================================
- * 大喇叭音频标签编辑 —— 全站全局代理：
- * 任何页面上的 .edit-tags-btn（编辑标签按钮）
- * 点击后弹出自定义输入框（CustomModal.prompt）编辑新标签，
- * POST 到 /music/<id>/tags 保存。
- * 成功后在卡片内就地刷新标签徽章。
- * ============================================================ */
+// 大喇叭音频标签编辑
 (function () {
     function renderTags(container, tags) {
         container.innerHTML = '';
