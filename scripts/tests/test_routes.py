@@ -53,8 +53,7 @@ ROUTES = [
     # 需登录
     ('/settings',      'GET', [302, 401],        True,     '设置页（未登录跳转登录页）'),
     ('/media/avatar/999999', 'GET', [404],       False,    '不存在的用户头像'),
-    ('/media/site-background', 'GET', [404],     False,    '未配置的全站首页背景'),
-    ('/media/site-background-option', 'GET', [404], False,  '无效的背景图库预览'),
+    
     ('/settings/avatar', 'POST', [302, 401],     True,     '上传用户头像'),
 
     # ==========================================================================

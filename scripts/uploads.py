@@ -25,7 +25,6 @@ sys.path.insert(0, _PROJECT_ROOT)
 # ---- 目录配置 ----
 UPLOADS_DIR = os.path.join(_PROJECT_ROOT, 'uploads')
 ATTACHMENTS_DIR = os.path.join(UPLOADS_DIR, 'attachments')
-BACKGROUNDS_DIR = os.path.join(UPLOADS_DIR, 'backgrounds')
 COMMUNITY_DIR = os.path.join(UPLOADS_DIR, 'community')
 SITEMAP_DIR = os.path.join(UPLOADS_DIR, 'sitemap')
 
@@ -39,7 +38,6 @@ stats = {
     'board_replies_deleted': 0,
     'attachments_deleted': 0,
     'moved_attachment': 0,
-    'moved_background': 0,
     'moved_community': 0,
     'skipped': 0,
     'errors': 0,
@@ -140,7 +138,7 @@ def _parse_attachment(val):
 
 def _ensure_dirs():
     """确保分类子目录存在。"""
-    for d in (ATTACHMENTS_DIR, BACKGROUNDS_DIR, COMMUNITY_DIR, SITEMAP_DIR):
+    for d in (ATTACHMENTS_DIR, COMMUNITY_DIR, SITEMAP_DIR):
         os.makedirs(d, exist_ok=True)
 
 
@@ -192,12 +190,6 @@ def _collect_db_attachments():
 def _is_attachment_filename(name, db_names):
     """判断文件是否是已注册的附件。"""
     return name in db_names
-
-
-def _is_background_candidate(name):
-    """判断文件是否可能是背景图片（以 bg_ 开头且是图片格式）。"""
-    base, ext = os.path.splitext(name)
-    return base.startswith('bg_') and ext.lower() in _IMAGE_EXTS
 
 
 def _migrate_file(src, dst):
@@ -255,15 +247,7 @@ def _migrate_uploads():
             print(f'  [附件] {fname}')
             continue
 
-        # 2) 背景图片 → backgrounds/
-        if _is_background_candidate(fname):
-            dst = os.path.join(BACKGROUNDS_DIR, fname)
-            _migrate_file(src, dst)
-            stats['moved_background'] += 1
-            print(f'  [背景] {fname}')
-            continue
-
-        # 3) 其他文件 → community/
+        # 2) 其他文件 → community/
         dst = os.path.join(COMMUNITY_DIR, fname)
         _migrate_file(src, dst)
         stats['moved_community'] += 1
@@ -362,7 +346,7 @@ def run():
     print(f'  征集主题:      {stats["board_topics_deleted"]} 个')
     print(f'  征集回复:      {stats["board_replies_deleted"]} 条')
     print(f'  附件文件:      {stats["attachments_deleted"]} 个')
-    print(f'  文件迁移:      {stats["moved_attachment"]} 附件 + {stats["moved_background"]} 背景 + {stats["moved_community"]} 其他')
+    print(f'  文件迁移:      {stats["moved_attachment"]} 附件 + {stats["moved_community"]} 其他')
     print(f'  跳过:          {stats["skipped"]} 个')
     print(f'  错误:          {stats["errors"]} 个')
     print('=' * 50)

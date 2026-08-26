@@ -15,7 +15,6 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 _MEDIA_DIR = os.path.join(UPLOAD_DIR, 'media')
 _IMAGE_SPECS = {
     'avatar': {'size': (512, 512), 'quality': 88, 'crop': True},
-    'background': {'size': (2560, 1440), 'quality': 90, 'crop': False},
 }
 
 
@@ -30,7 +29,7 @@ def _media_path(user_id, kind):
 
 
 def _update_user_object_key(user_id, column, object_key):
-    if column not in ('avatar_key', 'background_key'):
+    if column not in ('avatar_key',):
         raise ValueError('非法的用户图片字段')
     with get_db() as conn:
         conn.execute(f'UPDATE users SET {column} = ? WHERE id = ?', (object_key, user_id))
@@ -57,15 +56,6 @@ def user_avatar(user_id):
     if not row or not row['avatar_key']:
         abort(404)
     return _serve_local_image(row['avatar_key'], f'avatar-{user_id}.webp')
-
-
-@main_bp.route('/media/background')
-@login_required
-def user_background():
-    user = get_current_user()
-    if not user or not user.get('background_key'):
-        abort(404)
-    return _serve_local_image(user['background_key'], f'background-{user["id"]}.webp')
 
 
 def _read_upload(upload):
@@ -150,35 +140,4 @@ def delete_avatar():
         flash('头像删除失败，请稍后重试', 'error')
     return redirect(url_for('main.settings', tab='avatar'))
 
-@main_bp.route('/home/background', methods=['POST'])
-@login_required
-def upload_background():
-    user = get_current_user()
-    try:
-        data = _convert_image(request.files.get('background'), 'background')
-        filepath = _media_path(user['id'], 'background')
-        with open(filepath, 'wb') as f:
-            f.write(data)
-        _update_user_object_key(user['id'], 'background_key', filepath)
-        log('UserMedia', '主页背景上传成功', user_id=user['id'], username=user['username'])
-        flash('主页背景更新成功！', 'success')
-    except ValueError as exc:
-        log('UserMedia', '主页背景上传失败', user_id=user['id'], error=str(exc))
-        flash(str(exc), 'error')
-    return redirect(url_for('main.home'))
 
-
-@main_bp.route('/home/background/delete', methods=['POST'])
-@login_required
-def delete_background():
-    user = get_current_user()
-    try:
-        filepath = user.get('background_key', '')
-        if filepath and os.path.isfile(filepath):
-            os.remove(filepath)
-        _update_user_object_key(user['id'], 'background_key', '')
-        flash('主页背景已恢复为默认样式', 'success')
-    except Exception as exc:
-        log('UserMedia', '主页背景删除失败', user_id=user['id'], error=str(exc))
-        flash('背景删除失败，请稍后重试', 'error')
-    return redirect(url_for('main.home'))
