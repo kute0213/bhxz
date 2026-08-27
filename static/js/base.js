@@ -1,9 +1,12 @@
+// 滨海小镇 - 基础脚本
+// 功能：图标初始化、密码强度、移动端菜单、页面过渡、附件上传、弹窗、Toast、验证码、代码复制等
+
 // 安全初始化 lucide 图标
 if (typeof lucide !== 'undefined' && lucide.createIcons) {
     try { lucide.createIcons(); } catch (_) {}
 }
 
-// 密码强度展示：必需规则与 core.auth.validate_password 保持一致。
+// 密码强度展示：与 core.auth.validate_password 规则保持一致
 (function initPasswordStrengthIndicators() {
     document.querySelectorAll('input[data-password-strength]').forEach(function(input) {
         if (input.dataset.strengthInitialized === 'true') return;
@@ -69,7 +72,7 @@ if (typeof lucide !== 'undefined' && lucide.createIcons) {
     });
 })();
 
-// 移动端菜单控制
+// 移动端菜单控制：打开/关闭侧边菜单，ESC 键关闭
 var mobileMenuBtn = document.getElementById('mobile-menu-btn');
 var mobileCloseBtn = document.getElementById('mobile-close-btn');
 var mobileMenu = document.getElementById('mobile-menu');
@@ -109,7 +112,7 @@ document.addEventListener('keydown', function (e) {
     }
 });
 
-// 页面加载/跳转过渡动画
+// 页面加载/跳转过渡动画：捕获站内链接点击，添加离场动画后跳转
 (function () {
     try {
         var pageContent = document.querySelector('main.page-content');
@@ -171,7 +174,7 @@ document.addEventListener('keydown', function (e) {
 }
 })();
 
-// 附件上传进度条
+// 附件上传进度条：监听 multipart/form-data 表单提交，显示上传进度
 (function initUploadProgress() {
     document.addEventListener('submit', function (e) {
         var form = e.target;
@@ -265,7 +268,7 @@ document.addEventListener('keydown', function (e) {
     }, true);
 })();
 
-// 自定义弹窗系统
+// 自定义弹窗系统（alert / confirm / prompt 模式）
 var CustomModal = (function () {
     var modal = document.getElementById('custom-modal');
     var modalBox = document.getElementById('modal-box');
@@ -539,7 +542,7 @@ var CustomModal = (function () {
     };
 })();
 
-// Toast 提示系统
+// Toast 提示系统（成功/错误/警告/信息）
 var Toast = (function () {
     var container = document.getElementById('toast-container');
 
@@ -799,7 +802,7 @@ var CaptchaModal = (function () {
 window.__showCaptchaModal = CaptchaModal.show;
 window.__hideCaptchaModal = CaptchaModal.hide;
 
-// 代码一键复制
+// 代码一键复制：为 <pre><code> 块添加复制按钮，支持 clipboard API 和 fallback
 var CodeBlocks = (function () {
     // 为所有 <pre><code> 块添加复制按钮
     function enhance(root) {

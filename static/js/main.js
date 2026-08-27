@@ -1,3 +1,6 @@
+// 滨海小镇 - 主页面脚本
+// 功能：滚动动画、平滑滚动、按钮涟漪、鼠标光晕、卡片交错、文字揭示、视差、导航收缩
+
 document.addEventListener('DOMContentLoaded', function() {
     if (window.__animationsInitialized) return;
     window.__animationsInitialized = true;
@@ -12,7 +15,7 @@ document.addEventListener('DOMContentLoaded', function() {
     initNavShrink();
 });
 
-// 滚动渐入
+// 滚动渐入动画：监听 .section-fade 元素，进入视口时添加 visible 类
 function initScrollAnimations() {
     var prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
@@ -39,7 +42,7 @@ function initScrollAnimations() {
     });
 }
 
-// 平滑滚动
+// 平滑滚动：处理所有锚点链接（#xxx），平滑滚动到目标位置
 function initSmoothScroll() {
     document.querySelectorAll('a[href^="#"]').forEach(function(anchor) {
         anchor.addEventListener('click', function(e) {
@@ -56,7 +59,7 @@ function initSmoothScroll() {
     });
 }
 
-// 按钮涟漪效果
+// 按钮涟漪效果：点击按钮时产生水波扩散动画
 function initButtonFeedback() {
     document.addEventListener('click', function(e) {
         var button = e.target.closest('.btn-primary, .btn-secondary, .btn-danger, .btn-danger-outline');
@@ -74,7 +77,7 @@ function initButtonFeedback() {
     });
 }
 
-// 鼠标跟随光晕
+// 鼠标跟随光晕：鼠标移动时产生紫色光晕效果
 function initMouseGlow() {
     var glow = document.getElementById('mouse-glow');
     if (!glow) return;
@@ -122,7 +125,7 @@ function initMouseGlow() {
     }
 }
 
-// 卡片交错出现
+// 卡片交错出现：监听 .stagger-item 元素，按延迟时间依次显示
 function initStaggerReveal() {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
         document.querySelectorAll('.stagger-item').forEach(function(el) {
@@ -148,7 +151,7 @@ function initStaggerReveal() {
     });
 }
 
-// 文字逐词揭示
+// 文字逐词揭示：监听 .text-reveal-container 元素，逐词淡入显示
 function initTextReveal() {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
         document.querySelectorAll('.text-reveal').forEach(function(el) {
@@ -194,7 +197,7 @@ function initTextReveal() {
     });
 }
 
-// 视差滚动
+// 视差滚动：根据鼠标滚动位置，以不同速度移动元素制造景深感
 function initParallax() {
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 
@@ -233,7 +236,7 @@ function initParallax() {
     updateParallax();
 }
 
-// 导航栏收缩
+// 导航栏收缩：滚动超过阈值时给导航栏添加 scrolled 类，触发磨砂玻璃收缩效果
 function initNavShrink() {
     var nav = document.getElementById('glass-nav');
     if (!nav) return;

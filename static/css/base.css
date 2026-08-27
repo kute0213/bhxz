@@ -1,33 +1,53 @@
+/* ============================================
+   滨海小镇 - 淡紫蓝磨砂玻璃主题
+   颜色系统：浅蓝紫色背景 + 磨砂玻璃浅紫色元素
+   ============================================ */
+
+/* 颜色变量系统 */
 :root {
-    --bg-primary: #2d3448;
-    --bg-secondary: #363d52;
-    --bg-card: rgba(52, 60, 82, 0.88);
-    --bg-card-hover: rgba(58, 67, 90, 0.92);
-    --bg-glass: rgba(40, 46, 65, 0.92);
-    --bg-glass-strong: rgba(35, 40, 58, 0.96);
+    /* 背景色：浅蓝紫色系 */
+    --bg-primary: #2e3550;
+    --bg-secondary: #394062;
+    --bg-card: rgba(52, 60, 86, 0.88);
+    --bg-card-hover: rgba(58, 68, 95, 0.92);
+    --bg-glass: rgba(42, 48, 70, 0.92);
+    --bg-glass-strong: rgba(37, 42, 62, 0.96);
+
+    /* 文字色 */
     --text-primary: #eef2fb;
     --text-secondary: rgba(238, 242, 251, 0.7);
     --text-muted: rgba(238, 242, 251, 0.4);
+
+    /* 强调色：浅蓝紫系 */
     --accent-purple: #a78bfa;
     --accent-purple-dim: rgba(167, 139, 250, 0.12);
     --accent-blue: #60a5fa;
     --accent-blue-dim: rgba(96, 165, 250, 0.12);
+    --accent-indigo: #818cf8;
+    --accent-indigo-dim: rgba(129, 140, 248, 0.12);
     --accent-cyan: #67e8f9;
     --accent-rose: #fb7185;
     --accent-amber: #fbbf24;
+
+    /* 边框与阴影 */
     --border-subtle: rgba(255, 255, 255, 0.06);
     --border-card: rgba(255, 255, 255, 0.08);
     --border-accent: rgba(167, 139, 250, 0.2);
     --shadow-card: 0 8px 32px rgba(0, 0, 0, 0.3), 0 2px 8px rgba(0, 0, 0, 0.2);
     --shadow-elevated: 0 16px 48px rgba(0, 0, 0, 0.4), 0 4px 16px rgba(0, 0, 0, 0.3);
+
+    /* 圆角 */
     --radius-card: 16px;
     --radius-sm: 8px;
     --radius-lg: 24px;
+
+    /* 过渡动画 */
     --transition-fast: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     --transition-normal: 0.35s cubic-bezier(0.4, 0, 0.2, 1);
     --transition-bounce: 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
+/* 基础页面样式 */
 body {
     font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
     color: var(--text-primary);
@@ -45,6 +65,7 @@ h1 { letter-spacing: 0.035em; }
 h2, h3 { letter-spacing: 0.02em; }
 .glass-nav a, .btn-primary, .btn-secondary, .btn-danger { letter-spacing: 0.015em; }
 
+/* 背景噪点纹理（增强磨砂玻璃质感） */
 body::before {
     content: ''; position: fixed; inset: 0; z-index: 9998;
     pointer-events: none;
@@ -54,6 +75,7 @@ body::before {
     background-size: 200px 200px;
 }
 
+/* 浅蓝紫渐变背景光晕 */
 body::after {
     content: ''; position: fixed; inset: 0; z-index: -1;
     pointer-events: none;
@@ -76,6 +98,7 @@ body::after {
 @keyframes orbFloat2 { 0%,100% { transform: translate(0,0) scale(1); } 50% { transform: translate(-50px,-40px) scale(1.15); } }
 @keyframes orbFloat3 { 0%,100% { transform: translate(-50%,0) scale(1); } 50% { transform: translate(-50%,-60px) scale(0.95); } }
 
+/* 磨砂玻璃卡片 */
 .pixel-card {
     background: var(--bg-card);
     backdrop-filter: blur(20px) saturate(110%);
@@ -94,6 +117,7 @@ body::after {
     pointer-events: none; z-index: 0; mix-blend-mode: screen;
 }
 
+/* 磨砂玻璃渐变边框 */
 .pixel-card::after {
     content: '';
     position: absolute; inset: 0; border-radius: inherit; padding: 1px;
@@ -262,6 +286,11 @@ body::after {
 .music-card-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; width: 100%; flex-shrink: 0; }
 @media (min-width: 640px) { .music-card-actions { width: auto; flex-wrap: nowrap; } }
 
+/* ============================================
+   按钮系统 - 磨砂玻璃浅紫色按钮
+   ============================================ */
+
+/* 主按钮 - 磨砂玻璃浅紫 */
 .btn-primary {
     background: var(--accent-purple-dim);
     backdrop-filter: blur(20px) saturate(110%);
@@ -282,6 +311,7 @@ body::after {
 }
 .btn-primary:active { transform: translateY(0); }
 
+/* 次按钮 - 磨砂玻璃半透明 */
 .btn-secondary {
     background: rgba(255,255,255,0.05);
     backdrop-filter: blur(20px) saturate(110%);
@@ -302,6 +332,7 @@ body::after {
 }
 .btn-secondary:active { transform: translateY(0); }
 
+/* 危险按钮 - 磨砂玻璃淡红 */
 .btn-danger {
     background: rgba(251,113,133,0.06);
     backdrop-filter: blur(20px);
@@ -360,6 +391,7 @@ body::after {
 .password-strength[data-level="4"] .password-strength-label { color: #ddd6fe; }
 @media (max-width: 420px) { .password-strength-meta { flex-direction: column; gap: 3px; } .password-strength-hint { text-align: left; } }
 
+/* 导航栏 - 磨砂玻璃效果 */
 .glass-nav { position: sticky; top: 0; z-index: 40; background: transparent; transition: padding var(--transition-bounce); }
 .glass-nav-inner {
     position: relative; width: 100%; margin-left: 50%;
@@ -391,6 +423,7 @@ body::after {
 .glass-nav.scrolled .glass-nav-inner .border-t { border-top-color: rgba(255,255,255,0.04); }
 @media (prefers-reduced-motion: reduce) { .glass-nav, .glass-nav-inner { transition: none !important; } }
 
+/* 移动端侧边菜单 - 磨砂玻璃浮动 */
 .mobile-menu {
     background: linear-gradient(180deg, rgba(42,48,68,0.99) 0%, rgba(45,52,74,0.99) 100%);
     backdrop-filter: blur(40px) saturate(100%);
@@ -411,22 +444,29 @@ body::after {
 }
 .mobile-menu-overlay.active { opacity: 1; visibility: visible; }
 
+/* 页面入场/离场过渡动画 */
 .js .page-content { animation: page-in 0.45s cubic-bezier(0.4,0,0.2,1) both; }
+/* JS 保底显示：确保页面内容始终可见（配合 base.html 的 forceShow） */
+.page-ready { opacity: 1 !important; transform: translateY(0) !important; }
 @keyframes page-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
 body.page-leaving .page-content { animation: none; opacity: 0; transform: translateY(-8px); transition: opacity 0.3s ease, transform 0.3s ease; }
 .page-transition-overlay { position: fixed; inset: 0; z-index: 9999; background: var(--bg-primary); opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
 body.page-leaving .page-transition-overlay { opacity: 1; pointer-events: all; }
 .page-container { min-height: calc(100vh - 80px); }
 
+/* 磨砂玻璃行悬停 */
 .glass-table-row:hover { background: rgba(96,165,250,0.04); }
 
+/* 滚动渐入动画 */
 .section-fade { opacity: 0; transform: translateY(24px); transition: opacity 0.7s cubic-bezier(0.22,1,0.36,1), transform 0.7s cubic-bezier(0.22,1,0.36,1); }
 .section-fade.visible { opacity: 1; transform: translateY(0); }
 
+/* 光泽划过效果 */
 .glass-shine { position: relative; overflow: hidden; border-radius: inherit; }
 .glass-shine::after { content: ''; position: absolute; top: 0; left: -100%; width: 100%; height: 100%; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.02), transparent); transition: left 0.8s cubic-bezier(0.4,0,0.2,1); pointer-events: none; }
 .glass-shine:hover::after { left: 100%; }
 
+/* 自定义弹窗（磨砂玻璃） */
 .modal-overlay {
     position: fixed; inset: 0; z-index: 1000;
     background: rgba(0,0,0,0); backdrop-filter: blur(0px);
@@ -474,6 +514,7 @@ body.page-leaving .page-transition-overlay { opacity: 1; pointer-events: all; }
     .modal-footer .btn-primary, .modal-footer .btn-secondary { width: 100%; padding: 10px 20px; text-align: center; }
 }
 
+/* Toast 通知系统（磨砂玻璃） */
 .toast-container {
     position: fixed; top: 80px; left: 50%; transform: translateX(-50%);
     z-index: 1100; display: flex; flex-direction: column; gap: 10px; pointer-events: none;
@@ -586,10 +627,13 @@ a:focus-visible, button:focus-visible { outline: 2px solid rgba(167,139,250,0.4)
 .docs-sidebar-item.active { background: rgba(167,139,250,0.12); color: var(--accent-purple); font-weight: 600; }
 .line-clamp-3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 
+/* 卡片交错动画（滚动渐入） */
 .stagger-item { opacity: 0; transform: translateY(30px) scale(0.97); transition: opacity 0.7s cubic-bezier(0.22,1,0.36,1), transform 0.7s cubic-bezier(0.22,1,0.36,1); }
 .stagger-item.visible { opacity: 1; transform: translateY(0) scale(1); }
+/* 文字淡入 */
 .text-reveal { opacity: 0; transform: translateY(20px); transition: opacity 0.5s ease, transform 0.5s cubic-bezier(0.22,1,0.36,1); }
 .text-reveal.visible { opacity: 1; transform: translateY(0); }
+/* 文字逐词揭示 */
 .text-reveal-word { display: inline-block; opacity: 0; transform: translateY(16px) rotateX(20deg); transition: opacity 0.5s ease, transform 0.5s cubic-bezier(0.22,1,0.36,1); white-space: pre; }
 .text-reveal-word.visible { opacity: 1; transform: translateY(0) rotateX(0deg); }
 .parallax-layer, .parallax-slow, .parallax-fast { will-change: transform; }
@@ -651,11 +695,17 @@ pre::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius
 pre::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.15); }
 .upload-progress-text { font-size: 11px; color: var(--text-muted); margin-top: 4px; display: flex; justify-content: space-between; }
 
-.text-gold-400 { color: var(--accent-purple) !important; }
-.text-gold-400\/50 { color: rgba(167,139,250,0.5) !important; }
-.text-gold-400\/70 { color: rgba(167,139,250,0.7) !important; }
-.text-gold-400\/80 { color: rgba(167,139,250,0.8) !important; }
-.text-gold-400\/90 { color: rgba(167,139,250,0.9) !important; }
+.text-gold-400 { color: var(--accent-indigo) !important; }
+/* 浅蓝紫色图标颜色 */
+.text-accent-indigo { color: var(--accent-indigo) !important; }
+.text-accent-indigo\/50 { color: rgba(129,140,248,0.5) !important; }
+.text-accent-indigo\/70 { color: rgba(129,140,248,0.7) !important; }
+.text-accent-indigo\/80 { color: rgba(129,140,248,0.8) !important; }
+.text-accent-indigo\/90 { color: rgba(129,140,248,0.9) !important; }
+.text-gold-400\/50 { color: rgba(129,140,248,0.5) !important; }
+.text-gold-400\/70 { color: rgba(129,140,248,0.7) !important; }
+.text-gold-400\/80 { color: rgba(129,140,248,0.8) !important; }
+.text-gold-400\/90 { color: rgba(129,140,248,0.9) !important; }
 .text-cream { color: var(--text-primary) !important; }
 .text-cream\/50 { color: rgba(238,242,251,0.5) !important; }
 .text-cream\/60 { color: rgba(238,242,251,0.6) !important; }
@@ -663,12 +713,12 @@ pre::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.15); }
 .text-cream\/80 { color: rgba(238,242,251,0.8) !important; }
 .text-cream\/90 { color: rgba(238,242,251,0.9) !important; }
 
-.bg-gold-400 { background: var(--accent-purple) !important; }
-.bg-gold-400\/5 { background: rgba(167,139,250,0.05) !important; }
-.bg-gold-400\/10 { background: rgba(167,139,250,0.1) !important; }
-.bg-gold-400\/20 { background: rgba(167,139,250,0.2) !important; }
-.bg-gold-400\/30 { background: rgba(167,139,250,0.3) !important; }
-.bg-gold-400\/50 { background: rgba(167,139,250,0.5) !important; }
+.bg-gold-400 { background: var(--accent-indigo) !important; }
+.bg-gold-400\/5 { background: rgba(129,140,248,0.05) !important; }
+.bg-gold-400\/10 { background: rgba(129,140,248,0.1) !important; }
+.bg-gold-400\/20 { background: rgba(129,140,248,0.2) !important; }
+.bg-gold-400\/30 { background: rgba(129,140,248,0.3) !important; }
+.bg-gold-400\/50 { background: rgba(129,140,248,0.5) !important; }
 .bg-forest-900 { background: rgba(42,48,68,0.6) !important; }
 .bg-forest-900\/40 { background: rgba(42,48,68,0.4) !important; }
 .bg-forest-900\/50 { background: rgba(42,48,68,0.5) !important; }
@@ -676,20 +726,20 @@ pre::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.15); }
 .bg-forest-700\/50 { background: rgba(255,255,255,0.05) !important; }
 .bg-forest-700\/40 { background: rgba(255,255,255,0.04) !important; }
 
-.from-gold-400 { --tw-gradient-from: var(--accent-purple) !important; }
-.to-gold-500 { --tw-gradient-to: #7c3aed !important; }
-.via-gold-400\/30 { --tw-gradient-via: rgba(167,139,250,0.3) !important; }
+.from-gold-400 { --tw-gradient-from: var(--accent-indigo) !important; }
+.to-gold-500 { --tw-gradient-to: #6c5ce7 !important; }
+.via-gold-400\/30 { --tw-gradient-via: rgba(129,140,248,0.3) !important; }
 
-.border-gold-400\/20 { border-color: rgba(167,139,250,0.2) !important; }
-.border-gold-400\/30 { border-color: rgba(167,139,250,0.3) !important; }
-.border-gold-400\/10 { border-color: rgba(167,139,250,0.1) !important; }
+.border-gold-400\/20 { border-color: rgba(129,140,248,0.2) !important; }
+.border-gold-400\/30 { border-color: rgba(129,140,248,0.3) !important; }
+.border-gold-400\/10 { border-color: rgba(129,140,248,0.1) !important; }
 .border-forest-700\/50 { border-color: rgba(255,255,255,0.06) !important; }
 .border-cream\/20 { border-color: rgba(255,255,255,0.08) !important; }
 
-.hover\:text-gold-400:hover { color: var(--accent-purple) !important; }
-.hover\:border-gold-400\/50:hover { border-color: rgba(167,139,250,0.5) !important; }
-.hover\:bg-gold-400\/5:hover { background: rgba(167,139,250,0.05) !important; }
-.group:hover .group-hover\:text-gold-400 { color: var(--accent-purple) !important; }
+.hover\:text-gold-400:hover { color: var(--accent-indigo) !important; }
+.hover\:border-gold-400\/50:hover { border-color: rgba(129,140,248,0.5) !important; }
+.hover\:bg-gold-400\/5:hover { background: rgba(129,140,248,0.05) !important; }
+.group:hover .group-hover\:text-gold-400 { color: var(--accent-indigo) !important; }
 .text-gold-300 { color: #c4b5fd !important; }
 .text-gold-300\/90 { color: rgba(196,181,253,0.9) !important; }
 .hover\:text-gold-300:hover { color: #c4b5fd !important; }
@@ -702,4 +752,4 @@ pre::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.15); }
 .border-gold-500\/30 { border-color: rgba(124,58,237,0.3) !important; }
 .from-gold-500 { --tw-gradient-from: #7c3aed !important; }
 .peer-checked\:bg-gold-500:checked ~ .peer-checked\:bg-gold-500 { background: #7c3aed !important; }
-.hover\:shadow-gold-400\/20:hover { --tw-shadow-color: rgba(167,139,250,0.2) !important; }
+.hover\:shadow-gold-400\/20:hover { --tw-shadow-color: rgba(129,140,248,0.2) !important; }
