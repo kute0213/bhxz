@@ -13,6 +13,7 @@ UPLOAD_ATTACHMENTS_DIR = os.path.join(UPLOAD_DIR, 'attachments')
 UPLOAD_COMMUNITY_DIR = os.path.join(UPLOAD_DIR, 'community')
 UPLOAD_SITEMAP_DIR = os.path.join(UPLOAD_DIR, 'sitemap')
 UPLOAD_MUSIC_DIR = os.path.join(UPLOAD_DIR, 'music')
+UPLOAD_BACKGROUNDS_DIR = os.path.join(UPLOAD_DIR, 'backgrounds')
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'pdf', 'txt', 'zip', 'rar', '7z', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'mp4', 'mp3', 'wav'}
 
 # 大喇叭音频：允许上传的音频格式（上传后由 ffmpeg 转码为 HLS/m3u8）
@@ -167,6 +168,7 @@ os.makedirs(UPLOAD_ATTACHMENTS_DIR, exist_ok=True)
 os.makedirs(UPLOAD_COMMUNITY_DIR, exist_ok=True)
 os.makedirs(UPLOAD_SITEMAP_DIR, exist_ok=True)
 os.makedirs(UPLOAD_MUSIC_DIR, exist_ok=True)
+os.makedirs(UPLOAD_BACKGROUNDS_DIR, exist_ok=True)
 os.makedirs(BACKUP_DIR, exist_ok=True)
 
 

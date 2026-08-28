@@ -20,3 +20,4 @@ from routes.admin import broadcast    # noqa: E402,F401
 from routes.admin import discussion   # noqa: E402,F401
 from routes.admin import update       # noqa: E402,F401
 from routes.admin import music        # noqa: E402,F401
+from routes.admin import backgrounds   # noqa: E402,F401

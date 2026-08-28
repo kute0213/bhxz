@@ -40,7 +40,7 @@
     <!-- 入场动画见 base.css：纯 CSS animation，不依赖 JS，避免白屏 -->
     <noscript><style>.page-content{opacity:1!important;transform:none!important}</style></noscript>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/tailwind.css', v='4') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css', v='25') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css', v='26') }}">
     {% block extra_style %}{% endblock %}
 </head>
 <body>
@@ -53,6 +53,12 @@
         <div class="bg-orb bg-orb-2"></div>
         <div class="bg-orb bg-orb-3"></div>
     </div>
+
+    <!-- 全站背景图片 -->
+    {% if active_backgrounds %}
+    <div class="site-background" style="background-image: url('{{ url_for('backgrounds.serve_background', bg_id=active_backgrounds[0].id) }}');"></div>
+    <div class="site-background-overlay"></div>
+    {% endif %}
 
     <!-- 页面过渡遮罩 -->
     <div class="page-transition-overlay"></div>
@@ -115,9 +121,9 @@
                     <i data-lucide="message-square" class="w-5 h-5"></i>
                     <span>讨论</span>
                 </a>
-                <a href="{{ url_for('main.music_page') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors">
-                    <i data-lucide="music" class="w-5 h-5"></i>
-                    <span>大喇叭音频</span>
+                <a href="{{ url_for('main.interact_page') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors">
+                    <i data-lucide="gamepad-2" class="w-5 h-5"></i>
+                    <span>服务器互动</span>
                 </a>
                 <a href="{{ url_for('main.performance_page') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors">
                     <i data-lucide="activity" class="w-5 h-5"></i>
@@ -183,8 +189,8 @@
                 <a href="{{ url_for('discussion.list') }}" class="text-cream/80 hover:text-gold-400 text-sm font-medium transition-colors px-3 py-2 rounded-lg hover:bg-gold-400/5">
                     讨论
                 </a>
-                <a href="{{ url_for('main.music_page') }}" class="text-cream/80 hover:text-gold-400 text-sm font-medium transition-colors px-3 py-2 rounded-lg hover:bg-gold-400/5">
-                    大喇叭音频
+                <a href="{{ url_for('main.interact_page') }}" class="text-cream/80 hover:text-gold-400 text-sm font-medium transition-colors px-3 py-2 rounded-lg hover:bg-gold-400/5">
+                    服务器互动
                 </a>
                 <a href="{{ url_for('main.performance_page') }}" class="text-cream/80 hover:text-gold-400 text-sm font-medium transition-colors px-3 py-2 rounded-lg hover:bg-gold-400/5">
                     服务器状态
@@ -267,8 +273,8 @@
                 <a href="{{ url_for('discussion.list') }}" class="flex-shrink-0 px-3 py-1.5 text-sm text-cream/70 hover:text-gold-400 rounded-lg hover:bg-gold-400/5 transition-colors">
                     讨论
                 </a>
-                <a href="{{ url_for('main.music_page') }}" class="flex-shrink-0 px-3 py-1.5 text-sm text-cream/70 hover:text-gold-400 rounded-lg hover:bg-gold-400/5 transition-colors">
-                    大喇叭音频
+                <a href="{{ url_for('main.interact_page') }}" class="flex-shrink-0 px-3 py-1.5 text-sm text-cream/70 hover:text-gold-400 rounded-lg hover:bg-gold-400/5 transition-colors">
+                    服务器互动
                 </a>
                 <a href="{{ url_for('main.performance_page') }}" class="flex-shrink-0 px-3 py-1.5 text-sm text-cream/70 hover:text-gold-400 rounded-lg hover:bg-gold-400/5 transition-colors">
                     服务器状态

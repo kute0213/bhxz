@@ -1,0 +1,153 @@
+{% extends "admin/admin_base.html" %}
+
+{% block admin_title %}背景图片管理{% endblock %}
+
+{% block admin_content %}
+<div class="space-y-8">
+    <div>
+        <h2 class="text-xl font-bold text-gold-400 mb-4">待审核（{{ pending_bgs|length }}）</h2>
+        {% if pending_bgs %}
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {% for bg in pending_bgs %}
+            <div class="pixel-card rounded-xl p-4" id="bg-{{ bg.id }}">
+                <div class="aspect-video rounded-lg overflow-hidden bg-forest-900/50 mb-3">
+                    {% if bg.file_path %}
+                    <img src="{{ url_for('backgrounds.serve_background', bg_id=bg.id) }}" alt="{{ bg.filename }}" class="w-full h-full object-cover">
+                    {% else %}
+                    <div class="w-full h-full flex items-center justify-center text-cream/40">
+                        <i data-lucide="image" class="w-8 h-8"></i>
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="text-sm text-cream/80 mb-1 truncate">{{ bg.filename }}</div>
+                <div class="text-xs text-cream/50 mb-3">by {{ bg.username }} · {{ bg.created_at }}</div>
+                <div class="flex gap-2">
+                    <button class="btn-primary px-3 py-1.5 text-xs rounded-lg approve-btn" data-id="{{ bg.id }}">通过</button>
+                    <button class="btn-danger px-3 py-1.5 text-xs rounded-lg reject-btn" data-id="{{ bg.id }}">驳回</button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="pixel-card rounded-xl p-6 text-center text-cream/50">
+            <i data-lucide="check-circle" class="w-8 h-8 mx-auto mb-2"></i>
+            <p>暂无待审核的背景图片</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <div>
+        <h2 class="text-xl font-bold text-gold-400 mb-4">已通过（{{ approved_bgs|length }}）</h2>
+        {% if approved_bgs %}
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {% for bg in approved_bgs %}
+            <div class="pixel-card rounded-xl p-4" id="bg-{{ bg.id }}">
+                <div class="aspect-video rounded-lg overflow-hidden bg-forest-900/50 mb-3">
+                    <img src="{{ url_for('backgrounds.serve_background', bg_id=bg.id) }}" alt="{{ bg.filename }}" class="w-full h-full object-cover">
+                </div>
+                <div class="text-sm text-cream/80 mb-1 truncate">{{ bg.filename }}</div>
+                <div class="text-xs text-cream/50 mb-3">by {{ bg.username }} · {{ bg.created_at }}</div>
+                <div class="flex gap-2">
+                    {% if bg.is_active %}
+                    <button class="btn-secondary px-3 py-1.5 text-xs rounded-lg toggle-btn" data-id="{{ bg.id }}">停用</button>
+                    {% else %}
+                    <button class="btn-primary px-3 py-1.5 text-xs rounded-lg toggle-btn" data-id="{{ bg.id }}">启用</button>
+                    {% endif %}
+                    <button class="btn-danger px-3 py-1.5 text-xs rounded-lg admin-delete-btn" data-id="{{ bg.id }}">删除</button>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="pixel-card rounded-xl p-6 text-center text-cream/50">
+            <p>暂无已通过的背景图片</p>
+        </div>
+        {% endif %}
+    </div>
+
+    <div>
+        <h2 class="text-xl font-bold text-gold-400 mb-4">已驳回（{{ rejected_bgs|length }}）</h2>
+        {% if rejected_bgs %}
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {% for bg in rejected_bgs %}
+            <div class="pixel-card rounded-xl p-4 opacity-60" id="bg-{{ bg.id }}">
+                <div class="aspect-video rounded-lg overflow-hidden bg-forest-900/50 mb-3">
+                    {% if bg.file_path %}
+                    <img src="{{ url_for('backgrounds.serve_background', bg_id=bg.id) }}" alt="{{ bg.filename }}" class="w-full h-full object-cover">
+                    {% else %}
+                    <div class="w-full h-full flex items-center justify-center text-cream/40">
+                        <i data-lucide="image-off" class="w-8 h-8"></i>
+                    </div>
+                    {% endif %}
+                </div>
+                <div class="text-sm text-cream/80 mb-1 truncate">{{ bg.filename }}</div>
+                <div class="text-xs text-cream/50 mb-3">by {{ bg.username }} · {{ bg.created_at }}</div>
+                <div class="flex gap-2">
+                    <button class="btn-danger px-3 py-1.5 text-xs rounded-lg admin-delete-btn" data-id="{{ bg.id }}">删除</button>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="pixel-card rounded-xl p-6 text-center text-cream/50">
+            <p>暂无已驳回的背景图片</p>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block admin_extra_script %}
+<script>
+(function() {
+    function handleAction(url, btn, successMsg) {
+        btn.disabled = true;
+        var origText = btn.textContent;
+        btn.textContent = '处理中...';
+
+        fetch(url, { method: 'POST', credentials: 'same-origin' })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.success) {
+                    Toast.success(successMsg || data.message);
+                    setTimeout(function() { location.reload(); }, 500);
+                } else {
+                    Toast.error(data.message || '操作失败');
+                    btn.disabled = false;
+                    btn.textContent = origText;
+                }
+            })
+            .catch(function(err) {
+                Toast.error('操作失败，请重试');
+                btn.disabled = false;
+                btn.textContent = origText;
+            });
+    }
+
+    document.querySelectorAll('.approve-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            handleAction('/admin/backgrounds/' + this.dataset.id + '/approve', this, '审核通过');
+        });
+    });
+
+    document.querySelectorAll('.reject-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            if (!confirm('确定驳回这张背景图片吗？')) return;
+            handleAction('/admin/backgrounds/' + this.dataset.id + '/reject', this, '已驳回');
+        });
+    });
+
+    document.querySelectorAll('.toggle-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            handleAction('/admin/backgrounds/' + this.dataset.id + '/toggle', this);
+        });
+    });
+
+    document.querySelectorAll('.admin-delete-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            if (!confirm('确定删除这张背景图片吗？此操作不可恢复。')) return;
+            handleAction('/admin/backgrounds/' + this.dataset.id + '/delete', this, '已删除');
+        });
+    });
+})();
+</script>
+{% endblock %}

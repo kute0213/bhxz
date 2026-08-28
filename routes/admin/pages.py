@@ -26,6 +26,8 @@ def admin_page():
             'total_discussion_topics': conn.execute("SELECT COUNT(*) AS c FROM discussion_topics").fetchone()['c'],
             'total_discussion_replies': conn.execute("SELECT COUNT(*) AS c FROM discussion_replies").fetchone()['c'],
             'total_discussion_categories': conn.execute("SELECT COUNT(*) AS c FROM discussion_categories").fetchone()['c'],
+            'total_backgrounds': conn.execute("SELECT COUNT(*) AS c FROM backgrounds").fetchone()['c'],
+            'pending_backgrounds': conn.execute("SELECT COUNT(*) AS c FROM backgrounds WHERE status = 0").fetchone()['c'],
         }
     finally:
         conn.close()

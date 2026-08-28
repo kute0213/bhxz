@@ -17,6 +17,7 @@ def register_blueprints(app: Flask):
     from routes.docs import docs_bp
     from routes.guides import guides_bp
     from routes.discussion import discussion_bp
+    from routes.backgrounds import backgrounds_bp
     from routes.public import public_bp, try_serve_public
     from routes.sitemap import sitemap_bp
 
@@ -24,7 +25,7 @@ def register_blueprints(app: Flask):
         public_bp, main_bp, community_bp, admin_bp,
         api_bp, admin_api_bp, captcha_bp, email_code_bp,
         script_bp, scheduled_bp, docs_bp, guides_bp, discussion_bp,
-        sitemap_bp,
+        backgrounds_bp, sitemap_bp,
     ]
     for bp in blueprints:
         app.register_blueprint(bp)

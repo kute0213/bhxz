@@ -298,6 +298,20 @@ def init_db():
                 PRIMARY KEY (user_id, music_id)
             )
         '''),
+        # 背景图片表（status: 0=待审核 1=已通过 2=已驳回）
+        ('backgrounds', '''
+            CREATE SEQUENCE IF NOT EXISTS backgrounds_id_seq START 1;
+            CREATE TABLE IF NOT EXISTS backgrounds (
+                id INTEGER PRIMARY KEY DEFAULT nextval('backgrounds_id_seq'),
+                user_id INTEGER NOT NULL,
+                username VARCHAR NOT NULL,
+                filename VARCHAR NOT NULL,
+                file_path VARCHAR NOT NULL,
+                status INTEGER DEFAULT 0,
+                is_active INTEGER DEFAULT 0,
+                created_at VARCHAR NOT NULL
+            )
+        '''),
     ]
 
     for table_name, ddl in tables:

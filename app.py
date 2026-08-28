@@ -83,12 +83,17 @@ def _register_template_context():
     """注册模板上下文处理器，使全局配置在所有模板中可用。"""
     from config import get_config_value
     from flask import session
+    from services import background_service
 
     @app.context_processor
     def inject_global_config():
+        # 获取已启用的背景图片，根据屏幕宽度选择最合适的图片
+        # 我们在模板中根据屏幕尺寸选择，这里简单取第一个
+        active_bgs = background_service.get_active_backgrounds()
         return {
             # 登录欢迎语只展示一次，避免刷新页面后重复打扰用户。
             'login_welcome_username': session.pop('login_welcome_username', None),
+            'active_backgrounds': active_bgs,
         }
 
 
