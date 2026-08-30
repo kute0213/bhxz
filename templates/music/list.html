@@ -50,10 +50,10 @@
                     公开音频（游戏内大喇叭）
                 </h2>
                 <form method="GET" action="{{ url_for('main.music_page') }}" class="flex items-center gap-2">
-                    <div class="relative">
-                        <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-cream/40"></i>
+                    <div class="relative search-input-wrap">
+                        <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-cream/40 search-icon"></i>
                         <input type="text" name="q" value="{{ keyword }}" maxlength="60" placeholder="搜索音频名称或标签…"
-                               class="input-field pl-9 py-2 rounded-lg text-sm w-48 sm:w-64">
+                               class="input-field pl-9 py-2 rounded-lg text-sm search-input">
                     </div>
                     <button type="submit" class="btn-secondary px-4 py-2 rounded-lg text-sm flex items-center gap-1.5">
                         <i data-lucide="search" class="w-4 h-4"></i>搜索
@@ -112,6 +112,15 @@
 {{ music_player_assets() }}
 <script>
 (function () {
+    // 搜索图标点击聚焦输入框
+    var searchIcon = document.querySelector('.search-icon');
+    var searchInput = document.querySelector('.search-input');
+    if (searchIcon && searchInput) {
+        searchIcon.addEventListener('click', function () {
+            searchInput.focus();
+        });
+    }
+
     // 复制播放链接
     document.querySelectorAll('.copy-link-btn').forEach(function (btn) {
         btn.addEventListener('click', function () {

@@ -395,6 +395,20 @@ body::after {
 }
 .input-field::placeholder { color: var(--text-muted); }
 
+/* 搜索输入框展开动画 */
+.search-input-wrap { position: relative; }
+.search-input {
+    width: 130px;
+    transition: width 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.search-input:focus { width: 260px; }
+.search-icon { cursor: pointer; transition: color var(--transition-fast); }
+.search-icon:hover { color: var(--text-secondary); }
+@media (max-width: 640px) {
+    .search-input { width: 100px; }
+    .search-input:focus { width: 180px; }
+}
+
 .modal-input-wrap { padding: 2px 28px 8px; }
 .modal-input-wrap .input-field { background: rgba(0,0,0,0.3); border: 1px solid var(--border-card); }
 .modal-input-wrap .input-field:focus { border-color: rgba(96,165,250,0.4); box-shadow: 0 0 0 3px rgba(96,165,250,0.1); }
