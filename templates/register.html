@@ -31,6 +31,7 @@
                 {% endif %}
 
                 <form method="POST" class="space-y-5" id="register-form">
+                {{ csrf_field() }}
                     <!-- 图形验证码（前端弹窗验证后填入，随表单提交） -->
                     <input type="hidden" name="captcha_id" id="captcha-id-hidden" value="">
                     <input type="hidden" name="captcha" id="captcha-hidden" value="">

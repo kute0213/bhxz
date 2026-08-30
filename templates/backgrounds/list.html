@@ -209,6 +209,7 @@
             <div class="pixel-card background-card">
                 {% if bg.status != 1 %}
                 <form method="post" action="{{ url_for('backgrounds.delete_background', bg_id=bg.id) }}" class="delete-form" onsubmit="return confirm('确定要删除这张背景图片吗？');">
+                    {{ csrf_field() }}
                     <button type="submit" class="btn-delete">删除</button>
                 </form>
                 {% endif %}

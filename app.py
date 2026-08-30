@@ -84,16 +84,29 @@ def _register_template_context():
     from config import get_config_value
     from flask import session
     from services import background_service
+    from core.csrf import get_csrf_token
+    from markupsafe import Markup
 
     @app.context_processor
     def inject_global_config():
         # 获取已启用的背景图片，根据屏幕宽度选择最合适的图片
         # 我们在模板中根据屏幕尺寸选择，这里简单取第一个
         active_bgs = background_service.get_active_backgrounds()
+
+        # CSRF 模板辅助函数
+        def csrf_field():
+            token = get_csrf_token()
+            return Markup(f'<input type="hidden" name="csrf_token" value="{token}">')
+
+        def csrf_token_str():
+            return get_csrf_token()
+
         return {
             # 登录欢迎语只展示一次，避免刷新页面后重复打扰用户。
             'login_welcome_username': session.pop('login_welcome_username', None),
             'active_backgrounds': active_bgs,
+            'csrf_field': csrf_field,
+            'csrf_token': csrf_token_str,
         }
 
 

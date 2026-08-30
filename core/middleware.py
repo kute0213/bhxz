@@ -17,7 +17,7 @@ SKIP_PATHS = ('/static/', '/favicon.ico', '/uploads/',
 ROUTE_PREFIXES = (
     '/static/', '/admin', '/api/', '/cmd/',
     '/scheduled', '/community', '/docs',
-    '/login', '/register', '/logout', '/settings', '/performance',
+    '/login', '/register', '/logout', '/settings', '/health',
     '/music', '/sitemap.xml',
 )
 
@@ -97,6 +97,12 @@ def register_hooks(app, try_serve_public):
         app: Flask 应用实例
         try_serve_public: 公共文件服务函数（由 routes.public 提供）
     """
+
+    @app.before_request
+    def csrf_check_hook():
+        """全站 CSRF 防护（除 /api/* 和 /cmd/* 外所有 POST/PUT/DELETE/PATCH 请求）。"""
+        from core.csrf import csrf_protect
+        csrf_protect()
 
     @app.before_request
     def serve_public_files_hook():

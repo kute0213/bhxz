@@ -41,6 +41,47 @@
     <noscript><style>.page-content{opacity:1!important;transform:none!important}</style></noscript>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/tailwind.css', v='4') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css', v='28') }}">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <script>
+    // 全站 AJAX CSRF 防护：自动为所有 fetch/XHR 请求添加 X-CSRF-Token 请求头
+    (function() {
+        var token = document.querySelector('meta[name="csrf-token"]');
+        if (!token) return;
+        var csrf = function() { return token.getAttribute('content'); };
+
+        // 拦截 fetch
+        var origFetch = window.fetch;
+        window.fetch = function(url, opts) {
+            opts = opts || {};
+            var method = (opts.method || 'GET').toUpperCase();
+            if (method !== 'GET' && method !== 'HEAD') {
+                opts.headers = opts.headers || {};
+                if (opts.headers instanceof Headers) {
+                    if (!opts.headers.has('X-CSRF-Token')) {
+                        opts.headers.set('X-CSRF-Token', csrf());
+                    }
+                } else {
+                    opts.headers['X-CSRF-Token'] = csrf();
+                }
+            }
+            return origFetch.call(window, url, opts);
+        };
+
+        // 拦截 XMLHttpRequest
+        var origOpen = XMLHttpRequest.prototype.open;
+        XMLHttpRequest.prototype.open = function(method) {
+            this._csrfMethod = method.toUpperCase();
+            return origOpen.apply(this, arguments);
+        };
+        var origSend = XMLHttpRequest.prototype.send;
+        XMLHttpRequest.prototype.send = function(body) {
+            if (this._csrfMethod && this._csrfMethod !== 'GET' && this._csrfMethod !== 'HEAD') {
+                this.setRequestHeader('X-CSRF-Token', csrf());
+            }
+            return origSend.apply(this, arguments);
+        };
+    })();
+    </script>
     {% block extra_style %}{% endblock %}
 </head>
 <body>
@@ -125,7 +166,7 @@
                     <i data-lucide="gamepad-2" class="w-5 h-5"></i>
                     <span>服务器互动</span>
                 </a>
-                <a href="{{ url_for('main.performance_page') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors">
+                <a href="{{ url_for('main.health_page') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors">
                     <i data-lucide="activity" class="w-5 h-5"></i>
                     <span>服务器状态</span>
                 </a>
@@ -192,9 +233,9 @@
                 <a href="{{ url_for('main.interact_page') }}" class="text-cream/80 hover:text-gold-400 text-sm font-medium transition-colors px-3 py-2 rounded-lg hover:bg-gold-400/5">
                     服务器互动
                 </a>
-                <a href="{{ url_for('main.performance_page') }}" class="text-cream/80 hover:text-gold-400 text-sm font-medium transition-colors px-3 py-2 rounded-lg hover:bg-gold-400/5">
-                    服务器状态
-                </a>
+                <a href="{{ url_for('main.health_page') }}" class="text-cream/80 hover:text-gold-400 text-sm font-medium transition-colors px-3 py-2 rounded-lg hover:bg-gold-400/5">
+                服务器状态
+            </a>
                     {% if user and user.is_admin %}
                     <a href="{{ url_for('admin.admin_page') }}" class="text-cream/80 hover:text-gold-400 text-sm font-medium transition-colors px-3 py-2 rounded-lg hover:bg-gold-400/5">
                         管理中心
@@ -276,9 +317,7 @@
                 <a href="{{ url_for('main.interact_page') }}" class="flex-shrink-0 px-3 py-1.5 text-sm text-cream/70 hover:text-gold-400 rounded-lg hover:bg-gold-400/5 transition-colors">
                     服务器互动
                 </a>
-                <a href="{{ url_for('main.performance_page') }}" class="flex-shrink-0 px-3 py-1.5 text-sm text-cream/70 hover:text-gold-400 rounded-lg hover:bg-gold-400/5 transition-colors">
-                    服务器状态
-                </a>
+                <a href="{{ url_for('main.health_page') }}" class="flex-shrink-0 px-3 py-1.5 text-sm text-cream/70 hover:text-gold-400 rounded-lg hover:bg-gold-400/5 transition-colors">服务器状态</a>
                 {% if user and user.is_admin %}
                 <a href="{{ url_for('admin.admin_page') }}" class="flex-shrink-0 px-3 py-1.5 text-sm text-cream/70 hover:text-gold-400 rounded-lg hover:bg-gold-400/5 transition-colors">
                     管理中心

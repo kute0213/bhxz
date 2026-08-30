@@ -64,11 +64,13 @@
                                     {% if u.id != user.id %}
                                     <div class="flex flex-wrap items-center justify-end gap-2">
                                         <form method="POST" action="{{ url_for('admin.admin_toggle_admin', user_id=u.id) }}" onsubmit="return confirm('确定{% if u.is_admin %}取消{% else %}设置{% endif %}该用户的管理员权限吗？')">
+                                            {{ csrf_field() }}
                                             <button type="submit" class="text-gold-400 hover:text-gold-300 text-xs px-2 py-1 rounded hover:bg-gold-400/10 transition-colors">
                                                 {% if u.is_admin %}取消管理员{% else %}设为管理员{% endif %}
                                             </button>
                                         </form>
                                         <form method="POST" action="{{ url_for('admin.admin_delete_user', user_id=u.id) }}" onsubmit="return confirm('确定删除该用户吗？此操作不可恢复。')">
+                                            {{ csrf_field() }}
                                             <button type="submit" class="text-red-400 hover:text-red-300 text-xs px-2 py-1 rounded hover:bg-red-400/10 transition-colors">
                                                 删除
                                             </button>

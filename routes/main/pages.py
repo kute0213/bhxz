@@ -28,8 +28,8 @@ def home():
     )
 
 
-@main_bp.route('/performance')
-def performance_page():
+@main_bp.route('/health')
+def health_page():
     user = get_current_user()
     return render_template('performance.html', user=user)
 

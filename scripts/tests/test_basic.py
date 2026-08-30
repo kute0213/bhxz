@@ -44,11 +44,11 @@ def test_register_page():
         assert resp.status_code == 200, f"注册页状态码: {resp.status_code}"
 
 
-def test_performance_page():
-    """测试性能监控页返回 200。"""
+def test_health_page():
+    """测试服务器健康页返回 200。"""
     with _app.test_client() as client:
-        resp = client.get('/performance')
-        assert resp.status_code == 200, f"性能页状态码: {resp.status_code}"
+        resp = client.get('/health')
+        assert resp.status_code == 200, f"健康页状态码: {resp.status_code}"
 
 
 def test_404_page():
@@ -203,7 +203,7 @@ if __name__ == '__main__':
         test_home_page,
         test_login_page,
         test_register_page,
-        test_performance_page,
+        test_health_page,
         test_404_page,
         test_static_css,
         test_static_js,

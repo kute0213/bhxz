@@ -45,6 +45,7 @@
                     </button>
                     <!-- 清空日志 -->
                     <form method="POST" action="{{ url_for('admin.admin_logs_clear') }}" onsubmit="return confirm('确定清空所有访问日志吗？此操作不可恢复。')">
+                        {{ csrf_field() }}
                         <button type="submit" class="btn-secondary px-4 py-2 rounded-lg text-sm">
                             <i data-lucide="trash-2" class="w-4 h-4 inline mr-1"></i>清空日志
                         </button>

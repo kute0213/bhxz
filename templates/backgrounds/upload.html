@@ -238,6 +238,7 @@
         if (!selectedFile) return;
 
         var formData = new FormData();
+        formData.append('csrf_token', document.querySelector('meta[name="csrf-token"]').getAttribute('content'));
         formData.append('background_image', selectedFile);
 
         uploadBtn.disabled = true;

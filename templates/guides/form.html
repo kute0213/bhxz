@@ -25,6 +25,7 @@
         {% endwith %}
 
         <form method="POST" class="guide-submit-form space-y-6">
+            {{ csrf_field() }}
             <div>
                 <label class="block text-sm text-cream/70 mb-1">标题</label>
                 <input type="text" name="title" value="{{ guide.title if guide else '' }}" class="w-full px-4 py-2 rounded-lg bg-forest-900/60 border border-forest-700/50 text-cream focus:border-gold-400/50 focus:outline-none" required maxlength="200">

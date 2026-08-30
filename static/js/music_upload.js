@@ -179,6 +179,7 @@
         showProgress();
 
         var formData = new FormData();
+        formData.append('csrf_token', document.querySelector('meta[name="csrf-token"]').getAttribute('content'));
         formData.append('title', titleInput.value.trim());
         var tagsInput = document.getElementById('tags-input');
         if (tagsInput && tagsInput.value.trim()) formData.append('tags', tagsInput.value.trim());

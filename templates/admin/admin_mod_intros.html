@@ -85,6 +85,7 @@
                     <i data-lucide="plus-circle" class="w-5 h-5 text-gold-400"></i>添加新模组介绍
                 </h2>
                 <form method="POST" action="{{ url_for('admin.add_mod_intro') }}" class="grid md:grid-cols-5 gap-4">
+                    {{ csrf_field() }}
                     <div class="md:col-span-1">
                         <label class="block text-sm font-medium mb-2 text-cream/80">图标名称</label>
                         <input type="text" name="icon" value="box" class="input-field w-full px-4 py-3 rounded-lg" placeholder="如: mountain">
@@ -119,6 +120,7 @@
                 {% for intro in mod_intros %}
                 <div class="intro-card rounded-xl p-5">
                     <form method="POST" action="{{ url_for('admin.edit_mod_intro', intro_id=intro.id) }}" class="grid md:grid-cols-5 gap-4 items-start">
+                        {{ csrf_field() }}
                         <div class="md:col-span-1">
                             <div class="intro-icon w-12 h-12 rounded-lg flex items-center justify-center mb-2">
                                 <i data-lucide="{{ intro.icon or 'box' }}" class="w-6 h-6 text-gold-400"></i>
@@ -142,6 +144,7 @@
                     <div class="mt-3 pt-3 border-t border-forest-700/50 flex justify-between items-center gap-3">
                         <span class="text-xs text-cream/40 min-w-0 flex-1 truncate">ID: {{ intro.id }} · 创建于 {{ intro.created_at }}</span>
                         <form method="POST" action="{{ url_for('admin.delete_mod_intro', intro_id=intro.id) }}" onsubmit="return confirm('确定要删除「{{ intro.title }}」吗？');" class="flex-shrink-0">
+                            {{ csrf_field() }}
                             <button type="submit" class="btn-danger-outline px-3 py-1 rounded-lg text-xs flex items-center gap-1">
                                 <i data-lucide="trash-2" class="w-3 h-3"></i>删除
                             </button>

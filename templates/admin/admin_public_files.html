@@ -32,6 +32,7 @@
                     添加公开路径
                 </h2>
                 <form method="POST" action="{{ url_for('public.admin_public_files_add') }}" class="space-y-4">
+                    {{ csrf_field() }}
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label class="block text-sm font-medium text-cream/80 mb-2">
@@ -130,6 +131,7 @@
                                 <td class="py-3 px-2 text-right">
                                     <div class="flex items-center justify-end gap-2">
                                         <form method="POST" action="{{ url_for('public.admin_public_files_toggle', pid=p.id) }}" class="inline">
+                                            {{ csrf_field() }}
                                             <button type="submit"
                                                     class="p-2 rounded-lg hover:bg-white/10 text-cream/60 hover:text-cream transition-colors"
                                                     title="{% if p.is_active %}禁用{% else %}启用{% endif %}">
@@ -138,6 +140,7 @@
                                         </form>
                                         <form method="POST" action="{{ url_for('public.admin_public_files_delete', pid=p.id) }}"
                                               class="inline" onsubmit="return confirm('确定要删除此公开路径吗？');">
+                                            {{ csrf_field() }}
                                             <button type="submit"
                                                     class="p-2 rounded-lg hover:bg-red-900/30 text-red-400/70 hover:text-red-400 transition-colors"
                                                     title="删除">

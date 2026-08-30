@@ -62,6 +62,7 @@
                             <i data-lucide="tags" class="w-3.5 h-3.5"></i>编辑标签
                         </button>
                         <form method="POST" action="{{ url_for('main.toggle_music_public', music_id=m.id) }}" class="inline">
+                            {{ csrf_field() }}
                             <input type="hidden" name="next" value="{{ url_for('main.my_music_page') }}">
                             <button type="submit"
                                     class="px-3 py-2 rounded-lg text-xs border transition-colors flex items-center gap-1.5
@@ -74,6 +75,7 @@
                         </form>
                         <form method="POST" action="{{ url_for('main.delete_music', music_id=m.id) }}" class="inline"
                               onsubmit="return confirm('确定要删除此音频吗？删除后无法恢复。')">
+                            {{ csrf_field() }}
                             <input type="hidden" name="next" value="{{ url_for('main.my_music_page') }}">
                             <button type="submit"
                                     class="px-3 py-2 rounded-lg text-xs border border-red-500/30 text-red-300 hover:bg-red-500/10 transition-colors flex items-center gap-1.5"

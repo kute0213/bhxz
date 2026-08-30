@@ -61,6 +61,7 @@
                             {{ music_mp3_link_button(m.id) }}
                             {{ music_duration_button(m.duration_seconds) }}
                             <form method="POST" action="{{ url_for('admin.admin_music_review', music_id=m.id) }}" class="inline">
+                                {{ csrf_field() }}
                                 <input type="hidden" name="action" value="approve">
                                 <button type="submit"
                                         class="px-3 py-2 rounded-lg text-xs border border-green-500/30 text-green-300 hover:bg-green-500/10 transition-colors flex items-center gap-1.5">
@@ -69,6 +70,7 @@
                             </form>
                             <form method="POST" action="{{ url_for('admin.admin_music_review', music_id=m.id) }}" class="inline"
                                   onsubmit="return confirm('确定驳回此公开申请吗？驳回后音频将自动转为私有，用户可重新申请公开或删除。')">
+                                {{ csrf_field() }}
                                 <input type="hidden" name="action" value="reject">
                                 <button type="submit"
                                         class="px-3 py-2 rounded-lg text-xs border border-red-500/30 text-red-300 hover:bg-red-500/10 transition-colors flex items-center gap-1.5">
@@ -132,6 +134,7 @@
                                     </button>
                                     <form method="POST" action="{{ url_for('admin.admin_music_delete', music_id=m.id) }}" class="inline"
                                           onsubmit="return confirm('确定要下架（删除）此音频吗？将同步删除数据库记录和音频文件，无法恢复。')">
+                                        {{ csrf_field() }}
                                         <button type="submit"
                                                 class="px-2 py-1 rounded text-xs border border-red-500/30 text-red-300 hover:bg-red-500/10 transition-colors flex items-center gap-1"
                                                 title="下架（删除）">

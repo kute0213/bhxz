@@ -37,6 +37,7 @@
                 {% endif %}
 
                 <form method="POST" class="space-y-5" id="login-form">
+                {{ csrf_field() }}
                     <input type="hidden" name="next" value="{{ submitted_next|default(request.args.get('next', ''), true) }}">
                     <div>
                         <label class="block text-sm font-medium mb-2 text-cream/80">用户名</label>
