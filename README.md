@@ -1,6 +1,6 @@
 # 滨海小镇 - Minecraft 服务器社区网站
 
-基于 Flask 的 Minecraft 服务器社区门户，采用淡紫蓝磨砂玻璃（Lavender-Blue Frosted Glass）设计风格。提供用户系统、模组介绍、管理后台、服务器性能监控、终端控制台等功能。
+基于 Flask 的 Minecraft 服务器社区门户，采用浅蓝白磨砂玻璃（Blue-White Frosted Glass）设计风格。提供用户系统、模组介绍、管理后台、服务器性能监控、终端控制台、全站背景图片、网站图标可配置等功能。
 
 ## 文档索引
 
@@ -101,7 +101,7 @@ python scripts/build/package.py
 - 大喇叭音频管理（公开申请审核、查看全部音频、一键下架）
 - 管理中心数据统计（含大喇叭音频总数与待审核数量）
 - 脚本控制台（实时终端 + 快捷命令 + 定时任务）
-- 系统设置（在线编辑，热重载，含背景图片开关）
+- 系统设置（在线编辑，热重载，含网站图标选择、背景图片开关）
 - 数据库备份（手动/自动，进度条）
 - 公开文件管理
 - 广播邮件（富文本所见即所得编辑器 + 白名单 HTML 清洗，安全防 XSS）
@@ -166,6 +166,7 @@ python scripts/build/package.py
 - **安全配置**：会话有效期、登录失败锁定次数及时间
 - **讨论区配置**：回复实时刷新间隔、每页加载数量
 - **外部链接**：卫星地图地址、QQ 群链接
+- **网站图标**：favicon 图标选择（compass/mountain/star/heart），管理后台可在线切换
 - **服务器配置**：监听地址、端口、调试模式、工作线程数
 
 ### config.py
@@ -192,6 +193,7 @@ python scripts/build/package.py
 | `SCRIPT_EXECUTOR_POOL_SIZE` | 脚本子进程并发数上限 | `2` |
 | `DISCUSSION_REFRESH_INTERVAL` | 讨论区回复刷新间隔 | `5s` |
 | `REPLIES_PER_PAGE` | 讨论区回复每页数量 | `10` |
+| `FAVICON_ICON` | 网站图标（可选 compass/mountain/star/heart） | `compass` |
 | `MAP_URL` | 卫星地图地址 | `https://map.bhxz.tw.kg` |
 | `QQ_GROUP_URL` | QQ 群链接 | 空 |
 
