@@ -4,9 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}{% endblock %} - 滨海小镇</title>
-    <!-- 浏览器标签页图标 -->
-    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg', v='1') }}">
-    <link rel="alternate icon" href="{{ url_for('static', filename='favicon.ico', v='1') }}">
+    <!-- 浏览器标签页图标（动态，可在系统设置面板中修改） -->
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('main.favicon', v='1') }}">
+    <link rel="alternate icon" href="{{ url_for('main.favicon_ico', v='1') }}">
     <!-- 本地字体定义（系统字体栈，零下载） -->
     <link rel="stylesheet" href="{{ url_for('static', filename='lib/fonts/fonts.css', v='1') }}">
     <!-- 本地Lucide图标库 -->

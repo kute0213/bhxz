@@ -252,6 +252,9 @@ SETTINGS_REGISTRY = [
     ('MAP_URL', 'https://map.bhxz.tw.kg', 'str', '卫星地图地址', '首页卫星地图按钮的链接地址', '外部链接'),
     ('QQ_GROUP_URL', 'https://qun.qq.com/...', 'str', 'QQ 群链接', '首页加入 QQ 群按钮的链接地址', '外部链接'),
 
+    # 网站图标
+    ('FAVICON_ICON', 'compass', 'select', '网站图标', '设置浏览器标签页图标（favicon），可选：compass（指南针）, mountain（山峰）, star（星星）, heart（爱心）', '网站图标'),
+
     # 服务器
     ('SERVER_HOST', '0.0.0.0', 'str', '服务器监听地址', '服务器监听的 IP 地址，0.0.0.0 表示监听所有地址', '服务器配置'),
     ('SERVER_PORT', 5000, 'int', '服务器监听端口', '服务器监听的端口号', '服务器配置'),

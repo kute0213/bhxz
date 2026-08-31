@@ -10,7 +10,7 @@ from services.ip import get_client_ip, get_ip_info
 from services.logging import log_writer
 
 # 跳过日志记录的路径前缀
-SKIP_PATHS = ('/static/', '/favicon.ico', '/uploads/',
+SKIP_PATHS = ('/static/', '/favicon', '/favicon.ico', '/uploads/',
               '/api/admin/logs/refresh', '/api/performance')
 
 # 跳过公共文件服务的路径前缀（这些路径由 Flask 蓝图处理）

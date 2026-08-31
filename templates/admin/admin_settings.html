@@ -65,6 +65,9 @@
 
             // 获取当前输入的值
             function getInputValue(input) {
+                if (input.tagName === 'SELECT') {
+                    return input.value;
+                }
                 if (input.type === 'checkbox') {
                     return input.checked;
                 }
@@ -76,7 +79,9 @@
 
             // 设置输入的值
             function setInputValue(input, value, type) {
-                if (type === 'bool') {
+                if (input.tagName === 'SELECT') {
+                    input.value = value !== null && value !== undefined ? String(value) : '';
+                } else if (type === 'bool') {
                     input.checked = !!value;
                 } else {
                     input.value = value !== null && value !== undefined ? String(value) : '';
@@ -128,6 +133,15 @@
                                     <div class="w-11 h-6 bg-forest-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-gold-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
                                 </label>
                             `;
+                        } else if (item.type === 'select') {
+                            inputHtml = `
+                                <select class="px-3 py-2 bg-forest-900/60 border border-cream/20 rounded-lg text-sm focus:outline-none focus:border-gold-400 transition-colors w-full sm:w-48">
+                                    <option value="compass">指南针 (compass)</option>
+                                    <option value="mountain">山峰 (mountain)</option>
+                                    <option value="star">星星 (star)</option>
+                                    <option value="heart">爱心 (heart)</option>
+                                </select>
+                            `;
                         } else if (item.type === 'time') {
                             inputHtml = `
                                 <input type="time" class="px-3 py-2 bg-forest-900/60 border border-cream/20 rounded-lg text-sm focus:outline-none focus:border-gold-400 transition-colors w-full sm:w-32">
@@ -164,13 +178,18 @@
 
                         body.appendChild(row);
 
-                        // 设置输入值
-                        const input = row.querySelector('input');
+                        // 设置输入值（支持 input 和 select 元素）
+                        const input = row.querySelector('input, select');
                         if (input) {
                             setInputValue(input, item.value, item.type);
                             input.dataset.key = item.key;
                             input.dataset.type = item.type;
                             input.dataset.default = item.default;
+
+                            // 确保 select 选中值
+                            if (input.tagName === 'SELECT') {
+                                input.value = String(item.value);
+                            }
 
                             input.addEventListener('input', function () {
                                 const key = this.dataset.key;
@@ -200,7 +219,8 @@
                             resetBtn.addEventListener('click', function () {
                                 const row = this.closest('[data-key]');
                                 const key = row.dataset.key;
-                                const input = row.querySelector('input');
+                                const input = row.querySelector('input, select');
+                                if (!input) return;
                                 const defaultVal = input.dataset.default;
                                 const type = input.dataset.type;
 
@@ -274,7 +294,7 @@
 
             // 保存设置
             function saveSettings() {
-                const inputs = settingsContainer.querySelectorAll('input');
+                const inputs = settingsContainer.querySelectorAll('input, select');
                 const items = [];
                 let hasChange = false;
 

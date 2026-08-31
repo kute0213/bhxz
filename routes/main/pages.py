@@ -3,10 +3,11 @@
 薄层：仅负责 HTTP 请求解析/响应构造，业务逻辑委托给 services。
 """
 
-from flask import render_template
+import os
+from flask import render_template, send_from_directory, current_app
 from core.auth import get_current_user
 from core.db import get_db
-from config import get_config_value
+from config import get_config_value, APP_ROOT
 from routes.main import main_bp
 
 
@@ -39,3 +40,26 @@ def interact_page():
     """服务器互动页面：整合大喇叭音频和背景图片入口。"""
     user = get_current_user()
     return render_template('interact.html', user=user)
+
+
+@main_bp.route('/favicon')
+def favicon():
+    """动态 favicon 路由，根据设置返回对应的图标 SVG。
+
+    管理员可在系统设置面板中修改 FAVICON_ICON 配置项，
+    默认使用 compass（指南针）图标。
+    """
+    icon_name = get_config_value('FAVICON_ICON', 'compass')
+    allowed = {'compass', 'mountain', 'star', 'heart'}
+    if icon_name not in allowed:
+        icon_name = 'compass'
+
+    favicon_dir = os.path.join(APP_ROOT, 'static', 'favicons')
+    return send_from_directory(favicon_dir, f'{icon_name}.svg', mimetype='image/svg+xml')
+
+
+@main_bp.route('/favicon.ico')
+def favicon_ico():
+    """兼容旧版浏览器的 favicon.ico 请求，重定向到 SVG 版本。"""
+    from flask import redirect
+    return redirect('/favicon')
