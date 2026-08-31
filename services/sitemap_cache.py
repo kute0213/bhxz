@@ -14,7 +14,7 @@ import time
 import traceback
 
 from config import get_config_value, UPLOAD_SITEMAP_DIR
-from services.logger import log
+from core.logger import log
 
 
 class SitemapCache:

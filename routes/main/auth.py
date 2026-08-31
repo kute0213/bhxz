@@ -12,7 +12,7 @@ from services.email import normalize_email
 from services.user_service import (
     register, login, forgot_password, check_username_available,
 )
-from services.logger import log
+from core.logger import log
 from routes.main import main_bp
 
 

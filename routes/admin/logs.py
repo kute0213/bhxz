@@ -8,7 +8,7 @@ from flask import render_template, redirect, url_for, flash, abort, request, Res
 from core.auth import login_required, get_current_user
 from core.db import get_db
 from routes.admin import admin_bp
-from services.logger import (
+from core.logger import (
     log, get_log_buffer_tail, register_monitor_client, unregister_monitor_client,
 )
 

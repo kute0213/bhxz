@@ -26,7 +26,7 @@ from config import (
     FFPROBE_BIN,
     FFMPEG_THREADS,
 )
-from services.logger import log
+from core.logger import log
 
 # HLS 分片时长（秒）
 HLS_SEGMENT_SECONDS = 10

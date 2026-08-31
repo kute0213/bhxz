@@ -9,7 +9,7 @@ from flask import request, jsonify, render_template, abort, flash, redirect, url
 from core.auth import login_required, get_current_user
 from routes.admin import admin_bp
 from config import SETTINGS_REGISTRY, get_config_value
-from services.logger import log
+from core.logger import log
 from services.settings_manager import settings_manager
 
 

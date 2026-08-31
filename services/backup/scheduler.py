@@ -11,7 +11,7 @@ import time
 import datetime
 
 from config import get_config_value
-from services.logger import log
+from core.logger import log
 
 
 class BackupScheduler:

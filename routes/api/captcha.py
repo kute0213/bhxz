@@ -2,7 +2,7 @@
 
 from flask import Blueprint, jsonify, request
 from services.captcha import captcha_service
-from services.logger import log
+from core.logger import log
 
 captcha_bp = Blueprint('captcha', __name__)
 

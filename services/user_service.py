@@ -13,7 +13,7 @@ from config import REGISTER_VERIFY_CODE, UPLOAD_DIR, MAX_LOGIN_ATTEMPTS, LOGIN_L
 from services.captcha import captcha_service
 from services.email import normalize_email, email_code_service
 from services.ratelimit import register_limiter, login_limiter
-from services.logger import log
+from core.logger import log
 from services.attachment_service import clean_attachment_json
 
 

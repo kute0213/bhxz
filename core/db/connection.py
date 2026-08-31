@@ -10,7 +10,7 @@ import os
 import threading
 
 from config import DB_PATH
-from services.logger import log
+from core.logger import log
 
 
 # 模块级缓存：每个进程只检测一次，避免假阳性

@@ -14,7 +14,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 
 from core.db import get_db
 from config import UPLOAD_BACKGROUNDS_DIR, USER_IMAGE_MAX_BYTES
-from services.logger import log
+from core.logger import log
 
 # 背景图片状态：0=待审核 1=已通过 2=已驳回
 STATUS_PENDING = 0

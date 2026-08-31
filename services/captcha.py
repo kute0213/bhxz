@@ -17,7 +17,7 @@ import uuid
 import threading
 from typing import Tuple
 
-from services.logger import log
+from core.logger import log
 
 # 延迟导入 Pillow，避免不必要的依赖检查
 _pil_available = None

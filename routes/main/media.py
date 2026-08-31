@@ -9,7 +9,7 @@ from config import UPLOAD_DIR, USER_IMAGE_MAX_BYTES
 from core.auth import get_current_user, login_required
 from core.db import get_db
 from routes.main import main_bp
-from services.logger import log
+from core.logger import log
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 _MEDIA_DIR = os.path.join(UPLOAD_DIR, 'media')

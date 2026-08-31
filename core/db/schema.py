@@ -4,7 +4,7 @@ import hashlib
 from datetime import datetime
 
 from core.db.connection import get_db, _split_sql_script
-from services.logger import log
+from core.logger import log
 
 
 def _sync_sequence(conn, table_name):

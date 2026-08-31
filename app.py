@@ -5,7 +5,7 @@ import socket
 import threading
 from flask import Flask, render_template
 from config import SECRET_KEY, MAX_CONTENT_LENGTH
-from services.logger import log
+from core.logger import log
 
 
 # 项目根目录（确保工作目录正确，不受快捷方式启动影响）

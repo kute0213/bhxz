@@ -4,7 +4,7 @@ from flask import Blueprint, request, jsonify, session
 
 from services.email import email_code_service, normalize_email, email_service
 from services.captcha import captcha_service
-from services.logger import log
+from core.logger import log
 from config import get_config_value
 
 

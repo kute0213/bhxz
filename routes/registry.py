@@ -1,7 +1,7 @@
 """蓝图注册中心 —— 集中管理所有 Flask Blueprint 的注册，保持 app.py 清爽。"""
 
 from flask import Flask
-from services.logger import log
+from core.logger import log
 
 
 def register_blueprints(app: Flask):

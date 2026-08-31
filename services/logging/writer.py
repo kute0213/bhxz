@@ -13,7 +13,7 @@ import threading
 import datetime
 
 from core.db import get_db
-from services.logger import log
+from core.logger import log
 
 
 class AsyncLogWriter:

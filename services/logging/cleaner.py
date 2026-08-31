@@ -9,7 +9,7 @@ import time
 
 from config import get_config_value
 from core.db import get_db
-from services.logger import log
+from core.logger import log
 
 
 # 各日志表与其上限的映射（动态读取配置，支持热重载）

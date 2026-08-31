@@ -17,7 +17,7 @@ from config import (
 )
 from core.db import get_db
 from services.process_utils import run_process
-from services.logger import log
+from core.logger import log
 
 
 class TaskScheduler:

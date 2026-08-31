@@ -27,7 +27,7 @@ from config import (
     BACKUP_FILENAME_FORMAT,
     get_config_value,
 )
-from services.logger import log
+from core.logger import log
 
 
 # ---------------------------------------------------------------------------

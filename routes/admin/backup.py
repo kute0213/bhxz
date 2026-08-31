@@ -8,7 +8,7 @@ from core.auth import login_required, get_current_user
 from core.db import get_db
 from config import DB_PATH
 from routes.admin import admin_bp
-from services.logger import log
+from core.logger import log
 
 
 @admin_bp.route('/admin/db-backup')
