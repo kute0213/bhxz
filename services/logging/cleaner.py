@@ -9,6 +9,7 @@ import time
 
 from config import get_config_value
 from core.db import get_db
+from services.logger import log
 
 
 # 各日志表与其上限的映射（动态读取配置，支持热重载）
@@ -71,7 +72,7 @@ class LogCleaner:
             try:
                 self._clean_all()
             except Exception as e:
-                print(f'[LogCleaner] 清理异常: {e}', flush=True)
+                log('ERROR', 'LogCleaner', f'清理异常: {e}')
 
     def _clean_all(self):
         """检查所有日志表并清理超限记录。"""
@@ -101,7 +102,7 @@ class LogCleaner:
             f"(SELECT id FROM {table} ORDER BY id ASC LIMIT ?)",
             (excess,),
         )
-        print(f'[LogCleaner] {table}: 删除 {excess} 条旧记录 (剩余 {max_count})', flush=True)
+        log('INFO', 'LogCleaner', f'{table}: 删除 {excess} 条旧记录 (剩余 {max_count})')
 
     def clean_once(self):
         """手动触发一次清理。"""

@@ -27,6 +27,7 @@ from config import (
     BACKUP_FILENAME_FORMAT,
     get_config_value,
 )
+from services.logger import log
 
 
 # ---------------------------------------------------------------------------
@@ -182,7 +183,7 @@ class BackupManager:
                 try:
                     self._clean_logs()
                 except Exception as e:
-                    print(f'[Backup] 清理日志失败: {e}', flush=True)
+                    log('ERROR', 'BackupManager', f'清理日志失败: {e}')
 
             # 阶段 3: CHECKPOINT（合并 WAL 到主文件）
             if do_checkpoint:
@@ -190,7 +191,7 @@ class BackupManager:
                 try:
                     self._run_checkpoint()
                 except Exception as e:
-                    print(f'[Backup] CHECKPOINT 失败: {e}', flush=True)
+                    log('ERROR', 'BackupManager', f'CHECKPOINT 失败: {e}')
 
             # 阶段 4: 使用 DuckDB 在线备份（避免文件锁定问题）
             self._report_progress(50, f'执行在线备份到 {backup_name}...', progress_callback)
@@ -254,7 +255,7 @@ class BackupManager:
         except Exception as e:
             error_msg = str(e)
             status = 'failed'
-            print(f'[Backup] 备份失败: {e}', flush=True)
+            log('ERROR', 'BackupManager', f'备份失败: {e}')
             import traceback
             traceback.print_exc()
 
@@ -289,7 +290,7 @@ class BackupManager:
             cleaner = LogCleaner()
             cleaner.clean_once()
         except Exception as e:
-            print(f'[Backup] 调用日志清理失败: {e}', flush=True)
+            log('ERROR', 'BackupManager', f'调用日志清理失败: {e}')
 
     def _run_checkpoint(self):
         """执行 CHECKPOINT，将 WAL 合并到主数据库文件。"""
@@ -336,11 +337,11 @@ class BackupManager:
                     if os.path.exists(path):
                         os.remove(path)
                 except Exception as e:
-                    print(f'[Backup] 删除旧备份文件失败 {path}: {e}', flush=True)
+                    log('ERROR', 'BackupManager', f'删除旧备份文件失败 {path}: {e}')
                 try:
                     conn.execute("DELETE FROM db_backups WHERE id = ?", (bid,))
                 except Exception as e:
-                    print(f'[Backup] 删除旧备份记录失败 id={bid}: {e}', flush=True)
+                    log('ERROR', 'BackupManager', f'删除旧备份记录失败 id={bid}: {e}')
 
             conn.commit()
         finally:

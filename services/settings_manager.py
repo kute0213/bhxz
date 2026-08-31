@@ -12,6 +12,7 @@ import time
 from datetime import datetime
 
 from core.db import get_db
+from services.logger import log
 
 
 # ---------------------------------------------------------------------------
@@ -93,7 +94,7 @@ class SettingsManager:
                 raw_value = row['value'] if hasattr(row, '__getitem__') else row[0]
                 return _cast_value(raw_value, default)
         except Exception as e:
-            print(f'[SettingsManager] 加载设置 {key} 失败: {e}', flush=True)
+            log('ERROR', 'SettingsManager', f'加载设置 {key} 失败: {e}')
         return default
 
     def _save_to_db(self, key: str, value):
@@ -120,7 +121,7 @@ class SettingsManager:
                 self._cache[key] = value
                 self._cache_ts[key] = time.time()
         except Exception as e:
-            print(f'[SettingsManager] 保存设置 {key} 失败: {e}', flush=True)
+            log('ERROR', 'SettingsManager', f'保存设置 {key} 失败: {e}')
             raise
 
     # -------------------------------------------------------------------
@@ -177,7 +178,7 @@ class SettingsManager:
             conn.commit()
             conn.close()
         except Exception as e:
-            print(f'[SettingsManager] 删除设置 {key} 失败: {e}', flush=True)
+            log('ERROR', 'SettingsManager', f'删除设置 {key} 失败: {e}')
             raise
 
         with self._cache_lock:
@@ -198,7 +199,7 @@ class SettingsManager:
                 'updated_at': row[3] if len(row) > 3 else ''
             } for row in rows]
         except Exception as e:
-            print(f'[SettingsManager] 获取所有设置失败: {e}', flush=True)
+            log('ERROR', 'SettingsManager', f'获取所有设置失败: {e}')
             return []
 
     def invalidate_cache(self):

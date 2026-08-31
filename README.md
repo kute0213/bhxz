@@ -101,7 +101,8 @@ python scripts/build/package.py
 - 大喇叭音频管理（公开申请审核、查看全部音频、一键下架）
 - 管理中心数据统计（含大喇叭音频总数与待审核数量）
 - 脚本控制台（实时终端 + 快捷命令 + 定时任务）
-- 系统设置（在线编辑，热重载，含网站图标选择、背景图片开关）
+- 系统设置（在线编辑，热重载，含网站图标选择、日志等级、背景图片开关）
+- 系统日志（实时查看，SSE 推送，支持等级过滤、自动滚动）
 - 数据库备份（手动/自动，进度条）
 - 公开文件管理
 - 广播邮件（富文本所见即所得编辑器 + 白名单 HTML 清洗，安全防 XSS）
@@ -193,6 +194,7 @@ python scripts/build/package.py
 | `SCRIPT_EXECUTOR_POOL_SIZE` | 脚本子进程并发数上限 | `2` |
 | `DISCUSSION_REFRESH_INTERVAL` | 讨论区回复刷新间隔 | `5s` |
 | `REPLIES_PER_PAGE` | 讨论区回复每页数量 | `10` |
+| `LOG_LEVEL` | 日志输出等级（DEBUG/INFO/WARNING/ERROR/CRITICAL） | `INFO` |
 | `FAVICON_ICON` | 网站图标（可选 compass/mountain/star/heart） | `compass` |
 | `MAP_URL` | 卫星地图地址 | `https://map.bhxz.tw.kg` |
 | `QQ_GROUP_URL` | QQ 群链接 | 空 |

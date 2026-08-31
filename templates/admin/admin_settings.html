@@ -134,12 +134,12 @@
                                 </label>
                             `;
                         } else if (item.type === 'select') {
+                            const opts = (item.options || []).map(function(o) {
+                                return '<option value="' + o[0] + '">' + o[1] + '</option>';
+                            }).join('');
                             inputHtml = `
                                 <select class="px-3 py-2 bg-forest-900/60 border border-cream/20 rounded-lg text-sm focus:outline-none focus:border-gold-400 transition-colors w-full sm:w-48">
-                                    <option value="compass">指南针 (compass)</option>
-                                    <option value="mountain">山峰 (mountain)</option>
-                                    <option value="star">星星 (star)</option>
-                                    <option value="heart">爱心 (heart)</option>
+                                    ${opts}
                                 </select>
                             `;
                         } else if (item.type === 'time') {

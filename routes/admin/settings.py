@@ -3,6 +3,7 @@
 提供设置的读取、保存、重置接口，支持通过管理后台在线编辑配置。
 """
 
+import re
 from flask import request, jsonify, render_template, abort, flash, redirect, url_for
 
 from core.auth import login_required, get_current_user
@@ -10,6 +11,29 @@ from routes.admin import admin_bp
 from config import SETTINGS_REGISTRY, get_config_value
 from services.logger import log
 from services.settings_manager import settings_manager
+
+
+def _parse_select_options(description: str) -> list:
+    """从描述文字中提取 select 选项列表。
+
+    描述格式中应包含 "可选：A, B, C" 或 "可选：A（中文）, B（中文）" 等段落。
+    返回 [(value, label), ...]。
+    """
+    m = re.search(r'可选[：:]\s*(.+)', description)
+    if not m:
+        return []
+    options = []
+    for part in m.group(1).split(','):
+        part = part.strip()
+        if not part:
+            continue
+        # 尝试匹配 "value（label）" 格式
+        inner = re.match(r'(.+?)[（\(](.+?)[）\)]', part)
+        if inner:
+            options.append((inner.group(1).strip(), inner.group(2).strip()))
+        else:
+            options.append((part, part))
+    return options
 
 
 def _admin_check():
@@ -55,6 +79,7 @@ def api_get_settings():
             'value': current_value,
             'is_custom': db_entry is not None,
             'updated_at': db_entry.get('updated_at', '') if db_entry else '',
+            'options': _parse_select_options(description) if stype == 'select' else [],
         })
 
     # 按分类分组

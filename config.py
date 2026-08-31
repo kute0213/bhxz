@@ -200,6 +200,7 @@ QQ_GROUP_URL = 'https://qun.qq.com/universal-share/share?ac=1&authKey=rMtk0BTqbT
 # type: 'int', 'float', 'str', 'bool', 'select', 'time'
 SETTINGS_REGISTRY = [
     # 日志清理
+    ('LOG_LEVEL', 'INFO', 'select', '日志输出等级', '控制日志输出级别，可选：DEBUG（调试）, INFO（信息）, WARNING（警告）, ERROR（错误）, CRITICAL（严重）', '日志清理'),
     ('MAX_ACCESS_LOGS', 500, 'int', '访问日志最大条数', '超过此条数后自动删除最旧的访问日志', '日志清理'),
     ('MAX_CMD_LOGS', 1000, 'int', '命令日志最大条数', '超过此条数后自动删除最旧的命令执行日志', '日志清理'),
     ('MAX_TASK_LOGS', 2000, 'int', '定时任务日志最大条数', '超过此条数后自动删除最旧的定时任务日志', '日志清理'),

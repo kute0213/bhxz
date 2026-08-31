@@ -119,6 +119,15 @@
                         <span class="inline-block mt-4 text-gold-400 text-sm font-medium">查看日志 →</span>
                     </a>
 
+                    <a href="{{ url_for('admin.admin_system_logs_page') }}" class="pixel-card rounded-xl p-6 block hover:no-underline">
+                        <div class="w-12 h-12 mb-4 bg-gold-400/20 rounded-xl flex items-center justify-center">
+                            <i data-lucide="terminal" class="w-6 h-6 text-gold-400"></i>
+                        </div>
+                        <h3 class="text-lg font-bold mb-2">系统日志</h3>
+                        <p class="text-cream/60 text-sm">实时查看系统运行日志，支持等级过滤</p>
+                        <span class="inline-block mt-4 text-gold-400 text-sm font-medium">查看日志 →</span>
+                    </a>
+
                     <a href="{{ url_for('admin.db_backup_page') }}" class="pixel-card rounded-xl p-6 block hover:no-underline">
                         <div class="w-12 h-12 mb-4 bg-gold-400/20 rounded-xl flex items-center justify-center">
                             <i data-lucide="database" class="w-6 h-6 text-gold-400"></i>

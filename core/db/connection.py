@@ -10,6 +10,7 @@ import os
 import threading
 
 from config import DB_PATH
+from services.logger import log
 
 
 # 模块级缓存：每个进程只检测一次，避免假阳性
@@ -367,15 +368,15 @@ def get_db():
                 except duckdb.InternalException as e:
                     if 'WAL file' in str(e):
                         wal_path = f"{DB_PATH}.wal"
-                        print(f'[DB] 检测到 WAL 文件损坏，尝试恢复: {wal_path}', flush=True)
+                        log('WARNING', 'DB', f'检测到 WAL 文件损坏，尝试恢复: {wal_path}')
                         if os.path.exists(wal_path):
                             try:
                                 os.remove(wal_path)
-                                print(f'[DB] 已删除损坏的 WAL 文件，重试连接', flush=True)
+                                log('INFO', 'DB', '已删除损坏的 WAL 文件，重试连接')
                             except OSError as oe:
-                                print(f'[DB] 删除 WAL 文件失败: {oe}', flush=True)
+                                log('ERROR', 'DB', f'删除 WAL 文件失败: {oe}')
                         _conn = DuckDBConnection(DB_PATH)
-                        print('[DB] 数据库连接恢复成功', flush=True)
+                        log('INFO', 'DB', '数据库连接恢复成功')
                     else:
                         raise
                 _conn.row_factory = _row_factory_duckdbrow

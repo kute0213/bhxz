@@ -17,23 +17,13 @@ import uuid
 import threading
 from typing import Tuple
 
+from services.logger import log
+
 # 延迟导入 Pillow，避免不必要的依赖检查
 _pil_available = None
 Image = None
 ImageDraw = None
 ImageFont = None
-
-# 简单日志输出
-_log_lock = threading.Lock()
-
-
-def _log(event: str, detail: str = '', **kwargs):
-    """输出格式化的日志信息。"""
-    now = time.strftime('%Y-%m-%d %H:%M:%S', time.localtime())
-    parts = [f'[{now}] [CaptchaService]', f'[{event}]', detail]
-    for k, v in kwargs.items():
-        parts.append(f'{k}={v}')
-    print(' '.join(parts), flush=True)
 
 
 def _check_pil():
@@ -263,10 +253,10 @@ class CaptchaService:
             try:
                 expired_count = self.cleanup_expired()
                 if expired_count > 0:
-                    _log('Cleanup', f'清理过期验证码 {expired_count} 个', remaining=len(self._captchas))
+                    log('INFO', 'CaptchaService', f'清理过期验证码 {expired_count} 个', remaining=len(self._captchas))
             except Exception as e:
                 # 后台线程不应因异常退出
-                print(f'[Captcha] 清理过期验证码失败: {e}', flush=True)
+                log('ERROR', 'CaptchaService', f'清理过期验证码失败: {e}')
 
     def generate(self) -> Tuple[str, str, str]:
         """生成验证码。
@@ -312,22 +302,22 @@ class CaptchaService:
             是否正确
         """
         if not captcha_id or not user_input:
-            _log('Verify', '参数为空', captcha_id=captcha_id)
+            log('WARNING', 'CaptchaService', '参数为空', captcha_id=captcha_id)
             return False
         with self._lock:
             entry = self._captchas.get(captcha_id)
             if not entry:
-                _log('Verify', '验证码不存在或已消耗', captcha_id=captcha_id)
+                log('WARNING', 'CaptchaService', '验证码不存在或已消耗', captcha_id=captcha_id)
                 return False
             if time.time() > entry['expire']:
-                _log('Verify', '验证码已过期', captcha_id=captcha_id)
+                log('WARNING', 'CaptchaService', '验证码已过期', captcha_id=captcha_id)
                 return False
             result = (
                 user_input.strip().casefold()
                 == entry['answer'].strip().casefold()
             )
             if not result:
-                _log('Verify', '验证码答案错误', captcha_id=captcha_id)
+                log('INFO', 'CaptchaService', '验证码答案错误', captcha_id=captcha_id)
             return result
 
     def consume(self, captcha_id: str):
@@ -337,7 +327,7 @@ class CaptchaService:
         with self._lock:
             if captcha_id in self._captchas:
                 self._captchas.pop(captcha_id)
-                _log('Consume', '验证码已消耗', captcha_id=captcha_id)
+                log('INFO', 'CaptchaService', '验证码已消耗', captcha_id=captcha_id)
 
     def cleanup_expired(self) -> int:
         """清理过期的验证码。

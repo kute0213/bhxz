@@ -7,6 +7,7 @@ import time
 import threading
 from datetime import datetime
 
+from services.logger import log
 from .service import email_service
 from .templates import verification_code as build_code_html
 
@@ -73,7 +74,7 @@ class EmailCodeService:
             try:
                 self.cleanup_expired()
             except Exception as e:
-                print(f'[EmailCode] 清理过期验证码失败: {e}', flush=True)
+                log('ERROR', 'EmailCode', f'清理过期验证码失败: {e}')
 
     def _generate_code(self) -> str:
         """生成 6 位数字验证码。"""

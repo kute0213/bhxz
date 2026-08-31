@@ -4,6 +4,7 @@ import hashlib
 from datetime import datetime
 
 from core.db.connection import get_db, _split_sql_script
+from services.logger import log
 
 
 def _sync_sequence(conn, table_name):
@@ -37,7 +38,7 @@ def _sync_sequence(conn, table_name):
             advanced = True
 
         if advanced:
-            print(f'[DB] 序列 {seq_name} 已同步到 {max_id + 1}', flush=True)
+            log('INFO', 'DB', f'序列 {seq_name} 已同步到 {max_id + 1}')
     except Exception:
         pass
 
@@ -321,7 +322,7 @@ def init_db():
                 if stmt:
                     cursor.execute(stmt)
         except Exception as e:
-            print(f'[DB] 创建表 {table_name} 时出错: {e}', flush=True)
+            log('ERROR', 'DB', f'创建表 {table_name} 时出错: {e}')
 
     conn.commit()
 
@@ -330,7 +331,7 @@ def init_db():
         try:
             _sync_sequence(conn, table_name)
         except Exception as e:
-            print(f'[DB] 同步序列 {table_name} 失败: {e}', flush=True)
+            log('ERROR', 'DB', f'同步序列 {table_name} 失败: {e}')
     conn.commit()
 
     # ---- 迁移：检查并添加缺失列（兼容老库） ----
@@ -342,7 +343,7 @@ def init_db():
                 cursor.execute(f'ALTER TABLE {table} ADD COLUMN {column} {definition}')
                 conn.commit()
             except Exception as e:
-                print(f'[DB] 添加列 {table}.{column} 失败: {e}', flush=True)
+                log('ERROR', 'DB', f'添加列 {table}.{column} 失败: {e}')
 
     add_column_if_not_exists('cmd_commands', 'type', "VARCHAR DEFAULT 'cmd'")
     add_column_if_not_exists('scheduled_tasks', 'task_type', "VARCHAR DEFAULT 'shell'")
@@ -368,7 +369,7 @@ def init_db():
         cursor.execute("UPDATE music SET status = 2 WHERE status = 0 AND is_public = 1")
         conn.commit()
     except Exception as e:
-        print(f'[DB] 迁移 music 公开状态失败: {e}', flush=True)
+        log('ERROR', 'DB', f'迁移 music 公开状态失败: {e}')
 
     # ---- 大喇叭音频：音量增益功能已彻底移除（旧库遗留 gain 列仅保留字段，不再使用） ----
 
@@ -389,7 +390,7 @@ def init_db():
             )
         else:
             # 用户不存在时不自动创建（避免意外创建账号）
-            print(f'[DB] 管理员账号 {admin_username} 尚未注册，跳过', flush=True)
+            log('INFO', 'DB', f'管理员账号 {admin_username} 尚未注册，跳过')
 
     # 检查是否至少有一个管理员，若没有任何管理员则创建默认 admin 账号
     cursor.execute("SELECT COUNT(*) AS c FROM users WHERE is_admin = 1")

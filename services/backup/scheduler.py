@@ -11,6 +11,7 @@ import time
 import datetime
 
 from config import get_config_value
+from services.logger import log
 
 
 class BackupScheduler:
@@ -46,7 +47,7 @@ class BackupScheduler:
         )
         self._thread.start()
         scheduled_time = get_config_value('BACKUP_SCHEDULED_TIME', '03:00')
-        print(f'[BackupScheduler] 已启动，每日 {scheduled_time} 自动备份', flush=True)
+        log('INFO', 'BackupScheduler', f'已启动，每日 {scheduled_time} 自动备份')
 
     def stop(self):
         """停止调度器。"""
@@ -60,7 +61,7 @@ class BackupScheduler:
             try:
                 self._tick()
             except Exception as e:
-                print(f'[BackupScheduler] 调度异常: {e}', flush=True)
+                log('ERROR', 'BackupScheduler', f'调度异常: {e}')
             self._stop_event.wait(30)
 
     def _tick(self):
@@ -108,10 +109,10 @@ class BackupScheduler:
     def _do_backup(self):
         """执行定时备份。"""
         from .manager import BackupManager
-        print('[BackupScheduler] 开始定时自动备份...', flush=True)
+        log('INFO', 'BackupScheduler', '开始定时自动备份...')
         backup_id, thread = BackupManager().start_backup(
             backup_type='scheduled',
             progress_callback=None,
         )
         if backup_id is None:
-            print('[BackupScheduler] 已有备份在执行，跳过本次', flush=True)
+            log('INFO', 'BackupScheduler', '已有备份在执行，跳过本次')

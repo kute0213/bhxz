@@ -17,6 +17,7 @@ from config import (
 )
 from core.db import get_db
 from services.process_utils import run_process
+from services.logger import log
 
 
 class TaskScheduler:
@@ -79,10 +80,7 @@ class TaskScheduler:
             try:
                 self._tick()
             except Exception as e:
-                print(
-                    f'[Scheduler] 调度异常: {e}\n{traceback.format_exc()}',
-                    flush=True,
-                )
+                log('ERROR', 'Scheduler', f'调度异常: {e}\n{traceback.format_exc()}')
             self._stop_event.wait(get_config_value('TASK_SCHEDULER_INTERVAL', 1))
 
     def _tick(self):
@@ -107,10 +105,7 @@ class TaskScheduler:
             finally:
                 conn.close()
         except Exception as e:
-            print(
-                f'[Scheduler] 判断到期任务失败: {e}\n{traceback.format_exc()}',
-                flush=True,
-            )
+            log('ERROR', 'Scheduler', f'判断到期任务失败: {e}\n{traceback.format_exc()}')
             return
 
         for task in tasks:
@@ -124,10 +119,7 @@ class TaskScheduler:
                 self._executor.submit(self._execute_task, dict(task))
             except Exception as e:
                 # 线程池已关闭 / 拒绝提交：回滚 _running_tasks 状态，避免任务卡死
-                print(
-                    f'[Scheduler] 提交任务 #{task_id} 失败: {e}',
-                    flush=True,
-                )
+                log('ERROR', 'Scheduler', f'提交任务 #{task_id} 失败: {e}')
                 with self._running_lock:
                     self._running_tasks.pop(task_id, None)
 
@@ -166,7 +158,7 @@ class TaskScheduler:
                         ).strftime('%Y-%m-%d %H:%M:%S'),
                     })
         except Exception as e:
-            print(f'[Scheduler] 读取运行中任务失败: {e}', flush=True)
+            log('ERROR', 'Scheduler', f'读取运行中任务失败: {e}')
         finally:
             if conn is not None:
                 conn.close()
@@ -217,10 +209,7 @@ class TaskScheduler:
                     finally:
                         conn.close()
                 except Exception as e:
-                    print(
-                        f'[Scheduler] 任务 #{task_id} 读取快捷命令失败: {e}',
-                        flush=True,
-                    )
+                    log('ERROR', 'Scheduler', f'任务 #{task_id} 读取快捷命令失败: {e}')
 
             # 决定任务类型（强制为 shell）
             if not cmd_content:
@@ -230,11 +219,7 @@ class TaskScheduler:
             # 记录实际执行的命令
             executed_command = cmd_content
 
-            print(
-                f"[Scheduler] 执行任务 #{task_id} '{task['name']}': "
-                f"{executed_command}",
-                flush=True,
-            )
+            log('INFO', 'Scheduler', f"执行任务 #{task_id} '{task['name']}': {executed_command}")
 
             proc_result = run_process(
                 cmd_content,
@@ -252,10 +237,7 @@ class TaskScheduler:
             output = f'执行异常: {e}\n{traceback.format_exc()}'
             exit_code = -1
             success = False
-            print(
-                f'[Scheduler] 任务 #{task_id} 执行异常: {e}',
-                flush=True,
-            )
+            log('ERROR', 'Scheduler', f'任务 #{task_id} 执行异常: {e}')
         finally:
             # 收尾阶段独立 try：日志/调度更新失败不能阻止 _running_tasks 清理
             try:
@@ -268,11 +250,7 @@ class TaskScheduler:
                 )
                 self._update_task_schedule(task, finished_at)
             except Exception as e:
-                print(
-                    f'[Scheduler] 任务 #{task_id} 收尾失败: {e}\n'
-                    f'{traceback.format_exc()}',
-                    flush=True,
-                )
+                log('ERROR', 'Scheduler', f'任务 #{task_id} 收尾失败: {e}\n{traceback.format_exc()}')
             finally:
                 # 关键：无论收尾是否成功，必须从 _running_tasks 移除，
                 # 否则该任务将永远无法被再次调度
@@ -311,7 +289,7 @@ class TaskScheduler:
             )
             conn.commit()
         except Exception as e:
-            print(f'[Scheduler] 记录日志失败: {e}', flush=True)
+            log('ERROR', 'Scheduler', f'记录日志失败: {e}')
         finally:
             conn.close()
 
@@ -337,7 +315,7 @@ class TaskScheduler:
                 )
             conn.commit()
         except Exception as e:
-            print(f'[Scheduler] 更新任务调度失败: {e}', flush=True)
+            log('ERROR', 'Scheduler', f'更新任务调度失败: {e}')
         finally:
             conn.close()
 
@@ -369,19 +347,11 @@ class TaskScheduler:
                 hour, minute = map(int, execute_at.split(':')[:2])
             except (ValueError, AttributeError):
                 # 格式无效时返回 None 而非静默降级为 0:00
-                print(
-                    f'[Scheduler] 任务 #{task.get("id", "?")} execute_at 格式无效: {execute_at!r}，'
-                    f'跳过调度',
-                    flush=True,
-                )
+                log('WARNING', 'Scheduler', f'任务 #{task.get("id", "?")} execute_at 格式无效: {execute_at!r}，跳过调度')
                 return None
             if not (0 <= hour <= 23 and 0 <= minute <= 59):
                 # 时间值越界也视为无效
-                print(
-                    f'[Scheduler] 任务 #{task.get("id", "?")} execute_at 时间越界: {execute_at!r}，'
-                    f'跳过调度',
-                    flush=True,
-                )
+                log('WARNING', 'Scheduler', f'任务 #{task.get("id", "?")} execute_at 时间越界: {execute_at!r}，跳过调度')
                 return None
             next_time = base.replace(hour=hour, minute=minute, second=0, microsecond=0)
             if next_time <= base:
@@ -458,7 +428,7 @@ class TaskScheduler:
             finally:
                 conn.close()
         except Exception as e:
-            print(f'[Scheduler] 触发查询失败 #{task_id}: {e}', flush=True)
+            log('ERROR', 'Scheduler', f'触发查询失败 #{task_id}: {e}')
             return False
 
         if not task:
@@ -474,7 +444,7 @@ class TaskScheduler:
             self._executor.submit(self._execute_task, dict(task), no_timeout=True)
         except Exception as e:
             # 线程池已关闭 / 拒绝提交：回滚状态
-            print(f'[Scheduler] 触发提交失败 #{task_id}: {e}', flush=True)
+            log('ERROR', 'Scheduler', f'触发提交失败 #{task_id}: {e}')
             with self._running_lock:
                 self._running_tasks.pop(task_id, None)
             return False

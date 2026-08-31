@@ -14,6 +14,7 @@ import time
 import traceback
 
 from config import get_config_value, UPLOAD_SITEMAP_DIR
+from services.logger import log
 
 
 class SitemapCache:
@@ -50,7 +51,7 @@ class SitemapCache:
             target=self._run_loop, name='sitemap-cache', daemon=True
         )
         self._thread.start()
-        print('[SitemapCache] 已启动，每日自动刷新站点地图', flush=True)
+        log('INFO', 'SitemapCache', '已启动，每日自动刷新站点地图')
 
     def stop(self):
         """停止后台线程。"""
@@ -128,7 +129,7 @@ class SitemapCache:
         """手动立即刷新缓存（供管理面板调用）。"""
         self._refresh()
         self._last_refresh_date = datetime.datetime.now().strftime('%Y-%m-%d')
-        print('[SitemapCache] 手动刷新完成', flush=True)
+        log('INFO', 'SitemapCache', '手动刷新完成')
 
     # ------------------------------------------------------------------
     # 后台循环
@@ -140,10 +141,7 @@ class SitemapCache:
             try:
                 self._check_and_refresh()
             except Exception as e:
-                print(
-                    f'[SitemapCache] 检查异常: {e}\n{traceback.format_exc()}',
-                    flush=True,
-                )
+                log('ERROR', 'SitemapCache', f'检查异常: {e}\n{traceback.format_exc()}')
             self._stop_event.wait(60)
 
     def _check_and_refresh(self):
@@ -165,7 +163,7 @@ class SitemapCache:
         if now.hour > hour or (now.hour == hour and now.minute >= minute):
             self._refresh()
             self._last_refresh_date = today
-            print(f'[SitemapCache] 站点地图已刷新 ({today} {refresh_time})', flush=True)
+            log('INFO', 'SitemapCache', f'站点地图已刷新 ({today} {refresh_time})')
 
     # ------------------------------------------------------------------
     # 生成缓存
@@ -179,14 +177,14 @@ class SitemapCache:
         domains = _collect_domains()
 
         if not domains:
-            print('[SitemapCache] 未配置任何域名，跳过 sitemap 生成', flush=True)
+            log('WARNING', 'SitemapCache', '未配置任何域名，跳过 sitemap 生成')
             return
 
         # 生成 URL 列表（共享内容，仅 base_url 不同）
         url_entries = _build_url_entries()
 
         if not url_entries:
-            print('[SitemapCache] 无 URL 条目，跳过 sitemap 生成', flush=True)
+            log('WARNING', 'SitemapCache', '无 URL 条目，跳过 sitemap 生成')
             return
 
         # 为每个域名生成并写入文件
@@ -199,9 +197,9 @@ class SitemapCache:
                 os.makedirs(UPLOAD_SITEMAP_DIR, exist_ok=True)
                 with open(filepath, 'w', encoding='utf-8') as f:
                     f.write(xml_content)
-                print(f'[SitemapCache] 已生成: {filename} ({base_url})', flush=True)
+                log('INFO', 'SitemapCache', f'已生成: {filename} ({base_url})')
             except Exception as e:
-                print(f'[SitemapCache] 写入 {filename} 失败: {e}', flush=True)
+                log('ERROR', 'SitemapCache', f'写入 {filename} 失败: {e}')
 
 
 # ---------------------------------------------------------------------------

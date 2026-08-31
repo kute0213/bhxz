@@ -13,6 +13,7 @@ import threading
 import datetime
 
 from core.db import get_db
+from services.logger import log
 
 
 class AsyncLogWriter:
@@ -82,7 +83,7 @@ class AsyncLogWriter:
             except queue.Empty:
                 continue
             except Exception as e:
-                print(f'[AsyncLogWriter] 写入异常: {e}', flush=True)
+                log('ERROR', 'LogWriter', f'写入异常: {e}')
                 batch.clear()
 
         # 停止前刷新剩余日志
@@ -128,7 +129,7 @@ class AsyncLogWriter:
                 ))
             conn.commit()
         except Exception as e:
-            print(f'[AsyncLogWriter] 批量写入失败: {e}', flush=True)
+            log('ERROR', 'LogWriter', f'批量写入失败: {e}')
         finally:
             conn.close()
 

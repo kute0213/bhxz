@@ -11,6 +11,7 @@ from email.mime.multipart import MIMEMultipart
 from email.utils import formataddr
 
 from config import get_config_value
+from services.logger import log
 
 
 class EmailService:
@@ -74,7 +75,7 @@ class EmailService:
                 'html': html,
             })
         except queue.Full:
-            print('[Email] 队列已满，丢弃邮件', flush=True)
+            log('WARNING', 'Email', '队列已满，丢弃邮件')
 
     def is_enabled(self) -> bool:
         """邮件功能是否启用。"""
@@ -113,7 +114,7 @@ class EmailService:
             except queue.Empty:
                 continue
             except Exception as e:
-                print(f'[Email] 发送循环异常: {e}', flush=True)
+                log('ERROR', 'Email', f'发送循环异常: {e}')
 
         # 停止前清空队列
         while not self._queue.empty():
@@ -131,7 +132,7 @@ class EmailService:
 
         cfg = self._get_smtp_config()
         if cfg is None:
-            print('[Email] SMTP 配置不完整，跳过发送', flush=True)
+            log('WARNING', 'Email', 'SMTP 配置不完整，跳过发送')
             return
 
         try:
@@ -166,9 +167,9 @@ class EmailService:
                     server.login(cfg['user'], cfg['password'])
                     server.sendmail(cfg['user'], [item['to']], msg.as_string())
 
-            print(f"[Email] 已发送: {item['to']} <- {item['subject']}", flush=True)
+            log('INFO', 'Email', f"已发送: {item['to']} <- {item['subject']}")
         except Exception as e:
-            print(f"[Email] 发送失败 ({item.get('to')}): {type(e).__name__}: {e}", flush=True)
+            log('ERROR', 'Email', f"发送失败 ({item.get('to')}): {type(e).__name__}: {e}")
             traceback.print_exc()
 
 

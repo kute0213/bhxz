@@ -5,6 +5,7 @@ import socket
 import threading
 from flask import Flask, render_template
 from config import SECRET_KEY, MAX_CONTENT_LENGTH
+from services.logger import log
 
 
 # 项目根目录（确保工作目录正确，不受快捷方式启动影响）
@@ -70,7 +71,7 @@ _shutdown_lock = threading.Lock()
 
 def _register_hooks(try_serve_public):
     """统一注册请求钩子。"""
-    print('[INFO] 正在注册请求钩子...', flush=True)
+    log('INFO', 'App', '正在注册请求钩子...')
     from core.middleware import register_hooks
     register_hooks(app, try_serve_public)
 
@@ -124,7 +125,7 @@ def _start_background_services():
     BackupScheduler().start()
     email_service.start()
     sitemap_cache.start()
-    print('[INFO] 后台服务启动完成', flush=True)
+    log('INFO', 'App', '后台服务启动完成')
 
 
 
@@ -147,10 +148,10 @@ def _run_pending_migrations():
         if get_setting('UPLOADS_MIGRATION_PENDING', '0') != '1':
             return
 
-        print('[INFO] 检测到待执行的清理与迁移任务，正在运行...', flush=True)
+        log('INFO', 'App', '检测到待执行的清理与迁移任务，正在运行...')
         uploads_script = os.path.join(_APP_ROOT, 'scripts', 'uploads.py')
         if not os.path.isfile(uploads_script):
-            print('[WARN] scripts/uploads.py 不存在，跳过迁移', flush=True)
+            log('WARNING', 'App', 'scripts/uploads.py 不存在，跳过迁移')
             try:
                 set_setting('UPLOADS_MIGRATION_PENDING', '0')
             except Exception:
@@ -166,12 +167,12 @@ def _run_pending_migrations():
         for line in iter(proc.stdout.readline, ''):
             line = line.rstrip('\n\r')
             if line:
-                print(f'  | {line}', flush=True)
+                log('INFO', 'App', f'  | {line}')
         proc.wait(timeout=120)
         if proc.returncode == 0:
-            print('[OK] 清理与迁移完成', flush=True)
+            log('INFO', 'App', '清理与迁移完成')
         else:
-            print(f'[WARN] 清理脚本返回码: {proc.returncode}', flush=True)
+            log('WARNING', 'App', f'清理脚本返回码: {proc.returncode}')
         proc.stdout.close()
 
         # 清除标记，避免下次启动重复执行
@@ -180,7 +181,7 @@ def _run_pending_migrations():
         except Exception:
             pass
     except Exception as e:
-        print(f'[WARN] 执行清理与迁移失败: {e}', flush=True)
+        log('WARNING', 'App', f'执行清理与迁移失败: {e}')
 
 
 # ---------------------------------------------------------------------------
@@ -198,11 +199,11 @@ def _init_app():
     # 在 init_db() 之前执行，此时服务器尚未打开数据库连接，无锁冲突
     _run_pending_migrations()
 
-    print('[INFO] 正在初始化数据库...', flush=True)
+    log('INFO', 'App', '正在初始化数据库...')
     init_db()
-    print('[INFO] 数据库初始化完成', flush=True)
+    log('INFO', 'App', '数据库初始化完成')
 
-    print('[INFO] 正在注册蓝图...', flush=True)
+    log('INFO', 'App', '正在注册蓝图...')
     from routes.registry import register_blueprints
     try_serve_public = register_blueprints(app)
 
@@ -211,7 +212,7 @@ def _init_app():
     # 注册模板上下文处理器
     _register_template_context()
 
-    print('[INFO] 正在启动后台服务...', flush=True)
+    log('INFO', 'App', '正在启动后台服务...')
     _start_background_services()
 
 
@@ -250,11 +251,11 @@ def run_server(port=5000):
     global _server
     from cheroot.wsgi import Server
 
-    print(f'[INFO] 工作目录: {os.getcwd()}', flush=True)
-    print(f'[INFO] APP_ROOT: {os.path.dirname(os.path.abspath(__file__))}', flush=True)
+    log('INFO', 'App', f'工作目录: {os.getcwd()}')
+    log('INFO', 'App', f'APP_ROOT: {os.path.dirname(os.path.abspath(__file__))}')
 
     if is_port_in_use(port):
-        print(f'[ERROR] 端口 {port} 已被占用，请先关闭其他程序', flush=True)
+        log('ERROR', 'App', f'端口 {port} 已被占用，请先关闭其他程序')
         return
 
     ssl_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'ssl')
@@ -273,9 +274,9 @@ def run_server(port=5000):
     _server = server
 
     if has_ssl:
-        print(f'[INFO] HTTPS 模式运行 (端口 {port})', flush=True)
-        print(f'[INFO]   证书: {cert_path}', flush=True)
-        print(f'[INFO]   私钥: {key_path}', flush=True)
+        log('INFO', 'App', f'HTTPS 模式运行 (端口 {port})')
+        log('INFO', 'App', f'证书: {cert_path}')
+        log('INFO', 'App', f'私钥: {key_path}')
         try:
             from cheroot.ssl.builtin import BuiltinSSLAdapter
             server.ssl_adapter = BuiltinSSLAdapter(
@@ -283,11 +284,11 @@ def run_server(port=5000):
                 private_key=key_path,
             )
         except ImportError as e:
-            print(f'[WARNING] 无法加载 SSL 适配器 ({e})，回退到 HTTP 模式', flush=True)
-            print(f'[WARNING] HTTP 模式运行 (端口 {port})', flush=True)
+            log('WARNING', 'App', f'无法加载 SSL 适配器 ({e})，回退到 HTTP 模式')
+            log('WARNING', 'App', f'HTTP 模式运行 (端口 {port})')
     else:
-        print(f'[WARNING] 未找到 SSL 证书文件 ({cert_path} 或 {key_path})', flush=True)
-        print(f'[WARNING] 回退到 HTTP 模式运行 (端口 {port})', flush=True)
+        log('WARNING', 'App', f'未找到 SSL 证书文件 ({cert_path} 或 {key_path})')
+        log('WARNING', 'App', f'回退到 HTTP 模式运行 (端口 {port})')
 
     try:
         server.start()
@@ -295,7 +296,7 @@ def run_server(port=5000):
         # 未安装信号处理器的嵌入式运行场景仍需要进入统一关闭流程。
         _shutdown_application(signal.SIGINT)
     except Exception as e:
-        print(f'[ERROR] 服务器启动失败: {e}', flush=True)
+        log('ERROR', 'App', f'服务器启动失败: {e}')
         raise
     finally:
         _shutdown_application()
@@ -315,7 +316,7 @@ def _shutdown_application(signum=None):
         _shutdown_started = True
 
     if signum is not None:
-        print(f'\n[INFO] 收到信号 {signum}，正在关闭服务器...', flush=True)
+        log('INFO', 'App', f'收到信号 {signum}，正在关闭服务器...')
 
     from services.logging import log_writer, log_cleaner
     from services.scheduler import scheduler
@@ -329,7 +330,7 @@ def _shutdown_application(signum=None):
         try:
             _server.stop()
         except Exception as exc:
-            print(f'[WARNING] HTTP 服务关闭异常: {exc}', flush=True)
+            log('WARNING', 'App', f'HTTP 服务关闭异常: {exc}')
 
     BackupScheduler().stop()
     email_service.stop()
@@ -342,8 +343,8 @@ def _shutdown_application(signum=None):
         conn = get_db()
         conn.commit()
     except Exception as exc:
-        print(f'[WARNING] 关闭前提交数据库失败: {exc}', flush=True)
-    print('[INFO] 服务器已关闭', flush=True)
+        log('WARNING', 'App', f'关闭前提交数据库失败: {exc}')
+    log('INFO', 'App', '服务器已关闭')
 
 
 def _graceful_shutdown(signum, frame):

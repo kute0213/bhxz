@@ -8,6 +8,7 @@ from core.auth import login_required, get_current_user
 from core.db import get_db
 from config import DB_PATH
 from routes.admin import admin_bp
+from services.logger import log
 
 
 @admin_bp.route('/admin/db-backup')
@@ -145,7 +146,7 @@ def api_db_backup_delete(backup_id):
                 if os.path.exists(backup_path):
                     os.remove(backup_path)
             except Exception as e:
-                print(f'[Backup] 删除备份文件失败 {backup_path}: {e}', flush=True)
+                log('ERROR', 'BackupManager', f'删除备份文件失败 {backup_path}: {e}')
 
         # 删除数据库记录
         conn.execute("DELETE FROM db_backups WHERE id = ?", (backup_id,))
