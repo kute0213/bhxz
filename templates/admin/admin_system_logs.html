@@ -63,6 +63,15 @@
                 'CRITICAL':'text-red-500 font-bold',
             };
 
+            // 日志等级数值（用于 ≥ 过滤）
+            const LEVEL_NUMBERS = {
+                'DEBUG': 0,
+                'INFO': 1,
+                'WARNING': 2,
+                'ERROR': 3,
+                'CRITICAL': 4,
+            };
+
             let eventSource = null;
             let logCount = 0;
 
@@ -73,9 +82,13 @@
             }
 
             function appendLog(entry) {
-                // 等级过滤
+                // 等级过滤：显示 >= 选中等级的日志
                 const filter = levelFilter.value;
-                if (filter && entry.level !== filter) return;
+                if (filter) {
+                    const filterNum = LEVEL_NUMBERS[filter] ?? -1;
+                    const entryNum = LEVEL_NUMBERS[entry.level] ?? -1;
+                    if (entryNum < filterNum) return;
+                }
 
                 const levelClass = LEVEL_COLORS[entry.level] || 'text-cream';
                 const line = document.createElement('div');
@@ -87,12 +100,13 @@
                     <span class="text-gold-400 whitespace-nowrap flex-shrink-0">[${escapeHtml(entry.event)}]</span>
                     <span class="text-cream/80 break-all">${escapeHtml(entry.detail || '')}</span>
                 `;
-                logContent.appendChild(line);
+                // 最新日志在最上面
+                logContent.prepend(line);
                 logCount++;
 
-                // 自动滚动
+                // 自动滚动到顶部（新日志出现的位置）
                 if (autoScroll.checked) {
-                    logContainer.scrollTop = logContainer.scrollHeight;
+                    logContainer.scrollTop = 0;
                 }
             }
 
@@ -111,7 +125,9 @@
                         const logs = JSON.parse(e.data);
                         logContent.innerHTML = '';
                         logCount = 0;
-                        logs.forEach(appendLog);
+                        // get_log_buffer_tail 返回的是倒序（最新在前），
+                        // 而我们要 prepend 到顶部，所以先反转成从旧到新
+                        logs.reverse().forEach(appendLog);
                         connStatus.textContent = '已连接';
                         connStatus.className = 'text-xs px-2 py-1 rounded bg-green-500/20 text-green-400';
                     } catch (err) {
