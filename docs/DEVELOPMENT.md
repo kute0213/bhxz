@@ -103,7 +103,7 @@ def do_something(user_id, value, ip_address):
 **规则：**
 - 所有函数返回 `(success, data_or_error)` 元组
 - `success` 为 `bool` 类型
-- 日志记录在服务层统一完成（`from services.logger import log`）
+- 日志记录在核心层统一完成（`from core.logger import log`）
 - 禁止导入 `flask`、`request`、`session`、`render_template`、`redirect`、`flash`
 - 数据库连接仅通过 `get_db()` 获取，用完必须 `close()`
 

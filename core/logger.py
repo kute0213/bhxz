@@ -1,7 +1,7 @@
 """统一日志系统 —— 同时输出到控制台、日志文件、内存缓冲（供后台实时查看）。
 
 用法:
-    from services.logger import log
+    from core.logger import log
 
     log('INFO', 'App', '服务器启动成功', port=5000)
     log('WARNING', 'DB', '连接超时', retry=3)
