@@ -6,6 +6,7 @@ from flask import render_template, redirect, url_for, flash, abort, request, jso
 
 from core.auth import admin_required, get_current_user
 from core.db import get_db
+from core.db.schema import cleanup_expired_rejected_guides
 from services.email import email_service, guide_review_result as build_result_html
 from routes.admin import admin_bp
 
@@ -40,6 +41,9 @@ def _notify_author_guide_result(guide_title, author_email, approved, reason=''):
 def admin_guides():
     """管理后台：指南列表（含待审核）。"""
     user = get_current_user()
+
+    # 清理拒绝超过48小时的指南
+    cleanup_expired_rejected_guides()
 
     conn = get_db()
     try:
@@ -155,6 +159,11 @@ def admin_guide_edit(guide_id):
                 (title, slug, summary, content, cover_image, status,
                  is_pinned, now, published_at, guide_id),
             )
+            if status == 'approved':
+                conn.execute(
+                    "UPDATE server_guides SET rejected_at = NULL WHERE id = ?",
+                    (guide_id,),
+                )
             conn.commit()
             flash('指南已更新', 'success')
             return redirect(url_for('admin.admin_guides'))
@@ -244,10 +253,10 @@ def admin_guide_reject(guide_id):
         conn.execute(
             """
             UPDATE server_guides
-            SET status = 'rejected', updated_at = ?, rejected_reason = ?
+            SET status = 'rejected', updated_at = ?, rejected_reason = ?, rejected_at = ?
             WHERE id = ?
             """,
-            (now, reason, guide_id),
+            (now, reason, now, guide_id),
         )
         conn.commit()
         flash('指南已拒绝', 'success')

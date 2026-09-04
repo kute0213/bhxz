@@ -131,6 +131,7 @@ var guidePreviewData = {
     },
     {% endfor %}
 };
+var _previewGuideId = null;
 
 function showRejectModal(id) {
     const form = document.getElementById('reject-form');
@@ -141,18 +142,24 @@ function hideRejectModal() {
     document.getElementById('reject-modal').classList.add('hidden');
 }
 function showPreviewModal(btn) {
-    const id = parseInt(btn.dataset.guideId);
-    const data = guidePreviewData[id];
+    _previewGuideId = parseInt(btn.dataset.guideId);
+    const data = guidePreviewData[_previewGuideId];
     if (!data) return;
     document.getElementById('preview-title').textContent = data.title;
     document.getElementById('preview-content').innerHTML = DOMPurify.sanitize(marked.parse(data.content));
-    document.getElementById('preview-approve-form').action = '/admin/guides/' + id + '/approve';
+    document.getElementById('preview-approve-form').action = '/admin/guides/' + _previewGuideId + '/approve';
     document.getElementById('preview-modal').classList.remove('hidden');
     document.body.style.overflow = 'hidden';
 }
 function hidePreviewModal() {
+    _previewGuideId = null;
     document.getElementById('preview-modal').classList.add('hidden');
     document.body.style.overflow = '';
+}
+function rejectFromPreview() {
+    if (_previewGuideId === null) return;
+    hidePreviewModal();
+    showRejectModal(_previewGuideId);
 }
 </script>
 {% endblock %}
@@ -188,13 +195,14 @@ function hidePreviewModal() {
                 <h3 class="text-lg font-bold" id="preview-title"></h3>
                 <button onclick="hidePreviewModal()" class="text-cream/60 hover:text-cream p-1"><i data-lucide="x" class="w-5 h-5"></i></button>
             </div>
-            <div id="preview-content" class="prose-docs"></div>
+            <div id="preview-content" class="prose-docs overflow-y-auto max-h-[55vh]"></div>
             <div class="flex items-center justify-end gap-3 pt-6 border-t border-forest-700/50 mt-6">
                 <button type="button" onclick="hidePreviewModal()" class="btn-secondary px-4 py-2 rounded-lg text-sm">关闭</button>
                 <form id="preview-approve-form" method="POST" class="inline">
                     {{ csrf_field() }}
                     <button type="submit" class="btn-primary px-4 py-2 rounded-lg text-sm bg-green-500 hover:bg-green-600 border-green-500">通过审核</button>
                 </form>
+                <button type="button" onclick="rejectFromPreview()" class="btn-primary px-4 py-2 rounded-lg text-sm bg-red-500 hover:bg-red-600 border-red-500">拒绝</button>
             </div>
         </div>
     </div>

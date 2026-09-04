@@ -205,7 +205,8 @@ def init_db():
                 created_at VARCHAR NOT NULL,
                 updated_at VARCHAR NOT NULL,
                 published_at VARCHAR DEFAULT NULL,
-                rejected_reason VARCHAR DEFAULT ''
+                rejected_reason VARCHAR DEFAULT '',
+                rejected_at VARCHAR DEFAULT NULL
             )
         '''),
         # 指南编辑封禁表
@@ -428,4 +429,50 @@ def init_db():
             )
         conn.commit()
 
+    # ---- 指南拒绝审核：添加 rejected_at 列 ----
+    add_column_if_not_exists('server_guides', 'rejected_at', "VARCHAR DEFAULT NULL")
+    # 兼容旧数据：已拒绝但无 rejected_at 的指南，用 updated_at 填充
+    try:
+        cursor.execute(
+            "UPDATE server_guides SET rejected_at = updated_at "
+            "WHERE status = 'rejected' AND rejected_at IS NULL"
+        )
+        conn.commit()
+    except Exception as e:
+        log('ERROR', 'DB', f'迁移 server_guides.rejected_at 失败: {e}')
+
     conn.close()
+
+
+def cleanup_expired_rejected_guides():
+    """删除拒绝超过 48 小时且未修改的指南。
+
+    兼容旧数据：已拒绝但无 rejected_at 的指南（已由 init_db 填充为 updated_at），
+    同样会在此函数中被清理。
+    """
+    from datetime import datetime, timedelta
+    from services.logging import log_writer
+
+    conn = get_db()
+    try:
+        deadline = (datetime.now() - timedelta(hours=48)).strftime('%Y-%m-%d %H:%M:%S')
+        rows = conn.execute(
+            "SELECT id, title FROM server_guides "
+            "WHERE status = 'rejected' AND rejected_at IS NOT NULL AND rejected_at < ?",
+            (deadline,),
+        ).fetchall()
+        deleted = 0
+        for row in rows:
+            conn.execute("DELETE FROM server_guides WHERE id = ?", (row['id'],))
+            deleted += 1
+            log_writer('INFO', 'Guide', f'拒绝超时自动删除',
+                       guide_id=row['id'], title=row['title'])
+        if deleted:
+            conn.commit()
+            log_writer('INFO', 'Guide', f'自动清理过期拒绝指南', count=deleted)
+        return deleted
+    except Exception as e:
+        log_writer('ERROR', 'Guide', f'清理过期拒绝指南失败: {e}')
+        return 0
+    finally:
+        conn.close()
