@@ -108,6 +108,10 @@ def _register_template_context():
             'active_backgrounds': active_bgs,
             'csrf_field': csrf_field,
             'csrf_token': csrf_token_str,
+            # 备案号（热重载）
+            'show_beian': get_config_value('SHOW_BEIAN', False),
+            'icp_beian': get_config_value('ICP_BEIAN', ''),
+            'police_beian': get_config_value('POLICE_BEIAN', ''),
         }
 
 
