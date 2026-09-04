@@ -10,7 +10,7 @@ from routes.admin import admin_bp
 
 
 @admin_bp.route('/admin/mod-intros')
-@login_required
+@admin_required
 def manage_mod_intros():
     user = get_current_user()
     if not user or not user['is_admin']:
