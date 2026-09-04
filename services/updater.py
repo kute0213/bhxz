@@ -27,6 +27,8 @@ import time
 import json
 import subprocess
 import random
+import hashlib
+import shlex
 from concurrent.futures import ThreadPoolExecutor, as_completed, TimeoutError
 from urllib.request import Request, urlopen
 from urllib.error import URLError, HTTPError
@@ -259,12 +261,19 @@ def _test_proxy_timeout(proxy_name, proxy_base_url, proxy_clone_template, timeou
 
 
 def _create_ssl_context():
-    """创建宽松的 SSL 上下文，兼容一些代理证书问题。"""
+    """创建 SSL 上下文。
+
+    默认启用严格证书验证（CERT_REQUIRED）。
+    当环境变量 UPDATE_SSL_INSECURE=1 时回退到宽松模式（CERT_NONE），
+    兼容代理使用自签名证书的情况。
+    """
     import ssl
-    ctx = ssl.create_default_context()
-    ctx.check_hostname = False
-    ctx.verify_mode = ssl.CERT_NONE
-    return ctx
+    if os.environ.get('UPDATE_SSL_INSECURE') == '1':
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        return ctx
+    return ssl.create_default_context()
 
 
 def _get_urlerror_reason(e):
@@ -360,6 +369,28 @@ def _download_zip(url, dest_path, progress_callback=None, timeout=60):
                     return False  # 损坏的 ZIP
         except zipfile.BadZipFile:
             return False
+
+        # SHA256 完整性校验
+        # 尝试从 {url}.sha256 获取预期哈希值
+        sha256_url = url + '.sha256'
+        try:
+            req_sha = Request(sha256_url, method='GET')
+            req_sha.add_header('User-Agent', 'Mozilla/5.0 (compatible; bhxz-updater)')
+            resp_sha = urlopen(req_sha, context=ctx, timeout=timeout)
+            sha_content = resp_sha.read().decode('utf-8').strip()
+            # 兼容 "hash  filename" 和纯 hash 两种格式
+            expected_hash = sha_content.split()[0] if sha_content else ''
+            if expected_hash:
+                with open(dest_path, 'rb') as f:
+                    actual_hash = hashlib.sha256(f.read()).hexdigest()
+                if actual_hash.lower() != expected_hash.lower():
+                    return False  # 哈希不匹配
+        except HTTPError:
+            # .sha256 文件不存在（404），兼容无哈希的旧版本
+            pass
+        except Exception:
+            # 其他异常（超时、网络错误等）不阻止下载
+            pass
 
         return True
     except HTTPError as e:
@@ -1148,7 +1179,7 @@ def _restart_app(start_command=''):
                    .replace('{app_root}', APP_ROOT)
     _add_event('log', {'message': f'执行启动命令: {formatted}'})
     try:
-        subprocess.Popen(formatted, cwd=APP_ROOT, shell=True, close_fds=True)
+        subprocess.Popen(shlex.split(formatted), cwd=APP_ROOT, close_fds=True)
     except Exception as e:
         _add_event('log', {'message': f'启动命令执行失败: {e}'})
         # 关闭当前进程，避免卡死

@@ -3,10 +3,26 @@
 封装单个 shell 子进程的状态、输入输出处理与生命周期。
 """
 
+import re
 import threading
 import time
 
 from services.process_utils import decode_output
+
+
+def filter_escape_sequences(text):
+    """过滤终端输出中的转义序列，仅保留可读内容。
+
+    规则：只允许 ASCII 可打印字符（0x20-0x7E）、\\n、\\r、\\t，
+    移除所有 ANSI 转义序列（ESC 0x1B 开头）。
+    """
+    # 移除 ESC 开头的 ANSI 转义序列（\x1b[...m, \x1b(... 等）
+    text = re.sub(r'\x1b\[[0-9;]*[a-zA-Z]', '', text)
+    text = re.sub(r'\x1b[][()][0-9;]*[a-zA-Z]?', '', text)
+    text = re.sub(r'\x1b[PX^_]', '', text)
+    text = re.sub(r'\x1b[\\ab]', '', text)
+    # 移除其他非允许字符
+    return ''.join(c for c in text if c in '\n\r\t' or 0x20 <= ord(c) <= 0x7E)
 
 
 class TerminalSession:
@@ -62,7 +78,7 @@ class TerminalSession:
                 data = self._proc_manager.read_output(4096)
                 if not data:
                     break
-                text = decode_output(data)
+                text = filter_escape_sequences(decode_output(data))
                 with self._lock:
                     self._output_queue.append(text)
                     self._output_event.set()

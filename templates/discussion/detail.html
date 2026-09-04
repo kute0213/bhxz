@@ -235,7 +235,7 @@ var CONFIG = {
 document.addEventListener('DOMContentLoaded', function() {
     var contentEl = document.getElementById('content-render');
     if (contentEl) {
-        contentEl.innerHTML = marked.parse(contentEl.textContent);
+        contentEl.innerHTML = DOMPurify.sanitize(marked.parse(contentEl.textContent));
         // 触发代码高亮和复制按钮
         if (typeof CodeBlocks !== 'undefined') CodeBlocks.enhance(contentEl);
     }
@@ -314,7 +314,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // ---- 渲染单条回复 ----
     function renderReplyHTML(r) {
-        var contentHtml = marked.parse(r.content || '');
+        var contentHtml = DOMPurify.sanitize(marked.parse(r.content || ''));
         var canDelete = CONFIG.currentUserId &&
             (CONFIG.currentUserId === r.user_id || CONFIG.currentUserId === CONFIG.topicUserId || CONFIG.isAdmin);
         var attachHtml = '';

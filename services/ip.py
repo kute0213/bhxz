@@ -2,6 +2,8 @@ import os
 import threading
 from flask import request
 
+from config import TRUSTED_PROXIES
+
 IP_CACHE = {}
 IP_CACHE_LOCK = threading.Lock()
 _pending_ips = set()
@@ -18,6 +20,20 @@ REAL_IP_HEADERS = [
 
 
 def get_client_ip():
+    """获取客户端真实 IP 地址。
+
+    仅当 request.remote_addr 在信任代理列表（TRUSTED_PROXIES）中时，
+    才读取代理头部中的真实 IP；无信任代理时直接返回 request.remote_addr。
+    """
+    # 无信任代理时直接返回直连 IP
+    if not TRUSTED_PROXIES:
+        return request.remote_addr or '127.0.0.1'
+
+    # 检查请求来源是否为信任代理
+    remote = request.remote_addr or '127.0.0.1'
+    if remote not in TRUSTED_PROXIES:
+        return remote
+
     for header in REAL_IP_HEADERS:
         value = request.headers.get(header, '').strip()
         if not value:
@@ -32,7 +48,7 @@ def get_client_ip():
         if ips:
             return ips[0]
 
-    return request.remote_addr or '127.0.0.1'
+    return remote
 
 
 def is_public_ip(ip):

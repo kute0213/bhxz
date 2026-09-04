@@ -2,7 +2,7 @@ import os
 import sys
 import signal
 from flask import Flask
-from config import SECRET_KEY, MAX_CONTENT_LENGTH
+import config
 from core.init import init_app
 from core.server import register_error_handlers, run_server, graceful_shutdown
 from core.logger import log
@@ -50,13 +50,16 @@ _is_child = _is_mp_spawn_child()
 # Flask 应用
 # ---------------------------------------------------------------------------
 
+from datetime import timedelta
+
 app = Flask(__name__)
-app.secret_key = SECRET_KEY
-app.config['MAX_CONTENT_LENGTH'] = MAX_CONTENT_LENGTH
+app.secret_key = config.SECRET_KEY
+app.config['MAX_CONTENT_LENGTH'] = config.MAX_CONTENT_LENGTH
 app.config['TEMPLATES_AUTO_RELOAD'] = os.environ.get('FLASK_ENV') == 'development'
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['SESSION_COOKIE_SECURE'] = os.environ.get('ENABLE_SSL', '0').lower() in ('1', 'true', 'yes', 'on')
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(seconds=config.SESSION_LIFETIME)
 
 
 # ---------------------------------------------------------------------------

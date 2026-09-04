@@ -7,33 +7,23 @@ import json
 
 from flask import render_template, Response, stream_with_context, abort
 
-from core.auth import login_required, get_current_user
+from core.auth import admin_required, get_current_user
 from routes.admin import admin_bp
 from services.updater import start_update, pop_events, get_status
 
 
-def _admin_check():
-    """检查管理员权限。"""
-    user = get_current_user()
-    if not user or not user['is_admin']:
-        abort(403)
-    return user
-
-
 @admin_bp.route('/admin/update')
-@login_required
+@admin_required
 def admin_update_page():
     """一键更新页面。"""
-    _admin_check()
     status = get_status()
     return render_template('admin/admin_update.html', user=get_current_user(), status=status)
 
 
 @admin_bp.route('/admin/update/start', methods=['POST'])
-@login_required
+@admin_required
 def admin_update_start():
     """启动一键更新（后台线程）。"""
-    _admin_check()
     from flask import jsonify
 
     ok = start_update()
@@ -44,11 +34,9 @@ def admin_update_start():
 
 
 @admin_bp.route('/admin/update/stream')
-@login_required
+@admin_required
 def admin_update_stream():
     """SSE 流式输出更新进度。"""
-    _admin_check()
-
     def generate():
         # 先发送当前状态
         status = get_status()

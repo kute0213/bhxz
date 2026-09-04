@@ -4,7 +4,7 @@ import os
 
 from flask import render_template, jsonify, abort
 
-from core.auth import login_required, get_current_user
+from core.auth import admin_required, get_current_user
 from core.db import get_db
 from config import DB_PATH
 from routes.admin import admin_bp
@@ -12,12 +12,10 @@ from core.logger import log
 
 
 @admin_bp.route('/admin/db-backup')
-@login_required
+@admin_required
 def db_backup_page():
     """数据库备份管理页面。"""
     user = get_current_user()
-    if not user or not user['is_admin']:
-        abort(403)
 
     from config import get_config_value
 
@@ -51,12 +49,10 @@ def db_backup_page():
 
 
 @admin_bp.route('/admin/api/db-backup/start', methods=['POST'])
-@login_required
+@admin_required
 def api_db_backup_start():
     """启动手动数据库备份（异步执行）。"""
     user = get_current_user()
-    if not user or not user['is_admin']:
-        return jsonify({'success': False, 'message': '无权限'}), 403
 
     from services.backup import BackupManager
     backup_id, thread = BackupManager().start_backup(
@@ -78,12 +74,10 @@ def api_db_backup_start():
 
 
 @admin_bp.route('/admin/api/db-backup/progress')
-@login_required
+@admin_required
 def api_db_backup_progress():
     """获取当前备份进度。"""
     user = get_current_user()
-    if not user or not user['is_admin']:
-        return jsonify({'success': False, 'message': '无权限'}), 403
 
     from services.backup import BackupManager
     bm = BackupManager()
@@ -98,12 +92,10 @@ def api_db_backup_progress():
 
 
 @admin_bp.route('/admin/api/db-backup/list')
-@login_required
+@admin_required
 def api_db_backup_list():
     """获取备份历史列表。"""
     user = get_current_user()
-    if not user or not user['is_admin']:
-        return jsonify({'success': False, 'message': '无权限'}), 403
 
     conn = get_db()
     try:
@@ -120,12 +112,10 @@ def api_db_backup_list():
 
 
 @admin_bp.route('/admin/api/db-backup/<int:backup_id>/delete', methods=['POST', 'DELETE'])
-@login_required
+@admin_required
 def api_db_backup_delete(backup_id):
     """删除指定备份（文件 + 记录）。"""
     user = get_current_user()
-    if not user or not user['is_admin']:
-        return jsonify({'success': False, 'message': '无权限'}), 403
 
     from config import BACKUP_DIR
 

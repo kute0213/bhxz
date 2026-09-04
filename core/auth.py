@@ -22,11 +22,21 @@ def hash_password(password: str) -> str:
 
 
 def validate_password(password: str) -> str | None:
-    """校验密码强度，返回 None 表示通过，否则返回错误描述。"""
+    """校验密码强度，返回 None 表示通过，否则返回错误描述。
+
+    要求：至少 8 位、含大写字母、含小写字母、含数字、含特殊字符。
+    兼容旧数据：已有弱密码不受影响，仅在修改密码时应用新规则。
+    """
     if len(password) < 8:
         return '密码至少 8 位'
-    if not any(c.isalpha() for c in password):
-        return '密码必须包含至少一个字母'
+    if not any(c.islower() for c in password):
+        return '密码必须包含至少一个小写字母'
+    if not any(c.isupper() for c in password):
+        return '密码必须包含至少一个大写字母'
+    if not any(c.isdigit() for c in password):
+        return '密码必须包含至少一个数字'
+    if not any(c in '!@#$%^&*()_+-=[]{}|;:,.<>?/~`' for c in password):
+        return '密码必须包含至少一个特殊字符'
     return None
 
 

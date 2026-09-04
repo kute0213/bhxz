@@ -4,17 +4,15 @@ import datetime
 
 from flask import request, jsonify
 
-from core.auth import login_required
+from core.auth import admin_required
 from core.db import get_db
 from services.cmd_runner import run_command_sync
 from routes.script import script_bp
-from routes.script.terminal import _admin_check
 
 
 @script_bp.route('/admin/script/commands', methods=['GET'])
-@login_required
+@admin_required
 def list_commands():
-    _admin_check()
     conn = get_db()
     try:
         # 按名称自动排序（用户要求自动排列快捷命令顺序）
@@ -28,9 +26,8 @@ def list_commands():
 
 
 @script_bp.route('/admin/script/commands', methods=['POST'])
-@login_required
+@admin_required
 def create_command():
-    _admin_check()
     data = request.get_json() or request.form
     name = (data.get('name') or '').strip()
     command = (data.get('command') or '').strip()
@@ -64,9 +61,8 @@ def create_command():
 
 
 @script_bp.route('/admin/script/commands/<int:cmd_id>', methods=['PUT', 'POST'])
-@login_required
+@admin_required
 def update_command(cmd_id):
-    _admin_check()
     data = request.get_json() or request.form
     name = (data.get('name') or '').strip()
     command = (data.get('command') or '').strip()
@@ -100,13 +96,9 @@ def update_command(cmd_id):
 
 
 @script_bp.route('/admin/script/commands/<int:cmd_id>/delete', methods=['POST', 'DELETE'])
-@login_required
+@admin_required
 def delete_command(cmd_id):
-    """删除快捷命令。
-
-    如果该命令被定时任务引用，则阻止删除并提示用户。
-    """
-    _admin_check()
+    """删除快捷命令。"""
     conn = get_db()
     try:
         existing = conn.execute("SELECT id FROM cmd_commands WHERE id = ?", (cmd_id,)).fetchone()
@@ -147,10 +139,9 @@ def delete_command(cmd_id):
 
 
 @script_bp.route('/admin/script/run-preset/<int:cmd_id>', methods=['POST'])
-@login_required
+@admin_required
 def run_preset_command(cmd_id):
     """执行一键命令（同步模式，一次性返回输出）。"""
-    _admin_check()
     conn = get_db()
     try:
         preset = conn.execute("SELECT * FROM cmd_commands WHERE id = ?", (cmd_id,)).fetchone()

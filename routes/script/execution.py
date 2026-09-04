@@ -4,17 +4,15 @@ import json
 
 from flask import request, jsonify, Response, stream_with_context
 
-from core.auth import login_required
+from core.auth import admin_required
 from services.cmd_runner import run_command_stream, run_command_sync
 from routes.script import script_bp
-from routes.script.terminal import _admin_check
 
 
 @script_bp.route('/admin/script/run', methods=['POST'])
-@login_required
+@admin_required
 def run_cmd_sync():
     """同步执行命令，一次性返回全部输出。"""
-    _admin_check()
     data = request.get_json() or request.form
     command = (data.get('command') or '').strip()
     timeout = int(data.get('timeout') or 30)
@@ -30,11 +28,9 @@ def run_cmd_sync():
 
 
 @script_bp.route('/admin/script/run-stream', methods=['GET', 'POST'])
-@login_required
+@admin_required
 def run_cmd_stream():
     """流式执行命令，通过 SSE 实时返回输出。"""
-    _admin_check()
-
     if request.method == 'POST':
         data = request.get_json() or request.form
     else:

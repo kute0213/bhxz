@@ -4,7 +4,7 @@ from datetime import datetime
 
 from flask import render_template, redirect, url_for, flash, abort, request, jsonify
 
-from core.auth import login_required, get_current_user
+from core.auth import admin_required, get_current_user
 from core.db import get_db
 from services.email import email_service, guide_review_result as build_result_html
 from routes.admin import admin_bp
@@ -36,12 +36,10 @@ def _notify_author_guide_result(guide_title, author_email, approved, reason=''):
 
 
 @admin_bp.route('/admin/guides')
-@login_required
+@admin_required
 def admin_guides():
     """管理后台：指南列表（含待审核）。"""
     user = get_current_user()
-    if not user or not user['is_admin']:
-        abort(403)
 
     conn = get_db()
     try:
@@ -61,12 +59,10 @@ def admin_guides():
 
 
 @admin_bp.route('/admin/guides/create', methods=['GET', 'POST'])
-@login_required
+@admin_required
 def admin_guide_create():
     """管理后台：直接创建指南（自动通过审核）。"""
     user = get_current_user()
-    if not user or not user['is_admin']:
-        abort(403)
 
     if request.method == 'POST':
         title = (request.form.get('title') or '').strip()
@@ -109,12 +105,10 @@ def admin_guide_create():
 
 
 @admin_bp.route('/admin/guides/<int:guide_id>/edit', methods=['GET', 'POST'])
-@login_required
+@admin_required
 def admin_guide_edit(guide_id):
     """管理后台：编辑任意指南（保持原状态或直接通过）。"""
     user = get_current_user()
-    if not user or not user['is_admin']:
-        abort(403)
 
     conn = get_db()
     try:
@@ -174,12 +168,10 @@ def admin_guide_edit(guide_id):
 
 
 @admin_bp.route('/admin/guides/<int:guide_id>/delete', methods=['POST'])
-@login_required
+@admin_required
 def admin_guide_delete(guide_id):
     """管理后台：删除指南。"""
     user = get_current_user()
-    if not user or not user['is_admin']:
-        abort(403)
 
     conn = get_db()
     try:
@@ -196,12 +188,10 @@ def admin_guide_delete(guide_id):
 
 
 @admin_bp.route('/admin/guides/<int:guide_id>/approve', methods=['POST'])
-@login_required
+@admin_required
 def admin_guide_approve(guide_id):
     """管理后台：通过审核。"""
     user = get_current_user()
-    if not user or not user['is_admin']:
-        abort(403)
 
     conn = get_db()
     try:
@@ -235,12 +225,10 @@ def admin_guide_approve(guide_id):
 
 
 @admin_bp.route('/admin/guides/<int:guide_id>/reject', methods=['POST'])
-@login_required
+@admin_required
 def admin_guide_reject(guide_id):
     """管理后台：拒绝审核。"""
     user = get_current_user()
-    if not user or not user['is_admin']:
-        abort(403)
 
     reason = (request.form.get('reason') or '').strip()
 

@@ -22,7 +22,7 @@ if (typeof lucide !== 'undefined' && lucide.createIcons) {
             '</div>' +
             '<div class="password-strength-meta">' +
                 '<span class="password-strength-label">密码强度：未输入</span>' +
-                '<span class="password-strength-hint">至少 8 位且包含字母</span>' +
+                '<span class="password-strength-hint">至少 8 位，含大小写字母、数字和特殊字符</span>' +
             '</div>';
         input.insertAdjacentElement('afterend', indicator);
 
@@ -34,7 +34,7 @@ if (typeof lucide !== 'undefined' && lucide.createIcons) {
             if (!password) {
                 indicator.dataset.level = '0';
                 label.textContent = '密码强度：未输入';
-                hint.textContent = '至少 8 位且包含字母';
+                hint.textContent = '至少 8 位，含大小写字母、数字和特殊字符';
                 return;
             }
 
@@ -57,7 +57,9 @@ if (typeof lucide !== 'undefined' && lucide.createIcons) {
 
             var missing = [];
             if (!validLength) missing.push('至少 8 位');
-            if (!hasLetter) missing.push('包含字母');
+            if (!hasMixedCase) missing.push('大小写字母');
+            if (!hasNumber) missing.push('数字');
+            if (!hasSymbol) missing.push('特殊字符');
             if (missing.length) {
                 hint.textContent = '还需：' + missing.join('、');
             } else if (level < 4) {

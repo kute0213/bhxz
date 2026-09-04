@@ -25,6 +25,7 @@ from config import (
     FFMPEG_BIN,
     FFPROBE_BIN,
     FFMPEG_THREADS,
+    AUDIO_MAX_BYTES,
 )
 from core.logger import log
 
@@ -441,7 +442,7 @@ def _read_transcode_percent(progress_file, playlist_path, duration):
     return min(99.0, max(0.0, pct))
 
 
-def _insert_music_record(user_id, username, title, status, tags=''):
+def _insert_music_record(user_id, username, title, status, tags='', music_id=None):
     """插入音频记录并返回可靠 ID（并发安全）；失败抛异常。
 
     原实现依赖 cursor.lastrowid：数据库为全局单例且共享游标，并发上传时
@@ -449,9 +450,18 @@ def _insert_music_record(user_id, username, title, status, tags=''):
     错误目录（无法播放）、删除时也清理不到对应文件。
     现改为在持锁事务内完成 INSERT 与 lastrowid 读取（DuckDBCursor 在
     INSERT 后立刻用 currval 计算 lastrowid），保证 ID 不被并发覆盖。
+
+    当传入 music_id 时使用指定 ID（如 UUID）替代自增 ID，兼容旧数据。
     """
     try:
         with get_db() as conn:  # 持有线程锁，INSERT 与 ID 读取保持原子
+            if music_id is not None:
+                conn.execute(
+                    "INSERT INTO music (id, user_id, username, title, file_path, status, tags, created_at) "
+                    "VALUES (?, ?, ?, ?, '', ?, ?, ?)",
+                    (music_id, user_id, username, title, status, parse_tags(tags), _now()),
+                )
+                return music_id
             cursor = conn.execute(
                 "INSERT INTO music (user_id, username, title, file_path, status, tags, created_at) "
                 "VALUES (?, ?, ?, '', ?, ?, ?)",
@@ -580,11 +590,41 @@ def start_upload(user_id, username, title, is_public, upload_file, ip_address, t
     if not title:
         return False, '请填写音频名称'
 
+    # 检查文件大小
+    upload_file.seek(0, os.SEEK_END)
+    file_size = upload_file.tell()
+    upload_file.seek(0)
+    if file_size > AUDIO_MAX_BYTES:
+        return False, f'音频文件大小不能超过 {AUDIO_MAX_BYTES // (1024*1024)}MB'
+
     filename = upload_file.filename
     ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
     if ext not in MUSIC_ALLOWED_EXTENSIONS:
         return False, f'不支持的音频格式，仅支持：{"、".join(sorted(MUSIC_ALLOWED_EXTENSIONS))}'
 
+    # 音频魔数校验
+    # MP4/M4A 的 box size 可变（前 4 字节），统一检查 bytes 4-7 是否为 "ftyp"
+    _AUDIO_MAGIC = {
+        'mp3': [b'ID3', b'\xff\xfb', b'\xff\xf3'],
+        'wav': [b'RIFF'],
+        'ogg': [b'OggS'],
+        'flac': [b'fLaC'],
+        'm4a': None,  # 特殊处理
+        'mp4': None,  # 特殊处理
+    }
+    header = upload_file.read(8)
+    upload_file.seek(0)
+    expected_magics = _AUDIO_MAGIC.get(ext)
+    if expected_magics is not None:
+        # 普通魔数检查
+        if not any(header.startswith(m) for m in expected_magics):
+            return False, f'文件类型校验失败：{filename} 的文件头魔数与扩展名不匹配'
+    elif ext in ('mp4', 'm4a'):
+        # MP4/M4A 特殊处理：检查 bytes 4-7 是否为 "ftyp"
+        if len(header) < 8 or header[4:8] != b'ftyp':
+            return False, f'文件类型校验失败：{filename} 的文件头魔数与扩展名不匹配'
+
+    # 使用数据库自增 ID 作为音频 ID
     task_id = uuid.uuid4().hex
     work_dir = os.path.join(UPLOAD_MUSIC_DIR, f'.tmp_{task_id}')
     os.makedirs(work_dir, exist_ok=True)
@@ -611,7 +651,7 @@ def start_upload(user_id, username, title, is_public, upload_file, ip_address, t
     threading.Thread(
         target=_run_upload_task,
         args=(task_id, user_id, username, title, is_public,
-              work_dir, src_path, ip_address, tags),
+              work_dir, src_path, ip_address, tags, None),
         daemon=True,
     ).start()
     return True, {'task_id': task_id}
@@ -634,8 +674,11 @@ def _set_task(task_id, **kwargs):
 
 
 def _run_upload_task(task_id, user_id, username, title, is_public,
-                     work_dir, src_path, ip_address, tags=''):
-    """后台线程：运行 ffmpeg 转码（HLS+MP3），轮询进度，成功后落库。"""
+                     work_dir, src_path, ip_address, tags='', music_id=None):
+    """后台线程：运行 ffmpeg 转码（HLS+MP3），轮询进度，成功后落库。
+
+    music_id 可选，由 start_upload 传入 UUID 时使用指定 ID 替代自增 ID。
+    """
     try:
         playlist_path = os.path.join(work_dir, 'index.m3u8')
         seg_pattern = os.path.join(work_dir, 'seg_%03d.ts')
@@ -679,7 +722,7 @@ def _run_upload_task(task_id, user_id, username, title, is_public,
 
         # 落库 + 文件整理（自动删除原音频源文件）
         status = STATUS_PENDING if is_public else STATUS_PRIVATE
-        music_id = _insert_music_record(user_id, username, title, status, tags)
+        music_id = _insert_music_record(user_id, username, title, status, tags, music_id)
         if not music_id:
             raise RuntimeError('音频记录创建失败')
         _finalize_music_files(work_dir, music_id)

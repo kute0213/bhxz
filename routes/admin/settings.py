@@ -6,7 +6,7 @@
 import re
 from flask import request, jsonify, render_template, abort, flash, redirect, url_for
 
-from core.auth import login_required, get_current_user
+from core.auth import admin_required, get_current_user
 from routes.admin import admin_bp
 from config import SETTINGS_REGISTRY, get_config_value
 from core.logger import log
@@ -36,28 +36,17 @@ def _parse_select_options(description: str) -> list:
     return options
 
 
-def _admin_check():
-    """检查管理员权限。"""
-    user = get_current_user()
-    if not user or not user['is_admin']:
-        abort(403)
-    return user
-
-
 @admin_bp.route('/admin/settings')
-@login_required
+@admin_required
 def admin_settings_page():
     """系统设置页面。"""
-    user = _admin_check()
-    return render_template('admin/admin_settings.html', user=user)
+    return render_template('admin/admin_settings.html', user=get_current_user())
 
 
 @admin_bp.route('/admin/api/settings')
-@login_required
+@admin_required
 def api_get_settings():
     """获取所有设置（包含默认值和当前数据库存储的值）。"""
-    user = _admin_check()
-
     # 从数据库获取已存储的设置
     from services.settings_manager import get_all_settings
     db_settings = {item['key']: item for item in get_all_settings()}
@@ -168,11 +157,9 @@ def api_save_settings():
 
 
 @admin_bp.route('/admin/api/settings/<key>/reset', methods=['POST'])
-@login_required
+@admin_required
 def api_reset_setting(key):
     """重置单个设置为默认值。"""
-    user = _admin_check()
-
     valid_keys = {reg[0] for reg in SETTINGS_REGISTRY}
     if key not in valid_keys:
         return jsonify({'success': False, 'message': '无效的设置键'}), 400
@@ -188,11 +175,9 @@ def api_reset_setting(key):
 
 
 @admin_bp.route('/admin/api/settings/reset-all', methods=['POST'])
-@login_required
+@admin_required
 def api_reset_all_settings():
     """重置所有设置为默认值。"""
-    user = _admin_check()
-
     from services.settings_manager import settings_manager
     all_settings = settings_manager.get_all()
     configurable_keys = {reg[0] for reg in SETTINGS_REGISTRY}

@@ -17,8 +17,14 @@ UPLOAD_BACKGROUNDS_DIR = os.path.join(UPLOAD_DIR, 'backgrounds')
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'pdf', 'txt', 'zip', 'rar', '7z', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'mp4', 'mp3', 'wav'}
 
 # 大喇叭音频：允许上传的音频格式（上传后由 ffmpeg 转码为 HLS/m3u8）
-MUSIC_ALLOWED_EXTENSIONS = {'mp3', 'wav', 'ogg', 'm4a', 'flac'}
+MUSIC_ALLOWED_EXTENSIONS = {'mp3', 'wav', 'ogg', 'm4a', 'flac', 'mp4'}
 MAX_CONTENT_LENGTH = 100 * 1024 * 1024
+
+# 附件上传大小限制（字节），默认 10MB
+ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024
+
+# 音频上传大小限制（字节），默认 100MB
+AUDIO_MAX_BYTES = 100 * 1024 * 1024
 
 # 大喇叭音频：内置 ffmpeg 可执行文件路径
 # Windows 调用 <项目根>/scripts/ffmpeg/ffmpeg.exe，Linux/macOS 调用 <项目根>/scripts/ffmpeg/ffmpeg。
@@ -44,8 +50,14 @@ USER_IMAGE_MAX_BYTES = 10 * 1024 * 1024
 # 每次启动时确保这些账号为管理员，但不会移除其他管理员权限。
 PRIMARY_ADMIN_USERNAMES = ['LunSir', 'kute_mc[库禾]']
 
-# Session 密钥（硬编码默认值，无需环境变量，开箱即用）
-SECRET_KEY = 'mc_server_site_random_secret_key_2024'
+# Session 密钥：优先从环境变量 SECRET_KEY 读取，未设置时使用默认值
+_SECRET_KEY_ENV = os.environ.get('SECRET_KEY')
+if _SECRET_KEY_ENV:
+    SECRET_KEY = _SECRET_KEY_ENV
+else:
+    import warnings
+    warnings.warn("环境变量 SECRET_KEY 未设置，使用默认密钥（不安全）")
+    SECRET_KEY = 'mc_server_site_random_secret_key_2024'
 REGISTER_VERIFY_CODE = 'binhai_xz'
 
 # ---------------------------------------------------------------------------
@@ -102,6 +114,12 @@ BACKUP_CLEAN_LOGS = True
 
 # 数据库优化时是否执行 CHECKPOINT （将 WAL 合并到主文件，减少文件大小）
 BACKUP_CHECKPOINT = True
+
+# 信任代理白名单列表（仅当 request.remote_addr 在此列表中时，才读取代理头部获取真实 IP）
+TRUSTED_PROXIES = []
+
+# UUID 音频目录：启用后上传音频文件使用 UUID 命名目录而非原始文件名
+MUSIC_UUID_DIR = True
 
 # ===========================================================================
 # 安全配置

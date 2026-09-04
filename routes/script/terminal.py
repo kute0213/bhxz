@@ -11,17 +11,9 @@ import time
 
 from flask import request, Response, stream_with_context, jsonify, session, abort
 
-from core.auth import login_required, get_current_user
+from core.auth import admin_required
 from routes.script import script_bp
 from services.terminal import TerminalManager
-
-
-def _admin_check():
-    """校验当前用户是否为管理员，否则返回 403。"""
-    user = get_current_user()
-    if not user or not user['is_admin']:
-        abort(403)
-    return user
 
 
 def _sse_event(event_type, data):
@@ -41,10 +33,9 @@ def _sse_headers():
 
 
 @script_bp.route('/admin/script/terminal/stream', methods=['GET'])
-@login_required
+@admin_required
 def terminal_stream():
     """终端输出流（SSE）。"""
-    _admin_check()
     manager = TerminalManager()
     term_session = manager.get_or_create_session(session)
 
@@ -106,10 +97,8 @@ def terminal_stream():
 
 
 @script_bp.route('/admin/script/terminal/input', methods=['POST'])
-@login_required
+@admin_required
 def terminal_input():
-    """向终端发送输入。"""
-    _admin_check()
     data = request.get_json() or {}
     text = data.get('text', '')
 
@@ -134,10 +123,9 @@ def terminal_input():
 
 
 @script_bp.route('/admin/script/terminal/reset', methods=['POST'])
-@login_required
+@admin_required
 def terminal_reset():
     """重置终端（重启 shell 进程）。"""
-    _admin_check()
     manager = TerminalManager()
     term_session = manager.reset_session(session)
 
@@ -151,10 +139,9 @@ def terminal_reset():
 
 
 @script_bp.route('/admin/script/terminal/resize', methods=['POST'])
-@login_required
+@admin_required
 def terminal_resize():
     """调整终端窗口尺寸（PTY 会话生效，用于正确响应清屏与光标控制）。"""
-    _admin_check()
     data = request.get_json() or {}
     try:
         cols = int(data.get('cols', 120))

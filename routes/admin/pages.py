@@ -2,17 +2,15 @@
 
 from flask import render_template, abort
 
-from core.auth import login_required, get_current_user
+from core.auth import admin_required, get_current_user
 from core.db import get_db
 from routes.admin import admin_bp
 
 
 @admin_bp.route('/admin')
-@login_required
+@admin_required
 def admin_page():
     user = get_current_user()
-    if not user or not user['is_admin']:
-        abort(403)
 
     conn = get_db()
     try:

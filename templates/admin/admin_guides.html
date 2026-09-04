@@ -145,7 +145,7 @@ function showPreviewModal(btn) {
     const data = guidePreviewData[id];
     if (!data) return;
     document.getElementById('preview-title').textContent = data.title;
-    document.getElementById('preview-content').innerHTML = marked.parse(data.content);
+    document.getElementById('preview-content').innerHTML = DOMPurify.sanitize(marked.parse(data.content));
     document.getElementById('preview-approve-form').action = '/admin/guides/' + id + '/approve';
     document.getElementById('preview-modal').classList.remove('hidden');
     document.body.style.overflow = 'hidden';

@@ -24,7 +24,7 @@
         function updatePreview() {
             if (count) count.textContent = (textarea.value || '').length + ' 字';
             if (window.marked) {
-                preview.innerHTML = marked.parse(textarea.value || '');
+                preview.innerHTML = DOMPurify.sanitize(marked.parse(textarea.value || ''));
             }
         }
 

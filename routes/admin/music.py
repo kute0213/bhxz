@@ -5,7 +5,7 @@
 
 from flask import render_template, redirect, url_for, flash, abort, request
 
-from core.auth import login_required, get_current_user
+from core.auth import admin_required, get_current_user
 from routes.admin import admin_bp
 from services import music_service
 from services.email import email_service, music_review_result as build_result_html
@@ -43,12 +43,10 @@ def _notify_author_music_result(music_id, approved, ip_address):
 
 
 @admin_bp.route('/admin/music')
-@login_required
+@admin_required
 def admin_music_list():
     """管理员查看所有音频 + 待审核队列。"""
     user = get_current_user()
-    if not user or not user['is_admin']:
-        abort(403)
 
     pending_musics = music_service.attach_durations(music_service.get_pending_musics())
     musics = music_service.attach_durations(music_service.get_all_musics())
@@ -61,12 +59,10 @@ def admin_music_list():
 
 
 @admin_bp.route('/admin/music/<int:music_id>/review', methods=['POST'])
-@login_required
+@admin_required
 def admin_music_review(music_id):
     """管理员审核公开申请：通过 / 驳回。"""
     user = get_current_user()
-    if not user or not user['is_admin']:
-        abort(403)
 
     action = request.form.get('action', '')
     if action == 'approve':
@@ -94,12 +90,10 @@ def admin_music_review(music_id):
 
 
 @admin_bp.route('/admin/music/<int:music_id>/delete', methods=['POST'])
-@login_required
+@admin_required
 def admin_music_delete(music_id):
     """管理员下架（删除）音频。"""
     user = get_current_user()
-    if not user or not user['is_admin']:
-        abort(403)
 
     success, message = music_service.delete_music(
         music_id=music_id,

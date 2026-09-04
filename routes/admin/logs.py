@@ -5,7 +5,7 @@ import json
 import time
 from flask import render_template, redirect, url_for, flash, abort, request, Response, stream_with_context
 
-from core.auth import login_required, get_current_user
+from core.auth import admin_required, get_current_user
 from core.db import get_db
 from routes.admin import admin_bp
 from core.logger import (
@@ -14,11 +14,9 @@ from core.logger import (
 
 
 @admin_bp.route('/admin/logs')
-@login_required
+@admin_required
 def admin_logs():
     user = get_current_user()
-    if not user or not user['is_admin']:
-        abort(403)
 
     conn = get_db()
     try:
@@ -49,11 +47,9 @@ def admin_logs():
 
 
 @admin_bp.route('/admin/logs/clear', methods=['POST'])
-@login_required
+@admin_required
 def admin_logs_clear():
     user = get_current_user()
-    if not user or not user['is_admin']:
-        abort(403)
 
     conn = get_db()
     try:
@@ -74,22 +70,18 @@ def admin_logs_clear():
 
 
 @admin_bp.route('/admin/system-logs')
-@login_required
+@admin_required
 def admin_system_logs_page():
     """系统日志查看页面（实时，SSE 推送）。"""
     user = get_current_user()
-    if not user or not user['is_admin']:
-        abort(403)
     return render_template('admin/admin_system_logs.html', user=user)
 
 
 @admin_bp.route('/admin/api/system-logs/stream')
-@login_required
+@admin_required
 def admin_system_logs_sse():
     """SSE 端点：实时推送系统日志。"""
     user = get_current_user()
-    if not user or not user['is_admin']:
-        abort(403)
 
     def event_stream():
         # 每个客户端独享一个队列
@@ -125,12 +117,10 @@ def admin_system_logs_sse():
 
 
 @admin_bp.route('/admin/api/system-logs/history')
-@login_required
+@admin_required
 def admin_system_logs_history():
     """获取系统日志历史（不含 SSE）。"""
     user = get_current_user()
-    if not user or not user['is_admin']:
-        abort(403)
 
     from flask import jsonify
     level = request.args.get('level', '')

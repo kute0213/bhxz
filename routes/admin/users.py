@@ -5,18 +5,16 @@
 
 from flask import render_template, redirect, url_for, flash, abort, request
 
-from core.auth import login_required, get_current_user
+from core.auth import admin_required, get_current_user
 from core.db import get_db
 from routes.admin import admin_bp
 from services.user_service import admin_delete_user as _svc_delete_user, admin_toggle_admin as _svc_toggle_admin
 
 
 @admin_bp.route('/admin/users')
-@login_required
+@admin_required
 def admin_users():
     user = get_current_user()
-    if not user or not user['is_admin']:
-        abort(403)
 
     conn = get_db()
     try:
@@ -31,11 +29,9 @@ def admin_users():
 
 
 @admin_bp.route('/admin/users/<int:user_id>/toggle-admin', methods=['POST'])
-@login_required
+@admin_required
 def admin_toggle_admin(user_id):
     user = get_current_user()
-    if not user or not user['is_admin']:
-        abort(403)
 
     success, message = _svc_toggle_admin(user, user_id, request.remote_addr)
     flash(message, 'success' if success else 'error')
@@ -43,11 +39,9 @@ def admin_toggle_admin(user_id):
 
 
 @admin_bp.route('/admin/users/<int:user_id>/delete', methods=['POST'])
-@login_required
+@admin_required
 def admin_delete_user(user_id):
     user = get_current_user()
-    if not user or not user['is_admin']:
-        abort(403)
 
     success, message = _svc_delete_user(user, user_id, request.remote_addr)
     flash(message, 'success' if success else 'error')

@@ -5,7 +5,7 @@
 
 from flask import render_template, request, redirect, url_for, flash, abort
 
-from core.auth import login_required, get_current_user
+from core.auth import admin_required, get_current_user
 from core.db import get_db
 from routes.admin import admin_bp
 from services.discussion_service import (
@@ -15,11 +15,9 @@ from services.discussion_service import (
 
 
 @admin_bp.route('/admin/discussion')
-@login_required
+@admin_required
 def admin_discussion():
     user = get_current_user()
-    if not user or not user['is_admin']:
-        abort(403)
 
     conn = get_db()
     try:
@@ -43,11 +41,9 @@ def admin_discussion():
 
 
 @admin_bp.route('/admin/discussion/<int:topic_id>/delete', methods=['POST'])
-@login_required
+@admin_required
 def admin_delete_topic(topic_id):
     user = get_current_user()
-    if not user or not user['is_admin']:
-        abort(403)
 
     success, message = delete_topic(topic_id, user['id'], True, request.remote_addr)
     flash(message, 'success' if success else 'error')
@@ -55,11 +51,9 @@ def admin_delete_topic(topic_id):
 
 
 @admin_bp.route('/admin/discussion/<int:topic_id>/toggle-pin', methods=['POST'])
-@login_required
+@admin_required
 def admin_toggle_pin(topic_id):
     user = get_current_user()
-    if not user or not user['is_admin']:
-        abort(403)
 
     success, message = toggle_pin(topic_id, request.remote_addr)
     flash(message, 'success' if success else 'error')
@@ -67,11 +61,9 @@ def admin_toggle_pin(topic_id):
 
 
 @admin_bp.route('/admin/discussion/<int:topic_id>/toggle-lock', methods=['POST'])
-@login_required
+@admin_required
 def admin_toggle_lock(topic_id):
     user = get_current_user()
-    if not user or not user['is_admin']:
-        abort(403)
 
     success, message = toggle_lock(topic_id, request.remote_addr)
     flash(message, 'success' if success else 'error')
@@ -79,11 +71,9 @@ def admin_toggle_lock(topic_id):
 
 
 @admin_bp.route('/admin/discussion/categories', methods=['GET', 'POST'])
-@login_required
+@admin_required
 def admin_categories():
     user = get_current_user()
-    if not user or not user['is_admin']:
-        abort(403)
 
     if request.method == 'POST':
         action = request.form.get('action', '')

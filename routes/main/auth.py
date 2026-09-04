@@ -5,7 +5,7 @@
 
 from urllib.parse import urlparse
 
-from flask import render_template, request, redirect, url_for, session, flash, jsonify
+from flask import render_template, request, redirect, url_for, session, flash, jsonify, current_app
 from core.auth import get_current_user
 from config import get_config_value, REGISTER_VERIFY_CODE
 from services.email import normalize_email
@@ -144,8 +144,15 @@ def login_view():
 def logout():
     username = session.get('username', 'unknown')
     session.clear()
+    # 清除 session cookie，确保浏览器端会话数据彻底销毁
+    response = redirect(url_for('main.home'))
+    response.delete_cookie(
+        current_app.session_interface.get_cookie_name(),
+        path=current_app.session_interface.get_cookie_path(),
+        domain=current_app.session_interface.get_cookie_domain(),
+    )
     log('Logout', '用户登出', username=username, ip=request.remote_addr)
-    return redirect(url_for('main.home'))
+    return response
 
 
 # ---------------------------------------------------------------------------

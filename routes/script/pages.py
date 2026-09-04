@@ -2,16 +2,15 @@
 
 from flask import render_template
 
-from core.auth import login_required
+from core.auth import admin_required, get_current_user
 from core.db import get_db
 from routes.script import script_bp
-from routes.script.terminal import _admin_check
 
 
 @script_bp.route('/admin/script')
-@login_required
+@admin_required
 def script_page():
-    user = _admin_check()
+    user = get_current_user()
     conn = get_db()
     try:
         # 从数据库读取 shell 快捷命令，按名称自动排序
@@ -30,8 +29,7 @@ def script_page():
 
 
 @script_bp.route('/admin/script/terminal-page')
-@login_required
+@admin_required
 def terminal_page():
     """独立实时终端页面。"""
-    user = _admin_check()
-    return render_template('admin/admin_terminal_page.html', user=user)
+    return render_template('admin/admin_terminal_page.html', user=get_current_user())

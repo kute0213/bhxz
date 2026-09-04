@@ -3,6 +3,7 @@
 import os
 import socket
 import signal
+import ssl
 import threading
 
 from flask import Flask, render_template
@@ -122,7 +123,17 @@ def run_server(app, port=5000, app_root=None):
             server.ssl_adapter = BuiltinSSLAdapter(
                 certificate=cert_path,
                 private_key=key_path,
+                certificate_chain=None,
+                ciphers='ECDHE+AESGCM:ECDHE+CHACHA20:DHE+AESGCM:DHE+CHACHA20:!aNULL:!MD5:!DSS',
             )
+            # 配置 SSL 会话上下文（启用会话缓存）
+            ctx = ssl.create_default_context(purpose=ssl.Purpose.CLIENT_AUTH)
+            ctx.set_ciphers(
+                'ECDHE+AESGCM:ECDHE+CHACHA20:DHE+AESGCM:DHE+CHACHA20:!aNULL:!MD5:!DSS'
+            )
+            # 通过 session_stats 触发会话缓存初始化
+            ctx.session_stats()
+            server.ssl_adapter.context = ctx
         except ImportError as e:
             log('WARNING', 'App', f'无法加载 SSL 适配器 ({e})，回退到 HTTP 模式')
             log('WARNING', 'App', f'HTTP 模式运行 (端口 {port})')

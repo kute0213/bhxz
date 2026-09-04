@@ -212,7 +212,10 @@ def create_topic(user_id, username, title, content, category_id, tags, attachmen
     if not content:
         return False, '请输入内容'
 
-    attachment_names = save_attachments(attachment_files)
+    try:
+        attachment_names = save_attachments(attachment_files)
+    except ValueError as e:
+        return False, str(e)
     attachment_json = json.dumps(attachment_names) if attachment_names else None
 
     now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -330,8 +333,16 @@ def reply_to_topic(user_id, username, topic_id, content, attachment_files, ip_ad
             return False, '帖子不存在'
         if topic['is_locked']:
             return False, '帖子已锁定，无法回复'
+    finally:
+        conn.close()
 
+    try:
         attachment_names = save_attachments(attachment_files)
+    except ValueError as e:
+        return False, str(e)
+
+    conn = get_db()
+    try:
         attachment_json = json.dumps(attachment_names) if attachment_names else None
 
         now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')

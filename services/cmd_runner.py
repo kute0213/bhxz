@@ -8,6 +8,7 @@
 """
 
 import datetime
+import shlex
 import subprocess
 import threading
 import time
@@ -38,10 +39,16 @@ def run_command_stream(
 
     manager = ProcessManager()
     try:
+        cmd_list = shlex.split(command)
+    except Exception as e:
+        yield {'type': 'error', 'message': f'命令解析失败: {e}'}
+        return
+
+    try:
         manager.start(
-            command,
+            cmd_list,
             cwd=cwd,
-            shell=True,
+            shell=False,
             use_process_group=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
@@ -125,10 +132,18 @@ def run_command_sync(
 
     manager = ProcessManager()
     try:
+        cmd_list = shlex.split(command)
+    except Exception as e:
+        _log_cmd_execution(
+            command, str(e), -1, False, triggered_by, started_str, timeout
+        )
+        return {'success': False, 'output': '', 'error': f'命令解析失败: {e}'}
+
+    try:
         manager.start(
-            command,
+            cmd_list,
             cwd=cwd,
-            shell=True,
+            shell=False,
             use_process_group=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,

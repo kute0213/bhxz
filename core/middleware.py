@@ -90,6 +90,20 @@ def _set_security_headers(response):
     return response
 
 
+def _ssl_redirect(response):
+    """当 ENABLE_SSL 开启且请求为 HTTP 时，301 跳转到 HTTPS 相同 URL。"""
+    import os
+    enable_ssl = os.environ.get('ENABLE_SSL', '0').lower() in ('1', 'true', 'yes', 'on')
+    if enable_ssl and not request.is_secure and request.method in ('GET', 'HEAD'):
+        from werkzeug.urls import url_parse
+        parsed = url_parse(request.url)
+        if parsed.scheme != 'https':
+            https_url = request.url.replace('http://', 'https://', 1)
+            from flask import redirect
+            return redirect(https_url, code=301)
+    return response
+
+
 def register_hooks(app, try_serve_public):
     """注册所有请求钩子。
 
@@ -124,6 +138,18 @@ def register_hooks(app, try_serve_public):
 
     # 统一为所有响应写入安全标头（在 before_request 之后注册，顺序无关紧要）
     app.after_request(_set_security_headers)
+
+    # HTTPS 强制跳转（在安全标头之后注册，确保跳转优先）
+    app.after_request(_ssl_redirect)
+
+    # 统一记录 403 授权失败日志，避免在每个路由中重复写 log()
+    @app.after_request
+    def log_403_response(response):
+        if response.status_code == 403:
+            user = session.get('username', 'anonymous')
+            log('Auth', f'403 授权拒绝', username=user,
+                ip=request.remote_addr, path=request.path, method=request.method)
+        return response
 
 
 def log_access():
