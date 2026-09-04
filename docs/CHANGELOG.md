@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### 修复
+- **修复指南列表页500错误**：`templates/guides/index.html` 中 `guide.content[:120]` 在 `content` 为 `None` 时抛出 `TypeError`，导致页面崩溃。现使用 `(guide.content or '')[:120]` 安全处理 None 值
+- **修复 settings_manager 类型转换错误**：`_cast_value` 函数在 `raw` 参数为整数时调用 `raw.lower()` 抛出 `AttributeError`，现统一先转 `str(raw)` 再处理
+
 ### 新增
 - **安全风险自评估报告**[docs/SECURITY_REPORT.md]：按 OWASP Top 10（2021）逐项评估交互式服务安全检查表，涵盖 12 大类 40+ 检查项，发现 3 项严重、4 项高危、8 项中危、8 项低危风险，并提供优先级排序的改进建议
 - **手动广播邮件改为富文本（所见即所得）**：广播编辑由 Markdown 编辑器升级为 contenteditable 富文本编辑器（`templates/admin/admin_broadcast.html` 工具栏：加粗/斜体/下划线/删除线、H2/H3 标题、无序/有序列表、引用、插入链接、清除格式 + 字数统计 + 插入示例），所见即所得直接编辑排版；发送时提交 `html` 字段，后端经白名单清洗后嵌入邮件模板（`services/email/sanitize.py` 新增 `sanitize_email_html`/`html_to_plain_text`，`routes/admin/broadcast.py` 校验/清洗/纯文本兜底逻辑同步更新，`services/email/templates.py` 的 `broadcast_message()` 改为接收富文本 HTML），仅保留常见排版标签与安全 `a[href]`/`font[color]`，script/style/iframe 及 `javascript:` 链接等危险内容一律剔除，防 XSS 与邮件注入；管理中心广播邮件入口按钮下方说明文案同步更新为「向全体用户发送富文本（所见即所得）格式的邮件广播」

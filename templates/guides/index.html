@@ -98,7 +98,7 @@
                     </div>
                     <a href="{{ url_for('guides.guide_detail', guide_id=guide.id) }}" class="hover:no-underline">
                         <h3 class="text-lg font-bold mb-2 text-cream">{{ guide.title }}</h3>
-                        <p class="text-cream/60 text-sm leading-relaxed mb-4 line-clamp-3">{{ guide.summary or guide.content[:120] + '...' }}</p>
+                        <p class="text-cream/60 text-sm leading-relaxed mb-4 line-clamp-3">{{ guide.summary or (guide.content or '')[:120] + '...' }}</p>
                     </a>
                     <div class="flex items-center justify-between text-xs text-cream/40">
                         <span class="flex items-center gap-1"><i data-lucide="user" class="w-3 h-3"></i>{{ guide.author_name or '未知' }}</span>

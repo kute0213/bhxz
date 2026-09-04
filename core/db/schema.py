@@ -451,7 +451,7 @@ def cleanup_expired_rejected_guides():
     同样会在此函数中被清理。
     """
     from datetime import datetime, timedelta
-    from services.logging import log_writer
+    from core.logger import log
 
     conn = get_db()
     try:
@@ -465,14 +465,14 @@ def cleanup_expired_rejected_guides():
         for row in rows:
             conn.execute("DELETE FROM server_guides WHERE id = ?", (row['id'],))
             deleted += 1
-            log_writer('INFO', 'Guide', f'拒绝超时自动删除',
-                       guide_id=row['id'], title=row['title'])
+            log('INFO', 'Guide', f'拒绝超时自动删除',
+                guide_id=row['id'], title=row['title'])
         if deleted:
             conn.commit()
-            log_writer('INFO', 'Guide', f'自动清理过期拒绝指南', count=deleted)
+            log('INFO', 'Guide', f'自动清理过期拒绝指南', count=deleted)
         return deleted
     except Exception as e:
-        log_writer('ERROR', 'Guide', f'清理过期拒绝指南失败: {e}')
+        log('ERROR', 'Guide', f'清理过期拒绝指南失败: {e}')
         return 0
     finally:
         conn.close()

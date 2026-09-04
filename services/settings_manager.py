@@ -19,10 +19,15 @@ from core.logger import log
 # 类型转换辅助
 # ---------------------------------------------------------------------------
 
-def _cast_value(raw: str, default):
-    """将字符串值转换为默认值的类型。"""
+def _cast_value(raw, default):
+    """将值转换为默认值的类型。
+
+    数据库中存储的值可能是字符串或整数，统一先转字符串再处理。
+    """
     if raw is None or raw == '':
         return default
+
+    raw = str(raw)
 
     if isinstance(default, bool):
         return raw.lower() in ('1', 'true', 'yes', 'on')

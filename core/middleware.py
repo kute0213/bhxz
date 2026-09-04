@@ -8,6 +8,7 @@ from werkzeug.exceptions import HTTPException
 
 from services.ip import get_client_ip, get_ip_info
 from services.logging import log_writer
+from core.logger import log
 
 # 跳过日志记录的路径前缀
 SKIP_PATHS = ('/static/', '/favicon', '/favicon.ico', '/uploads/',
