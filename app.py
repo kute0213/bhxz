@@ -112,6 +112,8 @@ def _register_template_context():
             'show_beian': get_config_value('SHOW_BEIAN', False),
             'icp_beian': get_config_value('ICP_BEIAN', ''),
             'police_beian': get_config_value('POLICE_BEIAN', ''),
+            'copyright_year': get_config_value('COPYRIGHT_YEAR', '2024'),
+            'copyright_site_name': get_config_value('COPYRIGHT_SITE_NAME', '滨海小镇'),
         }
 
 

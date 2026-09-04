@@ -379,7 +379,8 @@
     {% endif %}
     {% block extra_script %}{% endblock %}
 
-    {# 工信部备案 & 公安备案（全站底部） #}
+    {# 工信部备案 & 公安备案 & 版权（非首页的独立页脚，首页已内嵌） #}
+    {% block beian_footer %}
     {% if show_beian %}
     <footer class="border-t border-cream/10 py-4 text-center text-xs text-cream/50">
         <div class="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-4">
@@ -394,8 +395,11 @@
                 {{ police_beian }}
             </a>
             {% endif %}
+            <span class="text-cream/40">·</span>
+            <span>&copy; {{ copyright_year }} {{ copyright_site_name }}. 保留所有权利.</span>
         </div>
     </footer>
     {% endif %}
+    {% endblock %}
 </body>
 </html>

@@ -237,13 +237,32 @@
                     <span class="hidden sm:inline">|</span>
                     <span>Fabric 模组服务器</span>
                 </div>
-                <div class="text-cream/50 text-xs sm:text-sm">© 2024 滨海小镇. 保留所有权利.</div>
+                <div class="text-cream/50 text-xs sm:text-sm">&copy; {{ copyright_year }} {{ copyright_site_name }}. 保留所有权利.</div>
                 <a href="/docs" class="text-cream/50 hover:text-gold-400 text-xs sm:text-sm transition-colors flex items-center gap-1">
                     <i data-lucide="book-open" class="w-4 h-4"></i>
                     关于官网
                 </a>
             </div>
+            {# 备案号 + 版权（内嵌到首页页脚） #}
+            {% if show_beian %}
+            <div class="mt-4 pt-4 border-t border-forest-700/30 flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-4 text-cream/40 text-xs">
+                {% if icp_beian %}
+                <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer" class="hover:text-cream/70 transition-colors">
+                    {{ icp_beian }}
+                </a>
+                {% endif %}
+                {% if police_beian %}
+                <a href="https://www.beian.gov.cn/portal/registerSystemInfo" target="_blank" rel="noopener noreferrer" class="hover:text-cream/70 transition-colors flex items-center gap-1">
+                    <svg class="w-3 h-3 inline-block" viewBox="0 0 20 20" fill="currentColor"><path d="M11.65 3.5c.5.3.9.7 1.2 1.2.3.5.5 1.1.5 1.7s-.2 1.2-.5 1.7c-.3.5-.7.9-1.2 1.2-.5.3-1.1.5-1.7.5s-1.2-.2-1.7-.5c-.5-.3-.9-.7-1.2-1.2-.3-.5-.5-1.1-.5-1.7s.2-1.2.5-1.7c.3-.5.7-.9 1.2-1.2.5-.3 1.1-.5 1.7-.5s1.2.2 1.7.5M10 0C4.5 0 0 4.5 0 10s4.5 10 10 10 10-4.5 10-10S15.5 0 10 0m0 18c-4.4 0-8-3.6-8-8s3.6-8 8-8 8 3.6 8 8-3.6 8-8 8"/></svg>
+                    {{ police_beian }}
+                </a>
+                {% endif %}
+                <span class="text-cream/30 hidden sm:inline">|</span>
+                <span>&copy; {{ copyright_year }} {{ copyright_site_name }}. 保留所有权利.</span>
+            </div>
+            {% endif %}
         </div>
     </footer>
 {% endblock %}
 {% block extra_script %}{% endblock %}
+{% block beian_footer %}{% endblock %}
