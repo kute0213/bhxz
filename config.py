@@ -51,13 +51,7 @@ USER_IMAGE_MAX_BYTES = 10 * 1024 * 1024
 PRIMARY_ADMIN_USERNAMES = ['LunSir', 'kute_mc[库禾]']
 
 # Session 密钥：优先从环境变量 SECRET_KEY 读取，未设置时使用默认值
-_SECRET_KEY_ENV = os.environ.get('SECRET_KEY')
-if _SECRET_KEY_ENV:
-    SECRET_KEY = _SECRET_KEY_ENV
-else:
-    import warnings
-    warnings.warn("环境变量 SECRET_KEY 未设置，使用默认密钥（不安全）")
-    SECRET_KEY = 'mc_server_site_random_secret_key_2024'
+SECRET_KEY = os.environ.get('SECRET_KEY') or 'mc_server_site_random_secret_key_2024'
 REGISTER_VERIFY_CODE = 'binhai_xz'
 
 # ---------------------------------------------------------------------------

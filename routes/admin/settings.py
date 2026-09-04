@@ -87,7 +87,7 @@ def api_get_settings():
 
 
 @admin_bp.route('/admin/api/settings/save', methods=['POST'])
-@login_required
+@admin_required
 def api_save_settings():
     """保存一个或多个设置。"""
     user = _admin_check()

@@ -43,7 +43,7 @@ def admin_approve_background(bg_id):
 
 
 @admin_bp.route('/admin/backgrounds/<int:bg_id>/reject', methods=['POST'])
-@login_required
+@admin_required
 def admin_reject_background(bg_id):
     """驳回审核。"""
     user = get_current_user()
