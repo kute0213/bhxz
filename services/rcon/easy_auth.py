@@ -109,10 +109,10 @@ def get_player_info(username: str) -> Tuple[bool, str]:
 
 
 def verify_login(username: str, password: str) -> Tuple[bool, str]:
-    """验证玩家密码是否正确（通过 /auth login 指令）。
+    """验证玩家密码是否正确（通过 /auth checkpassword 指令）。
 
-    EasyAuth 插件在 RCON 控制台模式下使用 /auth login <用户名> <密码>
-    而非客户端使用的 /login <密码>。
+    EasyAuth 插件在 RCON 控制台模式下使用 /auth checkpassword <用户名> <密码>
+    来验证密码是否正确，而非客户端使用的 /login <密码>。
 
     注意：返回 (成功, 消息) 元组，成功时消息为玩家真实名称。
 
@@ -130,17 +130,24 @@ def verify_login(username: str, password: str) -> Tuple[bool, str]:
     if not safe_pwd:
         return False, '密码不能为空'
 
-    # 尝试 /auth login 指令（RCON 控制台模式，EasyAuth 推荐方式）
-    cmd = f'/auth login {safe_user} {safe_pwd}'
+    # 尝试 /auth checkpassword 指令（EasyAuth 控制台密码验证命令）
+    cmd = f'/auth checkpassword {safe_user} {safe_pwd}'
     resp = _exec(cmd)
     if resp:
         resp_lower = resp.lower()
-        if ('successfully authenticated' in resp_lower or '登录成功' in resp
-                or 'logged in' in resp_lower or '验证成功' in resp):
+        # 成功匹配关键词
+        if ('password correct' in resp_lower or 'password matches' in resp_lower
+                or '验证成功' in resp or '密码正确' in resp
+                or 'successfully authenticated' in resp_lower):
             return True, safe_user
+        # 明确失败，直接返回
+        if ('password incorrect' in resp_lower or 'password doesn\'t match' in resp_lower
+                or '密码错误' in resp or '验证失败' in resp
+                or 'incorrect password' in resp_lower):
+            return False, f'密码验证失败: 密码错误'
 
-    # 尝试 /login 带用户名（部分 EasyAuth 版本支持）
-    cmd2 = f'/login {safe_user} {safe_pwd}'
+    # 尝试 /auth login 指令（部分 EasyAuth 版本支持）
+    cmd2 = f'/auth login {safe_user} {safe_pwd}'
     resp2 = _exec(cmd2)
     if resp2:
         resp2_lower = resp2.lower()
@@ -148,8 +155,8 @@ def verify_login(username: str, password: str) -> Tuple[bool, str]:
                 or 'logged in' in resp2_lower or '验证成功' in resp2):
             return True, safe_user
 
-    # 尝试不带用户名的 /login 指令（客户端模式，兼容性兜底）
-    cmd3 = f'/login {safe_pwd}'
+    # 尝试 /login 带用户名（部分 EasyAuth 版本支持）
+    cmd3 = f'/login {safe_user} {safe_pwd}'
     resp3 = _exec(cmd3)
     if resp3:
         resp3_lower = resp3.lower()
@@ -157,8 +164,17 @@ def verify_login(username: str, password: str) -> Tuple[bool, str]:
                 or 'logged in' in resp3_lower or '验证成功' in resp3):
             return True, safe_user
 
+    # 尝试不带用户名的 /login 指令（客户端模式，兼容性兜底）
+    cmd4 = f'/login {safe_pwd}'
+    resp4 = _exec(cmd4)
+    if resp4:
+        resp4_lower = resp4.lower()
+        if ('successfully authenticated' in resp4_lower or '登录成功' in resp4
+                or 'logged in' in resp4_lower or '验证成功' in resp4):
+            return True, safe_user
+
     # 组合错误信息
-    err = resp or resp2 or resp3 or 'RCON 连接失败，请检查 RCON 配置'
+    err = resp or resp2 or resp3 or resp4 or 'RCON 连接失败，请检查 RCON 配置'
     return False, f'密码验证失败: {err}'
 
 
