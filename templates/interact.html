@@ -6,10 +6,10 @@
 <div class="container mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8 sm:py-12 page-container">
     <div class="text-center mb-10 sm:mb-12 section-fade">
         <h1 class="text-2xl sm:text-3xl font-bold mb-3">服务器互动</h1>
-        <p class="text-cream/60 text-sm sm:text-base">与服务器社区互动，分享你的创意</p>
+        <p class="text-cream/60 text-sm sm:text-base">与服务器社区互动，管理你的游戏账号</p>
     </div>
 
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 sm:gap-8 max-w-3xl mx-auto section-fade">
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 sm:gap-8 max-w-5xl mx-auto section-fade">
         <!-- 大喇叭音频入口 -->
         <a href="{{ url_for('main.music_page') }}" class="pixel-card rounded-xl p-8 sm:p-10 flex flex-col items-center text-center hover:no-underline group hover:translate-y-[-4px] transition-transform">
             <div class="w-20 h-20 sm:w-24 sm:h-24 bg-gold-400/15 rounded-2xl flex items-center justify-center mb-5 group-hover:bg-gold-400/25 transition-colors">
@@ -28,6 +28,16 @@
             <h2 class="text-xl sm:text-2xl font-bold text-gold-400 mb-3">背景图片</h2>
             <p class="text-cream/60 text-sm sm:text-base">上传你的精美图片，让它们成为网站的背景。<br>审核通过后将在全站显示。</p>
             <span class="inline-block mt-5 text-gold-400 font-medium text-sm">进入背景图片 →</span>
+        </a>
+
+        <!-- 游戏账号入口 -->
+        <a href="{{ url_for('game_accounts.index') }}" class="pixel-card rounded-xl p-8 sm:p-10 flex flex-col items-center text-center hover:no-underline group hover:translate-y-[-4px] transition-transform">
+            <div class="w-20 h-20 sm:w-24 sm:h-24 bg-gold-400/15 rounded-2xl flex items-center justify-center mb-5 group-hover:bg-gold-400/25 transition-colors">
+                <i data-lucide="gamepad-2" class="w-10 h-10 sm:w-12 sm:h-12 text-gold-400"></i>
+            </div>
+            <h2 class="text-xl sm:text-2xl font-bold text-gold-400 mb-3">游戏账号</h2>
+            <p class="text-cream/60 text-sm sm:text-base">绑定你的 Minecraft 账号，<br>在线修改密码，申请注册新账号。</p>
+            <span class="inline-block mt-5 text-gold-400 font-medium text-sm">进入游戏账号 →</span>
         </a>
     </div>
 </div>
