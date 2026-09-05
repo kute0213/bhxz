@@ -3,7 +3,7 @@
 薄层：仅负责 HTTP 请求解析/响应构造，业务逻辑委托给 services。
 """
 
-from flask import render_template, request, redirect, url_for, flash, abort
+from flask import render_template, request, redirect, url_for, flash
 
 from core.auth import admin_required, get_current_user
 from core.db import get_db
@@ -54,8 +54,6 @@ def admin_delete_topic(topic_id):
 @admin_bp.route('/admin/discussion/<int:topic_id>/toggle-pin', methods=['POST'])
 @admin_required
 def admin_toggle_pin(topic_id):
-    user = get_current_user()
-
     success, message = toggle_pin(topic_id, get_client_ip())
     flash(message, 'success' if success else 'error')
     return redirect(url_for('admin.admin_discussion'))
@@ -64,8 +62,6 @@ def admin_toggle_pin(topic_id):
 @admin_bp.route('/admin/discussion/<int:topic_id>/toggle-lock', methods=['POST'])
 @admin_required
 def admin_toggle_lock(topic_id):
-    user = get_current_user()
-
     success, message = toggle_lock(topic_id, get_client_ip())
     flash(message, 'success' if success else 'error')
     return redirect(url_for('admin.admin_discussion'))

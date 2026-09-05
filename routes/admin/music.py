@@ -3,7 +3,7 @@
 薄层：仅负责 HTTP 请求解析/响应构造，业务逻辑委托给 services。
 """
 
-from flask import render_template, redirect, url_for, flash, abort, request
+from flask import render_template, redirect, url_for, flash, request
 
 from core.auth import admin_required, get_current_user
 from routes.admin import admin_bp
@@ -12,7 +12,7 @@ from services.email import email_service, music_review_result as build_result_ht
 from services.ip import get_client_ip
 
 
-def _notify_author_music_result(music_id, approved, ip_address):
+def _notify_author_music_result(music_id, approved):
     """异步通知音频上传者审核结果（不阻塞请求）。"""
     if not email_service.is_enabled():
         return
@@ -73,7 +73,7 @@ def admin_music_review(music_id):
             ip_address=get_client_ip(),
         )
         if success:
-            _notify_author_music_result(music_id, approved=True, ip_address=get_client_ip())
+            _notify_author_music_result(music_id, approved=True)
     elif action == 'reject':
         success, message = music_service.review_music(
             music_id, approve=False,
@@ -81,7 +81,7 @@ def admin_music_review(music_id):
             ip_address=get_client_ip(),
         )
         if success:
-            _notify_author_music_result(music_id, approved=False, ip_address=get_client_ip())
+            _notify_author_music_result(music_id, approved=False)
     else:
         flash('无效的操作', 'error')
         return redirect(url_for('admin.admin_music_list'))

@@ -391,8 +391,6 @@ def init_db():
     except Exception as e:
         log('ERROR', 'DB', f'迁移 music 公开状态失败: {e}')
 
-    # ---- 大喇叭音频：音量增益功能已彻底移除（旧库遗留 gain 列仅保留字段，不再使用） ----
-
     # ---- 管理员账号 ----
     # 确保 PRIMARY_ADMIN_USERNAMES 中的所有账号为管理员，
     # 但不会移除其他用户的管理员权限。

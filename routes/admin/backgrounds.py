@@ -1,6 +1,6 @@
 """管理后台背景图片管理路由。"""
 
-from flask import render_template, jsonify, request, abort
+from flask import render_template, jsonify, abort
 
 from core.auth import admin_required, get_current_user
 from routes.admin import admin_bp
