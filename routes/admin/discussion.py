@@ -12,6 +12,7 @@ from services.discussion_service import (
     delete_topic, toggle_pin, toggle_lock,
     create_category, delete_category, get_categories_with_counts,
 )
+from services.ip import get_client_ip
 
 
 @admin_bp.route('/admin/discussion')
@@ -45,7 +46,7 @@ def admin_discussion():
 def admin_delete_topic(topic_id):
     user = get_current_user()
 
-    success, message = delete_topic(topic_id, user['id'], True, request.remote_addr)
+    success, message = delete_topic(topic_id, user['id'], True, get_client_ip())
     flash(message, 'success' if success else 'error')
     return redirect(url_for('admin.admin_discussion'))
 
@@ -55,7 +56,7 @@ def admin_delete_topic(topic_id):
 def admin_toggle_pin(topic_id):
     user = get_current_user()
 
-    success, message = toggle_pin(topic_id, request.remote_addr)
+    success, message = toggle_pin(topic_id, get_client_ip())
     flash(message, 'success' if success else 'error')
     return redirect(url_for('admin.admin_discussion'))
 
@@ -65,7 +66,7 @@ def admin_toggle_pin(topic_id):
 def admin_toggle_lock(topic_id):
     user = get_current_user()
 
-    success, message = toggle_lock(topic_id, request.remote_addr)
+    success, message = toggle_lock(topic_id, get_client_ip())
     flash(message, 'success' if success else 'error')
     return redirect(url_for('admin.admin_discussion'))
 
@@ -82,14 +83,14 @@ def admin_categories():
                 name=request.form.get('name', '').strip(),
                 slug=request.form.get('slug', '').strip(),
                 admin_user=user,
-                ip_address=request.remote_addr,
+                ip_address=get_client_ip(),
             )
             flash(message, 'success' if success else 'error')
         elif action == 'delete':
             success, message = delete_category(
                 cat_id=request.form.get('category_id', type=int),
                 admin_user=user,
-                ip_address=request.remote_addr,
+                ip_address=get_client_ip(),
             )
             flash(message, 'success' if success else 'error')
 

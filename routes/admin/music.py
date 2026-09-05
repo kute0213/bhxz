@@ -9,6 +9,7 @@ from core.auth import admin_required, get_current_user
 from routes.admin import admin_bp
 from services import music_service
 from services.email import email_service, music_review_result as build_result_html
+from services.ip import get_client_ip
 
 
 def _notify_author_music_result(music_id, approved, ip_address):
@@ -69,18 +70,18 @@ def admin_music_review(music_id):
         success, message = music_service.review_music(
             music_id, approve=True,
             reviewer_username=user['username'],
-            ip_address=request.remote_addr,
+            ip_address=get_client_ip(),
         )
         if success:
-            _notify_author_music_result(music_id, approved=True, ip_address=request.remote_addr)
+            _notify_author_music_result(music_id, approved=True, ip_address=get_client_ip())
     elif action == 'reject':
         success, message = music_service.review_music(
             music_id, approve=False,
             reviewer_username=user['username'],
-            ip_address=request.remote_addr,
+            ip_address=get_client_ip(),
         )
         if success:
-            _notify_author_music_result(music_id, approved=False, ip_address=request.remote_addr)
+            _notify_author_music_result(music_id, approved=False, ip_address=get_client_ip())
     else:
         flash('无效的操作', 'error')
         return redirect(url_for('admin.admin_music_list'))
@@ -99,7 +100,7 @@ def admin_music_delete(music_id):
         music_id=music_id,
         user_id=user['id'],
         is_admin=True,
-        ip_address=request.remote_addr,
+        ip_address=get_client_ip(),
     )
     flash(message, 'success' if success else 'error')
     return redirect(url_for('admin.admin_music_list'))

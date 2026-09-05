@@ -1,3 +1,10 @@
+"""IP 地址获取与地理信息查询。
+
+提供：
+- get_client_ip() — 获取真实客户端 IP（自动识别 X-Forwarded-For / X-Real-IP）
+- get_ip_info() — 异步查询 IP 地理信息
+"""
+
 import os
 import threading
 from flask import request
@@ -19,17 +26,46 @@ REAL_IP_HEADERS = [
 ]
 
 
+def _first_public_ip_from_header(header_value: str) -> str:
+    """从代理头部提取第一个公网 IP。
+
+    X-Forwarded-For 格式: client, proxy1, proxy2
+    从右往左取第一个公网 IP（最接近客户端的那个）。
+    """
+    if not header_value:
+        return ''
+    ips = [ip.strip() for ip in header_value.split(',') if ip.strip()]
+    for ip in ips:
+        if is_public_ip(ip):
+            return ip
+    # 如果没有公网 IP，取第一个（可能是内网 IP，但至少不是代理 IP）
+    return ips[0] if ips else ''
+
+
 def get_client_ip():
     """获取客户端真实 IP 地址。
 
-    仅当 request.remote_addr 在信任代理列表（TRUSTED_PROXIES）中时，
-    才读取代理头部中的真实 IP；无信任代理时直接返回 request.remote_addr。
+    流程：
+    1. 优先检查代理头部（X-Forwarded-For / X-Real-IP 等），取第一个公网 IP
+    2. 如果 TRUSTED_PROXIES 配置了，且来源 IP 不在信任列表中，则忽略代理头部
+    3. 回退到 request.remote_addr
+
+    这样即使没有配置 TRUSTED_PROXIES，也能正确识别大多数反向代理场景。
     """
-    # 无信任代理时直接返回直连 IP
+    # 无信任代理配置时，直接检查代理头部
     if not TRUSTED_PROXIES:
+        # 直接检查所有代理头部
+        for header in REAL_IP_HEADERS:
+            value = request.headers.get(header, '').strip()
+            if not value:
+                continue
+            ip = _first_public_ip_from_header(value)
+            if ip:
+                return ip
+        # 无代理头部，返回直连 IP
         return request.remote_addr or '127.0.0.1'
 
-    # 检查请求来源是否为信任代理
+    # 有信任代理配置时，仅当来源是信任代理时才读取头部
     remote = request.remote_addr or '127.0.0.1'
     if remote not in TRUSTED_PROXIES:
         return remote
@@ -38,15 +74,9 @@ def get_client_ip():
         value = request.headers.get(header, '').strip()
         if not value:
             continue
-
-        ips = [ip.strip() for ip in value.split(',') if ip.strip()]
-
-        for ip in ips:
-            if is_public_ip(ip):
-                return ip
-
-        if ips:
-            return ips[0]
+        ip = _first_public_ip_from_header(value)
+        if ip:
+            return ip
 
     return remote
 

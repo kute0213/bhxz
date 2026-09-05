@@ -9,6 +9,7 @@ from core.auth import login_required, get_current_user
 from core.db import get_db
 from routes.discussion import discussion_bp
 from config import get_config_value
+from services.ip import get_client_ip
 from services.discussion_service import (
     get_categories, get_category_dict, get_topics_page, get_topic_detail,
     create_topic, edit_topic,
@@ -50,7 +51,7 @@ def create():
             category_id=request.form.get('category_id', type=int),
             tags=request.form.get('tags', '').strip(),
             attachment_files=request.files.getlist('attachments'),
-            ip_address=request.remote_addr,
+            ip_address=get_client_ip(),
         )
         if success:
             return redirect(url_for('discussion.list'))
@@ -109,7 +110,7 @@ def edit(topic_id):
             content=request.form.get('content', '').strip(),
             category_id=request.form.get('category_id', type=int),
             tags=request.form.get('tags', '').strip(),
-            ip_address=request.remote_addr,
+            ip_address=get_client_ip(),
         )
         if success:
             return redirect(url_for('discussion.detail', topic_id=topic_id))

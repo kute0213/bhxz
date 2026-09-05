@@ -8,6 +8,7 @@ from flask import render_template, request, jsonify
 from core.auth import get_current_user, login_required
 from routes.backgrounds import backgrounds_bp
 from services import background_service
+from services.ip import get_client_ip
 
 
 @backgrounds_bp.route('/backgrounds')
@@ -50,7 +51,7 @@ def upload_background():
         user_id=user['id'],
         username=user['username'],
         upload_file=upload_file,
-        ip_address=request.remote_addr,
+        ip_address=get_client_ip(),
     )
     if success:
         return jsonify({'task_id': result['task_id']})
@@ -76,7 +77,7 @@ def delete_background(bg_id):
         bg_id=bg_id,
         user_id=user['id'],
         is_admin=bool(user.get('is_admin')),
-        ip_address=request.remote_addr,
+        ip_address=get_client_ip(),
     )
     return jsonify({'success': success, 'message': message})
 

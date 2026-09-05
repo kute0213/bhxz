@@ -13,6 +13,7 @@ from services.user_service import (
     register, login, forgot_password, check_username_available,
 )
 from core.logger import log
+from services.ip import get_client_ip
 from routes.main import main_bp
 
 
@@ -43,7 +44,7 @@ def register_view():
             captcha_id=request.form.get('captcha_id', '').strip(),
             email=normalize_email(request.form.get('email', '')),
             email_code=request.form.get('email_code', '').strip(),
-            ip_address=request.remote_addr,
+            ip_address=get_client_ip(),
             email_verify_enabled=email_verify_enabled,
             group_code_verified=group_code_verified,
         )
@@ -85,14 +86,14 @@ def verify_group_code():
     data = request.get_json(silent=True) or {}
     code = (data.get('code') or '').strip()
     if not code:
-        log('VerifyGroupCode', '群内验证码为空', ip=request.remote_addr)
+        log('VerifyGroupCode', '群内验证码为空', ip=get_client_ip())
         return jsonify({'success': False, 'message': '请输入验证码'}), 400
     if code != REGISTER_VERIFY_CODE:
-        log('VerifyGroupCode', '群内验证码错误', ip=request.remote_addr)
+        log('VerifyGroupCode', '群内验证码错误', ip=get_client_ip())
         return jsonify({'success': False, 'message': '验证码错误，请在QQ群公告中获取正确验证码'}), 400
     session['group_code_verified'] = True
     session.permanent = True
-    log('VerifyGroupCode', '群内验证码验证成功', ip=request.remote_addr)
+    log('VerifyGroupCode', '群内验证码验证成功', ip=get_client_ip())
     return jsonify({'success': True, 'message': '验证成功'})
 
 
@@ -113,7 +114,7 @@ def login_view():
             password=request.form.get('password', ''),
             captcha_input=request.form.get('captcha', '').strip(),
             captcha_id=request.form.get('captcha_id', '').strip(),
-            ip_address=request.remote_addr,
+            ip_address=get_client_ip(),
         )
         if not success:
             return render_template(
@@ -151,7 +152,7 @@ def logout():
         path=current_app.session_interface.get_cookie_path(),
         domain=current_app.session_interface.get_cookie_domain(),
     )
-    log('Logout', '用户登出', username=username, ip=request.remote_addr)
+    log('Logout', '用户登出', username=username, ip=get_client_ip())
     return response
 
 
@@ -170,7 +171,7 @@ def forgot_password_view():
             email_code=request.form.get('email_code', '').strip(),
             new_password=request.form.get('new_password', ''),
             confirm_password=request.form.get('confirm_password', ''),
-            ip_address=request.remote_addr,
+            ip_address=get_client_ip(),
         )
         if not success:
             return render_template('forgot_password.html', error=message)

@@ -7,6 +7,7 @@ import json
 import os
 from collections import defaultdict
 
+from services.ip import get_client_ip
 
 _STATE_PATH = '/tmp/ratelimit_state.json'
 
@@ -16,7 +17,7 @@ class RateLimiter:
 
     用法:
         limiter = RateLimiter(max_requests=10, window=60)
-        if not limiter.check(request.remote_addr, request.headers.get('User-Agent', '')):
+        if not limiter.check(get_client_ip(), request.headers.get('User-Agent', '')):
             return "请求过于频繁", 429
     """
 

@@ -9,6 +9,7 @@ from core.auth import admin_required, get_current_user
 from core.db import get_db
 from routes.admin import admin_bp
 from services.user_service import admin_delete_user as _svc_delete_user, admin_toggle_admin as _svc_toggle_admin
+from services.ip import get_client_ip
 
 
 @admin_bp.route('/admin/users')
@@ -33,7 +34,7 @@ def admin_users():
 def admin_toggle_admin(user_id):
     user = get_current_user()
 
-    success, message = _svc_toggle_admin(user, user_id, request.remote_addr)
+    success, message = _svc_toggle_admin(user, user_id, get_client_ip())
     flash(message, 'success' if success else 'error')
     return redirect(url_for('admin.admin_users'))
 
@@ -43,6 +44,6 @@ def admin_toggle_admin(user_id):
 def admin_delete_user(user_id):
     user = get_current_user()
 
-    success, message = _svc_delete_user(user, user_id, request.remote_addr)
+    success, message = _svc_delete_user(user, user_id, get_client_ip())
     flash(message, 'success' if success else 'error')
     return redirect(url_for('admin.admin_users'))

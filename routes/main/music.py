@@ -23,6 +23,7 @@ from core.auth import login_required, get_current_user
 from config import UPLOAD_MUSIC_DIR
 from routes.main import main_bp
 from services import music_service
+from services.ip import get_client_ip
 
 
 @main_bp.route('/music')
@@ -102,7 +103,7 @@ def upload_music():
         title=title,
         is_public=is_public,
         upload_file=upload_file,
-        ip_address=request.remote_addr,
+        ip_address=get_client_ip(),
         tags=tags,
     )
     if success:
@@ -140,7 +141,7 @@ def edit_music_tags(music_id):
         user_id=user['id'],
         is_admin=bool(user.get('is_admin')),
         tags=tags,
-        ip_address=request.remote_addr,
+        ip_address=get_client_ip(),
     )
     return jsonify({'success': success, 'message': message})
 
@@ -153,7 +154,7 @@ def toggle_music_public(music_id):
         music_id=music_id,
         user_id=user['id'],
         is_admin=bool(user.get('is_admin')),
-        ip_address=request.remote_addr,
+        ip_address=get_client_ip(),
     )
     flash(message, 'success' if success else 'error')
     return _redirect_back()
@@ -167,7 +168,7 @@ def delete_music(music_id):
         music_id=music_id,
         user_id=user['id'],
         is_admin=bool(user.get('is_admin')),
-        ip_address=request.remote_addr,
+        ip_address=get_client_ip(),
     )
     flash(message, 'success' if success else 'error')
     return _redirect_back()

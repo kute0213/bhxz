@@ -5,6 +5,7 @@ from flask import render_template, jsonify, request, abort
 from core.auth import admin_required, get_current_user
 from routes.admin import admin_bp
 from services import background_service
+from services.ip import get_client_ip
 
 
 @admin_bp.route('/admin/backgrounds')
@@ -37,7 +38,7 @@ def admin_approve_background(bg_id):
         bg_id=bg_id,
         admin_id=user['id'],
         admin_username=user['username'],
-        ip_address=request.remote_addr,
+        ip_address=get_client_ip(),
     )
     return jsonify({'success': success, 'message': message})
 
@@ -54,7 +55,7 @@ def admin_reject_background(bg_id):
         bg_id=bg_id,
         admin_id=user['id'],
         admin_username=user['username'],
-        ip_address=request.remote_addr,
+        ip_address=get_client_ip(),
     )
     return jsonify({'success': success, 'message': message})
 
@@ -69,7 +70,7 @@ def admin_toggle_background(bg_id):
         bg_id=bg_id,
         admin_id=user['id'],
         admin_username=user['username'],
-        ip_address=request.remote_addr,
+        ip_address=get_client_ip(),
     )
     return jsonify({'success': success, 'message': message})
 
@@ -84,6 +85,6 @@ def admin_delete_background(bg_id):
         bg_id=bg_id,
         user_id=user['id'],
         is_admin=True,
-        ip_address=request.remote_addr,
+        ip_address=get_client_ip(),
     )
     return jsonify({'success': success, 'message': message})

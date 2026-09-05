@@ -8,6 +8,7 @@ from flask import request, abort, url_for, jsonify
 from core.auth import login_required, get_current_user
 from routes.discussion import discussion_bp
 from routes.community.helpers import _respond
+from services.ip import get_client_ip
 from services.discussion_service import (
     reply_to_topic,
     delete_reply as svc_delete_reply,
@@ -28,7 +29,7 @@ def reply(topic_id):
         topic_id=topic_id,
         content=request.form.get('content', '').strip(),
         attachment_files=request.files.getlist('attachments'),
-        ip_address=request.remote_addr,
+        ip_address=get_client_ip(),
     )
     return _respond(message, 'success' if success else 'error',
                     redirect_to=url_for('discussion.detail', topic_id=topic_id))
@@ -42,7 +43,7 @@ def delete_reply(reply_id):
         reply_id=reply_id,
         user_id=user['id'],
         is_admin=user.get('is_admin', False),
-        ip_address=request.remote_addr,
+        ip_address=get_client_ip(),
     )
     return _respond(message, 'success' if success else 'error')
 
@@ -53,7 +54,7 @@ def toggle_pin(topic_id):
     user = get_current_user()
     if not user.get('is_admin'):
         abort(403)
-    success, message = svc_toggle_pin(topic_id, request.remote_addr)
+    success, message = svc_toggle_pin(topic_id, get_client_ip())
     return _respond(message, 'success' if success else 'error',
                     redirect_to=url_for('discussion.detail', topic_id=topic_id))
 
@@ -64,7 +65,7 @@ def toggle_lock(topic_id):
     user = get_current_user()
     if not user.get('is_admin'):
         abort(403)
-    success, message = svc_toggle_lock(topic_id, request.remote_addr)
+    success, message = svc_toggle_lock(topic_id, get_client_ip())
     return _respond(message, 'success' if success else 'error',
                     redirect_to=url_for('discussion.detail', topic_id=topic_id))
 
@@ -77,7 +78,7 @@ def delete_topic(topic_id):
         topic_id=topic_id,
         caller_user_id=user['id'],
         is_admin=user.get('is_admin', False),
-        ip_address=request.remote_addr,
+        ip_address=get_client_ip(),
     )
     return _respond(message, 'success' if success else 'error',
                     redirect_to=url_for('discussion.list'))
