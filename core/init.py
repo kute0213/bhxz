@@ -56,7 +56,7 @@ def run_pending_migrations(app_root):
             try:
                 set_setting('UPLOADS_MIGRATION_PENDING', '0')
             except Exception:
-                pass
+                log('WARNING', 'App', '清除迁移标记失败（非关键）')
             return
 
         proc = subprocess.Popen(
@@ -78,7 +78,7 @@ def run_pending_migrations(app_root):
         try:
             set_setting('UPLOADS_MIGRATION_PENDING', '0')
         except Exception:
-            pass
+            log('WARNING', 'App', '清除迁移标记失败（非关键）')
     except Exception as e:
         log('WARNING', 'App', f'执行清理与迁移失败: {e}')
 

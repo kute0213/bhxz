@@ -75,13 +75,17 @@ python scripts/build/package.py
 │   └── ...             # 模板上下文、服务器、CSRF、日志
 ├── services/     # 业务逻辑层（纯 Python，不依赖 Flask）
 │   ├── backup/         # 数据库备份与恢复
+│   ├── discussion/     # 讨论区（帖子/回复/分类）
 │   ├── email/          # 异步邮件发送
 │   ├── game_accounts/  # 游戏账号绑定与注册申请
 │   ├── logging/        # 日志自动清理
 │   ├── monitoring/     # CPU/内存/系统/性能追踪（后台线程采集）
+│   ├── music/          # 大喇叭音频（常量/查询/CRUD/上传/收藏）
 │   ├── rcon/           # RCON 连接管理、玩家列表追踪、EasyAuth 指令
 │   ├── terminal/       # 持久终端会话（PTY）
-│   └── ...             # 其他单文件服务（附件/背景/验证码/限流/调度/设置/更新等）
+│   ├── updater/        # 自动更新（配置/核心逻辑）
+│   ├── user/           # 用户（认证/资料/管理）
+│   └── ...             # 其他单文件服务（附件/背景/验证码/限流/调度/设置/等）
 ├── routes/       # HTTP 路由层（Flask Blueprint）
 │   ├── admin/          # 管理后台（用户/备份/设置/日志/更新/游戏账号/指南/音乐/讨论等）
 │   ├── api/            # 公开 API（性能/统计/验证码/邮箱）
@@ -423,13 +427,13 @@ app.py ──→ routes/ ──→ services/ ──→ core/
          main/        process_utils.py
          docs/        process_manager.py
          public/      shell.py
-         admin/       user_service.py
+         admin/       user/（auth.py / profile.py）
          api/         attachment_service.py
-         cmd/         board_service.py
-         community/   discussion_service.py
-         discussion/  poll_service.py
-         guides/      captcha.py （验证码）
-         scheduled/   ratelimit.py （限流）
+         discussion/  discussion/（topics.py / replies.py）
+         guides/      music/（constants.py / queries.py / crud.py / upload.py / favorites.py）
+         scheduled/   updater/（config.py / core.py）
+         script/      captcha.py （验证码）
+                      ratelimit.py （限流）
                       logger.py （日志）
 ```
 
@@ -458,20 +462,24 @@ workspace/
 │   └── init.py               #   应用初始化
 ├── services/                 # 业务逻辑层（纯 Python，不依赖 Flask）
 │   ├── backup/               #   数据库备份与恢复
+│   ├── discussion/           #   讨论区（帖子/回复/分类）
 │   ├── email/                #   异步邮件发送
 │   ├── game_accounts/        #   游戏账号绑定与注册申请
 │   ├── logging/              #   日志写入与清理
 │   ├── monitoring/           #   系统监控（CPU/内存/系统/性能追踪）
+│   ├── music/                #   大喇叭音频（常量/查询/CRUD/上传/收藏）
 │   ├── rcon/                 #   RCON 连接管理、玩家列表追踪、EasyAuth 指令
-│   ├── easy_auth_db.py       #   EasyAuth 数据库直连验证（密码验证优先于 RCON）
 │   ├── terminal/             #   持久终端会话（PTY）
+│   ├── updater/              #   自动更新（配置/核心逻辑）
+│   ├── user/                 #   用户（认证/资料/管理）
 │   ├── attachment_service.py #   附件上传/清理
 │   ├── background_service.py #   背景图片业务
 │   ├── captcha.py            #   图形验证码
 │   ├── cmd_runner.py         #   命令执行流
-│   ├── discussion_service.py #   讨论区帖子管理
+│   ├── discussion_service.py #   兼容性重导出层（讨论区）
+│   ├── easy_auth_db.py       #   EasyAuth 数据库直连验证
 │   ├── ip.py                 #   IP 工具
-│   ├── music_service.py      #   大喇叭音频上传/转码/删除
+│   ├── music_service.py      #   兼容性重导出层（大喇叭音频）
 │   ├── process_manager.py    #   子进程生命周期管理
 │   ├── process_utils.py      #   子进程工具（编码/缓冲/环境变量）
 │   ├── ratelimit.py          #   IP 频率限制
@@ -479,8 +487,9 @@ workspace/
 │   ├── settings_manager.py   #   系统设置管理
 │   ├── shell.py              #   跨平台 shell 检测
 │   ├── sitemap_cache.py      #   Sitemap 缓存
-│   ├── updater.py            #   自动更新
-│   └── user_service.py       #   用户注册/登录/改密
+│   ├── updater.py            #   兼容性重导出层（自动更新）
+│   ├── user_service.py       #   兼容性重导出层（用户）
+│   └── validation.py         #   输入验证统一模块
 ├── routes/                   # HTTP 路由层
 │   ├── main/                 #   首页、登录、注册、设置、音乐
 │   ├── admin/                #   管理后台（用户/备份/设置/日志/更新/游戏账号/指南/音乐/讨论/广播/背景等）
@@ -644,3 +653,5 @@ workspace/
 ## 最近更新
 
 - **代码清理**：移除未使用的导入（`request`、`abort`、`redirect`、`url_for`）、死代码注释、未使用函数参数和未使用变量，提升代码可维护性。
+
+- **项目结构优化**：将大文件按功能模块拆分为子包，`services/music_service.py` → `services/music/`（常量/查询/CRUD/上传/收藏），`services/user_service.py` → `services/user/`（认证/资料/管理），`services/updater.py` → `services/updater/`（配置/核心逻辑），`services/discussion_service.py` → `services/discussion/`（帖子/回复/分类）；保留原文件作为兼容性重导出层，旧代码无需修改导入路径。

@@ -147,9 +147,9 @@ def do_something(user_id, value, ip_address):
 
 * 附件处理始终使用 `services/attachment_service.py`
 
-* 用户操作始终使用 `services/user_service.py`
+* 用户操作始终使用 `services/user/` 子模块
 
-* 讨论区操作始终使用 `services/discussion_service.py`
+* 讨论区操作始终使用 `services/discussion/` 子模块
 
 ## 测试规范
 

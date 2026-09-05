@@ -68,8 +68,24 @@ python scripts/build/package.py
 ```
 /workspace
 ├── app.py / config.py / requirements.txt   # 入口、配置、依赖
-├── core/         # 基础设施层（DB/认证/中间件）
+├── core/         # 基础设施层（DB/认证/中间件/服务器）
+│   ├── db/             # 数据库连接与 schema
+│   ├── auth.py         # 认证装饰器、密码哈希
+│   ├── middleware.py   # 请求中间件
+│   └── ...             # 模板上下文、服务器、CSRF、日志
 ├── services/     # 业务逻辑层（纯 Python，不依赖 Flask）
+│   ├── backup/         # 数据库备份与恢复
+│   ├── discussion/     # 讨论区（帖子/回复/分类）
+│   ├── email/          # 异步邮件发送
+│   ├── game_accounts/  # 游戏账号绑定与注册申请
+│   ├── logging/        # 日志自动清理
+│   ├── monitoring/     # CPU/内存/系统/性能追踪
+│   ├── music/          # 大喇叭音频（常量/查询/CRUD/上传/收藏）
+│   ├── rcon/           # RCON 连接管理、玩家列表追踪
+│   ├── terminal/       # 持久终端会话（PTY）
+│   ├── updater/        # 自动更新（配置/核心逻辑）
+│   ├── user/           # 用户（认证/资料/管理）
+│   └── ...             # 其他单文件服务
 ├── routes/       # HTTP 路由层（Flask Blueprint）
 ├── templates/    # Jinja2 模板
 ├── static/       # 静态资源（CSS/JS/本地化第三方库）
@@ -77,8 +93,9 @@ python scripts/build/package.py
 ├── scripts/      # 构建（build/）与测试（tests/）
 ├── uploads/      # 运行期上传数据
 │   ├── attachments/    # 留言板/讨论区附件
-│   ├── backgrounds/    # 全站背景图片（bg_16_9.jpg 等）
-│   └── community/      # 社区资源
+│   ├── backgrounds/    # 全站背景图片
+│   ├── community/      # 社区资源
+│   └── music/          # 大喇叭音频文件
 ├── backups/      # 数据库备份
 └── ssl/          # HTTPS 证书（可选）
 ```

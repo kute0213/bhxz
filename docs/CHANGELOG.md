@@ -2,6 +2,15 @@
 
 ## \[Unreleased]
 
+### 重构
+
+* **大文件按功能模块拆分为子包**：`services/music_service.py`（861行）→ `services/music/`（constants.py / queries.py / crud.py / upload.py / favorites.py），`services/user_service.py`（648行）→ `services/user/`（auth.py / profile.py / admin.py），`services/updater.py`（660行）→ `services/updater/`（config.py / core.py），`services/discussion_service.py`（531行）→ `services/discussion/`（topics.py / replies.py / categories.py）；保留原文件作为兼容性重导出层（`from services.music import *`），旧代码无需修改导入路径
+* **空异常捕获增加日志**：`core/init.py` 中两个 `except Exception: pass` 改为 `log('WARNING', ...)` 记录，便于排查问题
+
+### 文档
+
+* **项目结构文档同步**：README.md 项目结构、架构目录、services 子模块列表全面同步最新代码结构
+
 ### 安全
 
 * **指令执行安全增强**：所有 RCON 指令输入（用户名、密码）均经过 `sanitize_rcon_username` / `sanitize_rcon_password` 清洗，移除命令注入字符（`; | & \` $ ( ) { } " \n \r`），防止命令注入攻击；密码参数始终用引号包裹
