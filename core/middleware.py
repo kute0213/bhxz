@@ -1,4 +1,4 @@
-"""请求中间件 —— 访问日志记录、公共文件服务、请求钩子注册。
+"""请求中间件 —— 公共文件服务、请求钩子注册。
 
 设计原则：所有请求钩子在此模块集中管理，避免在 app.py 中散落。
 """
@@ -6,13 +6,7 @@
 from flask import request, session
 from werkzeug.exceptions import HTTPException
 
-from services.ip import get_client_ip, get_ip_info
-from services.logging import log_writer
 from core.logger import log
-
-# 跳过日志记录的路径前缀
-SKIP_PATHS = ('/static/', '/favicon', '/favicon.ico', '/uploads/',
-              '/api/admin/logs/refresh', '/api/performance')
 
 # 跳过公共文件服务的路径前缀（这些路径由 Flask 蓝图处理）
 ROUTE_PREFIXES = (
@@ -135,8 +129,6 @@ def register_hooks(app, try_serve_public):
             pass
         return None
 
-    app.before_request(log_access)
-
     # 统一为所有响应写入安全标头（在 before_request 之后注册，顺序无关紧要）
     app.after_request(_set_security_headers)
 
@@ -151,38 +143,3 @@ def register_hooks(app, try_serve_public):
             log('Auth', f'403 授权拒绝', username=user,
                 ip=request.remote_addr, path=request.path, method=request.method)
         return response
-
-
-def log_access():
-    """记录访问日志（非阻塞）。
-
-    IP 信息查询使用缓存，不阻塞请求；
-    日志写入通过队列异步完成，不阻塞请求；
-    用户信息直接从 session 读取，避免每次请求都查库。
-    日志清理由 log_cleaner 后台线程定期执行。
-    """
-    if any(request.path.startswith(p) for p in SKIP_PATHS):
-        return
-
-    try:
-        ip = get_client_ip()
-        ip_info = get_ip_info(ip)
-
-        # 直接从 session 读取用户信息（登录时已设置），无需查库
-        user_id = session.get('user_id')
-        username = session.get('username')
-
-        log_writer.enqueue({
-            'ip_address': ip,
-            'country': ip_info['country'],
-            'region': ip_info['region'],
-            'city': ip_info['city'],
-            'isp': ip_info['isp'],
-            'user_id': user_id,
-            'username': username,
-            'path': request.path,
-            'method': request.method,
-            'user_agent': request.headers.get('User-Agent', '')[:500],
-        })
-    except Exception:
-        pass

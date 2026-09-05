@@ -20,12 +20,11 @@ def register_hooks(app, try_serve_public):
 def start_background_services():
     """启动所有后台服务。"""
     from services.scheduler import scheduler
-    from services.logging import log_cleaner, log_writer
+    from services.logging import log_cleaner
     from services.backup import BackupScheduler
     from services.email import email_service
     from services.sitemap_cache import sitemap_cache
 
-    log_writer.start()
     log_cleaner.start()
     scheduler.start()
     BackupScheduler().start()

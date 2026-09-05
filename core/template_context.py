@@ -24,10 +24,14 @@ def register_template_context(app):
         def csrf_token_str():
             return get_csrf_token()
 
+        show_background = get_config_value('SHOW_BACKGROUND', True)
+        bg_size = get_config_value('BACKGROUND_IMAGE_SIZE', 'cover')
+
         return {
             # 登录欢迎语只展示一次，避免刷新页面后重复打扰用户。
             'login_welcome_username': session.pop('login_welcome_username', None),
-            'active_backgrounds': active_bgs,
+            'active_backgrounds': active_bgs if show_background else [],
+            'background_image_size': bg_size,
             'csrf_field': csrf_field,
             'csrf_token': csrf_token_str,
             # 备案号（热重载）

@@ -86,17 +86,21 @@
 <script>
 (function() {
     const raw = {{ guide.content | tojson }};
-    const renderer = {
-        heading({ text, depth }) {
-            const slug = String(text).replace(/<[^>]+>/g, '').toLowerCase()
-                .replace(/[.,;:!?\(\)\/\\]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '');
-            return `<h${depth} id="${slug}">${text}</h${depth}>\n`;
-        }
-    };
-    marked.use({ renderer });
-    document.getElementById('guide-body').innerHTML = DOMPurify.sanitize(marked.parse(raw));
-    // 触发代码高亮和复制按钮
-    if (typeof CodeBlocks !== 'undefined') CodeBlocks.enhance(document.getElementById('guide-body'));
+    const el = document.getElementById('guide-body');
+    if (!raw) {
+        el.innerHTML = '<p class="text-cream/40 text-center py-8">暂无内容</p>';
+    } else {
+        const renderer = {
+            heading({ text, depth }) {
+                const slug = String(text).replace(/<[^>]+>/g, '').toLowerCase()
+                    .replace(/[.,;:!?\(\)\/\\]/g, '').replace(/\s+/g, '-').replace(/-+/g, '-').replace(/^-+|-+$/g, '');
+                return `<h${depth} id="${slug}">${text}</h${depth}>\n`;
+            }
+        };
+        marked.use({ renderer });
+        el.innerHTML = DOMPurify.sanitize(marked.parse(raw));
+        if (typeof CodeBlocks !== 'undefined') CodeBlocks.enhance(el);
+    }
 })();
 </script>
 {% endblock %}

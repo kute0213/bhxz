@@ -56,12 +56,42 @@ def _validate_image(upload):
     return raw, ext
 
 
-def _convert_to_webp(raw, target_size=1920):
-    """将图片转换为 WebP 格式，自动适配尺寸。
+def _smart_crop(image, target_ratio=16/9):
+    """智能裁剪图片到目标宽高比，从中心裁剪。
+
+    Args:
+        image: PIL Image 对象
+        target_ratio: 目标宽高比（默认 16:9）
+
+    Returns:
+        裁剪后的 PIL Image 对象
+    """
+    w, h = image.size
+    current_ratio = w / h
+
+    if abs(current_ratio - target_ratio) < 0.01:
+        # 已经是目标比例，不需要裁剪
+        return image
+
+    if current_ratio > target_ratio:
+        # 图片太宽，裁剪宽度
+        new_w = int(h * target_ratio)
+        left = (w - new_w) // 2
+        return image.crop((left, 0, left + new_w, h))
+    else:
+        # 图片太高，裁剪高度
+        new_h = int(w / target_ratio)
+        top = (h - new_h) // 2
+        return image.crop((0, top, w, top + new_h))
+
+
+def _convert_to_webp(raw, target_size=1920, crop_to_ratio=True):
+    """将图片转换为 WebP 格式，自动适配尺寸并智能裁剪。
 
     Args:
         raw: 原始图片字节数据
         target_size: 目标长边最大像素（默认 1920px）
+        crop_to_ratio: 是否自动裁剪到 16:9 宽高比（默认开启）
 
     Returns:
         WebP 格式的字节数据
@@ -80,6 +110,10 @@ def _convert_to_webp(raw, target_size=1920):
         raise ValueError('图片像素过大，请压缩后重试') from exc
     except (UnidentifiedImageError, OSError, ValueError) as exc:
         raise ValueError('文件不是有效的图片') from exc
+
+    # 智能裁剪到 16:9
+    if crop_to_ratio:
+        image = _smart_crop(image, 16/9)
 
     # 按长边缩放
     w, h = image.size

@@ -213,7 +213,6 @@ QQ_GROUP_URL = 'https://qun.qq.com/universal-share/share?ac=1&authKey=rMtk0BTqbT
 SETTINGS_REGISTRY = [
     # 日志清理
     ('LOG_LEVEL', 'INFO', 'select', '日志输出等级', '控制日志输出级别，可选：DEBUG（调试）, INFO（信息）, WARNING（警告）, ERROR（错误）, CRITICAL（严重）', '日志清理'),
-    ('MAX_ACCESS_LOGS', 500, 'int', '访问日志最大条数', '超过此条数后自动删除最旧的访问日志', '日志清理'),
     ('MAX_CMD_LOGS', 1000, 'int', '命令日志最大条数', '超过此条数后自动删除最旧的命令执行日志', '日志清理'),
     ('MAX_TASK_LOGS', 2000, 'int', '定时任务日志最大条数', '超过此条数后自动删除最旧的定时任务日志', '日志清理'),
     ('LOG_CLEANUP_INTERVAL', 300, 'int', '日志清理间隔（秒）', '后台线程每隔此时间检查一次日志数量', '日志清理'),
@@ -255,15 +254,13 @@ SETTINGS_REGISTRY = [
     ('DISCUSSION_REFRESH_INTERVAL', 5, 'int', '回复实时刷新间隔（秒）', '讨论区回复列表自动刷新频率，仅后台可修改', '讨论区配置'),
     ('REPLIES_PER_PAGE', 10, 'int', '回复每页加载数量', '讨论区回复列表每次加载的回复数量', '讨论区配置'),
 
-    # 一键更新
-    ('BUILD_STATIC_ON_UPDATE', False, 'bool', '更新时构建静态资源', '开启后每次更新都会重新下载外部 CDN 资源（Monaco、xterm.js 等），关闭则仅同步代码', '一键更新'),
-    ('UPDATE_EXCLUDED_FILES', 'site.duckdb,site.duckdb.wal,backups,uploads,ssl,.env,.git,__pycache__', 'str', '不替换的文件/文件夹', '逗号分隔，更新时不会被删除或覆盖', '一键更新'),
-    ('GITHUB_PROXIES', '', 'str', '自定义 GitHub 代理', '每行一个，格式：名称=URL。留空使用默认代理列表', '一键更新'),
-    ('START_COMMAND', '{python} app.py', 'str', '自定义启动命令', '更新完成后启动服务器的命令，留空使用默认方式。关闭服务器使用自动方式。可用占位符：{python} {script} {app_root}', '一键更新'),
-
     # 外部链接
     ('MAP_URL', 'https://map.bhxz.tw.kg', 'str', '卫星地图地址', '首页卫星地图按钮的链接地址', '外部链接'),
     ('QQ_GROUP_URL', 'https://qun.qq.com/...', 'str', 'QQ 群链接', '首页加入 QQ 群按钮的链接地址', '外部链接'),
+
+    # 背景图片
+    ('SHOW_BACKGROUND', True, 'bool', '显示背景图片', '开启后在网站所有页面背景显示已通过的背景图片', '背景图片'),
+    ('BACKGROUND_IMAGE_SIZE', 'cover', 'select', '背景图片尺寸', '设置背景图片的显示方式，可选：cover（铺满裁剪）, contain（完整显示）, auto（原始尺寸）', '背景图片'),
 
     # 网站图标
     ('FAVICON_ICON', 'compass', 'select', '网站图标', '设置浏览器标签页图标（favicon），可选：compass（指南针）, mountain（山峰）, star（星星）, heart（爱心）', '网站图标'),

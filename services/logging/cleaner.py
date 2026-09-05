@@ -14,7 +14,6 @@ from core.logger import log
 
 # 各日志表与其上限的映射（动态读取配置，支持热重载）
 _LOG_TABLE_CONFIGS = [
-    ('access_logs', 'MAX_ACCESS_LOGS'),
     ('cmd_run_logs', 'MAX_CMD_LOGS'),
     ('scheduled_task_logs', 'MAX_TASK_LOGS'),
 ]

@@ -73,23 +73,6 @@ def init_db():
                 created_at VARCHAR NOT NULL
             )
         '''),
-        ('access_logs', '''
-            CREATE SEQUENCE IF NOT EXISTS access_logs_id_seq START 1;
-            CREATE TABLE IF NOT EXISTS access_logs (
-                id INTEGER PRIMARY KEY DEFAULT nextval('access_logs_id_seq'),
-                ip_address VARCHAR NOT NULL,
-                country VARCHAR,
-                region VARCHAR,
-                city VARCHAR,
-                isp VARCHAR,
-                user_id INTEGER,
-                username VARCHAR,
-                path VARCHAR NOT NULL,
-                method VARCHAR NOT NULL,
-                user_agent VARCHAR,
-                created_at VARCHAR NOT NULL
-            )
-        '''),
         ('cmd_commands', '''
             CREATE SEQUENCE IF NOT EXISTS cmd_commands_id_seq START 1;
             CREATE TABLE IF NOT EXISTS cmd_commands (

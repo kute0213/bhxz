@@ -44,6 +44,7 @@
     <noscript><style>.page-content{opacity:1!important;transform:none!important}</style></noscript>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/tailwind.css', v='4') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css', v='28') }}">
+    <script src="{{ url_for('static', filename='lib/purify/purify.min.js', v='1') }}"></script>
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <script>
     // 全站 AJAX CSRF 防护：自动为所有 fetch/XHR 请求添加 X-CSRF-Token 请求头
@@ -100,7 +101,7 @@
 
     <!-- 全站背景图片 -->
     {% if active_backgrounds %}
-    <div class="site-background" style="background-image: url('{{ url_for('backgrounds.serve_background', bg_id=active_backgrounds[0].id) }}');"></div>
+    <div class="site-background" style="background-image: url('{{ url_for('backgrounds.serve_background', bg_id=active_backgrounds[0].id) }}'); background-size: {{ background_image_size }};"></div>
     <div class="site-background-overlay"></div>
     {% endif %}
 
@@ -371,7 +372,6 @@
     </div>
 
     <script src="{{ url_for('static', filename='js/base.js', v='19') }}"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
     <script src="{{ url_for('static', filename='js/main.js', v='11') }}"></script>
     {% if login_welcome_username %}
     <script>

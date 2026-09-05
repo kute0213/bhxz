@@ -127,7 +127,7 @@ var guidePreviewData = {
     {% for guide in guides if guide.status == 'pending' %}
     {{ guide.id }}: {
         title: {{ guide.title | tojson }},
-        content: {{ guide.content | tojson }}
+        content: {{ (guide.content or '') | tojson }}
     },
     {% endfor %}
 };
@@ -142,11 +142,17 @@ function hideRejectModal() {
     document.getElementById('reject-modal').classList.add('hidden');
 }
 function showPreviewModal(btn) {
+    if (!window.DOMPurify || !window.marked) {
+        Toast.error('预览库尚未加载，请稍后重试');
+        return;
+    }
     _previewGuideId = parseInt(btn.dataset.guideId);
     const data = guidePreviewData[_previewGuideId];
     if (!data) return;
     document.getElementById('preview-title').textContent = data.title;
-    document.getElementById('preview-content').innerHTML = DOMPurify.sanitize(marked.parse(data.content));
+    document.getElementById('preview-content').innerHTML = data.content
+        ? DOMPurify.sanitize(marked.parse(data.content))
+        : '<p class="text-cream/40 text-center py-8">暂无内容</p>';
     document.getElementById('preview-approve-form').action = '/admin/guides/' + _previewGuideId + '/approve';
     document.getElementById('preview-modal').classList.remove('hidden');
     document.body.style.overflow = 'hidden';
