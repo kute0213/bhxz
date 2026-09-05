@@ -15,10 +15,7 @@ import tempfile
 import zipfile
 import threading
 import subprocess
-import concurrent.futures
 from collections import deque
-from urllib.request import urlopen, Request
-from urllib.error import URLError, HTTPError
 
 from config import APP_ROOT
 
@@ -28,31 +25,19 @@ from config import APP_ROOT
 
 # GitHub 归档路径格式
 REPO_ARCHIVE_PATH = 'kute0213/bhxz/archive/refs/heads/main.zip'
+REPO_FULL = 'kute0213/bhxz'
 
 # 下载 URL 模板（proxy_base 替换为实际代理地址）
 DOWNLOAD_URL_FORMATS = [
     '{proxy_base}{archive_path}',
 ]
 
-# 默认代理列表（格式：名称、基础 URL、下载模板）
-DEFAULT_PROXIES = [
-    ('cdn.jsdelivr.net', 'https://cdn.jsdelivr.net/gh/', 'https://cdn.jsdelivr.net/gh/{repo}'),
+# 可靠代理列表（按优先级，数量少且经过验证）
+RELIABLE_PROXIES = [
     ('ghp.ci', 'https://ghp.ci/https://github.com/', 'https://ghp.ci/https://github.com/{repo}'),
     ('ghproxy.com', 'https://ghproxy.com/https://github.com/', 'https://ghproxy.com/https://github.com/{repo}'),
-    ('kkgithub.com', 'https://kkgithub.com/https://github.com/', 'https://kkgithub.com/https://github.com/{repo}'),
-    ('gh.llkk.cc', 'https://gh.llkk.cc/https://github.com/', 'https://gh.llkk.cc/https://github.com/{repo}'),
-    ('slink.ltd', 'https://slink.ltd/https://github.com/', 'https://slink.ltd/https://github.com/{repo}'),
-    ('moeyy.cn', 'https://github.moeyy.cn/https://github.com/', 'https://github.moeyy.cn/https://github.com/{repo}'),
-    ('gh-proxy.com', 'https://gh-proxy.com/https://github.com/', 'https://gh-proxy.com/https://github.com/{repo}'),
-    ('ghproxy.net', 'https://ghproxy.net/https://github.com/', 'https://ghproxy.net/https://github.com/{repo}'),
-    ('gitproxy.cn', 'https://gitproxy.cn/https://github.com/', 'https://gitproxy.cn/https://github.com/{repo}'),
-    ('github.2222.win', 'https://github.2222.win/https://github.com/', 'https://github.2222.win/https://github.com/{repo}'),
     ('github.moeyy.xyz', 'https://github.moeyy.xyz/https://github.com/', 'https://github.moeyy.xyz/https://github.com/{repo}'),
-    ('gh-proxy.lvedong.top', 'https://gh-proxy.lvedong.top/https://github.com/', 'https://gh-proxy.lvedong.top/https://github.com/{repo}'),
-    ('github.catvod.com', 'https://github.catvod.com/https://github.com/', 'https://github.catvod.com/https://github.com/{repo}'),
-    ('github.top', 'https://github.top/https://github.com/', 'https://github.top/https://github.com/{repo}'),
-    ('gh.akass.cn', 'https://gh.akass.cn/https://github.com/', 'https://gh.akass.cn/https://github.com/{repo}'),
-    ('ghproxy.51sww.com', 'https://ghproxy.51sww.com/https://github.com/', 'https://ghproxy.51sww.com/https://github.com/{repo}'),
+    ('slink.ltd', 'https://slink.ltd/https://github.com/', 'https://slink.ltd/https://github.com/{repo}'),
 ]
 
 # 默认不替换路径（从安全角度考虑，site.duckdb 等必须保护）
@@ -216,64 +201,53 @@ def _make_zip_path():
 
 
 def _download_zip(url, zip_path, progress_callback=None, timeout=30):
-    """下载 ZIP 文件，支持进度回调。
+    """使用 requests 下载 ZIP 文件，支持进度回调。
 
     Returns:
         bool: 下载是否成功
     """
     try:
-        req = Request(url, headers={
+        import requests as req_lib
+        session = req_lib.Session()
+        resp = session.get(url, stream=True, timeout=timeout, headers={
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
             'Accept': 'application/zip,*/*',
         })
-        with urlopen(req, timeout=timeout) as resp:
-            # 检查状态码
-            if resp.status != 200:
-                return False
+        resp.raise_for_status()
 
-            # 检查 Content-Type 是否为 ZIP
-            content_type = resp.headers.get('Content-Type', '')
-            if 'html' in content_type.lower():
-                return False
+        # 检查 Content-Type 是否为 ZIP（部分代理可能返回 HTML）
+        ct = resp.headers.get('Content-Type', '')
+        if 'html' in ct.lower():
+            return False
 
-            # 获取文件大小
-            content_length = resp.headers.get('Content-Length')
-            total_size = int(content_length) if content_length else 0
+        total_size = int(resp.headers.get('Content-Length', 0))
+        downloaded = 0
+        last_report = 0
 
-            # 下载到临时文件
-            downloaded = 0
-            chunk_size = 64 * 1024  # 64KB
-            last_report = 0
-
-            with open(zip_path, 'wb') as f:
-                while True:
-                    chunk = resp.read(chunk_size)
-                    if not chunk:
-                        break
+        with open(zip_path, 'wb') as f:
+            for chunk in resp.iter_content(chunk_size=64 * 1024):
+                if chunk:
                     f.write(chunk)
                     downloaded += len(chunk)
-
-                    # 进度回调
                     if total_size > 0 and progress_callback:
                         pct = int(downloaded * 100 / total_size)
                         if pct > last_report:
                             last_report = pct
                             progress_callback(pct)
 
-            # 验证 ZIP 文件
-            if not zipfile.is_zipfile(zip_path):
+        # 验证 ZIP 文件
+        if not zipfile.is_zipfile(zip_path):
+            os.remove(zip_path)
+            return False
+
+        with zipfile.ZipFile(zip_path, 'r') as zf:
+            if len(zf.namelist()) == 0:
                 os.remove(zip_path)
                 return False
 
-            # 检查 ZIP 是否为空
-            with zipfile.ZipFile(zip_path, 'r') as zf:
-                if len(zf.namelist()) == 0:
-                    os.remove(zip_path)
-                    return False
+        return True
 
-            return True
-
-    except (URLError, HTTPError, OSError, ValueError, zipfile.BadZipFile) as e:
+    except Exception:
         if os.path.exists(zip_path):
             try:
                 os.remove(zip_path)
@@ -309,62 +283,29 @@ def _extract_zip(zip_path, extract_dir):
 
 
 def _detect_fastest_proxy(proxy_list, timeout=3):
-    """检测最快的可用代理。
+    """检测最快的可用代理（简化版，仅测试连接性，不测速）。
 
-    分批检测（每批 8 个），找到 3 个可用后提前结束。
+    按顺序测试，返回第一个可用的代理。
     """
-    available = []
-    batch_size = 8
-    early_stop_count = 3
-    batch_start = 0
-    total_checked = 0
+    import requests as req_lib
 
-    while batch_start < len(proxy_list):
-        batch = proxy_list[batch_start:batch_start + batch_size]
-        batch_start += batch_size
+    for name, base_url, tmpl in proxy_list:
+        test_url = f'{base_url}https://github.com/'
+        try:
+            start = time.time()
+            resp = req_lib.get(test_url, timeout=timeout, headers={
+                'User-Agent': 'Mozilla/5.0',
+            })
+            if resp.status_code == 200:
+                latency = time.time() - start
+                _add_event('log', {
+                    'message': f'  ✓ {name} ({latency:.2f}s)'
+                })
+                return [(name, base_url, tmpl, latency)]
+        except Exception:
+            pass
 
-        with concurrent.futures.ThreadPoolExecutor(max_workers=batch_size) as executor:
-            future_map = {
-                executor.submit(_test_proxy, name, url, timeout): (name, url, tmpl)
-                for name, url, tmpl in batch
-            }
-            for future in concurrent.futures.as_completed(future_map):
-                name, url, tmpl = future_map[future]
-                total_checked += 1
-                try:
-                    latency = future.result()
-                    if latency is not None:
-                        available.append((name, url, tmpl, latency))
-                        _add_event('log', {
-                            'message': f'  ✓ {name} ({latency:.2f}s)'
-                        })
-                except Exception:
-                    pass
-
-        # 检查是否已有足够代理
-        if len(available) >= early_stop_count:
-            break
-
-    # 按速度排序
-    available.sort(key=lambda x: x[3])
-    return available
-
-
-def _test_proxy(name, base_url, timeout):
-    """测试单个代理的延迟。"""
-    test_url = f'{base_url}https://github.com/'
-    try:
-        start = time.time()
-        req = Request(test_url, headers={
-            'User-Agent': 'Mozilla/5.0',
-        })
-        with urlopen(req, timeout=timeout) as resp:
-            elapsed = time.time() - start
-            if resp.status == 200:
-                return elapsed
-    except Exception:
-        pass
-    return None
+    return []
 
 
 def detect_fastest_proxy(proxy_list=None, timeout=3):
@@ -374,7 +315,7 @@ def detect_fastest_proxy(proxy_list=None, timeout=3):
         list: 按速度排序的 (name, base_url, download_template, latency) 列表
     """
     if proxy_list is None:
-        proxy_list = DEFAULT_PROXIES
+        proxy_list = RELIABLE_PROXIES
     return _detect_fastest_proxy(proxy_list, timeout)
 
 
@@ -392,7 +333,7 @@ def _run_update():
         _add_event('log', {'message': '开始检查更新...'})
 
         # 解析配置
-        proxy_list = list(DEFAULT_PROXIES)
+        proxy_list = list(RELIABLE_PROXIES)
         protected_paths = list(DEFAULT_EXCLUDED)
 
         try:
@@ -417,12 +358,9 @@ def _run_update():
                     url = url.strip()
                     if not name or not url:
                         continue
-                    # 确保 URL 以 / 结尾
                     if not url.endswith('/'):
                         url += '/'
-                    # 构建下载模板
                     download_template = url.rstrip('/') + '/{repo}'
-                    # 检查是否已存在同名代理
                     replaced = False
                     for i, (n, u, t) in enumerate(proxy_list):
                         if n == name:
@@ -436,86 +374,77 @@ def _run_update():
 
         _add_event('progress', {'percent': 2, 'message': f'已加载配置，{len(protected_paths)} 个受保护路径'})
 
-        # 1. 检测可用代理（分批检测，每批 8 个，超时 2.5s）
-        _add_event('progress', {'percent': 3, 'message': f'正在检测 {len(proxy_list)} 个 GitHub 代理...'})
-        _add_event('log', {'message': f'╔══ 开始代理检测（共 {len(proxy_list)} 个，分批 8 个，超时 2.5s，早停 3 个）'})
-        _add_event('log', {'message': f'║  首批检测前 8 个: {", ".join(n for n, *_ in proxy_list[:8])}'})
-        if len(proxy_list) > 8:
-            _add_event('log', {'message': f'║  剩余 {len(proxy_list) - 8} 个代理作为备用批次'})
+        # 1. 检测可用代理（按序测试，跳过不可用的）
+        _add_event('progress', {'percent': 3, 'message': f'正在检测 {len(proxy_list)} 个代理...'})
+        _add_event('log', {'message': f'╔══ 开始代理检测（共 {len(proxy_list)} 个，超时 3s）'})
+        _add_event('log', {'message': f'║  {", ".join(n for n, *_ in proxy_list)}'})
 
         available_proxies = detect_fastest_proxy(proxy_list=proxy_list, timeout=3)
 
-        # 记录可用代理数量
         _add_event('log', {'message': f'╚══ 代理检测完成：可用 {len(available_proxies)} 个'})
 
         if not available_proxies:
-            raise RuntimeError('所有 GitHub 代理均不可达，请检查网络连接或稍后重试')
+            raise RuntimeError('所有代理均不可达，尝试直连下载')
 
-        rank_parts = [f'{i+1}. {n} ({e:.1f}s)' for i, (n, *_, e) in enumerate(available_proxies[:5])]
-        _add_event('log', {'message': f'→ 代理速度排名: {"; ".join(rank_parts)}'})
-        if len(available_proxies) > 5:
-            _add_event('log', {'message': f'→ 以及另外 {len(available_proxies) - 5} 个可用代理'})
+        name, base_url, download_template, elapsed = available_proxies[0]
+        _add_event('log', {'message': f'→ 使用代理: {name} ({elapsed:.1f}s)'})
 
-        # 2. 按速度顺序尝试下载 ZIP 压缩包
+        # 2. 下载 ZIP 压缩包
         download_success = False
         last_error = ''
-        total_attempts = len(available_proxies)
 
-        for attempt_idx, (name, base_url, download_template, elapsed) in enumerate(available_proxies):
-            proxy_base = download_template.replace('{repo}', '')
-            if not proxy_base.endswith('/'):
-                proxy_base += '/'
+        proxy_base = download_template.replace('{repo}', '')
+        if not proxy_base.endswith('/'):
+            proxy_base += '/'
 
-            candidate_urls = []
-            for fmt in DOWNLOAD_URL_FORMATS:
-                url = fmt.format(proxy_base=proxy_base, archive_path=REPO_ARCHIVE_PATH)
-                candidate_urls.append(url)
+        candidate_urls = []
+        for fmt in DOWNLOAD_URL_FORMATS:
+            url = fmt.format(proxy_base=proxy_base, archive_path=REPO_ARCHIVE_PATH)
+            candidate_urls.append(url)
 
-            _add_event('log', {'message': f'{"─" * 40}'})
-            hint = '首选' if attempt_idx == 0 else '备用'
-            _add_event('log', {'message': f'下载尝试 #{attempt_idx + 1}: {name} （{hint}，延迟 {elapsed:.1f}s）'})
-            _add_event('progress', {'percent': 5, 'message': f'正在从 {name} 下载更新包...'})
+        _add_event('log', {'message': f'{"─" * 40}'})
+        _add_event('log', {'message': f'尝试从 {name} 下载更新包...'})
+        _add_event('progress', {'percent': 5, 'message': f'正在从 {name} 下载更新包...'})
 
-            zip_path = _make_zip_path()
-            download_start = time.time()
+        zip_path = _make_zip_path()
+        download_start = time.time()
 
-            def _dl_progress(pct):
-                mapped = 5 + int(pct * 65 / 100)
-                _add_event('progress', {'percent': mapped, 'message': f'正在下载更新包... {int(pct)}%'})
+        def _dl_progress(pct):
+            mapped = 5 + int(pct * 65 / 100)
+            _add_event('progress', {'percent': mapped, 'message': f'正在下载更新包... {int(pct)}%'})
 
-            url_ok = False
-            for url_idx, zip_url in enumerate(candidate_urls):
-                _add_event('log', {'message': f'  URL格式{url_idx + 1}: {zip_url}'})
-                try:
-                    success = _download_zip(zip_url, zip_path, progress_callback=_dl_progress, timeout=30)
-                    if success:
-                        url_ok = True
-                        break
-                    else:
-                        _add_event('log', {'message': f'  ✗ 格式{url_idx + 1} 不可用'})
-                except Exception as e:
-                    _add_event('log', {'message': f"  ✗ 格式{url_idx + 1} 异常: {str(e)[:60]}"})
-                finally:
-                    if not url_ok and os.path.isfile(zip_path):
-                        try:
-                            os.remove(zip_path)
-                        except Exception:
-                            pass
+        url_ok = False
+        for url_idx, zip_url in enumerate(candidate_urls):
+            _add_event('log', {'message': f'  URL: {zip_url}'})
+            try:
+                success = _download_zip(zip_url, zip_path, progress_callback=_dl_progress, timeout=30)
+                if success:
+                    url_ok = True
+                    break
+                else:
+                    _add_event('log', {'message': '  ✗ 不可用'})
+            except Exception as e:
+                _add_event('log', {'message': f"  ✗ 异常: {str(e)[:60]}"})
+            finally:
+                if not url_ok and os.path.isfile(zip_path):
+                    try:
+                        os.remove(zip_path)
+                    except Exception:
+                        pass
 
-            if url_ok:
-                download_elapsed = time.time() - download_start
-                _add_event('log', {'message': f'✓ {name} 下载成功（耗时 {download_elapsed:.1f}s）'})
-                _add_event('progress', {'percent': 70, 'message': '下载完成，正在解压...'})
+        if url_ok:
+            download_elapsed = time.time() - download_start
+            _add_event('log', {'message': f'✓ {name} 下载成功（耗时 {download_elapsed:.1f}s）'})
+            _add_event('progress', {'percent': 70, 'message': '下载完成，正在解压...'})
 
-                temp_dir = tempfile.mkdtemp(prefix='bhxz_update_')
-                _add_event('log', {'message': '正在解压更新包...'})
-                _extract_zip(zip_path, temp_dir)
+            temp_dir = tempfile.mkdtemp(prefix='bhxz_update_')
+            _add_event('log', {'message': '正在解压更新包...'})
+            _extract_zip(zip_path, temp_dir)
 
-                download_success = True
-                break
-            else:
-                _add_event('log', {'message': f'✗ {name} 所有格式均失败（耗时 {time.time() - download_start:.1f}s）'})
-                last_error = f'{name} 所有格式均失败'
+            download_success = True
+        else:
+            _add_event('log', {'message': f'✗ {name} 下载失败（耗时 {time.time() - download_start:.1f}s）'})
+            last_error = f'{name} 下载失败'
 
         if not download_success:
             _add_event('log', {'message': f'{"─" * 40}'})
@@ -549,7 +478,7 @@ def _run_update():
 
         if not download_success:
             raise RuntimeError(
-                f'已尝试 {total_attempts} 个代理及直连，全部失败。\n'
+                f'代理及直连均失败。\n'
                 f'最后错误: {last_error[:300]}'
             )
 

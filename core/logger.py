@@ -165,9 +165,9 @@ def get_log_buffer(level_filter: str = '', after_index: int = 0) -> list:
 
 
 def get_log_buffer_tail(count: int = 200) -> list:
-    """获取最近 N 条日志（倒序，最新在前）。"""
+    """获取最近 N 条日志（正序，旧→新，前端自行反转）。"""
     with _log_buffer_lock:
-        return list(reversed(_log_buffer[-count:]))
+        return list(_log_buffer[-count:])
 
 
 def clear_log_buffer():
