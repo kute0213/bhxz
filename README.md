@@ -640,3 +640,7 @@ workspace/
 ## 更新日志
 
 详见 [docs/CHANGELOG.md](docs/CHANGELOG.md)。
+
+## 最近更新
+
+- **代码清理**：移除未使用的导入（`request`、`abort`、`redirect`、`url_for`）、死代码注释、未使用函数参数和未使用变量，提升代码可维护性。
