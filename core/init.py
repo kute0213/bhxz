@@ -25,6 +25,7 @@ def start_background_services():
     from services.email import email_service
     from services.sitemap_cache import sitemap_cache
     from services.rcon import player_tracker
+    from services.monitoring import performance_tracker
 
     log_cleaner.start()
     scheduler.start()
@@ -32,6 +33,7 @@ def start_background_services():
     email_service.start()
     sitemap_cache.start()
     player_tracker.start()
+    performance_tracker.start()
     log('INFO', 'App', '后台服务启动完成')
 
 

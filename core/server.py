@@ -6,7 +6,7 @@ import signal
 import ssl
 import threading
 
-from flask import Flask, render_template
+from flask import render_template
 
 from core.logger import log
 

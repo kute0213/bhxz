@@ -1,0 +1,207 @@
+{% extends "base.html" %}
+{% block title %}游戏账号{% endblock %}
+{% block content %}
+<section class="page-container py-12">
+    <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+
+        <div class="text-center mb-10">
+            <h1 class="text-2xl sm:text-3xl font-bold mb-3">游戏账号</h1>
+            <p class="text-cream/60">管理你的 Minecraft 游戏账号</p>
+        </div>
+
+        <!-- 绑定账号 -->
+        <div class="pixel-card rounded-xl p-6 mb-6">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-lg font-bold flex items-center gap-2">
+                    <i data-lucide="link" class="w-5 h-5 text-gold-400"></i>
+                    已绑定账号
+                </h2>
+                <span class="text-xs text-cream/50">{{ bound_accounts|length }} 个</span>
+            </div>
+
+            <div id="bound-list" class="space-y-2">
+                {% if bound_accounts %}
+                {% for acc in bound_accounts %}
+                <div class="flex items-center justify-between px-4 py-3 bg-forest-900/40 rounded-lg" data-username="{{ acc.mc_username }}">
+                    <div class="flex items-center gap-3">
+                        <span class="w-2 h-2 rounded-full bg-green-400"></span>
+                        <span class="text-cream font-medium">{{ acc.mc_username }}</span>
+                        <span class="text-xs text-cream/40">绑定于 {{ acc.created_at[:10] }}</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <button class="btn-change-pwd text-xs px-3 py-1.5 bg-gold-400/20 hover:bg-gold-400/30 text-gold-300 rounded-lg transition-colors border border-gold-400/30" data-username="{{ acc.mc_username }}">
+                            改密码
+                        </button>
+                        <button class="btn-unbind text-xs px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-300 rounded-lg transition-colors border border-red-500/30" data-username="{{ acc.mc_username }}">
+                            解绑
+                        </button>
+                    </div>
+                </div>
+                {% endfor %}
+                {% else %}
+                <div class="text-cream/50 text-sm text-center py-6">暂未绑定任何游戏账号</div>
+                {% endif %}
+            </div>
+
+            <!-- 绑定新账号 -->
+            <div class="mt-4 pt-4 border-t border-cream/10">
+                <form id="bind-form" class="flex flex-wrap items-end gap-3">
+                    <div class="flex-1 min-w-[200px]">
+                        <label class="text-xs text-cream/60 block mb-1">MC 用户名</label>
+                        <input type="text" id="bind-username" placeholder="输入要绑定的 MC 用户名" class="w-full px-3 py-2 bg-forest-900/60 border border-cream/20 rounded-lg text-sm focus:outline-none focus:border-gold-400 transition-colors">
+                    </div>
+                    <button type="submit" class="px-5 py-2 bg-gold-400/20 hover:bg-gold-400/30 text-gold-300 text-sm rounded-lg transition-colors border border-gold-400/30">
+                        <i data-lucide="plus" class="w-4 h-4 inline mr-1"></i>绑定
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- 申请注册新账号 -->
+        <div class="pixel-card rounded-xl p-6 mb-6">
+            <h2 class="text-lg font-bold mb-4 flex items-center gap-2">
+                <i data-lucide="user-plus" class="w-5 h-5 text-gold-400"></i>
+                申请注册游戏账号
+            </h2>
+            <p class="text-cream/50 text-sm mb-4">申请创建一个新的 Minecraft 游戏账号，需管理员审核批准。</p>
+
+            <form id="register-form" class="space-y-4">
+                <div>
+                    <label class="text-xs text-cream/60 block mb-1">MC 用户名</label>
+                    <input type="text" id="reg-username" placeholder="输入要注册的 MC 用户名" class="w-full px-3 py-2 bg-forest-900/60 border border-cream/20 rounded-lg text-sm focus:outline-none focus:border-gold-400 transition-colors">
+                </div>
+                <div>
+                    <label class="text-xs text-cream/60 block mb-1">密码</label>
+                    <input type="password" id="reg-password" placeholder="游戏内登录密码" class="w-full px-3 py-2 bg-forest-900/60 border border-cream/20 rounded-lg text-sm focus:outline-none focus:border-gold-400 transition-colors">
+                </div>
+                <div>
+                    <label class="text-xs text-cream/60 block mb-1">图形验证码</label>
+                    <div class="flex items-center gap-3">
+                        <img id="captcha-image" src="" alt="验证码" class="h-12 rounded-lg cursor-pointer border border-cream/20" onclick="refreshCaptcha()">
+                        <input type="text" id="reg-captcha" placeholder="输入验证码" maxlength="6" class="flex-1 px-3 py-2 bg-forest-900/60 border border-cream/20 rounded-lg text-sm focus:outline-none focus:border-gold-400 transition-colors">
+                        <input type="hidden" id="reg-captcha-id" value="">
+                    </div>
+                </div>
+                <button type="submit" class="px-5 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 text-sm rounded-lg transition-colors border border-blue-500/30">
+                    <i data-lucide="send" class="w-4 h-4 inline mr-1"></i>提交申请
+                </button>
+            </form>
+        </div>
+
+        <!-- 消息提示 -->
+        <div id="message" class="hidden fixed top-4 right-4 z-50 px-5 py-3 rounded-xl text-sm shadow-lg"></div>
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_script %}
+<script>
+(function() {
+    const msgEl = document.getElementById('message');
+
+    function showMsg(text, isError) {
+        msgEl.textContent = text;
+        msgEl.className = 'fixed top-4 right-4 z-50 px-5 py-3 rounded-xl text-sm shadow-lg ' +
+            (isError ? 'bg-red-900/80 border border-red-500/30 text-red-200' : 'bg-green-900/80 border border-green-500/30 text-green-200');
+        msgEl.classList.remove('hidden');
+        setTimeout(function() { msgEl.classList.add('hidden'); }, 4000);
+    }
+
+    function refreshCaptcha() {
+        fetch('/api/captcha/generate')
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                if (d.success) {
+                    document.getElementById('captcha-image').src = d.image;
+                    document.getElementById('reg-captcha-id').value = d.captcha_id;
+                }
+            });
+    }
+
+    // 加载验证码
+    refreshCaptcha();
+
+    // 绑定
+    document.getElementById('bind-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        var username = document.getElementById('bind-username').value.trim();
+        if (!username) { showMsg('请输入 MC 用户名', true); return; }
+
+        fetch('/game-accounts/api/bind', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ mc_username: username }),
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            showMsg(d.message, !d.success);
+            if (d.success) { setTimeout(function() { location.reload(); }, 1000); }
+        });
+    });
+
+    // 解绑
+    document.querySelectorAll('.btn-unbind').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            if (!confirm('确认解绑 ' + this.dataset.username + ' ？')) return;
+            fetch('/game-accounts/api/unbind', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ mc_username: this.dataset.username }),
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                showMsg(d.message, !d.success);
+                if (d.success) { setTimeout(function() { location.reload(); }, 1000); }
+            });
+        });
+    });
+
+    // 改密码
+    document.querySelectorAll('.btn-change-pwd').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var username = this.dataset.username;
+            var newPwd = prompt('请输入 ' + username + ' 的新密码（至少 4 位）：');
+            if (!newPwd || newPwd.length < 4) { showMsg('密码至少 4 位', true); return; }
+            fetch('/game-accounts/api/change-password', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({ mc_username: username, new_password: newPwd }),
+            })
+            .then(function(r) { return r.json(); })
+            .then(function(d) { showMsg(d.message, !d.success); });
+        });
+    });
+
+    // 申请注册
+    document.getElementById('register-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        var username = document.getElementById('reg-username').value.trim();
+        var password = document.getElementById('reg-password').value;
+        var captcha = document.getElementById('reg-captcha').value.trim();
+        var captchaId = document.getElementById('reg-captcha-id').value;
+
+        if (!username) { showMsg('请输入 MC 用户名', true); return; }
+        if (!password || password.length < 4) { showMsg('密码至少 4 位', true); return; }
+        if (!captcha) { showMsg('请完成验证码', true); return; }
+
+        fetch('/game-accounts/api/apply-register', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ mc_username: username, password: password, captcha_id: captchaId, captcha: captcha }),
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            showMsg(d.message, !d.success);
+            if (d.success) {
+                document.getElementById('reg-username').value = '';
+                document.getElementById('reg-password').value = '';
+                document.getElementById('reg-captcha').value = '';
+                refreshCaptcha();
+            } else {
+                refreshCaptcha();
+            }
+        });
+    });
+})();
+</script>
+{% endblock %}

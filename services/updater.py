@@ -9,15 +9,13 @@
 
 import os
 import sys
-import re
-import json
 import time
 import shutil
 import tempfile
 import zipfile
 import threading
 import subprocess
-import shlex
+import concurrent.futures
 from collections import deque
 from urllib.request import urlopen, Request
 from urllib.error import URLError, HTTPError
@@ -31,10 +29,8 @@ from config import APP_ROOT
 # GitHub 归档路径格式
 REPO_ARCHIVE_PATH = 'kute0213/bhxz/archive/refs/heads/main.zip'
 
-# 下载 URL 格式（按优先级排列）
-# 需要依次尝试 proxy_base 拼接 archive_path 的多种格式组合
+# 下载 URL 模板（proxy_base 替换为实际代理地址）
 DOWNLOAD_URL_FORMATS = [
-    '{proxy_base}{archive_path}',
     '{proxy_base}{archive_path}',
 ]
 
@@ -42,7 +38,6 @@ DOWNLOAD_URL_FORMATS = [
 DEFAULT_PROXIES = [
     ('cdn.jsdelivr.net', 'https://cdn.jsdelivr.net/gh/', 'https://cdn.jsdelivr.net/gh/{repo}'),
     ('ghp.ci', 'https://ghp.ci/https://github.com/', 'https://ghp.ci/https://github.com/{repo}'),
-    ('ghproxy.net', 'https://ghproxy.net/https://github.com/', 'https://ghproxy.net/https://github.com/{repo}'),
     ('ghproxy.com', 'https://ghproxy.com/https://github.com/', 'https://ghproxy.com/https://github.com/{repo}'),
     ('kkgithub.com', 'https://kkgithub.com/https://github.com/', 'https://kkgithub.com/https://github.com/{repo}'),
     ('gh.llkk.cc', 'https://gh.llkk.cc/https://github.com/', 'https://gh.llkk.cc/https://github.com/{repo}'),
@@ -80,9 +75,6 @@ _update_state = {
     'events': deque(maxlen=5000),
     'lock': threading.Lock(),
 }
-
-_proxy_test_results = []
-_proxy_test_lock = threading.Lock()
 
 # ---------------------------------------------------------------------------
 # 公共 API
@@ -321,8 +313,6 @@ def _detect_fastest_proxy(proxy_list, timeout=3):
 
     分批检测（每批 8 个），找到 3 个可用后提前结束。
     """
-    import concurrent.futures
-
     available = []
     batch_size = 8
     early_stop_count = 3
@@ -362,15 +352,13 @@ def _detect_fastest_proxy(proxy_list, timeout=3):
 
 def _test_proxy(name, base_url, timeout):
     """测试单个代理的延迟。"""
-    import urllib.request
-
     test_url = f'{base_url}https://github.com/'
     try:
         start = time.time()
-        req = urllib.request.Request(test_url, headers={
+        req = Request(test_url, headers={
             'User-Agent': 'Mozilla/5.0',
         })
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with urlopen(req, timeout=timeout) as resp:
             elapsed = time.time() - start
             if resp.status == 200:
                 return elapsed
@@ -457,37 +445,11 @@ def _run_update():
 
         available_proxies = detect_fastest_proxy(proxy_list=proxy_list, timeout=3)
 
-        # 记录详细结果
-        success_count = 0
-        fail_count = 0
-        success_details = []
-        fail_details = []
-        with _proxy_test_lock:
-            for r in _proxy_test_results:
-                if r['status'] == 'success':
-                    success_count += 1
-                    success_details.append(f'{r["name"]}({r["elapsed"]})')
-                else:
-                    fail_count += 1
-                    fail_details.append(f'{r["name"]}({r["error"][:30]})')
-
-        if success_details:
-            _add_event('log', {'message': f'║  ✓ 可用代理 ({success_count}): {", ".join(success_details[:6])}'})
-            if len(success_details) > 6:
-                _add_event('log', {'message': f'║    ... 还有 {len(success_details) - 6} 个可用'})
-        if fail_details:
-            _add_event('log', {'message': f'║  ✗ 不可用: {fail_count} 个（{fail_details[0]}）'})
-        _add_event('log', {'message': f'╚══ 代理检测完成：可用 {success_count} 个，不可用 {fail_count} 个'})
+        # 记录可用代理数量
+        _add_event('log', {'message': f'╚══ 代理检测完成：可用 {len(available_proxies)} 个'})
 
         if not available_proxies:
-            err_details = []
-            with _proxy_test_lock:
-                for r in _proxy_test_results:
-                    err_details.append(f'{r["name"]}: {r["error"]}')
-            err_msg = '所有 GitHub 代理均不可达，请检查网络连接或稍后重试'
-            if err_details:
-                err_msg += '\n' + '\n'.join(err_details[:5])
-            raise RuntimeError(err_msg)
+            raise RuntimeError('所有 GitHub 代理均不可达，请检查网络连接或稍后重试')
 
         rank_parts = [f'{i+1}. {n} ({e:.1f}s)' for i, (n, *_, e) in enumerate(available_proxies[:5])]
         _add_event('log', {'message': f'→ 代理速度排名: {"; ".join(rank_parts)}'})

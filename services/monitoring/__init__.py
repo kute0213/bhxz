@@ -3,10 +3,12 @@
 from services.monitoring.cpu import get_cpu_usage, get_cpu_temperature
 from services.monitoring.memory import get_memory_info
 from services.monitoring.system import get_system_info
+from services.monitoring.tracker import performance_tracker
 
 __all__ = [
     'get_cpu_usage',
     'get_cpu_temperature',
     'get_memory_info',
     'get_system_info',
+    'performance_tracker',
 ]

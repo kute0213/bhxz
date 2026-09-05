@@ -90,8 +90,6 @@ def api_get_settings():
 @admin_required
 def api_save_settings():
     """保存一个或多个设置。"""
-    user = _admin_check()
-
     data = request.get_json() or {}
     items = data.get('items', [])
 

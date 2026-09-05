@@ -68,16 +68,49 @@ python scripts/build/package.py
 ```
 /workspace
 ├── app.py / config.py / requirements.txt   # 入口、配置、依赖
-├── core/         # 基础设施层（DB/认证/中间件）
+├── core/         # 基础设施层（DB/认证/中间件/服务器）
+│   ├── db/             # 数据库连接与 schema
+│   ├── auth.py         # 认证装饰器、密码哈希
+│   ├── middleware.py   # 请求中间件
+│   └── ...             # 模板上下文、服务器、CSRF、日志
 ├── services/     # 业务逻辑层（纯 Python，不依赖 Flask）
+│   ├── backup/         # 数据库备份与恢复
+│   ├── email/          # 异步邮件发送
+│   ├── game_accounts/  # 游戏账号绑定与注册申请
+│   ├── logging/        # 日志自动清理
+│   ├── monitoring/     # CPU/内存/系统/性能追踪（后台线程采集）
+│   ├── rcon/           # RCON 连接管理、玩家列表追踪、EasyAuth 指令
+│   ├── terminal/       # 持久终端会话（PTY）
+│   └── ...             # 其他单文件服务（附件/背景/验证码/限流/调度/设置/更新等）
 ├── routes/       # HTTP 路由层（Flask Blueprint）
+│   ├── admin/          # 管理后台（用户/备份/设置/日志/更新/游戏账号/指南/音乐/讨论等）
+│   ├── api/            # 公开 API（性能/统计/验证码/邮箱）
+│   ├── backgrounds/    # 背景图片页面
+│   ├── community/      # 社区留言板
+│   ├── discussion/     # 讨论区（页面+API）
+│   ├── docs/           # 文档页面
+│   ├── game_accounts/  # 游戏账号绑定与注册
+│   ├── guides/         # 服务器指南（页面+API）
+│   ├── main/           # 主站（登录/注册/设置/音乐）
+│   ├── public/         # 公开文件服务
+│   ├── scheduled/      # 定时任务管理
+│   └── script/         # 脚本控制台（页面+终端+命令）
 ├── templates/    # Jinja2 模板
+│   ├── admin/          # 管理后台页面
+│   ├── backgrounds/    # 背景图片页面
+│   ├── discussion/     # 讨论区页面
+│   ├── emails/         # 邮件模板
+│   ├── game_accounts/  # 游戏账号页面
+│   ├── guides/         # 服务器指南页面
+│   ├── macros/         # 通用模板宏（模态框/编辑/进度条/音乐）
+│   ├── music/          # 大喇叭音频页面
+│   └── ...             # 基础页面（首页/登录/注册/设置/404/403）
 ├── static/       # 静态资源（CSS/JS/本地化第三方库）
 ├── docs/         # 项目文档
 ├── scripts/      # 构建（build/）与测试（tests/）
 ├── uploads/      # 运行期上传数据
 │   ├── attachments/    # 留言板/讨论区附件
-│   ├── backgrounds/    # 全站背景图片（bg_16_9.jpg 等）
+│   ├── backgrounds/    # 全站背景图片
 │   ├── community/      # 社区资源
 │   └── music/          # 大喇叭音频（每个音频一个 ID 目录，含 m3u8、ts 分片与唱片 MP3）
 ├── backups/      # 数据库备份
@@ -95,18 +128,19 @@ python scripts/build/package.py
 - 邮箱唯一性约束（一个邮箱仅可注册一个账号）
 
 ### 管理后台
-- 用户管理、访问日志、模组介绍管理
+- 用户管理、模组介绍管理
 - 服务器指南 CRUD + 审核工作流 + 编辑封禁
 - 讨论区管理（帖子置顶/锁定/删除 + 分类管理）
 - 大喇叭音频管理（公开申请审核、查看全部音频、一键下架）
 - 管理中心数据统计（含大喇叭音频总数与待审核数量）
 - 脚本控制台（实时终端 + 快捷命令 + 定时任务）
-- 系统设置（在线编辑，热重载，含网站图标选择、日志等级、背景图片开关）
+- 系统设置（在线编辑，热重载，含网站图标选择、日志等级、背景图片开关、RCON 配置、MC 游戏文件夹）
 - 系统日志（实时查看，SSE 推送，支持等级过滤、自动滚动）
-- 数据库备份（手动/自动，进度条）
+- 数据库备份（手动/自动，进度条，一键恢复）
 - 公开文件管理
 - 广播邮件（富文本所见即所得编辑器 + 白名单 HTML 清洗，安全防 XSS）
 - 一键更新（从 GitHub 自动拉取 + 实时进度条 + 自动重启）
+- 游戏账号管理（注册申请审批、封禁列表管理）
 
 ### 服务器指南
 - 卡片式列表页，支持置顶与按标题自动排序
@@ -146,6 +180,18 @@ python scripts/build/package.py
 ### 服务器性能监控
 - CPU 使用率/温度、内存占用、运行时间
 - 公开页面，无需登录即可查看
+- 后台线程每 5 秒自动采集数据并缓存，前端轮询读取
+
+### Minecraft 在线玩家
+- 通过 RCON 连接 Minecraft 服务器，实时获取在线玩家列表
+- 后台线程每 5 秒执行 `/list` 命令，缓存结果
+- 支持系统设置中配置 RCON 地址、端口、密码
+
+### 游戏账号管理
+- 用户可绑定一或多个 MC 账号到网站账户
+- 绑定后可在线修改 MC 账号密码（通过 RCON + EasyAuth）
+- 申请注册 MC 游戏账号（需图形验证码 + 管理员审批）
+- 管理员可批准/驳回申请，封禁恶意账号
 
 ### 文档系统
 - Markdown 文档渲染（marked.js）
@@ -222,12 +268,35 @@ export ENABLE_SSL=1 && python app.py
 
 | 端点 | 说明 |
 |------|------|
-| `GET /api/performance` | 服务器性能数据（CPU/内存/运行时间） |
+| `GET /api/performance` | 服务器性能数据（CPU/内存/运行时间/在线玩家） |
 | `GET /api/stats` | 网站统计数据 |
 | `GET /api/captcha/generate` | 生成图形验证码 |
 | `POST /api/captcha/verify` | 验证图形验证码 |
 | `POST /api/email/send-code` | 发送邮箱验证码 |
 | `GET /api/email/check-enabled` | 检查邮件功能是否启用 |
+
+### 游戏账号 API（需登录）
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/game-accounts/` | 游戏账号首页（已绑定列表） |
+| POST | `/game-accounts/api/bind` | 绑定 MC 账号 |
+| POST | `/game-accounts/api/unbind` | 解绑 MC 账号 |
+| GET | `/game-accounts/api/bound` | 获取已绑定账号列表 |
+| POST | `/game-accounts/api/change-password` | 修改绑定的 MC 账号密码 |
+| POST | `/game-accounts/api/apply-register` | 申请注册 MC 游戏账号（需验证码） |
+
+### 游戏账号管理 API（管理员）
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/admin/game-accounts` | 游戏账号管理页面 |
+| GET | `/admin/api/game-accounts/applications` | 获取注册申请列表 |
+| POST | `/admin/api/game-accounts/applications/<id>/approve` | 批准申请（自动 RCON 注册） |
+| POST | `/admin/api/game-accounts/applications/<id>/reject` | 驳回申请 |
+| GET | `/admin/api/game-accounts/bans` | 获取封禁列表 |
+| POST | `/admin/api/game-accounts/bans` | 封禁账号申请资格 |
+| DELETE | `/admin/api/game-accounts/bans/<username>` | 解除封禁 |
 
 ### 社区 AJAX 端点
 
@@ -381,48 +450,69 @@ workspace/
 ├── core/                     # 基础设施层
 │   ├── db/                   #   数据库连接与 schema
 │   ├── auth.py               #   认证装饰器、密码哈希
-│   └── middleware.py         #   请求中间件（访问日志 + 公共文件 + 安全响应标头）
-├── services/                 # 业务逻辑层
-│   ├── user_service.py       #   用户注册/登录/改密
+│   ├── middleware.py         #   请求中间件（访问日志 + 公共文件 + 安全响应标头）
+│   ├── csrf.py               #   CSRF 保护
+│   ├── logger.py             #   日志基础
+│   ├── server.py             #   WSGI 服务器与优雅关闭
+│   ├── template_context.py   #   模板全局变量
+│   └── init.py               #   应用初始化
+├── services/                 # 业务逻辑层（纯 Python，不依赖 Flask）
+│   ├── backup/               #   数据库备份与恢复
+│   ├── email/                #   异步邮件发送
+│   ├── game_accounts/        #   游戏账号绑定与注册申请
+│   ├── logging/              #   日志写入与清理
+│   ├── monitoring/           #   系统监控（CPU/内存/系统/性能追踪）
+│   ├── rcon/                 #   RCON 连接管理、玩家列表追踪、EasyAuth 指令
+│   ├── terminal/             #   持久终端会话（PTY）
 │   ├── attachment_service.py #   附件上传/清理
-│   ├── discussion_service.py #   讨论区帖子管理
-│   ├── music_service.py      #   大喇叭音频上传/转码/删除
+│   ├── background_service.py #   背景图片业务
 │   ├── captcha.py            #   图形验证码
-│   ├── ratelimit.py          #   IP 频率限制
-│   ├── logger.py             #   操作日志
+│   ├── cmd_runner.py         #   命令执行流
+│   ├── discussion_service.py #   讨论区帖子管理
+│   ├── ip.py                 #   IP 工具
+│   ├── music_service.py      #   大喇叭音频上传/转码/删除
 │   ├── process_manager.py    #   子进程生命周期管理
 │   ├── process_utils.py      #   子进程工具（编码/缓冲/环境变量）
-│   ├── shell.py              #   跨平台 shell 检测
+│   ├── ratelimit.py          #   IP 频率限制
 │   ├── scheduler.py          #   定时任务调度器
 │   ├── settings_manager.py   #   系统设置管理
+│   ├── shell.py              #   跨平台 shell 检测
+│   ├── sitemap_cache.py      #   Sitemap 缓存
 │   ├── updater.py            #   自动更新
-│   ├── cmd_runner.py         #   命令执行流
-│   ├── email/                #   邮件服务
-│   ├── backup/               #   数据库备份
-│   ├── logging/              #   日志写入与清理
-│   ├── monitoring/           #   系统监控
-│   └── terminal/             #   持久终端会话
+│   └── user_service.py       #   用户注册/登录/改密
 ├── routes/                   # HTTP 路由层
-│   ├── main/                 #   首页、登录、注册、设置
+│   ├── main/                 #   首页、登录、注册、设置、音乐
+│   ├── admin/                #   管理后台（用户/备份/设置/日志/更新/游戏账号/指南/音乐/讨论/广播/背景等）
+│   ├── api/                  #   JSON API（性能/统计/验证码/邮箱）
+│   ├── backgrounds/          #   背景图片页面
+│   ├── community/            #   社区留言板
+│   ├── discussion/           #   讨论区（页面+API）
 │   ├── docs/                 #   文档页面
+│   ├── game_accounts/        #   游戏账号绑定与注册
+│   ├── guides/               #   服务器指南（页面+API）
 │   ├── public/               #   公开文件服务
-│   ├── admin/                #   管理后台
-│   ├── api/                  #   JSON API
-│   ├── script/               #   脚本控制台
-│   ├── discussion/           #   讨论区
-│   ├── guides/               #   服务器指南
-│   └── scheduled/            #   定时任务管理
+│   ├── scheduled/            #   定时任务管理
+│   ├── script/               #   脚本控制台（页面+终端+命令）
+│   ├── registry.py           #   蓝图注册中心
+│   └── sitemap.py            #   站点地图
 ├── static/                   # 静态资源（CSS/JS）
 │   ├── css/                  #   样式（tailwind/base）
-│   ├── js/                   #   脚本（base/main/script）
+│   ├── js/                   #   脚本（base/main/script/音乐/终端）
 │   └── lib/                  #   本地化第三方库（构建生成）
 ├── templates/                # Jinja2 模板
-│   ├── macros/               #   通用模板宏（进度条等）
-│   └── ...                   #   页面模板
+│   ├── admin/                #   管理后台页面
+│   ├── backgrounds/          #   背景图片页面
+│   ├── discussion/           #   讨论区页面
+│   ├── emails/               #   邮件模板
+│   ├── game_accounts/        #   游戏账号页面
+│   ├── guides/               #   服务器指南页面
+│   ├── macros/               #   通用模板宏（模态框/编辑器/进度条/音乐）
+│   ├── music/                #   大喇叭音频页面
+│   └── ...                   #   基础页面
 ├── docs/                     # 项目文档
 └── scripts/
     ├── build/                #   构建脚本
-    └── tests/                #   自动化测试
+    └── ...                   #   工具脚本
 ```
 
 ### 技术栈

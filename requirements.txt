@@ -9,3 +9,4 @@ python-dotenv>=1.0.0,<2.0.0
 pygments>=2.16.0
 pywinpty>=2.0.5; sys_platform == 'win32'
 mcrcon>=0.7.0
+cryptography>=41.0.0

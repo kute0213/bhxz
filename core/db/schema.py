@@ -297,6 +297,42 @@ def init_db():
                 created_at VARCHAR NOT NULL
             )
         '''),
+        # 游戏账号绑定表
+        ('game_account_bindings', '''
+            CREATE SEQUENCE IF NOT EXISTS game_account_bindings_id_seq START 1;
+            CREATE TABLE IF NOT EXISTS game_account_bindings (
+                id INTEGER PRIMARY KEY DEFAULT nextval('game_account_bindings_id_seq'),
+                user_id INTEGER NOT NULL,
+                mc_username VARCHAR NOT NULL UNIQUE,
+                created_at VARCHAR NOT NULL
+            )
+        '''),
+        # 游戏账号注册申请表
+        ('game_account_registrations', '''
+            CREATE SEQUENCE IF NOT EXISTS game_account_registrations_id_seq START 1;
+            CREATE TABLE IF NOT EXISTS game_account_registrations (
+                id INTEGER PRIMARY KEY DEFAULT nextval('game_account_registrations_id_seq'),
+                user_id INTEGER NOT NULL,
+                mc_username VARCHAR NOT NULL,
+                encrypted_password VARCHAR NOT NULL,
+                status VARCHAR NOT NULL DEFAULT 'pending',
+                reject_reason VARCHAR DEFAULT '',
+                reviewed_by INTEGER DEFAULT NULL,
+                reviewed_at VARCHAR DEFAULT NULL,
+                created_at VARCHAR NOT NULL
+            )
+        '''),
+        # 游戏账号封禁表
+        ('game_account_bans', '''
+            CREATE SEQUENCE IF NOT EXISTS game_account_bans_id_seq START 1;
+            CREATE TABLE IF NOT EXISTS game_account_bans (
+                id INTEGER PRIMARY KEY DEFAULT nextval('game_account_bans_id_seq'),
+                mc_username VARCHAR NOT NULL UNIQUE,
+                reason VARCHAR DEFAULT '',
+                created_at VARCHAR NOT NULL,
+                created_by INTEGER DEFAULT NULL
+            )
+        '''),
     ]
 
     for table_name, ddl in tables:

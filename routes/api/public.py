@@ -3,28 +3,31 @@
 from datetime import datetime, timezone
 from flask import Blueprint, jsonify
 from core.db import get_db
-from services.monitoring import (
-    get_cpu_usage, get_cpu_temperature, get_memory_info, get_system_info
-)
+from services.monitoring import performance_tracker
 from services.rcon import player_tracker
 
 api_bp = Blueprint('api', __name__, url_prefix='/api')
 
 
 # ---------------------------------------------------------------------------
-# 性能监控
+# 性能监控（从后台缓存读取，每 5 秒自动更新）
 # ---------------------------------------------------------------------------
 
 @api_bp.route('/performance')
 def api_performance():
-    """获取系统性能数据（CPU、内存、温度、运行时间）。公开访问。"""
+    """获取系统性能数据（CPU、内存、温度、运行时间）。公开访问。
+
+    数据由后台 PerformanceTracker 每 5 秒自动采集并缓存。
+    """
+    perf = performance_tracker.get_performance_data()
+
     return jsonify({
-        'cpu_usage': get_cpu_usage(),
-        'cpu_temp': get_cpu_temperature(),
-        'memory': get_memory_info(),
-        'system': get_system_info(),
+        'cpu_usage': perf.cpu_usage,
+        'cpu_temp': perf.cpu_temp,
+        'memory': perf.memory,
+        'system': perf.system,
         'players': _get_player_data(),
-        'timestamp': datetime.now(timezone.utc).astimezone().strftime(
+        'timestamp': perf.timestamp or datetime.now(timezone.utc).astimezone().strftime(
             '%Y-%m-%d %H:%M:%S %z'
         ),
     })

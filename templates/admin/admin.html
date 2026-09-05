@@ -130,6 +130,15 @@
                         <span class="inline-block mt-4 text-gold-400 text-sm font-medium">进入管理 →</span>
                     </a>
 
+                    <a href="{{ url_for('admin.admin_logs_page') }}" class="pixel-card rounded-xl p-6 block hover:no-underline">
+                        <div class="w-12 h-12 mb-4 bg-gold-400/20 rounded-xl flex items-center justify-center">
+                            <i data-lucide="scroll-text" class="w-6 h-6 text-gold-400"></i>
+                        </div>
+                        <h3 class="text-lg font-bold mb-2">系统日志</h3>
+                        <p class="text-cream/60 text-sm">实时查看应用运行日志，支持等级筛选</p>
+                        <span class="inline-block mt-4 text-gold-400 text-sm font-medium">查看日志 →</span>
+                    </a>
+
                     <a href="{{ url_for('admin.admin_settings_page') }}" class="pixel-card rounded-xl p-6 block hover:no-underline">
                         <div class="w-12 h-12 mb-4 bg-gold-400/20 rounded-xl flex items-center justify-center">
                             <i data-lucide="sliders" class="w-6 h-6 text-gold-400"></i>
@@ -181,6 +190,15 @@
                         </div>
                         <h3 class="text-lg font-bold mb-2">背景图片管理</h3>
                         <p class="text-cream/60 text-sm">审核用户上传的背景图片，启用/停用</p>
+                        <span class="inline-block mt-4 text-gold-400 text-sm font-medium">进入管理 →</span>
+                    </a>
+
+                    <a href="{{ url_for('admin.admin_game_accounts') }}" class="pixel-card rounded-xl p-6 block hover:no-underline">
+                        <div class="w-12 h-12 mb-4 bg-gold-400/20 rounded-xl flex items-center justify-center">
+                            <i data-lucide="gamepad-2" class="w-6 h-6 text-gold-400"></i>
+                        </div>
+                        <h3 class="text-lg font-bold mb-2">游戏账号管理</h3>
+                        <p class="text-cream/60 text-sm">审批注册申请、管理封禁列表</p>
                         <span class="inline-block mt-4 text-gold-400 text-sm font-medium">进入管理 →</span>
                     </a>
 

@@ -281,6 +281,9 @@ SETTINGS_REGISTRY = [
     ('RCON_PORT', 25575, 'int', 'RCON 端口', 'Minecraft 服务器的 RCON 端口号，默认 25575', 'RCON 配置'),
     ('RCON_PASSWORD', '', 'password', 'RCON 密码', 'Minecraft 服务器的 RCON 密码（不会明文显示）', 'RCON 配置'),
 
+    # MC 游戏目录
+    ('MC_GAME_FOLDER', '', 'str', 'MC 游戏文件夹', 'Minecraft 服务器游戏目录的绝对路径（如 /home/mc/server），暂未使用', 'RCON 配置'),
+
     # 网站备案
     ('SHOW_BEIAN', False, 'bool', '显示工信部/公安备案号', '开启后所有页面底部显示备案号信息', '网站备案'),
     ('ICP_BEIAN', '', 'str', '工信部备案号', '如：鄂ICP备2026045257号', '网站备案'),

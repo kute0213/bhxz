@@ -179,6 +179,10 @@
                     <i data-lucide="settings" class="w-5 h-5"></i>
                     <span>账户设置</span>
                 </a>
+                <a href="{{ url_for('game_accounts.index') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors">
+                    <i data-lucide="gamepad-2" class="w-5 h-5"></i>
+                    <span>游戏账号</span>
+                </a>
                 {% if user and user.is_admin %}
                 <a href="{{ url_for('admin.admin_page') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors">
                     <i data-lucide="settings-2" class="w-5 h-5"></i>

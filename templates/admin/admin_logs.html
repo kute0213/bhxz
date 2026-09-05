@@ -1,0 +1,179 @@
+{% extends "base.html" %}
+{% block title %}日志查看{% endblock %}
+{% block content %}
+<section class="page-container py-12">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="mb-8">
+            <a href="{{ url_for('admin.admin_page') }}" class="text-gold-400 hover:text-gold-300 text-sm mb-2 inline-block">
+                <i data-lucide="arrow-left" class="w-4 h-4 inline mr-1"></i>返回管理中心
+            </a>
+            <h1 class="text-xl sm:text-2xl font-bold">系统日志</h1>
+            <p class="text-cream/60 text-sm mt-1">实时查看应用运行日志</p>
+        </div>
+
+        <!-- 控制栏 -->
+        <div class="pixel-card rounded-xl p-4 mb-4">
+            <div class="flex flex-wrap items-center gap-3">
+                <div class="flex items-center gap-2">
+                    <label class="text-sm text-cream/60">等级筛选：</label>
+                    <select id="log-level-filter" class="px-3 py-1.5 bg-forest-900/60 border border-cream/20 rounded-lg text-sm focus:outline-none focus:border-gold-400 transition-colors">
+                        <option value="">全部</option>
+                        <option value="DEBUG">DEBUG</option>
+                        <option value="INFO">INFO</option>
+                        <option value="WARNING">WARNING</option>
+                        <option value="ERROR">ERROR</option>
+                        <option value="CRITICAL">CRITICAL</option>
+                    </select>
+                </div>
+                <div class="flex items-center gap-2 ml-auto">
+                    <span id="log-count" class="text-xs text-cream/50">0 条</span>
+                    <button id="btn-clear-logs" class="px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-300 text-sm rounded-lg transition-colors border border-red-500/30">
+                        <i data-lucide="trash-2" class="w-4 h-4 inline mr-1"></i>清空
+                    </button>
+                    <button id="btn-auto-scroll" class="px-3 py-1.5 bg-gold-400/20 hover:bg-gold-400/30 text-gold-300 text-sm rounded-lg transition-colors border border-gold-400/30">
+                        <i data-lucide="arrow-down-to-line" class="w-4 h-4 inline mr-1"></i>自动滚动
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 日志容器 -->
+        <div class="pixel-card rounded-xl p-4">
+            <div id="log-container" class="bg-forest-950/80 rounded-xl p-4 font-mono text-xs leading-relaxed overflow-y-auto" style="max-height: 70vh; min-height: 400px;">
+                <div class="text-cream/40 text-center py-8">加载中...</div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_script %}
+<script>
+(function() {
+    const container = document.getElementById('log-container');
+    const levelFilter = document.getElementById('log-level-filter');
+    const logCount = document.getElementById('log-count');
+    const btnClear = document.getElementById('btn-clear-logs');
+    const btnAutoScroll = document.getElementById('btn-auto-scroll');
+
+    let autoScroll = true;
+    let eventSource = null;
+    let entries = [];
+    let currentLevel = '';
+
+    // 日志等级颜色映射
+    const LEVEL_COLORS = {
+        'DEBUG': 'text-gray-400',
+        'INFO': 'text-blue-300',
+        'WARNING': 'text-yellow-300',
+        'ERROR': 'text-red-400',
+        'CRITICAL': 'text-red-500 font-bold',
+    };
+
+    // 渲染日志
+    function render() {
+        const filtered = currentLevel
+            ? entries.filter(e => e.level === currentLevel)
+            : entries;
+        if (filtered.length === 0) {
+            container.innerHTML = '<div class="text-cream/40 text-center py-8">暂无日志</div>';
+            logCount.textContent = '0 条';
+            return;
+        }
+        let html = '';
+        for (const e of filtered) {
+            const colorClass = LEVEL_COLORS[e.level] || 'text-cream';
+            html += `<div class="hover:bg-forest-800/40 px-2 py-0.5 rounded ${colorClass}">${escapeHtml(e.line)}</div>`;
+        }
+        container.innerHTML = html;
+        logCount.textContent = filtered.length + ' 条';
+        if (autoScroll) {
+            container.scrollTop = container.scrollHeight;
+        }
+    }
+
+    // 加载初始日志
+    function loadInitial() {
+        const url = '{{ url_for("admin.api_get_logs") }}?tail=500';
+        fetch(url)
+            .then(r => r.json())
+            .then(data => {
+                if (data.success && data.entries) {
+                    entries = data.entries;
+                    render();
+                }
+            })
+            .catch(() => {});
+    }
+
+    // 连接 SSE
+    function connectSSE() {
+        if (eventSource) {
+            eventSource.close();
+        }
+        eventSource = new EventSource('{{ url_for("admin.api_log_stream") }}');
+        eventSource.addEventListener('connected', function() {
+            // 连接建立后重新加载全量日志
+            loadInitial();
+        });
+        eventSource.onmessage = function(e) {
+            try {
+                const entry = JSON.parse(e.data);
+                entries.push(entry);
+                // 保持最多 2000 条
+                if (entries.length > 2000) {
+                    entries = entries.slice(-2000);
+                }
+                render();
+            } catch(err) {}
+        };
+        eventSource.onerror = function() {
+            // 断线重连
+            eventSource.close();
+            setTimeout(connectSSE, 3000);
+        };
+    }
+
+    // 等级筛选
+    levelFilter.addEventListener('change', function() {
+        currentLevel = this.value;
+        render();
+    });
+
+    // 清空
+    btnClear.addEventListener('click', function() {
+        if (!confirm('确认清空所有日志？')) return;
+        fetch('{{ url_for("admin.api_clear_logs") }}', { method: 'POST' })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    entries = [];
+                    render();
+                }
+            })
+            .catch(() => {});
+    });
+
+    // 自动滚动切换
+    btnAutoScroll.addEventListener('click', function() {
+        autoScroll = !autoScroll;
+        this.classList.toggle('bg-gold-400/20', autoScroll);
+        this.classList.toggle('bg-gold-400/20', !autoScroll);
+        if (autoScroll) {
+            container.scrollTop = container.scrollHeight;
+        }
+    });
+
+    // HTML 转义
+    function escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    // 初始化
+    loadInitial();
+    connectSSE();
+})();
+</script>
+{% endblock %}

@@ -2,240 +2,279 @@
 {% from "macros/progress.html" import progress_track %}
 {% block title %}服务器状态{% endblock %}
 {% block content %}
-    <section class="page-container py-12">
-        <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="text-center mb-10">
-                <h1 class="text-2xl sm:text-3xl font-bold mb-3">服务器状态</h1>
-                <p class="text-cream/60">实时查看服务器运行状态</p>
-            </div>
+<section class="page-container py-12">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
 
-            <!-- 系统信息卡片 -->
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-                <div class="pixel-card rounded-xl p-5 text-center">
-                    <i data-lucide="server" class="w-8 h-8 text-gold-400 mx-auto mb-3"></i>
-                    <div class="text-cream/60 text-sm mb-1">操作系统</div>
-                    <div id="sys-os" class="text-lg font-bold text-cream">--</div>
-                </div>
-                <div class="pixel-card rounded-xl p-5 text-center">
-                    <i data-lucide="clock" class="w-8 h-8 text-gold-400 mx-auto mb-3"></i>
-                    <div class="text-cream/60 text-sm mb-1">运行时间</div>
-                    <div id="sys-uptime" class="text-lg font-bold text-cream">--</div>
-                </div>
-                <div class="pixel-card rounded-xl p-5 text-center">
-                    <i data-lucide="cpu" class="w-8 h-8 text-gold-400 mx-auto mb-3"></i>
-                    <div class="text-cream/60 text-sm mb-1">CPU使用率</div>
-                    <div class="text-2xl font-bold" id="cpu-usage">--%</div>
-                </div>
-                <div class="pixel-card rounded-xl p-5 text-center">
-                    <i data-lucide="thermometer" class="w-8 h-8 text-gold-400 mx-auto mb-3"></i>
-                    <div class="text-cream/60 text-sm mb-1">CPU温度</div>
-                    <div class="text-2xl font-bold" id="cpu-temp">--</div>
-                </div>
-            </div>
-
-            <!-- CPU进度条 -->
-            <div class="pixel-card rounded-xl p-6 mb-6">
-                <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
-                    <span class="text-cream/80 font-medium">CPU 负载</span>
-                    <span id="cpu-usage-text" class="text-gold-400 font-bold">--%</span>
-                </div>
-                {{ progress_track(id='cpu-bar', variant='green', size='lg') }}
-            </div>
-
-            <!-- 内存信息 -->
-            <div class="pixel-card rounded-xl p-6">
-                <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
-                    <span class="text-cream/80 font-medium">
-                        <i data-lucide="hard-drive" class="w-4 h-4 inline mr-2 text-gold-400"></i>内存使用
-                    </span>
-                    <span id="mem-text" class="text-cream/60 text-sm">--</span>
-                </div>
-                {{ progress_track(id='mem-bar', variant='blue', size='lg') }}
-                <div class="grid grid-cols-3 gap-4 mt-4 text-center">
-                    <div>
-                        <div class="text-cream/60 text-xs mb-1">总内存</div>
-                        <div id="mem-total" class="font-bold text-cream">--</div>
-                    </div>
-                    <div>
-                        <div class="text-cream/60 text-xs mb-1">已用</div>
-                        <div id="mem-used" class="font-bold text-cream">--</div>
-                    </div>
-                    <div>
-                        <div class="text-cream/60 text-xs mb-1">可用</div>
-                        <div id="mem-available" class="font-bold text-cream">--</div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 在线玩家列表 -->
-            <div class="pixel-card rounded-xl p-6 mt-6">
-                <div class="flex items-center justify-between mb-4">
-                    <h2 class="text-lg font-bold flex items-center gap-2">
-                        <i data-lucide="users" class="w-5 h-5 text-gold-400"></i>
-                        MC 在线玩家
-                    </h2>
-                    <span id="player-status" class="text-xs px-2 py-1 rounded-full bg-red-900/40 text-red-400">未连接</span>
-                </div>
-                <div id="player-list-container" class="space-y-2">
-                    <div class="text-cream/50 text-sm text-center py-4">未配置 RCON 或连接失败</div>
-                </div>
-                <div class="text-center text-cream/30 text-xs mt-3" id="player-update-time"></div>
-            </div>
-
-            <!-- 最后更新时间 -->
-            <div class="text-center text-cream/40 text-sm mt-6" id="last-update">
-                最后更新: --
+        <!-- 页面标题 + 状态指示 -->
+        <div class="text-center mb-10">
+            <h1 class="text-2xl sm:text-3xl font-bold mb-3">服务器状态</h1>
+            <p class="text-cream/60">实时查看服务器运行状态</p>
+            <div class="flex items-center justify-center gap-2 mt-4">
+                <span id="status-dot" class="w-2.5 h-2.5 rounded-full bg-green-400 inline-block"></span>
+                <span id="status-text" class="text-sm text-cream/60">运行中</span>
+                <span class="text-cream/30 mx-2">|</span>
+                <span id="last-update" class="text-xs text-cream/40">等待数据...</span>
             </div>
         </div>
-    </section>
 
-    <script>
-        let refreshTimer = null;
-        const apiUrl = "{{ url_for('api.api_performance') }}";
+        <!-- 系统概览卡片 -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+            <div class="pixel-card rounded-xl p-5 text-center">
+                <i data-lucide="server" class="w-8 h-8 text-gold-400 mx-auto mb-3"></i>
+                <div class="text-cream/60 text-xs mb-1">操作系统</div>
+                <div id="sys-os" class="text-base font-bold text-cream truncate">--</div>
+            </div>
+            <div class="pixel-card rounded-xl p-5 text-center">
+                <i data-lucide="clock" class="w-8 h-8 text-gold-400 mx-auto mb-3"></i>
+                <div class="text-cream/60 text-xs mb-1">运行时间</div>
+                <div id="sys-uptime" class="text-base font-bold text-cream">--</div>
+            </div>
+            <div class="pixel-card rounded-xl p-5 text-center">
+                <i data-lucide="cpu" class="w-8 h-8 text-gold-400 mx-auto mb-3"></i>
+                <div class="text-cream/60 text-xs mb-1">CPU 使用率</div>
+                <div class="text-xl font-bold" id="cpu-usage">--%</div>
+            </div>
+            <div class="pixel-card rounded-xl p-5 text-center">
+                <i data-lucide="thermometer" class="w-8 h-8 text-gold-400 mx-auto mb-3"></i>
+                <div class="text-cream/60 text-xs mb-1">CPU 温度</div>
+                <div class="text-xl font-bold" id="cpu-temp">--</div>
+            </div>
+        </div>
 
-        function formatBytes(bytes) {
-            if (bytes === null || bytes === undefined) return '--';
-            if (bytes < 1024) return bytes + ' B';
-            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-            if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
-            return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+        <!-- CPU 详情 -->
+        <div class="pixel-card rounded-xl p-6 mb-6">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-lg font-bold flex items-center gap-2">
+                    <i data-lucide="cpu" class="w-5 h-5 text-gold-400"></i>
+                    CPU 负载
+                </h2>
+                <span id="cpu-usage-text" class="text-sm font-bold text-gold-400">--%</span>
+            </div>
+            {{ progress_track(id='cpu-bar', variant='green', size='lg') }}
+            <div class="grid grid-cols-3 gap-4 mt-4 text-center">
+                <div>
+                    <div class="text-cream/60 text-xs">运行时间</div>
+                    <div id="sys-uptime-detail" class="text-sm font-bold text-cream mt-1">--</div>
+                </div>
+                <div>
+                    <div class="text-cream/60 text-xs">当前负载</div>
+                    <div id="cpu-usage-detail" class="text-sm font-bold text-cream mt-1">--</div>
+                </div>
+                <div>
+                    <div class="text-cream/60 text-xs">温度</div>
+                    <div id="cpu-temp-detail" class="text-sm font-bold text-cream mt-1">--</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 内存详情 -->
+        <div class="pixel-card rounded-xl p-6 mb-6">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-lg font-bold flex items-center gap-2">
+                    <i data-lucide="hard-drive" class="w-5 h-5 text-gold-400"></i>
+                    内存使用
+                </h2>
+                <span id="mem-text" class="text-sm text-cream/60">--</span>
+            </div>
+            {{ progress_track(id='mem-bar', variant='blue', size='lg') }}
+            <div class="grid grid-cols-3 gap-4 mt-4 text-center">
+                <div>
+                    <div class="text-cream/60 text-xs">总内存</div>
+                    <div id="mem-total" class="text-sm font-bold text-cream mt-1">--</div>
+                </div>
+                <div>
+                    <div class="text-cream/60 text-xs">已用</div>
+                    <div id="mem-used" class="text-sm font-bold text-cream mt-1">--</div>
+                </div>
+                <div>
+                    <div class="text-cream/60 text-xs">可用</div>
+                    <div id="mem-available" class="text-sm font-bold text-cream mt-1">--</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 在线玩家列表 -->
+        <div class="pixel-card rounded-xl p-6">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-lg font-bold flex items-center gap-2">
+                    <i data-lucide="users" class="w-5 h-5 text-gold-400"></i>
+                    MC 在线玩家
+                </h2>
+                <div class="flex items-center gap-3">
+                    <span id="player-update-time" class="text-xs text-cream/30"></span>
+                    <span id="player-status" class="text-xs px-2.5 py-1 rounded-full bg-red-900/40 text-red-400">未连接</span>
+                </div>
+            </div>
+            <div id="player-list-container" class="space-y-1.5">
+                <div class="text-cream/50 text-sm text-center py-6">未配置 RCON 或连接失败</div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<script>
+(function() {
+    const apiUrl = "{{ url_for('api.api_performance') }}";
+    let refreshTimer = null;
+
+    function formatBytes(bytes) {
+        if (bytes === null || bytes === undefined) return '--';
+        if (bytes < 1024) return bytes + ' B';
+        if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+        if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+    }
+
+    function updateStatusIndicator(data) {
+        const dot = document.getElementById('status-dot');
+        const text = document.getElementById('status-text');
+        if (data.cpu_usage === null && data.memory === null) {
+            dot.className = 'w-2.5 h-2.5 rounded-full bg-red-400 inline-block';
+            text.textContent = '数据不可用';
+            text.className = 'text-sm text-red-400';
+        } else {
+            dot.className = 'w-2.5 h-2.5 rounded-full bg-green-400 inline-block';
+            text.textContent = '运行中';
+            text.className = 'text-sm text-green-400';
+        }
+    }
+
+    function updateData(data) {
+        document.getElementById('last-update').textContent = '最后更新: ' + data.timestamp;
+        updateStatusIndicator(data);
+
+        // 系统信息
+        if (data.system) {
+            document.getElementById('sys-os').textContent = data.system.os;
+            document.getElementById('sys-uptime').textContent = data.system.uptime;
+            document.getElementById('sys-uptime-detail').textContent = data.system.uptime;
         }
 
-        function updateData(data) {
-            document.getElementById('last-update').textContent = '最后更新: ' + data.timestamp;
-
-            // 系统信息
-            if (data.system) {
-                document.getElementById('sys-os').textContent = data.system.os;
-                document.getElementById('sys-uptime').textContent = data.system.uptime;
-            }
-
-            // CPU使用率
-            if (data.cpu_usage !== null && data.cpu_usage !== undefined) {
-                document.getElementById('cpu-usage').textContent = data.cpu_usage + '%';
-                document.getElementById('cpu-usage-text').textContent = data.cpu_usage + '%';
-                const cpuBar = document.getElementById('cpu-bar');
-                cpuBar.style.width = Math.min(data.cpu_usage, 100) + '%';
-                if (data.cpu_usage > 80) {
-                    cpuBar.className = 'progress-fill red no-shine';
-                } else if (data.cpu_usage > 50) {
-                    cpuBar.className = 'progress-fill yellow no-shine';
-                } else {
-                    cpuBar.className = 'progress-fill green no-shine';
-                }
+        // CPU 使用率
+        if (data.cpu_usage !== null && data.cpu_usage !== undefined) {
+            const usage = Math.min(data.cpu_usage, 100);
+            document.getElementById('cpu-usage').textContent = data.cpu_usage + '%';
+            document.getElementById('cpu-usage-text').textContent = data.cpu_usage + '%';
+            document.getElementById('cpu-usage-detail').textContent = data.cpu_usage + '%';
+            const cpuBar = document.getElementById('cpu-bar');
+            cpuBar.style.width = usage + '%';
+            if (usage > 80) {
+                cpuBar.className = 'progress-fill red no-shine';
+            } else if (usage > 50) {
+                cpuBar.className = 'progress-fill yellow no-shine';
             } else {
-                // CPU 数据不可用时清空显示，避免误导用户使用旧值
-                document.getElementById('cpu-usage').textContent = 'N/A';
-                document.getElementById('cpu-usage-text').textContent = 'N/A';
-                document.getElementById('cpu-bar').style.width = '0%';
+                cpuBar.className = 'progress-fill green no-shine';
             }
+        } else {
+            document.getElementById('cpu-usage').textContent = 'N/A';
+            document.getElementById('cpu-usage-text').textContent = 'N/A';
+            document.getElementById('cpu-usage-detail').textContent = 'N/A';
+            document.getElementById('cpu-bar').style.width = '0%';
+        }
 
-            // CPU温度
-            if (data.cpu_temp !== null && data.cpu_temp !== undefined) {
-                const tempEl = document.getElementById('cpu-temp');
-                tempEl.textContent = data.cpu_temp + '°C';
-                if (data.cpu_temp > 80) {
-                    tempEl.className = 'text-2xl font-bold text-red-400';
-                } else if (data.cpu_temp > 60) {
-                    tempEl.className = 'text-2xl font-bold text-yellow-400';
-                } else {
-                    tempEl.className = 'text-2xl font-bold text-green-400';
-                }
+        // CPU 温度
+        if (data.cpu_temp !== null && data.cpu_temp !== undefined) {
+            const tempEl = document.getElementById('cpu-temp');
+            const tempDetail = document.getElementById('cpu-temp-detail');
+            tempEl.textContent = data.cpu_temp + '°C';
+            tempDetail.textContent = data.cpu_temp + '°C';
+            const colorClass = data.cpu_temp > 80 ? 'text-red-400' :
+                               data.cpu_temp > 60 ? 'text-yellow-400' : 'text-green-400';
+            tempEl.className = 'text-xl font-bold ' + colorClass;
+            tempDetail.className = 'text-sm font-bold mt-1 ' + colorClass;
+        } else {
+            document.getElementById('cpu-temp').textContent = 'N/A';
+            document.getElementById('cpu-temp-detail').textContent = 'N/A';
+        }
+
+        // 内存信息
+        if (data.memory) {
+            document.getElementById('mem-total').textContent = formatBytes(data.memory.total);
+            document.getElementById('mem-used').textContent = formatBytes(data.memory.used);
+            document.getElementById('mem-available').textContent = formatBytes(data.memory.available);
+            document.getElementById('mem-text').textContent =
+                formatBytes(data.memory.used) + ' / ' + formatBytes(data.memory.total) +
+                ' (' + data.memory.usage + '%)';
+
+            const usage = Math.min(data.memory.usage, 100);
+            const memBar = document.getElementById('mem-bar');
+            memBar.style.width = usage + '%';
+            if (usage > 80) {
+                memBar.className = 'progress-fill red no-shine';
+            } else if (usage > 50) {
+                memBar.className = 'progress-fill yellow no-shine';
             } else {
-                document.getElementById('cpu-temp').textContent = 'N/A';
-            }
-
-            // 内存信息
-            if (data.memory) {
-                document.getElementById('mem-total').textContent = formatBytes(data.memory.total);
-                document.getElementById('mem-used').textContent = formatBytes(data.memory.used);
-                document.getElementById('mem-available').textContent = formatBytes(data.memory.available);
-                document.getElementById('mem-text').textContent =
-                    formatBytes(data.memory.used) + ' / ' + formatBytes(data.memory.total) +
-                    ' (' + data.memory.usage + '%)';
-
-                const memBar = document.getElementById('mem-bar');
-                memBar.style.width = Math.min(data.memory.usage, 100) + '%';
-                if (data.memory.usage > 80) {
-                    memBar.className = 'progress-fill red no-shine';
-                } else if (data.memory.usage > 50) {
-                    memBar.className = 'progress-fill yellow no-shine';
-                } else {
-                    memBar.className = 'progress-fill blue no-shine';
-                }
-            }
-
-            // 在线玩家列表
-            updatePlayerList(data.players);
-        }
-
-        function updatePlayerList(players) {
-            const container = document.getElementById('player-list-container');
-            const statusEl = document.getElementById('player-status');
-            const timeEl = document.getElementById('player-update-time');
-
-            if (!players || !players.connected) {
-                statusEl.textContent = '未连接';
-                statusEl.className = 'text-xs px-2 py-1 rounded-full bg-red-900/40 text-red-400';
-                container.innerHTML = '<div class="text-cream/50 text-sm text-center py-4">未配置 RCON 或连接失败</div>';
-                timeEl.textContent = '';
-                return;
-            }
-
-            if (players.error) {
-                statusEl.textContent = '连接失败';
-                statusEl.className = 'text-xs px-2 py-1 rounded-full bg-red-900/40 text-red-400';
-                container.innerHTML = '<div class="text-cream/50 text-sm text-center py-4">' + players.error + '</div>';
-                timeEl.textContent = '';
-                return;
-            }
-
-            // 连接成功
-            statusEl.textContent = players.online + '/' + players.max + ' 在线';
-            statusEl.className = 'text-xs px-2 py-1 rounded-full bg-green-900/40 text-green-400';
-
-            if (players.list.length === 0) {
-                container.innerHTML = '<div class="text-cream/50 text-sm text-center py-4">当前没有玩家在线</div>';
-            } else {
-                var html = '';
-                for (var i = 0; i < players.list.length; i++) {
-                    html += '<div class="flex items-center gap-3 px-3 py-2 bg-forest-900/40 rounded-lg">' +
-                        '<span class="w-2 h-2 rounded-full bg-green-400 flex-shrink-0"></span>' +
-                        '<span class="text-cream font-medium text-sm">' + escapeHtml(players.list[i]) + '</span>' +
-                        '</div>';
-                }
-                container.innerHTML = html;
-            }
-
-            if (players.updated_at) {
-                var d = new Date(players.updated_at * 1000);
-                timeEl.textContent = '更新于 ' + d.toLocaleTimeString('zh-CN', { hour12: false });
+                memBar.className = 'progress-fill blue no-shine';
             }
         }
 
-        function escapeHtml(str) {
-            var div = document.createElement('div');
-            div.appendChild(document.createTextNode(str));
-            return div.innerHTML;
+        // 在线玩家
+        updatePlayerList(data.players);
+    }
+
+    function updatePlayerList(players) {
+        const container = document.getElementById('player-list-container');
+        const statusEl = document.getElementById('player-status');
+        const timeEl = document.getElementById('player-update-time');
+
+        if (!players || !players.connected) {
+            statusEl.textContent = '未连接';
+            statusEl.className = 'text-xs px-2.5 py-1 rounded-full bg-red-900/40 text-red-400';
+            container.innerHTML = '<div class="text-cream/50 text-sm text-center py-6">未配置 RCON 或连接失败</div>';
+            timeEl.textContent = '';
+            return;
         }
 
-        function fetchData() {
-            fetch(apiUrl)
-                .then(function (res) {
-                    if (!res.ok) {
-                        throw new Error('HTTP ' + res.status);
-                    }
-                    return res.json();
-                })
-                .then(updateData)
-                .catch(function (err) {
-                    console.error('获取性能数据失败:', err);
-                    // 不再更新 last-update，让用户通过时间戳判断数据是否陈旧
-                });
+        if (players.error) {
+            statusEl.textContent = '连接失败';
+            statusEl.className = 'text-xs px-2.5 py-1 rounded-full bg-red-900/40 text-red-400';
+            container.innerHTML = '<div class="text-cream/50 text-sm text-center py-6">' + escapeHtml(players.error) + '</div>';
+            timeEl.textContent = '';
+            return;
         }
 
-        // 页面加载时立即获取数据并启动定时刷新
-        fetchData();
-        refreshTimer = setInterval(fetchData, 5000);
-    </script>
+        statusEl.textContent = players.online + '/' + players.max + ' 在线';
+        statusEl.className = 'text-xs px-2.5 py-1 rounded-full bg-green-900/40 text-green-400';
+
+        if (players.list.length === 0) {
+            container.innerHTML = '<div class="text-cream/50 text-sm text-center py-6">当前没有玩家在线</div>';
+        } else {
+            var html = '';
+            for (var i = 0; i < players.list.length; i++) {
+                html += '<div class="flex items-center gap-3 px-3 py-2 bg-forest-900/40 rounded-lg">' +
+                    '<span class="w-2 h-2 rounded-full bg-green-400 flex-shrink-0"></span>' +
+                    '<span class="text-cream font-medium text-sm">' + escapeHtml(players.list[i]) + '</span>' +
+                    '</div>';
+            }
+            container.innerHTML = html;
+        }
+
+        if (players.updated_at) {
+            var d = new Date(players.updated_at * 1000);
+            timeEl.textContent = '更新于 ' + d.toLocaleTimeString('zh-CN', { hour12: false });
+        }
+    }
+
+    function escapeHtml(str) {
+        var div = document.createElement('div');
+        div.appendChild(document.createTextNode(str));
+        return div.innerHTML;
+    }
+
+    function fetchData() {
+        fetch(apiUrl)
+            .then(function (res) {
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                return res.json();
+            })
+            .then(updateData)
+            .catch(function (err) {
+                console.error('获取性能数据失败:', err);
+            });
+    }
+
+    fetchData();
+    refreshTimer = setInterval(fetchData, 5000);
+})();
+</script>
 {% endblock %}

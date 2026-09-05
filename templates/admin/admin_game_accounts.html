@@ -1,0 +1,273 @@
+{% extends "base.html" %}
+{% block title %}游戏账号管理{% endblock %}
+{% block content %}
+<section class="page-container py-12">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="mb-8">
+            <a href="{{ url_for('admin.admin_page') }}" class="text-gold-400 hover:text-gold-300 text-sm mb-2 inline-block">
+                <i data-lucide="arrow-left" class="w-4 h-4 inline mr-1"></i>返回管理中心
+            </a>
+            <h1 class="text-xl sm:text-2xl font-bold">游戏账号管理</h1>
+            <p class="text-cream/60 text-sm mt-1">审批注册申请、管理封禁列表</p>
+        </div>
+
+        <!-- Tab -->
+        <div class="flex gap-1 mb-6 p-1 bg-forest-900/60 rounded-xl">
+            <button class="tab-btn flex-1 px-4 py-2 text-sm rounded-lg transition-colors bg-gold-400/20 text-gold-300 font-medium" data-tab="pending">
+                待审批 <span id="pending-count" class="ml-1 text-xs">(0)</span>
+            </button>
+            <button class="tab-btn flex-1 px-4 py-2 text-sm rounded-lg transition-colors text-cream/60 hover:text-cream" data-tab="history">
+                审批历史
+            </button>
+            <button class="tab-btn flex-1 px-4 py-2 text-sm rounded-lg transition-colors text-cream/60 hover:text-cream" data-tab="bans">
+                封禁列表
+            </button>
+        </div>
+
+        <!-- 待审批 -->
+        <div id="tab-pending" class="tab-content">
+            <div class="pixel-card rounded-xl p-6">
+                <div id="pending-list" class="space-y-3">
+                    <div class="text-cream/50 text-sm text-center py-6">加载中...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 审批历史 -->
+        <div id="tab-history" class="tab-content hidden">
+            <div class="pixel-card rounded-xl p-6">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="text-cream/50 border-b border-cream/10">
+                                <th class="text-left py-2 px-2">MC 用户名</th>
+                                <th class="text-left py-2 px-2">申请人</th>
+                                <th class="text-left py-2 px-2">状态</th>
+                                <th class="text-left py-2 px-2">审核人</th>
+                                <th class="text-left py-2 px-2">申请时间</th>
+                                <th class="text-left py-2 px-2">审核时间</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-list"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 封禁列表 -->
+        <div id="tab-bans" class="tab-content hidden">
+            <div class="pixel-card rounded-xl p-6">
+                <form id="ban-form" class="flex flex-wrap items-end gap-3 mb-6 p-4 bg-forest-900/40 rounded-xl">
+                    <div class="flex-1 min-w-[160px]">
+                        <label class="text-xs text-cream/60 block mb-1">MC 用户名</label>
+                        <input type="text" id="ban-username" placeholder="要封禁的 MC 用户名" class="w-full px-3 py-2 bg-forest-900/60 border border-cream/20 rounded-lg text-sm focus:outline-none focus:border-gold-400">
+                    </div>
+                    <div class="flex-1 min-w-[160px]">
+                        <label class="text-xs text-cream/60 block mb-1">原因（可选）</label>
+                        <input type="text" id="ban-reason" placeholder="封禁原因" class="w-full px-3 py-2 bg-forest-900/60 border border-cream/20 rounded-lg text-sm focus:outline-none focus:border-gold-400">
+                    </div>
+                    <button type="submit" class="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-300 text-sm rounded-lg border border-red-500/30">
+                        <i data-lucide="ban" class="w-4 h-4 inline mr-1"></i>封禁
+                    </button>
+                </form>
+                <div id="ban-list" class="space-y-2"></div>
+            </div>
+        </div>
+
+        <!-- 消息提示 -->
+        <div id="message" class="hidden fixed top-4 right-4 z-50 px-5 py-3 rounded-xl text-sm shadow-lg"></div>
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_script %}
+<script>
+(function() {
+    const msgEl = document.getElementById('message');
+
+    function showMsg(text, isErr) {
+        msgEl.textContent = text;
+        msgEl.className = 'fixed top-4 right-4 z-50 px-5 py-3 rounded-xl text-sm shadow-lg ' +
+            (isErr ? 'bg-red-900/80 border border-red-500/30 text-red-200' : 'bg-green-900/80 border border-green-500/30 text-green-200');
+        msgEl.classList.remove('hidden');
+        setTimeout(function() { msgEl.classList.add('hidden'); }, 4000);
+    }
+
+    // Tab 切换
+    document.querySelectorAll('.tab-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('.tab-btn').forEach(function(b) {
+                b.className = 'tab-btn flex-1 px-4 py-2 text-sm rounded-lg transition-colors text-cream/60 hover:text-cream';
+            });
+            this.className = 'tab-btn flex-1 px-4 py-2 text-sm rounded-lg transition-colors bg-gold-400/20 text-gold-300 font-medium';
+            document.querySelectorAll('.tab-content').forEach(function(t) { t.classList.add('hidden'); });
+            document.getElementById('tab-' + this.dataset.tab).classList.remove('hidden');
+            if (this.dataset.tab === 'pending') loadPending();
+            if (this.dataset.tab === 'history') loadHistory();
+            if (this.dataset.tab === 'bans') loadBans();
+        });
+    });
+
+    // 加载待审批
+    function loadPending() {
+        var list = document.getElementById('pending-list');
+        fetch('/admin/api/game-accounts/applications')
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                if (!d.success) { list.innerHTML = '<div class="text-red-400 text-sm text-center py-6">加载失败</div>'; return; }
+                var pending = d.pending;
+                document.getElementById('pending-count').textContent = '(' + pending.length + ')';
+                if (pending.length === 0) {
+                    list.innerHTML = '<div class="text-cream/50 text-sm text-center py-6">暂无待审批的注册申请</div>';
+                    return;
+                }
+                var html = '';
+                for (var i = 0; i < pending.length; i++) {
+                    var app = pending[i];
+                    html += '<div class="flex items-center justify-between px-4 py-3 bg-forest-900/40 rounded-lg">' +
+                        '<div>' +
+                            '<div class="text-cream font-medium">' + escapeHtml(app.mc_username) + '</div>' +
+                            '<div class="text-xs text-cream/50">申请人: ' + escapeHtml(app.applicant) + ' | ' + app.created_at + '</div>' +
+                        '</div>' +
+                        '<div class="flex items-center gap-2">' +
+                            '<button class="btn-approve px-3 py-1.5 bg-green-500/20 hover:bg-green-500/30 text-green-300 text-xs rounded-lg border border-green-500/30" data-id="' + app.id + '">通过</button>' +
+                            '<button class="btn-reject px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-300 text-xs rounded-lg border border-red-500/30" data-id="' + app.id + '">驳回</button>' +
+                        '</div>' +
+                    '</div>';
+                }
+                list.innerHTML = html;
+                bindPendingActions();
+            });
+    }
+
+    function bindPendingActions() {
+        document.querySelectorAll('.btn-approve').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                if (!confirm('确认通过该注册申请？系统将自动执行 RCON 注册。')) return;
+                var id = this.dataset.id;
+                fetch('/admin/api/game-accounts/applications/' + id + '/approve', { method: 'POST' })
+                    .then(function(r) { return r.json(); })
+                    .then(function(d) {
+                        showMsg(d.message, !d.success);
+                        if (d.success) loadPending();
+                    });
+            });
+        });
+        document.querySelectorAll('.btn-reject').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var id = this.dataset.id;
+                var reason = prompt('驳回原因（可选）：');
+                if (reason === null) return;
+                fetch('/admin/api/game-accounts/applications/' + id + '/reject', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ reason: reason }),
+                })
+                .then(function(r) { return r.json(); })
+                .then(function(d) {
+                    showMsg(d.message, !d.success);
+                    if (d.success) loadPending();
+                });
+            });
+        });
+    }
+
+    // 加载历史
+    function loadHistory() {
+        fetch('/admin/api/game-accounts/applications')
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                if (!d.success) return;
+                var all = d.all;
+                var tbody = document.getElementById('history-list');
+                if (all.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="6" class="text-center text-cream/50 py-6">暂无记录</td></tr>';
+                    return;
+                }
+                var html = '';
+                for (var i = 0; i < all.length; i++) {
+                    var a = all[i];
+                    var statusBadge = a.status === 'approved' ? 'text-green-400' : a.status === 'rejected' ? 'text-red-400' : 'text-yellow-400';
+                    html += '<tr class="border-b border-cream/10 hover:bg-forest-900/20">' +
+                        '<td class="py-2 px-2 text-cream">' + escapeHtml(a.mc_username) + '</td>' +
+                        '<td class="py-2 px-2 text-cream/70">' + escapeHtml(a.applicant) + '</td>' +
+                        '<td class="py-2 px-2 ' + statusBadge + '">' + a.status + '</td>' +
+                        '<td class="py-2 px-2 text-cream/70">' + (a.reviewer || '-') + '</td>' +
+                        '<td class="py-2 px-2 text-cream/50 text-xs">' + a.created_at + '</td>' +
+                        '<td class="py-2 px-2 text-cream/50 text-xs">' + (a.reviewed_at || '-') + '</td>' +
+                    '</tr>';
+                }
+                tbody.innerHTML = html;
+            });
+    }
+
+    // 加载封禁列表
+    function loadBans() {
+        fetch('/admin/api/game-accounts/bans')
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                if (!d.success) return;
+                var list = document.getElementById('ban-list');
+                if (d.bans.length === 0) {
+                    list.innerHTML = '<div class="text-cream/50 text-sm text-center py-6">暂无封禁记录</div>';
+                    return;
+                }
+                var html = '';
+                for (var i = 0; i < d.bans.length; i++) {
+                    var b = d.bans[i];
+                    html += '<div class="flex items-center justify-between px-4 py-3 bg-forest-900/40 rounded-lg">' +
+                        '<div>' +
+                            '<div class="text-cream font-medium">' + escapeHtml(b.mc_username) + '</div>' +
+                            '<div class="text-xs text-cream/50">' + (b.reason || '无原因') + ' | 封禁于 ' + b.created_at + ' | ' + (b.created_by_name || '') + '</div>' +
+                        '</div>' +
+                        '<button class="btn-unban px-3 py-1.5 bg-gold-400/20 hover:bg-gold-400/30 text-gold-300 text-xs rounded-lg border border-gold-400/30" data-username="' + escapeHtml(b.mc_username) + '">解封</button>' +
+                    '</div>';
+                }
+                list.innerHTML = html;
+                document.querySelectorAll('.btn-unban').forEach(function(btn) {
+                    btn.addEventListener('click', function() {
+                        if (!confirm('确认解封 ' + this.dataset.username + ' ？')) return;
+                        fetch('/admin/api/game-accounts/bans/' + encodeURIComponent(this.dataset.username), { method: 'DELETE' })
+                            .then(function(r) { return r.json(); })
+                            .then(function(d) {
+                                showMsg(d.message, !d.success);
+                                if (d.success) loadBans();
+                            });
+                    });
+                });
+            });
+    }
+
+    // 封禁提交
+    document.getElementById('ban-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        var username = document.getElementById('ban-username').value.trim();
+        var reason = document.getElementById('ban-reason').value.trim();
+        if (!username) { showMsg('请输入 MC 用户名', true); return; }
+        fetch('/admin/api/game-accounts/bans', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ mc_username: username, reason: reason }),
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            showMsg(d.message, !d.success);
+            if (d.success) {
+                document.getElementById('ban-username').value = '';
+                document.getElementById('ban-reason').value = '';
+                loadBans();
+            }
+        });
+    });
+
+    function escapeHtml(str) {
+        var div = document.createElement('div');
+        div.appendChild(document.createTextNode(str));
+        return div.innerHTML;
+    }
+
+    // 初始加载
+    loadPending();
+})();
+</script>
+{% endblock %}
