@@ -112,6 +112,11 @@ BACKUP_CHECKPOINT = True
 # 信任代理白名单列表（仅当 request.remote_addr 在此列表中时，才读取代理头部获取真实 IP）
 TRUSTED_PROXIES = []
 
+# EasyAuth 数据库路径（MC 服务器认证插件，用于直接验证玩家密码）
+# 留空表示不启用数据库直连验证，仅使用 RCON 命令。
+# 示例：/home/mc/server/plugins/EasyAuth/players.db
+EASYAUTH_DB_PATH = os.environ.get('EASYAUTH_DB_PATH', '')
+
 # UUID 音频目录：启用后上传音频文件使用 UUID 命名目录而非原始文件名
 MUSIC_UUID_DIR = True
 
@@ -283,6 +288,9 @@ SETTINGS_REGISTRY = [
 
     # MC 游戏目录
     ('MC_GAME_FOLDER', '', 'str', 'MC 游戏文件夹', 'Minecraft 服务器游戏目录的绝对路径（如 /home/mc/server），暂未使用', 'RCON 配置'),
+
+    # EasyAuth 数据库（密码直连验证，优先于 RCON 命令）
+    ('EASYAUTH_DB_PATH', '', 'str', 'EasyAuth 数据库路径', 'EasyAuth 插件 SQLite 数据库文件绝对路径（如 /home/mc/server/plugins/EasyAuth/players.db），留空则仅使用 RCON 命令验证', 'RCON 配置'),
 
     # 网站备案
     ('SHOW_BEIAN', False, 'bool', '显示工信部/公安备案号', '开启后所有页面底部显示备案号信息', '网站备案'),

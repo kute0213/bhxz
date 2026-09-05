@@ -1,5 +1,8 @@
 """EasyAuth 插件指令封装 —— 注册、改密、删除、查询等。
 
+密码验证优先使用数据库直连（services/easy_auth_db），
+仅当数据库未配置或不可用时，才通过 RCON 命令验证。
+
 通过 RCON 向 Minecraft 服务器发送 EasyAuth 插件指令。
 所有函数返回 (success, message) 元组。
 底层连接复用 services/rcon/client.py 的 execute_command。
@@ -109,10 +112,15 @@ def get_player_info(username: str) -> Tuple[bool, str]:
 
 
 def verify_login(username: str, password: str) -> Tuple[bool, str]:
-    """验证玩家密码是否正确（通过 /auth checkpassword 指令）。
+    """验证玩家密码是否正确。
 
-    EasyAuth 插件在 RCON 控制台模式下使用 /auth checkpassword <用户名> <密码>
-    来验证密码是否正确，而非客户端使用的 /login <密码>。
+    验证流程（按优先级）：
+    1. 尝试通过 EasyAuth 数据库直连验证（需配置 EASYAUTH_DB_PATH）
+    2. 失败或未配置时，依次尝试 RCON 命令：
+       - /auth checkpassword
+       - /auth login
+       - /login 带用户名
+       - /login 仅密码
 
     注意：返回 (成功, 消息) 元组，成功时消息为玩家真实名称。
 
@@ -130,23 +138,37 @@ def verify_login(username: str, password: str) -> Tuple[bool, str]:
     if not safe_pwd:
         return False, '密码不能为空'
 
-    # 尝试 /auth checkpassword 指令（EasyAuth 控制台密码验证命令）
+    # -----------------------------------------------------------------------
+    # 1. EasyAuth 数据库直连验证（优先，需配置 EASYAUTH_DB_PATH）
+    # -----------------------------------------------------------------------
+    from services.easy_auth_db import verify_password as db_verify
+    db_ok, db_msg = db_verify(safe_user, password)
+    if db_ok:
+        return True, db_msg
+    # 数据库可用但密码错误，直接返回
+    if '密码错误' in db_msg:
+        return False, db_msg
+
+    # 数据库未配置或不可用，继续尝试 RCON 命令
+    # -----------------------------------------------------------------------
+    # 2. /auth checkpassword 指令（EasyAuth 控制台密码验证命令）
+    # -----------------------------------------------------------------------
     cmd = f'/auth checkpassword {safe_user} {safe_pwd}'
     resp = _exec(cmd)
     if resp:
         resp_lower = resp.lower()
-        # 成功匹配关键词
         if ('password correct' in resp_lower or 'password matches' in resp_lower
                 or '验证成功' in resp or '密码正确' in resp
                 or 'successfully authenticated' in resp_lower):
             return True, safe_user
-        # 明确失败，直接返回
         if ('password incorrect' in resp_lower or 'password doesn\'t match' in resp_lower
                 or '密码错误' in resp or '验证失败' in resp
                 or 'incorrect password' in resp_lower):
-            return False, f'密码验证失败: 密码错误'
+            return False, '密码验证失败: 密码错误'
 
-    # 尝试 /auth login 指令（部分 EasyAuth 版本支持）
+    # -----------------------------------------------------------------------
+    # 3. /auth login 指令（部分 EasyAuth 版本支持）
+    # -----------------------------------------------------------------------
     cmd2 = f'/auth login {safe_user} {safe_pwd}'
     resp2 = _exec(cmd2)
     if resp2:
@@ -155,7 +177,9 @@ def verify_login(username: str, password: str) -> Tuple[bool, str]:
                 or 'logged in' in resp2_lower or '验证成功' in resp2):
             return True, safe_user
 
-    # 尝试 /login 带用户名（部分 EasyAuth 版本支持）
+    # -----------------------------------------------------------------------
+    # 4. /login 带用户名（部分 EasyAuth 版本支持）
+    # -----------------------------------------------------------------------
     cmd3 = f'/login {safe_user} {safe_pwd}'
     resp3 = _exec(cmd3)
     if resp3:
@@ -164,7 +188,9 @@ def verify_login(username: str, password: str) -> Tuple[bool, str]:
                 or 'logged in' in resp3_lower or '验证成功' in resp3):
             return True, safe_user
 
-    # 尝试不带用户名的 /login 指令（客户端模式，兼容性兜底）
+    # -----------------------------------------------------------------------
+    # 5. /login 仅密码（客户端模式，兼容性兜底）
+    # -----------------------------------------------------------------------
     cmd4 = f'/login {safe_pwd}'
     resp4 = _exec(cmd4)
     if resp4:

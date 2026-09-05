@@ -189,7 +189,7 @@ python scripts/build/package.py
 
 ### 游戏账号管理
 - 用户可绑定一或多个 MC 账号到网站账户
-- 绑定后可在线修改 MC 账号密码（通过 RCON + EasyAuth）
+- 绑定后可在线修改 MC 账号密码（通过 EasyAuth 数据库直连或 RCON）
 - 申请注册 MC 游戏账号（需图形验证码 + 管理员审批）
 - 管理员可批准/驳回申请，封禁恶意账号
 
@@ -463,6 +463,7 @@ workspace/
 │   ├── logging/              #   日志写入与清理
 │   ├── monitoring/           #   系统监控（CPU/内存/系统/性能追踪）
 │   ├── rcon/                 #   RCON 连接管理、玩家列表追踪、EasyAuth 指令
+│   ├── easy_auth_db.py       #   EasyAuth 数据库直连验证（密码验证优先于 RCON）
 │   ├── terminal/             #   持久终端会话（PTY）
 │   ├── attachment_service.py #   附件上传/清理
 │   ├── background_service.py #   背景图片业务
