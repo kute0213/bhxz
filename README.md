@@ -189,7 +189,7 @@ python scripts/build/package.py
 
 ### 游戏账号管理
 - 用户可绑定一或多个 MC 账号到网站账户
-- 绑定后可在线修改 MC 账号密码（通过 EasyAuth 数据库直连或 RCON）
+- 绑定后可在线修改 MC 账号密码（通过 EasyAuth 数据库直连或 RCON，数据库从 MC_GAME_FOLDER 自动发现）
 - 申请注册 MC 游戏账号（需图形验证码 + 管理员审批）
 - 管理员可批准/驳回申请，封禁恶意账号
 
