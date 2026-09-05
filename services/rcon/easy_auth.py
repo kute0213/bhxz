@@ -67,6 +67,9 @@ def register_player(username: str, password: str) -> Tuple[bool, str]:
 def change_password(username: str, new_password: str) -> Tuple[bool, str]:
     """修改游戏内账号密码。
 
+    优先通过 EasyAuth 数据库直连修改（需配置 MC_GAME_FOLDER），
+    失败时降级到 RCON 命令。
+
     Args:
         username: MC 玩家名
         new_password: 新密码
@@ -74,6 +77,20 @@ def change_password(username: str, new_password: str) -> Tuple[bool, str]:
     Returns:
         (success, message)
     """
+    safe_user = sanitize_rcon_username(username)
+    if not safe_user:
+        return False, 'MC 用户名包含非法字符'
+
+    # 1. 数据库直连改密（优先）
+    try:
+        from services.easy_auth_db import change_password as db_change
+        db_ok, db_msg = db_change(safe_user, new_password)
+        if db_ok:
+            return True, db_msg
+    except Exception:
+        pass
+
+    # 2. RCON 命令改密（降级）
     cmd = _build_command('/auth update', username, new_password)
     if not cmd:
         return False, 'MC 用户名包含非法字符'
