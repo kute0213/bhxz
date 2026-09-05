@@ -92,6 +92,47 @@
         <div id="message" class="hidden fixed top-4 right-4 z-50 px-5 py-3 rounded-xl text-sm shadow-lg"></div>
     </div>
 </section>
+
+<!-- ===== 密码验证弹窗（绑定/解绑共用） ===== -->
+<div id="pwd-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onclick="if(event.target===this)closePwdModal()">
+    <div class="bg-forest-800 border border-cream/20 rounded-2xl p-6 sm:p-8 w-full max-w-sm mx-4 shadow-2xl" onclick="event.stopPropagation()">
+        <h3 class="text-lg font-bold mb-2" id="pwd-modal-title">验证网站密码</h3>
+        <p class="text-cream/60 text-sm mb-4" id="pwd-modal-desc">请输入网站登录密码以确认操作</p>
+        <input type="password" id="pwd-modal-input" placeholder="网站登录密码" class="w-full px-3 py-2 bg-forest-900/60 border border-cream/20 rounded-lg text-sm focus:outline-none focus:border-gold-400 transition-colors mb-4" autocomplete="off">
+        <div class="flex justify-end gap-3">
+            <button onclick="closePwdModal()" class="px-4 py-2 text-sm text-cream/60 hover:text-cream transition-colors">取消</button>
+            <button id="pwd-modal-confirm" class="px-5 py-2 bg-gold-400/20 hover:bg-gold-400/30 text-gold-300 text-sm rounded-lg transition-colors border border-gold-400/30">确认</button>
+        </div>
+        <p id="pwd-modal-error" class="hidden text-red-400 text-xs mt-3"></p>
+    </div>
+</div>
+
+<!-- ===== 改密码弹窗 ===== -->
+<div id="change-pwd-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onclick="if(event.target===this)closeChangePwdModal()">
+    <div class="bg-forest-800 border border-cream/20 rounded-2xl p-6 sm:p-8 w-full max-w-sm mx-4 shadow-2xl" onclick="event.stopPropagation()">
+        <h3 class="text-lg font-bold mb-2">修改游戏密码</h3>
+        <p class="text-cream/60 text-sm mb-4" id="change-pwd-desc">为 <span id="change-pwd-username" class="text-gold-400 font-medium"></span> 设置新密码</p>
+        <div class="space-y-3 mb-4">
+            <div>
+                <label class="text-xs text-cream/60 block mb-1">新密码</label>
+                <input type="password" id="change-pwd-new" placeholder="至少 8 位，含字母和数字" class="w-full px-3 py-2 bg-forest-900/60 border border-cream/20 rounded-lg text-sm focus:outline-none focus:border-gold-400 transition-colors" autocomplete="new-password">
+            </div>
+            <div>
+                <label class="text-xs text-cream/60 block mb-1">确认密码</label>
+                <input type="password" id="change-pwd-confirm" placeholder="再次输入新密码" class="w-full px-3 py-2 bg-forest-900/60 border border-cream/20 rounded-lg text-sm focus:outline-none focus:border-gold-400 transition-colors" autocomplete="new-password">
+            </div>
+            <div>
+                <label class="text-xs text-cream/60 block mb-1">网站密码验证</label>
+                <input type="password" id="change-pwd-site" placeholder="输入网站登录密码" class="w-full px-3 py-2 bg-forest-900/60 border border-cream/20 rounded-lg text-sm focus:outline-none focus:border-gold-400 transition-colors" autocomplete="off">
+            </div>
+        </div>
+        <div class="flex justify-end gap-3">
+            <button onclick="closeChangePwdModal()" class="px-4 py-2 text-sm text-cream/60 hover:text-cream transition-colors">取消</button>
+            <button id="change-pwd-confirm-btn" class="px-5 py-2 bg-gold-400/20 hover:bg-gold-400/30 text-gold-300 text-sm rounded-lg transition-colors border border-gold-400/30">确认修改</button>
+        </div>
+        <p id="change-pwd-error" class="hidden text-red-400 text-xs mt-3"></p>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_script %}
@@ -121,62 +162,151 @@
     // 加载验证码
     refreshCaptcha();
 
-    // 绑定
+    // ===== 密码验证弹窗 =====
+    var pwdCallback = null; // 密码验证成功后的回调
+
+    window.openPwdModal = function(title, desc, callback) {
+        document.getElementById('pwd-modal-title').textContent = title;
+        document.getElementById('pwd-modal-desc').textContent = desc;
+        document.getElementById('pwd-modal-input').value = '';
+        document.getElementById('pwd-modal-error').classList.add('hidden');
+        document.getElementById('pwd-modal').classList.remove('hidden');
+        document.getElementById('pwd-modal-input').focus();
+        pwdCallback = callback;
+    };
+
+    window.closePwdModal = function() {
+        document.getElementById('pwd-modal').classList.add('hidden');
+        pwdCallback = null;
+    };
+
+    document.getElementById('pwd-modal-confirm').addEventListener('click', function() {
+        var pwd = document.getElementById('pwd-modal-input').value;
+        if (!pwd) {
+            document.getElementById('pwd-modal-error').textContent = '请输入网站密码';
+            document.getElementById('pwd-modal-error').classList.remove('hidden');
+            return;
+        }
+        if (pwdCallback) {
+            pwdCallback(pwd);
+        }
+    });
+
+    // 回车确认
+    document.getElementById('pwd-modal-input').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            document.getElementById('pwd-modal-confirm').click();
+        }
+    });
+
+    // ===== 绑定 =====
     document.getElementById('bind-form').addEventListener('submit', function(e) {
         e.preventDefault();
         var username = document.getElementById('bind-username').value.trim();
         if (!username) { showMsg('请输入 MC 用户名', true); return; }
 
-        fetch('/game-accounts/api/bind', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ mc_username: username }),
-        })
-        .then(function(r) { return r.json(); })
-        .then(function(d) {
-            showMsg(d.message, !d.success);
-            if (d.success) { setTimeout(function() { location.reload(); }, 1000); }
-        });
-    });
-
-    // 解绑
-    document.querySelectorAll('.btn-unbind').forEach(function(btn) {
-        btn.addEventListener('click', function() {
-            if (!confirm('确认解绑 ' + this.dataset.username + ' ？')) return;
-            fetch('/game-accounts/api/unbind', {
+        openPwdModal('验证网站密码', '绑定 ' + username + ' 需要验证网站密码', function(password) {
+            fetch('/game-accounts/api/bind', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ mc_username: this.dataset.username }),
+                body: JSON.stringify({ mc_username: username, password: password }),
             })
             .then(function(r) { return r.json(); })
             .then(function(d) {
+                closePwdModal();
                 showMsg(d.message, !d.success);
                 if (d.success) { setTimeout(function() { location.reload(); }, 1000); }
             });
         });
     });
 
-    // 改密码
-    document.querySelectorAll('.btn-change-pwd').forEach(function(btn) {
+    // ===== 解绑 =====
+    document.querySelectorAll('.btn-unbind').forEach(function(btn) {
         btn.addEventListener('click', function() {
             var username = this.dataset.username;
-            var newPwd = prompt('请输入 ' + username + ' 的新密码（至少 8 位，含字母和数字）：');
-            if (!newPwd) { showMsg('密码不能为空', true); return; }
-            if (newPwd.length < 8) { showMsg('密码至少 8 位', true); return; }
-            if (!/[a-zA-Z]/.test(newPwd)) { showMsg('密码必须包含至少一个字母', true); return; }
-            if (!/[0-9]/.test(newPwd)) { showMsg('密码必须包含至少一个数字', true); return; }
-            if (/\s/.test(newPwd)) { showMsg('密码不能包含空格', true); return; }
-            fetch('/game-accounts/api/change-password', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({ mc_username: username, new_password: newPwd }),
-            })
-            .then(function(r) { return r.json(); })
-            .then(function(d) { showMsg(d.message, !d.success); });
+            openPwdModal('确认解绑', '解绑 ' + username + ' 需要验证网站密码', function(password) {
+                fetch('/game-accounts/api/unbind', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ mc_username: username, password: password }),
+                })
+                .then(function(r) { return r.json(); })
+                .then(function(d) {
+                    closePwdModal();
+                    showMsg(d.message, !d.success);
+                    if (d.success) { setTimeout(function() { location.reload(); }, 1000); }
+                });
+            });
         });
     });
 
-    // 申请注册
+    // ===== 改密码弹窗 =====
+    window.closeChangePwdModal = function() {
+        document.getElementById('change-pwd-modal').classList.add('hidden');
+        document.getElementById('change-pwd-new').value = '';
+        document.getElementById('change-pwd-confirm').value = '';
+        document.getElementById('change-pwd-site').value = '';
+        document.getElementById('change-pwd-error').classList.add('hidden');
+    };
+
+    document.querySelectorAll('.btn-change-pwd').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var username = this.dataset.username;
+            document.getElementById('change-pwd-username').textContent = username;
+            document.getElementById('change-pwd-new').value = '';
+            document.getElementById('change-pwd-confirm').value = '';
+            document.getElementById('change-pwd-site').value = '';
+            document.getElementById('change-pwd-error').classList.add('hidden');
+            document.getElementById('change-pwd-modal').classList.remove('hidden');
+            document.getElementById('change-pwd-new').focus();
+        });
+    });
+
+    document.getElementById('change-pwd-confirm-btn').addEventListener('click', function() {
+        var username = document.getElementById('change-pwd-username').textContent;
+        var newPwd = document.getElementById('change-pwd-new').value;
+        var confirmPwd = document.getElementById('change-pwd-confirm').value;
+        var sitePwd = document.getElementById('change-pwd-site').value;
+        var errEl = document.getElementById('change-pwd-error');
+
+        if (!newPwd) { errEl.textContent = '请输入新密码'; errEl.classList.remove('hidden'); return; }
+        if (newPwd.length < 8) { errEl.textContent = '密码至少 8 位'; errEl.classList.remove('hidden'); return; }
+        if (!/[a-zA-Z]/.test(newPwd)) { errEl.textContent = '密码必须包含至少一个字母'; errEl.classList.remove('hidden'); return; }
+        if (!/[0-9]/.test(newPwd)) { errEl.textContent = '密码必须包含至少一个数字'; errEl.classList.remove('hidden'); return; }
+        if (/\s/.test(newPwd)) { errEl.textContent = '密码不能包含空格'; errEl.classList.remove('hidden'); return; }
+        if (newPwd !== confirmPwd) { errEl.textContent = '两次密码输入不一致'; errEl.classList.remove('hidden'); return; }
+        if (!sitePwd) { errEl.textContent = '请输入网站密码进行验证'; errEl.classList.remove('hidden'); return; }
+
+        errEl.classList.add('hidden');
+
+        fetch('/game-accounts/api/change-password', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ mc_username: username, new_password: newPwd, password: sitePwd }),
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            if (d.success) {
+                closeChangePwdModal();
+                showMsg(d.message, false);
+            } else {
+                errEl.textContent = d.message;
+                errEl.classList.remove('hidden');
+            }
+        });
+    });
+
+    // 改密码弹窗回车
+    document.getElementById('change-pwd-modal').addEventListener('keydown', function(e) {
+        if (e.key === 'Enter') {
+            var active = document.activeElement;
+            if (active && (active.id === 'change-pwd-new' || active.id === 'change-pwd-confirm' || active.id === 'change-pwd-site')) {
+                document.getElementById('change-pwd-confirm-btn').click();
+            }
+        }
+    });
+
+    // ===== 申请注册 =====
     document.getElementById('register-form').addEventListener('submit', function(e) {
         e.preventDefault();
         var username = document.getElementById('reg-username').value.trim();
