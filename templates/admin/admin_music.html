@@ -17,18 +17,7 @@
             </a>
         </div>
 
-        {% with messages = get_flashed_messages(with_categories=true) %}
-        {% if messages %}
-        {% for category, message in messages %}
-        <div class="mb-4 p-4 rounded-lg text-sm flex items-center gap-2
-                    {% if category == 'error' %}bg-red-900/30 border border-red-500/30 text-red-300
-                    {% else %}bg-green-900/30 border border-green-500/30 text-green-300{% endif %}">
-            <i data-lucide="{% if category == 'error' %}alert-circle{% else %}check-circle{% endif %}" class="w-5 h-5 flex-shrink-0"></i>
-            {{ message }}
-        </div>
-        {% endfor %}
-        {% endif %}
-        {% endwith %}
+        
 
         <!-- 待审核队列 -->
         <div class="mb-10">

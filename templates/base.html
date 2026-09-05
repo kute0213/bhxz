@@ -382,6 +382,25 @@
         Toast.success({{ ('欢迎来到滨海小镇，' ~ login_welcome_username)|tojson }});
     </script>
     {% endif %}
+    {# 统一 flash 消息 → Toast 提示（保持原样，移除内联渲染） #}
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <script>
+    (function() {
+        var messages = [
+            {% for category, message in messages %}
+            { category: {{ category|tojson }}, message: {{ message|tojson }} }{% if not loop.last %},{% endif %}
+            {% endfor %}
+        ];
+        document.addEventListener('DOMContentLoaded', function() {
+            messages.forEach(function(m) {
+                Toast.show(m.message, m.category === 'error' ? 'error' : m.category === 'warning' ? 'warning' : 'success');
+            });
+        });
+    })();
+    </script>
+    {% endif %}
+    {% endwith %}
     {% block extra_script %}{% endblock %}
 
     {# 工信部备案 & 公安备案 & 版权（非首页的独立页脚，首页已内嵌） #}
