@@ -135,6 +135,11 @@ def api_save_settings():
                     if not re.match(r'^\d{2}:\d{2}$', str(value)):
                         errors.append({'key': key, 'message': '时间格式应为 HH:MM'})
                         continue
+                elif stype == 'password':
+                    # 密码字段为空时保留原值
+                    if not value:
+                        saved.append(key)
+                        continue
             except (ValueError, TypeError) as e:
                 errors.append({'key': key, 'message': f'值类型错误: {e}'})
                 continue

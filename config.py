@@ -276,6 +276,11 @@ SETTINGS_REGISTRY = [
     ('DEBUG_MODE', False, 'bool', '调试模式', '开启后显示详细错误信息和自动重载', '服务器配置'),
     ('WORKER_THREADS', 4, 'int', '工作线程数', '处理请求的工作线程数量', '服务器配置'),
 
+    # RCON（Minecraft 远程控制）
+    ('RCON_HOST', '127.0.0.1', 'str', 'RCON 地址', 'Minecraft 服务器的 RCON 连接地址', 'RCON 配置'),
+    ('RCON_PORT', 25575, 'int', 'RCON 端口', 'Minecraft 服务器的 RCON 端口号，默认 25575', 'RCON 配置'),
+    ('RCON_PASSWORD', '', 'password', 'RCON 密码', 'Minecraft 服务器的 RCON 密码（不会明文显示）', 'RCON 配置'),
+
     # 网站备案
     ('SHOW_BEIAN', False, 'bool', '显示工信部/公安备案号', '开启后所有页面底部显示备案号信息', '网站备案'),
     ('ICP_BEIAN', '', 'str', '工信部备案号', '如：鄂ICP备2026045257号', '网站备案'),

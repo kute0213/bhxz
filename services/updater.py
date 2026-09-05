@@ -144,6 +144,7 @@ def _add_event(event_type, data):
                 _update_state['progress'] = data.get('percent', 0)
                 _update_state['message'] = data.get('message', '')
             elif event_type == 'done':
+                _update_state['running'] = False
                 _update_state['done'] = True
                 _update_state['success'] = data.get('success', False)
                 if not data.get('success'):
@@ -712,6 +713,9 @@ def _run_update():
         _add_event('error', {'message': f'更新失败: {error_msg}'})
         _add_event('done', {'success': False, 'message': f'更新失败: {error_msg}'})
     finally:
+        # 确保 running 标志被重置，允许重新尝试
+        with _update_state['lock']:
+            _update_state['running'] = False
         if zip_path and os.path.isfile(zip_path):
             try:
                 os.remove(zip_path)
@@ -737,11 +741,16 @@ def _restart_app():
     script = os.path.join(APP_ROOT, 'app.py')
     _add_event('log', {'message': f'启动新服务器: {python_exe} {script}'})
     try:
-        subprocess.Popen(
-            [python_exe, script],
-            cwd=APP_ROOT,
-            close_fds=True,
-        )
+        with open(os.devnull, 'w') as devnull:
+            subprocess.Popen(
+                [python_exe, script],
+                cwd=APP_ROOT,
+                close_fds=True,
+                start_new_session=True,
+                stdout=devnull,
+                stderr=devnull,
+                stdin=devnull,
+            )
     except Exception as e:
         _add_event('log', {'message': f'启动服务器失败: {e}'})
         _shutdown_current_process()

@@ -420,7 +420,6 @@ def change_username(user_id, current_username, new_username, current_password, i
             return False, '该用户名已被使用'
 
         conn.execute("UPDATE users SET username = ? WHERE id = ?", (new_username, user_id))
-        conn.execute("UPDATE access_logs SET username = ? WHERE user_id = ?", (new_username, user_id))
         conn.commit()
         log('ChangeUsername', '用户名修改成功', user_id=user_id,
             old_username=current_username, new_username=new_username, ip=ip_address)

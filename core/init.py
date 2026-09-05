@@ -24,12 +24,14 @@ def start_background_services():
     from services.backup import BackupScheduler
     from services.email import email_service
     from services.sitemap_cache import sitemap_cache
+    from services.rcon import player_tracker
 
     log_cleaner.start()
     scheduler.start()
     BackupScheduler().start()
     email_service.start()
     sitemap_cache.start()
+    player_tracker.start()
     log('INFO', 'App', '后台服务启动完成')
 
 
