@@ -48,11 +48,16 @@ def create_application(user_id: int, mc_username: str, password: str) -> Tuple[b
     Returns:
         (success, message)
     """
+    from services.validation import validate_mc_username, validate_game_password
+
     mc_username = mc_username.strip()
-    if not mc_username:
-        return False, 'MC 用户名不能为空'
-    if len(password) < 4:
-        return False, '密码至少 4 位'
+    valid_mc, mc_err = validate_mc_username(mc_username)
+    if not valid_mc:
+        return False, mc_err
+
+    valid_pwd, pwd_err = validate_game_password(password, min_length=8)
+    if not valid_pwd:
+        return False, pwd_err
 
     conn = get_db()
     try:

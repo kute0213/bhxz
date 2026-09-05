@@ -160,8 +160,12 @@
     document.querySelectorAll('.btn-change-pwd').forEach(function(btn) {
         btn.addEventListener('click', function() {
             var username = this.dataset.username;
-            var newPwd = prompt('请输入 ' + username + ' 的新密码（至少 4 位）：');
-            if (!newPwd || newPwd.length < 4) { showMsg('密码至少 4 位', true); return; }
+            var newPwd = prompt('请输入 ' + username + ' 的新密码（至少 8 位，含字母和数字）：');
+            if (!newPwd) { showMsg('密码不能为空', true); return; }
+            if (newPwd.length < 8) { showMsg('密码至少 8 位', true); return; }
+            if (!/[a-zA-Z]/.test(newPwd)) { showMsg('密码必须包含至少一个字母', true); return; }
+            if (!/[0-9]/.test(newPwd)) { showMsg('密码必须包含至少一个数字', true); return; }
+            if (/\s/.test(newPwd)) { showMsg('密码不能包含空格', true); return; }
             fetch('/game-accounts/api/change-password', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
@@ -180,8 +184,20 @@
         var captcha = document.getElementById('reg-captcha').value.trim();
         var captchaId = document.getElementById('reg-captcha-id').value;
 
+        // 前端校验 MC 用户名
         if (!username) { showMsg('请输入 MC 用户名', true); return; }
-        if (!password || password.length < 4) { showMsg('密码至少 4 位', true); return; }
+        if (username.length < 3) { showMsg('MC 用户名至少 3 个字符', true); return; }
+        if (username.length > 16) { showMsg('MC 用户名不能超过 16 个字符', true); return; }
+        if (!/^[a-zA-Z0-9_]+$/.test(username)) { showMsg('MC 用户名只能包含字母、数字和下划线', true); return; }
+        if (username.indexOf('__') !== -1) { showMsg('MC 用户名不能包含连续下划线', true); return; }
+
+        // 前端校验密码强度
+        if (!password) { showMsg('请输入密码', true); return; }
+        if (password.length < 8) { showMsg('密码至少 8 位', true); return; }
+        if (!/[a-zA-Z]/.test(password)) { showMsg('密码必须包含至少一个字母', true); return; }
+        if (!/[0-9]/.test(password)) { showMsg('密码必须包含至少一个数字', true); return; }
+        if (/\s/.test(password)) { showMsg('密码不能包含空格', true); return; }
+
         if (!captcha) { showMsg('请完成验证码', true); return; }
 
         fetch('/game-accounts/api/apply-register', {

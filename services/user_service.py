@@ -84,8 +84,12 @@ def _clean_user_media(keys, user_id):
 def check_username_available(username):
     """按不区分大小写的规则检查用户名是否可以注册。"""
     username = (username or '').strip()
-    if len(username) < 2 or len(username) > 20:
-        return False, '用户名长度应为 2-20 个字符'
+
+    # 使用 centralized 格式验证
+    from services.validation import validate_website_username
+    valid, err = validate_website_username(username)
+    if not valid:
+        return False, err
 
     try:
         with get_db() as conn:
@@ -113,9 +117,11 @@ def register(username, password, confirm, verify_code, captcha_input, captcha_id
         return False, '注册请求过于频繁，请稍后再试'
 
     # 验证输入
-    if len(username) < 2 or len(username) > 20:
-        log('Register', '用户名长度不符合要求', username=username, ip=ip_address)
-        return False, '用户名长度应为 2-20 个字符'
+    from services.validation import validate_website_username
+    valid_uname, uname_err = validate_website_username(username)
+    if not valid_uname:
+        log('Register', '用户名格式不符合要求', username=username, ip=ip_address)
+        return False, uname_err
 
     pwd_err = validate_password(password)
     if pwd_err:
@@ -398,8 +404,10 @@ def forgot_password(username, email, captcha_input, captcha_id, email_code,
 def change_username(user_id, current_username, new_username, current_password, ip_address):
     """修改用户名。返回 (success, message)。"""
 
-    if len(new_username) < 2 or len(new_username) > 20:
-        return False, '用户名长度应为 2-20 个字符'
+    from services.validation import validate_website_username
+    valid, err = validate_website_username(new_username)
+    if not valid:
+        return False, err
 
     if not current_password:
         return False, '请输入当前密码'

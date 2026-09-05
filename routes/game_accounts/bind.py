@@ -4,6 +4,7 @@ from flask import request, jsonify
 
 from core.auth import login_required, get_current_user
 from services.game_accounts.binding_service import bind_account, unbind_account, get_bound_accounts
+from services.validation import validate_mc_username
 from routes.game_accounts import game_accounts_bp
 
 
@@ -15,8 +16,9 @@ def api_bind():
     data = request.get_json(silent=True) or {}
     mc_username = (data.get('mc_username') or '').strip()
 
-    if not mc_username:
-        return jsonify({'success': False, 'message': 'MC 用户名不能为空'}), 400
+    valid, err = validate_mc_username(mc_username)
+    if not valid:
+        return jsonify({'success': False, 'message': err}), 400
 
     succ, msg = bind_account(user['id'], mc_username)
     return jsonify({'success': succ, 'message': msg})
@@ -30,8 +32,9 @@ def api_unbind():
     data = request.get_json(silent=True) or {}
     mc_username = (data.get('mc_username') or '').strip()
 
-    if not mc_username:
-        return jsonify({'success': False, 'message': 'MC 用户名不能为空'}), 400
+    valid, err = validate_mc_username(mc_username)
+    if not valid:
+        return jsonify({'success': False, 'message': err}), 400
 
     succ, msg = unbind_account(user['id'], mc_username)
     return jsonify({'success': succ, 'message': msg})

@@ -9,6 +9,7 @@ from services.game_accounts.registration_service import (
     approve_application, reject_application,
     ban_account, unban_account, get_banned_accounts,
 )
+from services.validation import validate_mc_username, validate_ban_reason
 
 
 @admin_bp.route('/admin/game-accounts')
@@ -76,8 +77,13 @@ def api_ban():
     mc_username = (data.get('mc_username') or '').strip()
     reason = (data.get('reason') or '').strip()
 
-    if not mc_username:
-        return jsonify({'success': False, 'message': 'MC 用户名不能为空'}), 400
+    valid_mc, mc_err = validate_mc_username(mc_username)
+    if not valid_mc:
+        return jsonify({'success': False, 'message': mc_err}), 400
+
+    valid_reason, reason_err = validate_ban_reason(reason)
+    if not valid_reason:
+        return jsonify({'success': False, 'message': reason_err}), 400
 
     succ, msg = ban_account(mc_username, reason, user['id'])
     return jsonify({'success': succ, 'message': msg})
@@ -87,5 +93,8 @@ def api_ban():
 @admin_required
 def api_unban(mc_username):
     """解除封禁。"""
+    valid_mc, mc_err = validate_mc_username(mc_username)
+    if not valid_mc:
+        return jsonify({'success': False, 'message': mc_err}), 400
     succ, msg = unban_account(mc_username)
     return jsonify({'success': succ, 'message': msg})
