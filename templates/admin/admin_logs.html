@@ -8,21 +8,20 @@
                 <i data-lucide="arrow-left" class="w-4 h-4 inline mr-1"></i>返回管理中心
             </a>
             <h1 class="text-xl sm:text-2xl font-bold">系统日志</h1>
-            <p class="text-cream/60 text-sm mt-1">实时查看应用运行日志</p>
+            <p class="text-cream/60 text-sm mt-1">实时查看应用运行日志（最新在前）</p>
         </div>
 
         <!-- 控制栏 -->
         <div class="pixel-card rounded-xl p-4 mb-4">
             <div class="flex flex-wrap items-center gap-3">
                 <div class="flex items-center gap-2">
-                    <label class="text-sm text-cream/60">等级筛选：</label>
+                    <label class="text-sm text-cream/60">最低等级：</label>
                     <select id="log-level-filter" class="px-3 py-1.5 bg-forest-900/60 border border-cream/20 rounded-lg text-sm focus:outline-none focus:border-gold-400 transition-colors">
-                        <option value="">全部</option>
-                        <option value="DEBUG">DEBUG</option>
-                        <option value="INFO">INFO</option>
-                        <option value="WARNING">WARNING</option>
-                        <option value="ERROR">ERROR</option>
-                        <option value="CRITICAL">CRITICAL</option>
+                        <option value="DEBUG">DEBUG（显示全部）</option>
+                        <option value="INFO">INFO 及以上</option>
+                        <option value="WARNING">WARNING 及以上</option>
+                        <option value="ERROR">ERROR 及以上</option>
+                        <option value="CRITICAL">仅 CRITICAL</option>
                     </select>
                 </div>
                 <div class="flex items-center gap-2 ml-auto">
@@ -31,7 +30,7 @@
                         <i data-lucide="trash-2" class="w-4 h-4 inline mr-1"></i>清空
                     </button>
                     <button id="btn-auto-scroll" class="px-3 py-1.5 bg-gold-400/20 hover:bg-gold-400/30 text-gold-300 text-sm rounded-lg transition-colors border border-gold-400/30">
-                        <i data-lucide="arrow-down-to-line" class="w-4 h-4 inline mr-1"></i>自动滚动
+                        <i data-lucide="arrow-up-to-line" class="w-4 h-4 inline mr-1"></i>自动滚动
                     </button>
                 </div>
             </div>
@@ -59,7 +58,7 @@
     let autoScroll = true;
     let eventSource = null;
     let entries = [];
-    let currentLevel = '';
+    let currentLevel = 'DEBUG';
 
     // 日志等级颜色映射
     const LEVEL_COLORS = {
@@ -70,25 +69,41 @@
         'CRITICAL': 'text-red-500 font-bold',
     };
 
-    // 渲染日志
+    // 等级数值映射（用于筛选 >= 当前等级）
+    const LEVEL_VALUES = {
+        'DEBUG': 0, 'INFO': 1, 'WARNING': 2, 'ERROR': 3, 'CRITICAL': 4,
+    };
+
+    // 判断是否匹配筛选（>= 当前等级）
+    function matchesLevel(entryLevel, filterLevel) {
+        var ev = LEVEL_VALUES[entryLevel] || 0;
+        var fv = LEVEL_VALUES[filterLevel] || 0;
+        return ev >= fv;
+    }
+
+    // 渲染日志（最新在前）
     function render() {
-        const filtered = currentLevel
-            ? entries.filter(e => e.level === currentLevel)
-            : entries;
+        var filtered = [];
+        for (var i = entries.length - 1; i >= 0; i--) {
+            if (matchesLevel(entries[i].level, currentLevel)) {
+                filtered.push(entries[i]);
+            }
+        }
         if (filtered.length === 0) {
             container.innerHTML = '<div class="text-cream/40 text-center py-8">暂无日志</div>';
             logCount.textContent = '0 条';
             return;
         }
-        let html = '';
-        for (const e of filtered) {
-            const colorClass = LEVEL_COLORS[e.level] || 'text-cream';
-            html += `<div class="hover:bg-forest-800/40 px-2 py-0.5 rounded ${colorClass}">${escapeHtml(e.line)}</div>`;
+        var html = '';
+        for (var j = 0; j < filtered.length; j++) {
+            var e = filtered[j];
+            var colorClass = LEVEL_COLORS[e.level] || 'text-cream';
+            html += '<div class="hover:bg-forest-800/40 px-2 py-0.5 rounded ' + colorClass + '">' + escapeHtml(e.line) + '</div>';
         }
         container.innerHTML = html;
         logCount.textContent = filtered.length + ' 条';
         if (autoScroll) {
-            container.scrollTop = container.scrollHeight;
+            container.scrollTop = 0;
         }
     }
 
@@ -103,7 +118,7 @@
                     render();
                 }
             })
-            .catch(() => {});
+            .catch(function() {});
     }
 
     // 连接 SSE
@@ -113,14 +128,12 @@
         }
         eventSource = new EventSource('{{ url_for("admin.api_log_stream") }}');
         eventSource.addEventListener('connected', function() {
-            // 连接建立后重新加载全量日志
             loadInitial();
         });
         eventSource.onmessage = function(e) {
             try {
-                const entry = JSON.parse(e.data);
+                var entry = JSON.parse(e.data);
                 entries.push(entry);
-                // 保持最多 2000 条
                 if (entries.length > 2000) {
                     entries = entries.slice(-2000);
                 }
@@ -128,7 +141,6 @@
             } catch(err) {}
         };
         eventSource.onerror = function() {
-            // 断线重连
             eventSource.close();
             setTimeout(connectSSE, 3000);
         };
@@ -151,22 +163,21 @@
                     render();
                 }
             })
-            .catch(() => {});
+            .catch(function() {});
     });
 
     // 自动滚动切换
     btnAutoScroll.addEventListener('click', function() {
         autoScroll = !autoScroll;
         this.classList.toggle('bg-gold-400/20', autoScroll);
-        this.classList.toggle('bg-gold-400/20', !autoScroll);
         if (autoScroll) {
-            container.scrollTop = container.scrollHeight;
+            container.scrollTop = 0;
         }
     });
 
     // HTML 转义
     function escapeHtml(text) {
-        const div = document.createElement('div');
+        var div = document.createElement('div');
         div.textContent = text;
         return div.innerHTML;
     }

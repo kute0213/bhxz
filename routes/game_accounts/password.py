@@ -1,5 +1,7 @@
 """游戏账号密码修改路由 —— 改密需验证当前 MC 密码 + 新密码强度。"""
 
+import logging
+
 from flask import request, jsonify
 
 from core.auth import login_required, get_current_user
@@ -7,6 +9,8 @@ from services.game_accounts.binding_service import is_bound
 from services.rcon.easy_auth import change_password, verify_login
 from services.validation import validate_game_password
 from routes.game_accounts import game_accounts_bp
+
+logger = logging.getLogger(__name__)
 
 
 @game_accounts_bp.route('/api/change-password', methods=['POST'])
@@ -38,7 +42,11 @@ def api_change_password():
         return jsonify({'success': False, 'message': '该账号未绑定，无法修改密码'}), 403
 
     # 验证当前 MC 密码
-    login_ok, login_msg = verify_login(mc_username, current_password)
+    try:
+        login_ok, login_msg = verify_login(mc_username, current_password)
+    except Exception as e:
+        logger.error('verify_login 异常: %s', e)
+        return jsonify({'success': False, 'message': '密码验证服务异常，请稍后重试'}), 500
     if not login_ok:
         return jsonify({'success': False, 'message': '当前密码验证失败: ' + login_msg}), 403
 

@@ -1,5 +1,7 @@
 """游戏账号绑定/解绑路由 —— 绑定/解绑需验证 MC 服务器密码。"""
 
+import logging
+
 from flask import request, jsonify
 
 from core.auth import login_required, get_current_user
@@ -7,6 +9,8 @@ from services.game_accounts.binding_service import bind_account, unbind_account,
 from services.rcon.easy_auth import verify_login
 from services.validation import validate_mc_username
 from routes.game_accounts import game_accounts_bp
+
+logger = logging.getLogger(__name__)
 
 
 @game_accounts_bp.route('/api/bind', methods=['POST'])
@@ -26,7 +30,11 @@ def api_bind():
         return jsonify({'success': False, 'message': '请输入 MC 服务器密码'}), 400
 
     # 验证 MC 服务器密码
-    login_ok, login_msg = verify_login(mc_username, mc_password)
+    try:
+        login_ok, login_msg = verify_login(mc_username, mc_password)
+    except Exception as e:
+        logger.error('verify_login 异常: %s', e)
+        return jsonify({'success': False, 'message': '密码验证服务异常，请稍后重试'}), 500
     if not login_ok:
         return jsonify({'success': False, 'message': login_msg}), 403
 
@@ -52,7 +60,11 @@ def api_unbind():
         return jsonify({'success': False, 'message': '请输入 MC 服务器密码'}), 400
 
     # 验证 MC 服务器密码
-    login_ok, login_msg = verify_login(mc_username, mc_password)
+    try:
+        login_ok, login_msg = verify_login(mc_username, mc_password)
+    except Exception as e:
+        logger.error('verify_login 异常: %s', e)
+        return jsonify({'success': False, 'message': '密码验证服务异常，请稍后重试'}), 500
     if not login_ok:
         return jsonify({'success': False, 'message': login_msg}), 403
 

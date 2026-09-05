@@ -139,15 +139,19 @@ def verify_login(username: str, password: str) -> Tuple[bool, str]:
         return False, '密码不能为空'
 
     # -----------------------------------------------------------------------
-    # 1. EasyAuth 数据库直连验证（优先，需配置 EASYAUTH_DB_PATH）
+    # 1. EasyAuth 数据库直连验证（优先，需配置 MC_GAME_FOLDER）
     # -----------------------------------------------------------------------
-    from services.easy_auth_db import verify_password as db_verify
-    db_ok, db_msg = db_verify(safe_user, password)
-    if db_ok:
-        return True, db_msg
-    # 数据库可用但密码错误，直接返回
-    if '密码错误' in db_msg:
-        return False, db_msg
+    try:
+        from services.easy_auth_db import verify_password as db_verify
+        db_ok, db_msg = db_verify(safe_user, password)
+        if db_ok:
+            return True, db_msg
+        if '密码错误' in db_msg:
+            return False, db_msg
+    except Exception as e:
+        # 数据库验证异常（如 bcrypt 版本不兼容、数据库文件损坏等），降级到 RCON
+        import logging
+        logging.getLogger(__name__).error('EasyAuth 数据库验证异常: %s', e)
 
     # 数据库未配置或不可用，继续尝试 RCON 命令
     # -----------------------------------------------------------------------

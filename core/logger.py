@@ -133,20 +133,33 @@ def get_log_buffer(level_filter: str = '', after_index: int = 0) -> list:
     """获取内存缓冲中的日志条目。
 
     参数:
-        level_filter: 按等级筛选，空字符串表示不过滤
+        level_filter: 按等级筛选。
+           - 空字符串或 'DEBUG' 表示不过滤（显示所有）
+           - 其他等级（如 'WARNING'）表示筛选该等级及以上的条目
+           - 支持 '>=' 前缀，如 '>=WARNING' 与 'WARNING' 效果相同
         after_index:  只返回索引 > after_index 的条目（用于增量拉取）
     返回:
         [(index, entry), ...]  按时间正序（旧→新）
     """
+    min_level = None
+    filter_raw = (level_filter or '').strip().upper()
+    if filter_raw and filter_raw != 'DEBUG':
+        if filter_raw.startswith('>='):
+            filter_raw = filter_raw[2:].strip()
+        if filter_raw in LOG_LEVELS:
+            min_level = LOG_LEVELS[filter_raw]
+
     with _log_buffer_lock:
         result = []
         start = max(0, after_index)
         for i, entry in enumerate(_log_buffer):
-            idx = i  # 相对索引
+            idx = i
             if idx < start:
                 continue
-            if level_filter and entry['level'] != level_filter.upper():
-                continue
+            if min_level is not None:
+                entry_level = LOG_LEVELS.get(entry['level'], 1)
+                if entry_level < min_level:
+                    continue
             result.append((idx, entry))
         return result
 

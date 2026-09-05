@@ -691,10 +691,7 @@ def _run_update():
 
 
 def _restart_app():
-    """重启当前应用进程（跨平台，优雅替换）。
-
-    使用默认方式启动新服务器，然后自动关闭当前进程。
-    """
+    """重启当前应用进程（跨平台，优雅替换）。"""
     _add_event('progress', {'percent': 100, 'message': '正在重启服务器...'})
 
     time.sleep(0.5)
@@ -704,15 +701,18 @@ def _restart_app():
     _add_event('log', {'message': f'启动新服务器: {python_exe} {script}'})
     try:
         with open(os.devnull, 'w') as devnull:
-            subprocess.Popen(
-                [python_exe, script],
-                cwd=APP_ROOT,
-                close_fds=True,
-                start_new_session=True,
-                stdout=devnull,
-                stderr=devnull,
-                stdin=devnull,
-            )
+            kwargs = {
+                'cwd': APP_ROOT,
+                'close_fds': True,
+                'stdout': devnull,
+                'stderr': devnull,
+                'stdin': devnull,
+            }
+            if sys.platform == 'win32':
+                kwargs['creationflags'] = subprocess.CREATE_NEW_PROCESS_GROUP
+            else:
+                kwargs['preexec_fn'] = os.setsid
+            subprocess.Popen([python_exe, script], **kwargs)
     except Exception as e:
         _add_event('log', {'message': f'启动服务器失败: {e}'})
         _shutdown_current_process()

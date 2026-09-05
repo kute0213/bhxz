@@ -52,7 +52,7 @@ def admin_update_stream():
                     return
 
             # 检查是否已结束（可能事件已在上一轮被取走）
-            s = _get_status_no_lock()
+            s = get_status()
             if s['done']:
                 yield "data: [DONE]\n\n"
                 return
@@ -69,16 +69,3 @@ def admin_update_stream():
             'Connection': 'keep-alive',
         },
     )
-
-
-def _get_status_no_lock():
-    """获取状态快照（不使用锁，供 SSE 内部使用）。"""
-    from services.updater import _update_state
-    return {
-        'running': _update_state['running'],
-        'progress': _update_state['progress'],
-        'message': _update_state['message'],
-        'done': _update_state['done'],
-        'success': _update_state['success'],
-        'error': _update_state['error'],
-    }

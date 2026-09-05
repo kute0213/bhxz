@@ -227,13 +227,22 @@
         if (!pwd) { errEl.textContent = '请输入 MC 服务器密码'; errEl.classList.remove('hidden'); return; }
         errEl.classList.add('hidden');
 
+        var controller = new AbortController();
+        var timeoutId = setTimeout(function() { controller.abort(); }, 15000);
         fetch('/game-accounts/api/bind', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ mc_username: pendingBindUsername, mc_password: pwd }),
+            signal: controller.signal,
         })
-        .then(function(r) { return r.json(); })
+        .then(function(r) { return r.json().catch(function() { return null; }); })
         .then(function(d) {
+            clearTimeout(timeoutId);
+            if (!d) {
+                errEl.textContent = '服务器响应异常，请稍后重试';
+                errEl.classList.remove('hidden');
+                return;
+            }
             if (d.success) {
                 closeBindModal();
                 showMsg(d.message, false);
@@ -242,6 +251,11 @@
                 errEl.textContent = d.message;
                 errEl.classList.remove('hidden');
             }
+        })
+        .catch(function() {
+            clearTimeout(timeoutId);
+            errEl.textContent = '请求失败，请检查网络连接';
+            errEl.classList.remove('hidden');
         });
     });
 
@@ -276,13 +290,22 @@
         if (!pwd) { errEl.textContent = '请输入 MC 服务器密码'; errEl.classList.remove('hidden'); return; }
         errEl.classList.add('hidden');
 
+        var controller = new AbortController();
+        var timeoutId = setTimeout(function() { controller.abort(); }, 15000);
         fetch('/game-accounts/api/unbind', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ mc_username: pendingUnbindUsername, mc_password: pwd }),
+            signal: controller.signal,
         })
-        .then(function(r) { return r.json(); })
+        .then(function(r) { return r.json().catch(function() { return null; }); })
         .then(function(d) {
+            clearTimeout(timeoutId);
+            if (!d) {
+                errEl.textContent = '服务器响应异常，请稍后重试';
+                errEl.classList.remove('hidden');
+                return;
+            }
             if (d.success) {
                 closeUnbindModal();
                 showMsg(d.message, false);
@@ -291,6 +314,11 @@
                 errEl.textContent = d.message;
                 errEl.classList.remove('hidden');
             }
+        })
+        .catch(function() {
+            clearTimeout(timeoutId);
+            errEl.textContent = '请求失败，请检查网络连接';
+            errEl.classList.remove('hidden');
         });
     });
 
@@ -337,13 +365,22 @@
 
         errEl.classList.add('hidden');
 
+        var controller = new AbortController();
+        var timeoutId = setTimeout(function() { controller.abort(); }, 15000);
         fetch('/game-accounts/api/change-password', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ mc_username: username, current_password: currentPwd, new_password: newPwd }),
+            signal: controller.signal,
         })
-        .then(function(r) { return r.json(); })
+        .then(function(r) { return r.json().catch(function() { return null; }); })
         .then(function(d) {
+            clearTimeout(timeoutId);
+            if (!d) {
+                errEl.textContent = '服务器响应异常，请稍后重试';
+                errEl.classList.remove('hidden');
+                return;
+            }
             if (d.success) {
                 closeChangePwdModal();
                 showMsg(d.message, false);
@@ -351,6 +388,11 @@
                 errEl.textContent = d.message;
                 errEl.classList.remove('hidden');
             }
+        })
+        .catch(function() {
+            clearTimeout(timeoutId);
+            errEl.textContent = '请求失败，请检查网络连接';
+            errEl.classList.remove('hidden');
         });
     });
 
