@@ -332,18 +332,22 @@ def sanitize_rcon_input(text: str) -> str:
 def sanitize_rcon_password(password: str) -> str:
     """清洗 RCON 密码参数，确保安全传递给命令。
 
+    移除命令注入字符，仅在密码含空格时加引号（EasyAuth 插件不支持始终引号）。
+
     Args:
         password: 密码
 
     Returns:
-        安全引用的密码字符串
+        安全清洗后的密码字符串
     """
     if not password:
         return ''
     # 移除命令注入字符（含引号，防止引号逃逸）
     safe = _RCON_INJECTION_RE.sub('', password)
-    # 总是用引号包裹，防止空格问题
-    return f'"{safe}"'
+    # 仅在含空格时加引号，EasyAuth 插件不支持始终引号
+    if ' ' in safe:
+        return f'"{safe}"'
+    return safe
 
 
 def sanitize_rcon_username(username: str) -> str:
