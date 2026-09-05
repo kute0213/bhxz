@@ -154,16 +154,21 @@
 
     // 清空
     btnClear.addEventListener('click', function() {
-        if (!confirm('确认清空所有日志？')) return;
-        fetch('{{ url_for("admin.api_clear_logs") }}', { method: 'POST' })
-            .then(r => r.json())
-            .then(data => {
-                if (data.success) {
-                    entries = [];
-                    render();
-                }
-            })
-            .catch(function() {});
+        CustomModal.confirm('确认清空所有日志？', {
+            trigger: this,
+            callback: function(confirmed) {
+                if (!confirmed) return;
+                fetch('{{ url_for("admin.api_clear_logs") }}', { method: 'POST' })
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.success) {
+                            entries = [];
+                            render();
+                        }
+                    })
+                    .catch(function() {});
+            }
+        });
     });
 
     // 自动滚动切换

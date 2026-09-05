@@ -138,8 +138,13 @@
 
     document.querySelectorAll('.reject-btn').forEach(function(btn) {
         btn.addEventListener('click', function() {
-            if (!confirm('确定驳回这张背景图片吗？')) return;
-            handleAction('/admin/backgrounds/' + this.dataset.id + '/reject', this, '已驳回');
+            CustomModal.confirm('确定驳回这张背景图片吗？', {
+                trigger: this,
+                callback: function(confirmed) {
+                    if (!confirmed) return;
+                    handleAction('/admin/backgrounds/' + btn.dataset.id + '/reject', btn, '已驳回');
+                }
+            });
         });
     });
 
@@ -151,8 +156,13 @@
 
     document.querySelectorAll('.admin-delete-btn').forEach(function(btn) {
         btn.addEventListener('click', function() {
-            if (!confirm('确定删除这张背景图片吗？此操作不可恢复。')) return;
-            handleAction('/admin/backgrounds/' + this.dataset.id + '/delete', this, '已删除');
+            CustomModal.confirm('确定删除这张背景图片吗？此操作不可恢复。', {
+                trigger: this,
+                callback: function(confirmed) {
+                    if (!confirmed) return;
+                    handleAction('/admin/backgrounds/' + btn.dataset.id + '/delete', btn, '已删除');
+                }
+            });
         });
     });
 })();

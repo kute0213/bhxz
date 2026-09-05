@@ -143,30 +143,41 @@
     function bindPendingActions() {
         document.querySelectorAll('.btn-approve').forEach(function(btn) {
             btn.addEventListener('click', function() {
-                if (!confirm('确认通过该注册申请？系统将自动执行 RCON 注册。')) return;
-                var id = this.dataset.id;
-                fetch('/admin/api/game-accounts/applications/' + id + '/approve', { method: 'POST' })
-                    .then(function(r) { return r.json(); })
-                    .then(function(d) {
-                        showMsg(d.message, !d.success);
-                        if (d.success) loadPending();
-                    });
+                CustomModal.confirm('确认通过该注册申请？系统将自动执行 RCON 注册。', {
+                    trigger: this,
+                    callback: function(confirmed) {
+                        if (!confirmed) return;
+                        var id = btn.dataset.id;
+                        fetch('/admin/api/game-accounts/applications/' + id + '/approve', { method: 'POST' })
+                            .then(function(r) { return r.json(); })
+                            .then(function(d) {
+                                showMsg(d.message, !d.success);
+                                if (d.success) loadPending();
+                            });
+                    }
+                });
             });
         });
         document.querySelectorAll('.btn-reject').forEach(function(btn) {
             btn.addEventListener('click', function() {
-                var id = this.dataset.id;
-                var reason = prompt('驳回原因（可选）：');
-                if (reason === null) return;
-                fetch('/admin/api/game-accounts/applications/' + id + '/reject', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ reason: reason }),
-                })
-                .then(function(r) { return r.json(); })
-                .then(function(d) {
-                    showMsg(d.message, !d.success);
-                    if (d.success) loadPending();
+                CustomModal.prompt('驳回原因（可选）：', {
+                    title: '驳回申请',
+                    placeholder: '输入驳回原因（可选）',
+                    trigger: this,
+                    callback: function(reason) {
+                        if (reason === null) return;
+                        var id = btn.dataset.id;
+                        fetch('/admin/api/game-accounts/applications/' + id + '/reject', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({ reason: reason }),
+                        })
+                        .then(function(r) { return r.json(); })
+                        .then(function(d) {
+                            showMsg(d.message, !d.success);
+                            if (d.success) loadPending();
+                        });
+                    }
                 });
             });
         });
@@ -226,13 +237,18 @@
                 list.innerHTML = html;
                 document.querySelectorAll('.btn-unban').forEach(function(btn) {
                     btn.addEventListener('click', function() {
-                        if (!confirm('确认解封 ' + this.dataset.username + ' ？')) return;
-                        fetch('/admin/api/game-accounts/bans/' + encodeURIComponent(this.dataset.username), { method: 'DELETE' })
-                            .then(function(r) { return r.json(); })
-                            .then(function(d) {
-                                showMsg(d.message, !d.success);
-                                if (d.success) loadBans();
-                            });
+                        CustomModal.confirm('确认解封 ' + this.dataset.username + ' ？', {
+                            trigger: this,
+                            callback: function(confirmed) {
+                                if (!confirmed) return;
+                                fetch('/admin/api/game-accounts/bans/' + encodeURIComponent(btn.dataset.username), { method: 'DELETE' })
+                                    .then(function(r) { return r.json(); })
+                                    .then(function(d) {
+                                        showMsg(d.message, !d.success);
+                                        if (d.success) loadBans();
+                                    });
+                            }
+                        });
                     });
                 });
             });

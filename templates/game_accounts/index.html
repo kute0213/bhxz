@@ -6,59 +6,11 @@
 
         <div class="text-center mb-10">
             <h1 class="text-2xl sm:text-3xl font-bold mb-3">游戏账号</h1>
-            <p class="text-cream/60">管理你的 Minecraft 游戏账号</p>
-        </div>
-
-        <!-- 绑定账号 -->
-        <div class="pixel-card rounded-xl p-6 mb-6">
-            <div class="flex items-center justify-between mb-4">
-                <h2 class="text-lg font-bold flex items-center gap-2">
-                    <i data-lucide="link" class="w-5 h-5 text-gold-400"></i>
-                    已绑定账号
-                </h2>
-                <span class="text-xs text-cream/50">{{ bound_accounts|length }} 个</span>
-            </div>
-
-            <div id="bound-list" class="space-y-2">
-                {% if bound_accounts %}
-                {% for acc in bound_accounts %}
-                <div class="flex items-center justify-between px-4 py-3 bg-forest-900/40 rounded-lg" data-username="{{ acc.mc_username }}">
-                    <div class="flex items-center gap-3">
-                        <span class="w-2 h-2 rounded-full bg-green-400"></span>
-                        <span class="text-cream font-medium">{{ acc.mc_username }}</span>
-                        <span class="text-xs text-cream/40">绑定于 {{ acc.created_at[:10] }}</span>
-                    </div>
-                    <div class="flex items-center gap-2">
-                        <button class="btn-change-pwd text-xs px-3 py-1.5 bg-gold-400/20 hover:bg-gold-400/30 text-gold-300 rounded-lg transition-colors border border-gold-400/30" data-username="{{ acc.mc_username }}">
-                            改密码
-                        </button>
-                        <button class="btn-unbind text-xs px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-300 rounded-lg transition-colors border border-red-500/30" data-username="{{ acc.mc_username }}">
-                            解绑
-                        </button>
-                    </div>
-                </div>
-                {% endfor %}
-                {% else %}
-                <div class="text-cream/50 text-sm text-center py-6">暂未绑定任何游戏账号</div>
-                {% endif %}
-            </div>
-
-            <!-- 绑定新账号 -->
-            <div class="mt-4 pt-4 border-t border-cream/10">
-                <form id="bind-form" class="flex flex-wrap items-end gap-3">
-                    <div class="flex-1 min-w-[200px]">
-                        <label class="text-xs text-cream/60 block mb-1">MC 用户名</label>
-                        <input type="text" id="bind-username" placeholder="输入要绑定的 MC 用户名" class="w-full px-3 py-2 bg-forest-900/60 border border-cream/20 rounded-lg text-sm focus:outline-none focus:border-gold-400 transition-colors">
-                    </div>
-                    <button type="submit" class="px-5 py-2 bg-gold-400/20 hover:bg-gold-400/30 text-gold-300 text-sm rounded-lg transition-colors border border-gold-400/30">
-                        <i data-lucide="plus" class="w-4 h-4 inline mr-1"></i>绑定
-                    </button>
-                </form>
-            </div>
+            <p class="text-cream/60">申请注册新的 Minecraft 游戏账号</p>
         </div>
 
         <!-- 申请注册新账号 -->
-        <div class="pixel-card rounded-xl p-6 mb-6">
+        <div class="pixel-card rounded-xl p-6">
             <h2 class="text-lg font-bold mb-4 flex items-center gap-2">
                 <i data-lucide="user-plus" class="w-5 h-5 text-gold-400"></i>
                 申请注册游戏账号
@@ -79,66 +31,8 @@
                 </button>
             </form>
         </div>
-
-        <!-- 消息提示 -->
-        <div id="message" class="hidden fixed top-4 right-4 z-50 px-5 py-3 rounded-xl text-sm shadow-lg"></div>
     </div>
 </section>
-
-<!-- ===== 绑定验证弹窗（输入 MC 服务器密码） ===== -->
-<div id="bind-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onclick="if(event.target===this)closeBindModal()">
-    <div class="bg-forest-800 border border-cream/20 rounded-2xl p-6 sm:p-8 w-full max-w-sm mx-4 shadow-2xl" onclick="event.stopPropagation()">
-        <h3 class="text-lg font-bold mb-2">绑定 MC 账号</h3>
-        <p class="text-cream/60 text-sm mb-4">请输入 <span id="bind-modal-username" class="text-gold-400 font-medium"></span> 的 MC 服务器密码进行验证</p>
-        <input type="password" id="bind-modal-pwd" placeholder="MC 服务器密码" class="w-full px-3 py-2 bg-forest-900/60 border border-cream/20 rounded-lg text-sm focus:outline-none focus:border-gold-400 transition-colors mb-4" autocomplete="off">
-        <div class="flex justify-end gap-3">
-            <button onclick="closeBindModal()" class="px-4 py-2 text-sm text-cream/60 hover:text-cream transition-colors">取消</button>
-            <button id="bind-modal-confirm" class="px-5 py-2 bg-gold-400/20 hover:bg-gold-400/30 text-gold-300 text-sm rounded-lg transition-colors border border-gold-400/30">确认绑定</button>
-        </div>
-        <p id="bind-modal-error" class="hidden text-red-400 text-xs mt-3"></p>
-    </div>
-</div>
-
-<!-- ===== 解绑验证弹窗（输入 MC 服务器密码） ===== -->
-<div id="unbind-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onclick="if(event.target===this)closeUnbindModal()">
-    <div class="bg-forest-800 border border-cream/20 rounded-2xl p-6 sm:p-8 w-full max-w-sm mx-4 shadow-2xl" onclick="event.stopPropagation()">
-        <h3 class="text-lg font-bold mb-2">解绑 MC 账号</h3>
-        <p class="text-cream/60 text-sm mb-4">解绑 <span id="unbind-modal-username" class="text-gold-400 font-medium"></span> 需要验证 MC 服务器密码</p>
-        <input type="password" id="unbind-modal-pwd" placeholder="MC 服务器密码" class="w-full px-3 py-2 bg-forest-900/60 border border-cream/20 rounded-lg text-sm focus:outline-none focus:border-gold-400 transition-colors mb-4" autocomplete="off">
-        <div class="flex justify-end gap-3">
-            <button onclick="closeUnbindModal()" class="px-4 py-2 text-sm text-cream/60 hover:text-cream transition-colors">取消</button>
-            <button id="unbind-modal-confirm" class="px-5 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-300 text-sm rounded-lg transition-colors border border-red-500/30">确认解绑</button>
-        </div>
-        <p id="unbind-modal-error" class="hidden text-red-400 text-xs mt-3"></p>
-    </div>
-</div>
-
-<!-- ===== 改密弹窗 ===== -->
-<div id="change-pwd-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onclick="if(event.target===this)closeChangePwdModal()">
-    <div class="bg-forest-800 border border-cream/20 rounded-2xl p-6 sm:p-8 w-full max-w-sm mx-4 shadow-2xl" onclick="event.stopPropagation()">
-        <h3 class="text-lg font-bold mb-2">修改游戏密码</h3>
-        <p class="text-cream/60 text-sm mb-4">为 <span id="change-pwd-username" class="text-gold-400 font-medium"></span> 修改密码</p>
-        <div class="space-y-3 mb-4">
-            <div>
-                <label class="text-xs text-cream/60 block mb-1">当前密码</label>
-                <input type="password" id="change-pwd-current" placeholder="输入当前 MC 密码" class="w-full px-3 py-2 bg-forest-900/60 border border-cream/20 rounded-lg text-sm focus:outline-none focus:border-gold-400 transition-colors" autocomplete="off">
-            </div>
-            <div>
-                <label class="text-xs text-cream/60 block mb-1">新密码</label>
-                <input type="password" id="change-pwd-new" placeholder="至少 8 位，含字母和数字" class="w-full px-3 py-2 bg-forest-900/60 border border-cream/20 rounded-lg text-sm focus:outline-none focus:border-gold-400 transition-colors" autocomplete="new-password">
-            </div>
-            <div>
-                <label class="text-xs text-cream/60 block mb-1">确认新密码</label>
-                <input type="password" id="change-pwd-confirm" placeholder="再次输入新密码" class="w-full px-3 py-2 bg-forest-900/60 border border-cream/20 rounded-lg text-sm focus:outline-none focus:border-gold-400 transition-colors" autocomplete="new-password">
-            </div>
-        </div>
-        <div class="flex justify-end gap-3">
-            <button onclick="closeChangePwdModal()" class="px-4 py-2 text-sm text-cream/60 hover:text-cream transition-colors">取消</button>
-            <button id="change-pwd-confirm-btn" class="px-5 py-2 bg-gold-400/20 hover:bg-gold-400/30 text-gold-300 text-sm rounded-lg transition-colors border border-gold-400/30">确认修改</button>
-        </div>
-        <p id="change-pwd-error" class="hidden text-red-400 text-xs mt-3"></p>
-    </div>
-</div>
 
 <!-- ===== 验证码弹窗（注册申请时弹出） ===== -->
 <div id="captcha-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onclick="if(event.target===this)closeCaptchaModal()">
@@ -163,18 +57,7 @@
 {% block extra_script %}
 <script>
 (function() {
-    const msgEl = document.getElementById('message');
-
-    function showMsg(text, isError) {
-        msgEl.textContent = text;
-        msgEl.className = 'fixed top-4 right-4 z-50 px-5 py-3 rounded-xl text-sm shadow-lg ' +
-            (isError ? 'bg-red-900/80 border border-red-500/30 text-red-200' : 'bg-green-900/80 border border-green-500/30 text-green-200');
-        msgEl.classList.remove('hidden');
-        setTimeout(function() { msgEl.classList.add('hidden'); }, 4000);
-    }
-
-    // ===== 验证码 =====
-    var pendingRegData = null; // 点击提交后暂存的注册数据
+    var pendingRegData = null;
 
     function refreshCaptcha() {
         fetch('/api/captcha/generate')
@@ -194,237 +77,24 @@
         pendingRegData = null;
     };
 
-    // ===== 绑定弹窗 =====
-    var pendingBindUsername = null;
-
-    window.closeBindModal = function() {
-        document.getElementById('bind-modal').classList.add('hidden');
-        document.getElementById('bind-modal-pwd').value = '';
-        document.getElementById('bind-modal-error').classList.add('hidden');
-        pendingBindUsername = null;
-    };
-
-    document.getElementById('bind-form').addEventListener('submit', function(e) {
-        e.preventDefault();
-        var username = document.getElementById('bind-username').value.trim();
-        if (!username) { showMsg('请输入 MC 用户名', true); return; }
-        if (username.length < 3) { showMsg('MC 用户名至少 3 个字符', true); return; }
-        if (username.length > 16) { showMsg('MC 用户名不能超过 16 个字符', true); return; }
-        if (!/^[a-zA-Z0-9_]+$/.test(username)) { showMsg('MC 用户名只能包含字母、数字和下划线', true); return; }
-        if (username.indexOf('__') !== -1) { showMsg('MC 用户名不能包含连续下划线', true); return; }
-
-        pendingBindUsername = username;
-        document.getElementById('bind-modal-username').textContent = username;
-        document.getElementById('bind-modal-pwd').value = '';
-        document.getElementById('bind-modal-error').classList.add('hidden');
-        document.getElementById('bind-modal').classList.remove('hidden');
-        document.getElementById('bind-modal-pwd').focus();
-    });
-
-    document.getElementById('bind-modal-confirm').addEventListener('click', function() {
-        var pwd = document.getElementById('bind-modal-pwd').value;
-        var errEl = document.getElementById('bind-modal-error');
-        if (!pwd) { errEl.textContent = '请输入 MC 服务器密码'; errEl.classList.remove('hidden'); return; }
-        errEl.classList.add('hidden');
-
-        var controller = new AbortController();
-        var timeoutId = setTimeout(function() { controller.abort(); }, 15000);
-        fetch('/game-accounts/api/bind', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ mc_username: pendingBindUsername, mc_password: pwd }),
-            signal: controller.signal,
-        })
-        .then(function(r) { return r.json().catch(function() { return null; }); })
-        .then(function(d) {
-            clearTimeout(timeoutId);
-            if (!d) {
-                errEl.textContent = '服务器响应异常，请稍后重试';
-                errEl.classList.remove('hidden');
-                return;
-            }
-            if (d.success) {
-                closeBindModal();
-                showMsg(d.message, false);
-                setTimeout(function() { location.reload(); }, 1000);
-            } else {
-                errEl.textContent = d.message;
-                errEl.classList.remove('hidden');
-            }
-        })
-        .catch(function() {
-            clearTimeout(timeoutId);
-            errEl.textContent = '请求失败，请检查网络连接';
-            errEl.classList.remove('hidden');
-        });
-    });
-
-    document.getElementById('bind-modal-pwd').addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') { document.getElementById('bind-modal-confirm').click(); }
-    });
-
-    // ===== 解绑弹窗 =====
-    var pendingUnbindUsername = null;
-
-    window.closeUnbindModal = function() {
-        document.getElementById('unbind-modal').classList.add('hidden');
-        document.getElementById('unbind-modal-pwd').value = '';
-        document.getElementById('unbind-modal-error').classList.add('hidden');
-        pendingUnbindUsername = null;
-    };
-
-    document.querySelectorAll('.btn-unbind').forEach(function(btn) {
-        btn.addEventListener('click', function() {
-            pendingUnbindUsername = this.dataset.username;
-            document.getElementById('unbind-modal-username').textContent = pendingUnbindUsername;
-            document.getElementById('unbind-modal-pwd').value = '';
-            document.getElementById('unbind-modal-error').classList.add('hidden');
-            document.getElementById('unbind-modal').classList.remove('hidden');
-            document.getElementById('unbind-modal-pwd').focus();
-        });
-    });
-
-    document.getElementById('unbind-modal-confirm').addEventListener('click', function() {
-        var pwd = document.getElementById('unbind-modal-pwd').value;
-        var errEl = document.getElementById('unbind-modal-error');
-        if (!pwd) { errEl.textContent = '请输入 MC 服务器密码'; errEl.classList.remove('hidden'); return; }
-        errEl.classList.add('hidden');
-
-        var controller = new AbortController();
-        var timeoutId = setTimeout(function() { controller.abort(); }, 15000);
-        fetch('/game-accounts/api/unbind', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ mc_username: pendingUnbindUsername, mc_password: pwd }),
-            signal: controller.signal,
-        })
-        .then(function(r) { return r.json().catch(function() { return null; }); })
-        .then(function(d) {
-            clearTimeout(timeoutId);
-            if (!d) {
-                errEl.textContent = '服务器响应异常，请稍后重试';
-                errEl.classList.remove('hidden');
-                return;
-            }
-            if (d.success) {
-                closeUnbindModal();
-                showMsg(d.message, false);
-                setTimeout(function() { location.reload(); }, 1000);
-            } else {
-                errEl.textContent = d.message;
-                errEl.classList.remove('hidden');
-            }
-        })
-        .catch(function() {
-            clearTimeout(timeoutId);
-            errEl.textContent = '请求失败，请检查网络连接';
-            errEl.classList.remove('hidden');
-        });
-    });
-
-    document.getElementById('unbind-modal-pwd').addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') { document.getElementById('unbind-modal-confirm').click(); }
-    });
-
-    // ===== 改密弹窗 =====
-    window.closeChangePwdModal = function() {
-        document.getElementById('change-pwd-modal').classList.add('hidden');
-        document.getElementById('change-pwd-current').value = '';
-        document.getElementById('change-pwd-new').value = '';
-        document.getElementById('change-pwd-confirm').value = '';
-        document.getElementById('change-pwd-error').classList.add('hidden');
-    };
-
-    document.querySelectorAll('.btn-change-pwd').forEach(function(btn) {
-        btn.addEventListener('click', function() {
-            var username = this.dataset.username;
-            document.getElementById('change-pwd-username').textContent = username;
-            document.getElementById('change-pwd-current').value = '';
-            document.getElementById('change-pwd-new').value = '';
-            document.getElementById('change-pwd-confirm').value = '';
-            document.getElementById('change-pwd-error').classList.add('hidden');
-            document.getElementById('change-pwd-modal').classList.remove('hidden');
-            document.getElementById('change-pwd-current').focus();
-        });
-    });
-
-    document.getElementById('change-pwd-confirm-btn').addEventListener('click', function() {
-        var username = document.getElementById('change-pwd-username').textContent;
-        var currentPwd = document.getElementById('change-pwd-current').value;
-        var newPwd = document.getElementById('change-pwd-new').value;
-        var confirmPwd = document.getElementById('change-pwd-confirm').value;
-        var errEl = document.getElementById('change-pwd-error');
-
-        if (!currentPwd) { errEl.textContent = '请输入当前 MC 密码'; errEl.classList.remove('hidden'); return; }
-        if (!newPwd) { errEl.textContent = '请输入新密码'; errEl.classList.remove('hidden'); return; }
-        if (newPwd.length < 8) { errEl.textContent = '密码至少 8 位'; errEl.classList.remove('hidden'); return; }
-        if (!/[a-zA-Z]/.test(newPwd)) { errEl.textContent = '密码必须包含至少一个字母'; errEl.classList.remove('hidden'); return; }
-        if (!/[0-9]/.test(newPwd)) { errEl.textContent = '密码必须包含至少一个数字'; errEl.classList.remove('hidden'); return; }
-        if (/\s/.test(newPwd)) { errEl.textContent = '密码不能包含空格'; errEl.classList.remove('hidden'); return; }
-        if (newPwd !== confirmPwd) { errEl.textContent = '两次密码输入不一致'; errEl.classList.remove('hidden'); return; }
-
-        errEl.classList.add('hidden');
-
-        var controller = new AbortController();
-        var timeoutId = setTimeout(function() { controller.abort(); }, 15000);
-        fetch('/game-accounts/api/change-password', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({ mc_username: username, current_password: currentPwd, new_password: newPwd }),
-            signal: controller.signal,
-        })
-        .then(function(r) { return r.json().catch(function() { return null; }); })
-        .then(function(d) {
-            clearTimeout(timeoutId);
-            if (!d) {
-                errEl.textContent = '服务器响应异常，请稍后重试';
-                errEl.classList.remove('hidden');
-                return;
-            }
-            if (d.success) {
-                closeChangePwdModal();
-                showMsg(d.message, false);
-            } else {
-                errEl.textContent = d.message;
-                errEl.classList.remove('hidden');
-            }
-        })
-        .catch(function() {
-            clearTimeout(timeoutId);
-            errEl.textContent = '请求失败，请检查网络连接';
-            errEl.classList.remove('hidden');
-        });
-    });
-
-    document.getElementById('change-pwd-modal').addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') {
-            var active = document.activeElement;
-            if (active && (active.id === 'change-pwd-current' || active.id === 'change-pwd-new' || active.id === 'change-pwd-confirm')) {
-                document.getElementById('change-pwd-confirm-btn').click();
-            }
-        }
-    });
-
     // ===== 注册申请（先校验，再弹出验证码弹窗） =====
     document.getElementById('register-form').addEventListener('submit', function(e) {
         e.preventDefault();
         var username = document.getElementById('reg-username').value.trim();
         var password = document.getElementById('reg-password').value;
 
-        // 前端校验
-        if (!username) { showMsg('请输入 MC 用户名', true); return; }
-        if (username.length < 3) { showMsg('MC 用户名至少 3 个字符', true); return; }
-        if (username.length > 16) { showMsg('MC 用户名不能超过 16 个字符', true); return; }
-        if (!/^[a-zA-Z0-9_]+$/.test(username)) { showMsg('MC 用户名只能包含字母、数字和下划线', true); return; }
-        if (username.indexOf('__') !== -1) { showMsg('MC 用户名不能包含连续下划线', true); return; }
+        if (!username) { Toast.error('请输入 MC 用户名'); return; }
+        if (username.length < 3) { Toast.error('MC 用户名至少 3 个字符'); return; }
+        if (username.length > 16) { Toast.error('MC 用户名不能超过 16 个字符'); return; }
+        if (!/^[a-zA-Z0-9_]+$/.test(username)) { Toast.error('MC 用户名只能包含字母、数字和下划线'); return; }
+        if (username.indexOf('__') !== -1) { Toast.error('MC 用户名不能包含连续下划线'); return; }
 
-        if (!password) { showMsg('请输入密码', true); return; }
-        if (password.length < 8) { showMsg('密码至少 8 位', true); return; }
-        if (!/[a-zA-Z]/.test(password)) { showMsg('密码必须包含至少一个字母', true); return; }
-        if (!/[0-9]/.test(password)) { showMsg('密码必须包含至少一个数字', true); return; }
-        if (/\s/.test(password)) { showMsg('密码不能包含空格', true); return; }
+        if (!password) { Toast.error('请输入密码'); return; }
+        if (password.length < 8) { Toast.error('密码至少 8 位'); return; }
+        if (!/[a-zA-Z]/.test(password)) { Toast.error('密码必须包含至少一个字母'); return; }
+        if (!/[0-9]/.test(password)) { Toast.error('密码必须包含至少一个数字'); return; }
+        if (/\s/.test(password)) { Toast.error('密码不能包含空格'); return; }
 
-        // 校验通过，暂存数据，弹出验证码弹窗
         pendingRegData = { mc_username: username, password: password };
         refreshCaptcha();
         document.getElementById('captcha-input').value = '';
@@ -454,13 +124,14 @@
         })
         .then(function(r) { return r.json(); })
         .then(function(d) {
-            showMsg(d.message, !d.success);
             if (d.success) {
+                Toast.success(d.message);
                 closeCaptchaModal();
                 document.getElementById('reg-username').value = '';
                 document.getElementById('reg-password').value = '';
                 pendingRegData = null;
             } else {
+                Toast.error(d.message);
                 refreshCaptcha();
                 document.getElementById('captcha-input').value = '';
                 document.getElementById('captcha-input').focus();
