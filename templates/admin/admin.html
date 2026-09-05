@@ -119,6 +119,15 @@
                         <span class="inline-block mt-4 text-gold-400 text-sm font-medium">查看日志 →</span>
                     </a>
 
+                    <a href="{{ url_for('admin.admin_update_page') }}" class="pixel-card rounded-xl p-6 block hover:no-underline">
+                        <div class="w-12 h-12 mb-4 bg-gold-400/20 rounded-xl flex items-center justify-center">
+                            <i data-lucide="refresh-cw" class="w-6 h-6 text-gold-400"></i>
+                        </div>
+                        <h3 class="text-lg font-bold mb-2">一键更新</h3>
+                        <p class="text-cream/60 text-sm">从 GitHub 自动获取最新代码并重启服务器</p>
+                        <span class="inline-block mt-4 text-gold-400 text-sm font-medium">进入更新 →</span>
+                    </a>
+
                     <a href="{{ url_for('admin.db_backup_page') }}" class="pixel-card rounded-xl p-6 block hover:no-underline">
                         <div class="w-12 h-12 mb-4 bg-gold-400/20 rounded-xl flex items-center justify-center">
                             <i data-lucide="database" class="w-6 h-6 text-gold-400"></i>
