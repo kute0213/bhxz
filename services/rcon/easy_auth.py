@@ -108,6 +108,48 @@ def get_player_info(username: str) -> Tuple[bool, str]:
     return False, '未找到该玩家信息'
 
 
+def verify_login(username: str, password: str) -> Tuple[bool, str]:
+    """验证玩家密码是否正确（通过 /login 指令）。
+
+    注意：返回 (成功, 消息) 元组，成功时消息为玩家真实名称。
+
+    Args:
+        username: MC 玩家名
+        password: 密码
+
+    Returns:
+        (success, message_or_error)
+    """
+    safe_user = sanitize_rcon_username(username)
+    if not safe_user:
+        return False, 'MC 用户名包含非法字符'
+    safe_pwd = sanitize_rcon_password(password)
+    if not safe_pwd:
+        return False, '密码不能为空'
+
+    # 尝试带用户名的 login 指令（RCON 控制台模式）
+    cmd = f'/login {safe_user} {safe_pwd}'
+    resp = _exec(cmd)
+    if resp:
+        resp_lower = resp.lower()
+        if ('successfully authenticated' in resp_lower or '登录成功' in resp
+                or 'logged in' in resp_lower or '验证成功' in resp):
+            return True, safe_user
+
+    # 尝试不带用户名的 login 指令（部分 EasyAuth 版本）
+    cmd2 = f'/login {safe_pwd}'
+    resp2 = _exec(cmd2)
+    if resp2:
+        resp2_lower = resp2.lower()
+        if ('successfully authenticated' in resp2_lower or '登录成功' in resp2
+                or 'logged in' in resp2_lower or '验证成功' in resp2):
+            return True, safe_user
+
+    # 组合错误信息
+    err = resp or resp2 or 'RCON 连接失败，请检查 RCON 配置'
+    return False, f'密码验证失败: {err}'
+
+
 def list_players() -> Tuple[bool, str]:
     """列出所有注册玩家。"""
     resp = _exec('/auth list')

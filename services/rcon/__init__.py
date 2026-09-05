@@ -10,12 +10,12 @@ from services.rcon.client import rcon_connect, execute_command
 from services.rcon.player_tracker import player_tracker, PlayerList, parse_player_list
 from services.rcon.easy_auth import (
     register_player, change_password, remove_player,
-    get_player_info, list_players,
+    get_player_info, list_players, verify_login,
 )
 
 __all__ = [
     'rcon_connect', 'execute_command',
     'player_tracker', 'PlayerList', 'parse_player_list',
     'register_player', 'change_password', 'remove_player',
-    'get_player_info', 'list_players',
+    'get_player_info', 'list_players', 'verify_login',
 ]
