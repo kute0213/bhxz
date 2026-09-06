@@ -4,6 +4,7 @@
 
 ### 新增
 
+* **导航栏「服务器账号」入口**：桌面端、平板端、移动端三个导航区域均添加「服务器账号」按钮，登录后可见，点击直达游戏账号管理首页
 * **管理中心「游戏账号管理」页面**：新增 `admin_game_account_bindings.html` 页面，管理员可查看所有用户已绑定的 MC 游戏账号（含绑定用户、绑定时间），支持管理员强制解绑
 * **管理中心功能拆分**：原「游戏账号管理」改名为「账号注册申请管理」，新增「游戏账号管理」独立入口，两者功能分离
 
@@ -20,6 +21,8 @@
 * **空异常捕获增加日志**：`core/init.py` 中两个 `except Exception: pass` 改为 `log('WARNING', ...)` 记录，便于排查问题
 
 ### 修复
+
+* **RCON 密码验证改用多重验证方式**：`easyauth_bind.py` 原使用 `/auth getPlayerInfo` 获取哈希 + bcrypt 比对，但部分服务器可能不支持该指令。现改用 `verify_login` 多重验证流程（数据库直连 → `/auth checkpassword` → `/auth login` → `/login`），兼容性更强，解决"RCON 连接失败，无法验证密码"问题
 
 * **修复** **`routes/game_accounts/__init__.py`** **缺少** **`get_db`** **导入**：`change_password_page`、`api_bound_accounts`、`api_change_password` 三个路由函数直接使用 `get_db()` 但未在文件顶部导入，会导致 NameError 运行时错误。现通过服务层函数替代，已移除对 `get_db` 的依赖
 
