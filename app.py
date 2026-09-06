@@ -67,6 +67,23 @@ app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(seconds=config.SESSION_LIFE
 # ---------------------------------------------------------------------------
 
 if not _is_child:
+    # 解析命令行参数
+    import argparse
+    _parser = argparse.ArgumentParser(description='BHXZ 服务器')
+    _parser.add_argument('--db-timeout', type=int, default=30,
+                         help='DuckDB 连接超时秒数（默认 30s，Windows 上数据库较大时可适当增大）')
+    _args, _ = _parser.parse_known_args()
+
+    # 设置数据库连接超时
+    from core.db.connection import set_db_connect_timeout
+    set_db_connect_timeout(_args.db_timeout)
+
+    # 启动前立即输出，确保 Windows 用户能看到进程已启动
+    print(f'[App] BHXZ 服务器启动中...', flush=True)
+    print(f'[App] 工作目录: {_APP_ROOT}', flush=True)
+    print(f'[App] Python: {sys.executable}', flush=True)
+    print(f'[App] 平台: {sys.platform}', flush=True)
+    print(f'[App] 数据库超时: {_args.db_timeout}s', flush=True)
     try:
         init_app(app, _APP_ROOT)
     except Exception as e:

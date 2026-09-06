@@ -439,8 +439,8 @@ def main():
     # 6. 启动新服务器
     log('\n▶ 启动新服务器...')
     if sys.platform == 'win32':
-        # Windows 下使用 start 命令打开新窗口
-        cmd = f'start "bhxz-server" "{python}" "{APP_SCRIPT}"'
+        # Windows 下使用 start 命令打开新窗口，增加数据库超时
+        cmd = f'start "bhxz-server" "{python}" "{APP_SCRIPT}" --db-timeout 60'
         subprocess.Popen(cmd, cwd=PROJECT_ROOT, shell=True)
     else:
         # Linux 下使用 nohup 后台运行

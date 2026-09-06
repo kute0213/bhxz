@@ -8,6 +8,7 @@
 
 import os
 import threading
+import time
 
 from config import DB_PATH
 from core.logger import log
@@ -238,9 +239,21 @@ class DuckDBCursor:
 class DuckDBConnection:
     """模拟 sqlite3.Connection 的连接对象。"""
 
-    def __init__(self, path):
-        self._path = path
-        self._duckdb_conn = duckdb.connect(database=path, read_only=False)
+    def __init__(self, path_or_conn, path=None):
+        """初始化连接。
+
+        Args:
+            path_or_conn: 数据库路径或已创建的 duckdb 连接
+            path: 数据库路径（当传入已创建连接时使用）
+        """
+        if isinstance(path_or_conn, str):
+            # 传入路径，创建新连接
+            self._path = path_or_conn
+            self._duckdb_conn = duckdb.connect(database=path_or_conn, read_only=False)
+        else:
+            # 传入已创建连接
+            self._duckdb_conn = path_or_conn
+            self._path = path or '<unknown>'
         self._row_factory = None
         self._cursor = DuckDBCursor(self)
 
@@ -338,6 +351,62 @@ _conn = None
 _conn_lock = threading.RLock()  # 可重入锁，支持嵌套调用
 _init_lock = threading.Lock()
 
+# DuckDB 连接超时（秒），防止 Windows 上 WAL 恢复卡死
+_DB_CONNECT_TIMEOUT = 30
+
+
+def set_db_connect_timeout(seconds: int):
+    """设置数据库连接超时（秒）。"""
+    global _DB_CONNECT_TIMEOUT
+    _DB_CONNECT_TIMEOUT = seconds
+
+
+def _connect_with_timeout(path: str, timeout: int = _DB_CONNECT_TIMEOUT):
+    """带超时的 DuckDB 连接，防止 Windows 上 WAL 恢复卡死。
+
+    DuckDB 在打开已有数据库文件时，如果 WAL 文件较大或损坏，
+    可能会无响应卡死。此函数使用后台线程 + 超时的方式来避免。
+
+    Args:
+        path: 数据库文件路径
+        timeout: 超时秒数（默认 30s）
+
+    Returns:
+        duckdb.DuckDBPyConnection
+
+    Raises:
+        TimeoutError: 连接超时
+        Exception: 连接过程中的其他异常
+    """
+    result = [None]
+    error = [None]
+    done = threading.Event()
+
+    def _connect():
+        try:
+            result[0] = duckdb.connect(database=path, read_only=False)
+        except Exception as e:
+            error[0] = e
+        finally:
+            done.set()
+
+    t = threading.Thread(target=_connect, daemon=True, name='db-connect')
+    t.start()
+
+    if not done.wait(timeout=timeout):
+        # 超时 —— 此时无法中断 duckdb.connect() 线程，但 let it finish in background
+        log('WARNING', 'DB',
+            f'DuckDB 连接超时（{timeout}s），数据库文件可能损坏或过大',
+            path=path)
+        raise TimeoutError(
+            f'DuckDB 连接超时（{timeout}s），请检查数据库文件: {path}'
+        )
+
+    if error[0] is not None:
+        raise error[0]
+
+    return result[0]
+
 
 def get_db():
     """获取数据库连接（单例共享，自动加锁）。
@@ -364,7 +433,25 @@ def get_db():
         with _init_lock:
             if _conn is None:
                 try:
-                    _conn = DuckDBConnection(DB_PATH)
+                    log('INFO', 'DB', f'正在连接数据库...（超时 {_DB_CONNECT_TIMEOUT}s）')
+                    real_conn = _connect_with_timeout(DB_PATH, _DB_CONNECT_TIMEOUT)
+                    _conn = DuckDBConnection(real_conn, DB_PATH)
+                    log('INFO', 'DB', '数据库连接成功')
+                except TimeoutError:
+                    log('ERROR', 'DB', '数据库连接超时，尝试删除 WAL 文件后重试')
+                    wal_path = f"{DB_PATH}.wal"
+                    if os.path.exists(wal_path):
+                        try:
+                            os.remove(wal_path)
+                            log('INFO', 'DB', '已删除 WAL 文件，重试连接')
+                            real_conn = _connect_with_timeout(DB_PATH, _DB_CONNECT_TIMEOUT)
+                            _conn = DuckDBConnection(real_conn, DB_PATH)
+                            log('INFO', 'DB', '数据库连接恢复成功（删除 WAL）')
+                        except OSError as oe:
+                            log('ERROR', 'DB', f'删除 WAL 文件失败: {oe}')
+                            raise
+                    else:
+                        raise
                 except duckdb.InternalException as e:
                     if 'WAL file' in str(e):
                         wal_path = f"{DB_PATH}.wal"
