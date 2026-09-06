@@ -27,52 +27,52 @@ def api_bind():
     username = (data.get('username') or '').strip()
     password = data.get('password', '')
 
-    # 基础校验
+    # ── 基础校验 ──
     if not username:
         return jsonify({'success': False, 'message': 'MC 用户名不能为空'}), 400
     if not password:
         return jsonify({'success': False, 'message': '密码不能为空'}), 400
 
-    # 校验 MC 用户名格式
     valid_mc, mc_err = validate_mc_username(username)
     if not valid_mc:
         return jsonify({'success': False, 'message': mc_err}), 400
 
-    # 检查当前用户是否已绑定账号
+    # ── 检查绑定冲突（合并为一次 DB 连接） ──
     conn = get_db()
     try:
+        # 检查当前用户是否已绑定
         my_bind = conn.execute(
             "SELECT id, mc_username FROM game_account_bindings WHERE user_id = ?",
             (user['id'],),
         ).fetchone()
         if my_bind:
-            return jsonify({'success': False, 'message': f'你已绑定账号 {my_bind["mc_username"]}，请先解绑后再绑定其他账号'}), 400
-    finally:
-        conn.close()
+            return jsonify({
+                'success': False,
+                'message': f'你已绑定账号 {my_bind["mc_username"]}，请先解绑后再绑定其他账号',
+                'error_code': 'ALREADY_BOUND',
+            }), 400
 
-    # 检查该 MC 账号是否已被绑定
-    conn = get_db()
-    try:
+        # 检查该 MC 账号是否已被其他用户绑定
         existing = conn.execute(
             "SELECT id, user_id FROM game_account_bindings WHERE mc_username = ?",
             (username,),
         ).fetchone()
         if existing:
-            return jsonify({'success': False, 'message': '该 MC 账号已被其他用户绑定'}), 400
-    finally:
-        conn.close()
+            return jsonify({
+                'success': False,
+                'message': '该 MC 账号已被其他用户绑定',
+                'error_code': 'ALREADY_BOUND',
+            }), 400
 
-    # 通过 RCON 验证密码
-    result = bind_account(username, password)
-    if not result['success']:
-        return jsonify(result), 401
+        # ── 通过 RCON 验证密码 ──
+        result = bind_account(username, password)
+        if not result['success']:
+            return jsonify(result), 401
 
-    # 验证通过，绑定到当前用户
-    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    actual_username = result['username']
-    conn = get_db()
-    try:
-        # 再次检查（防止并发）
+        # ── 验证通过，绑定到当前用户 ──
+        actual_username = result['username']
+
+        # 再次检查（防止并发冲突）
         existing = conn.execute(
             "SELECT id FROM game_account_bindings WHERE mc_username = ?",
             (actual_username,),
@@ -80,15 +80,20 @@ def api_bind():
         if existing:
             return jsonify({'success': False, 'message': '该 MC 账号已被其他用户绑定'}), 400
 
+        now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         conn.execute(
             "INSERT INTO game_account_bindings (user_id, mc_username, created_at) VALUES (?, ?, ?)",
             (user['id'], actual_username, now),
         )
         conn.commit()
 
-        result['success'] = True
-        result['message'] = f"账号 '{actual_username}' 绑定成功"
-        return jsonify(result), 200
+        return jsonify({
+            'success': True,
+            'message': f"账号 '{actual_username}' 绑定成功，你可以使用该账号登录游戏",
+            'username': actual_username,
+            'uuid': result.get('uuid'),
+        }), 200
+
     except Exception as e:
         return jsonify({'success': False, 'message': f'绑定失败: {e}'}), 500
     finally:

@@ -10,7 +10,8 @@
 """
 
 import json
-from typing import Optional
+
+import bcrypt
 
 
 def _get_player_info(username: str) -> dict:
@@ -20,22 +21,18 @@ def _get_player_info(username: str) -> dict:
     解析返回的 JSON 数据。
 
     Returns:
-        {
-            "success": bool,
-            "message": str,
-            "data": dict | None,  # 玩家信息 JSON 数据
-            "username": str,      # 实际用户名
-            "error_code": str | None
-        }
+        { success, message, data, username, error_code }
     """
     from services.rcon.easy_auth import get_player_info
 
     succ, msg = get_player_info(username)
     if not succ:
-        return _result(False, msg, username, error_code='PLAYER_NOT_FOUND')
+        # 区分 RCON 连接失败和玩家不存在
+        if 'RCON 无应答' in msg or 'RCON 连接失败' in msg:
+            return _result(False, 'RCON 连接失败，无法验证密码，请联系管理员检查服务器状态', username, error_code='RCON_FAILED')
+        return _result(False, f"玩家 '{username}' 未在服务器注册", username, error_code='PLAYER_NOT_FOUND')
 
     # 解析 RCON 响应
-    # 格式: "Player Info: {...json...}" 或直接的 JSON 字符串
     raw = msg.strip()
     if raw.startswith('Player Info:'):
         raw = raw[len('Player Info:'):].strip()
@@ -43,11 +40,11 @@ def _get_player_info(username: str) -> dict:
     try:
         data = json.loads(raw)
     except json.JSONDecodeError as e:
-        return _result(False, f'玩家数据解析失败: {e}', username, error_code='HASH_ERROR')
+        return _result(False, '玩家数据解析失败，请联系管理员', username, error_code='HASH_ERROR')
 
     password_hash = data.get('password', '')
     if not password_hash:
-        return _result(False, '该玩家未设置密码，无法绑定', username, error_code='HASH_ERROR')
+        return _result(False, '该玩家未设置游戏内密码，请先在游戏中登录设置密码', username, error_code='NO_PASSWORD')
 
     return _result(True, '玩家信息获取成功', username, data=data, password_hash=password_hash)
 
@@ -65,34 +62,30 @@ def bind_account(username: str, password: str) -> dict:
         password: 明文密码
 
     Returns:
-        {
-            "success": bool,         # 是否验证成功
-            "message": str,          # 提示信息
-            "username": str,         # 实际用户名（保持原始大小写）
-            "uuid": str | None,      # 玩家 UUID（成功时返回）
-            "error_code": str | None # 错误码
-        }
+        { success, message, username, uuid, error_code }
     """
     # ── 校验输入 ──
-    if not username or not username.strip():
-        return _result(False, '用户名不能为空', username, error_code='INVALID_INPUT')
+    username = username.strip()
+    if not username:
+        return _result(False, 'MC 用户名不能为空', username, error_code='INVALID_INPUT')
     if not password:
         return _result(False, '密码不能为空', username, error_code='INVALID_INPUT')
     if len(username) > 16:
-        return _result(False, '用户名过长（MC 限制 16 字符）', username, error_code='INVALID_INPUT')
+        return _result(False, 'MC 用户名过长（限制 16 字符）', username, error_code='INVALID_INPUT')
 
     # ── 第 1 步：通过 RCON 获取玩家信息 ──
-    info = _get_player_info(username.strip())
+    info = _get_player_info(username)
     if not info['success']:
-        return info  # 直接传播错误信息
+        return info
 
     data = info['data']
     password_hash = info['password_hash']
-    actual_username = data.get('online_account', data.get('username', username))
+
+    # 获取实际用户名（优先使用 JSON 中的 username 字段，回退到输入的 username）
+    actual_username = data.get('username', username)
 
     # ── 第 2 步：BCrypt 密码比对 ──
     try:
-        import bcrypt
         if bcrypt.checkpw(password.encode('utf-8'), password_hash.encode('utf-8')):
             return _result(
                 True, f"账号 '{actual_username}' 验证成功",
@@ -101,10 +94,8 @@ def bind_account(username: str, password: str) -> dict:
         else:
             return _result(
                 False, '密码错误，请重试', username,
-                uuid=data.get('uuid'), error_code='WRONG_PASSWORD',
+                error_code='WRONG_PASSWORD',
             )
-    except ImportError:
-        return _result(False, 'bcrypt 库未安装，请联系管理员', username, error_code='HASH_ERROR')
     except Exception as e:
         return _result(False, f'密码验证异常: {e}', username, error_code='HASH_ERROR')
 

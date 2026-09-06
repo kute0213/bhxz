@@ -15,7 +15,7 @@
                 <i data-lucide="link" class="w-5 h-5 text-blue-400"></i>
                 绑定已有游戏账号
             </h2>
-            <p class="text-cream/50 text-sm mb-4">输入游戏内账号信息，验证密码后绑定到当前网站账户。</p>
+            <p class="text-cream/50 text-sm mb-4">通过 RCON 验证游戏内密码，将你的游戏账号绑定到网站账户。绑定后可用该账号在相关功能中快捷登录。</p>
 
             <form id="bind-form" class="space-y-4">
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -28,8 +28,9 @@
                         <input type="password" id="bind-password" placeholder="游戏内登录密码" class="w-full px-3 py-2 bg-forest-900/60 border border-cream/20 rounded-lg text-sm focus:outline-none focus:border-blue-400 transition-colors">
                     </div>
                 </div>
-                <button type="submit" class="px-5 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 text-sm rounded-lg transition-colors border border-blue-500/30">
-                    <i data-lucide="shield-check" class="w-4 h-4 inline mr-1"></i>验证并绑定
+                <button type="submit" id="bind-btn" class="px-5 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 text-sm rounded-lg transition-colors border border-blue-500/30">
+                    <i data-lucide="shield-check" class="w-4 h-4 inline mr-1 bind-btn-icon"></i>
+                    <span class="bind-btn-text">验证并绑定</span>
                 </button>
             </form>
         </div>
@@ -99,8 +100,15 @@
     };
 
     // ===== 绑定账号 =====
-    document.getElementById('bind-form').addEventListener('submit', function(e) {
+    var bindForm = document.getElementById('bind-form');
+    var bindBtn = document.getElementById('bind-btn');
+    var bindBtnIcon = bindBtn.querySelector('.bind-btn-icon');
+    var bindBtnText = bindBtn.querySelector('.bind-btn-text');
+
+    bindForm.addEventListener('submit', function(e) {
         e.preventDefault();
+        if (bindBtn.disabled) return; // 防止重复提交
+
         var username = document.getElementById('bind-username').value.trim();
         var password = document.getElementById('bind-password').value;
 
@@ -111,11 +119,18 @@
         if (!password) { Toast.error('请输入密码'); return; }
 
         // 使用 CustomModal 确认
-        CustomModal.confirm('确认绑定账号 <strong>' + escapeHtml(username) + '</strong>？系统将验证游戏内密码。', {
+        CustomModal.confirm('确认绑定账号 <strong>' + escapeHtml(username) + '</strong>？系统将通过 RCON 验证游戏内密码。', {
             title: '绑定确认',
             confirmText: '验证并绑定',
             callback: function(confirmed) {
                 if (!confirmed) return;
+
+                // 设置加载状态
+                bindBtn.disabled = true;
+                bindBtnIcon.setAttribute('data-lucide', 'loader-2');
+                lucide.createIcons({ targets: [bindBtnIcon] });
+                bindBtnIcon.classList.add('animate-spin');
+                bindBtnText.textContent = '验证中...';
 
                 fetch('/game-accounts/api/bind', {
                     method: 'POST',
@@ -129,14 +144,23 @@
                 .then(function(d) {
                     if (d.success) {
                         CustomModal.alert(d.message, { type: 'success' });
-                        document.getElementById('bind-username').value = '';
+                        // 清空密码字段，保留用户名以便用户确认
                         document.getElementById('bind-password').value = '';
+                        Toast.success('账号 ' + d.username + ' 已绑定');
                     } else {
                         CustomModal.alert(d.message, { type: 'error' });
                     }
                 })
                 .catch(function(err) {
-                    CustomModal.alert('网络错误: ' + err.message, { type: 'error' });
+                    CustomModal.alert('网络错误，请检查网络连接后重试', { type: 'error' });
+                })
+                .finally(function() {
+                    // 恢复按钮状态
+                    bindBtn.disabled = false;
+                    bindBtnIcon.setAttribute('data-lucide', 'shield-check');
+                    lucide.createIcons({ targets: [bindBtnIcon] });
+                    bindBtnIcon.classList.remove('animate-spin');
+                    bindBtnText.textContent = '验证并绑定';
                 });
             }
         });
