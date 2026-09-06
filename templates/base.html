@@ -170,10 +170,6 @@
                     <i data-lucide="gamepad-2" class="w-5 h-5"></i>
                     <span>服务器互动</span>
                 </a>
-                <a href="{{ url_for('main.health_page') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors">
-                    <i data-lucide="activity" class="w-5 h-5"></i>
-                    <span>服务器状态</span>
-                </a>
                 {% if user %}
                 <a href="{{ url_for('main.settings') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors">
                     <i data-lucide="settings" class="w-5 h-5"></i>
@@ -237,9 +233,6 @@
                 <a href="{{ url_for('main.interact_page') }}" class="text-cream/80 hover:text-gold-400 text-sm font-medium transition-colors px-3 py-2 rounded-lg hover:bg-gold-400/5">
                     服务器互动
                 </a>
-                <a href="{{ url_for('main.health_page') }}" class="text-cream/80 hover:text-gold-400 text-sm font-medium transition-colors px-3 py-2 rounded-lg hover:bg-gold-400/5">
-                服务器状态
-            </a>
                     {% if user and user.is_admin %}
                     <a href="{{ url_for('admin.admin_page') }}" class="text-cream/80 hover:text-gold-400 text-sm font-medium transition-colors px-3 py-2 rounded-lg hover:bg-gold-400/5">
                         管理中心
@@ -321,7 +314,6 @@
                 <a href="{{ url_for('main.interact_page') }}" class="flex-shrink-0 px-3 py-1.5 text-sm text-cream/70 hover:text-gold-400 rounded-lg hover:bg-gold-400/5 transition-colors">
                     服务器互动
                 </a>
-                <a href="{{ url_for('main.health_page') }}" class="flex-shrink-0 px-3 py-1.5 text-sm text-cream/70 hover:text-gold-400 rounded-lg hover:bg-gold-400/5 transition-colors">服务器状态</a>
                 {% if user and user.is_admin %}
                 <a href="{{ url_for('admin.admin_page') }}" class="flex-shrink-0 px-3 py-1.5 text-sm text-cream/70 hover:text-gold-400 rounded-lg hover:bg-gold-400/5 transition-colors">
                     管理中心
