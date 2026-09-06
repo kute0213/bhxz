@@ -52,10 +52,26 @@ def _get_level_number(level_name: str) -> int:
     return LOG_LEVELS.get(level_name.upper(), 1)
 
 
+# 内存中的日志等级缓存，避免 _get_current_min_level() 调用 get_db() 导致死锁
+# 初始默认 INFO，数据库就绪后通过 refresh_log_level() 刷新
+_current_min_level = 1
+_current_min_level_lock = threading.Lock()
+
+
 def _get_current_min_level() -> int:
-    """获取当前配置的最低日志等级（每次调用实时读取，支持热重载）。"""
-    cfg = get_config_value('LOG_LEVEL', 'INFO')
-    return _get_level_number(cfg)
+    """获取当前配置的最低日志等级（从内存缓存读取，不依赖数据库）。"""
+    return _current_min_level
+
+
+def refresh_log_level():
+    """从数据库刷新日志等级缓存（数据库就绪后调用）。"""
+    try:
+        cfg = get_config_value('LOG_LEVEL', 'INFO')
+        with _current_min_level_lock:
+            global _current_min_level
+            _current_min_level = _get_level_number(cfg)
+    except Exception:
+        pass  # 数据库未就绪时保持默认值
 
 
 # ---------------------------------------------------------------------------

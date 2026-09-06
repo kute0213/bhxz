@@ -59,6 +59,10 @@ def init_app(app, app_root):
         raise
     log('INFO', 'App', '数据库初始化完成')
 
+    # 数据库就绪后刷新日志等级缓存（从 settings 表读取）
+    from core.logger import refresh_log_level
+    refresh_log_level()
+
     # 每次启动执行服务器健康检查（自动修复，不删文件）
     run_startup_checks(app_root)
 

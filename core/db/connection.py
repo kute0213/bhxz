@@ -363,28 +363,27 @@ def get_db():
     if _conn is None:
         with _init_lock:
             if _conn is None:
-                # 注意：不要在锁内调用 log()！log() 会调用 get_setting() 触发 get_db() 递归，导致死锁
-                print('[DB] 正在连接数据库...', flush=True)
+                # 注意：log() 不依赖数据库（日志等级缓存在内存中），锁内调用安全
+                log('INFO', 'DB', '正在连接数据库...')
                 try:
                     _conn = DuckDBConnection(DB_PATH)
-                    print('[DB] 数据库连接成功', flush=True)
+                    log('INFO', 'DB', '数据库连接成功')
                 except duckdb.InternalException as e:
                     if 'WAL file' in str(e):
                         wal_path = f"{DB_PATH}.wal"
-                        print(f'[DB] 检测到 WAL 文件损坏，尝试恢复: {wal_path}', flush=True)
+                        log('WARNING', 'DB', '检测到 WAL 文件损坏，尝试恢复', path=wal_path)
                         if os.path.exists(wal_path):
                             try:
                                 os.remove(wal_path)
-                                print('[DB] 已删除损坏的 WAL 文件，重试连接', flush=True)
+                                log('INFO', 'DB', '已删除损坏的 WAL 文件，重试连接')
                             except OSError as oe:
-                                print(f'[DB] 删除 WAL 文件失败: {oe}', flush=True)
+                                log('ERROR', 'DB', '删除 WAL 文件失败', error=str(oe))
                         _conn = DuckDBConnection(DB_PATH)
-                        print('[DB] 数据库连接恢复成功', flush=True)
+                        log('INFO', 'DB', '数据库连接恢复成功')
                     else:
                         raise
                 except Exception as e:
-                    print(f'[FATAL] 无法打开数据库 ({DB_PATH}): {e}', file=__import__('sys').stderr)
-                    __import__('sys').stderr.flush()
+                    log('CRITICAL', 'DB', '无法打开数据库', path=DB_PATH, error=str(e))
                     raise
                 _conn.row_factory = _row_factory_duckdbrow
     return _ThreadSafeConnection(_conn, _conn_lock)
