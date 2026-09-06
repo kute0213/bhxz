@@ -1,10 +1,10 @@
-"""公开页面路由：首页、性能监控。
+"""公开页面路由：首页。
 
 薄层：仅负责 HTTP 请求解析/响应构造，业务逻辑委托给 services。
 """
 
 import os
-from flask import render_template, send_from_directory, current_app
+from flask import render_template, send_from_directory, current_app, abort
 from core.auth import get_current_user
 from core.db import get_db
 from config import get_config_value, APP_ROOT
@@ -27,12 +27,6 @@ def home():
         map_url=get_config_value('MAP_URL', 'https://map.bhxz.tw.kg'),
         qq_group_url=get_config_value('QQ_GROUP_URL', ''),
     )
-
-
-@main_bp.route('/health')
-def health_page():
-    user = get_current_user()
-    return render_template('performance.html', user=user)
 
 
 @main_bp.route('/interact')

@@ -48,12 +48,11 @@ def create_binding(user_id: int, mc_username: str) -> Tuple[bool, str]:
     conn = get_db()
     try:
         now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        conn.execute(
+        cursor = conn.execute(
             "INSERT INTO game_account_bindings (user_id, mc_username, created_at) VALUES (?, ?, ?)",
             (user_id, mc_username, now),
         )
-        changes = conn.execute("SELECT changes()").fetchone()[0]
-        if changes == 0:
+        if cursor.rowcount == 0:
             return False, '绑定失败，请重试'
         conn.commit()
         return True, mc_username
@@ -82,11 +81,11 @@ def unbind_account(binding_id: int, user_id: int) -> Tuple[bool, str]:
     mc_username = binding['mc_username']
     conn = get_db()
     try:
-        conn.execute(
+        cursor = conn.execute(
             "DELETE FROM game_account_bindings WHERE id = ? AND user_id = ?",
             (binding_id, user_id),
         )
-        if conn.execute("SELECT changes()").fetchone()[0] == 0:
+        if cursor.rowcount == 0:
             return False, '解绑失败，请重试'
         conn.commit()
         return True, f'已成功解绑账号 {mc_username}'

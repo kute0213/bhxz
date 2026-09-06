@@ -9,13 +9,16 @@
 ### 重构
 
 * **路由层分层规范全面修复**：移除 `routes/game_accounts/__init__.py` 和 `routes/game_accounts/bind.py` 中所有直接 SQL 查询，改用 `services/game_accounts/binding_service.py` 的服务函数（`get_user_bindings`、`is_mc_username_bound`、`is_bound_to_user`、`create_binding`），彻底消除路由层 `conn.execute()` 调用，严格遵循 MVC 分层架构
+
 * **服务层增强**：`binding_service.py` 新增 `create_binding`（创建绑定记录，含双重并发检查）、`is_bound_to_user`（按用户名+用户ID 校验所有权）函数，所有函数返回 `(success, data_or_error)` 元组
+
 * **大文件按功能模块拆分为子包**：`services/music_service.py`（861行）→ `services/music/`（constants.py / queries.py / crud.py / upload.py / favorites.py），`services/user_service.py`（648行）→ `services/user/`（auth.py / profile.py / admin.py），`services/updater.py`（660行）→ `services/updater/`（config.py / core.py），`services/discussion_service.py`（531行）→ `services/discussion/`（topics.py / replies.py / categories.py）；保留原文件作为兼容性重导出层（`from services.music import *`），旧代码无需修改导入路径
+
 * **空异常捕获增加日志**：`core/init.py` 中两个 `except Exception: pass` 改为 `log('WARNING', ...)` 记录，便于排查问题
 
 ### 修复
 
-* **修复 `routes/game_accounts/__init__.py` 缺少 `get_db` 导入**：`change_password_page`、`api_bound_accounts`、`api_change_password` 三个路由函数直接使用 `get_db()` 但未在文件顶部导入，会导致 NameError 运行时错误。现通过服务层函数替代，已移除对 `get_db` 的依赖
+* **修复** **`routes/game_accounts/__init__.py`** **缺少** **`get_db`** **导入**：`change_password_page`、`api_bound_accounts`、`api_change_password` 三个路由函数直接使用 `get_db()` 但未在文件顶部导入，会导致 NameError 运行时错误。现通过服务层函数替代，已移除对 `get_db` 的依赖
 
 ### 文档
 
@@ -23,21 +26,30 @@
 
 ### 安全
 
-* **指令执行安全增强**：所有 RCON 指令输入（用户名、密码）均经过 `sanitize_rcon_username` / `sanitize_rcon_password` 清洗，移除命令注入字符（`; | & \` $ ( ) { } " \n \r`），防止命令注入攻击；密码参数始终用引号包裹
+* **指令执行安全增强**：所有 RCON 指令输入（用户名、密码）均经过 `sanitize_rcon_username` / `sanitize_rcon_password` 清洗，移除命令注入字符（`; | & \` $ ( ) { } " \n \r\`），防止命令注入攻击；密码参数始终用引号包裹
+
 * **弱密码数据库**：集成 150+ 常见易猜密码黑名单（含数字序列、字母序列、键盘模式、常见中文密码等），并检测纯重复字符密码和纯连续序列密码
+
 * **双重验证防御**：前端 JS 和后端 Python 均执行相同的格式和强度验证，避免绕过
 
 ### 优化
 
 * **集中化验证模块**：创建 `services/validation.py`，统一管理所有输入验证（MC 用户名、网站用户名、密码强度、RCON 安全、邮箱格式、封禁理由），避免重复代码和验证遗漏
+
 * **用户名严格验证**：MC 用户名字符限制（3-16 位，仅字母数字下划线）+ 连续下划线禁止；网站用户名禁止 HTML/JS 注入字符（`< > ' " ; &` 等），Unicode 类别白名单
+
 * **密码强度提升**：游戏账号密码从 4 位提升到 8 位，要求含字母和数字；网站密码新增弱密码检测
+
 * **模型层验证下沉**：`registration_service.create_application` 和 `binding_service` 等底层函数也内嵌验证，形成多层防御
 
 * **项目结构优化**：按功能模块全面分类组织代码，`services/` 新增 `game_accounts/`、`monitoring/tracker.py`、`rcon/easy_auth.py`、`terminal/` 等子包；`routes/` 新增 `game_accounts/`、`backgrounds/`、`community/`、`scheduled/`、`script/` 等子包；`templates/` 按模块细分目录；消除根目录文件堆积
+
 * **RCON 客户端统一**：合并重复的 RCON 客户端代码，`services/rcon/easy_auth.py` 统一封装 EasyAuth 插件指令（注册、改密、删除等），`services/rcon/client.py` 作为唯一 RCON 连接入口
+
 * **代码清理**：删除未使用的导入（`re`、`json`、`shlex`、`Flask` 等）、删除重复代理配置（`updater.py` 中 `ghproxy.net` 重复条目）、删除死代码和冗余文件（`services/game_accounts/rcon_client.py`）
+
 * **性能监控独立追踪器**：`services/monitoring/tracker.py` 新增 `PerformanceTracker`，后台线程每 5 秒采集 CPU/内存/系统信息并缓存，前端轮询读取，避免每次请求都调用 psutil
+
 * **文档同步更新**：README.md 项目结构、架构目录、API 接口、功能特性章节全面同步最新代码结构
 
 ### 修复
