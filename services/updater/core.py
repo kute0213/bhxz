@@ -154,19 +154,17 @@ def _make_zip_path():
 
 
 def _download_zip(url, zip_path, progress_callback=None, timeout=30):
-    """使用 requests 下载 ZIP 文件，支持进度回调。"""
+    """使用 requests 下载 ZIP 文件，支持进度回调。
+
+    不依赖 Content-Type 判断（代理可能返回 text/html），
+    下载完成后通过 zipfile.is_zipfile 验证文件有效性。
+    """
     try:
         import requests as req_lib
-        session = req_lib.Session()
-        resp = session.get(url, stream=True, timeout=timeout, headers={
+        resp = req_lib.get(url, stream=True, timeout=timeout, headers={
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-            'Accept': 'application/zip,*/*',
         })
         resp.raise_for_status()
-
-        ct = resp.headers.get('Content-Type', '')
-        if 'html' in ct.lower():
-            return False
 
         total_size = int(resp.headers.get('Content-Length', 0))
         downloaded = 0
@@ -228,17 +226,21 @@ def _extract_zip(zip_path, extract_dir):
 
 
 def _detect_fastest_proxy(proxy_list, timeout=3):
-    """检测最快的可用代理（简化版，仅测试连接性，不测速）。"""
+    """检测最快的可用代理。
+
+    通过尝试访问代理的首页来测试连通性，不依赖特定 URL 格式。
+    """
     import requests as req_lib
 
     for name, base_url, tmpl in proxy_list:
-        test_url = f'{base_url}https://github.com/'
+        # 解析代理的原始域名作为测试 URL
+        test_url = base_url.rstrip('/')
         try:
             start = time.time()
             resp = req_lib.get(test_url, timeout=timeout, headers={
                 'User-Agent': 'Mozilla/5.0',
             })
-            if resp.status_code == 200:
+            if resp.status_code < 500:  # 任何非服务器错误都算可用
                 latency = time.time() - start
                 _add_event('log', {
                     'message': f'  ✓ {name} ({latency:.2f}s)'
@@ -248,6 +250,61 @@ def _detect_fastest_proxy(proxy_list, timeout=3):
             pass
 
     return []
+
+
+def _build_download_urls(download_template, name, base_url):
+    """构建多个候选下载 URL，兼容不同代理格式。"""
+    candidate_urls = []
+
+    # 格式1: {template_base}/archive_path
+    template_base = download_template.replace('{repo}', '')
+    if not template_base.endswith('/'):
+        template_base += '/'
+    candidate_urls.append(f'{template_base}{REPO_ARCHIVE_PATH}')
+
+    # 格式2: base_url + full github URL
+    github_url = f'https://github.com/{REPO_ARCHIVE_PATH}'
+    b = base_url.rstrip('/')
+    candidate_urls.append(f'{b}/{github_url}')
+
+    # 格式3: base_url + archive_path
+    candidate_urls.append(f'{b}/{REPO_ARCHIVE_PATH}')
+
+    # 格式4: 标准 DOWNLOAD_URL_FORMATS 模板
+    for fmt in DOWNLOAD_URL_FORMATS:
+        url = fmt.format(proxy_base=template_base, archive_path=REPO_ARCHIVE_PATH)
+        if url not in candidate_urls:
+            candidate_urls.append(url)
+
+    return candidate_urls
+
+
+def _try_download(urls, zip_path, progress_callback, timeout, label):
+    """尝试多个 URL 下载 ZIP，返回 (success, temp_dir)。"""
+    import tempfile as _tempfile
+
+    for zip_url in urls:
+        _add_event('log', {'message': f'  URL: {zip_url}'})
+        try:
+            success = _download_zip(zip_url, zip_path, progress_callback=progress_callback, timeout=timeout)
+            if success:
+                _add_event('log', {'message': f'  ✓ {label} 下载成功'})
+                temp_dir = _tempfile.mkdtemp(prefix='bhxz_update_')
+                _add_event('log', {'message': '正在解压更新包...'})
+                _extract_zip(zip_path, temp_dir)
+                return True, temp_dir
+            else:
+                _add_event('log', {'message': '  ✗ 不可用'})
+        except Exception as e:
+            _add_event('log', {'message': f"  ✗ 异常: {str(e)[:60]}"})
+        finally:
+            if os.path.isfile(zip_path):
+                try:
+                    os.remove(zip_path)
+                except Exception:
+                    pass
+
+    return False, None
 
 
 def _run_update():
@@ -315,14 +372,8 @@ def _run_update():
         download_success = False
         last_error = ''
 
-        proxy_base = download_template.replace('{repo}', '')
-        if not proxy_base.endswith('/'):
-            proxy_base += '/'
-
-        candidate_urls = []
-        for fmt in DOWNLOAD_URL_FORMATS:
-            url = fmt.format(proxy_base=proxy_base, archive_path=REPO_ARCHIVE_PATH)
-            candidate_urls.append(url)
+        # 构建候选下载 URL 列表 - 尝试多种格式以兼容不同代理
+        candidate_urls = _build_download_urls(download_template, name, base_url)
 
         _add_event('log', {'message': f'{"─" * 40}'})
         _add_event('log', {'message': f'尝试从 {name} 下载更新包...'})
@@ -335,68 +386,31 @@ def _run_update():
             mapped = 5 + int(pct * 65 / 100)
             _add_event('progress', {'percent': mapped, 'message': f'正在下载更新包... {int(pct)}%'})
 
-        url_ok = False
-        for url_idx, zip_url in enumerate(candidate_urls):
-            _add_event('log', {'message': f'  URL: {zip_url}'})
-            try:
-                success = _download_zip(zip_url, zip_path, progress_callback=_dl_progress, timeout=30)
-                if success:
-                    url_ok = True
-                    break
-                else:
-                    _add_event('log', {'message': '  ✗ 不可用'})
-            except Exception as e:
-                _add_event('log', {'message': f"  ✗ 异常: {str(e)[:60]}"})
-            finally:
-                if not url_ok and os.path.isfile(zip_path):
-                    try:
-                        os.remove(zip_path)
-                    except Exception:
-                        pass
-
-        if url_ok:
-            download_elapsed = time.time() - download_start
-            _add_event('log', {'message': f'✓ {name} 下载成功（耗时 {download_elapsed:.1f}s）'})
-            _add_event('progress', {'percent': 70, 'message': '下载完成，正在解压...'})
-
-            temp_dir = tempfile.mkdtemp(prefix='bhxz_update_')
-            _add_event('log', {'message': '正在解压更新包...'})
-            _extract_zip(zip_path, temp_dir)
-
-            download_success = True
-        else:
-            _add_event('log', {'message': f'✗ {name} 下载失败（耗时 {time.time() - download_start:.1f}s）'})
-            last_error = f'{name} 下载失败'
+        download_success, temp_dir = _try_download(
+            candidate_urls, zip_path, _dl_progress, 30, name
+        )
 
         if not download_success:
+            _add_event('log', {'message': f'✗ {name} 下载失败（耗时 {time.time() - download_start:.1f}s）'})
+            last_error = f'{name} 下载失败'
+            # 尝试直连下载
             _add_event('log', {'message': f'{"─" * 40}'})
             _add_event('log', {'message': '尝试直接下载 GitHub 原始归档（无代理）...'})
-            direct_url = f'https://github.com/{REPO_ARCHIVE_PATH}'
-            _add_event('log', {'message': f"  下载 URL: {direct_url}"})
 
-            zip_path = _make_zip_path()
+            direct_urls = [
+                f'https://github.com/{REPO_ARCHIVE_PATH}',
+                f'https://github.com/kute0213/bhxz/archive/refs/heads/main.zip',
+            ]
 
             def _direct_progress(pct):
                 mapped = 5 + int(pct * 65 / 100)
                 _add_event('progress', {'percent': mapped, 'message': f'正在直连下载更新包... {int(pct)}%'})
 
-            try:
-                success = _download_zip(direct_url, zip_path, progress_callback=_direct_progress, timeout=15)
-                if success:
-                    _add_event('log', {'message': '✓ 直接下载成功'})
-                    temp_dir = tempfile.mkdtemp(prefix='bhxz_update_')
-                    _extract_zip(zip_path, temp_dir)
-                    download_success = True
-                else:
-                    last_error = '直接下载失败'
-            except Exception as e:
-                last_error = str(e)[:200]
-            finally:
-                if zip_path and os.path.isfile(zip_path):
-                    try:
-                        os.remove(zip_path)
-                    except Exception:
-                        pass
+            download_success, temp_dir = _try_download(
+                direct_urls, zip_path, _direct_progress, 15, 'GitHub 直连'
+            )
+            if not download_success:
+                last_error = '直连下载失败'
 
         if not download_success:
             raise RuntimeError(
@@ -508,17 +522,24 @@ def _run_update():
         restart_script = _write_restart_script()
 
         if restart_script and os.path.isfile(restart_script):
-            # 启动重启脚本（独立进程，不依赖当前进程存活）
+            # 启动重启脚本（独立进程组，不依赖当前进程存活）
             try:
-                with open(os.devnull, 'w') as devnull:
-                    subprocess.Popen(
-                        [restart_script],
-                        cwd=APP_ROOT,
-                        close_fds=True,
-                        stdout=devnull,
-                        stderr=devnull,
-                        stdin=devnull,
+                popen_kwargs = {
+                    'cwd': APP_ROOT,
+                    'close_fds': True,
+                    'stdout': subprocess.DEVNULL,
+                    'stderr': subprocess.DEVNULL,
+                    'stdin': subprocess.DEVNULL,
+                }
+                if sys.platform == 'win32':
+                    popen_kwargs['creationflags'] = (
+                        subprocess.CREATE_NEW_PROCESS_GROUP
+                        | subprocess.CREATE_NO_WINDOW
+                        | 0x00000004  # DETACHED_PROCESS
                     )
+                else:
+                    popen_kwargs['preexec_fn'] = os.setsid
+                subprocess.Popen([restart_script], **popen_kwargs)
                 _add_event('log', {'message': '✓ 重启脚本已启动，服务器将在旧进程退出后自动重启'})
             except Exception as e:
                 _add_event('log', {'message': f'✗ 启动重启脚本失败: {e}'})

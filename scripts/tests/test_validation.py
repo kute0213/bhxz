@@ -1,4 +1,6 @@
-"""验证模块测试 —— 确保验证逻辑正确无误判。"""
+"""验证模块测试 —— 使用 pytest 确保验证逻辑正确无误判。"""
+
+import pytest
 
 from services.validation import (
     validate_mc_username, validate_website_username,
@@ -9,10 +11,10 @@ from services.validation import (
 )
 
 
-def test_mc_username():
+class TestMCUsername:
     """MC 用户名验证测试"""
-    print('=== MC 用户名验证测试 ===')
-    tests = [
+
+    @pytest.mark.parametrize('username,expected', [
         ('Steve', True),
         ('Alex_123', True),
         ('xX_Player_Xx', True),
@@ -23,17 +25,16 @@ def test_mc_username():
         ('player\nname', False),
         ('player__name', False),
         ('', False),
-    ]
-    for username, expected in tests:
+    ])
+    def test_mc_username(self, username, expected):
         valid, msg = validate_mc_username(username)
-        status = 'PASS' if valid == expected else 'FAIL'
-        print(f'  [{status}] {username!r}: valid={valid}, msg={msg!r}')
+        assert valid == expected, f'{username!r}: valid={valid}, msg={msg!r}'
 
 
-def test_website_username():
+class TestWebsiteUsername:
     """网站用户名验证测试"""
-    print('\n=== 网站用户名验证测试 ===')
-    tests = [
+
+    @pytest.mark.parametrize('username,expected', [
         ('张三', True),
         ('test_user', True),
         ('test-user', True),
@@ -47,83 +48,84 @@ def test_website_username():
         ('李四', True),
         ('abc-def_123', True),
         ('test\\backslash', False),
-    ]
-    for username, expected in tests:
+    ])
+    def test_website_username(self, username, expected):
         valid, msg = validate_website_username(username)
-        status = 'PASS' if valid == expected else 'FAIL'
-        print(f'  [{status}] {username!r}: valid={valid}, msg={msg!r}')
+        assert valid == expected, f'{username!r}: valid={valid}, msg={msg!r}'
 
 
-def test_password_strength():
+class TestPasswordStrength:
     """网站密码强度测试"""
-    print('\n=== 网站密码强度测试 ===')
-    tests = [
-        ('Abcdef1!', True),        # 8 位，含大小写字母数字特殊字符
-        ('Password1!', True),      # 10 位，含大小写字母数字特殊字符，非弱密码
-        ('12345678', False),       # 无字母
-        ('abcdefgh', False),       # 无大写、数字、特殊字符
-        ('Abcdefgh', False),       # 无数字、特殊字符
-        ('Abc12345', False),       # 无特殊字符
-        ('Abcd1234!@#', True),     # 强密码
-        ('', False),               # 空
-        ('Admin123!', False),      # 弱密码（admin123!）
-        ('My_C0mpl3x!', True),     # 强密码
-        ('aaaaaaaa', False),       # 无大写字母/数字/特殊字符
-        ('1234567890', False),     # 无字母
-        ('X!a0' + 'x' * 200, False),  # 太长
-    ]
-    for pwd, expected in tests:
-        valid, msg = validate_password_strength(pwd)
-        status = 'PASS' if valid == expected else 'FAIL'
-        print(f'  [{status}] {pwd[:20]!r}: valid={valid}, msg={msg!r}')
+
+    @pytest.mark.parametrize('password,expected', [
+        ('Abcdef1!', True),
+        ('Password1!', True),
+        ('12345678', False),
+        ('abcdefgh', False),
+        ('Abcdefgh', False),
+        ('Abc12345', False),
+        ('Abcd1234!@#', True),
+        ('', False),
+        ('Admin123!', False),
+        ('My_C0mpl3x!', True),
+        ('aaaaaaaa', False),
+        ('1234567890', False),
+        ('X!a0' + 'x' * 200, False),
+    ])
+    def test_password_strength(self, password, expected):
+        valid, msg = validate_password_strength(password)
+        assert valid == expected, f'{password[:20]!r}: valid={valid}, msg={msg!r}'
 
 
-def test_game_password():
+class TestGamePassword:
     """游戏账号密码测试"""
-    print('\n=== 游戏账号密码测试 ===')
-    tests = [
-        ('Abcdef1!', True),        # 8 位，含字母数字
-        ('Password1!', True),      # 10 位，含字母数字
-        ('12345678', False),       # 无字母
-        ('abcdefghij', False),     # 无数字
-        ('abc12345', True),        # 8 位，含字母数字，非弱密码
-        ('', False),               # 空
-        ('admin123', False),       # 弱密码
-        ('My_Pass2024', True),     # 强密码
-        ('abc def', False),        # 含空格
-        ('a1' + 'x' * 200, False), # 太长
-    ]
-    for pwd, expected in tests:
-        valid, msg = validate_game_password(pwd)
-        status = 'PASS' if valid == expected else 'FAIL'
-        print(f'  [{status}] {pwd[:20]!r}: valid={valid}, msg={msg!r}')
+
+    @pytest.mark.parametrize('password,expected', [
+        ('Abcdef1!', True),
+        ('Password1!', True),
+        ('12345678', False),
+        ('abcdefghij', False),
+        ('abc12345', True),
+        ('', False),
+        ('admin123', False),
+        ('My_Pass2024', True),
+        ('abc def', False),
+        ('a1' + 'x' * 200, False),
+    ])
+    def test_game_password(self, password, expected):
+        valid, msg = validate_game_password(password)
+        assert valid == expected, f'{password[:20]!r}: valid={valid}, msg={msg!r}'
 
 
-def test_rcon_safety():
+class TestRCONSafety:
     """RCON 命令注入防护测试"""
-    print('\n=== RCON 命令注入防护测试 ===')
-    tests = [
+
+    @pytest.mark.parametrize('input_val,expected', [
         ('Steve', 'Steve'),
         ('player;rm -rf', 'playerrm'),
         ('admin|shutdown', 'adminshutdown'),
         ('test\nname', 'testname'),
         ('hello_world', 'hello_world'),
-    ]
-    for inp, expected in tests:
-        safe = sanitize_rcon_username(inp)
-        status = 'PASS' if safe == expected else 'FAIL'
-        print(f'  [{status}] sanitize_username({inp!r}) = {safe!r}')
+    ])
+    def test_sanitize_username(self, input_val, expected):
+        safe = sanitize_rcon_username(input_val)
+        assert safe == expected, f'sanitize_username({input_val!r}) = {safe!r}'
 
-    print('\n密码引用测试:')
-    for pwd in ['password', 'my pass', 'pass;word', 'pass"word']:
-        safe = sanitize_rcon_password(pwd)
-        print(f'  sanitize_password({pwd!r}) = {safe!r}')
+    @pytest.mark.parametrize('input_val,expected', [
+        ('password', 'password'),
+        ('my pass', '"my pass"'),
+        ('pass;word', 'password'),
+        ('pass"word', 'password'),
+    ])
+    def test_sanitize_password(self, input_val, expected):
+        safe = sanitize_rcon_password(input_val)
+        assert safe == expected, f'sanitize_password({input_val!r}) = {safe!r}'
 
 
-def test_weak_password():
+class TestWeakPassword:
     """弱密码检测测试"""
-    print('\n=== 弱密码检测测试 ===')
-    tests = [
+
+    @pytest.mark.parametrize('password,expected', [
         ('password', True),
         ('12345678', True),
         ('admin1234', True),
@@ -133,21 +135,39 @@ def test_weak_password():
         ('aaaaaaaa', True),
         ('abcdefgh', True),
         ('', False),
-    ]
-    for pwd, expected in tests:
-        result = is_weak_password(pwd)
-        status = 'PASS' if result == expected else 'FAIL'
-        print(f'  [{status}] is_weak({pwd[:20]!r}) = {result}')
+    ])
+    def test_weak_password(self, password, expected):
+        result = is_weak_password(password)
+        assert result == expected, f'is_weak({password[:20]!r}) = {result}'
 
 
-if __name__ == '__main__':
-    import sys
-    sys.path.insert(0, '/workspace')
+class TestEmailFormat:
+    """邮箱格式验证测试"""
 
-    test_mc_username()
-    test_website_username()
-    test_password_strength()
-    test_game_password()
-    test_rcon_safety()
-    test_weak_password()
-    print('\n所有测试完成！')
+    @pytest.mark.parametrize('email,expected', [
+        ('user@example.com', True),
+        ('test@test.com', True),
+        ('', False),
+        ('notanemail', False),
+        ('@example.com', False),
+        ('user@', False),
+        ('a' * 300 + '@test.com', False),
+    ])
+    def test_email_format(self, email, expected):
+        valid, msg = validate_email_format(email)
+        assert valid == expected, f'{email!r}: valid={valid}, msg={msg!r}'
+
+
+class TestBanReason:
+    """封禁理由验证测试"""
+
+    @pytest.mark.parametrize('reason,expected', [
+        ('作弊', True),
+        ('恶意攻击其他玩家', True),
+        ('', False),
+        ('a' * 501, False),
+        ('<script>alert(1)</script>', False),
+    ])
+    def test_ban_reason(self, reason, expected):
+        valid, msg = validate_ban_reason(reason)
+        assert valid == expected, f'{reason!r}: valid={valid}, msg={msg!r}'

@@ -10,6 +10,8 @@ REPO_FULL = 'kute0213/bhxz'
 # 下载 URL 模板（proxy_base 替换为实际代理地址）
 DOWNLOAD_URL_FORMATS = [
     '{proxy_base}{archive_path}',
+    '{proxy_base}github.com/{archive_path}',
+    '{proxy_base}https://github.com/{archive_path}',
 ]
 
 # 可靠代理列表（按优先级，数量少且经过验证）
