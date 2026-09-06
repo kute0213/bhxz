@@ -45,7 +45,13 @@ def _sync_sequence(conn, table_name):
 
 def init_db():
     """初始化数据库结构和默认数据。"""
-    conn = get_db()
+    try:
+        conn = get_db()
+    except Exception as e:
+        print(f'[FATAL] init_db: 获取数据库连接失败: {e}', file=__import__('sys').stderr)
+        __import__('sys').stderr.flush()
+        raise
+
     cursor = conn.cursor()
 
     # 为每张表创建 SEQUENCE 和表结构（DuckDB 用 SEQUENCE 模拟 AUTOINCREMENT）

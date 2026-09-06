@@ -1,6 +1,7 @@
 """应用初始化 —— 启动检查、数据库、蓝图、钩子、后台服务。"""
 
 import os
+import sys
 
 from flask import Flask
 
@@ -48,7 +49,14 @@ def init_app(app, app_root):
     # 先初始化数据库，确保 settings 等表已存在，再执行健康检查。
     # 注意：run_startup_checks 中的 _check_database() 会再次调用 init_db()（幂等操作）。
     log('INFO', 'App', '正在初始化数据库...')
-    init_db()
+    try:
+        init_db()
+    except Exception as e:
+        import traceback
+        print(f'[FATAL] 数据库初始化失败: {e}', file=sys.stderr)
+        traceback.print_exc(file=sys.stderr)
+        sys.stderr.flush()
+        raise
     log('INFO', 'App', '数据库初始化完成')
 
     # 每次启动执行服务器健康检查（自动修复，不删文件）

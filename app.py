@@ -67,7 +67,14 @@ app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(seconds=config.SESSION_LIFE
 # ---------------------------------------------------------------------------
 
 if not _is_child:
-    init_app(app, _APP_ROOT)
+    try:
+        init_app(app, _APP_ROOT)
+    except Exception as e:
+        import traceback
+        print(f'[FATAL] 应用初始化失败: {e}', file=sys.stderr)
+        traceback.print_exc(file=sys.stderr)
+        sys.stderr.flush()
+        raise
 
 
 # ---------------------------------------------------------------------------

@@ -379,6 +379,11 @@ def get_db():
                         log('INFO', 'DB', '数据库连接恢复成功')
                     else:
                         raise
+                except Exception as e:
+                    log('CRITICAL', 'DB', f'打开数据库失败: {e}')
+                    print(f'[FATAL] 无法打开数据库 ({DB_PATH}): {e}', file=__import__('sys').stderr)
+                    __import__('sys').stderr.flush()
+                    raise
                 _conn.row_factory = _row_factory_duckdbrow
     return _ThreadSafeConnection(_conn, _conn_lock)
 
