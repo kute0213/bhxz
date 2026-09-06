@@ -135,6 +135,15 @@
                     <div class="file-size" id="file-size-display"></div>
                 </div>
 
+                <div class="upload-controls">
+                    <a href="{{ url_for('backgrounds.background_list_page') }}" class="btn-secondary px-6 py-2 rounded-xl">
+                        返回
+                    </a>
+                    <button type="submit" id="upload-btn" class="btn-primary px-6 py-2 rounded-xl" disabled>
+                        开始上传
+                    </button>
+                </div>
+
                 <div class="upload-progress" id="upload-progress">
                     <div class="upload-progress-text mb-1">
                         <span id="progress-text">准备上传...</span>
@@ -143,15 +152,6 @@
                     <div class="upload-progress-bar lg">
                         <div class="upload-progress-fill blue" id="progress-fill"></div>
                     </div>
-                </div>
-
-                <div class="upload-controls">
-                    <a href="{{ url_for('backgrounds.background_list_page') }}" class="btn-secondary px-6 py-2 rounded-xl">
-                        返回
-                    </a>
-                    <button type="submit" id="upload-btn" class="btn-primary px-6 py-2 rounded-xl" disabled>
-                        开始上传
-                    </button>
                 </div>
             </form>
 
