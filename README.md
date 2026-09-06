@@ -87,7 +87,6 @@ python scripts/build/package.py
 │   ├── monitoring/     # CPU/内存/系统/性能追踪（后台线程采集）
 │   ├── music/          # 大喇叭音频（常量/查询/CRUD/上传/收藏）
 │   ├── rcon/           # RCON 连接管理、玩家列表追踪、EasyAuth 指令
-│   ├── terminal/       # 持久终端会话（PTY）
 │   ├── updater/        # 自动更新（配置/核心逻辑）
 │   ├── user/           # 用户（认证/资料/管理）
 │   └── ...             # 其他单文件服务（附件/背景/验证码/限流/调度/设置/等）
@@ -152,7 +151,7 @@ python scripts/build/package.py
 
 * 管理中心数据统计（含大喇叭音频总数与待审核数量）
 
-* 脚本控制台（实时终端 + 快捷命令 + 定时任务）
+* 脚本控制台（流式终端 + 快捷命令 + 定时任务）
 
 * 系统设置（在线编辑，热重载，含网站图标选择、日志等级、背景图片开关、RCON 配置、MC 游戏文件夹）
 
@@ -224,7 +223,7 @@ python scripts/build/package.py
 
 ### 终端控制台与快捷命令
 
-* 实时终端（持久 shell 会话，SSE 流式输出）
+* 流式输出终端（SSE 实时回流，自实现纯 DOM 终端，风格统一）
 
 * 快捷命令管理（数据库存储，按名称排序）
 
@@ -409,10 +408,7 @@ export ENABLE_SSL=1 && python app.py
 | GET/POST | `/admin/script/run-stream`           | SSE 流式执行    |
 | POST     | `/admin/script/run-preset/<id>`      | 执行快捷命令      |
 | POST     | `/admin/script/commands/<id>/delete` | 删除快捷命令      |
-| GET      | `/admin/script/terminal/stream`      | 交互式终端 SSE 流 |
-| POST     | `/admin/script/terminal/input`       | 向终端发送输入     |
-| POST     | `/admin/script/terminal/reset`       | 重置终端会话      |
-| POST     | `/admin/script/terminal/resize`      | 调整终端窗口尺寸    |
+
 
 ## 前端特性
 
@@ -562,7 +558,7 @@ workspace/
 │   ├── monitoring/           #   系统监控（CPU/内存/系统/性能追踪）
 │   ├── music/                #   大喇叭音频（常量/查询/CRUD/上传/收藏）
 │   ├── rcon/                 #   RCON 连接管理、玩家列表追踪、EasyAuth 指令
-│   ├── terminal/             #   持久终端会话（PTY）
+│   ├── terminal/             #   流式输出终端
 │   ├── updater/              #   自动更新（配置/核心逻辑）
 │   ├── user/                 #   用户（认证/资料/管理）
 │   ├── attachment_service.py #   附件上传/清理
@@ -629,7 +625,7 @@ workspace/
 | CSS      | Tailwind CSS + 自定义样式（淡紫蓝磨砂玻璃） |
 | 图标       | Lucide（本地化）                   |
 | Markdown | marked.js / Python Markdown   |
-| 终端模拟     | xterm.js（本地化）                 |
+| 终端模拟     | 自实现流式输出终端（纯 DOM + SSE）       |
 
 ### 异步架构
 
@@ -640,7 +636,7 @@ workspace/
 | 日志清理器   | 后台线程定期检查                           |
 | IP 地理信息 | 后台线程异步更新缓存                         |
 | CPU 监控  | 后台线程定期采样（2 秒）                      |
-| 交互式终端   | session-based shell + 后台读取线程 + SSE |
+| 流式命令执行  | SSE + 一次性子进程                     |
 
 ### 数据库
 
@@ -716,33 +712,25 @@ workspace/
 
 ## 终端控制台使用说明
 
-本文档介绍终端控制台的快捷命令、实时终端、定时任务功能。
+本文档介绍终端控制台的快捷命令、流式输出终端、定时任务功能。
 
 ### 页面布局
 
-终端控制台页面分为两个区域：
-
-* **快捷命令**：以卡片网格展示，点击"运行"直接执行——Shell 命令会打开**弹窗终端**（基于 xterm.js）并在其中自动执行，输出实时回流
-
-* **实时终端**：独立全屏终端页面（`/admin/script/terminal-page`），基于 xterm.js 渲染，输入/输出/清屏/光标控制与本地终端完全一致
+终端控制台页面包含快捷命令卡片网格，点击"运行"打开**流式输出终端弹窗**，命令通过 SSE 实时回流输出。
 
 ### 快捷命令
 
-快捷命令以卡片网格展示，支持添加、编辑、删除、排序。点击「运行」按钮打开弹窗终端，命令发送到持久 Shell 会话（PTY）执行，输出通过 SSE 实时回流。
+快捷命令以卡片网格展示，支持添加、编辑、删除、排序。点击「运行」按钮打开流式输出终端弹窗，命令通过 `/admin/script/run-stream` 端点执行，输出通过 SSE 实时回流到终端界面。
 
-### 实时终端
+### 流式输出终端
 
-终端基于 **xterm.js**（业界标准终端模拟器）渲染，使用真实伪终端（PTY）驱动 Shell 会话：
+终端为自实现的纯 DOM 终端，风格与全站暗色磨砂玻璃主题统一，无需 xterm.js 或 PTY 依赖：
 
-* 直接在终端中键入命令，`Enter` 执行
-
-* 输入回显、行编辑、`Tab` 补全、历史命令由终端驱动原生响应
-
-* 输出通过 **SSE** 实时逐行回流
-
-* 支持 `Ctrl+L` 清屏、`Ctrl+C` 中断
-
-* 自动自适应尺寸，浏览器窗口变化时自动调整
+* 命令输入框可直接键入命令，`Enter` 或点击运行按钮执行
+* 输出通过 **SSE** 实时流式回流，支持 ANSI 颜色解析
+* 清屏按钮清除输出，运行中可中止当前命令
+* 状态指示器显示执行状态（运行中 / 成功 / 错误）和退出码
+* 自动滚动到底部，无额外依赖
 
 ### 定时任务
 

@@ -7,10 +7,12 @@
   - 连接数无硬上限 —— 池满时自动创建临时连接（用完即关），实现理论无限并发
   - 归还连接时自动检测健康状态，失效连接被丢弃并创建新连接填补
   - 所有操作线程安全，使用 threading.Lock 保护内部状态
+  - 使用 socket.settimeout 替代 mcrcon 的 signal.alarm，确保多线程安全
 """
 
 import threading
 import time
+import socket
 from collections import deque
 from typing import Optional, Tuple
 
@@ -98,29 +100,47 @@ class RCONConnectionPool:
 
             while self._idle:
                 conn, _ = self._idle.popleft()
-                with self._lock:
-                    self._active_count += 1
+                self._active_count += 1
                 # 在锁外检查健康状态（避免长时间持有锁）
-                if self._check_alive(conn):
-                    return conn
-                # 连接失效，丢弃
-                self._safe_disconnect(conn)
-
-            # 空闲队列为空 —— 创建新连接
-            if self._active_count < self._max_size:
-                conn = self._create_connection()
-                if conn:
-                    with self._lock:
+                # 注意：锁被释放前 self._active_count 已递增，如果健康检查失败
+                # 需要在锁外递减，否则计数器会泄漏
+                break  # 只取一个，跳出 while 循环到锁外检查
+            else:
+                # 空闲队列为空 —— 创建新连接
+                if self._active_count < self._max_size:
+                    conn = self._create_connection()
+                    if conn:
                         self._active_count += 1
                         self._total_created += 1
-                    return conn
+                    return conn  # 可能为 None，在锁内返回
+                # 超过最大活跃数，在锁外创建临时连接
+                conn = None
+
+        # 以下代码在锁外执行
+
+        # 从空闲队列取出的连接，检查健康状态
+        if conn is not None:
+            if self._check_alive(conn):
+                return conn
+            # 连接失效，丢弃并递减计数器
+            self._safe_disconnect(conn)
+            with self._lock:
+                self._active_count -= 1
+            # 尝试创建新连接替代
+            new_conn = self._create_connection()
+            if new_conn:
+                with self._lock:
+                    self._active_count += 1
+                    self._total_created += 1
+                return new_conn
+            return None
 
         # 超过最大活跃数 —— 创建临时连接（不加入池统计）
-        conn = self._create_connection()
-        if conn:
+        temp_conn = self._create_connection()
+        if temp_conn:
             with self._lock:
                 self._total_created += 1
-        return conn  # 可能为 None
+        return temp_conn  # 可能为 None
 
     def release(self, conn: Optional[MCRcon], force_close: bool = False):
         """归还连接。
@@ -134,14 +154,20 @@ class RCONConnectionPool:
 
         if force_close:
             self._safe_disconnect(conn)
+            # 递减活跃计数（如果是从池中借出的）
+            with self._lock:
+                if self._active_count > 0:
+                    self._active_count -= 1
             return
 
         with self._lock:
             if self._closed:
                 self._safe_disconnect(conn)
+                if self._active_count > 0:
+                    self._active_count -= 1
                 return
 
-            # 检查是否临时连接（未计入 active_count）
+            # 检查是否临时连接（未计入 active_count 或计数已归零）
             if self._active_count <= 0:
                 # 临时连接，直接关闭
                 self._safe_disconnect(conn)
@@ -184,26 +210,48 @@ class RCONConnectionPool:
         return host, port, password
 
     def _create_connection(self) -> Optional[MCRcon]:
-        """创建一条新的 RCON 连接。"""
+        """创建一条新的 RCON 连接。
+
+        使用 socket.settimeout 替代 mcrcon 内部 signal.alarm 实现超时，
+        确保多线程环境下线程安全。
+        """
         host, port, password = self._read_config()
         if not password:
             return None
 
         try:
             mcr = MCRcon(host, password, port=port, timeout=self._connect_timeout)
-            mcr.connect()
+            # 设置 socket 超时（优先于 mcrcon 的 signal.alarm）
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(self._connect_timeout)
+            sock.connect((host, port))
+            # 替换 mcrcon 内部 socket 为已连接且带超时的 socket
+            mcr.socket = sock
+            # 发送 RCON 认证包
+            mcr._send(3, password)  # noqa: SLF001
             return mcr
+        except socket.timeout:
+            return None
+        except ConnectionRefusedError:
+            return None
+        except ConnectionResetError:
+            return None
+        except OSError:
+            return None
         except Exception:
             return None
 
     def _check_alive(self, conn: MCRcon) -> bool:
         """检查连接是否存活。
 
-        发送一个无害命令探测连接状态。
-        如果连接失效，返回 False。
+        使用 ping 命令（/）探测连接状态，不产生副作用。
+        失败时标记连接为失效。
         """
+        if conn is None or conn.socket is None:
+            return False
         try:
-            # 发送空命令/保持连接，不产生副作用
+            # 发一个无害命令，检查连接是否正常
+            # 即使服务器返回"未知命令"，也是有效响应
             conn.command('/')
             return True
         except Exception:
@@ -217,7 +265,10 @@ class RCONConnectionPool:
             pass
 
     def _fill_pool(self):
-        """预填充连接池到 min_size。"""
+        """预填充连接池到 min_size。
+
+        如果 RCON 未配置或连接失败，静默跳过，不会阻塞启动。
+        """
         for _ in range(self._min_size):
             conn = self._create_connection()
             if conn:
@@ -227,7 +278,10 @@ class RCONConnectionPool:
         """后台守护线程：定时清理过期空闲连接。"""
         while not self._closed:
             time.sleep(30)
-            self._cleanup_idle()
+            try:
+                self._cleanup_idle()
+            except Exception:
+                pass
 
     def _cleanup_idle(self):
         """清理超时未使用的空闲连接。"""
@@ -243,13 +297,9 @@ class RCONConnectionPool:
                 else:
                     keep.append((conn, last_used))
             self._idle = keep
-
-            # 如果清理后空闲连接少于 min_size，补充
             current_idle = len(self._idle)
-        if discarded > 0:
-            pass  # 日志已包含在 _safe_disconnect 中
 
-        # 在锁外补充连接，避免长时间持有锁
+        # 如果清理后空闲连接少于 min_size，补充（在锁外）
         if current_idle < self._min_size:
             need = self._min_size - current_idle
             for _ in range(need):

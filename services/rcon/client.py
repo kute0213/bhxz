@@ -7,6 +7,7 @@
   - 默认配置使用连接池，池满时自动创建临时连接（用完即关）
   - 非默认配置（host/port/password 覆盖）使用一次性连接
   - 所有操作线程安全
+  - 使用 socket.settimeout 实现超时，避免 mcrcon 的 signal.alarm 线程安全问题
 """
 
 import socket
@@ -31,12 +32,20 @@ def _create_oneoff_connection(host: str, port: int, password: str,
                                timeout: int = 5) -> tuple:
     """创建一次性 RCON 连接（非池管理）。
 
+    使用 socket.settimeout 替代 mcrcon 的 signal.alarm 实现超时，
+    确保线程安全。
+
     Returns:
         (MCRcon | None, error_message | None)
     """
     try:
         mcr = MCRcon(host, password, port=port, timeout=timeout)
-        mcr.connect()
+        # 使用 socket.settimeout 实现线程安全的超时
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(timeout)
+        sock.connect((host, port))
+        mcr.socket = sock
+        mcr._send(3, password)  # noqa: SLF001
         return mcr, None
     except socket.timeout:
         return None, f'RCON 连接超时（{host}:{port}，{timeout}s）'
@@ -134,10 +143,14 @@ def execute_command(command: str, **kwargs) -> str:
     Returns:
         命令应答字符串，失败时返回错误信息
     """
-    with rcon_connect(**kwargs) as (mcr, err):
-        if mcr is None:
-            return err or 'RCON 连接失败'
-        try:
-            return mcr.command(command)
-        except Exception as e:
-            return f'RCON 命令执行异常: {e}'
+    try:
+        with rcon_connect(**kwargs) as (mcr, err):
+            if mcr is None:
+                return err or 'RCON 连接失败'
+            try:
+                return mcr.command(command)
+            except Exception as e:
+                return f'RCON 命令执行异常: {e}'
+    except Exception as exc:
+        # rcon_connect 内部异常（如 pool.release 抛出的异常）
+        return f'RCON 连接异常: {exc}'

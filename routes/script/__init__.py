@@ -12,4 +12,3 @@ script_bp = Blueprint('script', __name__)
 from routes.script import pages      # noqa: E402,F401
 from routes.script import commands   # noqa: E402,F401
 from routes.script import execution  # noqa: E402,F401
-from routes.script import terminal   # noqa: E402,F401

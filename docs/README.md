@@ -82,7 +82,7 @@ python scripts/build/package.py
 │   ├── monitoring/     # CPU/内存/系统/性能追踪
 │   ├── music/          # 大喇叭音频（常量/查询/CRUD/上传/收藏）
 │   ├── rcon/           # RCON 连接管理、玩家列表追踪
-│   ├── terminal/       # 持久终端会话（PTY）
+│   ├── terminal/       # 流式输出终端
 │   ├── updater/        # 自动更新（配置/核心逻辑）
 │   ├── user/           # 用户（认证/资料/管理）
 │   └── ...             # 其他单文件服务
@@ -114,7 +114,7 @@ python scripts/build/package.py
 - 用户管理、访问日志、模组介绍管理
 - 服务器指南 CRUD + 审核工作流 + 编辑封禁
 - 讨论区管理（帖子置顶/锁定/删除 + 分类管理）
-- 实时终端（xterm.js + PTY，SSE 流式输出）
+- 流式输出终端（自实现纯 DOM 终端，SSE 实时回流）
 - 快捷命令（一键执行预设 Shell 命令）
 - 定时任务（自动执行 Shell 命令）
 - 系统设置（在线编辑，热重载）
@@ -135,7 +135,7 @@ python scripts/build/package.py
 - Markdown 编辑 + 附件上传
 
 ### 终端控制台
-- 实时终端（持久 shell 会话，SSE 流式输出）
+- 流式输出终端（自实现纯 DOM 终端，SSE 实时回流）
 - 快捷命令管理（数据库存储，按名称排序）
 - 定时任务（支持间隔/每日/一次性模式）
 
@@ -242,10 +242,6 @@ export ENABLE_SSL=1 && python app.py
 | POST | `/admin/script/abort-script` | 终止脚本执行 |
 | POST | `/admin/script/script-response` | 回传交互响应 |
 | GET/POST | `/admin/script/scripts` | 脚本 CRUD |
-| GET | `/admin/script/terminal/stream` | 交互式终端 SSE 流 |
-| POST | `/admin/script/terminal/input` | 向终端发送输入 |
-| POST | `/admin/script/terminal/reset` | 重置终端会话 |
-| POST | `/admin/script/terminal/resize` | 调整终端窗口尺寸 |
 
 ## 前端特性
 
@@ -375,7 +371,7 @@ workspace/
 │   ├── logging/              #   日志写入与清理
 │   ├── miniscript/           #   MiniScript 脚本引擎
 │   ├── monitoring/           #   系统监控
-│   └── terminal/             #   持久终端会话
+│   └── terminal/             #   流式输出终端
 ├── routes/                   # HTTP 路由层
 │   ├── main/                 #   首页、登录、注册、设置
 │   ├── docs/                 #   文档页面
@@ -421,7 +417,7 @@ workspace/
 | 日志清理器 | 后台线程定期检查 |
 | IP 地理信息 | 后台线程异步更新缓存 |
 | CPU 监控 | 后台线程定期采样（2 秒） |
-| 交互式终端 | session-based shell + 后台读取线程 + SSE |
+| 流式命令执行 | SSE + 一次性子进程 |
 | MiniScript | 独立子进程 + SSE 流式回流 |
 
 ### 数据库

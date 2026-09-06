@@ -28,8 +28,3 @@ def script_page():
     )
 
 
-@script_bp.route('/admin/script/terminal-page')
-@admin_required
-def terminal_page():
-    """独立实时终端页面。"""
-    return render_template('admin/admin_terminal_page.html', user=get_current_user())

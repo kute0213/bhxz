@@ -4,6 +4,7 @@
 - 独立线程，每 5 秒执行一次 /list 命令
 - 缓存结果，外部通过 read-only 接口获取最新数据
 - 连接失败时自动降级，不抛异常
+- 连续失败时自动降低轮询频率（退避），恢复后重置
 - 使用 threading.Event 实现优雅关闭
 """
 
@@ -70,6 +71,9 @@ class PlayerTracker:
 
     启动后在独立线程中每 5 秒执行一次 /list 命令，
     解析结果并缓存，外部通过 get_player_list() 获取最新数据。
+
+    连续失败时自动降低轮询频率，最多退避到 60 秒，
+    恢复成功后立即重置回正常间隔。
     """
 
     def __init__(self, interval: float = 5.0):
@@ -79,6 +83,9 @@ class PlayerTracker:
         self._thread: Optional[threading.Thread] = None
         self._stop_event = threading.Event()
         self._name = 'rcon-player-tracker'
+        # 连续失败计数 & 退避
+        self._consecutive_failures = 0
+        self._max_backoff = 60.0  # 最大退避间隔（秒）
 
     # ------------------------------------------------------------------
     # 公开接口
@@ -94,6 +101,7 @@ class PlayerTracker:
         if self._thread is not None and self._thread.is_alive():
             return
         self._stop_event.clear()
+        self._consecutive_failures = 0
         self._thread = threading.Thread(
             target=self._run_loop,
             name=self._name,
@@ -109,22 +117,47 @@ class PlayerTracker:
             self._thread.join(timeout=3)
         log('INFO', 'RCON', '玩家列表追踪器已停止')
 
+    def reset(self):
+        """重置缓存和失败计数（配置变更时调用）。"""
+        with self._lock:
+            self._cache = PlayerList()
+            self._consecutive_failures = 0
+
     # ------------------------------------------------------------------
     # 内部
     # ------------------------------------------------------------------
 
+    def _get_current_interval(self) -> float:
+        """根据连续失败次数计算当前轮询间隔（退避）。"""
+        failures = self._consecutive_failures
+        if failures <= 0:
+            return self._interval
+        # 退避算法：每次失败增加 5 秒，最大 60 秒
+        backoff = min(self._interval + failures * 5, self._max_backoff)
+        return backoff
+
     def _run_loop(self):
-        """后台循环：每 5 秒执行一次 /list。"""
+        """后台循环：每 5 秒执行一次 /list，失败时自动退避。"""
         while not self._stop_event.is_set():
             try:
                 raw = execute_command('/list', timeout=5)
                 parsed = parse_player_list(raw)
                 with self._lock:
                     self._cache = parsed
+                    if parsed.error:
+                        self._consecutive_failures += 1
+                    else:
+                        # 恢复成功，重置失败计数
+                        self._consecutive_failures = 0
             except Exception:
+                with self._lock:
+                    self._consecutive_failures += 1
                 # 兜底：任何未捕获异常都不让线程挂掉
                 pass
-            self._stop_event.wait(self._interval)
+
+            # 使用退避间隔等待
+            current_interval = self._get_current_interval()
+            self._stop_event.wait(current_interval)
 
     @property
     def is_running(self) -> bool:
