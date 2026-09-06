@@ -95,6 +95,21 @@ def unbind_account(binding_id: int, user_id: int) -> Tuple[bool, str]:
         conn.close()
 
 
+def get_all_bindings() -> List[dict]:
+    """获取所有绑定记录（含用户名），用于管理员后台。"""
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            "SELECT b.id, b.mc_username, b.user_id, u.username AS site_username, b.created_at "
+            "FROM game_account_bindings b "
+            "LEFT JOIN users u ON b.user_id = u.id "
+            "ORDER BY b.created_at DESC"
+        ).fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
 def is_bound_to_user(mc_username: str, user_id: int) -> bool:
     """检查 MC 用户名是否已被指定用户绑定。"""
     conn = get_db()

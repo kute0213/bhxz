@@ -9,13 +9,14 @@ from services.game_accounts.registration_service import (
     approve_application, reject_application,
     ban_account, unban_account, get_banned_accounts,
 )
+from services.game_accounts.binding_service import get_all_bindings
 from services.validation import validate_mc_username, validate_ban_reason
 
 
 @admin_bp.route('/admin/game-accounts')
 @admin_required
 def admin_game_accounts():
-    """游戏账号管理页面。"""
+    """账号注册申请管理页面。"""
     return render_template('admin/admin_game_accounts.html', user=get_current_user())
 
 
@@ -98,3 +99,47 @@ def api_unban(mc_username):
         return jsonify({'success': False, 'message': mc_err}), 400
     succ, msg = unban_account(mc_username)
     return jsonify({'success': succ, 'message': msg})
+
+
+# ---------------------------------------------------------------------------
+# 绑定账号管理（游戏账号管理）
+# ---------------------------------------------------------------------------
+
+@admin_bp.route('/admin/game-account-bindings')
+@admin_required
+def admin_game_account_bindings():
+    """游戏账号管理页面（查看和管理已绑定的游戏账号）。"""
+    return render_template('admin/admin_game_account_bindings.html', user=get_current_user())
+
+
+@admin_bp.route('/admin/api/game-account-bindings')
+@admin_required
+def api_get_all_bindings():
+    """获取所有绑定记录。"""
+    bindings = get_all_bindings()
+    return jsonify({'success': True, 'bindings': bindings})
+
+
+@admin_bp.route('/admin/api/game-account-bindings/<int:binding_id>/unbind', methods=['POST'])
+@admin_required
+def api_admin_unbind(binding_id):
+    """管理员强制解绑游戏账号（不验证用户所有权）。"""
+    user = get_current_user()
+    # 管理员解绑 —— 直接按 binding_id 删除，不检查 user_id
+    from core.db import get_db
+    conn = get_db()
+    try:
+        row = conn.execute(
+            "SELECT id, mc_username, user_id FROM game_account_bindings WHERE id = ?",
+            (binding_id,),
+        ).fetchone()
+        if not row:
+            return jsonify({'success': False, 'message': '绑定记录不存在'}), 404
+        mc_username = row['mc_username']
+        conn.execute("DELETE FROM game_account_bindings WHERE id = ?", (binding_id,))
+        conn.commit()
+        return jsonify({'success': True, 'message': f'已强制解绑账号 {mc_username}'})
+    except Exception as e:
+        return jsonify({'success': False, 'message': f'解绑失败: {e}'}), 500
+    finally:
+        conn.close()

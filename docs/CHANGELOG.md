@@ -4,6 +4,9 @@
 
 ### 新增
 
+* **管理中心「游戏账号管理」页面**：新增 `admin_game_account_bindings.html` 页面，管理员可查看所有用户已绑定的 MC 游戏账号（含绑定用户、绑定时间），支持管理员强制解绑
+* **管理中心功能拆分**：原「游戏账号管理」改名为「账号注册申请管理」，新增「游戏账号管理」独立入口，两者功能分离
+
 * **游戏账号解绑功能**：MC 账号列表新增「解绑」按钮，点击后弹出确认弹窗，确认后通过 AJAX 调用解绑 API 移除绑定记录，行自动淡出消除。绑定服务层新增 `create_binding`、`is_bound_to_user`、`unbind_account` 等函数，`routes/game_accounts/bind.py` 新增 `POST /game-accounts/api/unbind` 端点
 
 ### 重构
