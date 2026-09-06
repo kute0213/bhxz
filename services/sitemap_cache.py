@@ -260,7 +260,8 @@ def _build_url_entries() -> list:
     # 1) 静态页面
     static_pages = [
         ('/', 'monthly', '1.0'),
-        ('/performance', 'weekly', '0.6'),
+        ('/server-status', 'weekly', '0.8'),
+        ('/interact', 'monthly', '0.6'),
         ('/community', 'weekly', '0.8'),
         ('/docs', 'monthly', '0.7'),
         ('/guides', 'weekly', '0.8'),

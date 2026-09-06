@@ -217,7 +217,7 @@
     <nav class="glass-nav sticky top-0 z-40" id="glass-nav">
         <div class="glass-nav-inner">
         <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex items-center justify-between h-16 lg:h-20">
+            <div class="flex items-center justify-between h-16 md:h-20">
                 <!-- Logo 区域 -->
                 <a href="{{ url_for('main.home') }}" class="flex items-center gap-2 sm:gap-3 flex-shrink-0">
                     <div class="w-9 h-9 sm:w-10 sm:h-10 bg-gold-400 rounded-lg flex items-center justify-center">
@@ -226,8 +226,8 @@
                     <span class="text-lg sm:text-xl font-bold text-gold-400 hidden xs:inline">滨海小镇</span>
                 </a>
 
-                <!-- 桌面端导航 (lg+) -->
-                <div class="hidden lg:flex items-center gap-6">
+                <!-- 桌面端导航 (md+) -->
+                <div class="hidden md:flex items-center gap-6">
                     <a href="{{ url_for('main.home') }}" class="text-cream/80 hover:text-gold-400 text-sm font-medium transition-colors px-3 py-2 rounded-lg hover:bg-gold-400/5">
                         首页
                     </a>
@@ -256,8 +256,8 @@
                     {% endif %}
                 </div>
 
-                <!-- 桌面端用户区域 (lg+) -->
-                <div class="hidden lg:flex items-center gap-4 pl-6 border-l border-gold-400/10">
+                <!-- 桌面端用户区域 (md+) -->
+                <div class="hidden md:flex items-center gap-4 pl-6 border-l border-gold-400/10">
                     {% if user %}
                     <div class="flex items-center gap-3">
                         {% if user.avatar_key %}
@@ -286,27 +286,6 @@
                     {% endif %}
                 </div>
 
-                <!-- 平板端用户区域 (md-lg) -->
-                <div class="hidden md:flex lg:hidden items-center gap-3">
-                    {% if user %}
-                    <div class="flex items-center gap-2">
-                        {% if user.avatar_key %}
-                        <img src="{{ url_for('main.user_avatar', user_id=user.id) }}" alt="{{ user.username }}的头像" class="w-8 h-8 rounded-full object-cover border border-gold-400/30">
-                        {% else %}
-                        <div class="w-8 h-8 bg-gold-400/20 rounded-full flex items-center justify-center text-sm font-bold text-gold-400">{{ user.username[0] }}</div>
-                        {% endif %}
-                        <span class="text-gold-400 text-sm font-medium hidden sm:inline">{{ user.username }}</span>
-                    </div>
-                    <a href="{{ url_for('main.settings') }}" class="text-cream/60 hover:text-gold-400 transition-colors p-1">
-                        <i data-lucide="settings" class="w-5 h-5"></i>
-                    </a>
-                    <a href="{{ url_for('main.logout') }}" data-logout-confirm class="text-red-300 hover:text-red-400 text-sm">退出</a>
-                    {% else %}
-                    <a href="{{ url_for('main.login') }}" class="btn-secondary px-3 py-1.5 rounded-lg text-sm">登录</a>
-                    <a href="{{ url_for('main.register') }}" class="btn-primary px-3 py-1.5 rounded-lg text-sm font-bold">注册</a>
-                    {% endif %}
-                </div>
-
                 <!-- 移动端菜单按钮 -->
                 <button class="md:hidden text-cream/80 hover:text-gold-400 p-2 -mr-2" id="mobile-menu-btn">
                     <i data-lucide="menu" class="w-6 h-6"></i>
@@ -314,33 +293,6 @@
             </div>
         </div>
 
-        <!-- 平板端快捷导航 (md-lg) -->
-        <div class="hidden md:block lg:hidden border-t border-gold-400/5">
-            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2 flex items-center gap-1 overflow-x-auto">
-                <a href="{{ url_for('main.home') }}" class="flex-shrink-0 px-3 py-1.5 text-sm text-cream/70 hover:text-gold-400 rounded-lg hover:bg-gold-400/5 transition-colors">
-                    首页
-                </a>
-                <a href="{{ url_for('guides.guide_list') }}" class="flex-shrink-0 px-3 py-1.5 text-sm text-cream/70 hover:text-gold-400 rounded-lg hover:bg-gold-400/5 transition-colors">
-                    服务器指南
-                </a>
-                
-                <a href="{{ url_for('discussion.list') }}" class="flex-shrink-0 px-3 py-1.5 text-sm text-cream/70 hover:text-gold-400 rounded-lg hover:bg-gold-400/5 transition-colors">
-                    讨论
-                </a>
-                <a href="{{ url_for('main.interact_page') }}" class="flex-shrink-0 px-3 py-1.5 text-sm text-cream/70 hover:text-gold-400 rounded-lg hover:bg-gold-400/5 transition-colors">
-                    服务器互动
-                </a>
-                <a href="{{ url_for('main.server_status') }}" class="flex-shrink-0 px-3 py-1.5 text-sm text-cream/70 hover:text-gold-400 rounded-lg hover:bg-gold-400/5 transition-colors">服务器状态</a>
-                {% if user %}
-                <a href="{{ url_for('game_accounts.index') }}" class="flex-shrink-0 px-3 py-1.5 text-sm text-cream/70 hover:text-gold-400 rounded-lg hover:bg-gold-400/5 transition-colors">服务器账号</a>
-                {% endif %}
-                {% if user and user.is_admin %}
-                <a href="{{ url_for('admin.admin_page') }}" class="flex-shrink-0 px-3 py-1.5 text-sm text-cream/70 hover:text-gold-400 rounded-lg hover:bg-gold-400/5 transition-colors">
-                    管理中心
-                </a>
-                {% endif %}
-            </div>
-        </div>
         </div>
     </nav>
 

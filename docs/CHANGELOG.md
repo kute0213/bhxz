@@ -22,7 +22,11 @@
 
 ### 修复
 
-* **RCON 密码验证改用多重验证方式**：`easyauth_bind.py` 原使用 `/auth getPlayerInfo` 获取哈希 + bcrypt 比对，但部分服务器可能不支持该指令。现改用 `verify_login` 多重验证流程（数据库直连 → `/auth checkpassword` → `/auth login` → `/login`），兼容性更强，解决"RCON 连接失败，无法验证密码"问题
+* **RCON 密码验证恢复为 `/auth getPlayerInfo` + bcrypt**：服务器确认支持该指令，返回 JSON 格式玩家信息（含密码哈希）。`easyauth_bind.py` 重写为直接解析 JSON 并用 bcrypt.checkpw 比对，删除冗余的 `verify_login` 多重验证流程
+
+* **站点地图更新**：移除已删除的 `/performance` 页面，新增 `/server-status` 和 `/interact` 页面的 sitemap 条目
+
+* **平板导航简化为横屏/竖屏模式**：移除独立的平板端导航代码路径（`md:flex lg:hidden`），平板横屏直接使用桌面端导航（`md:flex`），竖屏使用移动端导航，减少代码冗余
 
 * **修复** **`routes/game_accounts/__init__.py`** **缺少** **`get_db`** **导入**：`change_password_page`、`api_bound_accounts`、`api_change_password` 三个路由函数直接使用 `get_db()` 但未在文件顶部导入，会导致 NameError 运行时错误。现通过服务层函数替代，已移除对 `get_db` 的依赖
 

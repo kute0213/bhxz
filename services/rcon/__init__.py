@@ -16,7 +16,7 @@ from services.rcon.pool import get_pool, reset_pool, RCONConnectionPool
 from services.rcon.player_tracker import player_tracker, PlayerList, parse_player_list
 from services.rcon.easy_auth import (
     register_player, change_password, remove_player,
-    get_player_info, list_players, verify_login,
+    get_player_info, list_players,
     whitelist_add_player,
 )
 
@@ -25,6 +25,6 @@ __all__ = [
     'get_pool', 'reset_pool', 'RCONConnectionPool',
     'player_tracker', 'PlayerList', 'parse_player_list',
     'register_player', 'change_password', 'remove_player',
-    'get_player_info', 'list_players', 'verify_login',
+    'get_player_info', 'list_players',
     'whitelist_add_player',
 ]
