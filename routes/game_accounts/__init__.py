@@ -1,4 +1,4 @@
-"""游戏账号蓝图 —— 仅保留申请注册 MC 账号功能。"""
+"""游戏账号蓝图 —— 申请注册 MC 账号与绑定已注册账号。"""
 
 from flask import Blueprint, render_template
 
@@ -21,3 +21,4 @@ def index():
 
 # 导入子模块注册路由
 from routes.game_accounts import register   # noqa: E402,F401
+from routes.game_accounts import bind       # noqa: E402,F401

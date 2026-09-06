@@ -770,3 +770,5 @@ workspace/
 
 - **MC 游戏账号注册改为白名单模式**：重写注册申请功能，审批通过后改为通过 RCON 发送 `/easywhitelist add <玩家名>` 命令添加白名单，不再需要密码。移除前端密码表单字段、后端密码验证、密码加密存储逻辑。新增 `services/rcon/easy_auth.whitelist_add_player()` 函数，使用 `sanitize_rcon_username` 清洗输入防止注入。
 
+- **新增绑定账号功能**：用户可通过输入游戏根目录路径、MC 用户名和密码，验证 EasyAuth 数据库中的 BCrypt 哈希后将游戏账号绑定到网站账户。新增 `services/easyauth_bind.py` 验证服务，使用 `bcrypt.checkpw` 比对密码，使用参数化查询防止 SQL 注入。前端绑定确认使用全局 `CustomModal` 弹窗。文档见 [docs/easyauth_bind_account_doc.md](docs/easyauth_bind_account_doc.md)。
+

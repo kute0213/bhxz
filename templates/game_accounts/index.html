@@ -6,7 +6,37 @@
 
         <div class="text-center mb-10">
             <h1 class="text-2xl sm:text-3xl font-bold mb-3">游戏账号</h1>
-            <p class="text-cream/60">申请注册新的 Minecraft 游戏账号</p>
+            <p class="text-cream/60">管理你的 Minecraft 游戏账号</p>
+        </div>
+
+        <!-- 绑定已有账号 -->
+        <div class="pixel-card rounded-xl p-6 mb-6">
+            <h2 class="text-lg font-bold mb-4 flex items-center gap-2">
+                <i data-lucide="link" class="w-5 h-5 text-blue-400"></i>
+                绑定已有游戏账号
+            </h2>
+            <p class="text-cream/50 text-sm mb-4">输入游戏根目录路径和账号信息，验证密码后绑定到当前网站账户。</p>
+
+            <form id="bind-form" class="space-y-4">
+                <div>
+                    <label class="text-xs text-cream/60 block mb-1">游戏根目录路径</label>
+                    <input type="text" id="bind-server-path" placeholder="例如：D:\minecraft-server 或 /opt/mc/server" class="w-full px-3 py-2 bg-forest-900/60 border border-cream/20 rounded-lg text-sm focus:outline-none focus:border-blue-400 transition-colors" autocomplete="off">
+                    <p class="text-xs text-cream/40 mt-1">Minecraft 服务器根目录的绝对路径（包含 EasyAuth 插件）</p>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label class="text-xs text-cream/60 block mb-1">MC 用户名</label>
+                        <input type="text" id="bind-username" placeholder="游戏内用户名" class="w-full px-3 py-2 bg-forest-900/60 border border-cream/20 rounded-lg text-sm focus:outline-none focus:border-blue-400 transition-colors" autocomplete="off">
+                    </div>
+                    <div>
+                        <label class="text-xs text-cream/60 block mb-1">密码</label>
+                        <input type="password" id="bind-password" placeholder="游戏内登录密码" class="w-full px-3 py-2 bg-forest-900/60 border border-cream/20 rounded-lg text-sm focus:outline-none focus:border-blue-400 transition-colors">
+                    </div>
+                </div>
+                <button type="submit" class="px-5 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 text-sm rounded-lg transition-colors border border-blue-500/30">
+                    <i data-lucide="shield-check" class="w-4 h-4 inline mr-1"></i>验证并绑定
+                </button>
+            </form>
         </div>
 
         <!-- 申请注册新账号 -->
@@ -73,6 +103,54 @@
         pendingRegData = null;
     };
 
+    // ===== 绑定账号 =====
+    document.getElementById('bind-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        var serverPath = document.getElementById('bind-server-path').value.trim();
+        var username = document.getElementById('bind-username').value.trim();
+        var password = document.getElementById('bind-password').value;
+
+        if (!serverPath) { Toast.error('请输入游戏根目录路径'); return; }
+        if (!username) { Toast.error('请输入 MC 用户名'); return; }
+        if (username.length < 3) { Toast.error('MC 用户名至少 3 个字符'); return; }
+        if (username.length > 16) { Toast.error('MC 用户名不能超过 16 个字符'); return; }
+        if (!/^[a-zA-Z0-9_]+$/.test(username)) { Toast.error('MC 用户名只能包含字母、数字和下划线'); return; }
+        if (!password) { Toast.error('请输入密码'); return; }
+
+        // 使用 CustomModal 确认
+        CustomModal.confirm('确认绑定账号 <strong>' + escapeHtml(username) + '</strong>？系统将验证游戏内密码。', {
+            title: '绑定确认',
+            confirmText: '验证并绑定',
+            callback: function(confirmed) {
+                if (!confirmed) return;
+
+                fetch('/game-accounts/api/bind', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        server_path: serverPath,
+                        username: username,
+                        password: password,
+                    }),
+                })
+                .then(function(r) { return r.json(); })
+                .then(function(d) {
+                    if (d.success) {
+                        CustomModal.alert(d.message, { type: 'success' });
+                        document.getElementById('bind-server-path').value = '';
+                        document.getElementById('bind-username').value = '';
+                        document.getElementById('bind-password').value = '';
+                    } else {
+                        CustomModal.alert(d.message, { type: 'error' });
+                    }
+                })
+                .catch(function(err) {
+                    CustomModal.alert('网络错误: ' + err.message, { type: 'error' });
+                });
+            }
+        });
+    });
+
     // ===== 注册申请（先校验，再弹出验证码弹窗） =====
     document.getElementById('register-form').addEventListener('submit', function(e) {
         e.preventDefault();
@@ -129,6 +207,12 @@
     document.getElementById('captcha-input').addEventListener('keydown', function(e) {
         if (e.key === 'Enter') { document.getElementById('captcha-modal-confirm').click(); }
     });
+
+    function escapeHtml(str) {
+        var div = document.createElement('div');
+        div.appendChild(document.createTextNode(str));
+        return div.innerHTML;
+    }
 })();
 </script>
 {% endblock %}
