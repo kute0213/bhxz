@@ -90,16 +90,25 @@ class SettingsManager:
         """从数据库加载单个设置值。"""
         try:
             conn = get_db()
-            row = conn.execute(
-                "SELECT value FROM settings WHERE key = ?", (key,)
-            ).fetchone()
-            conn.close()
+            try:
+                row = conn.execute(
+                    "SELECT value FROM settings WHERE key = ?", (key,)
+                ).fetchone()
+            except Exception as e:
+                err_str = str(e)
+                # 表不存在是首次启动的正常现象，不刷 ERROR 日志
+                if 'Table with name settings does not exist' in err_str:
+                    return default
+                log('WARNING', 'SettingsManager', f'加载设置 {key} 失败: {e}')
+                return default
+            finally:
+                conn.close()
 
             if row:
                 raw_value = row['value'] if hasattr(row, '__getitem__') else row[0]
                 return _cast_value(raw_value, default)
         except Exception as e:
-            log('ERROR', 'SettingsManager', f'加载设置 {key} 失败: {e}')
+            log('WARNING', 'SettingsManager', f'加载设置 {key} 失败: {e}')
         return default
 
     def _save_to_db(self, key: str, value):
