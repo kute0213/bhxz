@@ -5,6 +5,7 @@ from flask import Blueprint, jsonify
 from core.db import get_db
 from services.monitoring import performance_tracker
 from services.rcon import player_tracker
+from services.rcon.mspt_tracker import mspt_tracker
 
 api_bp = Blueprint('api', __name__, url_prefix='/api')
 
@@ -27,6 +28,7 @@ def api_performance():
         'memory': perf.memory,
         'system': perf.system,
         'players': _get_player_data(),
+        'mspt': _get_mspt_data(),
         'timestamp': perf.timestamp or datetime.now(timezone.utc).astimezone().strftime(
             '%Y-%m-%d %H:%M:%S %z'
         ),
@@ -45,6 +47,34 @@ def _get_player_data():
         'connected': True,
         'error': None,
         'updated_at': pl.updated_at,
+    }
+
+
+def _get_mspt_data():
+    """获取 MSPT/TPS 数据（用于前端渲染）。"""
+    md = mspt_tracker.get_mspt_data()
+    if md.error:
+        return {
+            'connected': False,
+            'error': md.error,
+            'mspt_current': 0,
+            'tps_5s': 0, 'tps_10s': 0, 'tps_1m': 0, 'tps_5m': 0, 'tps_15m': 0,
+            'tick_min_10s': 0, 'tick_med_10s': 0, 'tick_p95_10s': 0, 'tick_max_10s': 0,
+            'tick_min_1m': 0, 'tick_med_1m': 0, 'tick_p95_1m': 0, 'tick_max_1m': 0,
+            'cpu_system': 0, 'cpu_process': 0,
+        }
+    return {
+        'connected': True,
+        'error': None,
+        'mspt_current': md.mspt_current,
+        'tps_5s': md.tps_5s, 'tps_10s': md.tps_10s,
+        'tps_1m': md.tps_1m, 'tps_5m': md.tps_5m, 'tps_15m': md.tps_15m,
+        'tick_min_10s': md.tick_min_10s, 'tick_med_10s': md.tick_med_10s,
+        'tick_p95_10s': md.tick_p95_10s, 'tick_max_10s': md.tick_max_10s,
+        'tick_min_1m': md.tick_min_1m, 'tick_med_1m': md.tick_med_1m,
+        'tick_p95_1m': md.tick_p95_1m, 'tick_max_1m': md.tick_max_1m,
+        'cpu_system': md.cpu_system, 'cpu_process': md.cpu_process,
+        'updated_at': md.updated_at,
     }
 
 

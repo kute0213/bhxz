@@ -109,6 +109,126 @@
                 <div class="text-cream/50 text-sm text-center py-6">未配置 RCON 或连接失败</div>
             </div>
         </div>
+
+        <!-- MSPT / TPS 性能 -->
+        <div class="pixel-card rounded-xl p-6 mt-6">
+            <div class="flex items-center justify-between mb-4">
+                <h2 class="text-lg font-bold flex items-center gap-2">
+                    <i data-lucide="activity" class="w-5 h-5 text-blue-400"></i>
+                    MC 服务器性能
+                </h2>
+                <div class="flex items-center gap-3">
+                    <span id="mspt-update-time" class="text-xs text-cream/30"></span>
+                    <span id="mspt-status" class="text-xs px-2.5 py-1 rounded-full bg-red-900/40 text-red-400">未连接</span>
+                </div>
+            </div>
+
+            <!-- MSPT 当前值 -->
+            <div class="mb-5">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-sm text-cream/60">当前 MSPT</span>
+                    <span id="mspt-current" class="text-base font-bold">--</span>
+                </div>
+                <div class="h-2.5 bg-forest-900/50 rounded-full overflow-hidden">
+                    <div id="mspt-bar" class="h-full rounded-full transition-all duration-500 no-shine" style="width: 0%"></div>
+                </div>
+                <div class="flex justify-between mt-1">
+                    <span class="text-xs text-cream/30">0ms</span>
+                    <span class="text-xs text-cream/30">50ms</span>
+                </div>
+            </div>
+
+            <!-- TPS 时间线 -->
+            <div class="mb-5">
+                <div class="text-sm text-cream/60 mb-2">TPS 时间线</div>
+                <div class="grid grid-cols-5 gap-2 text-center">
+                    <div class="bg-forest-900/40 rounded-lg p-2.5">
+                        <div class="text-xs text-cream/40 mb-1">5秒</div>
+                        <div id="tps-5s" class="text-sm font-bold">--</div>
+                    </div>
+                    <div class="bg-forest-900/40 rounded-lg p-2.5">
+                        <div class="text-xs text-cream/40 mb-1">10秒</div>
+                        <div id="tps-10s" class="text-sm font-bold">--</div>
+                    </div>
+                    <div class="bg-forest-900/40 rounded-lg p-2.5">
+                        <div class="text-xs text-cream/40 mb-1">1分钟</div>
+                        <div id="tps-1m" class="text-sm font-bold">--</div>
+                    </div>
+                    <div class="bg-forest-900/40 rounded-lg p-2.5">
+                        <div class="text-xs text-cream/40 mb-1">5分钟</div>
+                        <div id="tps-5m" class="text-sm font-bold">--</div>
+                    </div>
+                    <div class="bg-forest-900/40 rounded-lg p-2.5">
+                        <div class="text-xs text-cream/40 mb-1">15分钟</div>
+                        <div id="tps-15m" class="text-sm font-bold">--</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tick 耗时详情 -->
+            <div class="mb-5">
+                <div class="text-sm text-cream/60 mb-2">Tick 耗时 (ms)</div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <div class="text-xs text-cream/40 mb-2">最近 10 秒</div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div class="bg-forest-900/40 rounded-lg p-2">
+                                <div class="text-xs text-cream/40">最低</div>
+                                <div id="tick-min-10s" class="text-sm font-bold mt-0.5">--</div>
+                            </div>
+                            <div class="bg-forest-900/40 rounded-lg p-2">
+                                <div class="text-xs text-cream/40">中位数</div>
+                                <div id="tick-med-10s" class="text-sm font-bold mt-0.5">--</div>
+                            </div>
+                            <div class="bg-forest-900/40 rounded-lg p-2">
+                                <div class="text-xs text-cream/40">P95</div>
+                                <div id="tick-p95-10s" class="text-sm font-bold mt-0.5">--</div>
+                            </div>
+                            <div class="bg-forest-900/40 rounded-lg p-2">
+                                <div class="text-xs text-cream/40">最高</div>
+                                <div id="tick-max-10s" class="text-sm font-bold mt-0.5">--</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <div class="text-xs text-cream/40 mb-2">最近 1 分钟</div>
+                        <div class="grid grid-cols-2 gap-2">
+                            <div class="bg-forest-900/40 rounded-lg p-2">
+                                <div class="text-xs text-cream/40">最低</div>
+                                <div id="tick-min-1m" class="text-sm font-bold mt-0.5">--</div>
+                            </div>
+                            <div class="bg-forest-900/40 rounded-lg p-2">
+                                <div class="text-xs text-cream/40">中位数</div>
+                                <div id="tick-med-1m" class="text-sm font-bold mt-0.5">--</div>
+                            </div>
+                            <div class="bg-forest-900/40 rounded-lg p-2">
+                                <div class="text-xs text-cream/40">P95</div>
+                                <div id="tick-p95-1m" class="text-sm font-bold mt-0.5">--</div>
+                            </div>
+                            <div class="bg-forest-900/40 rounded-lg p-2">
+                                <div class="text-xs text-cream/40">最高</div>
+                                <div id="tick-max-1m" class="text-sm font-bold mt-0.5">--</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- CPU 使用率 -->
+            <div>
+                <div class="text-sm text-cream/60 mb-2">Spark CPU 使用率</div>
+                <div class="grid grid-cols-2 gap-4 text-center">
+                    <div class="bg-forest-900/40 rounded-lg p-2.5">
+                        <div class="text-xs text-cream/40 mb-1">系统</div>
+                        <div id="spark-cpu-system" class="text-sm font-bold">--</div>
+                    </div>
+                    <div class="bg-forest-900/40 rounded-lg p-2.5">
+                        <div class="text-xs text-cream/40 mb-1">进程</div>
+                        <div id="spark-cpu-process" class="text-sm font-bold">--</div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </section>
 
@@ -210,6 +330,102 @@
 
         // 在线玩家
         updatePlayerList(data.players);
+
+        // MSPT / TPS
+        updateMSPTData(data.mspt);
+    }
+
+    function updateMSPTData(mspt) {
+        const statusEl = document.getElementById('mspt-status');
+        const timeEl = document.getElementById('mspt-update-time');
+
+        if (!mspt || !mspt.connected) {
+            statusEl.textContent = '未连接';
+            statusEl.className = 'text-xs px-2.5 py-1 rounded-full bg-red-900/40 text-red-400';
+            document.getElementById('mspt-current').textContent = '--';
+            document.getElementById('mspt-bar').style.width = '0%';
+            timeEl.textContent = '';
+            return;
+        }
+
+        if (mspt.error) {
+            statusEl.textContent = '连接失败';
+            statusEl.className = 'text-xs px-2.5 py-1 rounded-full bg-red-900/40 text-red-400';
+            timeEl.textContent = '';
+            return;
+        }
+
+        statusEl.textContent = '已连接';
+        statusEl.className = 'text-xs px-2.5 py-1 rounded-full bg-green-900/40 text-green-400';
+
+        // 当前 MSPT
+        var msptCurrent = mspt.mspt_current || 0;
+        document.getElementById('mspt-current').textContent = msptCurrent.toFixed(1) + ' ms';
+
+        // MSPT 进度条（50ms = 100%）
+        var msptPercent = Math.min((msptCurrent / 50) * 100, 100);
+        var msptBar = document.getElementById('mspt-bar');
+        msptBar.style.width = msptPercent + '%';
+        if (msptCurrent > 40) {
+            msptBar.className = 'h-full rounded-full transition-all duration-500 no-shine bg-red-500';
+        } else if (msptCurrent > 20) {
+            msptBar.className = 'h-full rounded-full transition-all duration-500 no-shine bg-yellow-500';
+        } else {
+            msptBar.className = 'h-full rounded-full transition-all duration-500 no-shine bg-green-500';
+        }
+
+        // TPS
+        function setTps(id, val) {
+            var el = document.getElementById(id);
+            if (val > 0) {
+                el.textContent = val.toFixed(2);
+                el.className = val >= 20 ? 'text-sm font-bold text-green-400' : (val >= 10 ? 'text-sm font-bold text-yellow-400' : 'text-sm font-bold text-red-400');
+            } else {
+                el.textContent = '--';
+                el.className = 'text-sm font-bold text-cream/30';
+            }
+        }
+        setTps('tps-5s', mspt.tps_5s);
+        setTps('tps-10s', mspt.tps_10s);
+        setTps('tps-1m', mspt.tps_1m);
+        setTps('tps-5m', mspt.tps_5m);
+        setTps('tps-15m', mspt.tps_15m);
+
+        // Tick 耗时
+        function setTick(id, val) {
+            var el = document.getElementById(id);
+            if (val > 0) {
+                el.textContent = val.toFixed(1);
+            } else {
+                el.textContent = '--';
+            }
+        }
+        setTick('tick-min-10s', mspt.tick_min_10s);
+        setTick('tick-med-10s', mspt.tick_med_10s);
+        setTick('tick-p95-10s', mspt.tick_p95_10s);
+        setTick('tick-max-10s', mspt.tick_max_10s);
+        setTick('tick-min-1m', mspt.tick_min_1m);
+        setTick('tick-med-1m', mspt.tick_med_1m);
+        setTick('tick-p95-1m', mspt.tick_p95_1m);
+        setTick('tick-max-1m', mspt.tick_max_1m);
+
+        // Spark CPU
+        if (mspt.cpu_system > 0) {
+            document.getElementById('spark-cpu-system').textContent = mspt.cpu_system + '%';
+        } else {
+            document.getElementById('spark-cpu-system').textContent = '--';
+        }
+        if (mspt.cpu_process > 0) {
+            document.getElementById('spark-cpu-process').textContent = mspt.cpu_process + '%';
+        } else {
+            document.getElementById('spark-cpu-process').textContent = '--';
+        }
+
+        // 更新时间
+        if (mspt.updated_at) {
+            var d = new Date(mspt.updated_at * 1000);
+            timeEl.textContent = '更新于 ' + d.toLocaleTimeString('zh-CN', { hour12: false });
+        }
     }
 
     function updatePlayerList(players) {
