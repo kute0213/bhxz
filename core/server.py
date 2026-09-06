@@ -45,7 +45,7 @@ def shutdown_application(signum=None):
     # 先停止接收新请求
     if _server is not None:
         try:
-            _server.stop()
+            _server.close()
         except Exception as exc:
             log('WARNING', 'App', f'HTTP 服务关闭异常: {exc}')
 
@@ -88,7 +88,10 @@ def register_error_handlers(app):
 
 
 def run_server(app, port=5000, app_root=None):
-    """使用 Cheroot 作为 WSGI 服务器，可选 SSL。"""
+    """使用 Waitress 作为 WSGI 服务器，可选 SSL。
+
+    优先使用 Waitress（生产级），若未安装则回退到 Flask 内置服务器。
+    """
     global _server
 
     log('INFO', 'App', f'工作目录: {os.getcwd()}')
@@ -105,48 +108,45 @@ def run_server(app, port=5000, app_root=None):
     enable_ssl = os.environ.get('ENABLE_SSL', '0').lower() in ('1', 'true', 'yes', 'on')
     has_ssl = enable_ssl and os.path.isfile(key_path) and os.path.isfile(cert_path)
 
-    from cheroot.wsgi import Server
-    server = Server(
-        ('0.0.0.0', port),
-        app,
-        request_queue_size=100,
-        numthreads=20,
-    )
-    _server = server
+    # 尝试使用 Waitress（生产级 WSGI 服务器）
+    try:
+        import waitress
+        log('INFO', 'App', '使用 Waitress 服务器')
+        server = waitress.create_server(
+            app,
+            host='0.0.0.0',
+            port=port,
+            threads=20,
+        )
+        _server = server
+        if has_ssl:
+            log('WARNING', 'App', 'Waitress 不支持 SSL 终端，请使用反向代理（如 Nginx）处理 HTTPS')
+            log('WARNING', 'App', f'HTTP 模式运行 (端口 {port})')
+        try:
+            server.run()
+        except KeyboardInterrupt:
+            shutdown_application(signal.SIGINT)
+        except Exception as e:
+            log('ERROR', 'App', f'服务器错误: {e}')
+            raise
+        finally:
+            shutdown_application()
+        return
+    except ImportError:
+        log('WARNING', 'App', 'Waitress 未安装，回退到 Flask 内置服务器')
+
+    # 使用 Waitress 失败，使用 Flask 内置服务器
+    protocol = 'HTTPS' if has_ssl else 'HTTP'
+    log('INFO', 'App', f'使用 Flask 内置服务器（{protocol} 模式）')
+    log('WARNING', 'App', '建议安装 Waitress 获取更好的性能：pip install waitress')
 
     if has_ssl:
-        log('INFO', 'App', f'HTTPS 模式运行 (端口 {port})')
-        log('INFO', 'App', f'证书: {cert_path}')
-        log('INFO', 'App', f'私钥: {key_path}')
         try:
-            from cheroot.ssl.builtin import BuiltinSSLAdapter
-            server.ssl_adapter = BuiltinSSLAdapter(
-                certificate=cert_path,
-                private_key=key_path,
-                certificate_chain=None,
-                ciphers='ECDHE+AESGCM:ECDHE+CHACHA20:DHE+AESGCM:DHE+CHACHA20:!aNULL:!MD5:!DSS',
-            )
-            # 配置 SSL 会话上下文（启用会话缓存）
-            ctx = ssl.create_default_context(purpose=ssl.Purpose.CLIENT_AUTH)
-            ctx.set_ciphers(
-                'ECDHE+AESGCM:ECDHE+CHACHA20:DHE+AESGCM:DHE+CHACHA20:!aNULL:!MD5:!DSS'
-            )
-            # 通过 session_stats 触发会话缓存初始化
-            ctx.session_stats()
-            server.ssl_adapter.context = ctx
-        except ImportError as e:
-            log('WARNING', 'App', f'无法加载 SSL 适配器 ({e})，回退到 HTTP 模式')
-            log('WARNING', 'App', f'HTTP 模式运行 (端口 {port})')
+            ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            ssl_context.load_cert_chain(cert_path, key_path)
+            app.run(host='0.0.0.0', port=port, ssl_context=ssl_context, threaded=True, debug=False)
+        except Exception as e:
+            log('WARNING', 'App', f'SSL 加载失败 ({e})，回退到 HTTP')
+            app.run(host='0.0.0.0', port=port, threaded=True, debug=False)
     else:
-        log('WARNING', 'App', f'未找到 SSL 证书文件 ({cert_path} 或 {key_path})')
-        log('WARNING', 'App', f'回退到 HTTP 模式运行 (端口 {port})')
-
-    try:
-        server.start()
-    except KeyboardInterrupt:
-        shutdown_application(signal.SIGINT)
-    except Exception as e:
-        log('ERROR', 'App', f'服务器启动失败: {e}')
-        raise
-    finally:
-        shutdown_application()
+        app.run(host='0.0.0.0', port=port, threaded=True, debug=False)

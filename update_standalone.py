@@ -8,12 +8,17 @@
   Linux:   python3 update_standalone.py
 
 注意：本脚本会重置本地所有修改，强制与远程仓库同步。
+如果本地不是 Git 仓库，会自动从 GitHub 下载最新代码并覆盖。
 """
 
 import os
 import sys
+import shutil
+import zipfile
 import subprocess
 import time
+import tempfile
+import urllib.request
 
 # ═══════════════════════════════════════════════════════════════════════
 # 配置
@@ -23,6 +28,9 @@ import time
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 
 # 远程仓库
+GITHUB_REPO = 'kute0213/bhxz'
+GITHUB_URL = f'https://github.com/{GITHUB_REPO}'
+GITHUB_ARCHIVE = f'{GITHUB_URL}/archive/refs/heads/main.zip'
 REMOTE = 'origin'
 BRANCH = 'main'
 
@@ -162,6 +170,80 @@ def wait_for_exit(pid_file=None, process_name='app.py'):
 # 主流程
 # ═══════════════════════════════════════════════════════════════════════
 
+def is_git_repo(path):
+    """检查目录是否是一个 Git 仓库。"""
+    git_dir = os.path.join(path, '.git')
+    return os.path.isdir(git_dir)
+
+
+def download_and_extract(url, dest):
+    """从 GitHub 下载 ZIP 归档并解压到目标目录。
+
+    解压后目录结构: dest/bhxz-main/
+    """
+    log(f'  下载中: {url}')
+    try:
+        with tempfile.NamedTemporaryFile(suffix='.zip', delete=False) as tmp:
+            zip_path = tmp.name
+            urllib.request.urlretrieve(url, zip_path)
+    except Exception as e:
+        log(f'  ✗ 下载失败: {e}')
+        return False
+
+    log(f'  解压中...')
+    try:
+        with zipfile.ZipFile(zip_path, 'r') as zf:
+            extract_dir = tempfile.mkdtemp()
+            zf.extractall(extract_dir)
+
+        src = os.path.join(extract_dir, 'bhxz-main')
+        if not os.path.isdir(src):
+            items = os.listdir(extract_dir)
+            if items:
+                src = os.path.join(extract_dir, items[0])
+
+        for item in os.listdir(src):
+            s = os.path.join(src, item)
+            d = os.path.join(dest, item)
+            if os.path.isdir(s):
+                if os.path.exists(d):
+                    shutil.rmtree(d)
+                shutil.copytree(s, d)
+            else:
+                shutil.copy2(s, d)
+
+        shutil.rmtree(extract_dir, ignore_errors=True)
+        os.unlink(zip_path)
+        return True
+    except Exception as e:
+        log(f'  ✗ 解压失败: {e}')
+        try:
+            os.unlink(zip_path)
+        except Exception:
+            pass
+        return False
+
+
+def pull_code():
+    """拉取最新代码。
+
+    如果本地是 Git 仓库，使用 git 强制同步。
+    否则从 GitHub 下载 ZIP 归档并覆盖本地文件。
+    """
+    if is_git_repo(PROJECT_ROOT):
+        log('  本地是 Git 仓库，使用 git 同步')
+        code = run('git fetch --all', timeout=30)
+        if code != 0:
+            log('  ⚠ git fetch 失败，尝试从 GitHub 下载')
+            return download_and_extract(GITHUB_ARCHIVE, PROJECT_ROOT)
+        run(f'git reset --hard {REMOTE}/{BRANCH}', timeout=30)
+        run('git clean -fd', timeout=30)
+        return True
+
+    log('  本地不是 Git 仓库，从 GitHub 下载最新代码')
+    return download_and_extract(GITHUB_ARCHIVE, PROJECT_ROOT)
+
+
 def main():
     log('=' * 50)
     log(' 备用更新脚本启动')
@@ -173,21 +255,14 @@ def main():
     # 1. 切换到项目目录
     os.chdir(PROJECT_ROOT)
 
-    # 2. 检查 Git 是否可用
-    log('\n▶ 检查 Git...')
-    code, git_version = run('git --version', capture=True, timeout=10)
-    if code != 0:
-        log('  ✗ Git 不可用，请先安装 Git')
+    # 2. 拉取最新代码
+    log('\n▶ 拉取最新代码...')
+    if not pull_code():
+        log('  ✗ 代码拉取失败，终止更新')
         input('\n按回车键退出...')
         return 1
 
-    # 3. 拉取最新代码（强制覆盖本地修改）
-    log('\n▶ 拉取最新代码...')
-    run('git fetch --all', timeout=30)
-    run(f'git reset --hard {REMOTE}/{BRANCH}', timeout=30)
-    run('git clean -fd', timeout=30)
-
-    # 4. 安装/更新依赖
+    # 3. 安装/更新依赖
     log('\n▶ 安装依赖...')
     python = find_python()
     log(f'  使用 Python: {python}')
