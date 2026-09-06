@@ -2,10 +2,20 @@
 
 ## \[Unreleased]
 
+### 新增
+
+* **游戏账号解绑功能**：MC 账号列表新增「解绑」按钮，点击后弹出确认弹窗，确认后通过 AJAX 调用解绑 API 移除绑定记录，行自动淡出消除。绑定服务层新增 `create_binding`、`is_bound_to_user`、`unbind_account` 等函数，`routes/game_accounts/bind.py` 新增 `POST /game-accounts/api/unbind` 端点
+
 ### 重构
 
+* **路由层分层规范全面修复**：移除 `routes/game_accounts/__init__.py` 和 `routes/game_accounts/bind.py` 中所有直接 SQL 查询，改用 `services/game_accounts/binding_service.py` 的服务函数（`get_user_bindings`、`is_mc_username_bound`、`is_bound_to_user`、`create_binding`），彻底消除路由层 `conn.execute()` 调用，严格遵循 MVC 分层架构
+* **服务层增强**：`binding_service.py` 新增 `create_binding`（创建绑定记录，含双重并发检查）、`is_bound_to_user`（按用户名+用户ID 校验所有权）函数，所有函数返回 `(success, data_or_error)` 元组
 * **大文件按功能模块拆分为子包**：`services/music_service.py`（861行）→ `services/music/`（constants.py / queries.py / crud.py / upload.py / favorites.py），`services/user_service.py`（648行）→ `services/user/`（auth.py / profile.py / admin.py），`services/updater.py`（660行）→ `services/updater/`（config.py / core.py），`services/discussion_service.py`（531行）→ `services/discussion/`（topics.py / replies.py / categories.py）；保留原文件作为兼容性重导出层（`from services.music import *`），旧代码无需修改导入路径
 * **空异常捕获增加日志**：`core/init.py` 中两个 `except Exception: pass` 改为 `log('WARNING', ...)` 记录，便于排查问题
+
+### 修复
+
+* **修复 `routes/game_accounts/__init__.py` 缺少 `get_db` 导入**：`change_password_page`、`api_bound_accounts`、`api_change_password` 三个路由函数直接使用 `get_db()` 但未在文件顶部导入，会导致 NameError 运行时错误。现通过服务层函数替代，已移除对 `get_db` 的依赖
 
 ### 文档
 

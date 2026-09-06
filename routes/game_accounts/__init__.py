@@ -3,9 +3,13 @@
 from flask import Blueprint, render_template, request, jsonify
 
 from core.auth import login_required, get_current_user
-from core.db import get_db
 from services.easyauth_bind import bind_account
 from services.rcon.easy_auth import change_password as rcon_change_password
+from services.game_accounts.binding_service import (
+    get_user_bindings,
+    is_bound_to_user,
+)
+
 game_accounts_bp = Blueprint('game_accounts', __name__, url_prefix='/game-accounts')
 
 
@@ -18,15 +22,7 @@ game_accounts_bp = Blueprint('game_accounts', __name__, url_prefix='/game-accoun
 def index():
     """游戏账号功能首页，显示已绑定账号列表和操作入口。"""
     user = get_current_user()
-    conn = get_db()
-    try:
-        bound_accounts = conn.execute(
-            "SELECT id, mc_username, created_at FROM game_account_bindings WHERE user_id = ? ORDER BY created_at DESC",
-            (user['id'],),
-        ).fetchall()
-        bound_accounts = [dict(r) for r in bound_accounts]
-    finally:
-        conn.close()
+    bound_accounts = get_user_bindings(user['id'])
     return render_template('game_accounts/index.html', user=user, bound_accounts=bound_accounts)
 
 
@@ -55,15 +51,7 @@ def apply_page():
 def change_password_page():
     """修改已绑定账号密码页面。"""
     user = get_current_user()
-    conn = get_db()
-    try:
-        bound_accounts = conn.execute(
-            "SELECT id, mc_username, created_at FROM game_account_bindings WHERE user_id = ? ORDER BY created_at DESC",
-            (user['id'],),
-        ).fetchall()
-        bound_accounts = [dict(r) for r in bound_accounts]
-    finally:
-        conn.close()
+    bound_accounts = get_user_bindings(user['id'])
     return render_template('game_accounts/change_password.html', user=user, bound_accounts=bound_accounts)
 
 
@@ -76,17 +64,11 @@ def change_password_page():
 def api_bound_accounts():
     """获取当前用户已绑定的游戏账号列表。"""
     user = get_current_user()
-    conn = get_db()
     try:
-        accounts = conn.execute(
-            "SELECT id, mc_username, created_at FROM game_account_bindings WHERE user_id = ? ORDER BY created_at DESC",
-            (user['id'],),
-        ).fetchall()
-        return jsonify({'success': True, 'accounts': [dict(r) for r in accounts]})
+        accounts = get_user_bindings(user['id'])
+        return jsonify({'success': True, 'accounts': accounts})
     except Exception as e:
         return jsonify({'success': False, 'message': f'获取失败: {e}'}), 500
-    finally:
-        conn.close()
 
 
 # ---------------------------------------------------------------------------
@@ -125,16 +107,8 @@ def api_change_password():
         return jsonify({'success': False, 'message': '新密码不能超过 32 个字符'}), 400
 
     # ── 检查该账号是否属于当前用户 ──
-    conn = get_db()
-    try:
-        binding = conn.execute(
-            "SELECT id FROM game_account_bindings WHERE user_id = ? AND mc_username = ?",
-            (user['id'], mc_username),
-        ).fetchone()
-        if not binding:
-            return jsonify({'success': False, 'message': '该账号未绑定或不属于你'}), 400
-    finally:
-        conn.close()
+    if not is_bound_to_user(mc_username, user['id']):
+        return jsonify({'success': False, 'message': '该账号未绑定或不属于你'}), 400
 
     # ── 验证当前密码 ──
     result = bind_account(mc_username, current_password)

@@ -48,9 +48,14 @@
                             <div class="text-xs text-cream/40">绑定于 {{ account.created_at }}</div>
                         </div>
                     </div>
-                    <a href="{{ url_for('game_accounts.change_password_page', mc_username=account.mc_username) }}" class="flex-shrink-0 px-3 py-1.5 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 text-xs rounded-lg transition-colors border border-blue-500/30 ml-2">
-                        <i data-lucide="key" class="w-3.5 h-3.5 inline mr-1"></i>更改密码
-                    </a>
+                    <div class="flex items-center gap-2 flex-shrink-0">
+                        <button type="button" class="px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-300 text-xs rounded-lg transition-colors border border-red-500/30 unbind-btn" data-binding-id="{{ account.id }}" data-username="{{ account.mc_username }}">
+                            <i data-lucide="unlink" class="w-3.5 h-3.5 inline mr-1"></i>解绑
+                        </button>
+                        <a href="{{ url_for('game_accounts.change_password_page', mc_username=account.mc_username) }}" class="px-3 py-1.5 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 text-xs rounded-lg transition-colors border border-blue-500/30">
+                            <i data-lucide="key" class="w-3.5 h-3.5 inline mr-1"></i>更改密码
+                        </a>
+                    </div>
                 </div>
                 {% endfor %}
             </div>
@@ -66,4 +71,64 @@
         </div>
     </div>
 </section>
+{% endblock %}
+{% block extra_script %}
+<script>
+(function() {
+    document.querySelectorAll('.unbind-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var bindingId = btn.dataset.bindingId;
+            var username = btn.dataset.username;
+            if (btn.disabled) return;
+
+            CustomModal.confirm(
+                '确定解绑账号 <strong>' + username + '</strong>？',
+                {
+                    title: '解绑确认',
+                    confirmText: '确认解绑',
+                    cancelText: '取消',
+                    callback: function(confirmed) {
+                        if (!confirmed) return;
+
+                        btn.disabled = true;
+                        var origText = btn.innerHTML;
+                        btn.innerHTML = '<i data-lucide="loader-2" class="w-3.5 h-3.5 inline mr-1 animate-spin"></i>解绑中...';
+                        lucide.createIcons({ targets: [btn] });
+
+                        fetch('/game-accounts/api/unbind', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({ binding_id: bindingId }),
+                        })
+                        .then(function(r) { return r.json(); })
+                        .then(function(d) {
+                            if (d.success) {
+                                Toast.success(d.message);
+                                // 移除该行
+                                var row = btn.closest('.flex.items-center.justify-between');
+                                if (row) {
+                                    row.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+                                    row.style.opacity = '0';
+                                    row.style.transform = 'translateX(-20px)';
+                                    setTimeout(function() { row.remove(); }, 300);
+                                }
+                            } else {
+                                CustomModal.alert(d.message, { type: 'error' });
+                            }
+                        })
+                        .catch(function(err) {
+                            CustomModal.alert('网络错误，请重试', { type: 'error' });
+                        })
+                        .finally(function() {
+                            btn.disabled = false;
+                            btn.innerHTML = origText;
+                            lucide.createIcons({ targets: [btn] });
+                        });
+                    }
+                }
+            );
+        });
+    });
+})();
+</script>
 {% endblock %}

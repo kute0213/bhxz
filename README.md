@@ -746,6 +746,12 @@ workspace/
 
 ## 最近更新
 
+* **游戏账号解绑功能**：MC 账号列表新增「解绑」按钮，支持确认弹窗和淡出消除动画，绑定服务层新增 `unbind_account`、`create_binding`、`is_bound_to_user` 等服务函数
+
+* **路由层分层规范全面修复**：移除 `routes/game_accounts/__init__.py` 和 `routes/game_accounts/bind.py` 中所有直接 SQL 查询，改用服务层函数调用，彻底消除路由层 `conn.execute()`，严格遵循 MVC 分层架构
+
+* **修复潜在 NameError 运行时错误**：`routes/game_accounts/__init__.py` 中三个路由函数使用 `get_db()` 但未导入，现通过服务层替代已消除该隐患
+
 * **代码清理**：移除未使用的导入（`request`、`abort`、`redirect`、`url_for`）、死代码注释、未使用函数参数和未使用变量，提升代码可维护性。
 
 * **项目结构优化**：将大文件按功能模块拆分为子包，`services/music_service.py` → `services/music/`（常量/查询/CRUD/上传/收藏），`services/user_service.py` → `services/user/`（认证/资料/管理），`services/updater.py` → `services/updater/`（配置/核心逻辑），`services/discussion_service.py` → `services/discussion/`（帖子/回复/分类）；保留原文件作为兼容性重导出层，旧代码无需修改导入路径。

@@ -5,8 +5,11 @@ from flask import request, jsonify
 from core.auth import login_required, get_current_user
 from services.easyauth_bind import bind_account
 from services.validation import validate_mc_username
-from core.db import get_db
-from datetime import datetime
+from services.game_accounts.binding_service import (
+    unbind_account,
+    create_binding,
+    is_mc_username_bound,
+)
 from routes.game_accounts import game_accounts_bp
 
 
@@ -37,52 +40,65 @@ def api_bind():
     if not valid_mc:
         return jsonify({'success': False, 'message': mc_err}), 400
 
-    # ── 检查绑定冲突（合并为一次 DB 连接） ──
-    conn = get_db()
-    try:
-        # 检查该 MC 账号是否已被其他用户绑定
-        existing = conn.execute(
-            "SELECT id, user_id FROM game_account_bindings WHERE mc_username = ?",
-            (username,),
-        ).fetchone()
-        if existing:
-            return jsonify({
-                'success': False,
-                'message': '该 MC 账号已被其他用户绑定',
-                'error_code': 'ALREADY_BOUND',
-            }), 400
-
-        # ── 通过 RCON 验证密码 ──
-        result = bind_account(username, password)
-        if not result['success']:
-            return jsonify(result), 401
-
-        # ── 验证通过，绑定到当前用户 ──
-        actual_username = result['username']
-
-        # 再次检查（防止并发冲突）
-        existing = conn.execute(
-            "SELECT id FROM game_account_bindings WHERE mc_username = ?",
-            (actual_username,),
-        ).fetchone()
-        if existing:
-            return jsonify({'success': False, 'message': '该 MC 账号已被其他用户绑定'}), 400
-
-        now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        conn.execute(
-            "INSERT INTO game_account_bindings (user_id, mc_username, created_at) VALUES (?, ?, ?)",
-            (user['id'], actual_username, now),
-        )
-        conn.commit()
-
+    # ── 检查该 MC 账号是否已被绑定 ──
+    if is_mc_username_bound(username):
         return jsonify({
-            'success': True,
-            'message': f"账号 '{actual_username}' 绑定成功，你可以使用该账号登录游戏",
-            'username': actual_username,
-            'uuid': result.get('uuid'),
-        }), 200
+            'success': False,
+            'message': '该 MC 账号已被其他用户绑定',
+            'error_code': 'ALREADY_BOUND',
+        }), 400
 
-    except Exception as e:
-        return jsonify({'success': False, 'message': f'绑定失败: {e}'}), 500
-    finally:
-        conn.close()
+    # ── 通过 RCON 验证密码 ──
+    result = bind_account(username, password)
+    if not result['success']:
+        return jsonify(result), 401
+
+    actual_username = result['username']
+
+    # ── 再次检查（防止并发冲突） ──
+    if is_mc_username_bound(actual_username):
+        return jsonify({'success': False, 'message': '该 MC 账号已被其他用户绑定'}), 400
+
+    # ── 创建绑定记录 ──
+    succ, data_or_msg = create_binding(user['id'], actual_username)
+    if not succ:
+        return jsonify({'success': False, 'message': data_or_msg}), 500
+
+    return jsonify({
+        'success': True,
+        'message': f"账号 '{actual_username}' 绑定成功，你可以使用该账号登录游戏",
+        'username': actual_username,
+        'uuid': result.get('uuid'),
+    }), 200
+
+
+# ---------------------------------------------------------------------------
+# API：解绑游戏账号
+# ---------------------------------------------------------------------------
+
+@game_accounts_bp.route('/api/unbind', methods=['POST'])
+@login_required
+def api_unbind():
+    """解绑已绑定的 MC 游戏账号。
+
+    请求体 JSON:
+        binding_id: 绑定记录 ID（必填）
+
+    返回:
+        { success, message }
+    """
+    user = get_current_user()
+    data = request.get_json(silent=True) or {}
+    binding_id = data.get('binding_id')
+
+    if not binding_id:
+        return jsonify({'success': False, 'message': '缺少绑定记录 ID'}), 400
+
+    try:
+        binding_id = int(binding_id)
+    except (ValueError, TypeError):
+        return jsonify({'success': False, 'message': '绑定记录 ID 无效'}), 400
+
+    succ, msg = unbind_account(binding_id, user['id'])
+    status = 200 if succ else 400
+    return jsonify({'success': succ, 'message': msg}), status
