@@ -32,13 +32,13 @@ def create_application(user_id: int, mc_username: str) -> Tuple[bool, str]:
 
     conn = get_db()
     try:
-        # 检查是否已被封禁
+        # 检查是否已被封禁（按用户名或用户ID）
         banned = conn.execute(
-            "SELECT id FROM game_account_bans WHERE mc_username = ?",
-            (mc_username,),
+            "SELECT id FROM game_account_bans WHERE mc_username = ? OR user_id = ?",
+            (mc_username, user_id),
         ).fetchone()
         if banned:
-            return False, '该账号已被禁止申请注册'
+            return False, '你的账号已被禁止申请注册'
 
         # 检查是否有待处理的申请
         existing = conn.execute(
@@ -188,7 +188,7 @@ def reject_application(app_id: int, reviewer_id: int, reason: str = '') -> Tuple
 # ---------------------------------------------------------------------------
 
 def ban_account(mc_username: str, reason: str, created_by: int) -> Tuple[bool, str]:
-    """禁止某个 MC 用户名申请注册。"""
+    """禁止某个 MC 用户名申请注册，同时禁止该账号绑定的官网用户申请新账号。"""
     mc_username = mc_username.strip()
     if not mc_username:
         return False, 'MC 用户名不能为空'
@@ -196,19 +196,30 @@ def ban_account(mc_username: str, reason: str, created_by: int) -> Tuple[bool, s
     conn = get_db()
     try:
         existing = conn.execute(
-            "SELECT id FROM game_account_bans WHERE mc_username = ?",
+            "SELECT id, user_id FROM game_account_bans WHERE mc_username = ?",
             (mc_username,),
         ).fetchone()
         if existing:
             return False, '该账号已被封禁'
 
+        # 查找绑定该 MC 账号的官网用户
+        binding = conn.execute(
+            "SELECT user_id FROM game_account_bindings WHERE mc_username = ?",
+            (mc_username,),
+        ).fetchone()
+        banned_user_id = binding['user_id'] if binding else None
+
         now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         conn.execute(
-            "INSERT INTO game_account_bans (mc_username, reason, created_at, created_by) VALUES (?, ?, ?, ?)",
-            (mc_username, reason, now, created_by),
+            "INSERT INTO game_account_bans (mc_username, reason, created_at, created_by, user_id) VALUES (?, ?, ?, ?, ?)",
+            (mc_username, reason, now, created_by, banned_user_id),
         )
         conn.commit()
-        return True, f'已封禁账号 {mc_username}'
+
+        msg = f'已封禁账号 {mc_username}'
+        if banned_user_id:
+            msg += '，该账号绑定的官网用户已失去申请新账号资格'
+        return True, msg
     except Exception as e:
         return False, f'封禁失败: {e}'
     finally:
@@ -236,7 +247,7 @@ def get_banned_accounts() -> List[dict]:
     conn = get_db()
     try:
         rows = conn.execute(
-            """SELECT b.id, b.mc_username, b.reason, b.created_at, u.username AS created_by_name
+            """SELECT b.id, b.mc_username, b.reason, b.created_at, b.user_id, u.username AS created_by_name
                FROM game_account_bans b
                LEFT JOIN users u ON b.created_by = u.id
                ORDER BY b.created_at DESC""",
@@ -246,14 +257,20 @@ def get_banned_accounts() -> List[dict]:
         conn.close()
 
 
-def is_banned(mc_username: str) -> bool:
-    """检查 MC 用户名是否被封禁。"""
+def is_banned(mc_username: str, user_id: int = None) -> bool:
+    """检查 MC 用户名或用户 ID 是否被封禁。"""
     conn = get_db()
     try:
-        row = conn.execute(
-            "SELECT id FROM game_account_bans WHERE mc_username = ?",
-            (mc_username,),
-        ).fetchone()
+        if user_id is not None:
+            row = conn.execute(
+                "SELECT id FROM game_account_bans WHERE mc_username = ? OR user_id = ?",
+                (mc_username, user_id),
+            ).fetchone()
+        else:
+            row = conn.execute(
+                "SELECT id FROM game_account_bans WHERE mc_username = ?",
+                (mc_username,),
+            ).fetchone()
         return row is not None
     finally:
         conn.close()

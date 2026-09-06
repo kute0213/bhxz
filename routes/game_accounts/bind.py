@@ -40,18 +40,6 @@ def api_bind():
     # ── 检查绑定冲突（合并为一次 DB 连接） ──
     conn = get_db()
     try:
-        # 检查当前用户是否已绑定
-        my_bind = conn.execute(
-            "SELECT id, mc_username FROM game_account_bindings WHERE user_id = ?",
-            (user['id'],),
-        ).fetchone()
-        if my_bind:
-            return jsonify({
-                'success': False,
-                'message': f'你已绑定账号 {my_bind["mc_username"]}，请先解绑后再绑定其他账号',
-                'error_code': 'ALREADY_BOUND',
-            }), 400
-
         # 检查该 MC 账号是否已被其他用户绑定
         existing = conn.execute(
             "SELECT id, user_id FROM game_account_bindings WHERE mc_username = ?",

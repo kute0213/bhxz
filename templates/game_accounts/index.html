@@ -1,233 +1,69 @@
 {% extends "base.html" %}
 {% block title %}游戏账号{% endblock %}
 {% block content %}
-<section class="page-container py-12">
+<section class="page-container py-8 sm:py-12">
     <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
 
-        <div class="text-center mb-10">
+        <div class="text-center mb-8 sm:mb-10">
             <h1 class="text-2xl sm:text-3xl font-bold mb-3">游戏账号</h1>
-            <p class="text-cream/60">管理你的 Minecraft 游戏账号</p>
+            <p class="text-cream/60 text-sm">管理你的 Minecraft 游戏账号</p>
         </div>
 
-        <!-- 绑定已有账号 -->
-        <div class="pixel-card rounded-xl p-6 mb-6">
-            <h2 class="text-lg font-bold mb-4 flex items-center gap-2">
-                <i data-lucide="link" class="w-5 h-5 text-blue-400"></i>
-                绑定已有游戏账号
-            </h2>
-            <p class="text-cream/50 text-sm mb-4">通过 RCON 验证游戏内密码，将你的游戏账号绑定到网站账户。绑定后可用该账号在相关功能中快捷登录。</p>
-
-            <form id="bind-form" class="space-y-4">
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                        <label class="text-xs text-cream/60 block mb-1">MC 用户名</label>
-                        <input type="text" id="bind-username" placeholder="游戏内用户名" class="w-full px-3 py-2 bg-forest-900/60 border border-cream/20 rounded-lg text-sm focus:outline-none focus:border-blue-400 transition-colors" autocomplete="off">
-                    </div>
-                    <div>
-                        <label class="text-xs text-cream/60 block mb-1">密码</label>
-                        <input type="password" id="bind-password" placeholder="游戏内登录密码" class="w-full px-3 py-2 bg-forest-900/60 border border-cream/20 rounded-lg text-sm focus:outline-none focus:border-blue-400 transition-colors">
-                    </div>
+        <!-- 操作入口按钮 -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8 sm:mb-10">
+            <a href="{{ url_for('game_accounts.bind_page') }}" class="pixel-card rounded-xl p-5 sm:p-6 text-center hover:border-blue-400/50 transition-all group">
+                <div class="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-blue-500/20 flex items-center justify-center mx-auto mb-3 group-hover:bg-blue-500/30 transition-colors">
+                    <i data-lucide="link" class="w-6 h-6 sm:w-7 sm:h-7 text-blue-400"></i>
                 </div>
-                <button type="submit" id="bind-btn" class="px-5 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 text-sm rounded-lg transition-colors border border-blue-500/30">
-                    <i data-lucide="shield-check" class="w-4 h-4 inline mr-1 bind-btn-icon"></i>
-                    <span class="bind-btn-text">验证并绑定</span>
-                </button>
-            </form>
+                <h2 class="text-base sm:text-lg font-bold mb-1">绑定已有账号</h2>
+                <p class="text-xs sm:text-sm text-cream/50">通过 RCON 验证游戏内密码，将你的游戏账号绑定到网站账户</p>
+            </a>
+            <a href="{{ url_for('game_accounts.apply_page') }}" class="pixel-card rounded-xl p-5 sm:p-6 text-center hover:border-gold-400/50 transition-all group">
+                <div class="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-gold-400/20 flex items-center justify-center mx-auto mb-3 group-hover:bg-gold-400/30 transition-colors">
+                    <i data-lucide="user-plus" class="w-6 h-6 sm:w-7 sm:h-7 text-gold-400"></i>
+                </div>
+                <h2 class="text-base sm:text-lg font-bold mb-1">申请新账号</h2>
+                <p class="text-xs sm:text-sm text-cream/50">申请创建一个新的 Minecraft 游戏账号，需管理员审核批准</p>
+            </a>
         </div>
 
-        <!-- 申请注册新账号 -->
-        <div class="pixel-card rounded-xl p-6">
-            <h2 class="text-lg font-bold mb-4 flex items-center gap-2">
-                <i data-lucide="user-plus" class="w-5 h-5 text-gold-400"></i>
-                申请注册游戏账号
+        <!-- 已绑定账号列表 -->
+        <div class="pixel-card rounded-xl p-5 sm:p-6">
+            <h2 class="text-base sm:text-lg font-bold mb-4 flex items-center gap-2">
+                <i data-lucide="gamepad-2" class="w-5 h-5 text-green-400"></i>
+                已绑定的账号
+                <span class="text-xs text-cream/50 font-normal ml-1">({{ bound_accounts|length }})</span>
             </h2>
-            <p class="text-cream/50 text-sm mb-4">申请创建一个新的 Minecraft 游戏账号，需管理员审核批准。</p>
 
-            <form id="register-form" class="space-y-4">
-                <div>
-                    <label class="text-xs text-cream/60 block mb-1">MC 用户名</label>
-                    <input type="text" id="reg-username" placeholder="输入要注册的 MC 用户名" class="w-full px-3 py-2 bg-forest-900/60 border border-cream/20 rounded-lg text-sm focus:outline-none focus:border-gold-400 transition-colors">
+            {% if bound_accounts %}
+            <div class="space-y-3">
+                {% for account in bound_accounts %}
+                <div class="flex items-center justify-between px-4 py-3 bg-forest-900/40 rounded-lg border border-cream/5">
+                    <div class="flex items-center gap-3 min-w-0">
+                        <div class="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center flex-shrink-0">
+                            <i data-lucide="user" class="w-4 h-4 text-green-400"></i>
+                        </div>
+                        <div class="min-w-0">
+                            <div class="text-cream font-medium text-sm sm:text-base truncate">{{ account.mc_username }}</div>
+                            <div class="text-xs text-cream/40">绑定于 {{ account.created_at }}</div>
+                        </div>
+                    </div>
+                    <a href="{{ url_for('game_accounts.change_password_page', mc_username=account.mc_username) }}" class="flex-shrink-0 px-3 py-1.5 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 text-xs rounded-lg transition-colors border border-blue-500/30 ml-2">
+                        <i data-lucide="key" class="w-3.5 h-3.5 inline mr-1"></i>更改密码
+                    </a>
                 </div>
-                <button type="submit" class="px-5 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 text-sm rounded-lg transition-colors border border-blue-500/30">
-                    <i data-lucide="send" class="w-4 h-4 inline mr-1"></i>提交申请
-                </button>
-            </form>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="text-center py-8 sm:py-10">
+                <div class="w-16 h-16 rounded-full bg-forest-900/60 flex items-center justify-center mx-auto mb-3">
+                    <i data-lucide="gamepad-2" class="w-8 h-8 text-cream/30"></i>
+                </div>
+                <p class="text-cream/40 text-sm">你还没有绑定任何游戏账号</p>
+                <p class="text-cream/30 text-xs mt-1">点击上方按钮绑定或申请新账号</p>
+            </div>
+            {% endif %}
         </div>
     </div>
 </section>
-
-<!-- ===== 验证码弹窗（注册申请时弹出） ===== -->
-<div id="captcha-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onclick="if(event.target===this)closeCaptchaModal()">
-    <div class="bg-forest-800 border border-cream/20 rounded-2xl p-6 sm:p-8 w-full max-w-sm mx-4 shadow-2xl" onclick="event.stopPropagation()">
-        <h3 class="text-lg font-bold mb-2">图形验证码</h3>
-        <p class="text-cream/60 text-sm mb-4">请输入验证码以完成申请</p>
-        <div class="flex flex-col items-center gap-3 mb-4">
-            <img id="captcha-image" src="" alt="验证码" class="h-14 rounded-lg cursor-pointer border border-cream/20" onclick="refreshCaptcha()">
-            <input type="text" id="captcha-input" placeholder="输入验证码" maxlength="6" class="w-full px-3 py-2 bg-forest-900/60 border border-cream/20 rounded-lg text-sm focus:outline-none focus:border-gold-400 transition-colors text-center tracking-widest" autocomplete="off">
-            <input type="hidden" id="captcha-id" value="">
-            <p class="text-xs text-cream/40">点击图片刷新验证码</p>
-        </div>
-        <div class="flex justify-end gap-3">
-            <button onclick="closeCaptchaModal()" class="px-4 py-2 text-sm text-cream/60 hover:text-cream transition-colors">取消</button>
-            <button id="captcha-modal-confirm" class="px-5 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 text-sm rounded-lg transition-colors border border-blue-500/30">确认提交</button>
-        </div>
-        <p id="captcha-modal-error" class="hidden text-red-400 text-xs mt-3"></p>
-    </div>
-</div>
-{% endblock %}
-
-{% block extra_script %}
-<script>
-(function() {
-    var pendingRegData = null;
-
-    function refreshCaptcha() {
-        fetch('/api/captcha/generate')
-            .then(function(r) { return r.json(); })
-            .then(function(d) {
-                if (d.success) {
-                    document.getElementById('captcha-image').src = d.image;
-                    document.getElementById('captcha-id').value = d.captcha_id;
-                }
-            });
-    }
-
-    window.closeCaptchaModal = function() {
-        document.getElementById('captcha-modal').classList.add('hidden');
-        document.getElementById('captcha-input').value = '';
-        document.getElementById('captcha-modal-error').classList.add('hidden');
-        pendingRegData = null;
-    };
-
-    // ===== 绑定账号 =====
-    var bindForm = document.getElementById('bind-form');
-    var bindBtn = document.getElementById('bind-btn');
-    var bindBtnIcon = bindBtn.querySelector('.bind-btn-icon');
-    var bindBtnText = bindBtn.querySelector('.bind-btn-text');
-
-    bindForm.addEventListener('submit', function(e) {
-        e.preventDefault();
-        if (bindBtn.disabled) return; // 防止重复提交
-
-        var username = document.getElementById('bind-username').value.trim();
-        var password = document.getElementById('bind-password').value;
-
-        if (!username) { Toast.error('请输入 MC 用户名'); return; }
-        if (username.length < 3) { Toast.error('MC 用户名至少 3 个字符'); return; }
-        if (username.length > 16) { Toast.error('MC 用户名不能超过 16 个字符'); return; }
-        if (!/^[a-zA-Z0-9_]+$/.test(username)) { Toast.error('MC 用户名只能包含字母、数字和下划线'); return; }
-        if (!password) { Toast.error('请输入密码'); return; }
-
-        // 使用 CustomModal 确认
-        CustomModal.confirm('确认绑定账号 <strong>' + escapeHtml(username) + '</strong>？系统将通过 RCON 验证游戏内密码。', {
-            title: '绑定确认',
-            confirmText: '验证并绑定',
-            callback: function(confirmed) {
-                if (!confirmed) return;
-
-                // 设置加载状态
-                bindBtn.disabled = true;
-                bindBtnIcon.setAttribute('data-lucide', 'loader-2');
-                lucide.createIcons({ targets: [bindBtnIcon] });
-                bindBtnIcon.classList.add('animate-spin');
-                bindBtnText.textContent = '验证中...';
-
-                fetch('/game-accounts/api/bind', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({
-                        username: username,
-                        password: password,
-                    }),
-                })
-                .then(function(r) { return r.json(); })
-                .then(function(d) {
-                    if (d.success) {
-                        CustomModal.alert(d.message, { type: 'success' });
-                        // 清空密码字段，保留用户名以便用户确认
-                        document.getElementById('bind-password').value = '';
-                        Toast.success('账号 ' + d.username + ' 已绑定');
-                    } else {
-                        CustomModal.alert(d.message, { type: 'error' });
-                    }
-                })
-                .catch(function(err) {
-                    CustomModal.alert('网络错误，请检查网络连接后重试', { type: 'error' });
-                })
-                .finally(function() {
-                    // 恢复按钮状态
-                    bindBtn.disabled = false;
-                    bindBtnIcon.setAttribute('data-lucide', 'shield-check');
-                    lucide.createIcons({ targets: [bindBtnIcon] });
-                    bindBtnIcon.classList.remove('animate-spin');
-                    bindBtnText.textContent = '验证并绑定';
-                });
-            }
-        });
-    });
-
-    // ===== 注册申请（先校验，再弹出验证码弹窗） =====
-    document.getElementById('register-form').addEventListener('submit', function(e) {
-        e.preventDefault();
-        var username = document.getElementById('reg-username').value.trim();
-
-        if (!username) { Toast.error('请输入 MC 用户名'); return; }
-        if (username.length < 3) { Toast.error('MC 用户名至少 3 个字符'); return; }
-        if (username.length > 16) { Toast.error('MC 用户名不能超过 16 个字符'); return; }
-        if (!/^[a-zA-Z0-9_]+$/.test(username)) { Toast.error('MC 用户名只能包含字母、数字和下划线'); return; }
-        if (username.indexOf('__') !== -1) { Toast.error('MC 用户名不能包含连续下划线'); return; }
-
-        pendingRegData = { mc_username: username };
-        refreshCaptcha();
-        document.getElementById('captcha-input').value = '';
-        document.getElementById('captcha-modal-error').classList.add('hidden');
-        document.getElementById('captcha-modal').classList.remove('hidden');
-        document.getElementById('captcha-input').focus();
-    });
-
-    document.getElementById('captcha-modal-confirm').addEventListener('click', function() {
-        var captcha = document.getElementById('captcha-input').value.trim();
-        var captchaId = document.getElementById('captcha-id').value;
-        var errEl = document.getElementById('captcha-modal-error');
-
-        if (!captcha) { errEl.textContent = '请输入验证码'; errEl.classList.remove('hidden'); return; }
-        if (!pendingRegData) { errEl.textContent = '提交数据丢失，请重新申请'; errEl.classList.remove('hidden'); return; }
-        errEl.classList.add('hidden');
-
-        fetch('/game-accounts/api/apply-register', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({
-                mc_username: pendingRegData.mc_username,
-                captcha_id: captchaId,
-                captcha: captcha,
-            }),
-        })
-        .then(function(r) { return r.json(); })
-        .then(function(d) {
-            if (d.success) {
-                Toast.success(d.message);
-                closeCaptchaModal();
-                document.getElementById('reg-username').value = '';
-                pendingRegData = null;
-            } else {
-                Toast.error(d.message);
-                refreshCaptcha();
-                document.getElementById('captcha-input').value = '';
-                document.getElementById('captcha-input').focus();
-            }
-        });
-    });
-
-    document.getElementById('captcha-input').addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') { document.getElementById('captcha-modal-confirm').click(); }
-    });
-
-    function escapeHtml(str) {
-        var div = document.createElement('div');
-        div.appendChild(document.createTextNode(str));
-        return div.innerHTML;
-    }
-})();
-</script>
 {% endblock %}
