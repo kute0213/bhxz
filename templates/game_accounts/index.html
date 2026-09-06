@@ -15,14 +15,9 @@
                 <i data-lucide="link" class="w-5 h-5 text-blue-400"></i>
                 绑定已有游戏账号
             </h2>
-            <p class="text-cream/50 text-sm mb-4">输入游戏根目录路径和账号信息，验证密码后绑定到当前网站账户。</p>
+            <p class="text-cream/50 text-sm mb-4">输入游戏内账号信息，验证密码后绑定到当前网站账户。</p>
 
             <form id="bind-form" class="space-y-4">
-                <div>
-                    <label class="text-xs text-cream/60 block mb-1">游戏根目录路径</label>
-                    <input type="text" id="bind-server-path" placeholder="例如：D:\minecraft-server 或 /opt/mc/server" class="w-full px-3 py-2 bg-forest-900/60 border border-cream/20 rounded-lg text-sm focus:outline-none focus:border-blue-400 transition-colors" autocomplete="off">
-                    <p class="text-xs text-cream/40 mt-1">Minecraft 服务器根目录的绝对路径（包含 EasyAuth 插件）</p>
-                </div>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                         <label class="text-xs text-cream/60 block mb-1">MC 用户名</label>
@@ -106,11 +101,9 @@
     // ===== 绑定账号 =====
     document.getElementById('bind-form').addEventListener('submit', function(e) {
         e.preventDefault();
-        var serverPath = document.getElementById('bind-server-path').value.trim();
         var username = document.getElementById('bind-username').value.trim();
         var password = document.getElementById('bind-password').value;
 
-        if (!serverPath) { Toast.error('请输入游戏根目录路径'); return; }
         if (!username) { Toast.error('请输入 MC 用户名'); return; }
         if (username.length < 3) { Toast.error('MC 用户名至少 3 个字符'); return; }
         if (username.length > 16) { Toast.error('MC 用户名不能超过 16 个字符'); return; }
@@ -128,7 +121,6 @@
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
-                        server_path: serverPath,
                         username: username,
                         password: password,
                     }),
@@ -137,7 +129,6 @@
                 .then(function(d) {
                     if (d.success) {
                         CustomModal.alert(d.message, { type: 'success' });
-                        document.getElementById('bind-server-path').value = '';
                         document.getElementById('bind-username').value = '';
                         document.getElementById('bind-password').value = '';
                     } else {
