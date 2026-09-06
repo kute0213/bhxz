@@ -78,11 +78,13 @@ def register_error_handlers(app):
 
     @app.errorhandler(404)
     def page_not_found(e):
-        return render_template('404.html'), 404
+        from core.auth import get_current_user
+        return render_template('404.html', user=get_current_user()), 404
 
     @app.errorhandler(403)
     def forbidden(e):
-        return render_template('403.html'), 403
+        from core.auth import get_current_user
+        return render_template('403.html', user=get_current_user()), 403
 
 
 def run_server(app, port=5000, app_root=None):

@@ -1,63 +1,34 @@
 """游戏账号注册申请数据库操作 —— 申请、审批、封禁。
 
-密码存储使用 Fernet 加密（基于 Flask SECRET_KEY），
-审批通过后解密并执行 RCON 注册，注册后彻底删除密码。
+审批通过后通过 RCON 执行 /easywhitelist add 命令将玩家添加到白名单。
 """
 
-import base64
-import hashlib
-import os
 from datetime import datetime
 from typing import List, Optional, Tuple
 
-from cryptography.fernet import Fernet
-
 from core.db import get_db
-from config import SECRET_KEY
-
-
-def _get_fernet() -> Fernet:
-    """从 SECRET_KEY 派生 Fernet 密钥。"""
-    key = hashlib.sha256(SECRET_KEY.encode('utf-8')).digest()
-    key_b64 = base64.urlsafe_b64encode(key)
-    return Fernet(key_b64)
-
-
-def encrypt_password(password: str) -> str:
-    """加密密码。"""
-    return _get_fernet().encrypt(password.encode('utf-8')).decode('utf-8')
-
-
-def decrypt_password(encrypted: str) -> str:
-    """解密密码。"""
-    return _get_fernet().decrypt(encrypted.encode('utf-8')).decode('utf-8')
 
 
 # ---------------------------------------------------------------------------
 # 注册申请
 # ---------------------------------------------------------------------------
 
-def create_application(user_id: int, mc_username: str, password: str) -> Tuple[bool, str]:
+def create_application(user_id: int, mc_username: str) -> Tuple[bool, str]:
     """创建游戏账号注册申请。
 
     Args:
         user_id: 网站用户 ID
         mc_username: 申请的 MC 用户名
-        password: 密码（明文，内部加密存储）
 
     Returns:
         (success, message)
     """
-    from services.validation import validate_mc_username, validate_game_password
+    from services.validation import validate_mc_username
 
     mc_username = mc_username.strip()
     valid_mc, mc_err = validate_mc_username(mc_username)
     if not valid_mc:
         return False, mc_err
-
-    valid_pwd, pwd_err = validate_game_password(password, min_length=8)
-    if not valid_pwd:
-        return False, pwd_err
 
     conn = get_db()
     try:
@@ -85,13 +56,12 @@ def create_application(user_id: int, mc_username: str, password: str) -> Tuple[b
         if bound:
             return False, '该账号已被绑定'
 
-        encrypted = encrypt_password(password)
         now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         conn.execute(
             """INSERT INTO game_account_registrations
                (user_id, mc_username, encrypted_password, status, created_at)
-               VALUES (?, ?, ?, 'pending', ?)""",
-            (user_id, mc_username, encrypted, now),
+               VALUES (?, ?, '', 'pending', ?)""",
+            (user_id, mc_username, now),
         )
         conn.commit()
         return True, '注册申请已提交，等待管理员审核'
@@ -149,9 +119,9 @@ def get_application_by_id(app_id: int) -> Optional[dict]:
 
 
 def approve_application(app_id: int, reviewer_id: int) -> Tuple[bool, str]:
-    """审批通过注册申请，执行 RCON 注册。
+    """审批通过注册申请，执行 RCON 白名单添加。
 
-    解密密码后执行 RCON 注册，成功后彻底删除密文。
+    通过 RCON 发送 /easywhitelist add 命令将玩家添加到白名单。
 
     Returns:
         (success, message)
@@ -162,17 +132,12 @@ def approve_application(app_id: int, reviewer_id: int) -> Tuple[bool, str]:
     if app['status'] != 'pending':
         return False, '该申请已处理'
 
-    from services.rcon.easy_auth import register_player
+    from services.rcon.easy_auth import whitelist_add_player
 
-    # 解密密码并执行 RCON 注册
-    try:
-        password = decrypt_password(app['encrypted_password'])
-    except Exception:
-        return False, '密码解密失败，请联系管理员'
-
-    succ, msg = register_player(app['mc_username'], password)
+    # 执行 RCON 白名单添加
+    succ, msg = whitelist_add_player(app['mc_username'])
     if not succ:
-        return False, f'RCON 注册失败: {msg}'
+        return False, f'白名单添加失败: {msg}'
 
     # 更新数据库状态
     now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -185,7 +150,7 @@ def approve_application(app_id: int, reviewer_id: int) -> Tuple[bool, str]:
             (reviewer_id, now, app_id),
         )
         conn.commit()
-        return True, f'已批准并注册账号 {app["mc_username"]}'
+        return True, f'已批准并添加 {app["mc_username"]} 到白名单'
     except Exception as e:
         return False, f'更新数据库失败: {e}'
     finally:

@@ -11,6 +11,7 @@ from services.rcon.player_tracker import player_tracker, PlayerList, parse_playe
 from services.rcon.easy_auth import (
     register_player, change_password, remove_player,
     get_player_info, list_players, verify_login,
+    whitelist_add_player,
 )
 
 __all__ = [
@@ -18,4 +19,5 @@ __all__ = [
     'player_tracker', 'PlayerList', 'parse_player_list',
     'register_player', 'change_password', 'remove_player',
     'get_player_info', 'list_players', 'verify_login',
+    'whitelist_add_player',
 ]

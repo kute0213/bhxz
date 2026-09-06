@@ -58,10 +58,37 @@ def register_player(username: str, password: str) -> Tuple[bool, str]:
         return False, 'MC 用户名包含非法字符'
     resp = _exec(cmd)
     if not resp:
-        return False, 'RCON 连接失败，请检查 RCON 配置'
+        return False, 'RCON 无应答（服务器未返回任何输出）'
     if 'successfully' in resp.lower() or '注册成功' in resp or 'created' in resp.lower():
         return True, '账号注册成功'
-    return False, resp or '注册失败，未知错误'
+    return False, resp
+
+
+def whitelist_add_player(username: str) -> Tuple[bool, str]:
+    """通过白名单命令添加玩家（/easywhitelist add）。
+
+    使用 RCON 向 Minecraft 服务器发送 /easywhitelist add 命令，
+    将玩家添加到服务器白名单中。
+
+    Args:
+        username: MC 玩家名（已由调用方验证格式）
+
+    Returns:
+        (success, message)
+    """
+    safe_user = sanitize_rcon_username(username)
+    if not safe_user:
+        return False, 'MC 用户名包含非法字符'
+
+    cmd = f'/easywhitelist add {safe_user}'
+    resp = _exec(cmd)
+    if not resp:
+        return False, 'RCON 无应答（服务器未返回任何输出）'
+    if 'added' in resp.lower() or 'add' in resp.lower() or '成功' in resp or '已添加' in resp:
+        return True, f'玩家 {safe_user} 已添加到白名单'
+    if 'already' in resp.lower() or 'already added' in resp.lower() or '已存在' in resp or 'already whitelisted' in resp.lower():
+        return True, f'玩家 {safe_user} 已在白名单中'
+    return False, resp
 
 
 def change_password(username: str, new_password: str) -> Tuple[bool, str]:
@@ -96,10 +123,10 @@ def change_password(username: str, new_password: str) -> Tuple[bool, str]:
         return False, 'MC 用户名包含非法字符'
     resp = _exec(cmd)
     if not resp:
-        return False, 'RCON 连接失败，请检查 RCON 配置'
+        return False, 'RCON 无应答（服务器未返回任何输出）'
     if 'successfully' in resp.lower() or '更新成功' in resp or 'updated' in resp.lower():
         return True, '密码修改成功'
-    return False, resp or '修改密码失败，未知错误'
+    return False, resp
 
 
 def remove_player(username: str) -> Tuple[bool, str]:
@@ -109,10 +136,10 @@ def remove_player(username: str) -> Tuple[bool, str]:
         return False, 'MC 用户名包含非法字符'
     resp = _exec(cmd)
     if not resp:
-        return False, 'RCON 连接失败，请检查 RCON 配置'
+        return False, 'RCON 无应答（服务器未返回任何输出）'
     if 'successfully' in resp.lower() or 'removed' in resp.lower() or '删除成功' in resp:
         return True, '账号已删除'
-    return False, resp or '删除失败，未知错误'
+    return False, resp
 
 
 def get_player_info(username: str) -> Tuple[bool, str]:
@@ -122,7 +149,7 @@ def get_player_info(username: str) -> Tuple[bool, str]:
         return False, 'MC 用户名包含非法字符'
     resp = _exec(cmd)
     if not resp:
-        return False, 'RCON 连接失败'
+        return False, 'RCON 无应答'
     if resp.strip():
         return True, resp.strip()
     return False, '未找到该玩家信息'
@@ -221,7 +248,7 @@ def verify_login(username: str, password: str) -> Tuple[bool, str]:
             return True, safe_user
 
     # 组合错误信息
-    err = resp or resp2 or resp3 or resp4 or 'RCON 连接失败，请检查 RCON 配置'
+    err = resp or resp2 or resp3 or resp4 or 'RCON 无应答（所有验证方式均无返回）'
     return False, f'密码验证失败: {err}'
 
 
@@ -229,7 +256,7 @@ def list_players() -> Tuple[bool, str]:
     """列出所有注册玩家。"""
     resp = _exec('/auth list')
     if not resp:
-        return False, 'RCON 连接失败'
+        return False, 'RCON 无应答'
     if resp.strip():
         return True, resp.strip()
     return False, '无玩家列表返回'

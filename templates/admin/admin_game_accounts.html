@@ -74,8 +74,7 @@
             </div>
         </div>
 
-        <!-- 消息提示 -->
-        <div id="message" class="hidden fixed top-4 right-4 z-50 px-5 py-3 rounded-xl text-sm shadow-lg"></div>
+        <!-- 消息提示（已改用 CustomModal.alert） -->
     </div>
 </section>
 {% endblock %}
@@ -83,15 +82,6 @@
 {% block extra_script %}
 <script>
 (function() {
-    const msgEl = document.getElementById('message');
-
-    function showMsg(text, isErr) {
-        msgEl.textContent = text;
-        msgEl.className = 'fixed top-4 right-4 z-50 px-5 py-3 rounded-xl text-sm shadow-lg ' +
-            (isErr ? 'bg-red-900/80 border border-red-500/30 text-red-200' : 'bg-green-900/80 border border-green-500/30 text-green-200');
-        msgEl.classList.remove('hidden');
-        setTimeout(function() { msgEl.classList.add('hidden'); }, 4000);
-    }
 
     // Tab 切换
     document.querySelectorAll('.tab-btn').forEach(function(btn) {
@@ -143,7 +133,7 @@
     function bindPendingActions() {
         document.querySelectorAll('.btn-approve').forEach(function(btn) {
             btn.addEventListener('click', function() {
-                CustomModal.confirm('确认通过该注册申请？系统将自动执行 RCON 注册。', {
+                CustomModal.confirm('确认通过该注册申请？系统将自动将玩家添加到白名单。', {
                     trigger: this,
                     callback: function(confirmed) {
                         if (!confirmed) return;
@@ -151,7 +141,7 @@
                         fetch('/admin/api/game-accounts/applications/' + id + '/approve', { method: 'POST' })
                             .then(function(r) { return r.json(); })
                             .then(function(d) {
-                                showMsg(d.message, !d.success);
+                                CustomModal.alert(d.message, { type: d.success ? 'success' : 'error' });
                                 if (d.success) loadPending();
                             });
                     }
@@ -174,7 +164,7 @@
                         })
                         .then(function(r) { return r.json(); })
                         .then(function(d) {
-                            showMsg(d.message, !d.success);
+                            CustomModal.alert(d.message, { type: d.success ? 'success' : 'error' });
                             if (d.success) loadPending();
                         });
                     }
@@ -244,7 +234,7 @@
                                 fetch('/admin/api/game-accounts/bans/' + encodeURIComponent(btn.dataset.username), { method: 'DELETE' })
                                     .then(function(r) { return r.json(); })
                                     .then(function(d) {
-                                        showMsg(d.message, !d.success);
+                                        CustomModal.alert(d.message, { type: d.success ? 'success' : 'error' });
                                         if (d.success) loadBans();
                                     });
                             }
@@ -259,7 +249,7 @@
         e.preventDefault();
         var username = document.getElementById('ban-username').value.trim();
         var reason = document.getElementById('ban-reason').value.trim();
-        if (!username) { showMsg('请输入 MC 用户名', true); return; }
+        if (!username) { CustomModal.alert('请输入 MC 用户名', { type: 'error' }); return; }
         fetch('/admin/api/game-accounts/bans', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
@@ -267,7 +257,7 @@
         })
         .then(function(r) { return r.json(); })
         .then(function(d) {
-            showMsg(d.message, !d.success);
+            CustomModal.alert(d.message, { type: d.success ? 'success' : 'error' });
             if (d.success) {
                 document.getElementById('ban-username').value = '';
                 document.getElementById('ban-reason').value = '';

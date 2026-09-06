@@ -5,7 +5,7 @@ from flask import request, jsonify
 from core.auth import login_required, get_current_user
 from services.captcha import captcha_service
 from services.game_accounts.registration_service import create_application
-from services.validation import validate_mc_username, validate_game_password
+from services.validation import validate_mc_username
 from routes.game_accounts import game_accounts_bp
 
 
@@ -16,7 +16,6 @@ def api_apply_register():
     user = get_current_user()
     data = request.get_json(silent=True) or {}
     mc_username = (data.get('mc_username') or '').strip()
-    password = data.get('password', '')
     captcha_id = (data.get('captcha_id') or '').strip()
     captcha_input = (data.get('captcha') or '').strip()
 
@@ -32,10 +31,5 @@ def api_apply_register():
     if not valid_mc:
         return jsonify({'success': False, 'message': mc_err}), 400
 
-    # 校验密码强度
-    valid_pwd, pwd_err = validate_game_password(password)
-    if not valid_pwd:
-        return jsonify({'success': False, 'message': pwd_err}), 400
-
-    succ, msg = create_application(user['id'], mc_username, password)
+    succ, msg = create_application(user['id'], mc_username)
     return jsonify({'success': succ, 'message': msg})

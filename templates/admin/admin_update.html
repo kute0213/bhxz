@@ -206,20 +206,9 @@ function addLogEntry(message) {
 function updateProgress(percent, message) {
     const bar = document.getElementById('progress-bar');
     const text = document.getElementById('progress-text');
-    const logArea = document.getElementById('log-area');
 
     bar.style.width = Math.min(percent, 100) + '%';
     text.textContent = message;
-
-    if (logArea.classList.contains('hidden')) {
-        logArea.classList.remove('hidden');
-    }
-
-    const logEntry = document.createElement('div');
-    logEntry.className = 'text-cream/70';
-    logEntry.textContent = '[' + new Date().toLocaleTimeString() + '] ' + message;
-    logArea.appendChild(logEntry);
-    logArea.scrollTop = logArea.scrollHeight;
 }
 
 function handleDone(success, message, error) {
@@ -237,6 +226,9 @@ function handleDone(success, message, error) {
         text.className = 'text-sm text-green-400 text-center';
 
         const logArea = document.getElementById('log-area');
+        if (logArea.classList.contains('hidden')) {
+            logArea.classList.remove('hidden');
+        }
         const logEntry = document.createElement('div');
         logEntry.className = 'text-green-400 font-bold';
         logEntry.textContent = '[' + new Date().toLocaleTimeString() + '] ' + (message || '更新成功，正在重启...');
@@ -262,37 +254,40 @@ function handleDone(success, message, error) {
 
 function waitForServerRestart() {
     let attempts = 0;
-    const maxAttempts = 30;
-    const interval = setInterval(function() {
-        attempts++;
-        fetch(window.location.href, { method: 'HEAD', cache: 'no-store' })
-            .then(function() {
-                clearInterval(interval);
-                const btn = document.getElementById('start-btn');
-                btn.disabled = false;
-                btn.innerHTML = '<i data-lucide="check-circle" class="w-5 h-5 inline-block mr-2" style="color: #22c55e;"></i>更新成功 ✓';
-                btn.className = 'px-8 py-3 rounded-xl font-bold text-sm transition-all duration-200 bg-green-600/30 text-green-400 border border-green-500/30 cursor-default';
-                if (window.lucide) lucide.createIcons();
-
-                const logArea = document.getElementById('log-area');
-                const logEntry = document.createElement('div');
-                logEntry.className = 'text-green-400 font-bold';
-                logEntry.textContent = '[' + new Date().toLocaleTimeString() + '] 服务器已重启完成 ✓';
-                logArea.appendChild(logEntry);
-                logArea.scrollTop = logArea.scrollHeight;
-            })
-            .catch(function() {
-                if (attempts >= maxAttempts) {
+    const maxAttempts = 60;
+    // 先等待旧进程完全退出，再开始轮询新服务器
+    setTimeout(function() {
+        const interval = setInterval(function() {
+            attempts++;
+            fetch(window.location.href, { method: 'HEAD', cache: 'no-store' })
+                .then(function() {
                     clearInterval(interval);
+                    const btn = document.getElementById('start-btn');
+                    btn.disabled = false;
+                    btn.innerHTML = '<i data-lucide="check-circle" class="w-5 h-5 inline-block mr-2" style="color: #22c55e;"></i>更新成功 ✓';
+                    btn.className = 'px-8 py-3 rounded-xl font-bold text-sm transition-all duration-200 bg-green-600/30 text-green-400 border border-green-500/30 cursor-default';
+                    if (window.lucide) lucide.createIcons();
+
                     const logArea = document.getElementById('log-area');
                     const logEntry = document.createElement('div');
-                    logEntry.className = 'text-yellow-400';
-                    logEntry.textContent = '[' + new Date().toLocaleTimeString() + '] 等待服务器重启超时，请手动刷新页面';
+                    logEntry.className = 'text-green-400 font-bold';
+                    logEntry.textContent = '[' + new Date().toLocaleTimeString() + '] 服务器已重启完成 ✓';
                     logArea.appendChild(logEntry);
                     logArea.scrollTop = logArea.scrollHeight;
-                }
-            });
-    }, 2000);
+                })
+                .catch(function() {
+                    if (attempts >= maxAttempts) {
+                        clearInterval(interval);
+                        const logArea = document.getElementById('log-area');
+                        const logEntry = document.createElement('div');
+                        logEntry.className = 'text-yellow-400';
+                        logEntry.textContent = '[' + new Date().toLocaleTimeString() + '] 等待服务器重启超时，请手动刷新页面';
+                        logArea.appendChild(logEntry);
+                        logArea.scrollTop = logArea.scrollHeight;
+                    }
+                });
+        }, 2000);
+    }, 5000);
 }
 
 function showError(message) {

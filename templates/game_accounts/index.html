@@ -22,10 +22,6 @@
                     <label class="text-xs text-cream/60 block mb-1">MC 用户名</label>
                     <input type="text" id="reg-username" placeholder="输入要注册的 MC 用户名" class="w-full px-3 py-2 bg-forest-900/60 border border-cream/20 rounded-lg text-sm focus:outline-none focus:border-gold-400 transition-colors">
                 </div>
-                <div>
-                    <label class="text-xs text-cream/60 block mb-1">密码</label>
-                    <input type="password" id="reg-password" placeholder="游戏内登录密码" class="w-full px-3 py-2 bg-forest-900/60 border border-cream/20 rounded-lg text-sm focus:outline-none focus:border-gold-400 transition-colors">
-                </div>
                 <button type="submit" class="px-5 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 text-sm rounded-lg transition-colors border border-blue-500/30">
                     <i data-lucide="send" class="w-4 h-4 inline mr-1"></i>提交申请
                 </button>
@@ -81,7 +77,6 @@
     document.getElementById('register-form').addEventListener('submit', function(e) {
         e.preventDefault();
         var username = document.getElementById('reg-username').value.trim();
-        var password = document.getElementById('reg-password').value;
 
         if (!username) { Toast.error('请输入 MC 用户名'); return; }
         if (username.length < 3) { Toast.error('MC 用户名至少 3 个字符'); return; }
@@ -89,13 +84,7 @@
         if (!/^[a-zA-Z0-9_]+$/.test(username)) { Toast.error('MC 用户名只能包含字母、数字和下划线'); return; }
         if (username.indexOf('__') !== -1) { Toast.error('MC 用户名不能包含连续下划线'); return; }
 
-        if (!password) { Toast.error('请输入密码'); return; }
-        if (password.length < 8) { Toast.error('密码至少 8 位'); return; }
-        if (!/[a-zA-Z]/.test(password)) { Toast.error('密码必须包含至少一个字母'); return; }
-        if (!/[0-9]/.test(password)) { Toast.error('密码必须包含至少一个数字'); return; }
-        if (/\s/.test(password)) { Toast.error('密码不能包含空格'); return; }
-
-        pendingRegData = { mc_username: username, password: password };
+        pendingRegData = { mc_username: username };
         refreshCaptcha();
         document.getElementById('captcha-input').value = '';
         document.getElementById('captcha-modal-error').classList.add('hidden');
@@ -117,7 +106,6 @@
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({
                 mc_username: pendingRegData.mc_username,
-                password: pendingRegData.password,
                 captcha_id: captchaId,
                 captcha: captcha,
             }),
@@ -128,7 +116,6 @@
                 Toast.success(d.message);
                 closeCaptchaModal();
                 document.getElementById('reg-username').value = '';
-                document.getElementById('reg-password').value = '';
                 pendingRegData = null;
             } else {
                 Toast.error(d.message);

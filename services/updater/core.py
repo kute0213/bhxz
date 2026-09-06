@@ -500,23 +500,41 @@ def _run_update():
             else:
                 _add_event('log', {'message': '[WARN] 未找到构建脚本: scripts/build/build_static.py'})
 
-        _add_event('progress', {'percent': 98, 'message': '正在标记清理与迁移任务...'})
-        _add_event('log', {'message': '标记清理与迁移脚本，将在下次服务器启动时运行...'})
-        try:
-            from services.settings_manager import set_setting
-            set_setting('UPLOADS_MIGRATION_PENDING', '1')
-            _add_event('log', {'message': '[OK] 已标记清理与迁移任务，重启后自动执行'})
-        except Exception as e:
-            _add_event('log', {'message': f'[WARN] 标记迁移任务失败（重启后手动运行 scripts/uploads.py）: {e}'})
+        _add_event('progress', {'percent': 99, 'message': '同步完成，正在准备重启...'})
+        _add_event('log', {'message': '正在准备重启服务器...'})
 
-        _add_event('progress', {'percent': 99, 'message': '构建完成，正在准备重启...'})
+        # 写入重启脚本，再发送 done 事件，确保重启脚本已就绪
+        _add_event('progress', {'percent': 100, 'message': '正在重启服务器...'})
+        restart_script = _write_restart_script()
 
+        if restart_script and os.path.isfile(restart_script):
+            # 启动重启脚本（独立进程，不依赖当前进程存活）
+            try:
+                with open(os.devnull, 'w') as devnull:
+                    subprocess.Popen(
+                        [restart_script],
+                        cwd=APP_ROOT,
+                        close_fds=True,
+                        stdout=devnull,
+                        stderr=devnull,
+                        stdin=devnull,
+                    )
+                _add_event('log', {'message': '✓ 重启脚本已启动，服务器将在旧进程退出后自动重启'})
+            except Exception as e:
+                _add_event('log', {'message': f'✗ 启动重启脚本失败: {e}'})
+                # 重启脚本失败时，尝试直接重启
+                _add_event('log', {'message': '尝试直接启动新进程...'})
+                _direct_restart()
+
+        # 发送 done 事件（此时重启脚本已就绪，新进程必会启动）
         _add_event('done', {
             'success': True,
-            'message': '更新成功，即将重启服务器...',
+            'message': '更新成功，服务器正在重启...',
         })
+
+        # 给前端一点时间处理 done 事件
         time.sleep(1)
-        _restart_app()
+        _shutdown_current_process()
 
     except Exception as e:
         error_msg = str(e)
@@ -538,39 +556,107 @@ def _run_update():
                 pass
 
 
-def _restart_app():
-    """重启当前应用进程（跨平台，优雅替换）。"""
-    _add_event('progress', {'percent': 100, 'message': '正在重启服务器...'})
+# ---------------------------------------------------------------------------
+# 重启逻辑（跨平台，独立脚本）
+# ---------------------------------------------------------------------------
 
-    time.sleep(0.5)
 
+def _write_restart_script():
+    """写入独立重启脚本，返回脚本路径。
+
+    重启脚本完全独立于当前进程，会在当前进程退出后启动新服务器。
+    """
+    pid = os.getpid()
     python_exe = sys.executable
     script = os.path.join(APP_ROOT, 'app.py')
-    _add_event('log', {'message': f'启动新服务器: {python_exe} {script}'})
-    try:
-        with open(os.devnull, 'w') as devnull:
-            kwargs = {
-                'cwd': APP_ROOT,
-                'close_fds': True,
-                'stdout': devnull,
-                'stderr': devnull,
-                'stdin': devnull,
-            }
-            if sys.platform == 'win32':
-                kwargs['creationflags'] = subprocess.CREATE_NEW_PROCESS_GROUP
-            else:
-                kwargs['preexec_fn'] = os.setsid
-            subprocess.Popen([python_exe, script], **kwargs)
-    except Exception as e:
-        _add_event('log', {'message': f'启动服务器失败: {e}'})
-        _shutdown_current_process()
-        return
 
-    _shutdown_current_process()
+    if sys.platform == 'win32':
+        return _write_restart_bat(pid, python_exe, script)
+    else:
+        return _write_restart_sh(pid, python_exe, script)
+
+
+def _write_restart_bat(pid, python_exe, script):
+    """写入 Windows 重启批处理脚本。
+
+    使用 tasklist 循环检测旧进程是否退出，然后启动新服务器。
+    start 命令确保新进程独立运行（不依附于当前 cmd 窗口）。
+    """
+    content = f'''@echo off
+title bhxz-restart-{pid}
+ping -n 3 127.0.0.1 > nul
+:wait
+tasklist /FI "PID eq {pid}" 2>nul | find "{pid}" >nul
+if not errorlevel 1 (
+    ping -n 2 127.0.0.1 > nul
+    goto wait
+)
+start "" "{python_exe}" "{script}"
+del "%~f0"
+exit
+'''
+    path = os.path.join(tempfile.gettempdir(), f'bhxz_restart_{pid}.bat')
+    try:
+        with open(path, 'w', newline='\r\n') as f:
+            f.write(content)
+        return path
+    except Exception as e:
+        _add_event('log', {'message': f'  ✗ 写入重启脚本失败: {e}'})
+        return None
+
+
+def _write_restart_sh(pid, python_exe, script):
+    """写入 Linux/macOS 重启 Shell 脚本。
+
+    使用 kill -0 循环检测旧进程是否退出，然后 exec 替换自身。
+    """
+    content = f'''#!/bin/sh
+sleep 2
+while kill -0 {pid} 2>/dev/null; do sleep 1; done
+cd "{APP_ROOT}"
+exec "{python_exe}" "{script}"
+rm -f "$0"
+'''
+    path = os.path.join(tempfile.gettempdir(), f'bhxz_restart_{pid}.sh')
+    try:
+        with open(path, 'w') as f:
+            f.write(content)
+        os.chmod(path, 0o755)
+        return path
+    except Exception as e:
+        _add_event('log', {'message': f'  ✗ 写入重启脚本失败: {e}'})
+        return None
+
+
+def _direct_restart():
+    """直接启动新进程（兜底方案，当重启脚本写入失败时使用）。"""
+    python_exe = sys.executable
+    script = os.path.join(APP_ROOT, 'app.py')
+    try:
+        kwargs = {
+            'cwd': APP_ROOT,
+            'close_fds': True,
+            'stdout': subprocess.DEVNULL,
+            'stderr': subprocess.DEVNULL,
+            'stdin': subprocess.DEVNULL,
+        }
+        if sys.platform == 'win32':
+            kwargs['creationflags'] = (
+                subprocess.CREATE_NEW_PROCESS_GROUP
+                | subprocess.CREATE_NO_WINDOW
+                | 0x00000004  # DETACHED_PROCESS
+            )
+        else:
+            kwargs['preexec_fn'] = os.setsid
+        subprocess.Popen([python_exe, script], **kwargs)
+        _add_event('log', {'message': '✓ 新进程已启动'})
+    except Exception as e:
+        _add_event('log', {'message': f'✗ 直接启动新进程失败: {e}'})
 
 
 def _shutdown_current_process():
-    """自动关闭当前进程（跨平台）。"""
+    """关闭当前进程。"""
+    _add_event('log', {'message': '正在关闭旧服务器进程...'})
     if sys.platform == 'win32':
         import signal
         try:
