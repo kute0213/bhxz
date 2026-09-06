@@ -5,10 +5,36 @@
     <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="mb-8">
             <h1 class="text-xl sm:text-2xl font-bold">服务器状态</h1>
-            <p class="text-cream/60 text-sm mt-1">查看服务器实时在线情况</p>
+            <p class="text-cream/60 text-sm mt-1">查看服务器实时运行状态</p>
         </div>
 
-        <!-- 状态概览卡片 -->
+        <!-- 系统资源概览 -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+            <div class="pixel-card rounded-xl p-5">
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-sm text-cream/60 flex items-center gap-2">
+                        <i data-lucide="cpu" class="w-4 h-4"></i>CPU 使用率
+                    </span>
+                    <span class="text-lg font-bold text-blue-400" id="status-cpu">-</span>
+                </div>
+                <div class="w-full h-2 bg-forest-900/60 rounded-full overflow-hidden">
+                    <div class="h-full rounded-full transition-all duration-500" id="cpu-bar" style="width: 0%; background: linear-gradient(90deg, #34d399, #60a5fa);"></div>
+                </div>
+            </div>
+            <div class="pixel-card rounded-xl p-5">
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-sm text-cream/60 flex items-center gap-2">
+                        <i data-lucide="server" class="w-4 h-4"></i>内存使用率
+                    </span>
+                    <span class="text-lg font-bold text-purple-400" id="status-memory">-</span>
+                </div>
+                <div class="w-full h-2 bg-forest-900/60 rounded-full overflow-hidden">
+                    <div class="h-full rounded-full transition-all duration-500" id="mem-bar" style="width: 0%; background: linear-gradient(90deg, #34d399, #a78bfa);"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 玩家状态概览 -->
         <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
             <div class="pixel-card rounded-xl p-5 text-center">
                 <div class="text-3xl font-bold text-green-400 mb-1" id="status-online">-</div>
@@ -29,7 +55,7 @@
             <h2 class="text-lg font-bold mb-4 flex items-center gap-2">
                 <i data-lucide="users" class="w-5 h-5 text-gold-400"></i>
                 在线玩家列表
-                <span class="text-xs text-cream/50 font-normal ml-auto" id="status-update-info">数据每 5 秒自动更新</span>
+                <span class="text-xs text-cream/50 font-normal ml-auto">数据每 5 秒自动更新</span>
             </h2>
             <div id="player-list" class="flex flex-wrap gap-2">
                 <div class="text-cream/50 text-sm py-4">加载中...</div>
@@ -44,11 +70,30 @@
 (function() {
     var POLL_INTERVAL = 5000;  // 5 秒
 
+    function formatBytes(bytes) {
+        if (bytes === 0) return '0 B';
+        var units = ['B', 'KB', 'MB', 'GB'];
+        var i = Math.floor(Math.log(bytes) / Math.log(1024));
+        if (i >= units.length) i = units.length - 1;
+        return (bytes / Math.pow(1024, i)).toFixed(1) + ' ' + units[i];
+    }
+
     function updateStatus() {
         fetch('/api/server-status')
             .then(function(r) { return r.json(); })
             .then(function(d) {
-                // 更新概览数字
+                // CPU
+                var cpu = d.cpu_percent !== undefined ? d.cpu_percent : 0;
+                document.getElementById('status-cpu').textContent = cpu.toFixed(1) + '%';
+                document.getElementById('cpu-bar').style.width = Math.min(cpu, 100) + '%';
+
+                // 内存
+                if (d.memory_percent !== undefined) {
+                    document.getElementById('status-memory').textContent = d.memory_percent.toFixed(1) + '% (' + formatBytes(d.memory_used) + ' / ' + formatBytes(d.memory_total) + ')';
+                    document.getElementById('mem-bar').style.width = Math.min(d.memory_percent, 100) + '%';
+                }
+
+                // 玩家概览
                 document.getElementById('status-online').textContent = d.online;
                 document.getElementById('status-max').textContent = d.max_players;
 
@@ -61,7 +106,7 @@
                     statusEl.className = 'text-3xl font-bold text-green-400 mb-1';
                 }
 
-                // 更新玩家列表
+                // 玩家列表
                 var listEl = document.getElementById('player-list');
                 if (d.error) {
                     listEl.innerHTML = '<div class="text-red-400/70 text-sm py-4">无法连接到服务器</div>';

@@ -29,16 +29,29 @@ def api_stats():
 
 @api_bp.route('/server-status')
 def api_server_status():
-    """获取服务器实时状态（在线玩家列表、人数等）。
+    """获取服务器实时状态（在线玩家列表、人数、CPU、内存等）。
 
-    数据来源：PlayerTracker 后台线程每 5 秒通过 RCON /list 采集并缓存。
+    数据来源：
+    - 玩家数据：PlayerTracker 后台线程每 5 秒通过 RCON /list 采集并缓存。
+    - 系统资源：使用 psutil 实时采集（轻量，无外部依赖）。
     前端可按需轮询此接口，无需额外更新时间提示（服务端固定周期）。
     """
     from services.rcon import player_tracker
+    import psutil
+
     pl = player_tracker.get_player_list()
+
+    # 系统资源
+    cpu_percent = psutil.cpu_percent(interval=None)
+    mem = psutil.virtual_memory()
+
     return jsonify({
         'online': pl.online,
         'max_players': pl.max_players,
         'players': pl.players,
         'error': pl.error,
+        'cpu_percent': cpu_percent,
+        'memory_percent': mem.percent,
+        'memory_used': mem.used,
+        'memory_total': mem.total,
     })

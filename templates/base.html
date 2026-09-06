@@ -173,10 +173,6 @@
                 <a href="{{ url_for('main.server_status') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors">
                     <i data-lucide="activity" class="w-5 h-5"></i>
                     <span>服务器状态</span>
-                    <span class="ml-auto inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-green-500/10 text-green-400 border border-green-500/20" id="mobile-player-count">
-                        <span class="w-1.5 h-1.5 rounded-full bg-green-400 inline-block"></span>
-                        <span id="mobile-player-num">-</span>
-                    </span>
                 </a>
                 {% if user %}
                 <a href="{{ url_for('main.settings') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors">
@@ -243,10 +239,6 @@
                 </a>
                 <a href="{{ url_for('main.server_status') }}" class="text-cream/80 hover:text-gold-400 text-sm font-medium transition-colors px-3 py-2 rounded-lg hover:bg-gold-400/5">
                     <span>服务器状态</span>
-                    <span class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-green-500/10 text-green-400 border border-green-500/20 ml-1" id="desktop-player-count">
-                        <span class="w-1.5 h-1.5 rounded-full bg-green-400 inline-block"></span>
-                        <span id="desktop-player-num">-</span>
-                    </span>
                 </a>
                     {% if user and user.is_admin %}
                     <a href="{{ url_for('admin.admin_page') }}" class="text-cream/80 hover:text-gold-400 text-sm font-medium transition-colors px-3 py-2 rounded-lg hover:bg-gold-400/5">
@@ -381,33 +373,6 @@
 
     <script src="{{ url_for('static', filename='js/base.js', v='19') }}"></script>
     <script src="{{ url_for('static', filename='js/main.js', v='11') }}"></script>
-    <script>
-    // 在线玩家计数轮询（导航栏徽标，每 5 秒更新一次）
-    (function() {
-        var POLL_INTERVAL = 5000;
-        var desktopNum = document.getElementById('desktop-player-num');
-        var mobileNum = document.getElementById('mobile-player-num');
-
-        function updatePlayerCount() {
-            fetch('/api/server-status')
-                .then(function(r) { return r.json(); })
-                .then(function(d) {
-                    var text = d.error ? '离线' : String(d.online);
-                    if (desktopNum) desktopNum.textContent = text;
-                    if (mobileNum) mobileNum.textContent = text;
-                })
-                .catch(function() {
-                    if (desktopNum) desktopNum.textContent = '?';
-                    if (mobileNum) mobileNum.textContent = '?';
-                });
-        }
-
-        // 首次更新
-        updatePlayerCount();
-        // 定时更新
-        setInterval(updatePlayerCount, POLL_INTERVAL);
-    })();
-    </script>
     {% if login_welcome_username %}
     <script>
         Toast.success({{ ('欢迎来到滨海小镇，' ~ login_welcome_username)|tojson }});
