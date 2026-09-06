@@ -9,7 +9,7 @@
         </div>
 
         <!-- 系统资源概览 -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
             <div class="pixel-card rounded-xl p-5">
                 <div class="flex items-center justify-between mb-3">
                     <span class="text-sm text-cream/60 flex items-center gap-2">
@@ -19,6 +19,17 @@
                 </div>
                 <div class="w-full h-2 bg-forest-900/60 rounded-full overflow-hidden">
                     <div class="h-full rounded-full transition-all duration-500" id="cpu-bar" style="width: 0%; background: linear-gradient(90deg, #34d399, #60a5fa);"></div>
+                </div>
+            </div>
+            <div class="pixel-card rounded-xl p-5">
+                <div class="flex items-center justify-between mb-3">
+                    <span class="text-sm text-cream/60 flex items-center gap-2">
+                        <i data-lucide="thermometer" class="w-4 h-4"></i>CPU 温度
+                    </span>
+                    <span class="text-lg font-bold text-orange-400" id="status-cpu-temp">-</span>
+                </div>
+                <div class="w-full h-2 bg-forest-900/60 rounded-full overflow-hidden">
+                    <div class="h-full rounded-full transition-all duration-500" id="temp-bar" style="width: 0%; background: linear-gradient(90deg, #34d399, #fbbf24);"></div>
                 </div>
             </div>
             <div class="pixel-card rounded-xl p-5">
@@ -86,6 +97,17 @@
                 var cpu = d.cpu_percent !== undefined ? d.cpu_percent : 0;
                 document.getElementById('status-cpu').textContent = cpu.toFixed(1) + '%';
                 document.getElementById('cpu-bar').style.width = Math.min(cpu, 100) + '%';
+
+                // CPU 温度
+                var tempEl = document.getElementById('status-cpu-temp');
+                var tempBar = document.getElementById('temp-bar');
+                if (d.cpu_temp !== null && d.cpu_temp !== undefined) {
+                    tempEl.textContent = d.cpu_temp + '°C';
+                    tempBar.style.width = Math.min(d.cpu_temp / 1.2, 100) + '%';
+                } else {
+                    tempEl.textContent = 'N/A';
+                    tempBar.style.width = '0%';
+                }
 
                 // 内存
                 if (d.memory_percent !== undefined) {
