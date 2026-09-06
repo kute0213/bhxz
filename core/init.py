@@ -45,12 +45,14 @@ def init_app(app, app_root):
     # 确保工作目录始终是项目根目录
     os.chdir(app_root)
 
-    # 每次启动执行服务器健康检查（自动修复，不删文件）
-    run_startup_checks(app_root)
-
+    # 先初始化数据库，确保 settings 等表已存在，再执行健康检查。
+    # 注意：run_startup_checks 中的 _check_database() 会再次调用 init_db()（幂等操作）。
     log('INFO', 'App', '正在初始化数据库...')
     init_db()
     log('INFO', 'App', '数据库初始化完成')
+
+    # 每次启动执行服务器健康检查（自动修复，不删文件）
+    run_startup_checks(app_root)
 
     log('INFO', 'App', '正在注册蓝图...')
     from routes.registry import register_blueprints

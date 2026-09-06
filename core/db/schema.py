@@ -386,12 +386,19 @@ def init_db():
     add_column_if_not_exists('music', 'status', 'INTEGER DEFAULT 0')
     # 大喇叭音频：标签列（逗号分隔，供搜索匹配与卡片展示）
     add_column_if_not_exists('music', 'tags', "VARCHAR DEFAULT ''")
+    # 迁移前先检查 is_public 列是否存在（新库没有此列，跳过迁移）
     try:
-        # 历史已公开音频（is_public=1）直接迁移为「已通过」状态，立即在公开列表可见
-        cursor.execute("UPDATE music SET status = 2 WHERE status = 0 AND is_public = 1")
-        conn.commit()
-    except Exception as e:
-        log('ERROR', 'DB', f'迁移 music 公开状态失败: {e}')
+        cursor.execute("SELECT is_public FROM music LIMIT 0")
+        has_is_public = True
+    except Exception:
+        has_is_public = False
+    if has_is_public:
+        try:
+            # 历史已公开音频（is_public=1）直接迁移为「已通过」状态，立即在公开列表可见
+            cursor.execute("UPDATE music SET status = 2 WHERE status = 0 AND is_public = 1")
+            conn.commit()
+        except Exception as e:
+            log('ERROR', 'DB', f'迁移 music 公开状态失败: {e}')
 
     # ---- 管理员账号 ----
     # 确保 PRIMARY_ADMIN_USERNAMES 中的所有账号为管理员，
