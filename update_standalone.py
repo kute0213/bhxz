@@ -19,6 +19,9 @@ import subprocess
 import time
 import tempfile
 import urllib.request
+import urllib.error
+import socket
+import ssl
 
 # ═══════════════════════════════════════════════════════════════════════
 # 配置
@@ -50,6 +53,9 @@ APP_SCRIPT = os.path.join(PROJECT_ROOT, 'app.py')
 
 # pip 超时（秒）
 PIP_TIMEOUT = 120
+
+# 下载超时（秒）
+DOWNLOAD_TIMEOUT = 60
 
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -184,10 +190,90 @@ def is_git_repo(path):
     return os.path.isdir(git_dir)
 
 
+def _test_connection(url, timeout=10):
+    """快速测试 URL 是否可达，避免下载时长时间卡死。"""
+    try:
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        req = urllib.request.Request(url, method='HEAD',
+            headers={'User-Agent': 'Mozilla/5.0 bhxz-updater'})
+        resp = urllib.request.urlopen(req, timeout=timeout, context=ctx)
+        log(f'    连接成功（HTTP {resp.status}）')
+        return True
+    except Exception as e:
+        log(f'    ⚠ 连接测试失败: {e}')
+        return False
+
+
+def _download_file(url, dest_path, timeout=30):
+    """分块下载文件，实时输出进度日志。
+
+    使用 urllib.request.urlopen 分块读取，每下载 2MB 输出一次进度。
+    设置超时避免 Windows 下无响应卡死。
+
+    Args:
+        url: 下载地址
+        dest_path: 本地保存路径
+        timeout: 连接超时（秒）
+
+    Returns:
+        True 成功 / False 失败
+    """
+    try:
+        # 创建不验证 SSL 证书的上下文（解决 Windows 上某些代理的证书问题）
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+
+        req = urllib.request.Request(url, headers={
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) bhxz-updater',
+        })
+        resp = urllib.request.urlopen(req, timeout=timeout, context=ctx)
+
+        total = resp.length
+        downloaded = 0
+        chunk_size = 64 * 1024  # 64KB
+        next_report = 2 * 1024 * 1024  # 每 2MB 汇报一次
+
+        with open(dest_path, 'wb') as f:
+            while True:
+                chunk = resp.read(chunk_size)
+                if not chunk:
+                    break
+                f.write(chunk)
+                downloaded += len(chunk)
+
+                if downloaded >= next_report:
+                    if total:
+                        pct = downloaded * 100 // total
+                        log(f'    下载进度: {pct}% ({downloaded // 1024 // 1024}MB / {total // 1024 // 1024}MB)')
+                    else:
+                        log(f'    已下载: {downloaded // 1024 // 1024}MB')
+                    next_report += 2 * 1024 * 1024
+
+        if total:
+            log(f'    下载完成: {total // 1024 // 1024}MB')
+        else:
+            log(f'    下载完成: {downloaded // 1024 // 1024}MB')
+        return True
+
+    except urllib.error.URLError as e:
+        log(f'  ✗ 网络错误: {e.reason}')
+        return False
+    except socket.timeout:
+        log(f'  ✗ 连接超时（{timeout}s）')
+        return False
+    except Exception as e:
+        log(f'  ✗ 下载异常: {e}')
+        return False
+
+
 def download_and_extract(url, dest, name=None):
     """从指定 URL 下载 ZIP 归档并解压到目标目录。
 
     支持镜像代理自动切换：先尝试直连，失败后依次尝试国内镜像代理。
+    使用分块下载 + 实时进度日志，避免 Windows 下无反馈卡死。
 
     Args:
         url: 原始下载地址
@@ -199,46 +285,56 @@ def download_and_extract(url, dest, name=None):
     # 构建 URL 列表：直连 + 镜像代理
     urls = [url]
     for proxy_name, proxy_base in MIRROR_PROXIES:
-        # 仅对 GitHub 原始 URL 应用代理
         if url.startswith('https://github.com/'):
-            proxy_url = proxy_base + url.removeprefix('https://github.com/')
+            proxy_url = proxy_base + url[len('https://github.com/'):]
             urls.append((proxy_url, proxy_name))
 
     last_error = None
     for entry in urls:
         if isinstance(entry, tuple):
             current_url, mirror_name = entry
-            log(f'  尝试镜像 [{mirror_name}]: {current_url}')
+            log(f'  尝试镜像 [{mirror_name}]')
         else:
             current_url = entry
-            log(f'  尝试直连: {current_url}')
+            log(f'  尝试直连')
 
+        # 先快速测试连接
+        if not _test_connection(current_url, timeout=DOWNLOAD_TIMEOUT):
+            log(f'  ⚠ 跳过不可达源')
+            continue
+
+        # 分块下载
         try:
             with tempfile.NamedTemporaryFile(suffix='.zip', delete=False) as tmp:
                 zip_path = tmp.name
-                urllib.request.urlretrieve(current_url, zip_path)
+            if not _download_file(current_url, zip_path, timeout=DOWNLOAD_TIMEOUT):
+                try:
+                    os.unlink(zip_path)
+                except Exception:
+                    pass
+                continue
         except Exception as e:
-            last_error = e
-            log(f'  ✗ 失败: {e}')
-            # 清理临时文件
+            log(f'  ✗ 下载失败: {e}')
             try:
                 os.unlink(zip_path)
             except Exception:
                 pass
             continue
 
+        # 解压
         log(f'  解压中...')
         try:
             with zipfile.ZipFile(zip_path, 'r') as zf:
                 extract_dir = tempfile.mkdtemp()
                 zf.extractall(extract_dir)
 
-            src = os.path.join(extract_dir, 'bhxz-main')
-            if not os.path.isdir(src):
-                items = [i for i in os.listdir(extract_dir) if os.path.isdir(os.path.join(extract_dir, i))]
-                if items:
-                    src = os.path.join(extract_dir, items[0])
+            # 找到解压后的根目录（通常是 bhxz-main 或类似）
+            items = [i for i in os.listdir(extract_dir)
+                     if os.path.isdir(os.path.join(extract_dir, i))]
+            src = os.path.join(extract_dir, items[0]) if items else extract_dir
 
+            # 复制到目标目录
+            count = 0
             for item in os.listdir(src):
                 s = os.path.join(src, item)
                 d = os.path.join(dest, item)
@@ -248,12 +344,13 @@ def download_and_extract(url, dest, name=None):
                     shutil.copytree(s, d)
                 else:
                     shutil.copy2(s, d)
+                count += 1
+            log(f'    已覆盖 {count} 个文件/目录')
 
             shutil.rmtree(extract_dir, ignore_errors=True)
             os.unlink(zip_path)
             return True
         except Exception as e:
-            last_error = e
             log(f'  ✗ 解压失败: {e}')
             try:
                 os.unlink(zip_path)
@@ -286,11 +383,24 @@ def pull_code():
 
 
 def main():
+    # 命令行参数
+    import argparse
+    parser = argparse.ArgumentParser(description='BHXZ 备用更新脚本')
+    parser.add_argument('--timeout', type=int, default=DOWNLOAD_TIMEOUT,
+                        help=f'下载超时秒数（默认 {DOWNLOAD_TIMEOUT}s，Windows 网络差可适当增大）')
+    args = parser.parse_args()
+
+    # 设置全局 socket 超时，防止任何网络操作无限制卡死
+    socket.setdefaulttimeout(args.timeout)
+    global DOWNLOAD_TIMEOUT
+    DOWNLOAD_TIMEOUT = args.timeout
+
     log('=' * 50)
     log(' 备用更新脚本启动')
     log(f' 项目路径: {PROJECT_ROOT}')
     log(f' 系统平台: {sys.platform}')
     log(f' Python: {sys.executable}')
+    log(f' 下载超时: {DOWNLOAD_TIMEOUT}s')
     log('=' * 50)
 
     # 1. 切换到项目目录
