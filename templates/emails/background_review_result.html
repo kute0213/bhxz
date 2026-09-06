@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block content %}
+<p>您好！</p>
+<p>您上传的背景图片：</p>
+<div class="mail-highlight">{{ filename }}</div>
+{% if approved %}
+<div class="mail-status mail-status-success">
+    <span class="mail-status-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+    </span>
+    <div class="mail-status-text">
+        <div class="mail-status-title">审核通过</div>
+        <div class="mail-status-desc">该背景图片已通过审核，管理员可在后台启用为全站背景。</div>
+    </div>
+</div>
+{% else %}
+<div class="mail-status mail-status-fail">
+    <span class="mail-status-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+    </span>
+    <div class="mail-status-text">
+        <div class="mail-status-title">审核未通过</div>
+        <div class="mail-status-desc">该背景图片未通过审核，您可以在「背景图片」页面中查看详情或重新上传。</div>
+    </div>
+</div>
+{% endif %}
+<p class="mail-muted">如需修改，可在「背景图片 - 我的上传」中管理该图片。</p>
+{% endblock %}

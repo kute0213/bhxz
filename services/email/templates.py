@@ -160,3 +160,32 @@ def broadcast_message(subject: str, html_body: str, sender_name: str = '滨海�
         sender_name=sender_name,
         body_html=html_body,
     )
+
+
+def background_review_result(filename: str, approved: bool) -> str:
+    """构建背景图片审核结果通知邮件 HTML。
+
+    Args:
+        filename: 背景图片文件名
+        approved: 是否通过
+
+    Returns:
+        邮件 HTML 字符串
+    """
+    if approved:
+        title_text = '背景图片审核通过'
+        color = '#4ade80'
+        status = '已通过审核，管理员可在后台启用为全站背景。'
+    else:
+        title_text = '背景图片审核未通过'
+        color = '#f87171'
+        status = '未通过审核。'
+
+    return _render(
+        'background_review_result.html',
+        title=title_text,
+        title_color=color,
+        filename=filename,
+        approved=approved,
+        status=status,
+    )

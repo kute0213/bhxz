@@ -13,5 +13,6 @@ from .templates import (
     guide_review_pending,
     guide_review_result,
     music_review_result,
+    background_review_result,
     verification_code,
 )

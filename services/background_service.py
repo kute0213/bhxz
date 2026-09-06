@@ -15,6 +15,7 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 from core.db import get_db
 from config import UPLOAD_BACKGROUNDS_DIR, USER_IMAGE_MAX_BYTES
 from core.logger import log
+from services.email import email_service, background_review_result
 
 # 背景图片状态：0=待审核 1=已通过 2=已驳回
 STATUS_PENDING = 0
@@ -266,6 +267,27 @@ def get_background(bg_id):
         return dict(row) if row else None
 
 
+def _send_review_email(bg, approved: bool, admin_username: str):
+    """发送审核结果邮件通知给上传者。"""
+    if not email_service.is_enabled():
+        return
+    try:
+        with get_db() as conn:
+            user = conn.execute(
+                "SELECT email FROM users WHERE id = ?",
+                (bg['user_id'],),
+            ).fetchone()
+            if not user or not user['email']:
+                return
+
+        subject = '背景图片审核通过' if approved else '背景图片审核未通过'
+        html = background_review_result(bg['filename'], approved)
+        email_service.send(to=user['email'], subject=subject, body=subject, html=html)
+        log('Email', f'已发送背景审核邮件: {user["email"]} <- {subject}')
+    except Exception as e:
+        log('WARNING', 'Email', f'发送背景审核邮件失败: {e}')
+
+
 def approve_background(bg_id, admin_id, admin_username, ip_address):
     """通过背景图片审核。"""
     with get_db() as conn:
@@ -280,6 +302,8 @@ def approve_background(bg_id, admin_id, admin_username, ip_address):
             (STATUS_APPROVED, bg_id),
         )
         conn.commit()
+
+    _send_review_email(bg, True, admin_username)
 
     log('BackgroundApprove', '背景图片审核通过',
         bg_id=bg_id, admin_id=admin_id, admin_username=admin_username,
@@ -301,6 +325,8 @@ def reject_background(bg_id, admin_id, admin_username, ip_address):
             (STATUS_REJECTED, bg_id),
         )
         conn.commit()
+
+    _send_review_email(bg, False, admin_username)
 
     log('BackgroundReject', '背景图片审核驳回',
         bg_id=bg_id, admin_id=admin_id, admin_username=admin_username,

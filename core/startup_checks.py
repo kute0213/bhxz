@@ -62,6 +62,7 @@ _REQUIRED_DIRS = [
     'uploads/attachments',
     'uploads/community',
     'uploads/sitemap',
+    'uploads/backgrounds',
     'backups',
     'ssl',
     'logs',
@@ -170,7 +171,7 @@ def _check_uploads_structure(app_root: str):
         return
 
     # 确保分类子目录存在
-    subdirs = ['attachments', 'community', 'sitemap']
+    subdirs = ['attachments', 'community', 'sitemap', 'backgrounds']
     created = 0
     for sub in subdirs:
         sub_path = os.path.join(uploads_dir, sub)

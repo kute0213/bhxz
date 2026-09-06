@@ -3,7 +3,9 @@
 薄层：仅负责 HTTP 请求解析/响应构造，业务逻辑委托给 services。
 """
 
-from flask import render_template, request, jsonify
+import os
+
+from flask import render_template, request, jsonify, send_file, abort
 
 from core.auth import get_current_user, login_required
 from routes.backgrounds import backgrounds_bp
@@ -85,12 +87,16 @@ def delete_background(bg_id):
 @backgrounds_bp.route('/backgrounds/serve/<int:bg_id>')
 def serve_background(bg_id):
     """提供背景图片访问。"""
-    from flask import send_file, abort
     bg = background_service.get_background(bg_id)
     if not bg or bg['status'] != 1 or not bg['file_path']:
         abort(404)
+
+    file_path = bg['file_path']
+    if not os.path.isfile(file_path):
+        abort(404)
+
     return send_file(
-        bg['file_path'],
+        file_path,
         mimetype='image/webp',
         max_age=3600,
     )
