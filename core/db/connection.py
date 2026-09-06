@@ -395,9 +395,8 @@ def _connect_with_timeout(path: str, timeout: int = _DB_CONNECT_TIMEOUT):
 
     if not done.wait(timeout=timeout):
         # 超时 —— 此时无法中断 duckdb.connect() 线程，但 let it finish in background
-        log('WARNING', 'DB',
-            f'DuckDB 连接超时（{timeout}s），数据库文件可能损坏或过大',
-            path=path)
+        # 注意：这里不能用 log()，因为可能被 get_db() 的 _init_lock 持有中调用，会导致死锁
+        print(f'[DB] ⚠ DuckDB 连接超时（{timeout}s），数据库文件可能损坏或过大: {path}', flush=True)
         raise TimeoutError(
             f'DuckDB 连接超时（{timeout}s），请检查数据库文件: {path}'
         )
@@ -432,42 +431,43 @@ def get_db():
     if _conn is None:
         with _init_lock:
             if _conn is None:
+                # 注意：不要在锁内调用 log()！log() 会调用 get_setting() 触发 get_db() 递归，导致死锁
+                print(f'[DB] 正在连接数据库...（超时 {_DB_CONNECT_TIMEOUT}s）', flush=True)
                 try:
-                    log('INFO', 'DB', f'正在连接数据库...（超时 {_DB_CONNECT_TIMEOUT}s）')
                     real_conn = _connect_with_timeout(DB_PATH, _DB_CONNECT_TIMEOUT)
                     _conn = DuckDBConnection(real_conn, DB_PATH)
-                    log('INFO', 'DB', '数据库连接成功')
+                    print('[DB] 数据库连接成功', flush=True)
                 except TimeoutError:
-                    log('ERROR', 'DB', '数据库连接超时，尝试删除 WAL 文件后重试')
+                    print(f'[DB] 数据库连接超时，尝试删除 WAL 文件后重试', flush=True)
                     wal_path = f"{DB_PATH}.wal"
                     if os.path.exists(wal_path):
                         try:
                             os.remove(wal_path)
-                            log('INFO', 'DB', '已删除 WAL 文件，重试连接')
+                            print('[DB] 已删除 WAL 文件，重试连接', flush=True)
                             real_conn = _connect_with_timeout(DB_PATH, _DB_CONNECT_TIMEOUT)
                             _conn = DuckDBConnection(real_conn, DB_PATH)
-                            log('INFO', 'DB', '数据库连接恢复成功（删除 WAL）')
+                            print('[DB] 数据库连接恢复成功（删除 WAL）', flush=True)
                         except OSError as oe:
-                            log('ERROR', 'DB', f'删除 WAL 文件失败: {oe}')
+                            print(f'[DB] 删除 WAL 文件失败: {oe}', flush=True)
                             raise
                     else:
                         raise
                 except duckdb.InternalException as e:
                     if 'WAL file' in str(e):
                         wal_path = f"{DB_PATH}.wal"
-                        log('WARNING', 'DB', f'检测到 WAL 文件损坏，尝试恢复: {wal_path}')
+                        print(f'[DB] 检测到 WAL 文件损坏，尝试恢复: {wal_path}', flush=True)
                         if os.path.exists(wal_path):
                             try:
                                 os.remove(wal_path)
-                                log('INFO', 'DB', '已删除损坏的 WAL 文件，重试连接')
+                                print('[DB] 已删除损坏的 WAL 文件，重试连接', flush=True)
                             except OSError as oe:
-                                log('ERROR', 'DB', f'删除 WAL 文件失败: {oe}')
-                        _conn = DuckDBConnection(DB_PATH)
-                        log('INFO', 'DB', '数据库连接恢复成功')
+                                print(f'[DB] 删除 WAL 文件失败: {oe}', flush=True)
+                        real_conn = _connect_with_timeout(DB_PATH, _DB_CONNECT_TIMEOUT)
+                        _conn = DuckDBConnection(real_conn, DB_PATH)
+                        print('[DB] 数据库连接恢复成功', flush=True)
                     else:
                         raise
                 except Exception as e:
-                    log('CRITICAL', 'DB', f'打开数据库失败: {e}')
                     print(f'[FATAL] 无法打开数据库 ({DB_PATH}): {e}', file=__import__('sys').stderr)
                     __import__('sys').stderr.flush()
                     raise
