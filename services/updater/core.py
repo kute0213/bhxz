@@ -576,28 +576,89 @@ def _write_restart_script():
         return _write_restart_sh(pid, python_exe, script)
 
 
+def _get_short_path_windows(long_path):
+    """获取 Windows 短路径名（8.3 格式），避免 Unicode 编码问题。
+
+    如果无法获取短路径，返回原路径的 ASCII 安全版本或原始路径。
+    """
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        # 获取短路径所需的缓冲区大小
+        GetShortPathNameW = ctypes.windll.kernel32.GetShortPathNameW
+        GetShortPathNameW.argtypes = [wintypes.LPCWSTR, wintypes.LPWSTR, wintypes.DWORD]
+        GetShortPathNameW.restype = wintypes.DWORD
+
+        buf_size = GetShortPathNameW(long_path, None, 0)
+        if buf_size == 0:
+            return long_path
+
+        buf = ctypes.create_unicode_buffer(buf_size)
+        result = GetShortPathNameW(long_path, buf, buf_size)
+        if result == 0:
+            return long_path
+        return buf.value
+    except Exception:
+        return long_path
+
+
 def _write_restart_bat(pid, python_exe, script):
     """写入 Windows 重启批处理脚本。
 
     使用 tasklist 循环检测旧进程是否退出，然后启动新服务器。
     start 命令确保新进程独立运行（不依附于当前 cmd 窗口）。
+
+    兼容性修复：
+      - 使用短路径名（8.3 格式）避免中文路径编码问题
+      - 使用 timeout 代替 ping 实现延迟（更标准）
+      - 使用 tasklist /NH 避免表头兼容性问题
+      - 添加最大等待次数，防止无限循环
     """
-    content = f'''@echo off
-title bhxz-restart-{pid}
-ping -n 3 127.0.0.1 > nul
-:wait
-tasklist /FI "PID eq {pid}" 2>nul | find "{pid}" >nul
-if not errorlevel 1 (
-    ping -n 2 127.0.0.1 > nul
-    goto wait
-)
-start "" "{python_exe}" "{script}"
-del "%~f0"
-exit
-'''
+    # 使用短路径名避免 Unicode 编码问题
+    safe_python = _get_short_path_windows(python_exe)
+    safe_script = _get_short_path_windows(script)
+
+    content = (
+        '@echo off\r\n'
+        f'title bhxz-restart-{pid}\r\n'
+        'chcp 65001 >nul 2>&1\r\n'
+        'timeout /t 3 /nobreak >nul\r\n'
+        'setlocal enabledelayedexpansion\r\n'
+        'set MAX_WAIT=60\r\n'
+        'set WAIT_COUNT=0\r\n'
+        ':wait\r\n'
+        f'tasklist /NH /FI "PID eq {pid}" 2>nul | findstr /R /C:"\\<{pid}\\>" >nul\r\n'
+        'if not errorlevel 1 (\r\n'
+        '    set /a WAIT_COUNT+=1\r\n'
+        '    if !WAIT_COUNT! geq !MAX_WAIT! (\r\n'
+        f'        start "" /B "{safe_python}" "{safe_script}"\r\n'
+        '        del "%~f0"\r\n'
+        '        exit\r\n'
+        '    )\r\n'
+        '    timeout /t 1 /nobreak >nul\r\n'
+        '    goto wait\r\n'
+        ')\r\n'
+        f'start "" /B "{safe_python}" "{safe_script}"\r\n'
+        'del "%~f0"\r\n'
+        'exit\r\n'
+    )
     path = os.path.join(tempfile.gettempdir(), f'bhxz_restart_{pid}.bat')
+
+    # 判断路径是否包含非 ASCII 字符，选择合适的编码
+    def _is_ascii_only(s):
+        try:
+            s.encode('ascii')
+            return True
+        except (UnicodeEncodeError, UnicodeDecodeError):
+            return False
+
+    if _is_ascii_only(content):
+        encoding = 'ascii'
+    else:
+        encoding = 'utf-8-sig'  # UTF-8 with BOM，cmd.exe 在 chcp 65001 下可识别
     try:
-        with open(path, 'w', newline='\r\n') as f:
+        with open(path, 'w', encoding=encoding, newline='\r\n') as f:
             f.write(content)
         return path
     except Exception as e:
@@ -641,14 +702,18 @@ def _direct_restart():
             'stdin': subprocess.DEVNULL,
         }
         if sys.platform == 'win32':
+            # 使用短路径名避免编码问题
+            safe_python = _get_short_path_windows(python_exe)
+            safe_script = _get_short_path_windows(script)
             kwargs['creationflags'] = (
                 subprocess.CREATE_NEW_PROCESS_GROUP
                 | subprocess.CREATE_NO_WINDOW
                 | 0x00000004  # DETACHED_PROCESS
             )
+            subprocess.Popen([safe_python, safe_script], **kwargs)
         else:
             kwargs['preexec_fn'] = os.setsid
-        subprocess.Popen([python_exe, script], **kwargs)
+            subprocess.Popen([python_exe, script], **kwargs)
         _add_event('log', {'message': '✓ 新进程已启动'})
     except Exception as e:
         _add_event('log', {'message': f'✗ 直接启动新进程失败: {e}'})
