@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}服务器状态{% endblock %}
+{% block content %}
+<section class="page-container py-12">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="mb-8">
+            <h1 class="text-xl sm:text-2xl font-bold">服务器状态</h1>
+            <p class="text-cream/60 text-sm mt-1">查看服务器实时在线情况</p>
+        </div>
+
+        <!-- 状态概览卡片 -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+            <div class="pixel-card rounded-xl p-5 text-center">
+                <div class="text-3xl font-bold text-green-400 mb-1" id="status-online">-</div>
+                <div class="text-xs text-cream/60">在线玩家</div>
+            </div>
+            <div class="pixel-card rounded-xl p-5 text-center">
+                <div class="text-3xl font-bold text-gold-400 mb-1" id="status-max">-</div>
+                <div class="text-xs text-cream/60">最大玩家数</div>
+            </div>
+            <div class="pixel-card rounded-xl p-5 text-center">
+                <div class="text-3xl font-bold text-blue-400 mb-1" id="status-status">检测中</div>
+                <div class="text-xs text-cream/60">服务器状态</div>
+            </div>
+        </div>
+
+        <!-- 在线玩家列表 -->
+        <div class="pixel-card rounded-xl p-6">
+            <h2 class="text-lg font-bold mb-4 flex items-center gap-2">
+                <i data-lucide="users" class="w-5 h-5 text-gold-400"></i>
+                在线玩家列表
+                <span class="text-xs text-cream/50 font-normal ml-auto" id="status-update-info">数据每 5 秒自动更新</span>
+            </h2>
+            <div id="player-list" class="flex flex-wrap gap-2">
+                <div class="text-cream/50 text-sm py-4">加载中...</div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_script %}
+<script>
+(function() {
+    var POLL_INTERVAL = 5000;  // 5 秒
+
+    function updateStatus() {
+        fetch('/api/server-status')
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                // 更新概览数字
+                document.getElementById('status-online').textContent = d.online;
+                document.getElementById('status-max').textContent = d.max_players;
+
+                var statusEl = document.getElementById('status-status');
+                if (d.error) {
+                    statusEl.textContent = '离线';
+                    statusEl.className = 'text-3xl font-bold text-red-400 mb-1';
+                } else {
+                    statusEl.textContent = '在线';
+                    statusEl.className = 'text-3xl font-bold text-green-400 mb-1';
+                }
+
+                // 更新玩家列表
+                var listEl = document.getElementById('player-list');
+                if (d.error) {
+                    listEl.innerHTML = '<div class="text-red-400/70 text-sm py-4">无法连接到服务器</div>';
+                    return;
+                }
+                if (d.players.length === 0) {
+                    listEl.innerHTML = '<div class="text-cream/50 text-sm py-4">当前没有玩家在线</div>';
+                    return;
+                }
+                var html = '';
+                for (var i = 0; i < d.players.length; i++) {
+                    html += '<span class="px-3 py-1.5 bg-forest-900/50 border border-cream/10 rounded-lg text-sm text-cream/80">' +
+                        escapeHtml(d.players[i]) + '</span>';
+                }
+                listEl.innerHTML = html;
+            })
+            .catch(function() {
+                document.getElementById('status-online').textContent = '-';
+                document.getElementById('status-max').textContent = '-';
+                document.getElementById('status-status').textContent = '离线';
+                document.getElementById('status-status').className = 'text-3xl font-bold text-red-400 mb-1';
+                document.getElementById('player-list').innerHTML = '<div class="text-red-400/70 text-sm py-4">数据获取失败</div>';
+            });
+    }
+
+    function escapeHtml(str) {
+        var div = document.createElement('div');
+        div.appendChild(document.createTextNode(str));
+        return div.innerHTML;
+    }
+
+    // 首次立即刷新
+    updateStatus();
+    // 每 5 秒自动轮询
+    setInterval(updateStatus, POLL_INTERVAL);
+})();
+</script>
+{% endblock %}

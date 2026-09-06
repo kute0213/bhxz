@@ -57,3 +57,10 @@ def favicon_ico():
     """兼容旧版浏览器的 favicon.ico 请求，重定向到 SVG 版本。"""
     from flask import redirect
     return redirect('/favicon')
+
+
+@main_bp.route('/server-status')
+def server_status():
+    """服务器状态页面：展示在线玩家列表、人数等实时信息。"""
+    user = get_current_user()
+    return render_template('server_status.html', user=user)
