@@ -165,66 +165,25 @@
                 </div>
             </div>
 
-            <!-- Tick 耗时详情 -->
-            <div class="mb-5">
-                <div class="text-sm text-cream/60 mb-2">Tick 耗时 (ms)</div>
-                <div class="grid grid-cols-2 gap-4">
-                    <div>
-                        <div class="text-xs text-cream/40 mb-2">最近 10 秒</div>
-                        <div class="grid grid-cols-2 gap-2">
-                            <div class="bg-forest-900/40 rounded-lg p-2">
-                                <div class="text-xs text-cream/40">最低</div>
-                                <div id="tick-min-10s" class="text-sm font-bold mt-0.5">--</div>
-                            </div>
-                            <div class="bg-forest-900/40 rounded-lg p-2">
-                                <div class="text-xs text-cream/40">中位数</div>
-                                <div id="tick-med-10s" class="text-sm font-bold mt-0.5">--</div>
-                            </div>
-                            <div class="bg-forest-900/40 rounded-lg p-2">
-                                <div class="text-xs text-cream/40">P95</div>
-                                <div id="tick-p95-10s" class="text-sm font-bold mt-0.5">--</div>
-                            </div>
-                            <div class="bg-forest-900/40 rounded-lg p-2">
-                                <div class="text-xs text-cream/40">最高</div>
-                                <div id="tick-max-10s" class="text-sm font-bold mt-0.5">--</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div>
-                        <div class="text-xs text-cream/40 mb-2">最近 1 分钟</div>
-                        <div class="grid grid-cols-2 gap-2">
-                            <div class="bg-forest-900/40 rounded-lg p-2">
-                                <div class="text-xs text-cream/40">最低</div>
-                                <div id="tick-min-1m" class="text-sm font-bold mt-0.5">--</div>
-                            </div>
-                            <div class="bg-forest-900/40 rounded-lg p-2">
-                                <div class="text-xs text-cream/40">中位数</div>
-                                <div id="tick-med-1m" class="text-sm font-bold mt-0.5">--</div>
-                            </div>
-                            <div class="bg-forest-900/40 rounded-lg p-2">
-                                <div class="text-xs text-cream/40">P95</div>
-                                <div id="tick-p95-1m" class="text-sm font-bold mt-0.5">--</div>
-                            </div>
-                            <div class="bg-forest-900/40 rounded-lg p-2">
-                                <div class="text-xs text-cream/40">最高</div>
-                                <div id="tick-max-1m" class="text-sm font-bold mt-0.5">--</div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- CPU 使用率 -->
+            <!-- Tick 耗时 -->
             <div>
-                <div class="text-sm text-cream/60 mb-2">Spark CPU 使用率</div>
-                <div class="grid grid-cols-2 gap-4 text-center">
-                    <div class="bg-forest-900/40 rounded-lg p-2.5">
-                        <div class="text-xs text-cream/40 mb-1">系统</div>
-                        <div id="spark-cpu-system" class="text-sm font-bold">--</div>
+                <div class="text-sm text-cream/60 mb-2">Tick 耗时 (ms) — 最近 10 秒</div>
+                <div class="grid grid-cols-4 gap-2">
+                    <div class="bg-forest-900/40 rounded-lg p-2.5 text-center">
+                        <div class="text-xs text-cream/40">最低</div>
+                        <div id="tick-min-10s" class="text-sm font-bold mt-0.5">--</div>
                     </div>
-                    <div class="bg-forest-900/40 rounded-lg p-2.5">
-                        <div class="text-xs text-cream/40 mb-1">进程</div>
-                        <div id="spark-cpu-process" class="text-sm font-bold">--</div>
+                    <div class="bg-forest-900/40 rounded-lg p-2.5 text-center">
+                        <div class="text-xs text-cream/40">中位数</div>
+                        <div id="tick-med-10s" class="text-sm font-bold mt-0.5">--</div>
+                    </div>
+                    <div class="bg-forest-900/40 rounded-lg p-2.5 text-center">
+                        <div class="text-xs text-cream/40">P95</div>
+                        <div id="tick-p95-10s" class="text-sm font-bold mt-0.5">--</div>
+                    </div>
+                    <div class="bg-forest-900/40 rounded-lg p-2.5 text-center">
+                        <div class="text-xs text-cream/40">最高</div>
+                        <div id="tick-max-10s" class="text-sm font-bold mt-0.5">--</div>
                     </div>
                 </div>
             </div>
@@ -340,6 +299,14 @@
         const timeEl = document.getElementById('mspt-update-time');
 
         if (!mspt || !mspt.connected) {
+            if (mspt && mspt.error) {
+                statusEl.textContent = '获取失败';
+                statusEl.className = 'text-xs px-2.5 py-1 rounded-full bg-red-900/40 text-red-400';
+                document.getElementById('mspt-current').textContent = '--';
+                document.getElementById('mspt-bar').style.width = '0%';
+                timeEl.textContent = mspt.error;
+                return;
+            }
             statusEl.textContent = '未连接';
             statusEl.className = 'text-xs px-2.5 py-1 rounded-full bg-red-900/40 text-red-400';
             document.getElementById('mspt-current').textContent = '--';
@@ -404,22 +371,6 @@
         setTick('tick-med-10s', mspt.tick_med_10s);
         setTick('tick-p95-10s', mspt.tick_p95_10s);
         setTick('tick-max-10s', mspt.tick_max_10s);
-        setTick('tick-min-1m', mspt.tick_min_1m);
-        setTick('tick-med-1m', mspt.tick_med_1m);
-        setTick('tick-p95-1m', mspt.tick_p95_1m);
-        setTick('tick-max-1m', mspt.tick_max_1m);
-
-        // Spark CPU
-        if (mspt.cpu_system > 0) {
-            document.getElementById('spark-cpu-system').textContent = mspt.cpu_system + '%';
-        } else {
-            document.getElementById('spark-cpu-system').textContent = '--';
-        }
-        if (mspt.cpu_process > 0) {
-            document.getElementById('spark-cpu-process').textContent = mspt.cpu_process + '%';
-        } else {
-            document.getElementById('spark-cpu-process').textContent = '--';
-        }
 
         // 更新时间
         if (mspt.updated_at) {

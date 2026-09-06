@@ -81,6 +81,19 @@ def parse_mspt_data(raw: str) -> MSPTData:
         result.error = 'RCON 无应答'
         return result
 
+    # 检测 execute_command 返回的错误信息（以 "RCON" 开头）
+    error_prefixes = (
+        'RCON 连接失败', 'RCON 密码未配置',
+        'RCON 连接超时', 'RCON 连接被拒绝',
+        'RCON 连接被重置', 'RCON 网络错误',
+        'RCON 参数错误', 'RCON 连接异常',
+        'RCON 命令执行异常',
+    )
+    stripped = raw.strip()
+    if stripped.startswith(error_prefixes):
+        result.error = stripped
+        return result
+
     lines = raw.strip().split('\n')
 
     # 移除 Spark 前缀标记 [⚡] 或 [Spark]
@@ -129,6 +142,7 @@ def parse_mspt_data(raw: str) -> MSPTData:
 
     # 如果没有任何数据被解析，标记错误
     if result.tps_5s == 0.0 and result.tps_10s == 0.0 and result.tick_min_10s == 0.0:
+        log('WARNING', 'RCON', f'MSPT 原始数据无法解析: {stripped[:300]}')
         result.error = '无法解析 MSPT 数据'
 
     return result
@@ -212,12 +226,17 @@ class MSPTTracker:
                     self._cache = parsed
                     if parsed.error:
                         self._consecutive_failures += 1
+                        if self._consecutive_failures == 1 or self._consecutive_failures % 6 == 0:
+                            log('WARNING', 'RCON',
+                                f'MSPT 获取失败 ({self._consecutive_failures}次): {parsed.error}')
                     else:
+                        if self._consecutive_failures > 0:
+                            log('INFO', 'RCON', 'MSPT 追踪已恢复')
                         self._consecutive_failures = 0
-            except Exception:
+            except Exception as exc:
                 with self._lock:
                     self._consecutive_failures += 1
-                pass
+                log('WARNING', 'RCON', f'MSPT 追踪异常: {exc}')
 
             current_interval = self._get_current_interval()
             self._stop_event.wait(current_interval)

@@ -60,7 +60,6 @@ def _get_mspt_data():
             'mspt_current': 0,
             'tps_5s': 0, 'tps_10s': 0, 'tps_1m': 0, 'tps_5m': 0, 'tps_15m': 0,
             'tick_min_10s': 0, 'tick_med_10s': 0, 'tick_p95_10s': 0, 'tick_max_10s': 0,
-            'tick_min_1m': 0, 'tick_med_1m': 0, 'tick_p95_1m': 0, 'tick_max_1m': 0,
             'cpu_system': 0, 'cpu_process': 0,
         }
     return {
@@ -71,8 +70,6 @@ def _get_mspt_data():
         'tps_1m': md.tps_1m, 'tps_5m': md.tps_5m, 'tps_15m': md.tps_15m,
         'tick_min_10s': md.tick_min_10s, 'tick_med_10s': md.tick_med_10s,
         'tick_p95_10s': md.tick_p95_10s, 'tick_max_10s': md.tick_max_10s,
-        'tick_min_1m': md.tick_min_1m, 'tick_med_1m': md.tick_med_1m,
-        'tick_p95_1m': md.tick_p95_1m, 'tick_max_1m': md.tick_max_1m,
         'cpu_system': md.cpu_system, 'cpu_process': md.cpu_process,
         'updated_at': md.updated_at,
     }
