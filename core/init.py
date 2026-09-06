@@ -18,48 +18,23 @@ def register_hooks(app, try_serve_public):
 
 def start_background_services():
     """启动所有后台服务。"""
-    log('INFO', 'App', '正在启动后台服务...')
-
-    log('INFO', 'App', '  启动日志清理...')
-    from services.logging import log_cleaner
-    log_cleaner.start()
-    log('INFO', 'App', '  ✓ 日志清理已启动')
-
-    log('INFO', 'App', '  启动定时任务...')
     from services.scheduler import scheduler
-    scheduler.start()
-    log('INFO', 'App', '  ✓ 定时任务已启动')
-
-    log('INFO', 'App', '  启动备份服务...')
+    from services.logging import log_cleaner
     from services.backup import BackupScheduler
-    BackupScheduler().start()
-    log('INFO', 'App', '  ✓ 备份服务已启动')
-
-    log('INFO', 'App', '  启动邮件服务...')
     from services.email import email_service
-    email_service.start()
-    log('INFO', 'App', '  ✓ 邮件服务已启动')
-
-    log('INFO', 'App', '  启动站点地图缓存...')
     from services.sitemap_cache import sitemap_cache
-    sitemap_cache.start()
-    log('INFO', 'App', '  ✓ 站点地图缓存已启动')
-
-    log('INFO', 'App', '  启动玩家追踪器...')
     from services.rcon import player_tracker
-    player_tracker.start()
-    log('INFO', 'App', '  ✓ 玩家追踪器已启动')
-
-    log('INFO', 'App', '  启动 MSPT 追踪器...')
     from services.rcon.mspt_tracker import mspt_tracker
-    mspt_tracker.start()
-    log('INFO', 'App', '  ✓ MSPT 追踪器已启动')
-
-    log('INFO', 'App', '  启动性能监控...')
     from services.monitoring import performance_tracker
-    performance_tracker.start()
-    log('INFO', 'App', '  ✓ 性能监控已启动')
 
+    log_cleaner.start()
+    scheduler.start()
+    BackupScheduler().start()
+    email_service.start()
+    sitemap_cache.start()
+    player_tracker.start()
+    mspt_tracker.start()
+    performance_tracker.start()
     log('INFO', 'App', '后台服务启动完成')
 
 
