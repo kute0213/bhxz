@@ -34,6 +34,14 @@ GITHUB_ARCHIVE = f'{GITHUB_URL}/archive/refs/heads/main.zip'
 REMOTE = 'origin'
 BRANCH = 'main'
 
+# 国内镜像代理（按优先级，下载失败时自动切换）
+MIRROR_PROXIES = [
+    ('ghp.ci', 'https://ghp.ci/https://github.com/'),
+    ('ghproxy.com', 'https://ghproxy.com/https://github.com/'),
+    ('github.moeyy.xyz', 'https://github.moeyy.xyz/https://github.com/'),
+    ('slink.ltd', 'https://slink.ltd/https://github.com/'),
+]
+
 # 依赖文件
 REQUIREMENTS = os.path.join(PROJECT_ROOT, 'requirements.txt')
 
@@ -176,71 +184,104 @@ def is_git_repo(path):
     return os.path.isdir(git_dir)
 
 
-def download_and_extract(url, dest):
-    """从 GitHub 下载 ZIP 归档并解压到目标目录。
+def download_and_extract(url, dest, name=None):
+    """从指定 URL 下载 ZIP 归档并解压到目标目录。
 
-    解压后目录结构: dest/bhxz-main/
+    支持镜像代理自动切换：先尝试直连，失败后依次尝试国内镜像代理。
+
+    Args:
+        url: 原始下载地址
+        dest: 目标目录
+        name: 显示名称（用于日志）
     """
-    log(f'  下载中: {url}')
-    try:
-        with tempfile.NamedTemporaryFile(suffix='.zip', delete=False) as tmp:
-            zip_path = tmp.name
-            urllib.request.urlretrieve(url, zip_path)
-    except Exception as e:
-        log(f'  ✗ 下载失败: {e}')
-        return False
+    name = name or 'GitHub'
 
-    log(f'  解压中...')
-    try:
-        with zipfile.ZipFile(zip_path, 'r') as zf:
-            extract_dir = tempfile.mkdtemp()
-            zf.extractall(extract_dir)
+    # 构建 URL 列表：直连 + 镜像代理
+    urls = [url]
+    for proxy_name, proxy_base in MIRROR_PROXIES:
+        # 仅对 GitHub 原始 URL 应用代理
+        if url.startswith('https://github.com/'):
+            proxy_url = proxy_base + url.removeprefix('https://github.com/')
+            urls.append((proxy_url, proxy_name))
 
-        src = os.path.join(extract_dir, 'bhxz-main')
-        if not os.path.isdir(src):
-            items = os.listdir(extract_dir)
-            if items:
-                src = os.path.join(extract_dir, items[0])
+    last_error = None
+    for entry in urls:
+        if isinstance(entry, tuple):
+            current_url, mirror_name = entry
+            log(f'  尝试镜像 [{mirror_name}]: {current_url}')
+        else:
+            current_url = entry
+            log(f'  尝试直连: {current_url}')
 
-        for item in os.listdir(src):
-            s = os.path.join(src, item)
-            d = os.path.join(dest, item)
-            if os.path.isdir(s):
-                if os.path.exists(d):
-                    shutil.rmtree(d)
-                shutil.copytree(s, d)
-            else:
-                shutil.copy2(s, d)
-
-        shutil.rmtree(extract_dir, ignore_errors=True)
-        os.unlink(zip_path)
-        return True
-    except Exception as e:
-        log(f'  ✗ 解压失败: {e}')
         try:
+            with tempfile.NamedTemporaryFile(suffix='.zip', delete=False) as tmp:
+                zip_path = tmp.name
+                urllib.request.urlretrieve(current_url, zip_path)
+        except Exception as e:
+            last_error = e
+            log(f'  ✗ 失败: {e}')
+            # 清理临时文件
+            try:
+                os.unlink(zip_path)
+            except Exception:
+                pass
+            continue
+
+        log(f'  解压中...')
+        try:
+            with zipfile.ZipFile(zip_path, 'r') as zf:
+                extract_dir = tempfile.mkdtemp()
+                zf.extractall(extract_dir)
+
+            src = os.path.join(extract_dir, 'bhxz-main')
+            if not os.path.isdir(src):
+                items = [i for i in os.listdir(extract_dir) if os.path.isdir(os.path.join(extract_dir, i))]
+                if items:
+                    src = os.path.join(extract_dir, items[0])
+
+            for item in os.listdir(src):
+                s = os.path.join(src, item)
+                d = os.path.join(dest, item)
+                if os.path.isdir(s):
+                    if os.path.exists(d):
+                        shutil.rmtree(d)
+                    shutil.copytree(s, d)
+                else:
+                    shutil.copy2(s, d)
+
+            shutil.rmtree(extract_dir, ignore_errors=True)
             os.unlink(zip_path)
-        except Exception:
-            pass
-        return False
+            return True
+        except Exception as e:
+            last_error = e
+            log(f'  ✗ 解压失败: {e}')
+            try:
+                os.unlink(zip_path)
+            except Exception:
+                pass
+            continue
+
+    log(f'  ✗ 所有下载方式均失败（共尝试 {len(urls)} 个源）')
+    return False
 
 
 def pull_code():
     """拉取最新代码。
 
     如果本地是 Git 仓库，使用 git 强制同步。
-    否则从 GitHub 下载 ZIP 归档并覆盖本地文件。
+    否则从 GitHub 下载 ZIP 归档并覆盖本地文件（自动使用国内镜像加速）。
     """
     if is_git_repo(PROJECT_ROOT):
         log('  本地是 Git 仓库，使用 git 同步')
         code = run('git fetch --all', timeout=30)
         if code != 0:
-            log('  ⚠ git fetch 失败，尝试从 GitHub 下载')
+            log('  ⚠ git fetch 失败，尝试通过国内镜像下载覆盖')
             return download_and_extract(GITHUB_ARCHIVE, PROJECT_ROOT)
         run(f'git reset --hard {REMOTE}/{BRANCH}', timeout=30)
         run('git clean -fd', timeout=30)
         return True
 
-    log('  本地不是 Git 仓库，从 GitHub 下载最新代码')
+    log('  本地不是 Git 仓库，从 GitHub 下载最新代码（自动使用国内镜像加速）')
     return download_and_extract(GITHUB_ARCHIVE, PROJECT_ROOT)
 
 
