@@ -472,6 +472,7 @@ body::after {
     transition: transform var(--transition-bounce);
     border-radius: 28px;
     box-shadow: 0 8px 40px rgba(0,0,0,0.4);
+    overflow: hidden;
     /* 桌面端铺满半个页面 */
     width: 50vw;
     max-width: 480px;
