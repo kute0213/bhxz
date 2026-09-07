@@ -2,9 +2,10 @@
 
 from datetime import datetime, timedelta
 
-from flask import render_template, redirect, url_for, flash, abort, request
+from flask import redirect, url_for, flash, abort, request
 
 from core.auth import admin_required, get_current_user
+from core.helpers import render_page
 from core.db import get_db
 from routes.admin import admin_bp
 
@@ -13,8 +14,6 @@ from routes.admin import admin_bp
 @admin_required
 def admin_guide_bans():
     """管理后台：封禁列表。"""
-    user = get_current_user()
-
     conn = get_db()
     try:
         now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -35,7 +34,7 @@ def admin_guide_bans():
     finally:
         conn.close()
 
-    return render_template('admin/admin_guide_bans.html', user=user, bans=bans)
+    return render_page('admin/admin_guide_bans.html', bans=bans)
 
 
 @admin_bp.route('/admin/guide-bans/create', methods=['POST'])

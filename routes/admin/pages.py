@@ -1,8 +1,9 @@
 """管理后台页面路由：仪表盘。"""
 
-from flask import render_template, abort
+from flask import abort
 
-from core.auth import admin_required, get_current_user
+from core.auth import admin_required
+from core.helpers import render_page
 from core.db import get_db
 from routes.admin import admin_bp
 
@@ -10,8 +11,6 @@ from routes.admin import admin_bp
 @admin_bp.route('/admin')
 @admin_required
 def admin_page():
-    user = get_current_user()
-
     conn = get_db()
     try:
         stats = {
@@ -30,4 +29,4 @@ def admin_page():
     finally:
         conn.close()
 
-    return render_template('admin/admin.html', user=user, stats=stats)
+    return render_page('admin/admin.html', stats=stats)

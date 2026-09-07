@@ -1,8 +1,9 @@
 """管理员后台 —— 游戏账号注册申请审批、封禁管理。"""
 
-from flask import render_template, request, jsonify
+from flask import request, jsonify
 
 from core.auth import admin_required, get_current_user
+from core.helpers import render_page
 from routes.admin import admin_bp
 from services.game_accounts.registration_service import (
     get_pending_applications, get_all_applications,
@@ -17,7 +18,7 @@ from services.validation import validate_mc_username, validate_ban_reason
 @admin_required
 def admin_game_accounts():
     """账号注册申请管理页面。"""
-    return render_template('admin/admin_game_accounts.html', user=get_current_user())
+    return render_page('admin/admin_game_accounts.html')
 
 
 # ---------------------------------------------------------------------------
@@ -109,7 +110,7 @@ def api_unban(mc_username):
 @admin_required
 def admin_game_account_bindings():
     """游戏账号管理页面（查看和管理已绑定的游戏账号）。"""
-    return render_template('admin/admin_game_account_bindings.html', user=get_current_user())
+    return render_page('admin/admin_game_account_bindings.html')
 
 
 @admin_bp.route('/admin/api/game-account-bindings')

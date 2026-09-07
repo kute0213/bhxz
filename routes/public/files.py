@@ -15,10 +15,11 @@ import os
 import platform
 import mimetypes
 from datetime import datetime
-from flask import send_file, abort, request, render_template, redirect, url_for, flash
+from flask import send_file, abort, request, redirect, url_for, flash
 
 from config import APP_ROOT
 from core.auth import login_required, get_current_user
+from core.helpers import render_page
 from core.db import get_db
 from routes.public import public_bp
 
@@ -280,7 +281,7 @@ def admin_public_files_page():
     finally:
         conn.close()
 
-    return render_template('admin/admin_public_files.html', user=user, paths=paths)
+    return render_page('admin/admin_public_files.html', paths=paths)
 
 
 @public_bp.route('/admin/public-files/add', methods=['POST'])

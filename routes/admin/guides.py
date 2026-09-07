@@ -2,9 +2,10 @@
 
 from datetime import datetime
 
-from flask import render_template, redirect, url_for, flash, abort, request, jsonify
+from flask import redirect, url_for, flash, abort, request, jsonify
 
 from core.auth import admin_required, get_current_user
+from core.helpers import render_page
 from core.db import get_db
 from core.db.schema import cleanup_expired_rejected_guides
 from services.email import email_service, guide_review_result as build_result_html
@@ -40,8 +41,6 @@ def _notify_author_guide_result(guide_title, author_email, approved, reason=''):
 @admin_required
 def admin_guides():
     """管理后台：指南列表（含待审核）。"""
-    user = get_current_user()
-
     # 清理拒绝超过48小时的指南
     cleanup_expired_rejected_guides()
 
@@ -59,7 +58,7 @@ def admin_guides():
     finally:
         conn.close()
 
-    return render_template('admin/admin_guides.html', user=user, guides=guides)
+    return render_page('admin/admin_guides.html', guides=guides)
 
 
 @admin_bp.route('/admin/guides/create', methods=['GET', 'POST'])
@@ -105,15 +104,13 @@ def admin_guide_create():
         finally:
             conn.close()
 
-    return render_template('admin/admin_guide_form.html', user=user, guide=None)
+    return render_page('admin/admin_guide_form.html', guide=None)
 
 
 @admin_bp.route('/admin/guides/<int:guide_id>/edit', methods=['GET', 'POST'])
 @admin_required
 def admin_guide_edit(guide_id):
     """管理后台：编辑任意指南（保持原状态或直接通过）。"""
-    user = get_current_user()
-
     conn = get_db()
     try:
         row = conn.execute(
@@ -173,7 +170,7 @@ def admin_guide_edit(guide_id):
         finally:
             conn.close()
 
-    return render_template('admin/admin_guide_form.html', user=user, guide=guide)
+    return render_page('admin/admin_guide_form.html', guide=guide)
 
 
 @admin_bp.route('/admin/guides/<int:guide_id>/delete', methods=['POST'])

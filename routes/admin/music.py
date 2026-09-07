@@ -3,9 +3,10 @@
 薄层：仅负责 HTTP 请求解析/响应构造，业务逻辑委托给 services。
 """
 
-from flask import render_template, redirect, url_for, flash, request
+from flask import redirect, url_for, flash, request
 
 from core.auth import admin_required, get_current_user
+from core.helpers import render_page
 from routes.admin import admin_bp
 from services import music_service
 from services.email import email_service, music_review_result as build_result_html
@@ -47,13 +48,10 @@ def _notify_author_music_result(music_id, approved):
 @admin_required
 def admin_music_list():
     """管理员查看所有音频 + 待审核队列。"""
-    user = get_current_user()
-
     pending_musics = music_service.attach_durations(music_service.get_pending_musics())
     musics = music_service.attach_durations(music_service.get_all_musics())
-    return render_template(
+    return render_page(
         'admin/admin_music.html',
-        user=user,
         pending_musics=pending_musics,
         musics=musics,
     )

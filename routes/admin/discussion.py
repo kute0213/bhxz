@@ -3,9 +3,10 @@
 薄层：仅负责 HTTP 请求解析/响应构造，业务逻辑委托给 services。
 """
 
-from flask import render_template, request, redirect, url_for, flash
+from flask import request, redirect, url_for, flash
 
 from core.auth import admin_required, get_current_user
+from core.helpers import render_page
 from core.db import get_db
 from routes.admin import admin_bp
 from services.discussion_service import (
@@ -18,8 +19,6 @@ from services.ip import get_client_ip
 @admin_bp.route('/admin/discussion')
 @admin_required
 def admin_discussion():
-    user = get_current_user()
-
     conn = get_db()
     try:
         rows = conn.execute(
@@ -38,7 +37,7 @@ def admin_discussion():
     finally:
         conn.close()
 
-    return render_template('admin/admin_discussion.html', user=user, topics=topics, cat_dict=cat_dict)
+    return render_page('admin/admin_discussion.html', topics=topics, cat_dict=cat_dict)
 
 
 @admin_bp.route('/admin/discussion/<int:topic_id>/delete', methods=['POST'])
@@ -91,4 +90,4 @@ def admin_categories():
             flash(message, 'success' if success else 'error')
 
     categories = get_categories_with_counts()
-    return render_template('admin/admin_discussion_categories.html', user=user, categories=categories)
+    return render_page('admin/admin_discussion_categories.html', categories=categories)

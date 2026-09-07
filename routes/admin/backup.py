@@ -7,9 +7,10 @@ import shutil
 import subprocess
 from datetime import datetime
 
-from flask import render_template, jsonify, abort
+from flask import jsonify, abort
 
 from core.auth import admin_required, get_current_user
+from core.helpers import render_page
 from core.db import get_db
 from config import DB_PATH, BACKUP_DIR, APP_ROOT
 from routes.admin import admin_bp
@@ -20,8 +21,6 @@ from core.logger import log
 @admin_required
 def db_backup_page():
     """数据库备份管理页面。"""
-    user = get_current_user()
-
     from config import get_config_value
 
     conn = get_db()
@@ -44,9 +43,8 @@ def db_backup_page():
     finally:
         conn.close()
 
-    return render_template(
+    return render_page(
         'admin/admin_db_backup.html',
-        user=user,
         db_size=db_size,
         backups=backups,
         max_backups=get_config_value('MAX_BACKUPS', 30),

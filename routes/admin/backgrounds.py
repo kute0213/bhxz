@@ -1,8 +1,9 @@
 """管理后台背景图片管理路由。"""
 
-from flask import render_template, jsonify, abort
+from flask import jsonify, abort
 
 from core.auth import admin_required, get_current_user
+from core.helpers import render_page
 from routes.admin import admin_bp
 from services import background_service
 from services.ip import get_client_ip
@@ -12,15 +13,12 @@ from services.ip import get_client_ip
 @admin_required
 def admin_backgrounds_page():
     """背景图片管理页。"""
-    user = get_current_user()
-
     pending_bgs = background_service.get_backgrounds(status=0)
     approved_bgs = background_service.get_backgrounds(status=1)
     rejected_bgs = background_service.get_backgrounds(status=2)
 
-    return render_template(
+    return render_page(
         'admin/admin_backgrounds.html',
-        user=user,
         pending_bgs=pending_bgs,
         approved_bgs=approved_bgs,
         rejected_bgs=rejected_bgs,

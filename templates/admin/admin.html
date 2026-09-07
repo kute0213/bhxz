@@ -1,205 +1,180 @@
 {% extends "base.html" %}
+{% from 'macros/page_header.html' import page_header_center, section_title %}
 {% block title %}管理中心{% endblock %}
 {% block content %}
-    <section class="page-container py-12">
-        <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="text-center mb-10 sm:mb-12">
-                <h1 class="text-2xl sm:text-3xl font-bold mb-3">管理中心</h1>
-                <p class="text-cream/60 text-sm sm:text-base">集中管理服务器的各项功能</p>
-            </div>
+<section class="page-container py-12">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+        {{ page_header_center(title='管理中心', subtitle='集中管理服务器的各项功能') }}
 
-            <!-- 数据统计 -->
-            <div class="mb-10 sm:mb-12">
-                <h2 class="text-lg font-bold mb-4 flex items-center gap-2">
-                    <i data-lucide="bar-chart-2" class="w-5 h-5 text-gold-400"></i>
-                    数据统计
-                </h2>
-                <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
-                    <div class="pixel-card rounded-xl p-4 text-center">
-                        <div class="text-xl sm:text-2xl font-bold text-gold-400 mb-1 break-all">{{ stats.total_users }}</div>
-                        <div class="text-xs text-cream/60">注册用户</div>
-                    </div>
-                    <div class="pixel-card rounded-xl p-4 text-center">
-                        <div class="text-xl sm:text-2xl font-bold text-gold-400 mb-1 break-all">{{ stats.total_music }}</div>
-                        <div class="text-xs text-cream/60">大喇叭音频</div>
-                    </div>
-                    <div class="pixel-card rounded-xl p-4 text-center">
-                        <div class="text-xl sm:text-2xl font-bold text-gold-400 mb-1 break-all">{{ stats.pending_music }}</div>
-                        <div class="text-xs text-cream/60">待审核大喇叭音频</div>
-                    </div>
-                    <div class="pixel-card rounded-xl p-4 text-center">
-                        <div class="text-xl sm:text-2xl font-bold text-gold-400 mb-1 break-all">{{ stats.total_mod_intros }}</div>
-                        <div class="text-xs text-cream/60">模组介绍</div>
-                    </div>
-                    <div class="pixel-card rounded-xl p-4 text-center">
-                        <div class="text-xl sm:text-2xl font-bold text-gold-400 mb-1 break-all">{{ stats.total_guides }}</div>
-                        <div class="text-xs text-cream/60">服务器指南</div>
-                    </div>
-                    <div class="pixel-card rounded-xl p-4 text-center">
-                        <div class="text-xl sm:text-2xl font-bold text-gold-400 mb-1 break-all">{{ stats.pending_guides }}</div>
-                        <div class="text-xs text-cream/60">待审核指南</div>
-                    </div>
+        <!-- 数据统计 -->
+        <div class="mb-10 sm:mb-12">
+            {{ section_title(title='数据统计', icon='bar-chart-2') }}
+            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
                 <div class="pixel-card rounded-xl p-4 text-center">
-                        <div class="text-xl sm:text-2xl font-bold text-gold-400 mb-1 break-all">{{ stats.total_discussion_topics }}</div>
-                        <div class="text-xs text-cream/60">讨论帖子</div>
-                    </div>
-                    <div class="pixel-card rounded-xl p-4 text-center">
-                        <div class="text-xl sm:text-2xl font-bold text-gold-400 mb-1 break-all">{{ stats.total_discussion_replies }}</div>
-                        <div class="text-xs text-cream/60">讨论回复</div>
-                    </div>
-                    <div class="pixel-card rounded-xl p-4 text-center">
-                        <div class="text-xl sm:text-2xl font-bold text-gold-400 mb-1 break-all">{{ stats.total_discussion_categories }}</div>
-                        <div class="text-xs text-cream/60">讨论分类</div>
-                    </div>
+                    <div class="text-xl sm:text-2xl font-bold text-gold-400 mb-1 break-all">{{ stats.total_users }}</div>
+                    <div class="text-xs text-cream/60">注册用户</div>
+                </div>
+                <div class="pixel-card rounded-xl p-4 text-center">
+                    <div class="text-xl sm:text-2xl font-bold text-gold-400 mb-1 break-all">{{ stats.total_music }}</div>
+                    <div class="text-xs text-cream/60">大喇叭音频</div>
+                </div>
+                <div class="pixel-card rounded-xl p-4 text-center">
+                    <div class="text-xl sm:text-2xl font-bold text-gold-400 mb-1 break-all">{{ stats.pending_music }}</div>
+                    <div class="text-xs text-cream/60">待审核大喇叭音频</div>
+                </div>
+                <div class="pixel-card rounded-xl p-4 text-center">
+                    <div class="text-xl sm:text-2xl font-bold text-gold-400 mb-1 break-all">{{ stats.total_mod_intros }}</div>
+                    <div class="text-xs text-cream/60">模组介绍</div>
+                </div>
+                <div class="pixel-card rounded-xl p-4 text-center">
+                    <div class="text-xl sm:text-2xl font-bold text-gold-400 mb-1 break-all">{{ stats.total_guides }}</div>
+                    <div class="text-xs text-cream/60">服务器指南</div>
+                </div>
+                <div class="pixel-card rounded-xl p-4 text-center">
+                    <div class="text-xl sm:text-2xl font-bold text-gold-400 mb-1 break-all">{{ stats.pending_guides }}</div>
+                    <div class="text-xs text-cream/60">待审核指南</div>
+                </div>
+                <div class="pixel-card rounded-xl p-4 text-center">
+                    <div class="text-xl sm:text-2xl font-bold text-gold-400 mb-1 break-all">{{ stats.total_discussion_topics }}</div>
+                    <div class="text-xs text-cream/60">讨论帖子</div>
+                </div>
+                <div class="pixel-card rounded-xl p-4 text-center">
+                    <div class="text-xl sm:text-2xl font-bold text-gold-400 mb-1 break-all">{{ stats.total_discussion_replies }}</div>
+                    <div class="text-xs text-cream/60">讨论回复</div>
+                </div>
+                <div class="pixel-card rounded-xl p-4 text-center">
+                    <div class="text-xl sm:text-2xl font-bold text-gold-400 mb-1 break-all">{{ stats.total_discussion_categories }}</div>
+                    <div class="text-xs text-cream/60">讨论分类</div>
                 </div>
             </div>
+        </div>
 
-            <!-- 功能入口 -->
-            <div>
-                <h2 class="text-lg font-bold mb-4 flex items-center gap-2">
-                    <i data-lucide="settings" class="w-5 h-5 text-gold-400"></i>
-                    管理功能
-                </h2>
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-                    <a href="{{ url_for('admin.admin_users') }}" class="pixel-card rounded-xl p-6 block hover:no-underline">
-                        <div class="w-12 h-12 mb-4 bg-gold-400/20 rounded-xl flex items-center justify-center">
-                            <i data-lucide="users" class="w-6 h-6 text-gold-400"></i>
-                        </div>
-                        <h3 class="text-lg font-bold mb-2">用户管理</h3>
-                        <p class="text-cream/60 text-sm">查看、删除用户，设置管理员权限</p>
-                        <span class="inline-block mt-4 text-gold-400 text-sm font-medium">进入管理 →</span>
-                    </a>
-
-                    <a href="{{ url_for('admin.manage_mod_intros') }}" class="pixel-card rounded-xl p-6 block hover:no-underline">
-                        <div class="w-12 h-12 mb-4 bg-gold-400/20 rounded-xl flex items-center justify-center">
-                            <i data-lucide="package" class="w-6 h-6 text-gold-400"></i>
-                        </div>
-                        <h3 class="text-lg font-bold mb-2">模组介绍管理</h3>
-                        <p class="text-cream/60 text-sm">添加、编辑或删除服务器模组介绍</p>
-                        <span class="inline-block mt-4 text-gold-400 text-sm font-medium">进入管理 →</span>
-                    </a>
-
-                    <a href="{{ url_for('admin.admin_guides') }}" class="pixel-card rounded-xl p-6 block hover:no-underline">
-                        <div class="w-12 h-12 mb-4 bg-gold-400/20 rounded-xl flex items-center justify-center">
-                            <i data-lucide="book-open" class="w-6 h-6 text-gold-400"></i>
-                        </div>
-                        <h3 class="text-lg font-bold mb-2">服务器指南管理</h3>
-                        <p class="text-cream/60 text-sm">审核、编辑和管理服务器指南</p>
-                        <span class="inline-block mt-4 text-gold-400 text-sm font-medium">进入管理 →</span>
-                    </a>
-
-                    <a href="{{ url_for('script.script_page') }}" class="pixel-card rounded-xl p-6 block hover:no-underline">
-                        <div class="w-12 h-12 mb-4 bg-gold-400/20 rounded-xl flex items-center justify-center">
-                            <i data-lucide="terminal" class="w-6 h-6 text-gold-400"></i>
-                        </div>
-                        <h3 class="text-lg font-bold mb-2">终端控制台</h3>
-                        <p class="text-cream/60 text-sm">快捷命令与实时终端</p>
-                        <span class="inline-block mt-4 text-gold-400 text-sm font-medium">进入 →</span>
-                    </a>
-
-                    
-
-                    <a href="{{ url_for('admin.admin_update_page') }}" class="pixel-card rounded-xl p-6 block hover:no-underline">
-                        <div class="w-12 h-12 mb-4 bg-gold-400/20 rounded-xl flex items-center justify-center">
-                            <i data-lucide="refresh-cw" class="w-6 h-6 text-gold-400"></i>
-                        </div>
-                        <h3 class="text-lg font-bold mb-2">一键更新</h3>
-                        <p class="text-cream/60 text-sm">从 GitHub 自动获取最新代码并重启服务器</p>
-                        <span class="inline-block mt-4 text-gold-400 text-sm font-medium">进入更新 →</span>
-                    </a>
-
-                    <a href="{{ url_for('admin.db_backup_page') }}" class="pixel-card rounded-xl p-6 block hover:no-underline">
-                        <div class="w-12 h-12 mb-4 bg-gold-400/20 rounded-xl flex items-center justify-center">
-                            <i data-lucide="database" class="w-6 h-6 text-gold-400"></i>
-                        </div>
-                        <h3 class="text-lg font-bold mb-2">数据库备份</h3>
-                        <p class="text-cream/60 text-sm">优化数据库、清理日志、一键备份恢复</p>
-                        <span class="inline-block mt-4 text-gold-400 text-sm font-medium">进入管理 →</span>
-                    </a>
-
-                    <a href="{{ url_for('admin.admin_logs_page') }}" class="pixel-card rounded-xl p-6 block hover:no-underline">
-                        <div class="w-12 h-12 mb-4 bg-gold-400/20 rounded-xl flex items-center justify-center">
-                            <i data-lucide="scroll-text" class="w-6 h-6 text-gold-400"></i>
-                        </div>
-                        <h3 class="text-lg font-bold mb-2">系统日志</h3>
-                        <p class="text-cream/60 text-sm">实时查看应用运行日志，支持等级筛选</p>
-                        <span class="inline-block mt-4 text-gold-400 text-sm font-medium">查看日志 →</span>
-                    </a>
-
-                    <a href="{{ url_for('admin.admin_settings_page') }}" class="pixel-card rounded-xl p-6 block hover:no-underline">
-                        <div class="w-12 h-12 mb-4 bg-gold-400/20 rounded-xl flex items-center justify-center">
-                            <i data-lucide="sliders" class="w-6 h-6 text-gold-400"></i>
-                        </div>
-                        <h3 class="text-lg font-bold mb-2">系统设置</h3>
-                        <p class="text-cream/60 text-sm">在线编辑配置项，修改后立即生效</p>
-                        <span class="inline-block mt-4 text-gold-400 text-sm font-medium">进入设置 →</span>
-                    </a>
-
-                    <a href="{{ url_for('public.admin_public_files_page') }}" class="pixel-card rounded-xl p-6 block hover:no-underline">
-                        <div class="w-12 h-12 mb-4 bg-gold-400/20 rounded-xl flex items-center justify-center">
-                            <i data-lucide="folder-open" class="w-6 h-6 text-gold-400"></i>
-                        </div>
-                        <h3 class="text-lg font-bold mb-2">公开文件管理</h3>
-                        <p class="text-cream/60 text-sm">将本地文件或目录对外公开访问</p>
-                        <span class="inline-block mt-4 text-gold-400 text-sm font-medium">进入管理 →</span>
-                    </a>
-
-                    <a href="{{ url_for('admin.admin_broadcast') }}" class="pixel-card rounded-xl p-6 block hover:no-underline">
-                        <div class="w-12 h-12 mb-4 bg-gold-400/20 rounded-xl flex items-center justify-center">
-                            <i data-lucide="megaphone" class="w-6 h-6 text-gold-400"></i>
-                        </div>
-                        <h3 class="text-lg font-bold mb-2">广播邮件</h3>
-                        <p class="text-cream/60 text-sm">向全体用户发送富文本（所见即所得）格式的邮件广播</p>
-                        <span class="inline-block mt-4 text-gold-400 text-sm font-medium">发送广播 →</span>
-                    </a>
-
-                    <a href="{{ url_for('admin.admin_discussion') }}" class="pixel-card rounded-xl p-6 block hover:no-underline">
-                        <div class="w-12 h-12 mb-4 bg-gold-400/20 rounded-xl flex items-center justify-center">
-                            <i data-lucide="message-square" class="w-6 h-6 text-gold-400"></i>
-                        </div>
-                        <h3 class="text-lg font-bold mb-2">讨论管理</h3>
-                        <p class="text-cream/60 text-sm">管理帖子、分类，置顶/锁定/删除</p>
-                        <span class="inline-block mt-4 text-gold-400 text-sm font-medium">进入管理 →</span>
-                    </a>
-
-                    <a href="{{ url_for('admin.admin_music_list') }}" class="pixel-card rounded-xl p-6 block hover:no-underline">
-                        <div class="w-12 h-12 mb-4 bg-gold-400/20 rounded-xl flex items-center justify-center">
-                            <i data-lucide="music" class="w-6 h-6 text-gold-400"></i>
-                        </div>
-                        <h3 class="text-lg font-bold mb-2">大喇叭音频管理</h3>
-                        <p class="text-cream/60 text-sm">查看全部音频，下架违规内容</p>
-                        <span class="inline-block mt-4 text-gold-400 text-sm font-medium">进入管理 →</span>
-                    </a>
-
-                    <a href="{{ url_for('admin.admin_backgrounds_page') }}" class="pixel-card rounded-xl p-6 block hover:no-underline">
-                        <div class="w-12 h-12 mb-4 bg-gold-400/20 rounded-xl flex items-center justify-center">
-                            <i data-lucide="image" class="w-6 h-6 text-gold-400"></i>
-                        </div>
-                        <h3 class="text-lg font-bold mb-2">背景图片管理</h3>
-                        <p class="text-cream/60 text-sm">审核用户上传的背景图片，启用/停用</p>
-                        <span class="inline-block mt-4 text-gold-400 text-sm font-medium">进入管理 →</span>
-                    </a>
-
-                    <a href="{{ url_for('admin.admin_game_accounts') }}" class="pixel-card rounded-xl p-6 block hover:no-underline">
-                        <div class="w-12 h-12 mb-4 bg-gold-400/20 rounded-xl flex items-center justify-center">
-                            <i data-lucide="clipboard-check" class="w-6 h-6 text-gold-400"></i>
-                        </div>
-                        <h3 class="text-lg font-bold mb-2">账号注册申请管理</h3>
-                        <p class="text-cream/60 text-sm">审批注册申请、管理封禁列表</p>
-                        <span class="inline-block mt-4 text-gold-400 text-sm font-medium">进入管理 →</span>
-                    </a>
-
-                    <a href="{{ url_for('admin.admin_game_account_bindings') }}" class="pixel-card rounded-xl p-6 block hover:no-underline">
-                        <div class="w-12 h-12 mb-4 bg-gold-400/20 rounded-xl flex items-center justify-center">
-                            <i data-lucide="gamepad-2" class="w-6 h-6 text-gold-400"></i>
-                        </div>
-                        <h3 class="text-lg font-bold mb-2">游戏账号管理</h3>
-                        <p class="text-cream/60 text-sm">查看和管理用户已绑定的游戏账号</p>
-                        <span class="inline-block mt-4 text-gold-400 text-sm font-medium">进入管理 →</span>
-                    </a>
-
+        <!-- 功能入口 -->
+        <div>
+            {{ section_title(title='管理功能', icon='settings') }}
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+                <a href="{{ url_for('admin.admin_users') }}" class="pixel-card rounded-xl p-6 block hover:no-underline">
+                    <div class="w-12 h-12 mb-4 bg-gold-400/20 rounded-xl flex items-center justify-center">
+                        <i data-lucide="users" class="w-6 h-6 text-gold-400"></i>
                     </div>
+                    <h3 class="text-lg font-bold mb-2">用户管理</h3>
+                    <p class="text-cream/60 text-sm">查看、删除用户，设置管理员权限</p>
+                    <span class="inline-block mt-4 text-gold-400 text-sm font-medium">进入管理 →</span>
+                </a>
+                <a href="{{ url_for('admin.manage_mod_intros') }}" class="pixel-card rounded-xl p-6 block hover:no-underline">
+                    <div class="w-12 h-12 mb-4 bg-gold-400/20 rounded-xl flex items-center justify-center">
+                        <i data-lucide="package" class="w-6 h-6 text-gold-400"></i>
+                    </div>
+                    <h3 class="text-lg font-bold mb-2">模组介绍管理</h3>
+                    <p class="text-cream/60 text-sm">添加、编辑或删除服务器模组介绍</p>
+                    <span class="inline-block mt-4 text-gold-400 text-sm font-medium">进入管理 →</span>
+                </a>
+                <a href="{{ url_for('admin.admin_guides') }}" class="pixel-card rounded-xl p-6 block hover:no-underline">
+                    <div class="w-12 h-12 mb-4 bg-gold-400/20 rounded-xl flex items-center justify-center">
+                        <i data-lucide="book-open" class="w-6 h-6 text-gold-400"></i>
+                    </div>
+                    <h3 class="text-lg font-bold mb-2">服务器指南管理</h3>
+                    <p class="text-cream/60 text-sm">审核、编辑和管理服务器指南</p>
+                    <span class="inline-block mt-4 text-gold-400 text-sm font-medium">进入管理 →</span>
+                </a>
+                <a href="{{ url_for('script.script_page') }}" class="pixel-card rounded-xl p-6 block hover:no-underline">
+                    <div class="w-12 h-12 mb-4 bg-gold-400/20 rounded-xl flex items-center justify-center">
+                        <i data-lucide="terminal" class="w-6 h-6 text-gold-400"></i>
+                    </div>
+                    <h3 class="text-lg font-bold mb-2">终端控制台</h3>
+                    <p class="text-cream/60 text-sm">快捷命令与实时终端</p>
+                    <span class="inline-block mt-4 text-gold-400 text-sm font-medium">进入 →</span>
+                </a>
+                <a href="{{ url_for('admin.admin_update_page') }}" class="pixel-card rounded-xl p-6 block hover:no-underline">
+                    <div class="w-12 h-12 mb-4 bg-gold-400/20 rounded-xl flex items-center justify-center">
+                        <i data-lucide="refresh-cw" class="w-6 h-6 text-gold-400"></i>
+                    </div>
+                    <h3 class="text-lg font-bold mb-2">一键更新</h3>
+                    <p class="text-cream/60 text-sm">从 GitHub 自动获取最新代码并重启服务器</p>
+                    <span class="inline-block mt-4 text-gold-400 text-sm font-medium">进入更新 →</span>
+                </a>
+                <a href="{{ url_for('admin.db_backup_page') }}" class="pixel-card rounded-xl p-6 block hover:no-underline">
+                    <div class="w-12 h-12 mb-4 bg-gold-400/20 rounded-xl flex items-center justify-center">
+                        <i data-lucide="database" class="w-6 h-6 text-gold-400"></i>
+                    </div>
+                    <h3 class="text-lg font-bold mb-2">数据库备份</h3>
+                    <p class="text-cream/60 text-sm">优化数据库、清理日志、一键备份恢复</p>
+                    <span class="inline-block mt-4 text-gold-400 text-sm font-medium">进入管理 →</span>
+                </a>
+                <a href="{{ url_for('admin.admin_logs_page') }}" class="pixel-card rounded-xl p-6 block hover:no-underline">
+                    <div class="w-12 h-12 mb-4 bg-gold-400/20 rounded-xl flex items-center justify-center">
+                        <i data-lucide="scroll-text" class="w-6 h-6 text-gold-400"></i>
+                    </div>
+                    <h3 class="text-lg font-bold mb-2">系统日志</h3>
+                    <p class="text-cream/60 text-sm">实时查看应用运行日志，支持等级筛选</p>
+                    <span class="inline-block mt-4 text-gold-400 text-sm font-medium">查看日志 →</span>
+                </a>
+                <a href="{{ url_for('admin.admin_settings_page') }}" class="pixel-card rounded-xl p-6 block hover:no-underline">
+                    <div class="w-12 h-12 mb-4 bg-gold-400/20 rounded-xl flex items-center justify-center">
+                        <i data-lucide="sliders" class="w-6 h-6 text-gold-400"></i>
+                    </div>
+                    <h3 class="text-lg font-bold mb-2">系统设置</h3>
+                    <p class="text-cream/60 text-sm">在线编辑配置项，修改后立即生效</p>
+                    <span class="inline-block mt-4 text-gold-400 text-sm font-medium">进入设置 →</span>
+                </a>
+                <a href="{{ url_for('public.admin_public_files_page') }}" class="pixel-card rounded-xl p-6 block hover:no-underline">
+                    <div class="w-12 h-12 mb-4 bg-gold-400/20 rounded-xl flex items-center justify-center">
+                        <i data-lucide="folder-open" class="w-6 h-6 text-gold-400"></i>
+                    </div>
+                    <h3 class="text-lg font-bold mb-2">公开文件管理</h3>
+                    <p class="text-cream/60 text-sm">将本地文件或目录对外公开访问</p>
+                    <span class="inline-block mt-4 text-gold-400 text-sm font-medium">进入管理 →</span>
+                </a>
+                <a href="{{ url_for('admin.admin_broadcast') }}" class="pixel-card rounded-xl p-6 block hover:no-underline">
+                    <div class="w-12 h-12 mb-4 bg-gold-400/20 rounded-xl flex items-center justify-center">
+                        <i data-lucide="megaphone" class="w-6 h-6 text-gold-400"></i>
+                    </div>
+                    <h3 class="text-lg font-bold mb-2">广播邮件</h3>
+                    <p class="text-cream/60 text-sm">向全体用户发送富文本格式的邮件广播</p>
+                    <span class="inline-block mt-4 text-gold-400 text-sm font-medium">发送广播 →</span>
+                </a>
+                <a href="{{ url_for('admin.admin_discussion') }}" class="pixel-card rounded-xl p-6 block hover:no-underline">
+                    <div class="w-12 h-12 mb-4 bg-gold-400/20 rounded-xl flex items-center justify-center">
+                        <i data-lucide="message-square" class="w-6 h-6 text-gold-400"></i>
+                    </div>
+                    <h3 class="text-lg font-bold mb-2">讨论管理</h3>
+                    <p class="text-cream/60 text-sm">管理帖子、分类，置顶/锁定/删除</p>
+                    <span class="inline-block mt-4 text-gold-400 text-sm font-medium">进入管理 →</span>
+                </a>
+                <a href="{{ url_for('admin.admin_music_list') }}" class="pixel-card rounded-xl p-6 block hover:no-underline">
+                    <div class="w-12 h-12 mb-4 bg-gold-400/20 rounded-xl flex items-center justify-center">
+                        <i data-lucide="music" class="w-6 h-6 text-gold-400"></i>
+                    </div>
+                    <h3 class="text-lg font-bold mb-2">大喇叭音频管理</h3>
+                    <p class="text-cream/60 text-sm">查看全部音频，下架违规内容</p>
+                    <span class="inline-block mt-4 text-gold-400 text-sm font-medium">进入管理 →</span>
+                </a>
+                <a href="{{ url_for('admin.admin_backgrounds_page') }}" class="pixel-card rounded-xl p-6 block hover:no-underline">
+                    <div class="w-12 h-12 mb-4 bg-gold-400/20 rounded-xl flex items-center justify-center">
+                        <i data-lucide="image" class="w-6 h-6 text-gold-400"></i>
+                    </div>
+                    <h3 class="text-lg font-bold mb-2">背景图片管理</h3>
+                    <p class="text-cream/60 text-sm">审核用户上传的背景图片，启用/停用</p>
+                    <span class="inline-block mt-4 text-gold-400 text-sm font-medium">进入管理 →</span>
+                </a>
+                <a href="{{ url_for('admin.admin_game_accounts') }}" class="pixel-card rounded-xl p-6 block hover:no-underline">
+                    <div class="w-12 h-12 mb-4 bg-gold-400/20 rounded-xl flex items-center justify-center">
+                        <i data-lucide="clipboard-check" class="w-6 h-6 text-gold-400"></i>
+                    </div>
+                    <h3 class="text-lg font-bold mb-2">账号注册申请管理</h3>
+                    <p class="text-cream/60 text-sm">审批注册申请、管理封禁列表</p>
+                    <span class="inline-block mt-4 text-gold-400 text-sm font-medium">进入管理 →</span>
+                </a>
+                <a href="{{ url_for('admin.admin_game_account_bindings') }}" class="pixel-card rounded-xl p-6 block hover:no-underline">
+                    <div class="w-12 h-12 mb-4 bg-gold-400/20 rounded-xl flex items-center justify-center">
+                        <i data-lucide="gamepad-2" class="w-6 h-6 text-gold-400"></i>
+                    </div>
+                    <h3 class="text-lg font-bold mb-2">游戏账号管理</h3>
+                    <p class="text-cream/60 text-sm">查看和管理用户已绑定的游戏账号</p>
+                    <span class="inline-block mt-4 text-gold-400 text-sm font-medium">进入管理 →</span>
+                </a>
             </div>
         </div>
-    </section>
+    </div>
+</section>
 {% endblock %}

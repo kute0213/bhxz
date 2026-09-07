@@ -1,8 +1,9 @@
 """文档页面路由。"""
 
 import os
-from flask import render_template, jsonify, abort
+from flask import jsonify, abort
 from core.auth import get_current_user
+from core.helpers import render_page
 from routes.docs import docs_bp
 
 # docs/ 目录位于项目根目录下
@@ -15,7 +16,7 @@ DOCS_DIR = os.path.join(
 @docs_bp.route('/docs')
 def docs_index():
     """文档首页"""
-    return render_template('docs.html', user=get_current_user())
+    return render_page('docs.html')
 
 
 @docs_bp.route('/docs/api/list')

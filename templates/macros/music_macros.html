@@ -11,7 +11,7 @@
    - music_audio_player(music_id)      自定义音频播放器（进度/倍速/音量，HLS 播放）
    - music_player_assets()             播放器所需脚本（hls.js + music_player.js）
    使用 music_audio_player 的页面，须在 extra_script 块中调用 music_player_assets()。
-   样式见 static/css/base.css 的 .music-player，JS 见 static/js/music_player.js。
+   样式见 static/css/base.css 的 .music-player，JS 见 static/js/pages/music_player.js。
    ============================================================ #}
 
 {% macro music_status_badge(status) -%}
@@ -113,5 +113,5 @@
 {# 播放器所需脚本：hls.js + 播放器逻辑。使用 music_audio_player 的页面在 extra_script 中调用。 #}
 {% macro music_player_assets() -%}
 <script src="{{ url_for('static', filename='lib/hls/hls.min.js', v='1') }}"></script>
-<script src="{{ url_for('static', filename='js/music_player.js', v='3') }}"></script>
+<script src="{{ url_for('static', filename='js/pages/music_player.js', v='3') }}"></script>
 {%- endmacro %}

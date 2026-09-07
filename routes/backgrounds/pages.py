@@ -5,9 +5,10 @@
 
 import os
 
-from flask import render_template, request, jsonify, send_file, abort
+from flask import request, jsonify, send_file, abort
 
 from core.auth import get_current_user, login_required
+from core.helpers import render_page
 from routes.backgrounds import backgrounds_bp
 from services import background_service
 from services.ip import get_client_ip
@@ -23,9 +24,8 @@ def background_list_page():
     my_bgs = []
     if user:
         my_bgs = background_service.get_backgrounds(user_id=user['id'])
-    return render_template(
+    return render_page(
         'backgrounds/list.html',
-        user=user,
         active_bgs=active_bgs,
         my_bgs=my_bgs,
     )
@@ -35,10 +35,8 @@ def background_list_page():
 @login_required
 def upload_background_page():
     """背景图片上传页。"""
-    user = get_current_user()
-    return render_template(
+    return render_page(
         'backgrounds/upload.html',
-        user=user,
     )
 
 

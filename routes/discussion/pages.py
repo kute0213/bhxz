@@ -3,9 +3,10 @@
 薄层：仅负责 HTTP 请求解析/响应构造，业务逻辑委托给 services。
 """
 
-from flask import render_template, request, redirect, url_for, flash, abort
+from flask import request, redirect, url_for, flash, abort
 
 from core.auth import login_required, get_current_user
+from core.helpers import render_page
 from core.db import get_db
 from routes.discussion import discussion_bp
 from config import get_config_value
@@ -18,7 +19,6 @@ from services.discussion_service import (
 
 @discussion_bp.route('/discussion', endpoint='list')
 def list_view():
-    user = get_current_user()
     categories = get_categories()
     category_id = request.args.get('category', type=int)
     page = request.args.get('page', 1, type=int)
@@ -28,8 +28,8 @@ def list_view():
     cat_dict = get_category_dict()
     current_category_name = cat_dict.get(category_id, '') if category_id else ''
 
-    return render_template(
-        'discussion/list.html', user=user, topics=topics,
+    return render_page(
+        'discussion/list.html', topics=topics,
         categories=categories, category_id=category_id,
         current_category_name=current_category_name,
         page=page, total_pages=total_pages, total=total,
@@ -56,26 +56,25 @@ def create():
         if success:
             return redirect(url_for('discussion.list'))
         flash(message, 'error')
-        return render_template('discussion/create.html', user=user, categories=categories,
-                               title=request.form.get('title', ''),
-                               content=request.form.get('content', ''),
-                               category_id=request.form.get('category_id', type=int),
-                               tags=request.form.get('tags', ''))
+        return render_page('discussion/create.html', categories=categories,
+                           title=request.form.get('title', ''),
+                           content=request.form.get('content', ''),
+                           category_id=request.form.get('category_id', type=int),
+                           tags=request.form.get('tags', ''))
 
-    return render_template('discussion/create.html', user=user, categories=categories)
+    return render_page('discussion/create.html', categories=categories)
 
 
 @discussion_bp.route('/discussion/<int:topic_id>')
 def detail(topic_id):
-    user = get_current_user()
     result = get_topic_detail(topic_id)
     if not result:
         abort(404)
 
     topic, total_replies, last_reply_id = result
 
-    return render_template(
-        'discussion/detail.html', user=user, topic=topic,
+    return render_page(
+        'discussion/detail.html', topic=topic,
         total_replies=total_replies, last_reply_id=last_reply_id,
         discussion_refresh_interval=get_config_value('DISCUSSION_REFRESH_INTERVAL', 5),
         replies_per_page=get_config_value('REPLIES_PER_PAGE', 10),
@@ -115,12 +114,12 @@ def edit(topic_id):
         if success:
             return redirect(url_for('discussion.detail', topic_id=topic_id))
         flash(message, 'error')
-        return render_template('discussion/create.html', user=user, categories=categories,
-                               topic=topic, title=request.form.get('title', ''),
-                               content=request.form.get('content', ''),
-                               category_id=request.form.get('category_id', type=int),
-                               tags=request.form.get('tags', ''), editing=True)
+        return render_page('discussion/create.html', categories=categories,
+                           topic=topic, title=request.form.get('title', ''),
+                           content=request.form.get('content', ''),
+                           category_id=request.form.get('category_id', type=int),
+                           tags=request.form.get('tags', ''), editing=True)
 
-    return render_template('discussion/create.html', user=user, categories=categories,
+    return render_page('discussion/create.html', categories=categories,
                            topic=topic, title=topic['title'], content=topic['content'],
                            category_id=topic['category_id'], tags=topic['tags'], editing=True)

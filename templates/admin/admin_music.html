@@ -1,33 +1,26 @@
 {% extends "base.html" %}
 {% from "macros/music_macros.html" import music_status_badge, music_copy_link_button, music_mp3_link_button, music_duration_button, music_tags_list, music_audio_player, music_player_assets %}
+{% from 'macros/page_header.html' import page_header, section_title %}
+{% from 'macros/data_table.html' import data_table, empty_state %}
 {% block title %}大喇叭音频管理{% endblock %}
 {% block content %}
 <section class="page-container py-12">
     <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="flex flex-wrap items-center justify-between gap-3 mb-8">
-            <div>
-                <a href="{{ url_for('admin.admin_page') }}" class="text-gold-400 hover:text-gold-300 text-sm mb-2 inline-block">
-                    <i data-lucide="arrow-left" class="w-4 h-4 inline mr-1"></i>返回管理中心
-                </a>
-                <h1 class="text-xl sm:text-2xl font-bold">大喇叭音频管理</h1>
-                <p class="text-cream/60 text-sm mt-1">共 {{ musics|length }} 个音频，{{ pending_musics|length }} 个待审核</p>
-            </div>
-            <a href="{{ url_for('main.music_page') }}" class="btn-secondary px-4 py-2 rounded-lg text-sm">
-                <i data-lucide="music" class="w-4 h-4 inline mr-1"></i>前往大喇叭音频板块
-            </a>
-        </div>
-
-        
+        {{ page_header(
+            title='大喇叭音频管理',
+            subtitle='共 ' ~ (musics|length) ~ ' 个音频，' ~ (pending_musics|length) ~ ' 个待审核',
+            back_url=url_for('admin.admin_page'),
+            back_text='返回管理中心',
+            actions=[(url_for('main.music_page'), 'music', '前往大喇叭音频板块', 'btn-secondary')]
+        ) }}
 
         <!-- 待审核队列 -->
         <div class="mb-10">
-            <h2 class="text-lg font-bold mb-4 flex items-center gap-2">
-                <i data-lucide="clock" class="w-5 h-5 text-gold-400"></i>
-                待审核公开申请
-                {% if pending_musics %}
-                <span class="px-2 py-0.5 rounded-full text-xs font-bold bg-yellow-500/20 text-yellow-300 border border-yellow-500/30">{{ pending_musics|length }}</span>
-                {% endif %}
-            </h2>
+            {{ section_title(
+                title='待审核公开申请',
+                icon='clock',
+                extra='<span class="px-2 py-0.5 rounded-full text-xs font-bold bg-yellow-500/20 text-yellow-300 border border-yellow-500/30">' ~ (pending_musics|length) ~ '</span>' if pending_musics else ''
+            ) }}
             {% if pending_musics %}
             <div class="space-y-3">
                 {% for m in pending_musics %}
@@ -52,8 +45,7 @@
                             <form method="POST" action="{{ url_for('admin.admin_music_review', music_id=m.id) }}" class="inline">
                                 {{ csrf_field() }}
                                 <input type="hidden" name="action" value="approve">
-                                <button type="submit"
-                                        class="px-3 py-2 rounded-lg text-xs border border-green-500/30 text-green-300 hover:bg-green-500/10 transition-colors flex items-center gap-1.5">
+                                <button type="submit" class="px-3 py-2 rounded-lg text-xs border border-green-500/30 text-green-300 hover:bg-green-500/10 transition-colors flex items-center gap-1.5">
                                     <i data-lucide="check" class="w-3.5 h-3.5"></i>通过
                                 </button>
                             </form>
@@ -61,88 +53,58 @@
                                   onsubmit="return confirm('确定驳回此公开申请吗？驳回后音频将自动转为私有，用户可重新申请公开或删除。')">
                                 {{ csrf_field() }}
                                 <input type="hidden" name="action" value="reject">
-                                <button type="submit"
-                                        class="px-3 py-2 rounded-lg text-xs border border-red-500/30 text-red-300 hover:bg-red-500/10 transition-colors flex items-center gap-1.5">
+                                <button type="submit" class="px-3 py-2 rounded-lg text-xs border border-red-500/30 text-red-300 hover:bg-red-500/10 transition-colors flex items-center gap-1.5">
                                     <i data-lucide="x" class="w-3.5 h-3.5"></i>驳回
                                 </button>
                             </form>
                         </div>
                     </div>
-                    <div class="mt-3">
-                        {{ music_audio_player(m.id) }}
-                    </div>
+                    <div class="mt-3">{{ music_audio_player(m.id) }}</div>
                 </div>
                 {% endfor %}
             </div>
             {% else %}
-            <div class="pixel-card rounded-xl p-8 text-center">
-                <i data-lucide="check-circle" class="w-8 h-8 mx-auto text-cream/20 mb-2"></i>
-                <p class="text-cream/50">暂无待审核的公开申请</p>
-            </div>
+            {{ empty_state('暂无待审核的公开申请', 'check-circle') }}
             {% endif %}
         </div>
 
         <!-- 全部音频 -->
         {% if musics %}
-        <div class="pixel-card rounded-xl overflow-hidden">
-            <div class="overflow-x-auto">
-                <table class="w-full text-sm">
-                    <thead>
-                        <tr class="border-b border-forest-700/50">
-                            <th class="text-left px-4 py-3 text-cream/60 font-medium">ID</th>
-                            <th class="text-left px-4 py-3 text-cream/60 font-medium">音频名称</th>
-                            <th class="text-left px-4 py-3 text-cream/60 font-medium">上传者</th>
-                            <th class="text-left px-4 py-3 text-cream/60 font-medium">标签</th>
-                            <th class="text-center px-4 py-3 text-cream/60 font-medium">状态</th>
-                            <th class="text-left px-4 py-3 text-cream/60 font-medium">上传时间</th>
-                            <th class="text-right px-4 py-3 text-cream/60 font-medium">操作</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for m in musics %}
-                        <tr class="border-b border-forest-700/30 hover:bg-forest-800/30">
-                            <td class="px-4 py-3 text-cream/60">{{ m.id }}</td>
-                            <td class="px-4 py-3">
-                                <div class="text-cream/90">{{ m.title[:40] }}{% if m.title|length > 40 %}...{% endif %}</div>
-                                <div class="text-xs text-cream/50 mt-0.5">{{ request.host_url.rstrip('/') }}/music/{{ m.id }}.m3u8</div>
-                            </td>
-                            <td class="px-4 py-3 text-cream/70">{{ m.username or '未知' }}</td>
-                            <td class="px-4 py-3">
-                                <div class="tags-display flex flex-wrap gap-1 max-w-56">{{ music_tags_list(m.tags) }}</div>
-                            </td>
-                            <td class="px-4 py-3 text-center">
-                                {{ music_status_badge(m.status) }}
-                            </td>
-                            <td class="px-4 py-3 text-cream/60">{{ m.created_at[:10] }}</td>
-                            <td class="px-4 py-3">
-                                <div class="flex items-center justify-end gap-2">
-                                    <button type="button"
-                                            class="edit-tags-btn px-2 py-1 rounded text-xs border border-cream/20 text-cream/70 hover:text-cream hover:border-cream/40 transition-colors flex items-center gap-1"
-                                            data-id="{{ m.id }}" data-tags="{{ m.tags or '' }}" title="编辑标签">
-                                        <i data-lucide="tags" class="w-3 h-3"></i>标签
-                                    </button>
-                                    <form method="POST" action="{{ url_for('admin.admin_music_delete', music_id=m.id) }}" class="inline"
-                                          onsubmit="return confirm('确定要下架（删除）此音频吗？将同步删除数据库记录和音频文件，无法恢复。')">
-                                        {{ csrf_field() }}
-                                        <button type="submit"
-                                                class="px-2 py-1 rounded text-xs border border-red-500/30 text-red-300 hover:bg-red-500/10 transition-colors flex items-center gap-1"
-                                                title="下架（删除）">
-                                            <i data-lucide="trash-2" class="w-3 h-3"></i>下架
-                                        </button>
-                                    </form>
-                                </div>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
+        {% call data_table(headers=[('ID', 'left'), ('音频名称', 'left'), ('上传者', 'left'), ('标签', 'left'), ('状态', 'center'), ('上传时间', 'left'), ('操作', 'right')]) %}
+            {% for m in musics %}
+            <tr class="border-b border-forest-700/30 hover:bg-forest-800/30">
+                <td class="px-4 py-3 text-cream/60">{{ m.id }}</td>
+                <td class="px-4 py-3">
+                    <div class="text-cream/90">{{ m.title[:40] }}{% if m.title|length > 40 %}...{% endif %}</div>
+                    <div class="text-xs text-cream/50 mt-0.5">{{ request.host_url.rstrip('/') }}/music/{{ m.id }}.m3u8</div>
+                </td>
+                <td class="px-4 py-3 text-cream/70">{{ m.username or '未知' }}</td>
+                <td class="px-4 py-3">
+                    <div class="tags-display flex flex-wrap gap-1 max-w-56">{{ music_tags_list(m.tags) }}</div>
+                </td>
+                <td class="px-4 py-3 text-center">{{ music_status_badge(m.status) }}</td>
+                <td class="px-4 py-3 text-cream/60">{{ m.created_at[:10] }}</td>
+                <td class="px-4 py-3">
+                    <div class="flex items-center justify-end gap-2">
+                        <button type="button"
+                                class="edit-tags-btn px-2 py-1 rounded text-xs border border-cream/20 text-cream/70 hover:text-cream hover:border-cream/40 transition-colors flex items-center gap-1"
+                                data-id="{{ m.id }}" data-tags="{{ m.tags or '' }}" title="编辑标签">
+                            <i data-lucide="tags" class="w-3 h-3"></i>标签
+                        </button>
+                        <form method="POST" action="{{ url_for('admin.admin_music_delete', music_id=m.id) }}" class="inline"
+                              onsubmit="return confirm('确定要下架（删除）此音频吗？将同步删除数据库记录和音频文件，无法恢复。')">
+                            {{ csrf_field() }}
+                            <button type="submit" class="px-2 py-1 rounded text-xs border border-red-500/30 text-red-300 hover:bg-red-500/10 transition-colors flex items-center gap-1" title="下架（删除）">
+                                <i data-lucide="trash-2" class="w-3 h-3"></i>下架
+                            </button>
+                        </form>
+                    </div>
+                </td>
+            </tr>
+            {% endfor %}
+        {% endcall %}
         {% else %}
-        <div class="pixel-card rounded-xl p-12 text-center">
-            <i data-lucide="music" class="w-12 h-12 mx-auto text-cream/20 mb-4"></i>
-            <p class="text-cream/50">暂无音频</p>
-        </div>
+        {{ empty_state('暂无音频', 'music') }}
         {% endif %}
     </div>
 </section>

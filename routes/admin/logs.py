@@ -8,9 +8,10 @@ import json
 import queue
 import time
 
-from flask import render_template, request, jsonify, Response, stream_with_context
+from flask import request, jsonify, Response, stream_with_context
 
 from core.auth import admin_required, get_current_user
+from core.helpers import render_page
 from core.logger import (
     get_log_buffer, get_log_buffer_tail, clear_log_buffer,
     register_monitor_client, unregister_monitor_client,
@@ -24,7 +25,7 @@ LOG_LEVELS = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
 @admin_required
 def admin_logs_page():
     """日志查看页面。"""
-    return render_template('admin/admin_logs.html', user=get_current_user())
+    return render_page('admin/admin_logs.html')
 
 
 @admin_bp.route('/admin/api/logs')

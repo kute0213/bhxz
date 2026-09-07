@@ -4,9 +4,10 @@
 """
 
 import re
-from flask import request, jsonify, render_template, abort, flash, redirect, url_for
+from flask import request, jsonify, abort, flash, redirect, url_for
 
 from core.auth import admin_required, get_current_user
+from core.helpers import render_page
 from routes.admin import admin_bp
 from config import SETTINGS_REGISTRY, get_config_value
 from core.logger import log
@@ -40,7 +41,7 @@ def _parse_select_options(description: str) -> list:
 @admin_required
 def admin_settings_page():
     """系统设置页面。"""
-    return render_template('admin/admin_settings.html', user=get_current_user())
+    return render_page('admin/admin_settings.html')
 
 
 @admin_bp.route('/admin/api/settings')

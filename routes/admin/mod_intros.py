@@ -2,9 +2,10 @@
 
 import datetime
 
-from flask import render_template, redirect, url_for, flash, abort, request
+from flask import redirect, url_for, flash, abort, request
 
 from core.auth import admin_required, get_current_user
+from core.helpers import render_page
 from core.db import get_db
 from routes.admin import admin_bp
 
@@ -23,7 +24,7 @@ def manage_mod_intros():
     finally:
         conn.close()
 
-    return render_template('admin/admin_mod_intros.html', user=user, mod_intros=intros)
+    return render_page('admin/admin_mod_intros.html', mod_intros=intros)
 
 
 @admin_bp.route('/admin/mod-intros/add', methods=['POST'])

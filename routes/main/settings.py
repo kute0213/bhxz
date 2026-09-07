@@ -3,8 +3,9 @@
 薄层：仅负责 HTTP 请求解析/响应构造，业务逻辑委托给 services。
 """
 
-from flask import render_template, request, redirect, url_for, session, flash
+from flask import request, redirect, url_for, session, flash
 from core.auth import login_required, get_current_user
+from core.helpers import render_page
 from services.email import normalize_email
 from services.user_service import (
     change_username as svc_change_username,
@@ -23,8 +24,7 @@ from routes.main import main_bp
 @main_bp.route('/settings', methods=['GET', 'POST'])
 @login_required
 def settings():
-    user = get_current_user()
-    return render_template('settings.html', user=user, tab=request.args.get('tab', 'username'))
+    return render_page('settings.html', tab=request.args.get('tab', 'username'))
 
 
 @main_bp.route('/settings/username', methods=['POST'])

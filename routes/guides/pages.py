@@ -1,9 +1,10 @@
 """服务器指南公开页面：列表、详情、创建、编辑。"""
 
-from flask import render_template, abort, request, redirect, url_for, flash
+from flask import abort, request, redirect, url_for, flash
 from datetime import datetime
 
 from core.auth import get_current_user, login_required
+from core.helpers import render_page
 from core.db import get_db
 from services.captcha import captcha_service
 from routes.guides import guides_bp
@@ -41,7 +42,7 @@ def guide_list():
     finally:
         conn.close()
 
-    return render_template('guides/index.html', user=user, guides=guides, my_mode=bool(user and request.args.get('my')))
+    return render_page('guides/index.html', guides=guides, my_mode=bool(user and request.args.get('my')))
 
 
 @guides_bp.route('/guides/<int:guide_id>')
@@ -77,7 +78,7 @@ def guide_detail(guide_id):
         abort(404)
 
     guide = dict(row)
-    return render_template('guides/detail.html', user=user, guide=guide)
+    return render_page('guides/detail.html', guide=guide)
 
 
 @guides_bp.route('/guides/create', methods=['GET', 'POST'])
@@ -93,14 +94,14 @@ def guide_create():
 
         if not title or not content:
             flash('标题和内容不能为空', 'error')
-            return render_template('guides/form.html', user=user, guide=None)
+            return render_page('guides/form.html', guide=None)
 
         # 验证图形验证码
         captcha_input = (request.form.get('captcha') or '').strip()
         captcha_id = (request.form.get('captcha_id') or '').strip()
         if not captcha_service.verify(captcha_id, captcha_input):
             flash('验证码错误或已过期', 'error')
-            return render_template('guides/form.html', user=user, guide=None)
+            return render_page('guides/form.html', guide=None)
 
         from routes.guides.api import _slugify, _ensure_unique_slug
         conn = get_db()
@@ -124,7 +125,7 @@ def guide_create():
         finally:
             conn.close()
 
-    return render_template('guides/form.html', user=user, guide=None)
+    return render_page('guides/form.html', guide=None)
 
 
 @guides_bp.route('/guides/<int:guide_id>/edit', methods=['GET', 'POST'])
@@ -157,14 +158,14 @@ def guide_edit(guide_id):
 
         if not title or not content:
             flash('标题和内容不能为空', 'error')
-            return render_template('guides/form.html', user=user, guide=guide)
+            return render_page('guides/form.html', guide=guide)
 
         # 验证图形验证码
         captcha_input = (request.form.get('captcha') or '').strip()
         captcha_id = (request.form.get('captcha_id') or '').strip()
         if not captcha_service.verify(captcha_id, captcha_input):
             flash('验证码错误或已过期', 'error')
-            return render_template('guides/form.html', user=user, guide=guide)
+            return render_page('guides/form.html', guide=guide)
 
         from routes.guides.api import _slugify, _ensure_unique_slug
         conn = get_db()
@@ -189,4 +190,4 @@ def guide_edit(guide_id):
         finally:
             conn.close()
 
-    return render_template('guides/form.html', user=user, guide=guide)
+    return render_page('guides/form.html', guide=guide)

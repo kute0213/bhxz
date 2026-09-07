@@ -1,0 +1,53 @@
+{#
+  数据表格宏：统一的表格容器 + 表头 + 数据行 + 空状态
+  用法:
+    {% from 'macros/data_table.html' import data_table, empty_state %}
+
+    {{ data_table(
+        headers=[('ID', 'left'), ('标题', 'left'), ('状态', 'center'), ('操作', 'right')],
+        rows=items,
+        empty_msg='暂无数据',
+        empty_icon='inbox',
+        render_row=lambda item: (
+            '<td>...</td>',
+            '<td>...</td>',
+        )
+    ) }}
+
+  或者使用块模式：
+    {% call data_table(headers=[('标题', 'left')], empty_msg='暂无数据') %}
+        {% for item in items %}
+        <tr>...</tr>
+        {% endfor %}
+    {% endcall %}
+#}
+
+{% macro data_table(headers, empty_msg='暂无数据', empty_icon='inbox') %}
+<div class="pixel-card rounded-xl overflow-hidden">
+    <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+            <thead>
+                <tr class="border-b border-forest-700/50">
+                    {% for header, align in headers %}
+                    <th class="text-{{ align }} px-4 py-3 text-cream/60 font-medium">{{ header }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {{ caller() }}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endmacro %}
+
+{#
+  空状态展示
+  用法: {{ empty_state('暂无音频', 'music') }}
+#}
+{% macro empty_state(message, icon='inbox') %}
+<div class="pixel-card rounded-xl p-12 text-center">
+    <i data-lucide="{{ icon }}" class="w-12 h-12 mx-auto text-cream/20 mb-4"></i>
+    <p class="text-cream/50">{{ message }}</p>
+</div>
+{% endmacro %}

@@ -310,8 +310,8 @@
         </div>
     </div>
 
-    <script src="{{ url_for('static', filename='js/base.js', v='19') }}"></script>
-    <script src="{{ url_for('static', filename='js/main.js', v='11') }}"></script>
+    <script src="{{ url_for('static', filename='js/core/base.js', v='19') }}"></script>
+    <script src="{{ url_for('static', filename='js/pages/main.js', v='11') }}"></script>
     {% if login_welcome_username %}
     <script>
         Toast.success({{ ('欢迎来到滨海小镇，' ~ login_welcome_username)|tojson }});

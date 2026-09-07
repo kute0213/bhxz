@@ -3,7 +3,7 @@
        {% from "macros/markdown_editor.html" import markdown_editor %}
        {{ markdown_editor(name='content', value=guide.content if guide else '', editor_id='md-editor') }}
    并在页面末尾引入共享脚本：
-       <script src="{{ url_for('static', filename='js/markdown-editor.js', v='1') }}"></script>
+       <script src="{{ url_for('static', filename='js/pages/markdown-editor.js', v='1') }}"></script>
    可选参数：
        name         - textarea 的 name 属性（表单提交字段名）
        value        - 初始内容

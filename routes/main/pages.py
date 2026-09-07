@@ -4,8 +4,8 @@
 """
 
 import os
-from flask import render_template, send_from_directory, current_app, abort
-from core.auth import get_current_user
+from flask import send_from_directory, current_app, abort
+from core.helpers import render_page
 from core.db import get_db
 from config import get_config_value, APP_ROOT
 from routes.main import main_bp
@@ -13,7 +13,6 @@ from routes.main import main_bp
 
 @main_bp.route('/')
 def home():
-    user = get_current_user()
     conn = get_db()
     try:
         mod_intros = conn.execute(
@@ -22,8 +21,8 @@ def home():
         mod_intros = [dict(r) for r in mod_intros]
     finally:
         conn.close()
-    return render_template(
-        'index.html', user=user, mod_intros=mod_intros,
+    return render_page(
+        'index.html', mod_intros=mod_intros,
         map_url=get_config_value('MAP_URL', 'https://map.bhxz.tw.kg'),
         qq_group_url=get_config_value('QQ_GROUP_URL', ''),
     )
@@ -55,5 +54,4 @@ def favicon_ico():
 @main_bp.route('/server-status')
 def server_status():
     """服务器状态页面：展示在线玩家列表、人数等实时信息。"""
-    user = get_current_user()
-    return render_template('server_status.html', user=user)
+    return render_page('server_status.html')

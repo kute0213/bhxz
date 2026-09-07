@@ -1,0 +1,56 @@
+{#
+  页面头部宏：统一的标题 + 副标题 + 返回链接 + 操作按钮模式
+  用法:
+    {{ page_header(title='用户管理', subtitle='共 N 位用户', back_url=url_for('admin.admin_page'), back_text='返回管理中心') }}
+    {{ page_header(title='服务器指南', subtitle='指南列表', actions=[(url_for('admin.admin_guide_create'), 'plus', '新建指南', 'btn-primary')]) }}
+#}
+{% macro page_header(title, subtitle='', back_url='', back_text='', actions=[]) %}
+<div class="flex flex-wrap items-center justify-between gap-3 mb-8">
+    <div>
+        {% if back_url %}
+        <a href="{{ back_url }}" class="text-gold-400 hover:text-gold-300 text-sm mb-2 inline-block">
+            <i data-lucide="arrow-left" class="w-4 h-4 inline mr-1"></i>{{ back_text or '返回' }}
+        </a>
+        {% endif %}
+        <h1 class="text-xl sm:text-2xl font-bold">{{ title }}</h1>
+        {% if subtitle %}
+        <p class="text-cream/60 text-sm mt-1">{{ subtitle }}</p>
+        {% endif %}
+    </div>
+    {% if actions %}
+    <div class="flex items-center gap-3">
+        {% for url, icon, text, cls in actions %}
+        <a href="{{ url }}" class="{{ cls }} px-4 py-2 rounded-lg text-sm inline-flex items-center gap-2">
+            {% if icon %}<i data-lucide="{{ icon }}" class="w-4 h-4"></i>{% endif %}
+            {{ text }}
+        </a>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+{% endmacro %}
+
+{#
+  居中页面头部（无返回链接，用于非管理页面）
+  用法: {{ page_header_center(title='管理中心', subtitle='集中管理服务器的各项功能') }}
+#}
+{% macro page_header_center(title, subtitle='') %}
+<div class="text-center mb-10 sm:mb-12">
+    <h1 class="text-2xl sm:text-3xl font-bold mb-3">{{ title }}</h1>
+    {% if subtitle %}
+    <p class="text-cream/60 text-sm sm:text-base">{{ subtitle }}</p>
+    {% endif %}
+</div>
+{% endmacro %}
+
+{#
+  带图标的区块标题
+  用法: {{ section_title(title='数据统计', icon='bar-chart-2') }}
+#}
+{% macro section_title(title, icon='', extra='') %}
+<h2 class="text-lg font-bold mb-4 flex items-center gap-2">
+    {% if icon %}<i data-lucide="{{ icon }}" class="w-5 h-5 text-gold-400"></i>{% endif %}
+    {{ title }}
+    {% if extra %}{{ extra }}{% endif %}
+</h2>
+{% endmacro %}
