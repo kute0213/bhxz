@@ -62,39 +62,131 @@ def api_server_status():
     })
 
 
+def _wmic_temperature(temperature_class):
+    """通过 WMI 获取温度，返回摄氏度或 None。temperature_class 如 'MSAcpi_ThermalZoneTemperature'。"""
+    import subprocess
+    # 用 CurrentTemperature 或 CurrentReading 两种字段名
+    if temperature_class == 'MSAcpi_ThermalZoneTemperature':
+        field = 'CurrentTemperature'
+    else:
+        field = 'CurrentReading'
+    result = subprocess.run(
+        ['wmic', '/namespace:\\\\root\\wmi', 'path', temperature_class, 'get', field],
+        capture_output=True, text=True, timeout=5
+    )
+    lines = [l.strip() for l in result.stdout.strip().splitlines() if l.strip()]
+    # 跳过表头，取第一个数值
+    for line in lines:
+        if line.lower() == field.lower():
+            continue
+        try:
+            val = int(line)
+            # 单位是 0.1 开尔文 → 摄氏度
+            celsius = val / 10.0 - 273.15
+            if 0 < celsius < 150:  # 合理范围校验
+                return round(celsius, 1)
+        except (ValueError, TypeError):
+            continue
+    return None
+
+
+def _powershell_temperature():
+    """通过 PowerShell 获取 MSAcpi_ThermalZoneTemperature，返回摄氏度或 None。"""
+    import subprocess
+    script = (
+        'Get-CimInstance -Namespace root/wmi -ClassName MSAcpi_ThermalZoneTemperature '
+        '| Select-Object -ExpandProperty CurrentTemperature'
+    )
+    result = subprocess.run(
+        ['powershell', '-NoProfile', '-Command', script],
+        capture_output=True, text=True, timeout=5
+    )
+    if result.returncode == 0:
+        for line in result.stdout.strip().splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                val = int(line)
+                celsius = val / 10.0 - 273.15
+                if 0 < celsius < 150:
+                    return round(celsius, 1)
+            except (ValueError, TypeError):
+                continue
+    return None
+
+
 def _get_cpu_temperature(psutil, platform):
     """跨平台获取 CPU 温度，返回摄氏度或 None。"""
-    # 1. psutil 原生传感器（Linux）
+    system = platform.system()
+
+    # 1. psutil 原生传感器（Linux / WSL）
     try:
         temps = psutil.sensors_temperatures()
         if temps:
-            # 优先取 coretemp（Intel），其次 k10temp（AMD），最后任意第一个
-            for key in ('coretemp', 'k10temp', 'cpu_thermal', 'acpitz'):
+            # 优先取 coretemp（Intel），其次 k10temp（AMD），然后常见名称
+            for key in ('coretemp', 'k10temp', 'cpu_thermal', 'acpitz', 'cpu-thermal', 'soc-thermal'):
                 if key in temps:
                     return round(temps[key][0].current, 1)
-            # 兜底：取第一个传感器
+            # 兜底：取第一个非空传感器
             for key in temps:
-                return round(temps[key][0].current, 1)
+                entries = temps[key]
+                if entries:
+                    return round(entries[0].current, 1)
     except Exception:
         pass
 
-    # 2. Windows — 通过 WMI 获取
-    if platform.system() == 'Windows':
+    # 2. Windows — 多策略获取
+    if system == 'Windows':
+        # 2a. WMI MSAcpi_ThermalZoneTemperature（Windows 10 最可靠）
+        try:
+            val = _wmic_temperature('MSAcpi_ThermalZoneTemperature')
+            if val is not None:
+                return val
+        except Exception:
+            pass
+
+        # 2b. WMI Win32_TemperatureProbe（旧版兼容）
+        try:
+            val = _wmic_temperature('Win32_TemperatureProbe')
+            if val is not None:
+                return val
+        except Exception:
+            pass
+
+        # 2c. PowerShell 兜底
+        try:
+            val = _powershell_temperature()
+            if val is not None:
+                return val
+        except Exception:
+            pass
+
+        # 2d. 最后尝试: wmic /namespace 旧语法
         try:
             import subprocess
             result = subprocess.run(
-                ['wmic', 'path', 'Win32_TemperatureProbe', 'get', 'CurrentReading'],
+                ['wmic', '/namespace:\\\\root\\wmi', 'path', 'MSAcpi_ThermalZoneTemperature',
+                 'get', 'CurrentTemperature', '/format:csv'],
                 capture_output=True, text=True, timeout=5
             )
-            lines = [l.strip() for l in result.stdout.strip().splitlines() if l.strip()]
-            if len(lines) > 1 and lines[1].isdigit():
-                # 单位是 0.1 开尔文，转换为摄氏度
-                return round(int(lines[1]) / 10.0 - 273.15, 1)
+            for line in result.stdout.strip().splitlines():
+                parts = line.strip().split(',')
+                for p in parts:
+                    p = p.strip()
+                    if p and p != 'CurrentTemperature':
+                        try:
+                            val = int(p)
+                            celsius = val / 10.0 - 273.15
+                            if 0 < celsius < 150:
+                                return round(celsius, 1)
+                        except (ValueError, TypeError):
+                            continue
         except Exception:
             pass
 
     # 3. macOS — 通过 sysctl 获取
-    if platform.system() == 'Darwin':
+    if system == 'Darwin':
         try:
             import subprocess
             result = subprocess.run(

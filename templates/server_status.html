@@ -5,48 +5,84 @@
     <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="mb-8">
             <h1 class="text-xl sm:text-2xl font-bold">服务器状态</h1>
-            <p class="text-cream/60 text-sm mt-1">查看服务器实时运行状态</p>
+            <p class="text-cream/60 text-sm mt-1">查看服务器实时运行状态，数据每 5 秒自动刷新</p>
         </div>
 
-        <!-- 系统资源概览 -->
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-            <div class="pixel-card rounded-xl p-5">
-                <div class="flex items-center justify-between mb-3">
-                    <span class="text-sm text-cream/60 flex items-center gap-2">
-                        <i data-lucide="cpu" class="w-4 h-4"></i>CPU 使用率
-                    </span>
-                    <span class="text-lg font-bold text-blue-400" id="status-cpu">-</span>
+        <!-- ====== CPU 使用率 ====== -->
+        <div class="pixel-card rounded-xl p-6 mb-5">
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-blue-400/15 rounded-xl flex items-center justify-center">
+                        <i data-lucide="cpu" class="w-5 h-5 text-blue-400"></i>
+                    </div>
+                    <div>
+                        <div class="text-base font-bold text-cream/90">CPU 使用率</div>
+                        <div class="text-xs text-cream/50">中央处理器</div>
+                    </div>
                 </div>
-                <div class="w-full h-2 bg-forest-900/60 rounded-full overflow-hidden">
-                    <div class="h-full rounded-full transition-all duration-500" id="cpu-bar" style="width: 0%; background: linear-gradient(90deg, #34d399, #60a5fa);"></div>
-                </div>
+                <span class="text-2xl font-bold text-blue-400" id="status-cpu">-</span>
             </div>
-            <div class="pixel-card rounded-xl p-5">
-                <div class="flex items-center justify-between mb-3">
-                    <span class="text-sm text-cream/60 flex items-center gap-2">
-                        <i data-lucide="thermometer" class="w-4 h-4"></i>CPU 温度
-                    </span>
-                    <span class="text-lg font-bold text-orange-400" id="status-cpu-temp">-</span>
-                </div>
-                <div class="w-full h-2 bg-forest-900/60 rounded-full overflow-hidden">
-                    <div class="h-full rounded-full transition-all duration-500" id="temp-bar" style="width: 0%; background: linear-gradient(90deg, #34d399, #fbbf24);"></div>
-                </div>
+            <div class="w-full h-3 bg-forest-900/60 rounded-full overflow-hidden">
+                <div class="h-full rounded-full transition-all duration-700 ease-out" id="cpu-bar" style="width: 0%; background: linear-gradient(90deg, #34d399, #60a5fa);"></div>
             </div>
-            <div class="pixel-card rounded-xl p-5">
-                <div class="flex items-center justify-between mb-3">
-                    <span class="text-sm text-cream/60 flex items-center gap-2">
-                        <i data-lucide="server" class="w-4 h-4"></i>内存使用率
-                    </span>
-                    <span class="text-lg font-bold text-purple-400" id="status-memory">-</span>
-                </div>
-                <div class="w-full h-2 bg-forest-900/60 rounded-full overflow-hidden">
-                    <div class="h-full rounded-full transition-all duration-500" id="mem-bar" style="width: 0%; background: linear-gradient(90deg, #34d399, #a78bfa);"></div>
-                </div>
+            <div class="flex justify-between mt-2 text-xs text-cream/40">
+                <span>0%</span>
+                <span>50%</span>
+                <span>100%</span>
             </div>
         </div>
 
-        <!-- 玩家状态概览 -->
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+        <!-- ====== 内存使用率 ====== -->
+        <div class="pixel-card rounded-xl p-6 mb-5">
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-purple-400/15 rounded-xl flex items-center justify-center">
+                        <i data-lucide="server" class="w-5 h-5 text-purple-400"></i>
+                    </div>
+                    <div>
+                        <div class="text-base font-bold text-cream/90">内存使用率</div>
+                        <div class="text-xs text-cream/50">运行内存</div>
+                    </div>
+                </div>
+                <span class="text-2xl font-bold text-purple-400" id="status-memory">-</span>
+            </div>
+            <div class="w-full h-3 bg-forest-900/60 rounded-full overflow-hidden">
+                <div class="h-full rounded-full transition-all duration-700 ease-out" id="mem-bar" style="width: 0%; background: linear-gradient(90deg, #34d399, #a78bfa);"></div>
+            </div>
+            <div class="flex justify-between mt-2 text-xs text-cream/40">
+                <span>0%</span>
+                <span>50%</span>
+                <span>100%</span>
+            </div>
+            <div class="mt-3 text-xs text-cream/50 text-center" id="status-memory-detail"></div>
+        </div>
+
+        <!-- ====== CPU 温度 ====== -->
+        <div class="pixel-card rounded-xl p-6 mb-5">
+            <div class="flex items-center justify-between mb-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 bg-orange-400/15 rounded-xl flex items-center justify-center">
+                        <i data-lucide="thermometer" class="w-5 h-5 text-orange-400"></i>
+                    </div>
+                    <div>
+                        <div class="text-base font-bold text-cream/90">CPU 温度</div>
+                        <div class="text-xs text-cream/50">处理器温度</div>
+                    </div>
+                </div>
+                <span class="text-2xl font-bold text-orange-400" id="status-cpu-temp">-</span>
+            </div>
+            <div class="w-full h-3 bg-forest-900/60 rounded-full overflow-hidden">
+                <div class="h-full rounded-full transition-all duration-700 ease-out" id="temp-bar" style="width: 0%; background: linear-gradient(90deg, #34d399, #fbbf24, #ef4444);"></div>
+            </div>
+            <div class="flex justify-between mt-2 text-xs text-cream/40">
+                <span>0°C</span>
+                <span>50°C</span>
+                <span>100°C</span>
+            </div>
+        </div>
+
+        <!-- ====== 玩家状态 ====== -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">
             <div class="pixel-card rounded-xl p-5 text-center">
                 <div class="text-3xl font-bold text-green-400 mb-1" id="status-online">-</div>
                 <div class="text-xs text-cream/60">在线玩家</div>
@@ -61,7 +97,7 @@
             </div>
         </div>
 
-        <!-- 在线玩家列表 -->
+        <!-- ====== 在线玩家列表 ====== -->
         <div class="pixel-card rounded-xl p-6">
             <h2 class="text-lg font-bold mb-4 flex items-center gap-2">
                 <i data-lucide="users" class="w-5 h-5 text-gold-400"></i>
@@ -79,7 +115,7 @@
 {% block extra_script %}
 <script>
 (function() {
-    var POLL_INTERVAL = 5000;  // 5 秒
+    var POLL_INTERVAL = 5000;
 
     function formatBytes(bytes) {
         if (bytes === 0) return '0 B';
@@ -93,26 +129,29 @@
         fetch('/api/server-status')
             .then(function(r) { return r.json(); })
             .then(function(d) {
-                // CPU
+                // CPU 使用率
                 var cpu = d.cpu_percent !== undefined ? d.cpu_percent : 0;
                 document.getElementById('status-cpu').textContent = cpu.toFixed(1) + '%';
                 document.getElementById('cpu-bar').style.width = Math.min(cpu, 100) + '%';
+
+                // 内存使用率
+                if (d.memory_percent !== undefined) {
+                    document.getElementById('status-memory').textContent = d.memory_percent.toFixed(1) + '%';
+                    document.getElementById('mem-bar').style.width = Math.min(d.memory_percent, 100) + '%';
+                    document.getElementById('status-memory-detail').textContent =
+                        '已用 ' + formatBytes(d.memory_used) + ' / 总计 ' + formatBytes(d.memory_total);
+                }
 
                 // CPU 温度
                 var tempEl = document.getElementById('status-cpu-temp');
                 var tempBar = document.getElementById('temp-bar');
                 if (d.cpu_temp !== null && d.cpu_temp !== undefined) {
-                    tempEl.textContent = d.cpu_temp + '°C';
-                    tempBar.style.width = Math.min(d.cpu_temp / 1.2, 100) + '%';
+                    var temp = typeof d.cpu_temp === 'number' ? d.cpu_temp : parseFloat(d.cpu_temp);
+                    tempEl.textContent = temp.toFixed(1) + '°C';
+                    tempBar.style.width = Math.min(temp / 1.2, 100) + '%';
                 } else {
                     tempEl.textContent = 'N/A';
                     tempBar.style.width = '0%';
-                }
-
-                // 内存
-                if (d.memory_percent !== undefined) {
-                    document.getElementById('status-memory').textContent = d.memory_percent.toFixed(1) + '% (' + formatBytes(d.memory_used) + ' / ' + formatBytes(d.memory_total) + ')';
-                    document.getElementById('mem-bar').style.width = Math.min(d.memory_percent, 100) + '%';
                 }
 
                 // 玩家概览
@@ -160,9 +199,7 @@
         return div.innerHTML;
     }
 
-    // 首次立即刷新
     updateStatus();
-    // 每 5 秒自动轮询
     setInterval(updateStatus, POLL_INTERVAL);
 })();
 </script>

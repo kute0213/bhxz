@@ -746,6 +746,10 @@ workspace/
 
 ## 最近更新
 
+* **服务器状态页面重构**：CPU 使用率、内存使用率、CPU 温度改为各占一行独立板块，展示更清晰醒目；新增内存详情（已用/总计）、刻度标签、三色渐变温度条
+
+* **彻底修复 Windows 10 CPU 温度获取**：改用 `MSAcpi_ThermalZoneTemperature` WMI 类（Windows 10 最可靠），新增 PowerShell 兜底策略，多层级重试确保最大兼容性
+
 * **修复汉堡侧边栏无法滚动**：移动端菜单 nav 添加 `overflow: hidden`，解决 `border-radius` 与 `backdrop-filter` 组合时内容溢出破坏滚动行为的问题
 
 * **修复邮件文字颜色**：邮件模板 `base.html` 中 `.mail-content` 区域文本颜色改为 `#e5e7eb`，解决黑色文字在暗灰蓝背景下看不清的问题
