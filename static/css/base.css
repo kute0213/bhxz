@@ -462,7 +462,7 @@ body::after {
 .glass-nav.scrolled .glass-nav-inner .border-t { border-top-color: rgba(255,255,255,0.04); }
 @media (prefers-reduced-motion: reduce) { .glass-nav, .glass-nav-inner { transition: none !important; } }
 
-/* 移动端侧边菜单 - 磨砂玻璃浮动 */
+/* 全屏侧边菜单 - 磨砂玻璃浮动（适配所有屏幕） */
 .mobile-menu {
     background: linear-gradient(180deg, rgba(30,45,68,0.99) 0%, rgba(28,42,64,0.99) 100%);
     backdrop-filter: blur(40px) saturate(100%);
@@ -472,8 +472,31 @@ body::after {
     transition: transform var(--transition-bounce);
     border-radius: 28px;
     box-shadow: 0 8px 40px rgba(0,0,0,0.4);
+    /* 桌面端铺满半个页面 */
+    width: 50vw;
+    max-width: 480px;
+    min-width: 320px;
 }
 .mobile-menu.active { transform: translateX(0); }
+
+/* 平板：略宽 */
+@media (max-width: 1024px) {
+    .mobile-menu {
+        width: 65vw;
+        max-width: 440px;
+    }
+}
+
+/* 小屏幕：几乎全屏 */
+@media (max-width: 640px) {
+    .mobile-menu {
+        width: calc(100vw - 1rem);
+        max-width: none;
+        min-width: 0;
+        border-radius: 24px;
+    }
+}
+
 .mobile-menu-overlay {
     opacity: 0; visibility: hidden;
     transition: opacity var(--transition-normal), visibility var(--transition-normal);

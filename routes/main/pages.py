@@ -29,13 +29,6 @@ def home():
     )
 
 
-@main_bp.route('/interact')
-def interact_page():
-    """服务器互动页面：整合大喇叭音频和背景图片入口。"""
-    user = get_current_user()
-    return render_template('interact.html', user=user)
-
-
 @main_bp.route('/favicon')
 def favicon():
     """动态 favicon 路由，根据设置返回对应的图标 SVG。

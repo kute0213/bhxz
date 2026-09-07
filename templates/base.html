@@ -108,7 +108,7 @@
     <!-- 页面过渡遮罩 -->
     <div class="page-transition-overlay"></div>
 
-    <!-- 移动端菜单遮罩层 -->
+    <!-- 全屏菜单遮罩层 -->
     <div class="mobile-menu-overlay fixed inset-0 bg-black/40 z-50" id="mobile-overlay"></div>
 
     <!-- 自定义弹窗（alert / confirm / prompt 通用骨架，见 macros/modal.html） -->
@@ -118,11 +118,11 @@
     <!-- Toast 容器 -->
     <div class="toast-container" id="toast-container"></div>
 
-    <!-- 移动端侧边菜单 -->
-    <nav class="mobile-menu fixed top-2 right-2 bottom-2 w-72 z-50 shadow-2xl" id="mobile-menu">
-        <div class="p-6">
-            <!-- 移动端菜单头部 -->
-            <div class="flex items-center justify-between mb-8">
+    <!-- 全屏侧边菜单 -->
+    <nav class="mobile-menu fixed top-2 right-2 bottom-2 z-50 shadow-2xl" id="mobile-menu">
+        <div class="h-full flex flex-col p-6 overflow-y-auto">
+            <!-- 菜单头部 -->
+            <div class="flex items-center justify-between mb-8 flex-shrink-0">
                 <div class="flex items-center gap-3">
                     <div class="w-10 h-10 bg-gold-400 rounded-lg flex items-center justify-center">
                         <i data-lucide="compass" class="w-6 h-6 text-forest-900"></i>
@@ -134,10 +134,10 @@
                 </button>
             </div>
 
-            <!-- 移动端用户信息 -->
+            <!-- 用户信息 -->
             {% if user %}
-            <div class="pixel-card rounded-xl p-4 mb-6">
-                <div class="flex items-center gap-3 mb-3">
+            <div class="pixel-card rounded-xl p-4 mb-6 flex-shrink-0">
+                <div class="flex items-center gap-3">
                     {% if user.avatar_key %}
                     <img src="{{ url_for('main.user_avatar', user_id=user.id) }}" alt="{{ user.username }}的头像" class="w-12 h-12 rounded-full object-cover border border-gold-400/30">
                     {% else %}
@@ -151,8 +151,9 @@
             </div>
             {% endif %}
 
-            <!-- 移动端导航链接 -->
-            <div class="space-y-2">
+            <!-- 导航链接 -->
+            <div class="space-y-1 flex-1">
+                <div class="text-xs text-cream/40 font-medium uppercase tracking-wider px-4 mb-2">导航</div>
                 <a href="{{ url_for('main.home') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors">
                     <i data-lucide="home" class="w-5 h-5"></i>
                     <span>首页</span>
@@ -161,29 +162,36 @@
                     <i data-lucide="book-open" class="w-5 h-5"></i>
                     <span>服务器指南</span>
                 </a>
-                
                 <a href="{{ url_for('discussion.list') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors">
                     <i data-lucide="message-square" class="w-5 h-5"></i>
                     <span>讨论</span>
-                </a>
-                <a href="{{ url_for('main.interact_page') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors">
-                    <i data-lucide="gamepad-2" class="w-5 h-5"></i>
-                    <span>服务器互动</span>
                 </a>
                 <a href="{{ url_for('main.server_status') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors">
                     <i data-lucide="activity" class="w-5 h-5"></i>
                     <span>服务器状态</span>
                 </a>
-                {% if user %}
+
+                <div class="text-xs text-cream/40 font-medium uppercase tracking-wider px-4 mb-2 mt-6">互动</div>
+                <a href="{{ url_for('main.music_page') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors">
+                    <i data-lucide="music" class="w-5 h-5"></i>
+                    <span>大喇叭音频</span>
+                </a>
+                <a href="{{ url_for('backgrounds.background_list_page') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors">
+                    <i data-lucide="image" class="w-5 h-5"></i>
+                    <span>背景图片</span>
+                </a>
                 <a href="{{ url_for('game_accounts.index') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors">
                     <i data-lucide="gamepad-2" class="w-5 h-5"></i>
-                    <span>服务器账号</span>
+                    <span>游戏账号</span>
                 </a>
+
+                {% if user %}
+                <div class="text-xs text-cream/40 font-medium uppercase tracking-wider px-4 mb-2 mt-6">账户</div>
                 <a href="{{ url_for('main.settings') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors">
                     <i data-lucide="settings" class="w-5 h-5"></i>
                     <span>账户设置</span>
                 </a>
-                {% if user and user.is_admin %}
+                {% if user.is_admin %}
                 <a href="{{ url_for('admin.admin_page') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors">
                     <i data-lucide="settings-2" class="w-5 h-5"></i>
                     <span>管理中心</span>
@@ -192,8 +200,8 @@
                 {% endif %}
             </div>
 
-            <!-- 移动端底部按钮 -->
-            <div class="mt-8 space-y-3">
+            <!-- 底部按钮 -->
+            <div class="mt-6 space-y-3 flex-shrink-0">
                 {% if user %}
                 <a href="{{ url_for('main.logout') }}" data-logout-confirm class="flex items-center justify-center gap-2 w-full px-4 py-3 rounded-lg text-red-300 border border-red-500/20 hover:bg-red-500/10 transition-colors">
                     <i data-lucide="log-out" class="w-5 h-5"></i>
@@ -226,70 +234,37 @@
                     <span class="text-lg sm:text-xl font-bold text-gold-400 hidden xs:inline">滨海小镇</span>
                 </a>
 
-                <!-- 桌面端导航 (md+) -->
-                <div class="hidden md:flex items-center gap-6">
-                    <a href="{{ url_for('main.home') }}" class="text-cream/80 hover:text-gold-400 text-sm font-medium transition-colors px-3 py-2 rounded-lg hover:bg-gold-400/5">
-                        首页
-                    </a>
-                    <a href="{{ url_for('guides.guide_list') }}" class="text-cream/80 hover:text-gold-400 text-sm font-medium transition-colors px-3 py-2 rounded-lg hover:bg-gold-400/5">
-                        服务器指南
-                    </a>
-                    
-                <a href="{{ url_for('discussion.list') }}" class="text-cream/80 hover:text-gold-400 text-sm font-medium transition-colors px-3 py-2 rounded-lg hover:bg-gold-400/5">
-                    讨论
-                </a>
-                <a href="{{ url_for('main.interact_page') }}" class="text-cream/80 hover:text-gold-400 text-sm font-medium transition-colors px-3 py-2 rounded-lg hover:bg-gold-400/5">
-                    服务器互动
-                </a>
-                <a href="{{ url_for('main.server_status') }}" class="text-cream/80 hover:text-gold-400 text-sm font-medium transition-colors px-3 py-2 rounded-lg hover:bg-gold-400/5">
-                    <span>服务器状态</span>
-                </a>
-                    {% if user %}
-                    <a href="{{ url_for('game_accounts.index') }}" class="text-cream/80 hover:text-gold-400 text-sm font-medium transition-colors px-3 py-2 rounded-lg hover:bg-gold-400/5">
-                        服务器账号
-                    </a>
-                    {% endif %}
-                    {% if user and user.is_admin %}
-                    <a href="{{ url_for('admin.admin_page') }}" class="text-cream/80 hover:text-gold-400 text-sm font-medium transition-colors px-3 py-2 rounded-lg hover:bg-gold-400/5">
-                        管理中心
-                    </a>
-                    {% endif %}
-                </div>
-
-                <!-- 桌面端用户区域 (md+) -->
-                <div class="hidden md:flex items-center gap-4 pl-6 border-l border-gold-400/10">
-                    {% if user %}
-                    <div class="flex items-center gap-3">
-                        {% if user.avatar_key %}
-                        <img src="{{ url_for('main.user_avatar', user_id=user.id) }}" alt="{{ user.username }}的头像" class="w-8 h-8 rounded-full object-cover border border-gold-400/30">
+                <!-- 右侧：用户信息 + 汉堡菜单 -->
+                <div class="flex items-center gap-2 sm:gap-3">
+                    <!-- 用户信息（桌面端显示） -->
+                    <div class="hidden sm:flex items-center gap-3 pr-3 border-r border-gold-400/10">
+                        {% if user %}
+                        <a href="{{ url_for('main.settings') }}" class="flex items-center gap-2 hover:no-underline group">
+                            {% if user.avatar_key %}
+                            <img src="{{ url_for('main.user_avatar', user_id=user.id) }}" alt="{{ user.username }}的头像" class="w-8 h-8 rounded-full object-cover border border-gold-400/30 group-hover:border-gold-400/60 transition-colors">
+                            {% else %}
+                            <div class="w-8 h-8 bg-gold-400/20 rounded-full flex items-center justify-center text-sm font-bold text-gold-400 group-hover:bg-gold-400/30 transition-colors">{{ user.username[0] }}</div>
+                            {% endif %}
+                            <span class="text-cream/80 text-sm hidden md:inline">
+                                <span class="text-gold-400 font-medium">{{ user.username }}</span>
+                                {% if user.is_admin %}<span class="text-xs bg-red-500/20 text-red-300 px-2 py-0.5 rounded ml-1">服主</span>{% endif %}
+                            </span>
+                        </a>
                         {% else %}
-                        <div class="w-8 h-8 bg-gold-400/20 rounded-full flex items-center justify-center text-sm font-bold text-gold-400">{{ user.username[0] }}</div>
+                        <a href="{{ url_for('main.login') }}" class="text-cream/80 hover:text-gold-400 text-sm font-medium transition-colors">
+                            登录
+                        </a>
+                        <a href="{{ url_for('main.register') }}" class="btn-primary px-4 py-2 rounded-lg text-sm font-bold">
+                            注册
+                        </a>
                         {% endif %}
-                        <span class="text-cream/80 text-sm">
-                            <span class="text-gold-400 font-medium">{{ user.username }}</span>
-                            {% if user.is_admin %}<span class="text-xs bg-red-500/20 text-red-300 px-2 py-0.5 rounded ml-1">服主</span>{% endif %}
-                        </span>
                     </div>
-                    <a href="{{ url_for('main.settings') }}" class="text-cream/60 hover:text-gold-400 text-sm transition-colors">
-                        <i data-lucide="settings" class="w-5 h-5"></i>
-                    </a>
-                    <a href="{{ url_for('main.logout') }}" data-logout-confirm class="text-red-300 hover:text-red-400 text-sm transition-colors">
-                        退出
-                    </a>
-                    {% else %}
-                    <a href="{{ url_for('main.login') }}" class="text-cream/80 hover:text-gold-400 text-sm font-medium transition-colors">
-                        登录
-                    </a>
-                    <a href="{{ url_for('main.register') }}" class="btn-primary px-5 py-2.5 rounded-lg text-sm font-bold">
-                        注册
-                    </a>
-                    {% endif %}
-                </div>
 
-                <!-- 移动端菜单按钮 -->
-                <button class="md:hidden text-cream/80 hover:text-gold-400 p-2 -mr-2" id="mobile-menu-btn">
-                    <i data-lucide="menu" class="w-6 h-6"></i>
-                </button>
+                    <!-- 汉堡菜单按钮（始终显示） -->
+                    <button class="text-cream/80 hover:text-gold-400 p-2 -mr-2 transition-colors" id="mobile-menu-btn">
+                        <i data-lucide="menu" class="w-6 h-6"></i>
+                    </button>
+                </div>
             </div>
         </div>
 
