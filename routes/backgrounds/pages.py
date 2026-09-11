@@ -3,7 +3,7 @@
 薄层：仅负责 HTTP 请求解析/响应构造，业务逻辑委托给 services。
 """
 
-import os
+from io import BytesIO
 
 from flask import request, jsonify, send_file, abort
 
@@ -89,12 +89,15 @@ def serve_background(bg_id):
     if not bg or bg['status'] != 1 or not bg['file_path']:
         abort(404)
 
-    file_path = bg['file_path']
-    if not os.path.isfile(file_path):
+    try:
+        data = background_service.read_background_data(bg)
+    except Exception:
+        data = None
+    if not data:
         abort(404)
 
     return send_file(
-        file_path,
+        BytesIO(data),
         mimetype='image/webp',
         max_age=3600,
     )

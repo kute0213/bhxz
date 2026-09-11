@@ -119,7 +119,7 @@
         <div class="pixel-card rounded-xl p-6 sm:p-8">
             <h2 class="text-2xl font-bold text-gold-400 mb-6">上传背景图片</h2>
 
-            <form id="upload-form" method="post" enctype="multipart/form-data">
+            <form id="upload-form" method="post" enctype="multipart/form-data" data-upload-managed="true">
                 <div id="dropzone" class="upload-dropzone">
                     <i data-lucide="image-up" class="w-16 h-16"></i>
                     <h3>点击或拖拽图片到这里</h3>
@@ -127,7 +127,7 @@
                     <button type="button" class="btn-primary px-6 py-2 rounded-xl" id="select-btn">
                         选择文件
                     </button>
-                    <input type="file" id="file-input" accept="image/*">
+                    <input type="file" id="file-input" name="background_image" accept="image/*">
                 </div>
 
                 <div id="file-info" class="file-info">
@@ -205,6 +205,11 @@
         fileInput.click();
     });
 
+    dropzone.addEventListener('click', function(e) {
+        if (e.target.closest('#select-btn')) return;
+        fileInput.click();
+    });
+
     fileInput.addEventListener('change', function() {
         if (this.files && this.files[0]) {
             handleFileSelect(this.files[0]);
@@ -235,6 +240,7 @@
 
     document.getElementById('upload-form').addEventListener('submit', function(e) {
         e.preventDefault();
+        e.stopPropagation();
         if (!selectedFile) return;
 
         var formData = new FormData();

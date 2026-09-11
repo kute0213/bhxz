@@ -24,14 +24,23 @@ def generate():
     }
     """
     try:
+        # 刷新时立即作废上一张，避免旧验证码继续占用内存或被重放。
+        previous_id = (request.args.get('previous_id') or '').strip()
+        if previous_id:
+            captcha_service.consume(previous_id)
+
         # 生成验证码，答案存于服务端内存，返回 captcha_id
         captcha_id, _answer, image_data = captcha_service.generate()
         log('Captcha', '验证码生成成功', captcha_id=captcha_id, ip=get_client_ip())
-        return jsonify({
+        response = jsonify({
             'success': True,
             'image': image_data,
-            'captcha_id': captcha_id
+            'captcha_id': captcha_id,
+            'code_length': 4,
+            'expires_in': 300,
         })
+        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
+        return response
     except Exception as e:
         log('Captcha', '验证码生成失败', error=str(e), ip=get_client_ip())
         return jsonify({
@@ -62,6 +71,9 @@ def verify():
 
     if not captcha_id or not captcha_input:
         return jsonify({'success': False, 'message': '参数不完整'}), 400
+
+    if len(captcha_input) != 4:
+        return jsonify({'success': False, 'message': '请输入完整的 4 位验证码'}), 400
 
     if captcha_service.verify(captcha_id, captcha_input):
         log('Captcha', '验证码校验成功', captcha_id=captcha_id, ip=get_client_ip())

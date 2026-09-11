@@ -12,6 +12,7 @@ import io
 import os
 import base64
 import random
+import secrets
 import time
 import uuid
 import threading
@@ -68,14 +69,15 @@ def _load_font(size: int):
     raise FileNotFoundError('未找到 DejaVuSans-Bold.ttf 字体文件')
 
 
-# 图片混合大小写字母和数字，并排除易混淆项：0/O/o、1/I/l、2/Z、5/S/s、8/B。
-# 服务端校验不区分大小写，同一个字母输入大写或小写都能通过。
-_CAPTCHA_CHARS = 'ACDEFGHJKMNPQRTUVWXYacdefghjkmnpqrtuvwxy34679'
+# 图片统一显示大写字母和数字，并排除易混淆项：0/O、1/I/L、2/Z、5/S、8/B。
+# 服务端使用 casefold() 校验，用户输入大写或小写都能通过。
+_CAPTCHA_CHARS = 'ACDEFGHJKMNPQRTUVWXY34679'
+_CAPTCHA_LENGTH = 4
 
 
 def generate_char_captcha(
-    width: int = 320,
-    height: int = 120,
+    width: int = 360,
+    height: int = 128,
 ) -> Tuple[str, str]:
     """
     生成四位字符验证码图片。
@@ -97,14 +99,14 @@ def generate_char_captcha(
         raise RuntimeError("Pillow 库未安装，请运行: pip install Pillow")
 
     # 生成 4 位随机字符
-    code = ''.join(random.choices(_CAPTCHA_CHARS, k=4))
+    code = ''.join(secrets.choice(_CAPTCHA_CHARS) for _ in range(_CAPTCHA_LENGTH))
 
     # 创建浅色背景图片
     img = Image.new('RGB', (width, height), color=(248, 246, 240))
     draw = ImageDraw.Draw(img)
 
     # 字号与单字符格宽匹配，避免旋转后首尾字符被画布裁掉。
-    font_size = 78
+    font_size = min(88, int(height * 0.69))
     try:
         # 优先使用项目内嵌字体（兼容 Windows / Linux / macOS）
         font = _load_font(font_size)
@@ -112,14 +114,14 @@ def generate_char_captcha(
         font = ImageFont.load_default()
 
     # ---- 绘制微弱背景噪点 ----
-    for _ in range((width * height) // 100):
+    for _ in range((width * height) // 150):
         x = random.randint(0, width - 1)
         y = random.randint(0, height - 1)
         c = random.randint(195, 215)
         draw.point((x, y), fill=(c, c, c))
 
     # ---- 绘制一条随机倾斜的粗干扰线 ----
-    line_width = random.randint(3, 5)
+    line_width = random.randint(2, 3)
     # 线从左侧到右侧，随机倾斜穿行
     x1 = random.randint(0, width // 4)
     y1 = random.randint(0, height - 1)
@@ -130,7 +132,7 @@ def generate_char_captcha(
     draw.line((x1, y1, x2, y2), fill=(lc, lc, lc), width=line_width)
 
     # ---- 绘制每个字符（紧边界画布、独立旋转、按格居中） ----
-    cell_w = width // 4
+    cell_w = width // _CAPTCHA_LENGTH
     for i, ch in enumerate(code):
         # 根据实际字形创建紧边界画布，避免旋转透明大画布造成字符重叠和裁切。
         bbox = font.getbbox(ch)
@@ -162,7 +164,7 @@ def generate_char_captcha(
         )
 
         # 轻微旋转保留辨识度，同时提供基本的机器识别干扰。
-        angle = random.randint(-22, 22)
+        angle = random.randint(-12, 12)
         rotated = ch_img.rotate(
             angle, expand=True, resample=Image.BICUBIC,
             fillcolor=(0, 0, 0, 0)
@@ -171,7 +173,7 @@ def generate_char_captcha(
         # 计算粘贴位置
         paste_x = cell_w * i + (cell_w - rotated.width) // 2
         paste_x = max(0, min(width - rotated.width, paste_x))
-        paste_y = (height - rotated.height) // 2 + random.randint(-4, 4)
+        paste_y = (height - rotated.height) // 2 + random.randint(-2, 2)
         paste_y = max(0, min(height - rotated.height, paste_y))
 
         # 粘贴到主图（使用 alpha 通道作为遮罩）
@@ -238,8 +240,9 @@ class CaptchaService:
         # {captcha_id: {'answer': str, 'expire': float, 'created_at': float}}
         self._captchas: dict = {}
         self._lock = threading.Lock()
-        # 过期时间（秒）
+        # 过期时间（秒）和单个验证码最大尝试次数
         self._expire_seconds = 300
+        self._max_attempts = 5
         # 启动后台清理线程，每 60 秒清理一次过期验证码，避免内存泄漏
         self._cleanup_thread = threading.Thread(
             target=self._cleanup_loop, name='captcha-cleanup', daemon=True
@@ -273,6 +276,7 @@ class CaptchaService:
                 'image': image_data,  # 存图片数据，页面刷新后可复用
                 'expire': now + self._expire_seconds,
                 'created_at': now,
+                'attempts': 0,
             }
         return captcha_id, answer, image_data
 
@@ -283,6 +287,9 @@ class CaptchaService:
         with self._lock:
             entry = self._captchas.get(captcha_id)
             if not entry:
+                return None
+            if time.time() > entry['expire']:
+                self._captchas.pop(captcha_id, None)
                 return None
             return entry.get('image')
 
@@ -310,6 +317,7 @@ class CaptchaService:
                 log('WARNING', 'CaptchaService', '验证码不存在或已消耗', captcha_id=captcha_id)
                 return False
             if time.time() > entry['expire']:
+                self._captchas.pop(captcha_id, None)
                 log('WARNING', 'CaptchaService', '验证码已过期', captcha_id=captcha_id)
                 return False
             result = (
@@ -317,6 +325,9 @@ class CaptchaService:
                 == entry['answer'].strip().casefold()
             )
             if not result:
+                entry['attempts'] = entry.get('attempts', 0) + 1
+                if entry['attempts'] >= self._max_attempts:
+                    self._captchas.pop(captcha_id, None)
                 log('INFO', 'CaptchaService', '验证码答案错误', captcha_id=captcha_id)
             return result
 

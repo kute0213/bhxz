@@ -43,7 +43,7 @@
     <!-- 入场动画见 base.css：纯 CSS animation，不依赖 JS，避免白屏 -->
     <noscript><style>.page-content{opacity:1!important;transform:none!important}</style></noscript>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/tailwind.css', v='4') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css', v='28') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css', v='31') }}">
     <script src="{{ url_for('static', filename='lib/purify/purify.min.js', v='1') }}"></script>
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <script>
@@ -234,6 +234,22 @@
                     <span class="text-lg sm:text-xl font-bold text-gold-400 hidden xs:inline">滨海小镇</span>
                 </a>
 
+                <!-- 桌面端主导航：常用入口直接可见，空间不足时按优先级自动收起 -->
+                <div class="desktop-nav" aria-label="主导航">
+                    <a href="{{ url_for('main.home') }}" class="desktop-nav-link{% if request.endpoint == 'main.home' %} active{% endif %}">
+                        <i data-lucide="home"></i><span>首页</span>
+                    </a>
+                    <a href="{{ url_for('guides.guide_list') }}" class="desktop-nav-link{% if request.endpoint and request.endpoint.startswith('guides.') %} active{% endif %}">
+                        <i data-lucide="book-open"></i><span>服务器指南</span>
+                    </a>
+                    <a href="{{ url_for('discussion.list') }}" class="desktop-nav-link nav-priority-low{% if request.endpoint and request.endpoint.startswith('discussion.') %} active{% endif %}">
+                        <i data-lucide="message-square"></i><span>讨论</span>
+                    </a>
+                    <a href="{{ url_for('main.server_status') }}" class="desktop-nav-link nav-priority-low{% if request.endpoint == 'main.server_status' %} active{% endif %}">
+                        <i data-lucide="activity"></i><span>服务器状态</span>
+                    </a>
+                </div>
+
                 <!-- 右侧：用户信息 + 汉堡菜单 -->
                 <div class="flex items-center gap-2 sm:gap-3">
                     <!-- 用户信息（桌面端显示） -->
@@ -261,7 +277,7 @@
                     </div>
 
                     <!-- 汉堡菜单按钮（始终显示） -->
-                    <button class="text-cream/80 hover:text-gold-400 p-2 -mr-2 transition-colors" id="mobile-menu-btn">
+                    <button class="nav-more-button text-cream/80 hover:text-gold-400 p-2 -mr-2 transition-colors" id="mobile-menu-btn" aria-label="打开更多导航" aria-controls="mobile-menu" aria-expanded="false">
                         <i data-lucide="menu" class="w-6 h-6"></i>
                     </button>
                 </div>
@@ -290,7 +306,7 @@
             </div>
             <div class="space-y-4">
                 <div class="flex items-center justify-center gap-3">
-                    <img id="modal-captcha-img" src="" alt="验证码" class="h-24 rounded cursor-pointer hover:opacity-80 transition-opacity border border-forest-700/50" title="点击刷新" style="image-rendering: auto;">
+                    <img id="modal-captcha-img" src="" alt="验证码加载中" class="w-full max-w-[360px] h-auto rounded-lg cursor-pointer hover:opacity-90 transition-opacity border border-forest-700/50 bg-cream/90" title="点击刷新验证码" style="image-rendering: auto;">
                     <input type="hidden" id="modal-captcha-id" value="">
                     <button type="button" id="modal-captcha-refresh" class="p-2 text-cream/50 hover:text-gold-400 transition-colors rounded-lg hover:bg-cream/5" title="刷新验证码">
                         <i data-lucide="refresh-cw" class="w-5 h-5"></i>
@@ -298,7 +314,7 @@
                 </div>
                 <div>
                     <label class="block text-sm font-medium mb-2 text-cream/80">验证码</label>
-                    <input type="text" id="modal-captcha-input" class="input-field w-full px-4 py-3 rounded-lg" placeholder="请输入验证码（不区分大小写）" autocomplete="off" autocapitalize="characters" spellcheck="false" maxlength="4">
+                    <input type="text" id="modal-captcha-input" class="input-field w-full px-4 py-3 rounded-lg text-center tracking-[0.35em] uppercase" placeholder="输入 4 位验证码（不区分大小写）" autocomplete="off" autocapitalize="characters" spellcheck="false" minlength="4" maxlength="4">
                 </div>
                 <button type="button" id="modal-captcha-submit" class="btn-primary w-full py-3 rounded-lg font-bold">
                     验证
@@ -310,7 +326,7 @@
         </div>
     </div>
 
-    <script src="{{ url_for('static', filename='js/core/base.js', v='19') }}"></script>
+    <script src="{{ url_for('static', filename='js/core/base.js', v='22') }}"></script>
     <script src="{{ url_for('static', filename='js/pages/main.js', v='11') }}"></script>
     {% if login_welcome_username %}
     <script>

@@ -1,7 +1,8 @@
 """背景图片业务服务：上传、审核、列表查询。
 
 所有函数为 Flask 无关的纯业务逻辑，返回 (success, data_or_error) 元组。
-背景图片存储在 uploads/backgrounds/ 目录，自动转换为 WebP 格式。
+新上传的背景图片统一保存到 MinIO，并自动转换为 WebP 格式。
+数据库只保存 MinIO 对象引用；历史本地图片仍可继续读取和删除。
 """
 
 import os
@@ -13,9 +14,10 @@ from io import BytesIO
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 from core.db import get_db
-from config import UPLOAD_BACKGROUNDS_DIR, USER_IMAGE_MAX_BYTES
+from config import USER_IMAGE_MAX_BYTES
 from core.logger import log
 from services.email import email_service, background_review_result
+from services import object_storage
 
 # 背景图片状态：0=待审核 1=已通过 2=已驳回
 STATUS_PENDING = 0
@@ -143,6 +145,16 @@ def _background_filename(bg_id, original_filename):
 
 def start_upload(user_id, username, upload_file, ip_address):
     """开始异步上传背景图片任务。返回 (success, result_or_error)。"""
+    # Flask 会在请求结束后关闭上传流，因此必须在线程启动前读取文件。
+    try:
+        raw, _ = _validate_image(upload_file)
+    except ValueError as exc:
+        return False, str(exc)
+
+    if not object_storage.is_enabled():
+        return False, '背景图片存储未配置，请先配置 MinIO'
+
+    original_filename = upload_file.filename
     task_id = hashlib.md5(f'{user_id}_{_now()}_{id(upload_file)}'.encode()).hexdigest()[:16]
 
     with _upload_tasks_lock:
@@ -155,9 +167,8 @@ def start_upload(user_id, username, upload_file, ip_address):
 
     # 在后台线程中处理上传
     def _process():
+        file_reference = None
         try:
-            raw, ext = _validate_image(upload_file)
-
             with _upload_tasks_lock:
                 _upload_tasks[task_id]['percent'] = 30
                 _upload_tasks[task_id]['message'] = '正在转换格式...'
@@ -169,30 +180,40 @@ def start_upload(user_id, username, upload_file, ip_address):
                 _upload_tasks[task_id]['percent'] = 60
                 _upload_tasks[task_id]['message'] = '正在保存...'
 
-            # 写入数据库
+            # DuckDB 只保存背景记录和 MinIO 对象引用，不保存图片内容。
             with get_db() as conn:
-                filename = upload_file.filename
-                now = _now()
-                cursor = conn.execute(
-                    "INSERT INTO backgrounds (user_id, username, filename, file_path, status, is_active, created_at) "
-                    "VALUES (?, ?, ?, '', ?, 0, ?)",
-                    (user_id, username, filename, STATUS_PENDING, now),
-                )
-                conn.commit()
-                bg_id = cursor.lastrowid
+                try:
+                    conn.execute("BEGIN TRANSACTION")
+                    filename = original_filename
+                    now = _now()
+                    cursor = conn.execute(
+                        "INSERT INTO backgrounds (user_id, username, filename, file_path, status, is_active, created_at) "
+                        "VALUES (?, ?, ?, '', ?, 0, ?)",
+                        (user_id, username, filename, STATUS_PENDING, now),
+                    )
+                    bg_id = cursor.lastrowid
 
-                # 生成文件名并保存
-                save_name = _background_filename(bg_id, filename)
-                save_path = os.path.join(UPLOAD_BACKGROUNDS_DIR, save_name)
-                with open(save_path, 'wb') as f:
-                    f.write(webp_data)
+                    save_name = _background_filename(bg_id, filename)
+                    file_reference = object_storage.put_bytes(
+                        f'backgrounds/{save_name}',
+                        webp_data,
+                        content_type='image/webp',
+                    )
 
-                # 更新文件路径
-                conn.execute(
-                    "UPDATE backgrounds SET file_path = ? WHERE id = ?",
-                    (save_path, bg_id),
-                )
-                conn.commit()
+                    conn.execute(
+                        "UPDATE backgrounds SET file_path = ? WHERE id = ?",
+                        (file_reference, bg_id),
+                    )
+                    conn.commit()
+                except Exception:
+                    conn.rollback()
+                    if file_reference:
+                        try:
+                            object_storage.remove(file_reference)
+                        except Exception as cleanup_exc:
+                            log('WARNING', 'BackgroundUpload', '回滚时清理 MinIO 对象失败',
+                                reference=file_reference, error=str(cleanup_exc))
+                    raise
 
             with _upload_tasks_lock:
                 _upload_tasks[task_id]['percent'] = 100
@@ -265,6 +286,19 @@ def get_background(bg_id):
     with get_db() as conn:
         row = conn.execute("SELECT * FROM backgrounds WHERE id = ?", (bg_id,)).fetchone()
         return dict(row) if row else None
+
+
+def read_background_data(bg):
+    """读取背景图片字节；兼容 MinIO 对象引用和历史本地绝对路径。"""
+    file_reference = bg.get('file_path') if bg else None
+    if not file_reference:
+        return None
+    if file_reference.startswith('minio://'):
+        return object_storage.get_bytes(file_reference)
+    if not os.path.isfile(file_reference):
+        return None
+    with open(file_reference, 'rb') as file:
+        return file.read()
 
 
 def _send_review_email(bg, approved: bool, admin_username: str):
@@ -369,12 +403,16 @@ def delete_background(bg_id, user_id, is_admin, ip_address):
         if bg['user_id'] != user_id and not is_admin:
             return False, '无权删除'
 
-        # 删除文件
-        if bg['file_path'] and os.path.isfile(bg['file_path']):
+        # 删除对象或历史本地文件
+        if bg['file_path']:
             try:
-                os.remove(bg['file_path'])
-            except OSError:
-                pass
+                if bg['file_path'].startswith('minio://'):
+                    object_storage.remove(bg['file_path'])
+                elif os.path.isfile(bg['file_path']):
+                    os.remove(bg['file_path'])
+            except Exception as exc:
+                log('WARNING', 'BackgroundDelete', '背景图片对象删除失败',
+                    bg_id=bg_id, error=str(exc))
 
         conn.execute("DELETE FROM backgrounds WHERE id = ?", (bg_id,))
         conn.commit()

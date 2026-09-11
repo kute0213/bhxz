@@ -16,6 +16,14 @@ UPLOAD_MUSIC_DIR = os.path.join(UPLOAD_DIR, 'music')
 UPLOAD_BACKGROUNDS_DIR = os.path.join(UPLOAD_DIR, 'backgrounds')
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'pdf', 'txt', 'zip', 'rar', '7z', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'mp4', 'mp3', 'wav'}
 
+# MinIO 对象存储。未配置 MINIO_ENDPOINT 时继续使用本地上传目录，便于开发。
+# 凭据只能通过环境变量或项目根目录 .env 提供，禁止写入源码。
+MINIO_ENDPOINT = os.environ.get('MINIO_ENDPOINT', '').strip()
+MINIO_ACCESS_KEY = os.environ.get('MINIO_ACCESS_KEY', '').strip()
+MINIO_SECRET_KEY = os.environ.get('MINIO_SECRET_KEY', '').strip()
+MINIO_BUCKET = os.environ.get('MINIO_BUCKET', 'bhxz').strip() or 'bhxz'
+MINIO_SECURE = os.environ.get('MINIO_SECURE', '0').lower() in ('1', 'true', 'yes', 'on')
+
 # 大喇叭音频：允许上传的音频格式（上传后由 ffmpeg 转码为 HLS/m3u8）
 MUSIC_ALLOWED_EXTENSIONS = {'mp3', 'wav', 'ogg', 'm4a', 'flac', 'mp4'}
 MAX_CONTENT_LENGTH = 100 * 1024 * 1024
@@ -124,6 +132,12 @@ SESSION_LIFETIME = 604800
 
 # 登录失败锁定次数（超过后锁定账户）
 MAX_LOGIN_ATTEMPTS = 5
+
+# 当前浏览器连续登录失败达到此次数后，才要求输入图形验证码
+LOGIN_CAPTCHA_THRESHOLD = 3
+
+# 多久没有再次失败后，清除当前浏览器的验证码触发状态（秒）
+LOGIN_CAPTCHA_RESET_SECONDS = 1800
 
 # 登录失败锁定时间（秒），默认 30 分钟
 LOGIN_LOCKOUT_TIME = 1800

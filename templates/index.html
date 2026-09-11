@@ -1,259 +1,576 @@
 {% extends "base.html" %}
-{% from "macros/progress.html" import progress_track %}
 {% block title %}首页{% endblock %}
+
 {% block extra_style %}
-    <style>
-        .hero-bg {
-            background: transparent;
-            position: relative; overflow: hidden;
+<style>
+    .home-hero {
+        min-height: calc(100vh - 80px);
+        display: flex;
+        align-items: center;
+        position: relative;
+        overflow: hidden;
+        isolation: isolate;
+    }
+    .home-hero::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        z-index: -1;
+        pointer-events: none;
+        background:
+            linear-gradient(90deg, rgba(2, 10, 18, .90) 0%, rgba(2, 11, 20, .72) 34%, rgba(2, 11, 20, .20) 63%, transparent 82%),
+            linear-gradient(0deg, rgba(3, 15, 25, .92) 0%, transparent 36%);
+    }
+    .home-hero::after {
+        content: "";
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        height: 1px;
+        background: linear-gradient(90deg, transparent, rgba(54,240,208,.42), rgba(53,185,255,.18), transparent);
+    }
+    .hero-layout {
+        width: min(1180px, calc(100% - 40px));
+        margin: 0 auto;
+        padding: 76px 0 96px;
+        display: grid;
+        grid-template-columns: minmax(0, 700px) minmax(220px, 1fr);
+        gap: 64px;
+        align-items: end;
+    }
+    .hero-eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 24px;
+        color: #7ff7e3;
+        font-size: 13px;
+        font-weight: 750;
+        letter-spacing: .18em;
+        text-transform: uppercase;
+    }
+    .hero-eyebrow::before {
+        content: "";
+        width: 34px;
+        height: 2px;
+        background: linear-gradient(90deg, #36f0d0, #35b9ff);
+        box-shadow: 0 0 16px rgba(54,240,208,.46);
+    }
+    .hero-title {
+        max-width: 720px;
+        margin: 0;
+        color: #f2fdff;
+        font-size: clamp(48px, 6.5vw, 88px);
+        font-weight: 850;
+        line-height: 1.04;
+        letter-spacing: -.055em;
+        text-shadow: 0 6px 30px rgba(0,0,0,.72);
+    }
+    .hero-title-accent {
+        display: block;
+        color: transparent;
+        background: linear-gradient(95deg, #36f0d0 0%, #55d4ff 62%, #8c87ff 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        filter: drop-shadow(0 0 22px rgba(54,240,208,.16));
+    }
+    .hero-summary {
+        max-width: 590px;
+        margin: 27px 0 0;
+        color: rgba(226,247,250,.76);
+        font-size: clamp(16px, 1.7vw, 19px);
+        line-height: 1.85;
+        text-shadow: 0 2px 12px rgba(0,0,0,.8);
+    }
+    .hero-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin-top: 34px;
+    }
+    .hero-actions a {
+        min-height: 50px;
+        padding: 0 24px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 9px;
+        font-size: 15px;
+    }
+    .hero-tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 9px 20px;
+        margin-top: 34px;
+        color: rgba(197,226,231,.62);
+        font-size: 13px;
+    }
+    .hero-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .hero-tag svg { width: 15px; height: 15px; color: #63dac9; }
+    .hero-status {
+        justify-self: end;
+        width: min(300px, 100%);
+        padding: 20px;
+        border: 1px solid rgba(123,222,216,.18);
+        border-radius: 18px;
+        background: linear-gradient(145deg, rgba(5,24,36,.76), rgba(3,14,24,.66));
+        box-shadow: 0 20px 50px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.045);
+        backdrop-filter: blur(18px) saturate(120%);
+    }
+    .hero-status-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin-bottom: 18px;
+    }
+    .hero-status-title {
+        color: rgba(232,250,252,.72);
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: .08em;
+    }
+    .hero-status-state {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        color: #87efd9;
+        font-size: 12px;
+    }
+    .hero-status-dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #36f0d0;
+        box-shadow: 0 0 12px rgba(54,240,208,.62);
+    }
+    .hero-specs {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+    }
+    .hero-spec {
+        padding: 12px;
+        border: 1px solid rgba(133,193,209,.10);
+        border-radius: 12px;
+        background: rgba(255,255,255,.025);
+    }
+    .hero-spec span { display: block; color: rgba(182,216,222,.50); font-size: 11px; margin-bottom: 4px; }
+    .hero-spec strong { color: #eefcff; font-size: 14px; font-weight: 700; }
+
+    .home-surface {
+        position: relative;
+        background:
+            radial-gradient(circle at 8% 15%, rgba(54,240,208,.055), transparent 30%),
+            radial-gradient(circle at 92% 42%, rgba(112,104,255,.06), transparent 28%),
+            linear-gradient(180deg, rgba(3,15,25,.94), #050b14 28%, #050b14 100%);
+    }
+    .home-section {
+        width: min(1180px, calc(100% - 40px));
+        margin: 0 auto;
+        padding: 96px 0;
+    }
+    .section-heading {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        gap: 32px;
+        margin-bottom: 36px;
+    }
+    .section-index {
+        display: block;
+        margin-bottom: 9px;
+        color: #55e5cf;
+        font-size: 12px;
+        font-weight: 750;
+        letter-spacing: .18em;
+        text-transform: uppercase;
+    }
+    .section-heading h2 {
+        margin: 0;
+        color: #effcff;
+        font-size: clamp(30px, 4vw, 48px);
+        font-weight: 800;
+        line-height: 1.14;
+        letter-spacing: -.035em;
+    }
+    .section-heading p {
+        max-width: 440px;
+        margin: 0;
+        color: rgba(190,221,227,.58);
+        font-size: 15px;
+        line-height: 1.75;
+        text-align: right;
+    }
+    .feature-grid {
+        display: grid;
+        grid-template-columns: repeat(12, 1fr);
+        gap: 16px;
+    }
+    .ocean-card {
+        position: relative;
+        min-height: 220px;
+        padding: 27px;
+        overflow: hidden;
+        border: 1px solid rgba(117,200,207,.13);
+        border-radius: 20px;
+        background: linear-gradient(145deg, rgba(8,29,43,.88), rgba(4,17,28,.82));
+        box-shadow: 0 18px 48px rgba(0,0,0,.20), inset 0 1px 0 rgba(255,255,255,.035);
+        transition: transform .25s ease, border-color .25s ease, background .25s ease;
+    }
+    .ocean-card::after {
+        content: "";
+        position: absolute;
+        inset: auto -40px -65px auto;
+        width: 170px;
+        height: 170px;
+        border-radius: 50%;
+        background: radial-gradient(circle, rgba(53,185,255,.10), transparent 68%);
+        pointer-events: none;
+    }
+    .ocean-card:hover {
+        transform: translateY(-4px);
+        border-color: rgba(79,229,215,.28);
+        background: linear-gradient(145deg, rgba(9,36,50,.94), rgba(5,21,33,.90));
+    }
+    .feature-grid .ocean-card:nth-child(1),
+    .feature-grid .ocean-card:nth-child(4) { grid-column: span 7; }
+    .feature-grid .ocean-card:nth-child(2),
+    .feature-grid .ocean-card:nth-child(3) { grid-column: span 5; }
+    .card-number {
+        position: absolute;
+        top: 22px;
+        right: 24px;
+        color: rgba(106,224,214,.24);
+        font-family: "JetBrains Mono", monospace;
+        font-size: 12px;
+        letter-spacing: .12em;
+    }
+    .card-icon {
+        width: 44px;
+        height: 44px;
+        display: grid;
+        place-items: center;
+        margin-bottom: 42px;
+        color: #42e9cf;
+        border: 1px solid rgba(54,240,208,.18);
+        border-radius: 13px;
+        background: linear-gradient(135deg, rgba(54,240,208,.10), rgba(53,185,255,.08));
+    }
+    .card-icon svg { width: 21px; height: 21px; }
+    .ocean-card h3 { margin: 0 0 10px; color: #f1fcff; font-size: 20px; font-weight: 750; }
+    .ocean-card p { max-width: 560px; margin: 0; color: rgba(190,220,226,.60); font-size: 14px; line-height: 1.72; }
+
+    .mod-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 16px;
+    }
+    .mod-card { min-height: 210px; }
+    .mod-card .card-icon { margin-bottom: 32px; }
+    .section-action {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        color: #71e8d4;
+        font-size: 13px;
+    }
+    .empty-card {
+        padding: 52px 24px;
+        color: rgba(190,220,226,.56);
+        border: 1px dashed rgba(117,200,207,.18);
+        border-radius: 20px;
+        text-align: center;
+        background: rgba(6,23,35,.55);
+    }
+    .philosophy-panel {
+        display: grid;
+        grid-template-columns: 1.1fr .9fr;
+        overflow: hidden;
+        border: 1px solid rgba(117,200,207,.13);
+        border-radius: 24px;
+        background: linear-gradient(145deg, rgba(8,29,43,.90), rgba(4,17,28,.88));
+        box-shadow: 0 24px 70px rgba(0,0,0,.24);
+    }
+    .philosophy-copy { padding: clamp(34px,5vw,64px); }
+    .philosophy-copy blockquote {
+        margin: 0 0 24px;
+        color: #f1fcff;
+        font-size: clamp(26px,3.3vw,42px);
+        font-weight: 780;
+        line-height: 1.35;
+        letter-spacing: -.035em;
+    }
+    .philosophy-copy blockquote strong { color: #53e8d1; }
+    .philosophy-copy p { margin: 0; color: rgba(196,224,229,.66); font-size: 15px; line-height: 1.85; }
+    .goal-list {
+        padding: clamp(30px,4vw,52px);
+        display: grid;
+        align-content: center;
+        gap: 10px;
+        border-left: 1px solid rgba(117,200,207,.11);
+        background: rgba(2,13,22,.42);
+    }
+    .goal-item {
+        min-height: 48px;
+        padding: 0 15px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        color: rgba(221,242,245,.78);
+        border: 1px solid rgba(117,200,207,.09);
+        border-radius: 12px;
+        background: rgba(255,255,255,.022);
+        font-size: 14px;
+    }
+    .goal-item svg { width: 16px; height: 16px; color: #4ee8cf; }
+    .contact-panel {
+        padding: clamp(34px,6vw,72px);
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 48px;
+        align-items: center;
+        border: 1px solid rgba(85,225,214,.20);
+        border-radius: 24px;
+        background:
+            linear-gradient(120deg, rgba(10,49,59,.84), rgba(7,25,40,.90) 62%, rgba(21,22,57,.76)),
+            radial-gradient(circle at 18% 20%, rgba(54,240,208,.12), transparent 36%);
+        box-shadow: 0 28px 80px rgba(0,0,0,.28);
+    }
+    .contact-panel h2 { margin: 0 0 14px; color: #effcff; font-size: clamp(30px,4vw,50px); font-weight: 800; letter-spacing: -.04em; }
+    .contact-panel p { max-width: 580px; margin: 0; color: rgba(200,228,233,.66); font-size: 15px; line-height: 1.75; }
+    .contact-actions { display: grid; gap: 10px; min-width: 215px; }
+    .contact-actions a { min-height: 48px; display: flex; align-items: center; justify-content: center; gap: 9px; padding: 0 20px; }
+    .home-footer {
+        padding: 30px 20px;
+        border-top: 1px solid rgba(54,240,208,.09);
+        background: rgba(2,11,19,.92);
+    }
+    .home-footer-inner {
+        width: min(1180px, 100%);
+        margin: 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+        color: rgba(184,216,222,.48);
+        font-size: 13px;
+    }
+    .home-footer-brand { display: flex; align-items: center; gap: 10px; color: rgba(232,250,252,.78); font-weight: 700; }
+    .home-footer-mark { width: 30px; height: 30px; display: grid; place-items: center; color: #42e9cf; border: 1px solid rgba(54,240,208,.18); border-radius: 9px; }
+    .home-footer-links { display: flex; align-items: center; gap: 20px; }
+    .home-footer a:hover { color: #64ead7; }
+
+    /* 首页核心内容必须始终可见；动效只作为增强，不能阻塞内容渲染。 */
+    .home-surface .section-fade {
+        opacity: 1;
+        transform: none;
+    }
+
+    @media (max-width: 900px) {
+        .hero-layout { grid-template-columns: 1fr; gap: 38px; align-items: center; }
+        .hero-status { justify-self: start; }
+        .mod-grid { grid-template-columns: repeat(2, 1fr); }
+        .philosophy-panel { grid-template-columns: 1fr; }
+        .goal-list { border-left: 0; border-top: 1px solid rgba(117,200,207,.11); }
+        .contact-panel { grid-template-columns: 1fr; }
+        .contact-actions { grid-template-columns: 1fr 1fr; min-width: 0; }
+    }
+    @media (max-width: 680px) {
+        .home-hero { min-height: calc(100vh - 64px); align-items: end; }
+        .home-hero::before {
+            background:
+                linear-gradient(0deg, rgba(2,10,18,.96) 0%, rgba(2,10,18,.68) 54%, rgba(2,10,18,.20) 100%),
+                linear-gradient(90deg, rgba(2,10,18,.55), transparent);
         }
-        .hero-bg::before {
-            content: '';
-            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
-            background: radial-gradient(ellipse at center top, rgba(103, 232, 249, 0.10), transparent 60%);
-            pointer-events: none;
-        }
-    </style>
+        .hero-layout { width: min(100% - 28px, 1180px); padding: 90px 0 54px; gap: 28px; }
+        .hero-title { font-size: clamp(42px, 14vw, 64px); }
+        .hero-summary { font-size: 16px; line-height: 1.72; }
+        .hero-actions { display: grid; grid-template-columns: 1fr; }
+        .hero-actions a { width: 100%; }
+        .hero-tags { gap: 10px 16px; }
+        .hero-status { width: 100%; }
+        .home-section { width: min(100% - 28px, 1180px); padding: 70px 0; }
+        .section-heading { align-items: start; flex-direction: column; gap: 14px; }
+        .section-heading p { text-align: left; }
+        .feature-grid { grid-template-columns: 1fr; }
+        .feature-grid .ocean-card:nth-child(n) { grid-column: auto; }
+        .mod-grid { grid-template-columns: 1fr; }
+        .ocean-card { min-height: 205px; padding: 23px; }
+        .contact-actions { grid-template-columns: 1fr; }
+        .home-footer-inner { flex-direction: column; text-align: center; }
+        .home-footer-links { flex-wrap: wrap; justify-content: center; }
+    }
+</style>
 {% endblock %}
+
 {% block content %}
-    <!-- Hero Section -->
-    <section class="hero-bg min-h-screen flex items-center justify-center relative">
-        <div class="max-w-5xl mx-auto px-6 text-center relative z-10 pt-20 lg:pt-24">
-            <div class="float-animation mb-8 parallax-layer" data-parallax-speed="0.08">
-                <div class="w-20 h-20 sm:w-24 sm:h-24 mx-auto bg-gradient-to-br from-gold-400 to-gold-500 rounded-2xl flex items-center justify-center pulse-glow">
-                    <i data-lucide="compass" class="w-10 h-10 sm:w-12 sm:h-12 text-forest-900"></i>
-                </div>
-            </div>
-            <h1 class="text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-black mb-4 sm:mb-6 glow-text">
-                <span class="text-gold-400">滨海小镇</span>
+<section class="home-hero">
+    <div class="hero-layout">
+        <div>
+            <div class="hero-eyebrow">Binhai Town · Minecraft Community</div>
+            <h1 class="hero-title">
+                在方块世界
+                <span class="hero-title-accent">与朋友一起生活</span>
             </h1>
-            <p class="text-lg sm:text-xl md:text-2xl text-cream/90 mb-3 sm:mb-4 font-medium text-reveal-container">
-                <span class="text-reveal-word">超强社交</span><span class="text-reveal-word"> × </span><span class="text-reveal-word">超多地形</span><span class="text-reveal-word"> × </span><span class="text-reveal-word">超强体验</span>
-            </p>
-            <p class="text-base sm:text-lg text-cream/60 mb-8 sm:mb-12 max-w-2xl mx-auto text-reveal-container">
-                <span class="text-reveal-word">Minecraft</span><span class="text-reveal-word"> Java </span><span class="text-reveal-word">1.20.1</span><span class="text-reveal-word"> Fabric </span><span class="text-reveal-word">模组服务器</span>
-            </p>
-            <div class="flex flex-col sm:flex-row gap-3 sm:gap-4 justify-center">
-                <a href="#contact" class="btn-primary px-6 sm:px-8 py-3 sm:py-4 rounded-xl text-base sm:text-lg inline-flex items-center justify-center gap-2">
+            <p class="hero-summary">一个以社交、探索与休闲生存为核心的 Fabric 模组服务器。没有追赶进度的压力，只有你想创造的生活。</p>
+            <div class="hero-actions">
+                <a href="#join" class="btn-primary">
                     <i data-lucide="gamepad-2" class="w-5 h-5"></i>
                     加入服务器
                 </a>
-                
-                <a href="{{ url_for('guides.guide_list') }}" class="btn-secondary px-6 sm:px-8 py-3 sm:py-4 rounded-xl text-base sm:text-lg inline-flex items-center justify-center gap-2">
+                <a href="{{ url_for('guides.guide_list') }}" class="btn-secondary">
                     <i data-lucide="book-open" class="w-5 h-5"></i>
-                    服务器指南
+                    查看服务器指南
                 </a>
             </div>
-            <div class="mt-12 sm:mt-16 flex items-center justify-center gap-4 sm:gap-8 text-cream/50 text-xs sm:text-sm">
-                <div class="flex items-center gap-2"><i data-lucide="users" class="w-4 h-4"></i><span>社交为核心</span></div>
-                <div class="hidden sm:flex items-center gap-2"><i data-lucide="map" class="w-4 h-4"></i><span>丰富地形</span></div>
-                <div class="flex items-center gap-2"><i data-lucide="heart" class="w-4 h-4"></i><span>休闲养老</span></div>
+            <div class="hero-tags">
+                <span class="hero-tag"><i data-lucide="users"></i>社交为核心</span>
+                <span class="hero-tag"><i data-lucide="map"></i>丰富地形</span>
+                <span class="hero-tag"><i data-lucide="heart"></i>休闲养老</span>
             </div>
         </div>
-        <div class="absolute bottom-6 sm:bottom-10 left-1/2 -translate-x-1/2 animate-bounce hidden sm:block parallax-layer" data-parallax-speed="-0.05">
-            <i data-lucide="chevron-down" class="w-6 h-6 sm:w-8 sm:h-8 text-gold-400/50"></i>
+        <aside class="hero-status" aria-label="服务器信息">
+            <div class="hero-status-head">
+                <span class="hero-status-title">SERVER PROFILE</span>
+                <span class="hero-status-state"><span class="hero-status-dot"></span>服务在线</span>
+            </div>
+            <div class="hero-specs">
+                <div class="hero-spec"><span>版本</span><strong>Java 1.20.1</strong></div>
+                <div class="hero-spec"><span>核心</span><strong>Fabric</strong></div>
+                <div class="hero-spec"><span>玩法</span><strong>模组生存</strong></div>
+                <div class="hero-spec"><span>风格</span><strong>社区共建</strong></div>
+            </div>
+        </aside>
+    </div>
+</section>
+
+<div class="home-surface">
+    <section id="features" class="home-section">
+        <header class="section-heading section-fade">
+            <div>
+                <span class="section-index">01 · Community</span>
+                <h2>不只是一起上线</h2>
+            </div>
+            <p>从语音交流到领地建设，所有功能都围绕人与人的连接展开。</p>
+        </header>
+        <div class="feature-grid">
+            <article class="ocean-card section-fade">
+                <span class="card-number">01 / VOICE</span>
+                <div class="card-icon"><i data-lucide="mic"></i></div>
+                <h3>游戏内语音</h3>
+                <p>无需频繁切换软件，在探索、建造和活动中随时交流，让协作更自然。</p>
+            </article>
+            <article class="ocean-card section-fade">
+                <span class="card-number">02 / CLAIM</span>
+                <div class="card-icon"><i data-lucide="shield-check"></i></div>
+                <h3>自由领地</h3>
+                <p>无需经济系统即可圈地，安心建设属于自己的家园。</p>
+            </article>
+            <article class="ocean-card section-fade">
+                <span class="card-number">03 / MAP</span>
+                <div class="card-icon"><i data-lucide="satellite"></i></div>
+                <h3>实时卫星地图</h3>
+                <p>从浏览器查看世界地形与社区建筑，随时寻找下一段旅程。</p>
+            </article>
+            <article class="ocean-card section-fade">
+                <span class="card-number">04 / SYNC</span>
+                <div class="card-icon"><i data-lucide="message-circle"></i></div>
+                <h3>群服消息互通</h3>
+                <p>QQ 群与游戏内消息双向同步，即使没有在线，也不会错过伙伴们的动态。</p>
+            </article>
         </div>
     </section>
 
-    <!-- Social Features Section -->
-    <section id="features" class="py-16 sm:py-20 lg:py-24">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="text-center mb-10 sm:mb-12 lg:mb-16 section-fade">
-                <span class="inline-block px-3 sm:px-4 py-1 bg-gold-400/10 text-gold-400 rounded-full text-xs sm:text-sm font-medium mb-3 sm:mb-4">社交畅联，互动无界</span>
-                <h2 class="text-2xl sm:text-3xl lg:text-4xl font-bold mb-3 sm:mb-4">社交畅联</h2>
-                <p class="text-cream/60 max-w-2xl mx-auto text-sm sm:text-base text-reveal">在这里，朋友与社交才是最珍贵的宝藏</p>
+    <section id="modintros" class="home-section">
+        <header class="section-heading section-fade">
+            <div>
+                <span class="section-index">02 · Experience</span>
+                <h2>精选模组体验</h2>
             </div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 tilt-container">
-                <div class="pixel-card rounded-xl p-5 sm:p-6 stagger-item tilt-card" data-stagger-delay="0.05">
-                    <div class="feature-icon mb-4"><i data-lucide="mic" class="w-6 h-6 text-gold-400"></i></div>
-                    <h3 class="text-lg font-bold mb-2">语音畅聊</h3>
-                    <p class="text-cream/60 text-sm leading-relaxed">内置超便捷语音系统，游戏中能随时语音交流，甚至能来场欢乐 K 歌，和伙伴告别打字繁琐！</p>
-                </div>
-                <div class="pixel-card rounded-xl p-5 sm:p-6 stagger-item tilt-card" data-stagger-delay="0.12">
-                    <div class="feature-icon mb-4"><i data-lucide="shield-check" class="w-6 h-6 text-gold-400"></i></div>
-                    <h3 class="text-lg font-bold mb-2">领地系统</h3>
-                    <p class="text-cream/60 text-sm leading-relaxed">进服就可以直接圈地，没有经济系统！做自己的管理员，让熊孩子望而却步，保护自己的领地！</p>
-                </div>
-                <div class="pixel-card rounded-xl p-5 sm:p-6 stagger-item tilt-card" data-stagger-delay="0.19">
-                    <div class="feature-icon mb-4"><i data-lucide="satellite" class="w-6 h-6 text-gold-400"></i></div>
-                    <h3 class="text-lg font-bold mb-2">卫星地图</h3>
-                    <p class="text-cream/60 text-sm leading-relaxed">点击链接进入卫星地图，开始偷窥服务器的建筑！</p>
-                </div>
-                <div class="pixel-card rounded-xl p-5 sm:p-6 stagger-item tilt-card" data-stagger-delay="0.26">
-                    <div class="feature-icon mb-4"><i data-lucide="message-circle" class="w-6 h-6 text-gold-400"></i></div>
-                    <h3 class="text-lg font-bold mb-2">群服互通</h3>
-                    <p class="text-cream/60 text-sm leading-relaxed">专业机器人实现 QQ 群与游戏内消息双向实时转发，不管在游戏还是群聊，都能和小伙伴随时互动。</p>
-                </div>
-            </div>
-        </div>
-    </section>
-
-    <!-- Mod Introductions Section -->
-    <section id="modintros" class="py-16 sm:py-20 lg:py-24">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="text-center mb-10 sm:mb-12 lg:mb-16 section-fade">
-                <span class="inline-block px-3 sm:px-4 py-1 bg-gold-400/10 text-gold-400 rounded-full text-xs sm:text-sm font-medium mb-3 sm:mb-4">精彩内容</span>
-                <h2 class="text-2xl sm:text-3xl lg:text-4xl font-bold mb-3 sm:mb-4">模组介绍</h2>
-                <p class="text-cream/60 max-w-2xl mx-auto text-sm sm:text-base text-reveal">服务器精选模组一览，感受丰富玩法的魅力</p>
+            <div>
+                <p>围绕探索、建造与生活感持续更新，不制造必须完成的任务。</p>
                 {% if user and user.is_admin %}
-                <div class="mt-4 sm:mt-6"><a href="{{ url_for('admin.manage_mod_intros') }}" class="inline-flex items-center gap-2 text-sm text-gold-400/70 hover:text-gold-400 transition-colors"><i data-lucide="settings" class="w-4 h-4"></i>管理模组介绍</a></div>
+                <a href="{{ url_for('admin.manage_mod_intros') }}" class="section-action"><i data-lucide="settings" class="w-4 h-4"></i>管理模组介绍</a>
                 {% endif %}
             </div>
-            {% if mod_intros %}
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 tilt-container">
-                {% for intro in mod_intros %}
-                <div class="pixel-card rounded-xl p-5 sm:p-6 stagger-item tilt-card" data-stagger-delay="{{ 0.05 + loop.index0 * 0.07 }}">
-                    <div class="feature-icon mb-4"><i data-lucide="{{ intro.icon or 'box' }}" class="w-6 h-6 text-gold-400"></i></div>
-                    <h3 class="text-lg font-bold mb-3">{{ intro.title }}</h3>
-                    <p class="text-cream/60 text-sm leading-relaxed whitespace-pre-wrap break-all">{{ intro.content }}</p>
-                </div>
-                {% endfor %}
-            </div>
-            {% else %}
-            <div class="text-center py-10 sm:py-12 pixel-card rounded-xl max-w-lg mx-auto section-fade">
-                <i data-lucide="package" class="w-10 h-10 sm:w-12 sm:h-12 text-cream/30 mx-auto mb-4"></i>
-                <p class="text-cream/60">暂无模组介绍</p>
-                {% if user and user.is_admin %}<p class="text-cream/40 text-sm mt-2">点击上方的「管理模组介绍」添加</p>{% endif %}
-            </div>
-            {% endif %}
+        </header>
+        {% if mod_intros %}
+        <div class="mod-grid">
+            {% for intro in mod_intros %}
+            <article class="ocean-card mod-card section-fade">
+                <span class="card-number">{{ '%02d'|format(loop.index) }}</span>
+                <div class="card-icon"><i data-lucide="{{ intro.icon or 'box' }}"></i></div>
+                <h3>{{ intro.title }}</h3>
+                <p class="whitespace-pre-wrap">{{ intro.content }}</p>
+            </article>
+            {% endfor %}
         </div>
+        {% else %}
+        <div class="empty-card section-fade">
+            <i data-lucide="package" class="w-8 h-8 mx-auto mb-4"></i>
+            <p>模组介绍正在整理中</p>
+            {% if user and user.is_admin %}<a href="{{ url_for('admin.manage_mod_intros') }}" class="section-action mt-3">现在添加</a>{% endif %}
+        </div>
+        {% endif %}
     </section>
 
-    <!-- Philosophy Section -->
-    <section id="philosophy" class="py-16 sm:py-20 lg:py-24 relative overflow-hidden">
-        <div class="absolute inset-0 opacity-5">
-            <div class="absolute top-1/4 left-1/4 w-64 sm:w-96 h-64 sm:h-96 bg-gold-400 rounded-full blur-3xl"></div>
-            <div class="absolute bottom-1/4 right-1/4 w-64 sm:w-96 h-64 sm:h-96 bg-forest-600 rounded-full blur-3xl"></div>
-        </div>
-        <div class="max-w-4xl mx-auto px-4 sm:px-6 relative z-10">
-            <div class="text-center mb-10 sm:mb-12 lg:mb-16 section-fade">
-                <span class="inline-block px-3 sm:px-4 py-1 bg-gold-400/10 text-gold-400 rounded-full text-xs sm:text-sm font-medium mb-3 sm:mb-4">服务器理念</span>
-                <h2 class="text-2xl sm:text-3xl lg:text-4xl font-bold mb-3 sm:mb-4">你的另一个游戏世界</h2>
+    <section id="philosophy" class="home-section">
+        <div class="philosophy-panel section-fade">
+            <div class="philosophy-copy">
+                <span class="section-index">03 · Our Way</span>
+                <blockquote>这里没有主线，<br><strong>朋友就是最珍贵的宝藏。</strong></blockquote>
+                <p>想探索就去远方，想安静就慢慢建设。没有日常打卡，也不必追赶进度；你的每份创意，都会成为小镇故事的一部分。</p>
             </div>
-            <div class="space-y-6 sm:space-y-8 text-center section-fade">
-                <p class="text-lg sm:text-xl text-cream/90 leading-relaxed max-w-3xl mx-auto text-reveal">
-                    我们都明白，单人模式下，这些好玩的模组也能带来乐趣。可在这虚拟方块世界里，<strong class="text-gold-400 text-xl sm:text-2xl">朋友与社交才是最珍贵的宝藏</strong>。
-                </p>
-                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6 mt-8 sm:mt-10 tilt-container">
-                    <div class="pixel-card rounded-xl p-5 sm:p-6 stagger-item tilt-card" data-stagger-delay="0.05">
-                        <div class="w-12 h-12 mx-auto mb-4 bg-gold-400/20 rounded-full flex items-center justify-center">
-                            <i data-lucide="castle" class="w-6 h-6 text-gold-400"></i>
-                        </div>
-                        <h3 class="text-base font-bold mb-2">冰雪城堡派对</h3>
-                        <p class="text-cream/60 text-sm">在冰雪城堡举办派对，身边围坐一同欢笑的好友</p>
-                    </div>
-                    <div class="pixel-card rounded-xl p-5 sm:p-6 stagger-item tilt-card" data-stagger-delay="0.12">
-                        <div class="w-12 h-12 mx-auto mb-4 bg-gold-400/20 rounded-full flex items-center justify-center">
-                            <i data-lucide="flag" class="w-6 h-6 text-gold-400"></i>
-                        </div>
-                        <h3 class="text-base font-bold mb-2">终点欢呼</h3>
-                        <p class="text-cream/60 text-sm">驾驶亲手打造的座驾冲过终点，有人为你欢呼喝彩</p>
-                    </div>
-                    <div class="pixel-card rounded-xl p-5 sm:p-6 stagger-item tilt-card" data-stagger-delay="0.19">
-                        <div class="w-12 h-12 mx-auto mb-4 bg-gold-400/20 rounded-full flex items-center justify-center">
-                            <i data-lucide="wine" class="w-6 h-6 text-gold-400"></i>
-                        </div>
-                        <h3 class="text-base font-bold mb-2">共饮分享</h3>
-                        <p class="text-cream/60 text-sm">酿造出香醇美酒，与挚友共饮分享这份喜悦</p>
-                    </div>
-                </div>
-                <p class="text-lg sm:text-xl text-gold-400 font-medium">
-                    将这些奇妙有趣的瞬间分享给朋友，才是滨海小镇真正的魅力所在。
-                </p>
-            </div>
-            <div class="h-px bg-gradient-to-r from-transparent via-gold-400/30 to-transparent my-10 sm:my-12"></div>
-            <div class="space-y-4 sm:space-y-6 sm:text-lg leading-relaxed text-cream/80 section-fade">
-                <p>这里没有强制任务，没有日常打卡，更没有"该做什么"的束缚。我们是朋友间成长起来的小天地，主打休闲生存与养老娱乐。</p>
-                <p>想探索未知？广阔世界等你冒险！想安静放松？随时上线，随心所欲。</p>
-                <p class="font-medium text-cream">无聊？不如创造你的小目标：</p>
-                <div class="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4 text-sm">
-                    <div class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-gold-400"></i><span>圈一片心仪的领地</span></div>
-                    <div class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-gold-400"></i><span>造一辆狂飙的赛车</span></div>
-                    <div class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-gold-400"></i><span>搭一架翱翔的飞机</span></div>
-                    <div class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-gold-400"></i><span>拍一张绝美风景</span></div>
-                    <div class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-gold-400"></i><span>做一桌美味佳肴</span></div>
-                    <div class="flex items-center gap-2"><i data-lucide="check" class="w-4 h-4 text-gold-400"></i><span>酿一壶神奇药酒</span></div>
-                </div>
-                <p class="text-gold-400 font-medium">你的每份创意，我们都会用心记录。</p>
-                <p>服务器会持续更新模组与玩法，只为提供更多有趣的选择——而非必须完成的任务。</p>
-                <div class="bg-forest-900/50 rounded-xl p-5 sm:p-6 border border-gold-400/20">
-                    <p class="text-lg sm:text-xl font-bold text-gold-400 mb-2">记住：这里只是你的另一个游戏世界。</p>
-                    <p>没有主线，不必追赶。想玩就玩，想歇就歇。<strong>做你想做的</strong>，就是这里的唯一规则。</p>
-                </div>
-                <p class="text-center text-lg sm:text-xl font-medium text-cream">欢迎加入，开启你的滨海小镇！</p>
+            <div class="goal-list">
+                <div class="goal-item"><i data-lucide="check"></i>圈一片心仪的领地</div>
+                <div class="goal-item"><i data-lucide="check"></i>造一辆狂飙的赛车</div>
+                <div class="goal-item"><i data-lucide="check"></i>搭一架翱翔的飞机</div>
+                <div class="goal-item"><i data-lucide="check"></i>拍下社区的绝美风景</div>
+                <div class="goal-item"><i data-lucide="check"></i>与伙伴分享一桌佳肴</div>
             </div>
         </div>
     </section>
 
-    <!-- Contact Section -->
-    <section id="contact" class="py-16 sm:py-20 lg:py-24">
-        <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-            <div class="section-fade">
-                <span class="inline-block px-3 sm:px-4 py-1 bg-gold-400/10 text-gold-400 rounded-full text-xs sm:text-sm font-medium mb-3 sm:mb-4">联系我们</span>
-                <h2 class="text-2xl sm:text-3xl lg:text-4xl font-bold mb-3 sm:mb-4">加入我们</h2>
-                <p class="text-cream/60 mb-8 sm:mb-12 text-sm sm:text-base text-reveal">点击链接加入群聊，直接和服务器的伙伴沟通吧！</p>
+    <section id="join" class="home-section">
+        <div class="contact-panel section-fade">
+            <div>
+                <span class="section-index">04 · Join Us</span>
+                <h2>从认识新伙伴开始</h2>
+                <p>先加入群聊了解服务器，或打开卫星地图看看大家已经创造的世界。</p>
             </div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 section-fade tilt-container">
-                <a href="{{ qq_group_url }}" target="_blank" rel="noopener noreferrer" class="pixel-card rounded-xl p-6 sm:p-8 flex flex-col items-center gap-3 sm:gap-4 hover:no-underline stagger-item tilt-card" data-stagger-delay="0.05">
-                    <div class="w-14 h-14 sm:w-16 sm:h-16 bg-gold-400/20 rounded-full flex items-center justify-center">
-                        <i data-lucide="message-square" class="w-7 h-7 sm:w-8 sm:h-8 text-gold-400"></i>
-                    </div>
-                    <h3 class="text-lg sm:text-xl font-bold text-gold-400">加入 QQ 群</h3>
-                    <p class="text-cream/60 text-sm">群聊群：Minecraft基建项目部</p>
-                    <span class="text-gold-400 font-medium text-sm">点击加入群聊 →</span>
+            <div class="contact-actions">
+                <a href="{{ qq_group_url }}" target="_blank" rel="noopener noreferrer" class="btn-primary">
+                    <i data-lucide="message-square" class="w-5 h-5"></i>加入 QQ 群
                 </a>
-                <a href="{{ map_url }}" target="_blank" rel="noopener noreferrer" class="pixel-card rounded-xl p-6 sm:p-8 flex flex-col items-center gap-3 sm:gap-4 hover:no-underline stagger-item tilt-card" data-stagger-delay="0.12">
-                    <div class="w-14 h-14 sm:w-16 sm:h-16 bg-gold-400/20 rounded-full flex items-center justify-center">
-                        <i data-lucide="globe" class="w-7 h-7 sm:w-8 sm:h-8 text-gold-400"></i>
-                    </div>
-                    <h3 class="text-lg sm:text-xl font-bold text-gold-400">查看卫星地图</h3>
-                    <p class="text-cream/60 text-sm">探索服务器的建筑与地形</p>
-                    <span class="text-gold-400 font-medium text-sm">点击查看地图 →</span>
+                <a href="{{ map_url }}" target="_blank" rel="noopener noreferrer" class="btn-secondary">
+                    <i data-lucide="globe" class="w-5 h-5"></i>查看卫星地图
                 </a>
             </div>
         </div>
     </section>
+</div>
 
-    <!-- Footer -->
-    <footer class="glass-footer border-t border-forest-700/50 py-8 sm:py-10 lg:py-12">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex flex-col sm:flex-row items-center justify-between gap-4 sm:gap-6">
-                <div class="flex items-center gap-3">
-                    <div class="w-9 h-9 sm:w-10 sm:h-10 bg-gold-400 rounded-lg flex items-center justify-center">
-                        <i data-lucide="compass" class="w-5 h-5 sm:w-6 sm:h-6 text-forest-900"></i>
-                    </div>
-                    <span class="text-lg sm:text-xl font-bold text-gold-400">滨海小镇</span>
-                </div>
-                <div class="flex items-center gap-4 sm:gap-6 text-cream/50 text-xs sm:text-sm">
-                    <span>Minecraft Java 1.20.1</span>
-                    <span class="hidden sm:inline">|</span>
-                    <span>Fabric 模组服务器</span>
-                </div>
-                <a href="/docs" class="text-cream/50 hover:text-gold-400 text-xs sm:text-sm transition-colors flex items-center gap-1">
-                    <i data-lucide="book-open" class="w-4 h-4"></i>
-                    关于官网
-                </a>
-            </div>
-            {# 备案号 + 版权（内嵌到首页页脚） #}
-            {% if show_beian %}
-            <div class="mt-4 pt-4 border-t border-forest-700/30 flex flex-col sm:flex-row items-center justify-center gap-2 sm:gap-4 text-cream/40 text-xs">
-                {% if icp_beian %}
-                <a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer" class="hover:text-cream/70 transition-colors">
-                    {{ icp_beian }}
-                </a>
-                {% endif %}
-                {% if police_beian %}
-                <a href="https://www.beian.gov.cn/portal/registerSystemInfo" target="_blank" rel="noopener noreferrer" class="hover:text-cream/70 transition-colors flex items-center gap-1">
-                    <svg class="w-3 h-3 inline-block" viewBox="0 0 20 20" fill="currentColor"><path d="M11.65 3.5c.5.3.9.7 1.2 1.2.3.5.5 1.1.5 1.7s-.2 1.2-.5 1.7c-.3.5-.7.9-1.2 1.2-.5.3-1.1.5-1.7.5s-1.2-.2-1.7-.5c-.5-.3-.9-.7-1.2-1.2-.3-.5-.5-1.1-.5-1.7s.2-1.2.5-1.7c.3-.5.7-.9 1.2-1.2.5-.3 1.1-.5 1.7-.5s1.2.2 1.7.5M10 0C4.5 0 0 4.5 0 10s4.5 10 10 10 10-4.5 10-10S15.5 0 10 0m0 18c-4.4 0-8-3.6-8-8s3.6-8 8-8 8 3.6 8 8-3.6 8-8 8"/></svg>
-                    {{ police_beian }}
-                </a>
-                {% endif %}
-                <span class="text-cream/30 hidden sm:inline">|</span>
-                <span>&copy; {{ copyright_year }} {{ copyright_site_name }}. 保留所有权利.</span>
-            </div>
-            {% endif %}
+<footer class="home-footer">
+    <div class="home-footer-inner">
+        <div class="home-footer-brand">
+            <span class="home-footer-mark"><i data-lucide="compass" class="w-4 h-4"></i></span>
+            滨海小镇
         </div>
-    </footer>
+        <div class="home-footer-links">
+            <span>Minecraft Java 1.20.1 · Fabric</span>
+            <a href="/docs">关于官网</a>
+            {% if show_beian and icp_beian %}<a href="https://beian.miit.gov.cn/" target="_blank" rel="noopener noreferrer">{{ icp_beian }}</a>{% endif %}
+            {% if show_beian and police_beian %}<a href="https://www.beian.gov.cn/portal/registerSystemInfo" target="_blank" rel="noopener noreferrer">{{ police_beian }}</a>{% endif %}
+        </div>
+        <span>&copy; {{ copyright_year }} {{ copyright_site_name }}</span>
+    </div>
+</footer>
 {% endblock %}
+
 {% block extra_script %}{% endblock %}
 {% block beian_footer %}{% endblock %}

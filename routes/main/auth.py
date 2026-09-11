@@ -4,10 +4,14 @@
 """
 
 from urllib.parse import urlparse
+import time
 
 from flask import render_template, request, redirect, url_for, session, flash, jsonify, current_app
 from core.auth import get_current_user
-from config import get_config_value, REGISTER_VERIFY_CODE
+from config import (
+    get_config_value, REGISTER_VERIFY_CODE,
+    LOGIN_CAPTCHA_THRESHOLD, LOGIN_CAPTCHA_RESET_SECONDS,
+)
 from services.email import normalize_email
 from services.user_service import (
     register, login, forgot_password, check_username_available,
@@ -22,6 +26,25 @@ def _is_safe_redirect_url(target: str) -> bool:
         return False
     parsed = urlparse(target)
     return not parsed.netloc and not parsed.scheme
+
+
+def _login_captcha_required() -> bool:
+    """判断当前浏览器是否因连续登录失败而需要图形验证码。"""
+    last_failure = float(session.get('login_last_failure_at', 0) or 0)
+    if last_failure and time.time() - last_failure > LOGIN_CAPTCHA_RESET_SECONDS:
+        session.pop('login_failed_attempts', None)
+        session.pop('login_last_failure_at', None)
+        return False
+    attempts = int(session.get('login_failed_attempts', 0) or 0)
+    return attempts >= LOGIN_CAPTCHA_THRESHOLD
+
+
+def _record_login_failure() -> int:
+    attempts = int(session.get('login_failed_attempts', 0) or 0) + 1
+    session['login_failed_attempts'] = attempts
+    session['login_last_failure_at'] = time.time()
+    session.permanent = True
+    return attempts
 
 
 # ---------------------------------------------------------------------------
@@ -108,6 +131,7 @@ def check_group_code():
 
 @main_bp.route('/login', methods=['GET', 'POST'], endpoint='login')
 def login_view():
+    captcha_required = _login_captcha_required()
     if request.method == 'POST':
         success, result = login(
             username=request.form.get('username', '').strip(),
@@ -115,12 +139,15 @@ def login_view():
             captcha_input=request.form.get('captcha', '').strip(),
             captcha_id=request.form.get('captcha_id', '').strip(),
             ip_address=get_client_ip(),
+            captcha_required=captcha_required,
         )
         if not success:
+            failed_attempts = _record_login_failure()
             return render_template(
                 'login.html', error=result,
                 submitted_username=request.form.get('username', '').strip(),
                 submitted_next=request.form.get('next', ''),
+                captcha_required=failed_attempts >= LOGIN_CAPTCHA_THRESHOLD,
             )
 
         session.clear()
@@ -138,7 +165,7 @@ def login_view():
     user = get_current_user()
     if user:
         return redirect(url_for('main.home'))
-    return render_template('login.html')
+    return render_template('login.html', captcha_required=captcha_required)
 
 
 @main_bp.route('/logout')

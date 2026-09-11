@@ -140,7 +140,8 @@ def register(username, password, confirm, verify_code, captcha_input, captcha_id
         return False, '注册失败，请稍后重试'
 
 
-def login(username, password, captcha_input, captcha_id, ip_address):
+def login(username, password, captcha_input, captcha_id, ip_address,
+          captcha_required=False):
     """登录验证。返回 (success, data_or_error)。"""
 
     if not login_limiter.check(ip_address or 'unknown', _get_ua()):
@@ -151,12 +152,15 @@ def login(username, password, captcha_input, captcha_id, ip_address):
         log('Login', '用户名或密码为空', ip=ip_address)
         return False, '请输入用户名和密码'
 
-    if os.environ.get('TRAE_TEST_BYPASS_CAPTCHA', '0') != '1' and \
+    should_verify_captcha = captcha_required and \
+        os.environ.get('TRAE_TEST_BYPASS_CAPTCHA', '0') != '1'
+
+    if should_verify_captcha and \
             not captcha_service.verify(captcha_id, captcha_input):
         log('Login', '验证码错误', username=username, ip=ip_address)
         return False, '验证码错误或已过期'
 
-    if os.environ.get('TRAE_TEST_BYPASS_CAPTCHA', '0') != '1':
+    if should_verify_captcha:
         captcha_service.consume(captcha_id)
 
     now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')

@@ -83,12 +83,14 @@ var mobileOverlay = document.getElementById('mobile-overlay');
 function openMobileMenu() {
     mobileMenu.classList.add('active');
     mobileOverlay.classList.add('active');
+    if (mobileMenuBtn) mobileMenuBtn.setAttribute('aria-expanded', 'true');
     document.body.style.overflow = 'hidden';
 }
 
 function closeMobileMenu() {
     mobileMenu.classList.remove('active');
     mobileOverlay.classList.remove('active');
+    if (mobileMenuBtn) mobileMenuBtn.setAttribute('aria-expanded', 'false');
     document.body.style.overflow = '';
 }
 
@@ -181,6 +183,7 @@ document.addEventListener('keydown', function (e) {
     document.addEventListener('submit', function (e) {
         var form = e.target;
         if (!form || !form.enctype || form.enctype.toLowerCase() !== 'multipart/form-data') return;
+        if (form.dataset.uploadManaged === 'true') return;
 
         var fileInputs = form.querySelectorAll('input[type="file"]');
         var hasFiles = false;
@@ -708,17 +711,30 @@ var CaptchaModal = (function () {
     var captchaHint = document.getElementById('captcha-modal-hint');
 
     var captchaCallback = null;
+    var captchaRequestId = 0;
 
     function loadModalCaptcha() {
-        fetch('/api/captcha/generate')
+        var previousId = captchaIdInput ? captchaIdInput.value : '';
+        var currentRequestId = ++captchaRequestId;
+        if (captchaIdInput) captchaIdInput.value = '';
+        captchaImg.alt = '验证码加载中';
+        var url = '/api/captcha/generate' + (previousId ? '?previous_id=' + encodeURIComponent(previousId) : '');
+        fetch(url, { cache: 'no-store' })
             .then(function(res) { return res.json(); })
             .then(function(data) {
-                if (data.success) {
+                if (currentRequestId !== captchaRequestId) return;
+                if (data.success && data.image && data.captcha_id) {
                     captchaImg.src = data.image;
+                    captchaImg.alt = '四位图形验证码，点击可刷新';
                     if (captchaIdInput) captchaIdInput.value = data.captcha_id || '';
+                } else {
+                    captchaImg.alt = '验证码加载失败，点击重试';
                 }
             })
-            .catch(function(err) { console.error('加载验证码失败:', err); });
+            .catch(function(err) {
+                if (currentRequestId === captchaRequestId) captchaImg.alt = '验证码加载失败，点击重试';
+                console.error('加载验证码失败:', err);
+            });
     }
 
     function show(hint, callback) {
@@ -739,12 +755,16 @@ var CaptchaModal = (function () {
 
     function verify() {
         var code = captchaCodeInput.value.trim();
-        if (!code) {
-            if (typeof Toast !== 'undefined' && Toast.warning) Toast.warning('请输入验证码');
+        if (code.length !== 4) {
+            if (typeof Toast !== 'undefined' && Toast.warning) Toast.warning('请输入完整的 4 位验证码');
             captchaCodeInput.focus();
             return;
         }
         var captchaId = captchaIdInput.value;
+        if (!captchaId) {
+            if (typeof Toast !== 'undefined' && Toast.warning) Toast.warning('验证码正在加载，请稍候');
+            return;
+        }
 
         captchaSubmit.disabled = true;
         captchaSubmit.textContent = '验证中...';
