@@ -5,13 +5,24 @@ from datetime import datetime
 
 from flask import request
 
-from core.auth import hash_password, validate_password, verify_password
+from core.auth import hash_password, verify_password
 from core.db import get_db
 from config import REGISTER_VERIFY_CODE, MAX_LOGIN_ATTEMPTS, LOGIN_LOCKOUT_TIME, get_config_value
 from services.captcha import captcha_service
 from services.email import normalize_email, email_code_service
 from services.ratelimit import register_limiter, login_limiter, forgot_password_limiter
 from core.logger import log
+
+
+def _validate_password(password):
+    """网站账号密码校验：仅限制长度为 6-30 位。"""
+    if not password:
+        return '密码不能为空'
+    if len(password) < 6:
+        return '密码至少 6 位'
+    if len(password) > 30:
+        return '密码不能超过 30 位'
+    return None
 
 
 def _get_ua():
@@ -61,7 +72,7 @@ def register(username, password, confirm, verify_code, captcha_input, captcha_id
         log('Register', '用户名格式不符合要求', username=username, ip=ip_address)
         return False, uname_err
 
-    pwd_err = validate_password(password)
+    pwd_err = _validate_password(password)
     if pwd_err:
         log('Register', '密码不符合要求', username=username, ip=ip_address)
         return False, pwd_err
@@ -289,7 +300,7 @@ def forgot_password(username, email, captcha_input, captcha_id, email_code,
         log('ForgotPassword', '邮箱验证码错误', username=username, email=email, ip=ip_address)
         return False, '邮箱验证码错误或已过期'
 
-    pwd_err = validate_password(new_password)
+    pwd_err = _validate_password(new_password)
     if pwd_err:
         log('ForgotPassword', '新密码不符合要求', username=username, ip=ip_address)
         return False, pwd_err

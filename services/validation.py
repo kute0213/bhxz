@@ -221,44 +221,14 @@ def validate_website_username(username: str) -> tuple:
 # 密码强度验证
 # ---------------------------------------------------------------------------
 
-def validate_password_strength(password: str, min_length: int = 8) -> tuple:
-    """验证密码强度。
-
-    规则：
-    - 至少 min_length 位（默认 8）
-    - 包含小写字母
-    - 包含大写字母
-    - 包含数字
-    - 包含特殊字符
-    - 不能是弱密码
-
-    Args:
-        password: 待验证的密码
-        min_length: 最小长度
-
-    Returns:
-        (is_valid, error_message)
-    """
+def validate_password_strength(password: str, min_length: int = 6) -> tuple:
+    """验证网站密码：仅限制长度为 6-30 位。"""
     if not password:
         return False, '密码不能为空'
-    if len(password) < min_length:
-        return False, f'密码至少 {min_length} 位'
-    if len(password) > 128:
-        return False, '密码不能超过 128 位'
-
-    if not any(c.islower() for c in password):
-        return False, '密码必须包含至少一个小写字母'
-    if not any(c.isupper() for c in password):
-        return False, '密码必须包含至少一个大写字母'
-    if not any(c.isdigit() for c in password):
-        return False, '密码必须包含至少一个数字'
-    if not any(c in '!@#$%^&*()_+-=[]{}|;:,.<>?/~`' for c in password):
-        return False, '密码必须包含至少一个特殊字符'
-
-    # 弱密码检查
-    if is_weak_password(password):
-        return False, '密码过于简单，请使用更复杂的密码'
-
+    if len(password) < 6:
+        return False, '密码至少 6 位'
+    if len(password) > 30:
+        return False, '密码不能超过 30 位'
     return True, ''
 
 
@@ -266,41 +236,14 @@ def validate_password_strength(password: str, min_length: int = 8) -> tuple:
 # 游戏账号密码验证（简化版，适用于 MC 账号）
 # ---------------------------------------------------------------------------
 
-def validate_game_password(password: str, min_length: int = 8) -> tuple:
-    """验证游戏账号密码强度。
-
-    规则：
-    - 至少 min_length 位（默认 8）
-    - 至少包含字母和数字
-    - 不能是弱密码
-    - 不能包含空格（可能影响 RCON 命令）
-
-    Args:
-        password: 待验证的密码
-        min_length: 最小长度
-
-    Returns:
-        (is_valid, error_message)
-    """
+def validate_game_password(password: str, min_length: int = 6) -> tuple:
+    """验证游戏账号密码：仅限制长度为 6-30 位。"""
     if not password:
         return False, '密码不能为空'
-    if len(password) < min_length:
-        return False, f'密码至少 {min_length} 位'
-    if len(password) > 128:
-        return False, '密码不能超过 128 位'
-
-    if ' ' in password:
-        return False, '密码不能包含空格'
-
-    if not any(c.isalpha() for c in password):
-        return False, '密码必须包含至少一个字母'
-    if not any(c.isdigit() for c in password):
-        return False, '密码必须包含至少一个数字'
-
-    # 弱密码检查
-    if is_weak_password(password):
-        return False, '密码过于简单，请使用更复杂的密码'
-
+    if len(password) < 6:
+        return False, '密码至少 6 位'
+    if len(password) > 30:
+        return False, '密码不能超过 30 位'
     return True, ''
 
 

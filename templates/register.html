@@ -42,11 +42,27 @@
                     </div>
                     <div>
                         <label class="block text-sm font-medium mb-2 text-cream/80">密码</label>
-                        <input type="password" name="password" required minlength="8" autocomplete="new-password" data-password-strength class="input-field w-full px-4 py-3 rounded-lg" placeholder="至少 8 位，需包含字母">
+                        <input
+                                type="password"
+                                name="password"
+                                required
+                                minlength="6"
+                                maxlength="30"
+                                autocomplete="new-password"
+                                class="input-field w-full px-4 py-3 rounded-lg"
+                                placeholder="6-30 位密码">
                     </div>
                     <div>
                         <label class="block text-sm font-medium mb-2 text-cream/80">确认密码</label>
-                        <input type="password" name="confirm" required minlength="8" autocomplete="new-password" class="input-field w-full px-4 py-3 rounded-lg" placeholder="再次输入密码">
+                        <input
+                                type="password"
+                                name="confirm"
+                                required
+                                minlength="6"
+                                maxlength="30"
+                                autocomplete="new-password"
+                                class="input-field w-full px-4 py-3 rounded-lg"
+                                placeholder="再次输入密码">
                     </div>
                     {% if email_verify_enabled %}
                     <div>

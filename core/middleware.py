@@ -13,7 +13,7 @@ from services.ip import get_client_ip
 ROUTE_PREFIXES = (
     '/static/', '/admin', '/api/', '/cmd/',
     '/scheduled', '/community', '/docs',
-    '/login', '/register', '/logout', '/settings', '/health',
+    '/login', '/register', '/', '/settings', '/health',
     '/music', '/sitemap.xml',
 )
 
