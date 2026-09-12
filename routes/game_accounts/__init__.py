@@ -84,15 +84,21 @@ def api_change_password():
         mc_username:  MC 用户名
         current_password: 当前密码（用于验证）
         new_password: 新密码
+        captcha_id:  图形验证码 ID
+        captcha:     图形验证码内容
 
     返回:
         { success, message }
     """
+    from services.captcha import captcha_service
+
     user = get_current_user()
     data = request.get_json(silent=True) or {}
     mc_username = (data.get('mc_username') or '').strip()
     current_password = data.get('current_password', '')
     new_password = data.get('new_password', '')
+    captcha_id = (data.get('captcha_id') or '').strip()
+    captcha_input = (data.get('captcha') or '').strip()
 
     # ── 基础校验 ──
     if not mc_username:
@@ -105,6 +111,13 @@ def api_change_password():
         return jsonify({'success': False, 'message': '新密码至少 4 个字符'}), 400
     if len(new_password) > 32:
         return jsonify({'success': False, 'message': '新密码不能超过 32 个字符'}), 400
+
+    # ── 校验图形验证码（验证当前密码前必须通过） ──
+    if not captcha_id or not captcha_input:
+        return jsonify({'success': False, 'message': '请完成图形验证码'}), 400
+    if not captcha_service.verify(captcha_id, captcha_input):
+        return jsonify({'success': False, 'message': '验证码错误或已过期'}), 400
+    captcha_service.consume(captcha_id)
 
     # ── 检查该账号是否属于当前用户 ──
     if not is_bound_to_user(mc_username, user['id']):

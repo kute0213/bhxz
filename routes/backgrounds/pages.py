@@ -84,20 +84,37 @@ def delete_background(bg_id):
 
 @backgrounds_bp.route('/backgrounds/serve/<int:bg_id>')
 def serve_background(bg_id):
-    """提供背景图片访问。"""
+    """提供背景图片访问。
+
+    支持 ?size= 参数：前端按设备屏幕宽度请求最合适的档位
+    （768 / 1280 / 1920），服务端就近返回对应变体，实现按设备最佳缩放。
+    已通过的图片公开可访问；待审核/已驳回图片仅管理员与上传者可预览。
+    """
     bg = background_service.get_background(bg_id)
-    if not bg or bg['status'] != 1 or not bg['file_path']:
+    if not bg or not bg['file_path']:
         abort(404)
 
+    if bg['status'] != 1:
+        # 未通过的图片仅允许管理员与上传者预览（管理后台审核、用户查看状态）
+        user = get_current_user()
+        if not user or (not user.get('is_admin') and user['id'] != bg['user_id']):
+            abort(404)
+
+    size = request.args.get('size', type=int)
+    if size is not None:
+        size = max(1, min(size, 1920))
+
     try:
-        data = background_service.read_background_data(bg)
+        data = background_service.read_background_data(bg, size=size)
     except Exception:
         data = None
     if not data:
         abort(404)
 
-    return send_file(
+    response = send_file(
         BytesIO(data),
         mimetype='image/webp',
-        max_age=3600,
+        max_age=86400,
     )
+    response.headers['Cache-Control'] = 'public, max-age=86400'
+    return response

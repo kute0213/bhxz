@@ -1,8 +1,7 @@
 """跨平台子进程工具：统一处理编码、输出缓冲、环境变量等问题。
 
-本模块从 core/process_utils.py 迁移至 services/process_utils.py，
-作为服务层子进程基础设施，供 services/process_manager.py、
-services/shell.py 及各服务层使用。
+供服务层子进程调用（音乐转码、数据库备份、更新重启等）统一使用，
+解决 Windows 下 subprocess 中文编码乱码问题。
 """
 
 import os

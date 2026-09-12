@@ -14,12 +14,16 @@ dist/
 /build/
 
 # 数据库文件
-*.duckdb
-*.duckdb.wal
 *.db
 *.db-journal
+*.db-shm
+*.db-wal
 *.sqlite
 *.sqlite3
+# DuckDB 迁移残留（迁移脚本会生成 *.duckdb.bak）
+*.duckdb
+*.duckdb.wal
+*.duckdb.bak
 
 # 备份与上传
 backups/

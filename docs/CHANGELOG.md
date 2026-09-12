@@ -4,6 +4,10 @@
 
 ### 新增
 
+* **一用户一账号绑定机制**：`binding_service.create_binding` 与 `routes/game_accounts/bind.py` 的 `api_bind` 均在绑定前检查当前用户是否已绑定，已绑定则返回「一个网站账号只能绑定一个服务器账号，请先解绑当前账号」，保留 MC 用户名唯一性检查
+
+* **绑定需图形验证码**：`POST /game-accounts/api/bind` 请求体新增 `captcha_id`/`captcha` 字段，后端通过 `captcha_service.verify` 校验并 `consume` 消耗；`bind.html` 复用全局 `CaptchaModal` 弹窗（先弹窗验证、再提交表单），不再内联验证码组件
+
 * **导航栏「服务器账号」入口**：桌面端、平板端、移动端三个导航区域均添加「服务器账号」按钮，登录后可见，点击直达游戏账号管理首页
 * **管理中心「游戏账号管理」页面**：新增 `admin_game_account_bindings.html` 页面，管理员可查看所有用户已绑定的 MC 游戏账号（含绑定用户、绑定时间），支持管理员强制解绑
 * **管理中心功能拆分**：原「游戏账号管理」改名为「账号注册申请管理」，新增「游戏账号管理」独立入口，两者功能分离
@@ -11,6 +15,8 @@
 * **游戏账号解绑功能**：MC 账号列表新增「解绑」按钮，点击后弹出确认弹窗，确认后通过 AJAX 调用解绑 API 移除绑定记录，行自动淡出消除。绑定服务层新增 `create_binding`、`is_bound_to_user`、`unbind_account` 等函数，`routes/game_accounts/bind.py` 新增 `POST /game-accounts/api/unbind` 端点
 
 ### 重构
+
+* **清理无用代码**：删除顶层残留的 `static/js/base.js`、`static/js/main.js`（模板实际引用 `js/core/base.js` 与 `js/pages/main.js`），删除空的 `static/js/script/` 目录；`static/lib/lib-version.json` 移除已废弃的 `xterm_version` 字段；`scripts/build/package.py` 打包排除项由 `*.duckdb` 更新为 `*.db-wal`/`*.db-shm`；`.gitignore` 移除 DuckDB 残留条目；管理后台备份页文案同步去除「命令日志/定时任务日志」过期描述
 
 * **路由层分层规范全面修复**：移除 `routes/game_accounts/__init__.py` 和 `routes/game_accounts/bind.py` 中所有直接 SQL 查询，改用 `services/game_accounts/binding_service.py` 的服务函数（`get_user_bindings`、`is_mc_username_bound`、`is_bound_to_user`、`create_binding`），彻底消除路由层 `conn.execute()` 调用，严格遵循 MVC 分层架构
 
@@ -22,6 +28,8 @@
 
 ### 修复
 
+* **`easyauth_bind.py` 解析容错增强**：`get_player_info` 返回的 `Player Info: {...}` 改为从首个 `{` 截取 JSON 解析，兼容冒号后有空格/无空格、返回中带其他前缀文本的情况；JSON 中 `uuid` 字段可有可无；密码为空时返回「未找到该玩家的密码信息」，密码错误时返回 `error_code='WRONG_PASSWORD'`
+
 * **RCON 密码验证恢复为 `/auth getPlayerInfo` + bcrypt**：服务器确认支持该指令，返回 JSON 格式玩家信息（含密码哈希）。`easyauth_bind.py` 重写为直接解析 JSON 并用 bcrypt.checkpw 比对，删除冗余的 `verify_login` 多重验证流程
 
 * **站点地图更新**：移除已删除的 `/performance` 页面，新增 `/server-status` 和 `/interact` 页面的 sitemap 条目
@@ -29,6 +37,10 @@
 * **平板导航简化为横屏/竖屏模式**：移除独立的平板端导航代码路径（`md:flex lg:hidden`），平板横屏直接使用桌面端导航（`md:flex`），竖屏使用移动端导航，减少代码冗余
 
 * **修复** **`routes/game_accounts/__init__.py`** **缺少** **`get_db`** **导入**：`change_password_page`、`api_bound_accounts`、`api_change_password` 三个路由函数直接使用 `get_db()` 但未在文件顶部导入，会导致 NameError 运行时错误。现通过服务层函数替代，已移除对 `get_db` 的依赖
+
+* **图形验证码优化（修复「验证码太小」）**：默认尺寸 360x128 → 420x150，字号增大（`font_size = min(96, int(height*0.68))`）；干扰元素升级——3~6 条明快色系（红/橙/蓝/绿/紫/青等）彩色干扰横线/斜线、字符后方 20~40 个浅色小号干扰字符（数字/字母/短横线/点）、背景噪点数量增加并随机浅色着色（不再只是灰色）；字符颜色改为从深色系（深蓝/深红/深绿/深紫/墨黑/深棕）随机选取，保持清晰可辨；位数（4 位）与字符集不变，`generate()`/`verify()`/`consume()` 接口不变；弹窗图片 `max-w-[360px]` 放宽至 `max-w-[420px]`
+
+* **subprocess 编码统一 UTF-8（修复 Windows 10 GBK 乱码/UnicodeDecodeError）**：`services/music/upload.py` 的 ffmpeg/ffprobe 子进程去除 `text=True`，统一改用 `env=services.process_utils.make_env()`（`PYTHONIOENCODING=utf-8`）+ `decode_output()` 解码字节输出；`routes/admin/backup.py` 启动恢复脚本、`scripts/restore_db.py` 启动服务器均传入 `env=make_env()`，跨平台统一处理，不再依赖系统 locale 编码
 
 ### 文档
 

@@ -1,8 +1,10 @@
 """
-验证码服务模块：生成四位字符验证码图片（大小写字母+数字组合）。
+验证码服务模块：生成四位字符验证码图片（大写字母+数字组合，校验时不区分大小写）。
 
-- 每个字符独立随机倾斜（-22° ~ +22°），字体粗大清晰
-- 一条随机倾斜的粗干扰线
+- 每个字符独立随机倾斜（-12° ~ +12°），字体粗大清晰，颜色从深色系随机选取
+- 3~6 条不同颜色的随机干扰横线/斜线
+- 字符后方 20~40 个浅色小号干扰字符（数字/字母/短横线/点）
+- 背景彩色浅色噪点
 - 图片直接返回 base64 编码，不保存文件，减少服务器开销
 - 验证码答案存于服务端内存（CaptchaService 单例），返回随机 captcha_id
 - 供前端提交时携带，校验后一次性删除防止重放攻击，避免被 curl 等工具绕过
@@ -74,16 +76,52 @@ def _load_font(size: int):
 _CAPTCHA_CHARS = 'ACDEFGHJKMNPQRTUVWXY34679'
 _CAPTCHA_LENGTH = 4
 
+# ---- 干扰线颜色：明快色系（红/橙/蓝/绿/紫/青/粉等），饱和度适中 ----
+_LINE_COLORS = [
+    (216, 76, 68),    # 红
+    (232, 141, 52),   # 橙
+    (66, 133, 224),   # 蓝
+    (76, 172, 92),    # 绿
+    (158, 92, 202),   # 紫
+    (58, 178, 190),   # 青
+    (216, 120, 164),  # 粉
+    (146, 160, 62),   # 黄绿
+]
+
+# ---- 字符颜色：深色系（深蓝/深红/深绿/深紫/墨黑/深棕），保证清晰可辨 ----
+_CHAR_COLORS = [
+    (18, 52, 108),    # 深蓝
+    (132, 28, 30),    # 深红
+    (16, 88, 42),     # 深绿
+    (92, 36, 118),    # 深紫
+    (28, 28, 34),     # 墨黑
+    (82, 48, 22),     # 深棕
+    (52, 52, 66),     # 深灰蓝
+]
+
+# ---- 干扰字符颜色：浅色系（不要盖过字符） ----
+_NOISE_CHAR_COLORS = [
+    (150, 172, 204), (182, 148, 158), (166, 190, 152),
+    (192, 172, 132), (158, 158, 194), (196, 142, 140),
+    (140, 182, 184), (182, 172, 194), (188, 196, 158),
+]
+
+# 字符后方干扰字符池：数字 + 大写字母 + 短横线/点
+_NOISE_CHARS = '0123456789ACDEFGHJKMNPQRTUVWXY-.'
+
 
 def generate_char_captcha(
-    width: int = 360,
-    height: int = 128,
+    width: int = 420,
+    height: int = 150,
 ) -> Tuple[str, str]:
     """
     生成四位字符验证码图片。
 
     每个字符从大小写字母、数字中随机选取，单独渲染并轻微旋转，
-    字体粗大清晰。图片包含一条随机倾斜的干扰线。
+    字体粗大清晰，颜色从深色系随机选取。图片包含：
+    - 3~6 条不同颜色的随机干扰横线/斜线
+    - 字符后方 20~40 个浅色小号干扰字符（数字/字母/短横线/点）
+    - 背景彩色浅色噪点
 
     Args:
         width: 图片宽度
@@ -98,7 +136,7 @@ def generate_char_captcha(
     if not _check_pil():
         raise RuntimeError("Pillow 库未安装，请运行: pip install Pillow")
 
-    # 生成 4 位随机字符
+    # 生成 4 位随机字符（位数与字符集保持不变，避免破坏校验逻辑）
     code = ''.join(secrets.choice(_CAPTCHA_CHARS) for _ in range(_CAPTCHA_LENGTH))
 
     # 创建浅色背景图片
@@ -106,30 +144,53 @@ def generate_char_captcha(
     draw = ImageDraw.Draw(img)
 
     # 字号与单字符格宽匹配，避免旋转后首尾字符被画布裁掉。
-    font_size = min(88, int(height * 0.69))
+    font_size = min(96, int(height * 0.68))
     try:
         # 优先使用项目内嵌字体（兼容 Windows / Linux / macOS）
         font = _load_font(font_size)
     except Exception:
         font = ImageFont.load_default()
 
-    # ---- 绘制微弱背景噪点 ----
-    for _ in range((width * height) // 150):
+    # 小号字体：用于字符后方的浅色干扰字符
+    try:
+        noise_font = _load_font(14)
+    except Exception:
+        noise_font = ImageFont.load_default()
+
+    # ---- 背景噪点：数量增加、随机浅色（不再只是灰色） ----
+    for _ in range((width * height) // 80):
         x = random.randint(0, width - 1)
         y = random.randint(0, height - 1)
-        c = random.randint(195, 215)
-        draw.point((x, y), fill=(c, c, c))
+        dot_color = (
+            random.randint(175, 235),
+            random.randint(175, 235),
+            random.randint(175, 235),
+        )
+        draw.point((x, y), fill=dot_color)
 
-    # ---- 绘制一条随机倾斜的粗干扰线 ----
-    line_width = random.randint(2, 3)
-    # 线从左侧到右侧，随机倾斜穿行
-    x1 = random.randint(0, width // 4)
-    y1 = random.randint(0, height - 1)
-    x2 = random.randint(width * 3 // 4, width - 1)
-    y2 = random.randint(0, height - 1)
-    # 线条颜色：中灰色，比字符浅
-    lc = random.randint(140, 185)
-    draw.line((x1, y1, x2, y2), fill=(lc, lc, lc), width=line_width)
+    # ---- 字符后方：20~40 个随机干扰数字/字母/短横线/点（浅色系） ----
+    for _ in range(random.randint(20, 40)):
+        x = random.randint(0, max(0, width - 20))
+        y = random.randint(0, max(0, height - 20))
+        noise_ch = random.choice(_NOISE_CHARS)
+        draw.text(
+            (x, y), noise_ch, font=noise_font,
+            fill=random.choice(_NOISE_CHAR_COLORS),
+        )
+
+    # ---- 3~6 条不同颜色的随机干扰横线/斜线 ----
+    for _ in range(random.randint(3, 6)):
+        # 线从左侧到右侧，随机倾斜穿行
+        x1 = random.randint(0, width // 4)
+        y1 = random.randint(0, height - 1)
+        x2 = random.randint(width * 3 // 4, width - 1)
+        y2 = random.randint(0, height - 1)
+        # 每条线从明快色系中随机取色，保证干扰明显且互不相同
+        line_color = random.choice(_LINE_COLORS)
+        draw.line(
+            (x1, y1, x2, y2), fill=line_color,
+            width=random.randint(2, 3),
+        )
 
     # ---- 绘制每个字符（紧边界画布、独立旋转、按格居中） ----
     cell_w = width // _CAPTCHA_LENGTH
@@ -146,15 +207,8 @@ def generate_char_captcha(
         )
         ch_draw = ImageDraw.Draw(ch_img)
 
-        # 字符颜色：深色，保证清晰可辨
-        r = random.randint(30, 90)
-        g = random.randint(30, 90)
-        b = random.randint(30, 90)
-        # 确保颜色足够深
-        if r + g + b > 240:
-            factor = 200 / (r + g + b)
-            r, g, b = int(r * factor), int(g * factor), int(b * factor)
-        char_color = (r, g, b)
+        # 字符颜色：从深色系随机选取，保证清晰可辨
+        char_color = random.choice(_CHAR_COLORS)
 
         ch_draw.text(
             (glyph_pad - bbox[0], glyph_pad - bbox[1]),

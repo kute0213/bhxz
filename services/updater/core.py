@@ -492,6 +492,7 @@ def _run_update():
                     [sys.executable, build_script],
                     stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                     text=True, bufsize=1,
+                    encoding='utf-8', errors='replace',
                     env=build_env,
                 )
                 build_ok = False
@@ -524,22 +525,7 @@ def _run_update():
         if restart_script and os.path.isfile(restart_script):
             # 启动重启脚本（独立进程组，不依赖当前进程存活）
             try:
-                popen_kwargs = {
-                    'cwd': APP_ROOT,
-                    'close_fds': True,
-                    'stdout': subprocess.DEVNULL,
-                    'stderr': subprocess.DEVNULL,
-                    'stdin': subprocess.DEVNULL,
-                }
-                if sys.platform == 'win32':
-                    popen_kwargs['creationflags'] = (
-                        subprocess.CREATE_NEW_PROCESS_GROUP
-                        | subprocess.CREATE_NO_WINDOW
-                        | 0x00000004  # DETACHED_PROCESS
-                    )
-                else:
-                    popen_kwargs['preexec_fn'] = os.setsid
-                subprocess.Popen([restart_script], **popen_kwargs)
+                _launch_restart_script(restart_script)
                 _add_event('log', {'message': '✓ 重启脚本已启动，服务器将在旧进程退出后自动重启'})
             except Exception as e:
                 _add_event('log', {'message': f'✗ 启动重启脚本失败: {e}'})
@@ -578,141 +564,114 @@ def _run_update():
 
 
 # ---------------------------------------------------------------------------
-# 重启逻辑（跨平台，独立脚本）
+# 重启逻辑（单一 Python 辅助脚本，跨平台，无编码问题）
 # ---------------------------------------------------------------------------
 
 
-def _write_restart_script():
-    """写入独立重启脚本，返回脚本路径。
+# 重启辅助脚本模板：完全独立于当前进程，等待旧进程退出后拉起新服务器。
+# 逻辑为纯 ASCII，仅运行时占位符替换（路径含中文时也安全，Python 源码默认 UTF-8）。
+_RESTART_TEMPLATE = '''\
+import os
+import subprocess
+import sys
+import time
 
-    重启脚本完全独立于当前进程，会在当前进程退出后启动新服务器。
+
+def _process_alive(pid):
+    """跨平台判断进程是否存活（Windows 下同样适用）。"""
+    try:
+        os.kill(pid, 0)
+        return True
+    except OSError:
+        return False
+
+
+# 等待旧进程退出（最多 60 秒，避免新进程端口占用）
+for _ in range(60):
+    if not _process_alive({old_pid}):
+        break
+    time.sleep(1)
+
+kwargs = {{
+    'cwd': {app_root!r},
+    'env': os.environ.copy(),  # 继承原进程环境（含 uv/虚拟环境变量）
+    'stdin': subprocess.DEVNULL,
+    'stdout': subprocess.DEVNULL,
+    'stderr': subprocess.DEVNULL,
+    'close_fds': True,
+}}
+if sys.platform == 'win32':
+    # DETACHED_PROCESS: 脱离会话独立运行，不弹出窗口
+    kwargs['creationflags'] = (
+        subprocess.CREATE_NEW_PROCESS_GROUP
+        | subprocess.CREATE_NO_WINDOW
+        | 0x00000004
+    )
+else:
+    kwargs['preexec_fn'] = os.setsid
+
+subprocess.Popen([{python_exe!r}, {app_script!r}], **kwargs)
+
+# 自清理
+try:
+    os.remove(os.path.abspath(__file__))
+except OSError:
+    pass
+'''
+
+
+def _write_restart_script():
+    """写入独立重启辅助脚本，返回脚本路径。
+
+    使用纯 Python 实现（而非 bat/sh），避免 Windows 下 cmd 编码、
+    tasklist 解析、短路径等问题；同时继承原进程完整环境变量，
+    保证 uv / 虚拟环境等任意启动方式下都能正确拉起新进程。
     """
     pid = os.getpid()
-    python_exe = sys.executable
-    script = os.path.join(APP_ROOT, 'app.py')
+    python_exe = sys.executable or sys.argv[0]
+    app_script = os.path.join(APP_ROOT, 'app.py')
 
-    if sys.platform == 'win32':
-        return _write_restart_bat(pid, python_exe, script)
-    else:
-        return _write_restart_sh(pid, python_exe, script)
-
-
-def _get_short_path_windows(long_path):
-    """获取 Windows 短路径名（8.3 格式），避免 Unicode 编码问题。
-
-    如果无法获取短路径，返回原路径的 ASCII 安全版本或原始路径。
-    """
-    try:
-        import ctypes
-        from ctypes import wintypes
-
-        # 获取短路径所需的缓冲区大小
-        GetShortPathNameW = ctypes.windll.kernel32.GetShortPathNameW
-        GetShortPathNameW.argtypes = [wintypes.LPCWSTR, wintypes.LPWSTR, wintypes.DWORD]
-        GetShortPathNameW.restype = wintypes.DWORD
-
-        buf_size = GetShortPathNameW(long_path, None, 0)
-        if buf_size == 0:
-            return long_path
-
-        buf = ctypes.create_unicode_buffer(buf_size)
-        result = GetShortPathNameW(long_path, buf, buf_size)
-        if result == 0:
-            return long_path
-        return buf.value
-    except Exception:
-        return long_path
-
-
-def _write_restart_bat(pid, python_exe, script):
-    """写入 Windows 重启批处理脚本。
-
-    使用 tasklist 循环检测旧进程是否退出，然后启动新服务器。
-    start 命令确保新进程独立运行（不依附于当前 cmd 窗口）。
-
-    兼容性修复：
-      - 使用短路径名（8.3 格式）避免中文路径编码问题
-      - 使用 timeout 代替 ping 实现延迟（更标准）
-      - 使用 tasklist /NH 避免表头兼容性问题
-      - 添加最大等待次数，防止无限循环
-    """
-    # 使用短路径名避免 Unicode 编码问题
-    safe_python = _get_short_path_windows(python_exe)
-    safe_script = _get_short_path_windows(script)
-
-    content = (
-        '@echo off\r\n'
-        f'title bhxz-restart-{pid}\r\n'
-        'chcp 65001 >nul 2>&1\r\n'
-        'timeout /t 3 /nobreak >nul\r\n'
-        'setlocal enabledelayedexpansion\r\n'
-        'set MAX_WAIT=60\r\n'
-        'set WAIT_COUNT=0\r\n'
-        ':wait\r\n'
-        f'tasklist /NH /FI "PID eq {pid}" 2>nul | findstr /R /C:"\\<{pid}\\>" >nul\r\n'
-        'if not errorlevel 1 (\r\n'
-        '    set /a WAIT_COUNT+=1\r\n'
-        '    if !WAIT_COUNT! geq !MAX_WAIT! (\r\n'
-        f'        start "" /B "{safe_python}" "{safe_script}"\r\n'
-        '        del "%~f0"\r\n'
-        '        exit\r\n'
-        '    )\r\n'
-        '    timeout /t 1 /nobreak >nul\r\n'
-        '    goto wait\r\n'
-        ')\r\n'
-        f'start "" /B "{safe_python}" "{safe_script}"\r\n'
-        'del "%~f0"\r\n'
-        'exit\r\n'
+    content = _RESTART_TEMPLATE.format(
+        old_pid=pid,
+        python_exe=python_exe,
+        app_script=app_script,
+        app_root=APP_ROOT,
     )
-    path = os.path.join(tempfile.gettempdir(), f'bhxz_restart_{pid}.bat')
 
-    # 判断路径是否包含非 ASCII 字符，选择合适的编码
-    def _is_ascii_only(s):
-        try:
-            s.encode('ascii')
-            return True
-        except (UnicodeEncodeError, UnicodeDecodeError):
-            return False
+    path = os.path.join(tempfile.gettempdir(), f'bhxz_restart_{pid}.py')
+    try:
+        with open(path, 'w', encoding='utf-8', newline='\n') as f:
+            f.write(content)
+        return path
+    except Exception as e:
+        _add_event('log', {'message': f'  ✗ 写入重启脚本失败: {e}'})
+        return None
 
-    if _is_ascii_only(content):
-        encoding = 'ascii'
+
+def _launch_restart_script(restart_script):
+    """启动重启辅助脚本（独立进程组，不依赖当前进程存活）。"""
+    python_exe = sys.executable or sys.argv[0]
+    popen_kwargs = {
+        'cwd': APP_ROOT,
+        'close_fds': True,
+        'stdout': subprocess.DEVNULL,
+        'stderr': subprocess.DEVNULL,
+        'stdin': subprocess.DEVNULL,
+    }
+    if sys.platform == 'win32':
+        popen_kwargs['creationflags'] = (
+            subprocess.CREATE_NEW_PROCESS_GROUP
+            | subprocess.CREATE_NO_WINDOW
+            | 0x00000004  # DETACHED_PROCESS
+        )
     else:
-        encoding = 'utf-8-sig'  # UTF-8 with BOM，cmd.exe 在 chcp 65001 下可识别
-    try:
-        with open(path, 'w', encoding=encoding, newline='\r\n') as f:
-            f.write(content)
-        return path
-    except Exception as e:
-        _add_event('log', {'message': f'  ✗ 写入重启脚本失败: {e}'})
-        return None
-
-
-def _write_restart_sh(pid, python_exe, script):
-    """写入 Linux/macOS 重启 Shell 脚本。
-
-    使用 kill -0 循环检测旧进程是否退出，然后 exec 替换自身。
-    """
-    content = f'''#!/bin/sh
-sleep 2
-while kill -0 {pid} 2>/dev/null; do sleep 1; done
-cd "{APP_ROOT}"
-exec "{python_exe}" "{script}"
-rm -f "$0"
-'''
-    path = os.path.join(tempfile.gettempdir(), f'bhxz_restart_{pid}.sh')
-    try:
-        with open(path, 'w') as f:
-            f.write(content)
-        os.chmod(path, 0o755)
-        return path
-    except Exception as e:
-        _add_event('log', {'message': f'  ✗ 写入重启脚本失败: {e}'})
-        return None
+        popen_kwargs['preexec_fn'] = os.setsid
+    subprocess.Popen([python_exe, restart_script], **popen_kwargs)
 
 
 def _direct_restart():
     """直接启动新进程（兜底方案，当重启脚本写入失败时使用）。"""
-    python_exe = sys.executable
+    python_exe = sys.executable or sys.argv[0]
     script = os.path.join(APP_ROOT, 'app.py')
     try:
         kwargs = {
@@ -723,18 +682,14 @@ def _direct_restart():
             'stdin': subprocess.DEVNULL,
         }
         if sys.platform == 'win32':
-            # 使用短路径名避免编码问题
-            safe_python = _get_short_path_windows(python_exe)
-            safe_script = _get_short_path_windows(script)
             kwargs['creationflags'] = (
                 subprocess.CREATE_NEW_PROCESS_GROUP
                 | subprocess.CREATE_NO_WINDOW
                 | 0x00000004  # DETACHED_PROCESS
             )
-            subprocess.Popen([safe_python, safe_script], **kwargs)
         else:
             kwargs['preexec_fn'] = os.setsid
-            subprocess.Popen([python_exe, script], **kwargs)
+        subprocess.Popen([python_exe, script], **kwargs)
         _add_event('log', {'message': '✓ 新进程已启动'})
     except Exception as e:
         _add_event('log', {'message': f'✗ 直接启动新进程失败: {e}'})

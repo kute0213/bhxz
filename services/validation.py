@@ -221,14 +221,38 @@ def validate_website_username(username: str) -> tuple:
 # 密码强度验证
 # ---------------------------------------------------------------------------
 
-def validate_password_strength(password: str, min_length: int = 6) -> tuple:
-    """验证网站密码：仅限制长度为 6-30 位。"""
+def validate_password_strength(password: str, min_length: int = 8) -> tuple:
+    """验证网站密码强度。
+
+    规则：
+    - 长度 8-30 位
+    - 必须同时包含大写字母、小写字母、数字、特殊字符
+      （特殊字符指非字母数字的可见字符，如 !@#$%^&*()_+-=[]{}|;:,.<>? 等）
+    - 拒绝弱密码（常见易猜密码、单一重复字符、连续序列）
+
+    Args:
+        password: 待验证的密码
+        min_length: 最小长度，默认 8
+
+    Returns:
+        (is_valid, error_message)
+    """
     if not password:
         return False, '密码不能为空'
-    if len(password) < 6:
-        return False, '密码至少 6 位'
+    if len(password) < min_length:
+        return False, f'密码至少 {min_length} 位且必须包含大小写字母、数字和特殊字符'
     if len(password) > 30:
         return False, '密码不能超过 30 位'
+    if not re.search(r'[A-Z]', password):
+        return False, '密码必须包含大写字母'
+    if not re.search(r'[a-z]', password):
+        return False, '密码必须包含小写字母'
+    if not re.search(r'\d', password):
+        return False, '密码必须包含数字'
+    if not re.search(r'[^A-Za-z0-9]', password):
+        return False, '密码必须包含特殊字符'
+    if is_weak_password(password):
+        return False, '密码过于简单，请使用更复杂的密码'
     return True, ''
 
 
@@ -237,13 +261,32 @@ def validate_password_strength(password: str, min_length: int = 6) -> tuple:
 # ---------------------------------------------------------------------------
 
 def validate_game_password(password: str, min_length: int = 6) -> tuple:
-    """验证游戏账号密码：仅限制长度为 6-30 位。"""
+    """验证游戏账号密码（Minecraft AuthMe 场景）。
+
+    规则：
+    - 长度 6-30 位
+    - 至少包含字母和数字（不要求特殊字符，AuthMe 密码可能不含特殊字符）
+    - 拒绝弱密码
+
+    Args:
+        password: 待验证的密码
+        min_length: 最小长度，默认 6
+
+    Returns:
+        (is_valid, error_message)
+    """
     if not password:
         return False, '密码不能为空'
-    if len(password) < 6:
-        return False, '密码至少 6 位'
+    if len(password) < min_length:
+        return False, f'密码至少 {min_length} 位'
     if len(password) > 30:
         return False, '密码不能超过 30 位'
+    if not re.search(r'[A-Za-z]', password):
+        return False, '密码必须包含字母'
+    if not re.search(r'\d', password):
+        return False, '密码必须包含数字'
+    if is_weak_password(password):
+        return False, '密码过于简单，请使用更复杂的密码'
     return True, ''
 
 

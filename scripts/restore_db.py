@@ -8,7 +8,7 @@
 1. 等待 2 秒，让主进程的 HTTP 响应发送完毕
 2. 向主进程发送 SIGTERM 信号，触发优雅关闭
 3. 等待主进程完全退出（最长 30 秒）
-4. 删除旧数据库文件（.duckdb 和 .wal）
+4. 删除旧数据库文件（.db、-wal 和 -shm）
 5. 将备份文件复制为新的数据库文件
 6. 启动新的服务器进程
 """
@@ -24,8 +24,12 @@ import subprocess
 # 项目根目录
 APP_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BACKUP_DIR = os.path.join(APP_ROOT, 'backups', 'db')
-DB_PATH = os.path.join(APP_ROOT, 'site.duckdb')
+DB_PATH = os.path.join(APP_ROOT, 'site.db')
 FLAG_FILE = os.path.join(BACKUP_DIR, '.restore_flag')
+
+# 独立脚本运行时 sys.path[0] 为 scripts/，需手动加入项目根目录以便导入 services
+sys.path.insert(0, APP_ROOT)
+from services.process_utils import make_env  # noqa: E402
 
 
 def main():
@@ -76,8 +80,8 @@ def main():
     if max_wait <= 0:
         print('主进程未在 30 秒内退出，强制继续...')
 
-    # 5. 删除旧数据库文件
-    for f in [DB_PATH, DB_PATH + '.wal']:
+    # 5. 删除旧数据库文件（主文件 + WAL + SHM）
+    for f in [DB_PATH, DB_PATH + '-wal', DB_PATH + '-shm']:
         if os.path.exists(f):
             try:
                 os.remove(f)
@@ -99,7 +103,7 @@ def main():
     except Exception as e:
         print(f'恢复失败: {e}')
         # 尝试回滚到安全备份
-        safety_path = os.path.join(BACKUP_DIR, 'pre_restore_*.duckdb')
+        safety_path = os.path.join(BACKUP_DIR, 'pre_restore_*.db')
         import glob
         safety_files = sorted(glob.glob(safety_path), reverse=True)
         if safety_files:
@@ -125,6 +129,7 @@ def main():
             [python_exe, script],
             cwd=APP_ROOT,
             close_fds=True,
+            env=make_env(),
         )
         print(f'服务器已启动: {python_exe} {script}')
     except Exception as e:

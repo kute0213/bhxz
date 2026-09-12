@@ -3,11 +3,13 @@
 from flask import request, jsonify
 
 from core.auth import login_required, get_current_user
+from services.captcha import captcha_service
 from services.easyauth_bind import bind_account
 from services.validation import validate_mc_username
 from services.game_accounts.binding_service import (
     unbind_account,
     create_binding,
+    get_user_bindings,
     is_mc_username_bound,
 )
 from routes.game_accounts import game_accounts_bp
@@ -16,11 +18,13 @@ from routes.game_accounts import game_accounts_bp
 @game_accounts_bp.route('/api/bind', methods=['POST'])
 @login_required
 def api_bind():
-    """绑定 MC 游戏账号（需通过 RCON 验证游戏内密码）。
+    """绑定 MC 游戏账号（需通过图形验证码 + RCON 验证游戏内密码）。
 
     请求体 JSON:
         username:    MC 用户名
         password:    游戏内密码
+        captcha_id:  图形验证码 ID
+        captcha:     图形验证码内容
 
     返回:
         { success, message, username, uuid, error_code }
@@ -29,6 +33,8 @@ def api_bind():
     data = request.get_json(silent=True) or {}
     username = (data.get('username') or '').strip()
     password = data.get('password', '')
+    captcha_id = (data.get('captcha_id') or '').strip()
+    captcha_input = (data.get('captcha') or '').strip()
 
     # ── 基础校验 ──
     if not username:
@@ -36,9 +42,24 @@ def api_bind():
     if not password:
         return jsonify({'success': False, 'message': '密码不能为空'}), 400
 
+    # ── 校验图形验证码 ──
+    if not captcha_id or not captcha_input:
+        return jsonify({'success': False, 'message': '请完成图形验证码'}), 400
+    if not captcha_service.verify(captcha_id, captcha_input):
+        return jsonify({'success': False, 'message': '验证码错误或已过期'}), 400
+    captcha_service.consume(captcha_id)
+
     valid_mc, mc_err = validate_mc_username(username)
     if not valid_mc:
         return jsonify({'success': False, 'message': mc_err}), 400
+
+    # ── 检查当前用户是否已绑定账号（一个网站账号只能绑定一个服务器账号） ──
+    if get_user_bindings(user['id']):
+        return jsonify({
+            'success': False,
+            'message': '一个网站账号只能绑定一个服务器账号，请先解绑当前账号',
+            'error_code': 'ALREADY_BOUND',
+        }), 400
 
     # ── 检查该 MC 账号是否已被绑定 ──
     if is_mc_username_bound(username):

@@ -35,8 +35,6 @@ def shutdown_application(signum=None):
     if signum is not None:
         log('INFO', 'App', f'收到信号 {signum}，正在关闭服务器...')
 
-    from services.logging import log_cleaner
-    from services.scheduler import scheduler
     from services.backup import BackupScheduler
     from services.email import email_service
     from services.sitemap_cache import sitemap_cache
@@ -51,9 +49,7 @@ def shutdown_application(signum=None):
 
     BackupScheduler().stop()
     email_service.stop()
-    scheduler.stop()
     sitemap_cache.stop()
-    log_cleaner.stop()
     try:
         conn = get_db()
         conn.commit()

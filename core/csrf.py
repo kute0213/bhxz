@@ -36,7 +36,6 @@ def csrf_protect():
     """before_request 钩子：对状态变更请求执行 CSRF 校验。
 
     - 跳过 /api/* 路由（JSON API 使用自己的鉴权方式）
-    - 跳过 /cmd/* 路由（WebSocket 类操作）
     - 跳过静态文件、上传文件等 GET 请求
     - 跳过文件上传类路由（它们通过 FormData 提交，需单独处理）
     """
@@ -46,10 +45,6 @@ def csrf_protect():
     # 跳过 API 路由（JSON 接口，不依赖表单 CSRF）
     path = request.path
     if path.startswith('/api/'):
-        return
-
-    # 跳过 /cmd/* 路由（WebSocket 类操作）
-    if path.startswith('/cmd/'):
         return
 
     # 获取 token：优先表单字段，其次自定义请求头

@@ -27,7 +27,7 @@ from routes.public import public_bp
 FORBIDDEN_LOCAL_PARTS = {
     'core', 'services', 'routes', 'templates', '__pycache__',
     '.git', 'backups', '.env', 'config.py', 'app.py',
-    'requirements.txt', 'site.duckdb', 'site.duckdb.wal'
+    'requirements.txt', 'site.db', 'site.db-wal', 'site.db-shm'
 }
 
 # 系统敏感目录前缀（绝对路径时禁止）

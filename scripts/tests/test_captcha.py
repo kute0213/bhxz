@@ -15,7 +15,7 @@ def test_captcha_image_has_readable_dimensions():
 
     raw = base64.b64decode(data_url.split(',', 1)[1])
     with Image.open(BytesIO(raw)) as image:
-        assert image.size == (360, 128)
+        assert image.size == (420, 150)
 
 
 def test_captcha_verification_is_case_insensitive():

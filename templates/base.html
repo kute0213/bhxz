@@ -12,7 +12,7 @@
     <!-- 本地Lucide图标库 -->
     <script src="{{ url_for('static', filename='lib/lucide/lucide.min.js', v='1') }}"></script>
     <!-- 关键CSS内联：防止白屏闪烁 -->
-    <style>body{background:#162b47;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei","Noto Sans CJK SC","WenQuanYi Micro Hei","Helvetica Neue",Arial,sans-serif}</style>
+    <style>body{background:#f3f6fa;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei","Noto Sans CJK SC","WenQuanYi Micro Hei","Helvetica Neue",Arial,sans-serif}</style>
     <script>
         document.documentElement.classList.add('js');
         // JS 保底：1.5 秒后无论 JS 是否正常，强制显示页面内容
@@ -99,10 +99,11 @@
         <div class="bg-orb bg-orb-3"></div>
     </div>
 
-    <!-- 全站背景图片 -->
+    <!-- 全站背景图片：JS 按设备屏幕宽度就近取档（768/1280/1920），无 JS 时回退主图 -->
     {% if active_backgrounds %}
-    <div class="site-background" style="background-image: url('{{ url_for('backgrounds.serve_background', bg_id=active_backgrounds[0].id) }}'); background-size: {{ background_image_size }};"></div>
+    <div class="site-background" data-background-url="{{ url_for('backgrounds.serve_background', bg_id=active_backgrounds[0].id) }}" style="background-size: {{ background_image_size }};"></div>
     <div class="site-background-overlay"></div>
+    <noscript><style>.site-background{background-image:url('{{ url_for('backgrounds.serve_background', bg_id=active_backgrounds[0].id) }}');opacity:1!important}</style></noscript>
     {% endif %}
 
     <!-- 页面过渡遮罩 -->
@@ -234,20 +235,74 @@
                     <span class="text-lg sm:text-xl font-bold text-gold-400 hidden xs:inline">滨海小镇</span>
                 </a>
 
-                <!-- 桌面端主导航：常用入口直接可见，空间不足时按优先级自动收起 -->
+                <!-- 桌面端主导航：首页直达，导航 / 互动 / 账号为悬停下拉 -->
                 <div class="desktop-nav" aria-label="主导航">
                     <a href="{{ url_for('main.home') }}" class="desktop-nav-link{% if request.endpoint == 'main.home' %} active{% endif %}">
                         <i data-lucide="home"></i><span>首页</span>
                     </a>
-                    <a href="{{ url_for('guides.guide_list') }}" class="desktop-nav-link{% if request.endpoint and request.endpoint.startswith('guides.') %} active{% endif %}">
-                        <i data-lucide="book-open"></i><span>服务器指南</span>
-                    </a>
-                    <a href="{{ url_for('discussion.list') }}" class="desktop-nav-link nav-priority-low{% if request.endpoint and request.endpoint.startswith('discussion.') %} active{% endif %}">
-                        <i data-lucide="message-square"></i><span>讨论</span>
-                    </a>
-                    <a href="{{ url_for('main.server_status') }}" class="desktop-nav-link nav-priority-low{% if request.endpoint == 'main.server_status' %} active{% endif %}">
-                        <i data-lucide="activity"></i><span>服务器状态</span>
-                    </a>
+                    <div class="desktop-nav-item">
+                        <button type="button" class="desktop-nav-toggle" aria-haspopup="true">
+                            <i data-lucide="menu"></i><span>导航</span>
+                            <i data-lucide="chevron-down" class="nav-caret"></i>
+                        </button>
+                        <div class="desktop-nav-dropdown" role="menu">
+                            <a href="{{ url_for('guides.guide_list') }}" class="desktop-nav-dropdown-link{% if request.endpoint and request.endpoint.startswith('guides.') %} active{% endif %}" role="menuitem">
+                                <i data-lucide="book-open"></i><span>服务器指南</span>
+                            </a>
+                            <a href="{{ url_for('discussion.list') }}" class="desktop-nav-dropdown-link{% if request.endpoint and request.endpoint.startswith('discussion.') %} active{% endif %}" role="menuitem">
+                                <i data-lucide="message-square"></i><span>讨论</span>
+                            </a>
+                            <a href="{{ url_for('main.server_status') }}" class="desktop-nav-dropdown-link{% if request.endpoint == 'main.server_status' %} active{% endif %}" role="menuitem">
+                                <i data-lucide="activity"></i><span>服务器状态</span>
+                            </a>
+                        </div>
+                    </div>
+                    <div class="desktop-nav-item">
+                        <button type="button" class="desktop-nav-toggle" aria-haspopup="true">
+                            <i data-lucide="users"></i><span>互动</span>
+                            <i data-lucide="chevron-down" class="nav-caret"></i>
+                        </button>
+                        <div class="desktop-nav-dropdown" role="menu">
+                            <a href="{{ url_for('main.music_page') }}" class="desktop-nav-dropdown-link{% if request.endpoint and request.endpoint.startswith('main.music') %} active{% endif %}" role="menuitem">
+                                <i data-lucide="music"></i><span>大喇叭音频</span>
+                            </a>
+                            <a href="{{ url_for('backgrounds.background_list_page') }}" class="desktop-nav-dropdown-link{% if request.endpoint and request.endpoint.startswith('backgrounds.') %} active{% endif %}" role="menuitem">
+                                <i data-lucide="image"></i><span>背景图片</span>
+                            </a>
+                            <a href="{{ url_for('game_accounts.index') }}" class="desktop-nav-dropdown-link{% if request.endpoint and request.endpoint.startswith('game_accounts.') %} active{% endif %}" role="menuitem">
+                                <i data-lucide="gamepad-2"></i><span>游戏账号</span>
+                            </a>
+                        </div>
+                    </div>
+                    <div class="desktop-nav-item">
+                        <button type="button" class="desktop-nav-toggle" aria-haspopup="true">
+                            <i data-lucide="user"></i><span>账号</span>
+                            <i data-lucide="chevron-down" class="nav-caret"></i>
+                        </button>
+                        <div class="desktop-nav-dropdown" role="menu">
+                            {% if user %}
+                            <a href="{{ url_for('main.settings') }}" class="desktop-nav-dropdown-link{% if request.endpoint == 'main.settings' %} active{% endif %}" role="menuitem">
+                                <i data-lucide="settings"></i><span>账户设置</span>
+                            </a>
+                            {% if user.is_admin %}
+                            <a href="{{ url_for('admin.admin_page') }}" class="desktop-nav-dropdown-link{% if request.endpoint and request.endpoint.startswith('admin.') %} active{% endif %}" role="menuitem">
+                                <i data-lucide="settings-2"></i><span>管理中心</span>
+                            </a>
+                            {% endif %}
+                            <div class="desktop-nav-dropdown-divider" role="separator"></div>
+                            <a href="{{ url_for('main.logout') }}" class="desktop-nav-dropdown-link" data-logout-confirm role="menuitem">
+                                <i data-lucide="log-out"></i><span>退出登录</span>
+                            </a>
+                            {% else %}
+                            <a href="{{ url_for('main.login') }}" class="desktop-nav-dropdown-link{% if request.endpoint == 'main.login' %} active{% endif %}" role="menuitem">
+                                <i data-lucide="log-in"></i><span>登录</span>
+                            </a>
+                            <a href="{{ url_for('main.register') }}" class="desktop-nav-dropdown-link{% if request.endpoint == 'main.register' %} active{% endif %}" role="menuitem">
+                                <i data-lucide="user-plus"></i><span>注册</span>
+                            </a>
+                            {% endif %}
+                        </div>
+                    </div>
                 </div>
 
                 <!-- 右侧：用户信息 + 汉堡菜单 -->
@@ -296,7 +351,7 @@
 
     <!-- 图形验证码弹窗（全局共享，由 base.js 的 CaptchaModal 控制） -->
     <div id="captcha-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.4); backdrop-filter: blur(8px) saturate(120%); -webkit-backdrop-filter: blur(8px) saturate(120%); z-index: 51;">
-        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: linear-gradient(145deg, rgba(30,45,68,0.99) 0%, rgba(28,42,64,0.99) 100%); backdrop-filter: blur(28px) saturate(105%); -webkit-backdrop-filter: blur(28px) saturate(105%); border: 1px solid rgba(255, 255, 255, 0.11); border-radius: 16px; box-shadow: 0 16px 48px rgba(15, 18, 27, 0.34); max-width: 28rem; width: calc(100% - 2rem); padding: 1.5rem;">
+        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: linear-gradient(145deg, rgba(255,255,255,0.98) 0%, rgba(248,250,254,0.98) 100%); backdrop-filter: blur(28px) saturate(105%); -webkit-backdrop-filter: blur(28px) saturate(105%); border: 1px solid rgba(15, 23, 42, 0.1); border-radius: 16px; box-shadow: 0 16px 48px rgba(15, 23, 42, 0.18); max-width: 28rem; width: calc(100% - 2rem); padding: 1.5rem;">
             <div class="text-center mb-6">
                 <div class="w-14 h-14 mx-auto bg-gold-400/20 rounded-full flex items-center justify-center mb-4">
                     <i data-lucide="shield" class="w-7 h-7 text-gold-400"></i>
@@ -306,7 +361,7 @@
             </div>
             <div class="space-y-4">
                 <div class="flex items-center justify-center gap-3">
-                    <img id="modal-captcha-img" src="" alt="验证码加载中" class="w-full max-w-[360px] h-auto rounded-lg cursor-pointer hover:opacity-90 transition-opacity border border-forest-700/50 bg-cream/90" title="点击刷新验证码" style="image-rendering: auto;">
+                    <img id="modal-captcha-img" src="" alt="验证码加载中" class="w-full max-w-[420px] h-auto rounded-lg cursor-pointer hover:opacity-90 transition-opacity border border-forest-700/50 bg-cream/90" title="点击刷新验证码" style="image-rendering: auto;">
                     <input type="hidden" id="modal-captcha-id" value="">
                     <button type="button" id="modal-captcha-refresh" class="p-2 text-cream/50 hover:text-gold-400 transition-colors rounded-lg hover:bg-cream/5" title="刷新验证码">
                         <i data-lucide="refresh-cw" class="w-5 h-5"></i>

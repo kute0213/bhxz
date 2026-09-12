@@ -15,6 +15,7 @@ from core.db import get_db
 from config import DB_PATH, BACKUP_DIR, APP_ROOT
 from routes.admin import admin_bp
 from core.logger import log
+from services.process_utils import make_env
 
 
 @admin_bp.route('/admin/db-backup')
@@ -158,7 +159,7 @@ def api_db_backup_restore(backup_id):
     流程：
     1. 验证备份文件存在且有效
     2. 自动创建当前数据库的安全备份
-    3. 使用 DuckDB COPY FROM DATABASE 在线恢复数据
+    3. 使用 SQLite 在线备份 API 恢复数据
     """
     user = get_current_user()
 
@@ -180,14 +181,13 @@ def api_db_backup_restore(backup_id):
         if backup.get('status') != 'success':
             return jsonify({'success': False, 'message': '只能恢复成功的备份'}), 400
 
-        # 2. 自动创建当前数据库的安全备份
-        safety_name = f"pre_restore_{datetime.now().strftime('%Y%m%d_%H%M%S')}.duckdb"
+        # 2. 自动创建当前数据库的安全备份（在线备份 API，不受文件锁影响）
+        safety_name = f"pre_restore_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
         safety_path = os.path.join(BACKUP_DIR, safety_name)
         os.makedirs(BACKUP_DIR, exist_ok=True)
 
         try:
-            conn.execute('CHECKPOINT')
-            shutil.copy2(DB_PATH, safety_path)
+            conn.backup_to(safety_path)
             log('INFO', 'Backup', f'创建恢复前安全备份: {safety_name}')
         except Exception as e:
             log('ERROR', 'Backup', f'创建安全备份失败: {e}')
@@ -205,33 +205,20 @@ def api_db_backup_restore(backup_id):
         except Exception:
             pass  # 非关键，安全备份文件已存在
 
-        # 3. 使用 DuckDB COPY FROM DATABASE 在线恢复
+        # 3. 使用 SQLite 在线备份 API 恢复（备份文件 → 当前数据库）
         try:
-            # 获取当前数据库名
-            db_rows = conn.execute(
-                "SELECT database_name FROM duckdb_databases() WHERE database_name NOT IN ('system', 'temp')"
-            ).fetchall()
-            source_db = db_rows[0][0] if db_rows else 'main'
+            import sqlite3
+            src = sqlite3.connect(f'file:{backup_path.replace(chr(92), "/")}?mode=ro', uri=True)
+            dest = sqlite3.connect(DB_PATH)
+            try:
+                src.backup(dest)
+            finally:
+                src.close()
+                dest.close()
 
-            sql_safe_backup_path = backup_path.replace('\\', '/').replace("'", "''")
-            safe_source_db = source_db.replace('"', '""')
-
-            # 先清空当前数据库的所有表（保留结构）
-            tables = conn.execute(
-                "SELECT table_name FROM information_schema.tables WHERE table_schema = 'main' AND table_type = 'BASE TABLE'"
-            ).fetchall()
-            for tbl in tables:
-                tname = tbl[0]
-                if tname in ('db_backups',):
-                    continue  # 保留备份记录表
-                conn.execute(f'DROP TABLE IF EXISTS "{tname.replace('"', '""')}" CASCADE')
-            conn.commit()
-
-            # 从备份附加并恢复
-            conn.execute(f"ATTACH '{sql_safe_backup_path}' AS _restore_src (READ_ONLY)")
-            conn.execute(f'COPY FROM DATABASE _restore_src TO "{safe_source_db}"')
-            conn.execute("DETACH _restore_src")
-            conn.commit()
+            # 重置全局连接，确保后续请求使用新数据并保持 WAL 模式
+            from core.db.connection import reset_connection
+            reset_connection()
 
             log('INFO', 'Backup', f'数据库已从备份恢复: {backup.get("backup_name")}',
                 backup_id=backup_id, safety_backup=safety_name)
@@ -243,22 +230,6 @@ def api_db_backup_restore(backup_id):
             })
         except Exception as e:
             log('ERROR', 'Backup', f'数据库恢复失败: {e}')
-            # 尝试从安全备份恢复
-            try:
-                log('INFO', 'Backup', '尝试从安全备份恢复...')
-                db_rows = conn.execute(
-                    "SELECT database_name FROM duckdb_databases() WHERE database_name NOT IN ('system', 'temp')"
-                ).fetchall()
-                source_db = db_rows[0][0] if db_rows else 'main'
-                safe_source_db = source_db.replace('"', '""')
-                sql_safe_path = safety_path.replace('\\', '/').replace("'", "''")
-                conn.execute(f"ATTACH '{sql_safe_path}' AS _safety_src (READ_ONLY)")
-                conn.execute(f'COPY FROM DATABASE _safety_src TO "{safe_source_db}"')
-                conn.execute("DETACH _safety_src")
-                conn.commit()
-                log('INFO', 'Backup', f'已从安全备份恢复: {safety_name}')
-            except Exception as e2:
-                log('ERROR', 'Backup', f'安全备份恢复也失败: {e2}')
             return jsonify({'success': False, 'message': f'恢复失败: {e}'}), 500
     finally:
         conn.close()
@@ -296,13 +267,12 @@ def api_db_backup_restart_restore(backup_id):
             return jsonify({'success': False, 'message': '只能恢复成功的备份'}), 400
 
         # 2. 自动创建当前数据库的安全备份
-        safety_name = f"pre_restore_{datetime.now().strftime('%Y%m%d_%H%M%S')}.duckdb"
+        safety_name = f"pre_restore_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
         safety_path = os.path.join(BACKUP_DIR, safety_name)
         os.makedirs(BACKUP_DIR, exist_ok=True)
 
         try:
-            conn.execute('CHECKPOINT')
-            shutil.copy2(DB_PATH, safety_path)
+            conn.backup_to(safety_path)
             log('INFO', 'Backup', f'创建恢复前安全备份: {safety_name}')
         except Exception as e:
             log('ERROR', 'Backup', f'创建安全备份失败: {e}')
@@ -328,11 +298,12 @@ def api_db_backup_restart_restore(backup_id):
             with open(flag_file, 'w') as f:
                 json.dump(flag_data, f)
 
-            # 启动恢复脚本，传入备份路径
+            # 启动恢复脚本，传入备份路径（统一环境变量：UTF-8 输出，避免 Windows 编码问题）
             subprocess.Popen(
                 [python_exe, restore_script, backup_path],
                 cwd=APP_ROOT,
                 close_fds=True,
+                env=make_env(),
             )
             log('INFO', 'Backup', f'数据库恢复脚本已启动',
                 backup_id=backup_id, safety_backup=safety_name)

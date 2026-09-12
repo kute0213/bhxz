@@ -14,17 +14,6 @@ from services.ratelimit import register_limiter, login_limiter, forgot_password_
 from core.logger import log
 
 
-def _validate_password(password):
-    """网站账号密码校验：仅限制长度为 6-30 位。"""
-    if not password:
-        return '密码不能为空'
-    if len(password) < 6:
-        return '密码至少 6 位'
-    if len(password) > 30:
-        return '密码不能超过 30 位'
-    return None
-
-
 def _get_ua():
     """获取当前请求的 User-Agent。"""
     try:
@@ -66,14 +55,14 @@ def register(username, password, confirm, verify_code, captcha_input, captcha_id
         log('Register', '注册请求过于频繁', ip=ip_address, username=username)
         return False, '注册请求过于频繁，请稍后再试'
 
-    from services.validation import validate_website_username
+    from services.validation import validate_website_username, validate_password_strength
     valid_uname, uname_err = validate_website_username(username)
     if not valid_uname:
         log('Register', '用户名格式不符合要求', username=username, ip=ip_address)
         return False, uname_err
 
-    pwd_err = _validate_password(password)
-    if pwd_err:
+    valid_pwd, pwd_err = validate_password_strength(password)
+    if not valid_pwd:
         log('Register', '密码不符合要求', username=username, ip=ip_address)
         return False, pwd_err
 
@@ -300,8 +289,9 @@ def forgot_password(username, email, captcha_input, captcha_id, email_code,
         log('ForgotPassword', '邮箱验证码错误', username=username, email=email, ip=ip_address)
         return False, '邮箱验证码错误或已过期'
 
-    pwd_err = _validate_password(new_password)
-    if pwd_err:
+    from services.validation import validate_password_strength
+    valid_pwd, pwd_err = validate_password_strength(new_password)
+    if not valid_pwd:
         log('ForgotPassword', '新密码不符合要求', username=username, ip=ip_address)
         return False, pwd_err
 

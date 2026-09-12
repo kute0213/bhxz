@@ -22,8 +22,8 @@ EXCLUDE_DIRS = {
     'logs', 'release', '.venv', 'venv', 'env', 'dist', 'build',
 }
 EXCLUDE_FILES = {
-    '*.pyc', '*.pyo', '*.zip', '*.duckdb', '*.duckdb.wal', '*.db',
-    '*.db-journal', '*.sqlite', '*.log', '.DS_Store', '.env',
+    '*.pyc', '*.pyo', '*.zip', '*.db', '*.db-journal', '*.db-wal', '*.db-shm',
+    '*.sqlite', '*.sqlite3', '*.log', '.DS_Store', '.env',
 }
 
 # 需要跳过其内容的子路径（monaco 大文件，由 build_static.py 按需重建）

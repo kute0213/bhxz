@@ -9,7 +9,7 @@
 
 ### 1. 文档结构规范
 
-* **README.md**：项目总览、快速开始、功能特性、配置说明、API 接口、架构、脚本控制台使用说明
+* **README.md**：项目总览、快速开始、功能特性、配置说明、API 接口、架构
 
 * **docs/DEVELOPMENT.md**（开发准则）：分层规范、代码规范、易错点、测试、路由检测、构建打包与发布、文档写入准则
 
@@ -444,7 +444,7 @@ server {
         proxy_http_version 1.1;
         proxy_set_header Host $host;
         proxy_set_header X-Real-IP $remote_addr;
-        # 关键：SSE 长连接，保证实时日志/进度/终端不中断
+        # 关键：SSE 长连接，保证实时日志/进度不中断
         proxy_buffering off;
         proxy_cache off;
         proxy_read_timeout 3600s;
@@ -454,7 +454,7 @@ server {
 }
 ```
 
-> **SSE 依赖**：实时进度条、定时任务日志、交互终端均依赖 SSE 长连接，Nginx 必须
+> **SSE 依赖**：实时进度条、日志实时刷新均依赖 SSE 长连接，Nginx 必须
 > 关闭缓冲（`proxy_buffering off`）并调大读超时，否则连接会中断。
 
 #### 开启 HTTPS（内置服务器）

@@ -182,7 +182,7 @@
             {% for bg in active_bgs %}
             <div class="pixel-card background-card">
                 <div class="background-preview">
-                    <img src="{{ url_for('backgrounds.serve_background', bg_id=bg.id) }}" alt="{{ bg.filename }}" loading="lazy">
+                    <img data-bg-id="{{ bg.id }}" src="{{ url_for('backgrounds.serve_background', bg_id=bg.id, size=768) }}" alt="{{ bg.filename }}" loading="lazy">
                 </div>
                 <div class="background-info">
                     <div class="flex items-center justify-between gap-2 mb-2">
@@ -210,18 +210,15 @@
                 {% if bg.status != 1 %}
                 <form method="post" action="{{ url_for('backgrounds.delete_background', bg_id=bg.id) }}" class="delete-form" onsubmit="return confirm('确定要删除这张背景图片吗？');">
                     {{ csrf_field() }}
-                    <button type="submit" class="btn-delete">删除</button>
+                    <button type="button" class="btn-delete" onclick="this.closest('form').submit()">删除</button>
                 </form>
                 {% endif %}
                 <div class="background-preview">
-                    {% if bg.status == 1 %}
-                    <img src="{{ url_for('backgrounds.serve_background', bg_id=bg.id) }}" alt="{{ bg.filename }}" loading="lazy">
-                    {% else %}
-                    <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; color: var(--text-muted);">
-                        <span>
-                            {% if bg.status == 0 %}等待审核{% else %}已驳回{% endif %}
-                        </span>
-                    </div>
+                    <img data-bg-id="{{ bg.id }}" src="{{ url_for('backgrounds.serve_background', bg_id=bg.id, size=768) }}" alt="{{ bg.filename }}" loading="lazy">
+                    {% if bg.status != 1 %}
+                    <span class="status-badge {% if bg.status == 0 %}status-pending{% else %}status-rejected{% endif %}" style="position: absolute; top: 0.5rem; left: 0.5rem; backdrop-filter: blur(8px);">
+                        {% if bg.status == 0 %}待审核{% else %}已驳回{% endif %}
+                    </span>
                     {% endif %}
                 </div>
                 <div class="background-info">
@@ -258,5 +255,28 @@
         {% endif %}
     </div>
 </div>
-</div>
+{% endblock %}
+
+{% block extra_script %}
+<script>
+// 按设备屏幕宽度（含 DPR）选择最合适的背景图片档位，替换 img 的 src。
+// 档位与后端一致：768 / 1280 / 1920。
+(function() {
+    function bestSize() {
+        var width = Math.ceil((window.innerWidth || document.documentElement.clientWidth) * (window.devicePixelRatio || 1));
+        if (width >= 1920) return 1920;
+        if (width >= 1280) return 1280;
+        return 768;
+    }
+
+    var size = bestSize();
+    document.querySelectorAll('img[data-bg-id]').forEach(function(img) {
+        // 已按需加载的图片不重复替换
+        if (img.dataset.resolved) return;
+        img.dataset.resolved = '1';
+        // 当前 src 已含 ?size=768，替换为最合适的档位
+        img.src = img.src.replace(/size=\d+/, 'size=' + size);
+    });
+})();
+</script>
 {% endblock %}

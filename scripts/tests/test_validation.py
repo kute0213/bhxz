@@ -67,6 +67,7 @@ class TestPasswordStrength:
         ('Abcd1234!@#', True),
         ('', False),
         ('Admin123!', False),
+        ('password123', False),
         ('My_C0mpl3x!', True),
         ('aaaaaaaa', False),
         ('1234567890', False),

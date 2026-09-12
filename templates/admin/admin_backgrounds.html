@@ -18,7 +18,7 @@
                 <div class="pixel-card rounded-xl p-4" id="bg-{{ bg.id }}">
                     <div class="aspect-video rounded-lg overflow-hidden bg-forest-900/50 mb-3">
                         {% if bg.file_path %}
-                        <img src="{{ url_for('backgrounds.serve_background', bg_id=bg.id) }}" alt="{{ bg.filename }}" class="w-full h-full object-cover">
+                        <img src="{{ url_for('backgrounds.serve_background', bg_id=bg.id, size=768) }}" alt="{{ bg.filename }}" class="w-full h-full object-cover">
                         {% else %}
                         <div class="w-full h-full flex items-center justify-center text-cream/40">
                             <i data-lucide="image" class="w-8 h-8"></i>
@@ -49,7 +49,7 @@
                 {% for bg in approved_bgs %}
                 <div class="pixel-card rounded-xl p-4" id="bg-{{ bg.id }}">
                     <div class="aspect-video rounded-lg overflow-hidden bg-forest-900/50 mb-3">
-                        <img src="{{ url_for('backgrounds.serve_background', bg_id=bg.id) }}" alt="{{ bg.filename }}" class="w-full h-full object-cover">
+                        <img src="{{ url_for('backgrounds.serve_background', bg_id=bg.id, size=768) }}" alt="{{ bg.filename }}" class="w-full h-full object-cover">
                     </div>
                     <div class="text-sm text-cream/80 mb-1 truncate">{{ bg.filename }}</div>
                     <div class="text-xs text-cream/50 mb-3">by {{ bg.username }} · {{ bg.created_at }}</div>
@@ -79,7 +79,7 @@
                 <div class="pixel-card rounded-xl p-4 opacity-60" id="bg-{{ bg.id }}">
                     <div class="aspect-video rounded-lg overflow-hidden bg-forest-900/50 mb-3">
                         {% if bg.file_path %}
-                        <img src="{{ url_for('backgrounds.serve_background', bg_id=bg.id) }}" alt="{{ bg.filename }}" class="w-full h-full object-cover">
+                        <img src="{{ url_for('backgrounds.serve_background', bg_id=bg.id, size=768) }}" alt="{{ bg.filename }}" class="w-full h-full object-cover">
                         {% else %}
                         <div class="w-full h-full flex items-center justify-center text-cream/40">
                             <i data-lucide="image-off" class="w-8 h-8"></i>

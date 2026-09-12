@@ -383,6 +383,9 @@ def pull_code():
 
 
 def main():
+    # 覆盖模块级超时变量（必须在使用前声明 global）
+    global DOWNLOAD_TIMEOUT
+
     # 命令行参数
     import argparse
     parser = argparse.ArgumentParser(description='BHXZ 备用更新脚本')
@@ -392,7 +395,6 @@ def main():
 
     # 设置全局 socket 超时，防止任何网络操作无限制卡死
     socket.setdefaulttimeout(args.timeout)
-    global DOWNLOAD_TIMEOUT
     DOWNLOAD_TIMEOUT = args.timeout
 
     log('=' * 50)
@@ -451,8 +453,8 @@ def main():
     log('\n▶ 等待服务器启动...')
     time.sleep(5)
 
-    # 检查是否启动成功
-    health_url = 'http://localhost:5000/health'
+    # 检查是否启动成功（使用首页而非已移除的 /health 路由）
+    health_url = 'http://localhost:5000/'
     if sys.platform != 'win32':
         code, _ = run(f'curl -s -o /dev/null -w "%{{http_code}}" "{health_url}"',
                       capture=True, timeout=10)

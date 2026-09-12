@@ -307,12 +307,12 @@ def run():
     try:
         backup_dir = os.path.join(_PROJECT_ROOT, 'backups')
         os.makedirs(backup_dir, exist_ok=True)
-        db_path = os.path.join(_PROJECT_ROOT, 'site.duckdb')
+        db_path = os.path.join(_PROJECT_ROOT, 'site.db')
         if os.path.isfile(db_path):
             import shutil
             import datetime
             ts = datetime.datetime.now().strftime('%Y%m%d_%H%M%S')
-            backup_path = os.path.join(backup_dir, f'site_pre_cleanup_{ts}.duckdb')
+            backup_path = os.path.join(backup_dir, f'site_pre_cleanup_{ts}.db')
             shutil.copy2(db_path, backup_path)
             print(f'  -> 已备份到: {backup_path}')
         else:

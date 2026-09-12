@@ -23,6 +23,7 @@ from config import (
     AUDIO_MAX_BYTES,
 )
 from core.logger import log
+from services.process_utils import make_env, decode_output
 from services.music.constants import (
     HLS_SEGMENT_SECONDS,
     STATUS_PENDING,
@@ -65,10 +66,10 @@ def _probe_duration(src_path):
         proc = subprocess.run(
             [FFPROBE_BIN, '-v', 'error', '-show_entries', 'format=duration',
              '-of', 'default=noprint_wrappers=1:nokey=1', src_path],
-            capture_output=True, text=True, timeout=60,
+            capture_output=True, timeout=60, env=make_env(),
         )
         if proc.returncode == 0:
-            val = (proc.stdout or '').strip()
+            val = (decode_output(proc.stdout) or '').strip()
             try:
                 return float(val) if val else None
             except ValueError:
@@ -230,9 +231,9 @@ def upload_music(user_id, username, title, is_public, upload_file, ip_address, t
         mp3_path = os.path.join(work_dir, 'index.mp3')
         progress_file = os.path.join(work_dir, 'progress.log')
         cmd = _build_transcode_cmd(src_path, playlist_path, seg_pattern, mp3_path, progress_file)
-        proc = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+        proc = subprocess.run(cmd, capture_output=True, timeout=300, env=make_env())
         if proc.returncode != 0 or not os.path.isfile(playlist_path) or not os.path.isfile(mp3_path):
-            detail = (proc.stderr or proc.stdout or '')[-400:]
+            detail = (decode_output(proc.stderr) or decode_output(proc.stdout) or '')[-400:]
             raise RuntimeError(f'音频转码失败：{detail}')
 
         status = STATUS_PENDING if is_public else STATUS_PRIVATE
@@ -352,7 +353,7 @@ def _run_upload_task(task_id, user_id, username, title, is_public,
         _set_task(task_id, status='transcoding', percent=0, message='正在转码… 0%')
 
         with open(err_log, 'w', encoding='utf-8', errors='replace') as errf:
-            proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=errf)
+            proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=errf, env=make_env())
             deadline = time.time() + 300
             try:
                 while proc.poll() is None:

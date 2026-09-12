@@ -57,10 +57,9 @@
                 </h2>
                 <p class="text-cream/60 text-sm mb-4">
                     点击按钮后将执行以下操作：<br>
-                    1. 清理过期日志（超过配置上限的访问日志、命令日志、定时任务日志）<br>
-                    2. 执行 CHECKPOINT，合并 WAL 文件到主数据库（减小文件大小）<br>
-                    3. 完整备份数据库文件到 <code class="bg-forest-900/50 px-1.5 py-0.5 rounded text-xs">backups/db/</code> 目录<br>
-                    4. 自动清理超出保留数量的旧备份（当前保留上限：{{ max_backups }} 份）
+                    1. 执行 CHECKPOINT，合并 WAL 文件到主数据库（减小文件大小）<br>
+                    2. 完整备份数据库文件到 <code class="bg-forest-900/50 px-1.5 py-0.5 rounded text-xs">backups/db/</code> 目录<br>
+                    3. 自动清理超出保留数量的旧备份（当前保留上限：{{ max_backups }} 份）
                 </p>
 
                 <!-- 进度条 -->

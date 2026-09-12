@@ -1,8 +1,9 @@
 """背景图片业务服务：上传、审核、列表查询。
 
 所有函数为 Flask 无关的纯业务逻辑，返回 (success, data_or_error) 元组。
-新上传的背景图片统一保存到 MinIO，并自动转换为 WebP 格式。
-数据库只保存 MinIO 对象引用；历史本地图片仍可继续读取和删除。
+背景图片存储在 uploads/backgrounds/ 目录，自动转换为 WebP 格式，
+并为不同屏幕尺寸生成多档变体（768 / 1280 / 1920），前端按设备宽度取用，
+实现"上传即转换、按设备最佳缩放"。
 """
 
 import os
@@ -14,10 +15,9 @@ from io import BytesIO
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 from core.db import get_db
-from config import USER_IMAGE_MAX_BYTES
+from config import UPLOAD_BACKGROUNDS_DIR, USER_IMAGE_MAX_BYTES
 from core.logger import log
 from services.email import email_service, background_review_result
-from services import object_storage
 
 # 背景图片状态：0=待审核 1=已通过 2=已驳回
 STATUS_PENDING = 0
@@ -32,6 +32,12 @@ STATUS_LABELS = {
 
 # 支持的源图片格式
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'tiff'}
+
+# 响应式变体档位：键为前端请求的 size 参数，值为图片长边最大像素。
+# 上传时按此列表生成多档 WebP，serve 时按设备宽度就近取用。
+RESPONSIVE_SIZES = [768, 1280, 1920]
+# 主图档位（全站背景默认使用）
+PRIMARY_SIZE = 1920
 
 # 上传任务进度
 _upload_tasks = {}
@@ -88,7 +94,7 @@ def _smart_crop(image, target_ratio=16/9):
         return image.crop((0, top, w, top + new_h))
 
 
-def _convert_to_webp(raw, target_size=1920, crop_to_ratio=True):
+def _convert_to_webp(raw, target_size=PRIMARY_SIZE, crop_to_ratio=True):
     """将图片转换为 WebP 格式，自动适配尺寸并智能裁剪。
 
     Args:
@@ -137,10 +143,44 @@ def _convert_to_webp(raw, target_size=1920, crop_to_ratio=True):
 
 
 def _background_filename(bg_id, original_filename):
-    """生成背景图片文件名。"""
+    """生成背景图片主文件名（不含尺寸后缀）。"""
     ext = (original_filename.rsplit('.', 1)[-1] if '.' in original_filename else '').lower()
     hash_suffix = hashlib.md5(f'{bg_id}_{_now()}'.encode()).hexdigest()[:8]
     return f'bg_{bg_id}_{hash_suffix}.webp'
+
+
+def _save_background_variants(bg_id, filename, raw):
+    """生成并保存背景图片主图与各档响应式变体。
+
+    Args:
+        bg_id: 背景图片记录 ID
+        filename: 原始文件名（用于生成主文件名）
+        raw: 原始图片字节
+
+    Returns:
+        主图绝对路径；任一档位处理失败时抛异常（由调用方回滚记录）
+    """
+    main_name = _background_filename(bg_id, filename)
+    # 主图（1920）优先生成，保证基础路径必然存在
+    main_path = os.path.join(UPLOAD_BACKGROUNDS_DIR, main_name)
+    with open(main_path, 'wb') as f:
+        f.write(_convert_to_webp(raw, target_size=PRIMARY_SIZE))
+
+    # 其余档位：失败不影响主图，仅记录日志
+    for size in RESPONSIVE_SIZES:
+        if size == PRIMARY_SIZE:
+            continue
+        variant_path = os.path.join(
+            UPLOAD_BACKGROUNDS_DIR, f'{main_name[:-5]}_{size}.webp'
+        )
+        try:
+            with open(variant_path, 'wb') as f:
+                f.write(_convert_to_webp(raw, target_size=size))
+        except Exception as exc:
+            log('WARNING', 'BackgroundUpload', f'生成 {size}px 变体失败',
+                bg_id=bg_id, error=str(exc))
+
+    return main_path
 
 
 def start_upload(user_id, username, upload_file, ip_address):
@@ -150,9 +190,6 @@ def start_upload(user_id, username, upload_file, ip_address):
         raw, _ = _validate_image(upload_file)
     except ValueError as exc:
         return False, str(exc)
-
-    if not object_storage.is_enabled():
-        return False, '背景图片存储未配置，请先配置 MinIO'
 
     original_filename = upload_file.filename
     task_id = hashlib.md5(f'{user_id}_{_now()}_{id(upload_file)}'.encode()).hexdigest()[:16]
@@ -167,82 +204,88 @@ def start_upload(user_id, username, upload_file, ip_address):
 
     # 在后台线程中处理上传
     def _process():
-        file_reference = None
+        save_path = None
+        bg_id = None
         try:
             with _upload_tasks_lock:
                 _upload_tasks[task_id]['percent'] = 30
                 _upload_tasks[task_id]['message'] = '正在转换格式...'
 
-            # 转换为 WebP
-            webp_data = _convert_to_webp(raw)
+            # 写入数据库（先生成记录拿到 bg_id，再落盘，文件名依赖 bg_id）
+            with get_db() as conn:
+                filename = original_filename
+                now = _now()
+                cursor = conn.execute(
+                    "INSERT INTO backgrounds (user_id, username, filename, file_path, status, is_active, created_at) "
+                    "VALUES (?, ?, ?, '', ?, 0, ?)",
+                    (user_id, username, filename, STATUS_PENDING, now),
+                )
+                bg_id = cursor.lastrowid
+                conn.commit()
 
             with _upload_tasks_lock:
                 _upload_tasks[task_id]['percent'] = 60
                 _upload_tasks[task_id]['message'] = '正在保存...'
 
-            # DuckDB 只保存背景记录和 MinIO 对象引用，不保存图片内容。
+            # 生成主图 + 响应式变体并落盘
+            save_path = _save_background_variants(bg_id, original_filename, raw)
+
             with get_db() as conn:
-                try:
-                    conn.execute("BEGIN TRANSACTION")
-                    filename = original_filename
-                    now = _now()
-                    cursor = conn.execute(
-                        "INSERT INTO backgrounds (user_id, username, filename, file_path, status, is_active, created_at) "
-                        "VALUES (?, ?, ?, '', ?, 0, ?)",
-                        (user_id, username, filename, STATUS_PENDING, now),
-                    )
-                    bg_id = cursor.lastrowid
-
-                    save_name = _background_filename(bg_id, filename)
-                    file_reference = object_storage.put_bytes(
-                        f'backgrounds/{save_name}',
-                        webp_data,
-                        content_type='image/webp',
-                    )
-
-                    conn.execute(
-                        "UPDATE backgrounds SET file_path = ? WHERE id = ?",
-                        (file_reference, bg_id),
-                    )
-                    conn.commit()
-                except Exception:
-                    conn.rollback()
-                    if file_reference:
-                        try:
-                            object_storage.remove(file_reference)
-                        except Exception as cleanup_exc:
-                            log('WARNING', 'BackgroundUpload', '回滚时清理 MinIO 对象失败',
-                                reference=file_reference, error=str(cleanup_exc))
-                    raise
+                conn.execute(
+                    "UPDATE backgrounds SET file_path = ? WHERE id = ?",
+                    (save_path, bg_id),
+                )
+                conn.commit()
 
             with _upload_tasks_lock:
                 _upload_tasks[task_id]['percent'] = 100
                 _upload_tasks[task_id]['status'] = 'completed'
                 _upload_tasks[task_id]['message'] = '上传完成，等待管理员审核'
 
-            log('BackgroundUpload', '背景图片上传成功',
+            log('INFO', 'BackgroundUpload', '背景图片上传成功',
                 user_id=user_id, username=username, bg_id=bg_id,
                 ip_address=ip_address)
 
         except ValueError as exc:
-            with _upload_tasks_lock:
-                _upload_tasks[task_id]['status'] = 'error'
-                _upload_tasks[task_id]['message'] = str(exc)
-            log('BackgroundUpload', '背景图片上传失败',
+            _fail_upload(task_id, str(exc))
+            log('ERROR', 'BackgroundUpload', '背景图片上传失败',
                 user_id=user_id, username=username, error=str(exc),
                 ip_address=ip_address)
+            _cleanup_failed_upload(bg_id, save_path)
         except Exception as exc:
-            with _upload_tasks_lock:
-                _upload_tasks[task_id]['status'] = 'error'
-                _upload_tasks[task_id]['message'] = '上传失败，请稍后重试'
-            log('BackgroundUpload', '背景图片上传异常',
+            _fail_upload(task_id, '上传失败，请稍后重试')
+            log('ERROR', 'BackgroundUpload', '背景图片上传异常',
                 user_id=user_id, username=username, error=str(exc),
                 ip_address=ip_address)
+            _cleanup_failed_upload(bg_id, save_path)
 
     t = threading.Thread(target=_process, daemon=True, name=f'bg-upload-{task_id}')
     t.start()
 
     return True, {'task_id': task_id}
+
+
+def _fail_upload(task_id, message):
+    """标记上传任务失败。"""
+    with _upload_tasks_lock:
+        _upload_tasks[task_id]['status'] = 'error'
+        _upload_tasks[task_id]['message'] = message
+
+
+def _cleanup_failed_upload(bg_id, save_path):
+    """清理失败上传产生的数据库记录与文件。"""
+    if bg_id:
+        try:
+            with get_db() as conn:
+                conn.execute("DELETE FROM backgrounds WHERE id = ?", (bg_id,))
+                conn.commit()
+        except Exception:
+            pass
+    if save_path and os.path.isfile(save_path):
+        try:
+            os.remove(save_path)
+        except Exception:
+            pass
 
 
 def get_upload_progress(task_id):
@@ -288,17 +331,50 @@ def get_background(bg_id):
         return dict(row) if row else None
 
 
-def read_background_data(bg):
-    """读取背景图片字节；兼容 MinIO 对象引用和历史本地绝对路径。"""
-    file_reference = bg.get('file_path') if bg else None
-    if not file_reference:
+def resolve_background_path(bg, size=None):
+    """按请求尺寸解析本地背景图片路径（不存在时回退主图）。
+
+    规则：size 为空时返回主图；否则在响应式变体中取与目标最接近
+    且不小于目标的档位；该档位文件缺失时逐级回退到主图。
+    """
+    main_path = bg.get('file_path') if bg else None
+    if not main_path or not os.path.isfile(main_path):
         return None
-    if file_reference.startswith('minio://'):
-        return object_storage.get_bytes(file_reference)
-    if not os.path.isfile(file_reference):
+
+    if size is None:
+        return main_path
+
+    # 选取不小于目标宽度的最小档位
+    chosen = None
+    for s in sorted(RESPONSIVE_SIZES):
+        if s >= size:
+            chosen = s
+            break
+    if chosen is None:
+        chosen = RESPONSIVE_SIZES[-1]
+
+    if chosen == PRIMARY_SIZE:
+        return main_path
+
+    variant_path = os.path.join(
+        os.path.dirname(main_path),
+        f'{os.path.splitext(os.path.basename(main_path))[0]}_{chosen}.webp',
+    )
+    if os.path.isfile(variant_path):
+        return variant_path
+    return main_path
+
+
+def read_background_data(bg, size=None):
+    """读取背景图片字节（按设备尺寸就近取档，兼容历史本地路径）。"""
+    path = resolve_background_path(bg, size=size)
+    if not path:
         return None
-    with open(file_reference, 'rb') as file:
-        return file.read()
+    try:
+        with open(path, 'rb') as file:
+            return file.read()
+    except OSError:
+        return None
 
 
 def _send_review_email(bg, approved: bool, admin_username: str):
@@ -317,7 +393,7 @@ def _send_review_email(bg, approved: bool, admin_username: str):
         subject = '背景图片审核通过' if approved else '背景图片审核未通过'
         html = background_review_result(bg['filename'], approved)
         email_service.send(to=user['email'], subject=subject, body=subject, html=html)
-        log('Email', f'已发送背景审核邮件: {user["email"]} <- {subject}')
+        log('INFO', 'Email', f'已发送背景审核邮件: {user["email"]} <- {subject}')
     except Exception as e:
         log('WARNING', 'Email', f'发送背景审核邮件失败: {e}')
 
@@ -339,7 +415,7 @@ def approve_background(bg_id, admin_id, admin_username, ip_address):
 
     _send_review_email(bg, True, admin_username)
 
-    log('BackgroundApprove', '背景图片审核通过',
+    log('INFO', 'BackgroundApprove', '背景图片审核通过',
         bg_id=bg_id, admin_id=admin_id, admin_username=admin_username,
         ip_address=ip_address)
     return True, '审核通过'
@@ -362,7 +438,7 @@ def reject_background(bg_id, admin_id, admin_username, ip_address):
 
     _send_review_email(bg, False, admin_username)
 
-    log('BackgroundReject', '背景图片审核驳回',
+    log('INFO', 'BackgroundReject', '背景图片审核驳回',
         bg_id=bg_id, admin_id=admin_id, admin_username=admin_username,
         ip_address=ip_address)
     return True, '已驳回'
@@ -388,14 +464,14 @@ def toggle_active(bg_id, admin_id, admin_username, ip_address):
         conn.commit()
 
     action = '启用' if new_active else '停用'
-    log('BackgroundToggle', f'背景图片{action}',
+    log('INFO', 'BackgroundToggle', f'背景图片{action}',
         bg_id=bg_id, admin_id=admin_id, admin_username=admin_username,
         ip_address=ip_address)
     return True, f'背景图片已{action}'
 
 
 def delete_background(bg_id, user_id, is_admin, ip_address):
-    """删除背景图片。"""
+    """删除背景图片（主图与响应式变体一并删除）。"""
     with get_db() as conn:
         bg = conn.execute("SELECT * FROM backgrounds WHERE id = ?", (bg_id,)).fetchone()
         if not bg:
@@ -403,21 +479,28 @@ def delete_background(bg_id, user_id, is_admin, ip_address):
         if bg['user_id'] != user_id and not is_admin:
             return False, '无权删除'
 
-        # 删除对象或历史本地文件
-        if bg['file_path']:
+        # 删除本地主图及响应式变体
+        if bg['file_path'] and os.path.isfile(bg['file_path']):
             try:
-                if bg['file_path'].startswith('minio://'):
-                    object_storage.remove(bg['file_path'])
-                elif os.path.isfile(bg['file_path']):
-                    os.remove(bg['file_path'])
+                main_path = bg['file_path']
+                os.remove(main_path)
+                base_name = os.path.splitext(os.path.basename(main_path))[0]
+                for size in RESPONSIVE_SIZES:
+                    if size == PRIMARY_SIZE:
+                        continue
+                    variant_path = os.path.join(
+                        os.path.dirname(main_path), f'{base_name}_{size}.webp'
+                    )
+                    if os.path.isfile(variant_path):
+                        os.remove(variant_path)
             except Exception as exc:
-                log('WARNING', 'BackgroundDelete', '背景图片对象删除失败',
+                log('WARNING', 'BackgroundDelete', '背景图片文件删除失败',
                     bg_id=bg_id, error=str(exc))
 
         conn.execute("DELETE FROM backgrounds WHERE id = ?", (bg_id,))
         conn.commit()
 
-    log('BackgroundDelete', '背景图片删除',
+    log('INFO', 'BackgroundDelete', '背景图片删除',
         bg_id=bg_id, user_id=user_id, is_admin=is_admin,
         ip_address=ip_address)
     return True, '背景图片已删除'

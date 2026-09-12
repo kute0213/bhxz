@@ -72,7 +72,8 @@ def _wmic_temperature(temperature_class):
         field = 'CurrentReading'
     result = subprocess.run(
         ['wmic', '/namespace:\\\\root\\wmi', 'path', temperature_class, 'get', field],
-        capture_output=True, text=True, timeout=5
+        capture_output=True, text=True, timeout=5,
+        encoding='utf-8', errors='replace',
     )
     lines = [l.strip() for l in result.stdout.strip().splitlines() if l.strip()]
     # 跳过表头，取第一个数值
@@ -99,7 +100,8 @@ def _powershell_temperature():
     )
     result = subprocess.run(
         ['powershell', '-NoProfile', '-Command', script],
-        capture_output=True, text=True, timeout=5
+        capture_output=True, text=True, timeout=5,
+        encoding='utf-8', errors='replace',
     )
     if result.returncode == 0:
         for line in result.stdout.strip().splitlines():
@@ -168,7 +170,8 @@ def _get_cpu_temperature(psutil, platform):
             result = subprocess.run(
                 ['wmic', '/namespace:\\\\root\\wmi', 'path', 'MSAcpi_ThermalZoneTemperature',
                  'get', 'CurrentTemperature', '/format:csv'],
-                capture_output=True, text=True, timeout=5
+                capture_output=True, text=True, timeout=5,
+                encoding='utf-8', errors='replace',
             )
             for line in result.stdout.strip().splitlines():
                 parts = line.strip().split(',')
@@ -191,7 +194,8 @@ def _get_cpu_temperature(psutil, platform):
             import subprocess
             result = subprocess.run(
                 ['sysctl', '-n', 'machdep.xcpm.cpu_thermal_level'],
-                capture_output=True, text=True, timeout=5
+                capture_output=True, text=True, timeout=5,
+                encoding='utf-8', errors='replace',
             )
             if result.returncode == 0 and result.stdout.strip():
                 val = int(result.stdout.strip())

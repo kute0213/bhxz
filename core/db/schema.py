@@ -3,44 +3,8 @@
 import hashlib
 from datetime import datetime
 
-from core.db.connection import get_db, _split_sql_script
+from core.db.connection import get_db
 from core.logger import log
-
-
-def _sync_sequence(conn, table_name):
-    """同步序列到表中最大 ID + 1，防止序列与数据脱节导致 Duplicate key。
-
-    DuckDB 限制较多：
-    - 不支持 ALTER SEQUENCE
-    - 不支持 DROP SEQUENCE ... CASCADE（会破坏表的 DEFAULT 依赖）
-    
-    解决方案：循环调用 nextval 推进序列指针，直到超过表中最大 ID。
-    不使用临时表方案，避免复杂 DDL 导致兼容性问题。
-    """
-    seq_name = f"{table_name}_id_seq"
-    try:
-        # 无自增 id 列的表（如联合主键关联表）无需同步序列
-        try:
-            conn.execute(f"SELECT id FROM {table_name} LIMIT 1").fetchone()
-        except Exception:
-            return
-        row = conn.execute(f"SELECT MAX(id) FROM {table_name}").fetchone()
-        max_id = row[0] if row and row[0] is not None else 0
-        if max_id <= 0:
-            return
-
-        advanced = False
-        while True:
-            seq_row = conn.execute(f"SELECT nextval('{seq_name}')").fetchone()
-            next_val = seq_row[0] if seq_row else 1
-            if next_val > max_id:
-                break
-            advanced = True
-
-        if advanced:
-            log('INFO', 'DB', f'序列 {seq_name} 已同步到 {max_id + 1}')
-    except Exception:
-        pass
 
 
 def init_db():
@@ -54,168 +18,101 @@ def init_db():
 
     cursor = conn.cursor()
 
-    # 为每张表创建 SEQUENCE 和表结构（DuckDB 用 SEQUENCE 模拟 AUTOINCREMENT）
+    # SQLite 自增主键统一使用 INTEGER PRIMARY KEY AUTOINCREMENT
     tables = [
         ('users', '''
-            CREATE SEQUENCE IF NOT EXISTS users_id_seq START 1;
             CREATE TABLE IF NOT EXISTS users (
-                id INTEGER PRIMARY KEY DEFAULT nextval('users_id_seq'),
-                username VARCHAR UNIQUE NOT NULL,
-                password_hash VARCHAR NOT NULL,
-                email VARCHAR DEFAULT '',
-                avatar_key VARCHAR DEFAULT '',
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                email TEXT DEFAULT '',
+                avatar_key TEXT DEFAULT '',
                 is_admin INTEGER DEFAULT 0,
-                created_at VARCHAR NOT NULL
+                created_at TEXT NOT NULL
             )
         '''),
         ('mod_intros', '''
-            CREATE SEQUENCE IF NOT EXISTS mod_intros_id_seq START 1;
             CREATE TABLE IF NOT EXISTS mod_intros (
-                id INTEGER PRIMARY KEY DEFAULT nextval('mod_intros_id_seq'),
-                icon VARCHAR NOT NULL DEFAULT 'box',
-                title VARCHAR NOT NULL,
-                content VARCHAR NOT NULL,
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                icon TEXT NOT NULL DEFAULT 'box',
+                title TEXT NOT NULL,
+                content TEXT NOT NULL,
                 sort_order INTEGER DEFAULT 0,
-                created_at VARCHAR NOT NULL
+                created_at TEXT NOT NULL
             )
         '''),
-        ('cmd_commands', '''
-            CREATE SEQUENCE IF NOT EXISTS cmd_commands_id_seq START 1;
-            CREATE TABLE IF NOT EXISTS cmd_commands (
-                id INTEGER PRIMARY KEY DEFAULT nextval('cmd_commands_id_seq'),
-                name VARCHAR NOT NULL,
-                command VARCHAR NOT NULL,
-                description VARCHAR DEFAULT '',
-                sort_order INTEGER DEFAULT 0,
-                created_at VARCHAR NOT NULL,
-                type VARCHAR DEFAULT 'cmd'
-            )
-        '''),
-        ('scheduled_tasks', '''
-            CREATE SEQUENCE IF NOT EXISTS scheduled_tasks_id_seq START 1;
-            CREATE TABLE IF NOT EXISTS scheduled_tasks (
-                id INTEGER PRIMARY KEY DEFAULT nextval('scheduled_tasks_id_seq'),
-                name VARCHAR NOT NULL,
-                command VARCHAR NOT NULL,
-                schedule_type VARCHAR NOT NULL DEFAULT 'interval',
-                interval_seconds INTEGER DEFAULT 3600,
-                execute_at VARCHAR,
-                is_enabled INTEGER DEFAULT 1,
-                last_run_at VARCHAR,
-                next_run_at VARCHAR,
-                run_count INTEGER DEFAULT 0,
-                task_type VARCHAR DEFAULT 'shell',
-                created_at VARCHAR NOT NULL
-            )
-        '''),
-        ('scheduled_task_logs', '''
-            CREATE SEQUENCE IF NOT EXISTS scheduled_task_logs_id_seq START 1;
-            CREATE TABLE IF NOT EXISTS scheduled_task_logs (
-                id INTEGER PRIMARY KEY DEFAULT nextval('scheduled_task_logs_id_seq'),
-                task_id INTEGER,
-                task_name VARCHAR,
-                command VARCHAR,
-                output VARCHAR DEFAULT '',
-                exit_code INTEGER,
-                success INTEGER DEFAULT 0,
-                started_at VARCHAR NOT NULL,
-                finished_at VARCHAR,
-                duration_seconds DOUBLE DEFAULT 0
-            )
-        '''),
-        ('cmd_run_logs', '''
-            CREATE SEQUENCE IF NOT EXISTS cmd_run_logs_id_seq START 1;
-            CREATE TABLE IF NOT EXISTS cmd_run_logs (
-                id INTEGER PRIMARY KEY DEFAULT nextval('cmd_run_logs_id_seq'),
-                command VARCHAR NOT NULL,
-                output VARCHAR DEFAULT '',
-                exit_code INTEGER,
-                success INTEGER DEFAULT 0,
-                triggered_by VARCHAR DEFAULT 'manual',
-                started_at VARCHAR NOT NULL,
-                finished_at VARCHAR,
-                duration_seconds DOUBLE DEFAULT 0
-            )
-        '''),
-        
         # 数据库备份记录表
         ('db_backups', '''
-            CREATE SEQUENCE IF NOT EXISTS db_backups_id_seq START 1;
             CREATE TABLE IF NOT EXISTS db_backups (
-                id INTEGER PRIMARY KEY DEFAULT nextval('db_backups_id_seq'),
-                backup_name VARCHAR NOT NULL,
-                backup_path VARCHAR NOT NULL,
-                backup_type VARCHAR NOT NULL DEFAULT 'scheduled',
-                status VARCHAR NOT NULL DEFAULT 'running',
-                size_bytes BIGINT DEFAULT 0,
-                error_message VARCHAR,
-                started_at VARCHAR NOT NULL,
-                finished_at VARCHAR,
-                duration_seconds DOUBLE DEFAULT 0
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                backup_name TEXT NOT NULL,
+                backup_path TEXT NOT NULL,
+                backup_type TEXT NOT NULL DEFAULT 'scheduled',
+                status TEXT NOT NULL DEFAULT 'running',
+                size_bytes INTEGER DEFAULT 0,
+                error_message TEXT,
+                started_at TEXT NOT NULL,
+                finished_at TEXT,
+                duration_seconds REAL DEFAULT 0
             )
         '''),
         # 系统设置表（用于管理后台在线编辑配置）
         ('settings', '''
-            CREATE SEQUENCE IF NOT EXISTS settings_id_seq START 1;
             CREATE TABLE IF NOT EXISTS settings (
-                id INTEGER PRIMARY KEY DEFAULT nextval('settings_id_seq'),
-                key VARCHAR UNIQUE NOT NULL,
-                value VARCHAR DEFAULT '',
-                description VARCHAR DEFAULT '',
-                updated_at VARCHAR NOT NULL
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                key TEXT UNIQUE NOT NULL,
+                value TEXT DEFAULT '',
+                description TEXT DEFAULT '',
+                updated_at TEXT NOT NULL
             )
         '''),
         # 公开文件/目录映射表
         ('public_paths', '''
-            CREATE SEQUENCE IF NOT EXISTS public_paths_id_seq START 1;
             CREATE TABLE IF NOT EXISTS public_paths (
-                id INTEGER PRIMARY KEY DEFAULT nextval('public_paths_id_seq'),
-                url_path VARCHAR UNIQUE NOT NULL,
-                local_path VARCHAR NOT NULL,
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                url_path TEXT UNIQUE NOT NULL,
+                local_path TEXT NOT NULL,
                 is_directory INTEGER DEFAULT 0,
                 is_active INTEGER DEFAULT 1,
-                created_at VARCHAR NOT NULL
+                created_at TEXT NOT NULL
             )
         '''),
         # 服务器指南表
         ('server_guides', '''
-            CREATE SEQUENCE IF NOT EXISTS server_guides_id_seq START 1;
             CREATE TABLE IF NOT EXISTS server_guides (
-                id INTEGER PRIMARY KEY DEFAULT nextval('server_guides_id_seq'),
-                title VARCHAR NOT NULL,
-                slug VARCHAR UNIQUE NOT NULL,
-                summary VARCHAR DEFAULT '',
-                content VARCHAR NOT NULL DEFAULT '',
-                cover_image VARCHAR DEFAULT '',
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                slug TEXT UNIQUE NOT NULL,
+                summary TEXT DEFAULT '',
+                content TEXT NOT NULL DEFAULT '',
+                cover_image TEXT DEFAULT '',
                 author_id INTEGER NOT NULL,
-                status VARCHAR NOT NULL DEFAULT 'pending',
+                status TEXT NOT NULL DEFAULT 'pending',
                 is_pinned INTEGER DEFAULT 0,
                 sort_order INTEGER DEFAULT 0,
-                created_at VARCHAR NOT NULL,
-                updated_at VARCHAR NOT NULL,
-                published_at VARCHAR DEFAULT NULL,
-                rejected_reason VARCHAR DEFAULT '',
-                rejected_at VARCHAR DEFAULT NULL
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                published_at TEXT DEFAULT NULL,
+                rejected_reason TEXT DEFAULT '',
+                rejected_at TEXT DEFAULT NULL
             )
         '''),
         # 指南编辑封禁表
         ('guide_edit_bans', '''
-            CREATE SEQUENCE IF NOT EXISTS guide_edit_bans_id_seq START 1;
             CREATE TABLE IF NOT EXISTS guide_edit_bans (
-                id INTEGER PRIMARY KEY DEFAULT nextval('guide_edit_bans_id_seq'),
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER DEFAULT NULL,
-                ip_address VARCHAR DEFAULT NULL,
+                ip_address TEXT DEFAULT NULL,
                 banned_by INTEGER NOT NULL,
-                reason VARCHAR DEFAULT '',
-                created_at VARCHAR NOT NULL,
-                expires_at VARCHAR DEFAULT NULL
+                reason TEXT DEFAULT '',
+                created_at TEXT NOT NULL,
+                expires_at TEXT DEFAULT NULL
             )
         '''),
         # 广播邮件日志表
         ('broadcast_logs', '''
-            CREATE SEQUENCE IF NOT EXISTS broadcast_logs_id_seq START 1;
             CREATE TABLE IF NOT EXISTS broadcast_logs (
-                id INTEGER PRIMARY KEY DEFAULT nextval('broadcast_logs_id_seq'),
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
                 subject TEXT NOT NULL,
                 body TEXT NOT NULL,
                 sender_id INTEGER NOT NULL,
@@ -226,58 +123,54 @@ def init_db():
         '''),
         # 讨论分类表
         ('discussion_categories', '''
-            CREATE SEQUENCE IF NOT EXISTS discussion_categories_id_seq START 1;
             CREATE TABLE IF NOT EXISTS discussion_categories (
-                id INTEGER PRIMARY KEY DEFAULT nextval('discussion_categories_id_seq'),
-                name VARCHAR NOT NULL,
-                slug VARCHAR UNIQUE NOT NULL,
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                slug TEXT UNIQUE NOT NULL,
                 sort_order INTEGER DEFAULT 0,
-                created_at VARCHAR NOT NULL
+                created_at TEXT NOT NULL
             )
         '''),
         # 讨论帖子表
         ('discussion_topics', '''
-            CREATE SEQUENCE IF NOT EXISTS discussion_topics_id_seq START 1;
             CREATE TABLE IF NOT EXISTS discussion_topics (
-                id INTEGER PRIMARY KEY DEFAULT nextval('discussion_topics_id_seq'),
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL,
                 category_id INTEGER,
-                title VARCHAR NOT NULL,
-                content VARCHAR NOT NULL DEFAULT '',
-                tags VARCHAR DEFAULT '',
-                attachment VARCHAR,
+                title TEXT NOT NULL,
+                content TEXT NOT NULL DEFAULT '',
+                tags TEXT DEFAULT '',
+                attachment TEXT,
                 is_pinned INTEGER DEFAULT 0,
                 is_locked INTEGER DEFAULT 0,
                 view_count INTEGER DEFAULT 0,
-                created_at VARCHAR NOT NULL,
-                updated_at VARCHAR NOT NULL
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
             )
         '''),
         # 讨论回复表
         ('discussion_replies', '''
-            CREATE SEQUENCE IF NOT EXISTS discussion_replies_id_seq START 1;
             CREATE TABLE IF NOT EXISTS discussion_replies (
-                id INTEGER PRIMARY KEY DEFAULT nextval('discussion_replies_id_seq'),
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
                 topic_id INTEGER NOT NULL,
                 user_id INTEGER NOT NULL,
-                content VARCHAR NOT NULL,
-                attachment VARCHAR,
-                created_at VARCHAR NOT NULL,
-                updated_at VARCHAR NOT NULL
+                content TEXT NOT NULL,
+                attachment TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
             )
         '''),
         # 大喇叭音频表（上传音频转码为 HLS，供游戏内大喇叭播放）
         # status: 0=私有 1=待审核 2=已公开（3=已驳回，仅遗留老数据保留，新驳回直接转为私有）
         ('music', '''
-            CREATE SEQUENCE IF NOT EXISTS music_id_seq START 1;
             CREATE TABLE IF NOT EXISTS music (
-                id INTEGER PRIMARY KEY DEFAULT nextval('music_id_seq'),
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL,
-                username VARCHAR DEFAULT '',
-                title VARCHAR NOT NULL,
-                file_path VARCHAR DEFAULT '',
+                username TEXT DEFAULT '',
+                title TEXT NOT NULL,
+                file_path TEXT DEFAULT '',
                 status INTEGER DEFAULT 0,
-                created_at VARCHAR NOT NULL
+                created_at TEXT NOT NULL
             )
         '''),
         # 大喇叭音频收藏表（联合主键：同一用户对同一音频仅一条收藏记录）
@@ -285,57 +178,53 @@ def init_db():
             CREATE TABLE IF NOT EXISTS music_favorites (
                 user_id INTEGER NOT NULL,
                 music_id INTEGER NOT NULL,
-                created_at VARCHAR NOT NULL,
+                created_at TEXT NOT NULL,
                 PRIMARY KEY (user_id, music_id)
             )
         '''),
         # 背景图片表（status: 0=待审核 1=已通过 2=已驳回）
         ('backgrounds', '''
-            CREATE SEQUENCE IF NOT EXISTS backgrounds_id_seq START 1;
             CREATE TABLE IF NOT EXISTS backgrounds (
-                id INTEGER PRIMARY KEY DEFAULT nextval('backgrounds_id_seq'),
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL,
-                username VARCHAR NOT NULL,
-                filename VARCHAR NOT NULL,
-                file_path VARCHAR NOT NULL,
+                username TEXT NOT NULL,
+                filename TEXT NOT NULL,
+                file_path TEXT NOT NULL,
                 status INTEGER DEFAULT 0,
                 is_active INTEGER DEFAULT 0,
-                created_at VARCHAR NOT NULL
+                created_at TEXT NOT NULL
             )
         '''),
-        # 游戏账号绑定表
+        # 游戏账号绑定表（一个用户只能绑定一个服务器账号）
         ('game_account_bindings', '''
-            CREATE SEQUENCE IF NOT EXISTS game_account_bindings_id_seq START 1;
             CREATE TABLE IF NOT EXISTS game_account_bindings (
-                id INTEGER PRIMARY KEY DEFAULT nextval('game_account_bindings_id_seq'),
-                user_id INTEGER NOT NULL,
-                mc_username VARCHAR NOT NULL UNIQUE,
-                created_at VARCHAR NOT NULL
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL UNIQUE,
+                mc_username TEXT NOT NULL UNIQUE,
+                created_at TEXT NOT NULL
             )
         '''),
         # 游戏账号注册申请表
         ('game_account_registrations', '''
-            CREATE SEQUENCE IF NOT EXISTS game_account_registrations_id_seq START 1;
             CREATE TABLE IF NOT EXISTS game_account_registrations (
-                id INTEGER PRIMARY KEY DEFAULT nextval('game_account_registrations_id_seq'),
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL,
-                mc_username VARCHAR NOT NULL,
-                encrypted_password VARCHAR NOT NULL,
-                status VARCHAR NOT NULL DEFAULT 'pending',
-                reject_reason VARCHAR DEFAULT '',
+                mc_username TEXT NOT NULL,
+                encrypted_password TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                reject_reason TEXT DEFAULT '',
                 reviewed_by INTEGER DEFAULT NULL,
-                reviewed_at VARCHAR DEFAULT NULL,
-                created_at VARCHAR NOT NULL
+                reviewed_at TEXT DEFAULT NULL,
+                created_at TEXT NOT NULL
             )
         '''),
         # 游戏账号封禁表
         ('game_account_bans', '''
-            CREATE SEQUENCE IF NOT EXISTS game_account_bans_id_seq START 1;
             CREATE TABLE IF NOT EXISTS game_account_bans (
-                id INTEGER PRIMARY KEY DEFAULT nextval('game_account_bans_id_seq'),
-                mc_username VARCHAR NOT NULL UNIQUE,
-                reason VARCHAR DEFAULT '',
-                created_at VARCHAR NOT NULL,
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                mc_username TEXT NOT NULL UNIQUE,
+                reason TEXT DEFAULT '',
+                created_at TEXT NOT NULL,
                 created_by INTEGER DEFAULT NULL
             )
         '''),
@@ -343,21 +232,10 @@ def init_db():
 
     for table_name, ddl in tables:
         try:
-            for stmt in _split_sql_script(ddl):
-                stmt = stmt.strip()
-                if stmt:
-                    cursor.execute(stmt)
+            cursor.execute(ddl)
         except Exception as e:
             log('ERROR', 'DB', f'创建表 {table_name} 时出错: {e}')
 
-    conn.commit()
-
-    # ---- 同步序列：防止手动删除数据后序列与表数据脱节 ----
-    for table_name, _ in tables:
-        try:
-            _sync_sequence(conn, table_name)
-        except Exception as e:
-            log('ERROR', 'DB', f'同步序列 {table_name} 失败: {e}')
     conn.commit()
 
     # ---- 迁移：检查并添加缺失列（兼容老库） ----
@@ -371,19 +249,12 @@ def init_db():
             except Exception as e:
                 log('ERROR', 'DB', f'添加列 {table}.{column} 失败: {e}')
 
-    add_column_if_not_exists('cmd_commands', 'type', "VARCHAR DEFAULT 'cmd'")
-    add_column_if_not_exists('scheduled_tasks', 'task_type', "VARCHAR DEFAULT 'shell'")
-    # 定时任务改为引用 cmd_commands 表中的快捷命令
-    add_column_if_not_exists('scheduled_tasks', 'command_id', 'INTEGER DEFAULT NULL')
-    # 每个定时任务独立的最大执行超时（秒），NULL 表示使用全局默认
-    add_column_if_not_exists('scheduled_tasks', 'timeout_seconds', 'INTEGER DEFAULT NULL')
-    # 用户表添加 email 列
-    add_column_if_not_exists('users', 'email', "VARCHAR DEFAULT ''")
-# 用户头像与个性背景只保存本地文件路径，图片内容不写入数据库。
-    add_column_if_not_exists('users', 'avatar_key', "VARCHAR DEFAULT ''")
-    # 登录失败锁定：连续失败次数 + 锁定截止时间
+    # 用户表：邮箱、头像路径、登录失败锁定
+    add_column_if_not_exists('users', 'email', "TEXT DEFAULT ''")
+    # 用户头像与个性背景只保存本地文件路径，图片内容不写入数据库。
+    add_column_if_not_exists('users', 'avatar_key', "TEXT DEFAULT ''")
     add_column_if_not_exists('users', 'login_attempts', 'INTEGER DEFAULT 0')
-    add_column_if_not_exists('users', 'locked_until', "VARCHAR DEFAULT ''")
+    add_column_if_not_exists('users', 'locked_until', "TEXT DEFAULT ''")
     # 游戏账号封禁表：添加 user_id 列，支持封禁官网账号申请资格
     add_column_if_not_exists('game_account_bans', 'user_id', 'INTEGER DEFAULT NULL')
 
@@ -391,7 +262,7 @@ def init_db():
     # 老库使用 is_public（0/1）标记公开，新库改用 status（0=私有 1=待审核 2=已公开）
     add_column_if_not_exists('music', 'status', 'INTEGER DEFAULT 0')
     # 大喇叭音频：标签列（逗号分隔，供搜索匹配与卡片展示）
-    add_column_if_not_exists('music', 'tags', "VARCHAR DEFAULT ''")
+    add_column_if_not_exists('music', 'tags', "TEXT DEFAULT ''")
     # 迁移前先检查 is_public 列是否存在（新库没有此列，跳过迁移）
     try:
         cursor.execute("SELECT is_public FROM music LIMIT 0")
@@ -462,7 +333,7 @@ def init_db():
         conn.commit()
 
     # ---- 指南拒绝审核：添加 rejected_at 列 ----
-    add_column_if_not_exists('server_guides', 'rejected_at', "VARCHAR DEFAULT NULL")
+    add_column_if_not_exists('server_guides', 'rejected_at', "TEXT DEFAULT NULL")
     # 兼容旧数据：已拒绝但无 rejected_at 的指南，用 updated_at 填充
     try:
         cursor.execute(

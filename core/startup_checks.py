@@ -116,7 +116,7 @@ _DEFAULT_SETTINGS = {
     'RCON_PASSWORD': '',
     'SESSION_LIFETIME': '86400',
     'MAX_CONTENT_LENGTH': '16777216',
-    'UPDATE_EXCLUDED_FILES': 'site.duckdb,site.duckdb.wal,backups,uploads,ssl,.env,__pycache__',
+    'UPDATE_EXCLUDED_FILES': 'site.db,site.db-wal,site.db-shm,backups,uploads,ssl,.env,__pycache__',
     'GITHUB_PROXIES': '',
     'BUILD_STATIC_ON_UPDATE': '0',
     'MAIL_SERVER': '',

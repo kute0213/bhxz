@@ -7,7 +7,7 @@ APP_ROOT = os.path.dirname(os.path.abspath(__file__))
 # 本地开发配置写在项目根目录 .env；系统环境变量优先，不会被文件覆盖。
 load_dotenv(os.path.join(APP_ROOT, '.env'), override=False)
 
-DB_PATH = os.path.join(APP_ROOT, 'site.duckdb')
+DB_PATH = os.path.join(APP_ROOT, 'site.db')
 UPLOAD_DIR = os.path.join(APP_ROOT, 'uploads')
 UPLOAD_ATTACHMENTS_DIR = os.path.join(UPLOAD_DIR, 'attachments')
 UPLOAD_COMMUNITY_DIR = os.path.join(UPLOAD_DIR, 'community')
@@ -15,14 +15,6 @@ UPLOAD_SITEMAP_DIR = os.path.join(UPLOAD_DIR, 'sitemap')
 UPLOAD_MUSIC_DIR = os.path.join(UPLOAD_DIR, 'music')
 UPLOAD_BACKGROUNDS_DIR = os.path.join(UPLOAD_DIR, 'backgrounds')
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'pdf', 'txt', 'zip', 'rar', '7z', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'mp4', 'mp3', 'wav'}
-
-# MinIO 对象存储。未配置 MINIO_ENDPOINT 时继续使用本地上传目录，便于开发。
-# 凭据只能通过环境变量或项目根目录 .env 提供，禁止写入源码。
-MINIO_ENDPOINT = os.environ.get('MINIO_ENDPOINT', '').strip()
-MINIO_ACCESS_KEY = os.environ.get('MINIO_ACCESS_KEY', '').strip()
-MINIO_SECRET_KEY = os.environ.get('MINIO_SECRET_KEY', '').strip()
-MINIO_BUCKET = os.environ.get('MINIO_BUCKET', 'bhxz').strip() or 'bhxz'
-MINIO_SECURE = os.environ.get('MINIO_SECURE', '0').lower() in ('1', 'true', 'yes', 'on')
 
 # 大喇叭音频：允许上传的音频格式（上传后由 ffmpeg 转码为 HLS/m3u8）
 MUSIC_ALLOWED_EXTENSIONS = {'mp3', 'wav', 'ogg', 'm4a', 'flac', 'mp4'}
@@ -63,44 +55,15 @@ SECRET_KEY = os.environ.get('SECRET_KEY') or 'mc_server_site_random_secret_key_2
 REGISTER_VERIFY_CODE = 'binhai_xz'
 
 # ---------------------------------------------------------------------------
-# 日志自动清理配置
-# ---------------------------------------------------------------------------
-
-# 访问日志：超过此条数后自动删除最旧的记录
-MAX_ACCESS_LOGS = 500
-
-# CMD 命令执行日志：超过此条数后自动删除最旧的记录
-MAX_CMD_LOGS = 1000
-
-# 定时任务执行日志：超过此条数后自动删除最旧的记录
-MAX_TASK_LOGS = 2000
-
-# 日志清理检查间隔（秒），后台线程每隔此时间检查一次
-LOG_CLEANUP_INTERVAL = 300  # 5 分钟
-
-# ---------------------------------------------------------------------------
-# 定时任务调度器配置
-# ---------------------------------------------------------------------------
-
-# 调度器检查间隔（秒），后台线程每隔此时间判断一次到期的定时任务
-TASK_SCHEDULER_INTERVAL = 1
-
-# 定时任务默认执行超时（秒）；每个任务可用 timeout_seconds 单独覆盖
-TASK_EXECUTION_TIMEOUT = 300
-
-# 定时任务执行线程池大小
-TASK_EXECUTOR_POOL_SIZE = 4
-
-# ---------------------------------------------------------------------------
 # 数据库备份配置
 # ---------------------------------------------------------------------------
 
-# 备份文件存放目录（DuckDB 为单文件数据库，直接复制整个文件）
+# 备份文件存放目录（SQLite 使用在线备份 API，避免文件锁定问题）
 BACKUP_DIR = os.path.join(APP_ROOT, 'backups', 'db')
 
 # 备份文件名格式（使用 strftime 占位符，将被替换为当前时间）
-# 例: backup_%Y%m%d_%H%M%S.duckdb -> backup_20240115_030000.duckdb
-BACKUP_FILENAME_FORMAT = 'backup_%Y%m%d_%H%M%S.duckdb'
+# 例: backup_%Y%m%d_%H%M%S.db -> backup_20240115_030000.db
+BACKUP_FILENAME_FORMAT = 'backup_%Y%m%d_%H%M%S.db'
 
 # 自动备份时间（24小时制 HH:MM 格式字符串），默认每天凌晨 3 点
 BACKUP_SCHEDULED_TIME = '03:00'
@@ -110,9 +73,6 @@ MAX_BACKUPS = 30
 
 # 备份执行超时时间（秒），防止备份过程卡住
 BACKUP_TIMEOUT = 3600  # 1 小时
-
-# 数据库优化时是否清理过期日志（执行 BACKUP 前自动调用日志清理）
-BACKUP_CLEAN_LOGS = True
 
 # 数据库优化时是否执行 CHECKPOINT （将 WAL 合并到主文件，减少文件大小）
 BACKUP_CHECKPOINT = True
@@ -225,22 +185,13 @@ QQ_GROUP_URL = 'https://qun.qq.com/universal-share/share?ac=1&authKey=rMtk0BTqbT
 # 每个条目: (key, default_value, type, label, description, category)
 # type: 'int', 'float', 'str', 'bool', 'select', 'time'
 SETTINGS_REGISTRY = [
-    # 日志清理
-    ('LOG_LEVEL', 'INFO', 'select', '日志输出等级', '控制日志输出级别，可选：DEBUG（调试）, INFO（信息）, WARNING（警告）, ERROR（错误）, CRITICAL（严重）', '日志清理'),
-    ('MAX_CMD_LOGS', 1000, 'int', '命令日志最大条数', '超过此条数后自动删除最旧的命令执行日志', '日志清理'),
-    ('MAX_TASK_LOGS', 2000, 'int', '定时任务日志最大条数', '超过此条数后自动删除最旧的定时任务日志', '日志清理'),
-    ('LOG_CLEANUP_INTERVAL', 300, 'int', '日志清理间隔（秒）', '后台线程每隔此时间检查一次日志数量', '日志清理'),
-
-    # 定时任务
-    ('TASK_SCHEDULER_INTERVAL', 1, 'int', '任务调度间隔（秒）', '后台线程每隔此时间判断一次到期的定时任务', '定时任务'),
-    ('TASK_EXECUTION_TIMEOUT', 300, 'int', '任务执行超时（秒）', '单个定时任务执行超时后自动终止', '定时任务'),
-    ('TASK_EXECUTOR_POOL_SIZE', 4, 'int', '任务执行线程池大小', '同时执行的定时任务数量上限', '定时任务'),
+    # 日志
+    ('LOG_LEVEL', 'INFO', 'select', '日志输出等级', '控制日志输出级别，可选：DEBUG（调试）, INFO（信息）, WARNING（警告）, ERROR（错误）, CRITICAL（严重）', '日志'),
 
     # 数据库备份
     ('BACKUP_SCHEDULED_TIME', '03:00', 'time', '自动备份时间', '每天自动备份的时间（HH:MM 格式）', '数据库备份'),
     ('MAX_BACKUPS', 30, 'int', '最大备份保留数', '超出后自动删除最旧的备份，0 表示不限制', '数据库备份'),
     ('BACKUP_TIMEOUT', 3600, 'int', '备份超时（秒）', '备份执行超时时间，防止备份过程卡住', '数据库备份'),
-    ('BACKUP_CLEAN_LOGS', True, 'bool', '备份前清理日志', '执行备份前自动清理过期日志', '数据库备份'),
     ('BACKUP_CHECKPOINT', True, 'bool', '备份前执行 CHECKPOINT', '将 WAL 合并到主文件，减小数据库体积', '数据库备份'),
 
 # Sitemap
@@ -269,8 +220,8 @@ SETTINGS_REGISTRY = [
     ('REPLIES_PER_PAGE', 10, 'int', '回复每页加载数量', '讨论区回复列表每次加载的回复数量', '讨论区配置'),
 
     # 一键更新
-    ('BUILD_STATIC_ON_UPDATE', False, 'bool', '更新时构建静态资源', '开启后每次更新都会重新下载外部 CDN 资源（Monaco、xterm.js 等），关闭则仅同步代码', '一键更新'),
-    ('UPDATE_EXCLUDED_FILES', 'site.duckdb,site.duckdb.wal,backups,uploads,ssl,.env,.git,__pycache__', 'str', '不替换的文件/文件夹', '逗号分隔，更新时不会被删除或覆盖', '一键更新'),
+    ('BUILD_STATIC_ON_UPDATE', False, 'bool', '更新时构建静态资源', '开启后每次更新都会重新下载外部 CDN 资源（Monaco、hls.js 等），关闭则仅同步代码', '一键更新'),
+    ('UPDATE_EXCLUDED_FILES', 'site.db,site.db-wal,site.db-shm,backups,uploads,ssl,.env,.git,__pycache__', 'str', '不替换的文件/文件夹', '逗号分隔，更新时不会被删除或覆盖', '一键更新'),
     ('GITHUB_PROXIES', '', 'str', '自定义 GitHub 代理', '每行一个，格式：名称=URL。留空使用默认代理列表', '一键更新'),
 
     # 外部链接

@@ -11,9 +11,9 @@ from services.ip import get_client_ip
 
 # 跳过公共文件服务的路径前缀（这些路径由 Flask 蓝图处理）
 ROUTE_PREFIXES = (
-    '/static/', '/admin', '/api/', '/cmd/',
-    '/scheduled', '/community', '/docs',
-    '/login', '/register', '/', '/settings', '/health',
+    '/static/', '/admin', '/api/',
+    '/community', '/docs',
+    '/login', '/register', '/', '/settings',
     '/music', '/sitemap.xml',
 )
 
@@ -110,7 +110,7 @@ def register_hooks(app, try_serve_public):
 
     @app.before_request
     def csrf_check_hook():
-        """全站 CSRF 防护（除 /api/* 和 /cmd/* 外所有 POST/PUT/DELETE/PATCH 请求）。"""
+        """全站 CSRF 防护（除 /api/* 外所有 POST/PUT/DELETE/PATCH 请求）。"""
         from core.csrf import csrf_protect
         csrf_protect()
 

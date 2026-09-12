@@ -48,12 +48,16 @@ def bind_account(username: str, password: str) -> dict:
 
     # ── 2. 解析 JSON ──
     # 预期格式：Player Info: {"password":"$2a$12$...","last_ip":"...",...}
+    # 兼容冒号后有空格/无空格、返回中带其他前缀文本的情况（uuid 字段可有可无）
     raw = msg.strip()
-    if raw.startswith('Player Info:'):
-        raw = raw[len('Player Info:'):].strip()
+    brace_idx = raw.find('{')
+    if brace_idx == -1:
+        return _result(False, '无法解析服务器返回的玩家信息',
+                       username, error_code='PARSE_FAILED')
+    payload = raw[brace_idx:]
 
     try:
-        player_data = json.loads(raw)
+        player_data = json.loads(payload)
     except json.JSONDecodeError:
         return _result(False, '无法解析服务器返回的玩家信息',
                        username, error_code='PARSE_FAILED')

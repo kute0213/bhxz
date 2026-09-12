@@ -1,12 +1,12 @@
 # 滨海小镇 - Minecraft 服务器社区网站
 
-基于 Flask 的 Minecraft 服务器社区门户，采用浅蓝白磨砂玻璃（Blue-White Frosted Glass）设计风格。提供用户系统、游戏账号管理、模组介绍、管理后台、服务器状态监控、终端控制台、全站背景图片、网站图标可配置等功能。
+基于 Flask 的 Minecraft 服务器社区门户，采用白色磨砂玻璃（White Frosted Glass）设计风格。提供用户系统、游戏账号管理、模组介绍、管理后台、服务器状态监控、全站背景图片、网站图标可配置等功能。
 
 ## 文档索引
 
 | 文档                                                  | 说明                                   |
 | --------------------------------------------------- | ------------------------------------ |
-| 本文档                                                 | 项目总览、快速开始、功能特性、配置、API、架构、终端控制台使用说明   |
+| 本文档                                                 | 项目总览、快速开始、功能特性、配置、API、架构               |
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)          | 开发准则：分层规范、易错点、测试、路由检测、构建打包与发布、文档写入准则 |
 | [docs/CHANGELOG.md](docs/CHANGELOG.md)              | 更新日志                                 |
 | [docs/SECURITY\_REPORT.md](docs/SECURITY_REPORT.md) | 安全风险自评估报告：OWASP 逐项评估、风险清单、改进建议       |
@@ -100,9 +100,7 @@ python scripts/build/package.py
 │   ├── game_accounts/  # 游戏账号绑定与注册
 │   ├── guides/         # 服务器指南（页面+API）
 │   ├── main/           # 主站（登录/注册/设置/音乐）
-│   ├── public/         # 公开文件服务
-│   ├── scheduled/      # 定时任务管理
-│   └── script/         # 脚本控制台（页面+终端+命令）
+│   └── public/         # 公开文件服务
 ├── templates/    # Jinja2 模板
 │   ├── admin/          # 管理后台页面
 │   ├── backgrounds/    # 背景图片页面
@@ -150,8 +148,6 @@ python scripts/build/package.py
 * 大喇叭音频管理（公开申请审核、查看全部音频、一键下架）
 
 * 管理中心数据统计（含大喇叭音频总数与待审核数量）
-
-* 脚本控制台（流式终端 + 快捷命令 + 定时任务）
 
 * 系统设置（在线编辑，热重载，含网站图标选择、日志等级、背景图片开关、RCON 配置、MC 游戏文件夹）
 
@@ -221,14 +217,6 @@ python scripts/build/package.py
 
 * **ffmpeg 多线程转码**：上传转码统一加 `-threads` 参数（`FFMPEG_THREADS`），每个上传任务是独立 ffmpeg 子进程与独立输出目录，多用户同时上传天然并行，不会出现「文件正在使用」冲突
 
-### 终端控制台与快捷命令
-
-* 流式输出终端（SSE 实时回流，自实现纯 DOM 终端，风格统一）
-
-* 快捷命令管理（数据库存储，按名称排序）
-
-* 定时任务（支持间隔/每日/一次性模式）
-
 ### 服务器性能监控
 
 * CPU 使用率/温度、内存占用、运行时间
@@ -247,11 +235,13 @@ python scripts/build/package.py
 
 ### 游戏账号管理
 
-* 用户可绑定一或多个 MC 账号到网站账户
+* 一个网站账号只能绑定一个服务器账号（已绑定时需先解绑再绑定其他账号）
+
+* 绑定通过 RCON 执行 `/auth getPlayerInfo 玩家名` 获取 BCrypt 密码哈希，服务端校验密码；绑定/修改密码前需完成图形验证码
 
 * 绑定后可在线修改 MC 账号密码（通过 EasyAuth 数据库直连或 RCON，数据库从 MC\_GAME\_FOLDER 自动发现）
 
-* 申请注册 MC 游戏账号（需图形验证码 + 管理员审批）
+* 申请注册 MC 游戏账号（需图形验证码 + 管理员审批，审批通过后自动 RCON 添加白名单）
 
 * 管理员可批准/驳回申请，封禁恶意账号
 
@@ -271,15 +261,11 @@ python scripts/build/package.py
 
 支持编辑的配置分类：
 
-* **日志清理**：访问日志、命令日志、任务日志上限及清理间隔
+* **日志**：日志输出等级
 
-* **定时任务**：调度间隔、执行超时、线程池大小
-
-* **数据库备份**：自动备份时间、保留份数、超时
+* **数据库备份**：自动备份时间、保留份数、超时、备份前 CHECKPOINT
 
 * **Sitemap**：刷新时间、站点域名、多域名列表
-
-* **脚本执行**：并发数
 
 * **安全配置**：会话有效期、登录失败锁定次数及时间
 
@@ -287,15 +273,25 @@ python scripts/build/package.py
 
 * **外部链接**：卫星地图地址、QQ 群链接
 
+* **邮件配置**：SMTP 服务器、端口、SSL、发件邮箱与授权码
+
+* **一键更新**：更新时是否构建静态资源、不替换的文件列表、自定义 GitHub 代理
+
+* **背景图片**：显示开关、显示方式（cover/contain/auto）
+
 * **网站图标**：favicon 图标选择（compass/mountain/star/heart），管理后台可在线切换
 
 * **服务器配置**：监听地址、端口、调试模式、工作线程数
+
+* **RCON 配置**：服务器 RCON 地址/端口/密码、MC 游戏文件夹
+
+* **网站备案**：工信部备案号、公安备案号、版权年份与站点名称
 
 ### config.py
 
 | 配置项                           | 说明                                        | 默认值                                         |
 | ----------------------------- | ----------------------------------------- | ------------------------------------------- |
-| `DB_PATH`                     | 数据库文件路径                                   | `./site.duckdb`                             |
+| `DB_PATH`                     | 数据库文件路径                                   | `./site.db`                                 |
 | `UPLOAD_DIR`                  | 上传文件目录                                    | `./uploads`                                 |
 | `UPLOAD_MUSIC_DIR`            | 大喇叭音频存放目录                                 | `./uploads/music`                           |
 | `MUSIC_ALLOWED_EXTENSIONS`    | 大喇叭音频允许上传的格式                              | `mp3/wav/ogg/m4a/flac`                      |
@@ -305,14 +301,8 @@ python scripts/build/package.py
 | `MAX_CONTENT_LENGTH`          | 最大上传大小                                    | 100 MB                                      |
 | `SECRET_KEY`                  | Session 密钥                                | `mc_server_site_random_secret_key_2024`     |
 | `REGISTER_VERIFY_CODE`        | 注册验证码                                     | `binhai_xz`                                 |
-| `MAX_ACCESS_LOGS`             | 访问日志最大保留条数                                | `500`                                       |
-| `MAX_CMD_LOGS`                | 脚本命令日志最大保留条数                              | `1000`                                      |
-| `MAX_TASK_LOGS`               | 任务日志最大保留条数                                | `2000`                                      |
 | `BACKUP_SCHEDULED_TIME`       | 每日自动备份时间                                  | `03:00`                                     |
 | `MAX_BACKUPS`                 | 最大保留备份份数                                  | `30`                                        |
-| `TASK_EXECUTION_TIMEOUT`      | 定时任务默认执行超时（秒）                             | `300`                                       |
-| `TASK_SCHEDULER_INTERVAL`     | 定时任务调度间隔（秒）                               | `1`                                         |
-| `SCRIPT_EXECUTOR_POOL_SIZE`   | 脚本子进程并发数上限                                | `2`                                         |
 | `DISCUSSION_REFRESH_INTERVAL` | 讨论区回复刷新间隔                                 | `5s`                                        |
 | `REPLIES_PER_PAGE`            | 讨论区回复每页数量                                 | `10`                                        |
 | `LOG_LEVEL`                   | 日志输出等级（DEBUG/INFO/WARNING/ERROR/CRITICAL） | `INFO`                                      |
@@ -355,7 +345,7 @@ export ENABLE_SSL=1 && python app.py
 | 方法   | 路径                                   | 说明                 |
 | ---- | ------------------------------------ | ------------------ |
 | GET  | `/game-accounts/`                    | 游戏账号首页（已绑定列表）      |
-| POST | `/game-accounts/api/bind`            | 绑定 MC 账号           |
+| POST | `/game-accounts/api/bind`            | 绑定 MC 账号（需图形验证码）     |
 | POST | `/game-accounts/api/unbind`          | 解绑 MC 账号           |
 | GET  | `/game-accounts/api/bound`           | 获取已绑定账号列表          |
 | POST | `/game-accounts/api/change-password` | 修改绑定的 MC 账号密码      |
@@ -398,43 +388,29 @@ export ENABLE_SSL=1 && python app.py
 | POST | `/music/<id>/tags`                 | 编辑音频标签（本人或管理员，需登录）              |
 | GET  | `/music/my/favorites`              | 我的收藏页（需登录）                      |
 
-### 终端控制台 API（管理员）
-
-| 方法       | 路径                                   | 说明          |
-| -------- | ------------------------------------ | ----------- |
-| GET      | `/admin/script/commands`             | 获取快捷命令列表    |
-| POST     | `/admin/script/commands`             | 新增快捷命令      |
-| POST     | `/admin/script/run`                  | 同步执行命令      |
-| GET/POST | `/admin/script/run-stream`           | SSE 流式执行    |
-| POST     | `/admin/script/run-preset/<id>`      | 执行快捷命令      |
-| POST     | `/admin/script/commands/<id>/delete` | 删除快捷命令      |
-
-
 ## 前端特性
 
-### 淡紫蓝磨砂玻璃效果（Lavender-Blue Frosted Glass）
+### 白色磨砂玻璃效果（White Frosted Glass）
 
-* **深灰底色 + 淡紫蓝强调色**：`#2d3448` 深灰底色搭配 `#a78bfa`（淡紫）、`#60a5fa`（蓝）、`#67e8f9`（青）等淡紫蓝调强调色，营造柔和科技感氛围
+* **白色页面 + 黑色控件**：`#f3f6fa` 浅色底色搭配 `#1a2230` 深色正文、`#0284c7`（蓝）/`#7c3aed`（紫）强调色，按钮、输入框、导航栏均为深色控件，白色磨砂玻璃卡片承载内容
 
 * **真实酸蚀刻玻璃质感**：`background: linear-gradient()` 渐变背景替代纯色，模拟光线透过玻璃的漫射效果
 
-* `backdrop-filter: blur(48px) saturate(100%)` — 降低饱和度，更自然通透
+* `backdrop-filter: blur(28px) saturate(140%)` — 玻璃卡片高通透，自然融入浅色背景
 
-* 超低透明度 `rgba(0.10)` 背景 + 光线散射伪元素（`radial-gradient` 模拟漫射光）
+* 高透明度 `rgba(255,255,255,0.74)` 背景 + 光线散射伪元素（`radial-gradient` 模拟漫射光）
 
 * 边缘光晕伪元素（`mask-composite` 渐变边框，模拟玻璃切割面折射）
 
-* 动态背景光球（CSS `@keyframes` 动画），降低透明度使光晕更柔和
-
 * 全局细微噪点纹理（SVG `feTurbulence`），模拟蚀刻玻璃表面微观散射
 
-* **滚动收缩导航栏**：向下滚动后导航栏收缩为居中漂浮的椭圆胶囊，磨砂质感更凝实，弹性缓出动画（`prefers-reduced-motion` 可降级）
+* **桌面端悬停下拉导航栏**：大屏端（≥1024px）主导航为「首页 / 导航 / 互动 / 账号」，其中「导航 / 互动 / 账号」为悬停下拉菜单（CSS 过渡动画，`cubic-bezier` 弹性曲线流畅展开）；小屏端保持右侧滑出菜单不变
 
-* **邮件模板同款磨砂玻璃**：`templates/emails/base.html` 统一淡紫蓝磨砂玻璃卡片（背景光晕 + 噪点纹理 + 光线散射层 + 顶部高光描边 + 状态卡），验证码 / 指南审核 / 音频审核 / 广播邮件共用同一外层与样式
+* **邮件模板同款磨砂玻璃**：`templates/emails/base.html` 统一白色磨砂玻璃卡片（背景光晕 + 噪点纹理 + 光线散射层 + 顶部高光描边 + 状态卡），验证码 / 指南审核 / 音频审核 / 广播邮件共用同一外层与样式
 
 * **自定义音频播放器（磨砂玻璃风格）**：大喇叭音频列表（`/music`）、我的音频（`/music/my`）、管理员审核页（`admin/admin_music.html`）均使用自研播放器替代浏览器默认控件，含进度条（点击/拖动 seek、缓冲显示，**圆点（thumb）跟随进度实时移动**）、倍速（0.5x~2x）、音量（按钮+滑块弹层，音量记忆在 localStorage）与播放/暂停，窄屏（≤480px）自动占满整行，且倍速/音量弹层窄屏时改为右对齐，避免超出卡片/视口被裁切；每个 `.music-player` 独立实例化并拥有独立的 HLS 实例与 `Audio` 元素，同一时间只允许一个播放器出声，列表内多个音频均可独立播放；样式见 `static/css/base.css` 的 `.music-player`（倍速/音量弹层 `z-index:100` 向上展开；内含播放器的卡片使用 `.pixel-card.music-card` 显式解除 `contain:paint`/`content-visibility` 的溢出裁切，弹层不被遮挡/裁切），逻辑见 `static/js/pages/music_player.js`，HLS 播放依赖本地 `static/lib/hls/hls.min.js`（构建脚本 `scripts/build/build_static.py` 自动下载）
 
-* **全站响应式适配所有屏幕**：竖屏/窄屏（≤640px）下音频卡片操作按钮组（复制广播 m3u / 唱片 MP3 / 时长 Ns / 审核操作）通过 `.music-card-actions` 自动占满整行并换行排列，不再横向溢出被裁切导致「穿模」、无法点击；全局 `body` 增加 `overflow-wrap: break-word` 兜底长文本换行，配合 `overflow-x: clip` 杜绝横向滚动；导航栏所有屏幕统一使用右侧滑出菜单（50vw~全屏响应式），桌面端汉堡按钮左侧显示用户头像/用户名，管理员数据表格统一 `overflow-x-auto` 横向滚动、指南/文档 `pre/table` 自带横向滚动，全站各页面均可适配任意屏幕尺寸
+* **全站响应式适配所有屏幕**：竖屏/窄屏（≤640px）下音频卡片操作按钮组（复制广播 m3u / 唱片 MP3 / 时长 Ns / 审核操作）通过 `.music-card-actions` 自动占满整行并换行排列，不再横向溢出被裁切导致「穿模」、无法点击；全局 `body` 增加 `overflow-wrap: break-word` 兜底长文本换行，配合 `overflow-x: clip` 杜绝横向滚动；小屏端导航使用右侧滑出菜单，大屏端使用悬停下拉导航，管理员数据表格统一 `overflow-x-auto` 横向滚动、指南/文档 `pre/table` 自带横向滚动，全站各页面均可适配任意屏幕尺寸
 
 * **模板宏复用**：`templates/macros/music_macros.html` 提取音频状态徽章、复制广播 m3u 链接按钮、复制唱片 MP3 按钮、复制时长（秒）按钮、自定义播放器（`music_audio_player`）与播放器脚本（`music_player_assets`）为公共宏，`music/list.html`、`music/my.html` 与 `admin/admin_music.html` 统一调用，消除重复代码
 
@@ -512,17 +488,18 @@ app.py ──→ routes/ ──→ services/ ──→ core/
   │            │            │            │
   Flask    蓝图/路由   纯 Python 函数    DB/认证/工具
              │            │
-         main/        process_utils.py
-         docs/        process_manager.py
-         public/      shell.py
-         admin/       user/（auth.py / profile.py）
-         api/         attachment_service.py
-         discussion/  discussion/（topics.py / replies.py）
-         guides/      music/（constants.py / queries.py / crud.py / upload.py / favorites.py）
-         scheduled/   updater/（config.py / core.py）
-         script/      captcha.py （验证码）
-                      ratelimit.py （限流）
-                      logger.py （日志）
+         main/        user/（auth.py / profile.py）
+         docs/        game_accounts/（binding_service.py / registration_service.py）
+         public/      attachment_service.py
+         admin/       discussion/（topics.py / replies.py / categories.py）
+         api/         music/（constants.py / queries.py / crud.py / upload.py / favorites.py）
+         discussion/  rcon/（client.py / pool.py / easy_auth.py）
+         guides/      updater/（config.py / core.py）
+         backgrounds/ backup/（manager.py / scheduler.py）
+         game_accounts/ captcha.py （验证码）
+                       easyauth_bind.py （游戏账号密码验证）
+                       ratelimit.py （限流）
+                       logger.py （日志）
 ```
 
 | 层级     | 目录          | 职责                                              | 禁止                                |
@@ -554,27 +531,22 @@ workspace/
 │   ├── discussion/           #   讨论区（帖子/回复/分类）
 │   ├── email/                #   异步邮件发送
 │   ├── game_accounts/        #   游戏账号绑定与注册申请
-│   ├── logging/              #   日志写入与清理
 │   ├── monitoring/           #   系统监控（CPU/内存/系统/性能追踪）
 │   ├── music/                #   大喇叭音频（常量/查询/CRUD/上传/收藏）
 │   ├── rcon/                 #   RCON 连接管理、玩家列表追踪、EasyAuth 指令
-│   ├── terminal/             #   流式输出终端
 │   ├── updater/              #   自动更新（配置/核心逻辑）
 │   ├── user/                 #   用户（认证/资料/管理）
 │   ├── attachment_service.py #   附件上传/清理
-│   ├── background_service.py #   背景图片业务
+│   ├── background_service.py #   背景图片业务（WebP 转换 + 响应式变体）
 │   ├── captcha.py            #   图形验证码
-│   ├── cmd_runner.py         #   命令执行流
 │   ├── discussion_service.py #   兼容性重导出层（讨论区）
 │   ├── easy_auth_db.py       #   EasyAuth 数据库直连验证
+│   ├── easyauth_bind.py      #   游戏账号密码验证（/auth getPlayerInfo + bcrypt）
 │   ├── ip.py                 #   IP 工具
 │   ├── music_service.py      #   兼容性重导出层（大喇叭音频）
-│   ├── process_manager.py    #   子进程生命周期管理
 │   ├── process_utils.py      #   子进程工具（编码/缓冲/环境变量）
 │   ├── ratelimit.py          #   IP 频率限制
-│   ├── scheduler.py          #   定时任务调度器
 │   ├── settings_manager.py   #   系统设置管理
-│   ├── shell.py              #   跨平台 shell 检测
 │   ├── sitemap_cache.py      #   Sitemap 缓存
 │   ├── updater.py            #   兼容性重导出层（自动更新）
 │   ├── user_service.py       #   兼容性重导出层（用户）
@@ -590,13 +562,11 @@ workspace/
 │   ├── game_accounts/        #   游戏账号绑定与注册
 │   ├── guides/               #   服务器指南（页面+API）
 │   ├── public/               #   公开文件服务
-│   ├── scheduled/            #   定时任务管理
-│   ├── script/               #   脚本控制台（页面+终端+命令）
 │   ├── registry.py           #   蓝图注册中心
 │   └── sitemap.py            #   站点地图
 ├── static/                   # 静态资源（CSS/JS）
 │   ├── css/                  #   样式（tailwind/base）
-│   ├── js/                   #   脚本（core/通用, pages/页面, script/终端）
+│   ├── js/                   #   脚本（core/通用, pages/页面）
 │   └── lib/                  #   本地化第三方库（构建生成）
 ├── templates/                # Jinja2 模板
 │   ├── admin/                #   管理后台页面
@@ -620,58 +590,54 @@ workspace/
 | -------- | ----------------------------- |
 | 后端框架     | Flask 3.x                     |
 | WSGI 服务器 | Cheroot（内置）                   |
-| 数据库      | DuckDB（嵌入式单文件）                |
+| 数据库      | SQLite（WAL 模式，嵌入式单文件）         |
 | 模板引擎     | Jinja2                        |
-| CSS      | Tailwind CSS + 自定义样式（淡紫蓝磨砂玻璃） |
+| CSS      | Tailwind CSS + 自定义样式（白色磨砂玻璃） |
 | 图标       | Lucide（本地化）                   |
 | Markdown | marked.js / Python Markdown   |
-| 终端模拟     | 自实现流式输出终端（纯 DOM + SSE）       |
 
 ### 异步架构
 
 | 组件      | 异步方式                               |
 | ------- | ---------------------------------- |
-| 定时任务调度器 | 后台线程 + ThreadPoolExecutor          |
 | 日志写入器   | 队列 + 后台线程批量写入                      |
-| 日志清理器   | 后台线程定期检查                           |
+| 数据库备份调度器 | 后台线程每日定时执行                         |
 | IP 地理信息 | 后台线程异步更新缓存                         |
 | CPU 监控  | 后台线程定期采样（2 秒）                      |
-| 流式命令执行  | SSE + 一次性子进程                     |
 
 ### 数据库
 
-使用 **DuckDB**（嵌入式 OLAP 数据库，单文件），首次启动自动建表。共 18 张表：
+使用 **SQLite**（嵌入式单文件数据库），启用 **WAL 模式**（`PRAGMA journal_mode=WAL`）+ `synchronous=NORMAL` + `busy_timeout=30000`，读写并发性能优秀且崩溃可恢复；单例共享连接 + 可重入锁保证多线程安全。首次启动自动建表，共 17 张表：
 
-| 表名                      | 说明       | 关键约束                                                                                                            |
-| ----------------------- | -------- | --------------------------------------------------------------------------------------------------------------- |
-| `users`                 | 用户       | `username` 唯一, `email` 唯一                                                                                       |
-| `mod_intros`            | 模组介绍     | —                                                                                                               |
-| `cmd_commands`          | 快捷命令     | 名称/命令/描述/排序                                                                                                     |
-| `access_logs`           | 访问日志     | 含 IP 地理信息，自动清理                                                                                                  |
-| `scheduled_tasks`       | 定时任务     | 支持间隔/每日/一次性                                                                                                     |
-| `scheduled_task_logs`   | 任务执行日志   | 外键 `task_id`                                                                                                    |
-| `cmd_run_logs`          | 脚本命令执行日志 | —                                                                                                               |
-| `db_backups`            | 备份记录     | 状态/大小/耗时                                                                                                        |
-| `settings`              | 系统设置     | key 唯一，支持热重载                                                                                                    |
-| `server_guides`         | 服务器指南    | 支持 Markdown，审核工作流                                                                                               |
-| `guide_edit_bans`       | 编辑封禁     | 用户名/IP，限时/永久                                                                                                    |
-| `discussion_categories` | 讨论分类     | slug 唯一                                                                                                         |
-| `discussion_topics`     | 讨论帖子     | 支持分类/标签/附件/置顶/锁定                                                                                                |
-| `discussion_replies`    | 讨论回复     | 外键 `topic_id`，支持附件                                                                                              |
-| `music`                 | 大喇叭音频    | `status` 状态机（0=私有/1=待审核/2=已公开，驳回后自动转为私有；旧库 `gain` 列仅保留不再使用），`tags` 逗号分隔标签列，删除记录时同步删除 `uploads/music/<ID>/` 文件目录 |
-| `music_favorites`       | 大喇叭音频收藏  | 联合主键 `(user_id, music_id)`（同一用户对同一音频仅一条收藏）                                                                      |
+| 表名                        | 说明       | 关键约束                                                                                                            |
+| ------------------------- | -------- | --------------------------------------------------------------------------------------------------------------- |
+| `users`                   | 用户       | `username` 唯一, `email` 唯一                                                                                       |
+| `mod_intros`              | 模组介绍     | —                                                                                                               |
+| `db_backups`              | 备份记录     | 状态/大小/耗时                                                                                                        |
+| `settings`                | 系统设置     | key 唯一，支持热重载                                                                                                    |
+| `public_paths`            | 公开文件路径   | 路径唯一                                                                                                          |
+| `server_guides`           | 服务器指南    | 支持 Markdown，审核工作流                                                                                               |
+| `guide_edit_bans`         | 编辑封禁     | 用户名/IP，限时/永久                                                                                                    |
+| `broadcast_logs`          | 广播邮件日志   | —                                                                                                               |
+| `discussion_categories`   | 讨论分类     | slug 唯一                                                                                                         |
+| `discussion_topics`       | 讨论帖子     | 支持分类/标签/附件/置顶/锁定                                                                                                |
+| `discussion_replies`      | 讨论回复     | 外键 `topic_id`，支持附件                                                                                              |
+| `music`                   | 大喇叭音频    | `status` 状态机（0=私有/1=待审核/2=已公开，驳回后自动转为私有；旧库 `gain` 列仅保留不再使用），`tags` 逗号分隔标签列，删除记录时同步删除 `uploads/music/<ID>/` 文件目录 |
+| `music_favorites`         | 大喇叭音频收藏  | 联合主键 `(user_id, music_id)`（同一用户对同一音频仅一条收藏）                                                                      |
+| `backgrounds`             | 背景图片     | `status` 审核状态，WebP 格式，响应式变体                                                                                    |
+| `game_account_bindings`   | 游戏账号绑定   | 一个网站用户只能绑定一个 MC 账号（`user_id`/`mc_username` 唯一）                                                                  |
+| `game_account_registrations` | 游戏账号注册申请 | 申请注册 MC 账号，管理员审批                                                                                               |
+| `game_account_bans`       | 游戏账号封禁   | 封禁 MC 账号申请资格                                                                                                    |
 
-#### 访问日志自动清理
-
-超出 `MAX_ACCESS_LOGS`（默认 500 条）阈值时，后台线程自动删除最旧记录。
+> 旧版 DuckDB 数据库（`site.duckdb`）可通过 `scripts/migrate_db.py` 一键迁移到 SQLite（迁移前会自动备份旧库）。
 
 #### 数据库备份
 
 每日凌晨 3:00（可配置）自动执行：
 
-1. 清理过期日志 → CHECKPOINT → DuckDB 在线备份 → 验证 → 清理旧备份
+1. 清理 WAL（CHECKPOINT）→ SQLite 在线备份 API（`Connection.backup()`）→ 校验备份文件 → 清理旧备份
 
-管理后台支持手动触发，显示实时进度条。
+管理后台支持手动触发，显示实时进度条；恢复前自动备份当前数据库。
 
 ### 一键更新机制
 
@@ -710,32 +676,6 @@ workspace/
 
    * `Strict-Transport-Security`（HSTS）：**仅 HTTPS 请求下发**，避免 HTTP 部署被强制升级而无法访问
 
-## 终端控制台使用说明
-
-本文档介绍终端控制台的快捷命令、流式输出终端、定时任务功能。
-
-### 页面布局
-
-终端控制台页面包含快捷命令卡片网格，点击"运行"打开**流式输出终端弹窗**，命令通过 SSE 实时回流输出。
-
-### 快捷命令
-
-快捷命令以卡片网格展示，支持添加、编辑、删除、排序。点击「运行」按钮打开流式输出终端弹窗，命令通过 `/admin/script/run-stream` 端点执行，输出通过 SSE 实时回流到终端界面。
-
-### 流式输出终端
-
-终端为自实现的纯 DOM 终端，风格与全站暗色磨砂玻璃主题统一，无需 xterm.js 或 PTY 依赖：
-
-* 命令输入框可直接键入命令，`Enter` 或点击运行按钮执行
-* 输出通过 **SSE** 实时流式回流，支持 ANSI 颜色解析
-* 清屏按钮清除输出，运行中可中止当前命令
-* 状态指示器显示执行状态（运行中 / 成功 / 错误）和退出码
-* 自动滚动到底部，无额外依赖
-
-### 定时任务
-
-支持三种调度模式：间隔执行、每日定时、一次性执行。任务类型为 Shell 命令，在后台线程中异步执行，不会阻塞 Web 请求。支持查看执行日志和实时状态反馈。
-
 ## 开发注意事项
 
 编写新代码前必查的**分层规范、易错点清单与测试要求**，详见 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)。
@@ -745,6 +685,30 @@ workspace/
 详见 [docs/CHANGELOG.md](docs/CHANGELOG.md)。
 
 ## 最近更新
+
+* **同步 GitHub 代码 + 上传**：本地改动已与 GitHub 仓库同步并提交。
+
+* **清理无用代码**：删除顶层残留的 `static/js/base.js`、`static/js/main.js`（模板实际引用 `js/core/base.js` 与 `js/pages/main.js`），删除空的 `static/js/script/` 目录；`static/lib/lib-version.json` 移除已废弃的 `xterm_version` 字段；打包/忽略规则更新为 SQLite 的 `*.db-wal`/`*.db-shm`，移除 DuckDB 残留
+
+* **彻底删除 MinIO 对象存储**：移除 `services/object_storage.py`、MinIO 相关配置与依赖，背景图片改回本地文件存储。
+
+* **彻底删除 CMD 控制台**：移除快捷命令、定时任务、脚本执行/终端等全部功能（路由、服务、模板、前端脚本、数据库表、xterm.js 依赖与构建下载逻辑），管理后台不再显示终端控制台入口。
+
+* **UI 改回白色页面 + 黑色控件**：全站由深色主题改为白色磨砂玻璃风格（白色卡片 + 深色控件），磨砂玻璃质感保留；导航栏大屏端（≥1024px）改为「首页 / 导航 / 互动 / 账号」悬停下拉菜单（导航=指南/讨论/服务器状态，互动=大喇叭音频/背景图片/游戏账号，账号=设置/管理/退出），小屏端保持右侧滑出菜单；下拉使用 CSS 过渡动画流畅展开
+
+* **数据库迁移到 SQLite（WAL 模式）**：从 DuckDB 迁移到 SQLite，启用 `PRAGMA journal_mode=WAL` + `synchronous=NORMAL` + `busy_timeout=30000`，单例共享连接 + 可重入锁保证多线程安全；备份改用 SQLite 在线备份 API（`Connection.backup()`）；新增迁移脚本 `scripts/migrate_db.py`（自动备份旧库后一键迁移）
+
+* **修复自动更新关闭后无法自动启动**（Windows 10 + uv）：重启逻辑不再依赖批处理/Shell 脚本，改为独立 Python 辅助脚本等待旧进程退出后拉起新进程，完整继承原环境变量（含 uv/虚拟环境），跨平台统一且无需特殊处理
+
+* **背景图片功能优化**：上传图片自动转为 WebP 格式（智能裁剪 16:9 + LANCZOS 缩放），自动生成 768/1280/1920 三档响应式变体；前端按设备屏幕宽度（含 DPR）请求最合适的尺寸，实现按设备最佳缩放；修复未通过审核图片无法预览的问题（管理员/上传者可预览）
+
+* **subprocess 编码统一 UTF-8（修复 Windows 10 下 GBK 乱码/UnicodeDecodeError）**：所有 `subprocess` 调用统一添加 `encoding='utf-8', errors='replace'`（或 `env=make_env()` + 显式解码），覆盖 CPU 温度获取、ffmpeg/ffprobe 转码、备份恢复、更新器构建等全部子进程场景
+
+* **图形验证码优化（修复「验证码太小」）**：默认尺寸 360x128 → 420x150，字号增大（`font_size = min(96, int(height*0.68))`）；干扰元素升级——3~6 条明快色系彩色干扰横线/斜线、字符后方 20~40 个浅色小号干扰字符（数字/字母/短横线/点）、背景噪点数量增加并随机浅色着色；字符颜色从深色系（深蓝/深红/深绿/深紫/墨黑/深棕）随机选取，保持清晰可辨；位数（4 位）与字符集不变，`generate()`/`verify()`/`consume()` 接口不变，弹窗图片宽度放宽至 `max-w-[420px]`
+
+* **游戏账号绑定机制改造**：一个网站账号只能绑定一个服务器账号（绑定页提示文案同步更新）；绑定/验证游戏内密码前需先完成图形验证码（复用全局 `CaptchaModal` 弹窗，前端先弹窗验证、后端再次校验并消耗）；`easyauth_bind.py` 解析 `Player Info: {...}` 容错增强（兼容冒号后有无空格、无 uuid 字段、密码为空等场景）
+
+* **恢复密码强度规则**：网站密码恢复为 8-30 位且必须包含大小写字母、数字和特殊字符，拒绝弱密码（常见易猜密码、单一重复字符、连续序列）；游戏账号密码（AuthMe）为 6-30 位且至少包含字母和数字。统一收敛到 `services/validation.py`，注册/找回密码/修改密码均复用 `validate_password_strength`，移除 `services/user/auth.py` 中重复的本地校验函数
 
 * **服务器状态页面重构**：CPU 使用率、内存使用率、CPU 温度改为各占一行独立板块，展示更清晰醒目；新增内存详情（已用/总计）、刻度标签、三色渐变温度条
 

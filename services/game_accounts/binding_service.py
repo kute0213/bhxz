@@ -42,6 +42,11 @@ def create_binding(user_id: int, mc_username: str) -> Tuple[bool, str]:
     Returns:
         (success, message_or_data)
     """
+    # 一个网站账号只能绑定一个服务器账号，已绑定时需先解绑
+    if get_user_bindings(user_id):
+        return False, '一个网站账号只能绑定一个服务器账号，请先解绑当前账号'
+
+    # 该 MC 账号已被其他用户绑定
     if is_mc_username_bound(mc_username):
         return False, '该 MC 账号已被其他用户绑定'
 
