@@ -7,7 +7,7 @@ APP_ROOT = os.path.dirname(os.path.abspath(__file__))
 # 本地开发配置写在项目根目录 .env；系统环境变量优先，不会被文件覆盖。
 load_dotenv(os.path.join(APP_ROOT, '.env'), override=False)
 
-DB_PATH = os.path.join(APP_ROOT, 'site.db')
+DB_PATH = os.path.join(APP_ROOT, 'db', 'site.db')
 UPLOAD_DIR = os.path.join(APP_ROOT, 'uploads')
 UPLOAD_ATTACHMENTS_DIR = os.path.join(UPLOAD_DIR, 'attachments')
 UPLOAD_COMMUNITY_DIR = os.path.join(UPLOAD_DIR, 'community')
@@ -218,6 +218,7 @@ WORKER_THREADS = 4
 # 可在管理后台 → 系统设置 / 一键更新 → 更新设置中在线修改。
 RESTART_COMMAND = os.environ.get('RESTART_COMMAND', '')
 
+os.makedirs(os.path.join(APP_ROOT, 'db'), exist_ok=True)
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(UPLOAD_ATTACHMENTS_DIR, exist_ok=True)
 os.makedirs(UPLOAD_COMMUNITY_DIR, exist_ok=True)
@@ -316,7 +317,7 @@ SETTINGS_REGISTRY = [
 
     # 一键更新
     ('BUILD_STATIC_ON_UPDATE', False, 'bool', '更新时构建静态资源', '开启后每次更新都会重新下载外部 CDN 资源（Monaco、hls.js 等），关闭则仅同步代码', '一键更新'),
-    ('UPDATE_EXCLUDED_FILES', 'site.db,site.db-wal,site.db-shm,backups,uploads,ssl,.env,.git,__pycache__', 'str', '不替换的文件/文件夹', '逗号分隔，更新时不会被删除或覆盖', '一键更新'),
+    ('UPDATE_EXCLUDED_FILES', 'db,backups,uploads,ssl,.env,.git,__pycache__', 'str', '不替换的文件/文件夹', '逗号分隔，更新时不会被删除或覆盖', '一键更新'),
     ('GITHUB_PROXIES', '', 'str', '自定义 GitHub 代理', '每行一个，格式：名称=URL。留空使用默认代理列表', '一键更新'),
     ('RESTART_COMMAND', '', 'str', '自定义启动指令', '一键更新完成后重启服务器使用的完整启动命令。留空自动使用「当前解释器 + app.py + 原启动参数」重启。示例：uv run app.py / python app.py --host 0.0.0.0', '一键更新'),
 

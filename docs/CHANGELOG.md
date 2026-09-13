@@ -2,6 +2,18 @@
 
 ## \[Unreleased]
 
+### 调整
+
+* **Sitemap 全量携带 lastmod（自动读取数据库）**：`services/sitemap_cache.py` 重构 URL 条目构建逻辑，新增 `_latest_time()`（查询指定表最新时间字段）与 `_site_latest()`（跨内容表取全站最近更新时间）两个辅助函数；静态页面统一使用全站最近内容更新时间作为 `lastmod`，内容列表页取各自内容表最新一条（比全站时间更准确），指南/讨论帖/公开路径等动态页面取各自记录的 `updated_at`/`created_at`，生成的 sitemap 所有链接均带 `<lastmod>`，不再有缺失项。
+
+* **数据库位置迁移至 `./db` 文件夹**：`config.py` 的 `DB_PATH` 由根目录 `./site.db` 改为 `./db/site.db`，启动时自动创建 `db` 目录；`core/db/connection.py` 新增 `_migrate_legacy_db()`，首次启动自动将旧版根目录下的 `site.db`（含 `-wal`/`-shm`）迁移到新位置，避免升级丢数据；`scripts/restore_db.py`、`scripts/uploads.py` 同步新路径；一键更新不替换列表（`UPDATE_EXCLUDED_FILES` / `services/updater/config.py` 的 `DEFAULT_EXCLUDED` / 更新页占位提示）由 `site.db,site.db-wal,site.db-shm` 改为 `db`；`routes/public/files.py` 敏感路径列表加入 `db` 防止数据库被公开访问。
+
+### 修复
+
+* **启动时反复提示添加缺失配置项**：`core/startup_checks.py` 的 `_check_config()` 原先用 `get_setting(key, None)` 判断配置是否存在，空字符串值（如留空的 `GITHUB_PROXIES`、`MAIL_SERVER`、`MAIL_USERNAME`、`MAIL_PASSWORD`、`MAIL_DEFAULT_SENDER`）被误判为缺失导致每次启动重复写入；改为通过 `get_all_settings()` 获取现有键集合，基于键存在性判断，空字符串是合法值不再误判。
+
+* **/admin/public-files 页面 500 错误**：`templates/admin/admin_public_files.html` 缺少 `{% endblock %}` 闭合标签导致 Jinja2 `TemplateSyntaxError: Unexpected end of template`，已基于 `admin_music.html` 结构重建模板，恢复公开路径添加表单、路径列表表格与删除按钮；并编写脚本批量校验全部 54 个 Jinja2 模板语法，全部通过，确保不再出现同类错误。
+
 ### 新增
 
 * **DDoS 攻击防护（极高性能多线程防火墙）**：新增 `core/firewall.py` —— 运行在 WSGI 入口（先于一切 Flask 逻辑）的高性能多线程防火墙。① **黑名单快速拦截**：进程内维护黑名单内存镜像（O(1) 集合查询，每 0.5 秒从数据库同步），命中黑名单的请求不进入路由/模板/数据库/静态文件等任何业务处理，直接返回最小 403 响应并标记 `Connection: close`；后台监控线程同时利用 Cheroot 连接特性（`linger=False` + `close()`）强制关闭黑名单 IP 的现存连接（含 keep-alive 空闲与处理中的请求，覆盖连接管理器 selector 与 WSGI 门禁登记两路来源），客户端表现为连接被重置而非收到页面。② **DDoS 检测**：按检测强度统计单位检测窗口（10 秒）内每个 IP 的请求数（low=宽松 300 次 / medium=中等 150 次 / high=严格 80 次），超阈值立即自动封禁来源 IP（复用 `ip_ban_service.create_ban`，操作人显示「系统」，白名单 IP 跳过）；首次限时封禁（时长可配，默认 30 分钟，0 为直接永久封禁），在违规记录时间窗口（默认 24 小时）内多次触发（默认 3 次）自动升级为**永久封禁**（屡教不改）；静态资源（`/static/`）不计入计数避免误判，计数器与违规记录由后台线程定期清理。③ **配置热更新**：`config.py` 新增 `DDOS_GUARD_ENABLED` / `DDOS_GUARD_INTENSITY` / `DDOS_GUARD_BAN_MINUTES` / `DDOS_GUARD_PERMANENT_AFTER` / `DDOS_GUARD_OFFENSE_WINDOW_HOURS`，管理后台 → 系统设置新增「DDoS 防护」分类，检测强度/封禁时长/触发次数等修改 5 秒内生效，无需重启。④ `core/server.py` 使用 `FirewallServer`（自定义网关向 environ 注入 `cheroot.connection`）集成防火墙，服务器启动/关闭时自动启停防火墙后台线程。

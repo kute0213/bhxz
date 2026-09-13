@@ -22,9 +22,9 @@ RELIABLE_PROXIES = [
     ('slink.ltd', 'https://slink.ltd/https://github.com/', 'https://slink.ltd/https://github.com/{repo}'),
 ]
 
-# 默认不替换路径（从安全角度考虑，site.db 等必须保护）
+# 默认不替换路径（从安全角度考虑，db 文件夹等必须保护）
 DEFAULT_EXCLUDED = [
-    'site.db', 'site.db-wal', 'site.db-shm', 'backups', 'uploads', 'ssl',
+    'db', 'backups', 'uploads', 'ssl',
     '.env', '.git', '__pycache__',
 ]
 

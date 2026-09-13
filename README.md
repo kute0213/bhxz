@@ -316,7 +316,7 @@ python scripts/build/package.py
 
 | 配置项                           | 说明                                        | 默认值                                         |
 | ----------------------------- | ----------------------------------------- | ------------------------------------------- |
-| `DB_PATH`                     | 数据库文件路径                                   | `./site.db`                                 |
+| `DB_PATH`                     | 数据库文件路径                                   | `./db/site.db`                             |
 | `UPLOAD_DIR`                  | 上传文件目录                                    | `./uploads`                                 |
 | `UPLOAD_MUSIC_DIR`            | 大喇叭音频存放目录                                 | `./uploads/music`                           |
 | `MUSIC_ALLOWED_EXTENSIONS`    | 大喇叭音频允许上传的格式                              | `mp3/wav/ogg/m4a/flac`                      |

@@ -307,7 +307,7 @@ def run():
     try:
         backup_dir = os.path.join(_PROJECT_ROOT, 'backups')
         os.makedirs(backup_dir, exist_ok=True)
-        db_path = os.path.join(_PROJECT_ROOT, 'site.db')
+        db_path = os.path.join(_PROJECT_ROOT, 'db', 'site.db')
         if os.path.isfile(db_path):
             import shutil
             import datetime

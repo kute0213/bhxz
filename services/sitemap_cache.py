@@ -12,6 +12,7 @@ import os
 import threading
 
 from config import get_config_value, UPLOAD_SITEMAP_DIR
+from core.db import get_db
 from core.logger import log
 from core.scheduler import Scheduler
 
@@ -217,36 +218,76 @@ def _get_default_base_url() -> str:
     return 'http://localhost:5000'
 
 
+# 无独立内容时间的页面：(path, changefreq, priority)
+_STATIC_PAGES = [
+    ('/', 'monthly', '1.0'),
+    ('/server-status', 'weekly', '0.8'),
+    ('/community', 'weekly', '0.8'),
+    ('/docs', 'monthly', '0.7'),
+    ('/guides', 'weekly', '0.8'),
+    ('/discussion', 'weekly', '0.8'),
+    ('/apply', 'monthly', '0.5'),
+]
+
+
+def _latest_time(conn, table: str, column: str, where: str = ''):
+    """查询表中满足条件的最新时间字段，返回格式化日期或 None。"""
+    sql = f'SELECT MAX({column}) FROM {table}'
+    if where:
+        sql += f' WHERE {where}'
+    try:
+        row = conn.execute(sql).fetchone()
+    except Exception:
+        return None
+    return _format_date(row[0]) if row and row[0] else None
+
+
+def _site_latest(conn) -> str:
+    """全站最近内容更新时间：跨所有内容表取最大，作为静态页面的 lastmod。"""
+    candidates = (
+        _latest_time(conn, 'server_guides', 'updated_at'),
+        _latest_time(conn, 'discussion_topics', 'updated_at'),
+        _latest_time(conn, 'backgrounds', 'created_at'),
+        _latest_time(conn, 'music', 'created_at'),
+        _latest_time(conn, 'public_paths', 'created_at'),
+        _latest_time(conn, 'mod_intros', 'created_at'),
+    )
+    return max((c for c in candidates if c), default=None) or _format_date(None)
+
+
 def _build_url_entries() -> list:
-    """构建所有 URL 条目（不含 base_url 前缀）。
+    """构建所有 URL 条目（不含 base_url 前缀），全部携带数据库读取的 lastmod。
 
     Returns:
         list[dict]: [{'path': '/xxx', 'changefreq': '...', 'priority': '...', 'lastmod': '...'}]
     """
-    from core.db import get_db
-
-    entries = []
-
-    # 1) 静态页面
-    static_pages = [
-        ('/', 'monthly', '1.0'),
-        ('/server-status', 'weekly', '0.8'),
-        
-        ('/community', 'weekly', '0.8'),
-        ('/docs', 'monthly', '0.7'),
-        ('/guides', 'weekly', '0.8'),
-        ('/discussion', 'weekly', '0.8'),
-    ]
-    for path, freq, priority in static_pages:
-        entries.append({
-            'path': path,
-            'changefreq': freq,
-            'priority': priority,
-        })
-
-    # 2) 已审核通过的指南
     conn = get_db()
     try:
+        entries = []
+        latest = _site_latest(conn)
+
+        # 1) 通用静态页面：无独立内容时间，统一使用全站最近内容更新时间
+        for path, freq, priority in _STATIC_PAGES:
+            entries.append({
+                'path': path,
+                'lastmod': latest,
+                'changefreq': freq,
+                'priority': priority,
+            })
+
+        # 2) 内容列表页：时间取各自内容表的最新一条（比全站时间更准确）
+        for path, freq, priority, lastmod in (
+            ('/backgrounds', 'weekly', '0.8', _latest_time(conn, 'backgrounds', 'created_at', 'status = 1')),
+            ('/music', 'weekly', '0.8', _latest_time(conn, 'music', 'created_at', 'status = 2')),
+        ):
+            entries.append({
+                'path': path,
+                'lastmod': lastmod or latest,
+                'changefreq': freq,
+                'priority': priority,
+            })
+
+        # 3) 已审核通过的指南
         rows = conn.execute(
             "SELECT id, updated_at FROM server_guides WHERE status = 'approved' ORDER BY id"
         ).fetchall()
@@ -257,26 +298,34 @@ def _build_url_entries() -> list:
                 'changefreq': 'weekly',
                 'priority': '0.7',
             })
-    finally:
-        conn.close()
 
-    # 3) 讨论帖子
-    conn = get_db()
-    try:
+        # 4) 讨论帖子
         rows = conn.execute(
-            "SELECT id, created_at FROM discussion_topics ORDER BY id"
+            "SELECT id, updated_at FROM discussion_topics ORDER BY id"
         ).fetchall()
         for row in rows:
             entries.append({
                 'path': f'/discussion/{row["id"]}',
-                'lastmod': _format_date(row['created_at']),
+                'lastmod': _format_date(row['updated_at']),
                 'changefreq': 'monthly',
                 'priority': '0.6',
             })
+
+        # 5) 自定义公开页面（public_paths 表）
+        rows = conn.execute(
+            "SELECT url_path, created_at FROM public_paths WHERE is_active = 1 ORDER BY id"
+        ).fetchall()
+        for row in rows:
+            entries.append({
+                'path': row['url_path'].rstrip('/') or '/',
+                'lastmod': _format_date(row['created_at']),
+                'changefreq': 'weekly',
+                'priority': '0.5',
+            })
+
+        return entries
     finally:
         conn.close()
-
-    return entries
 
 
 def _render_sitemap_xml(base_url: str, entries: list) -> str:

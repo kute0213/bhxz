@@ -116,7 +116,7 @@ _DEFAULT_SETTINGS = {
     'RCON_PASSWORD': '',
     'SESSION_LIFETIME': '86400',
     'MAX_CONTENT_LENGTH': '16777216',
-    'UPDATE_EXCLUDED_FILES': 'site.db,site.db-wal,site.db-shm,backups,uploads,ssl,.env,__pycache__',
+    'UPDATE_EXCLUDED_FILES': 'db,backups,uploads,ssl,.env,__pycache__',
     'GITHUB_PROXIES': '',
     'BUILD_STATIC_ON_UPDATE': '0',
     'MAIL_SERVER': '',
@@ -131,19 +131,21 @@ _DEFAULT_SETTINGS = {
 def _check_config():
     """检查关键系统设置是否存在，缺失时自动写入默认值。
 
-    只补充缺失项，不修改已有值。
+    只补充缺失项，不修改已有值。判断依据是数据库是否存在该键，
+    空字符串是合法值（如留空的 MAIL_* / GITHUB_PROXIES），不算缺失。
     """
     log('INFO', 'Startup', '[3/4] 检查系统配置完整性...')
     try:
-        from services.settings_manager import get_setting, set_setting
+        from services.settings_manager import get_all_settings, set_setting
+        existing_keys = {item['key'] for item in get_all_settings()}
         added = 0
         for key, default_value in _DEFAULT_SETTINGS.items():
+            if key in existing_keys:
+                continue
             try:
-                existing = get_setting(key, None)
-                if existing is None:
-                    set_setting(key, default_value)
-                    log('INFO', 'Startup', f'  + 添加配置: {key}')
-                    added += 1
+                set_setting(key, default_value)
+                log('INFO', 'Startup', f'  + 添加配置: {key}')
+                added += 1
             except Exception as e:
                 log('WARNING', 'Startup', f'  ! 检查配置 {key} 失败: {e}')
 
