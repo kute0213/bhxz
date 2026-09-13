@@ -6,6 +6,12 @@ from core.auth import admin_required, get_current_user
 from core.helpers import render_page
 from services import ip_ban_service
 from services.ip import get_client_ip
+from config import (
+    IP_BAN_WHITELIST,
+    AUTO_BAN_ENABLED,
+    AUTO_BAN_DURATION_MINUTES,
+    get_config_value,
+)
 from routes.admin import admin_bp
 
 
@@ -15,7 +21,15 @@ def admin_ip_bans():
     """管理后台：IP 封禁列表。"""
     bans = ip_ban_service.get_bans()
     current_ip = get_client_ip()
-    return render_page('admin/admin_ip_bans.html', bans=bans, current_ip=current_ip)
+    return render_page(
+        'admin/admin_ip_bans.html',
+        bans=bans,
+        current_ip=current_ip,
+        whitelist=IP_BAN_WHITELIST,
+        auto_ban_enabled=get_config_value('AUTO_BAN_ENABLED', AUTO_BAN_ENABLED),
+        auto_ban_duration_minutes=get_config_value(
+            'AUTO_BAN_DURATION_MINUTES', AUTO_BAN_DURATION_MINUTES),
+    )
 
 
 @admin_bp.route('/admin/ip-bans/create', methods=['POST'])

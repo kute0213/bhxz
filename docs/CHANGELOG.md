@@ -2,6 +2,10 @@
 
 ## \[Unreleased]
 
+### 新增
+
+* **自动 IP 封禁**：触发限流的可疑操作（登录/注册/找回密码/邮箱验证码）自动封禁来源 IP，封禁时长可配置（默认 30 分钟，0 为永久封禁），到期自动解除；管理后台 → 系统设置新增「IP 封禁」分类（总开关、封禁时长、各操作独立开关），IP 封禁管理页展示自动封禁与白名单状态；封禁白名单在 `config.py` 的 `IP_BAN_WHITELIST` 配置（默认 `112.82.136.172`），白名单 IP 不会被手动或自动封禁。
+
 ### 修复
 
 * **subprocess 编码统一 UTF-8（补全 Windows 10 场景）**：`services/process_utils.py` 的 `make_env()` 新增 `PYTHONUTF8=1`（强制 Python 子进程启用 UTF-8 模式），与既有 `PYTHONIOENCODING=utf-8` 一起从源头消除 Windows 10 下子进程 GBK 输出乱码 / `UnicodeDecodeError`；已覆盖 CPU 温度获取、ffmpeg/ffprobe 转码、数据库备份恢复、一键更新等全部子进程场景

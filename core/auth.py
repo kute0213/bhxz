@@ -1,10 +1,22 @@
-from functools import wraps
+"""认证核心 —— 密码哈希、登录/管理员校验装饰器、当前用户获取。
+
+依赖关系：本模块属于 core 基础设施层，只依赖核心库与数据库，
+不得导入 services（业务逻辑层），避免分层逆向依赖。
+"""
+
 import hashlib
 import hmac
+from functools import wraps
+
 from flask import session, redirect, url_for, request, g, jsonify, abort
-from core.db import get_db
 from werkzeug.security import check_password_hash, generate_password_hash
 
+from core.db import get_db
+
+
+# ---------------------------------------------------------------------------
+# 工具
+# ---------------------------------------------------------------------------
 
 def _is_json_request():
     """检测当前请求是否期望 JSON 响应（AJAX 或 JSON 内容类型）。"""
@@ -15,6 +27,10 @@ def _is_json_request():
         or request.headers.get('X-Requested-With') == 'XMLHttpRequest'
     )
 
+
+# ---------------------------------------------------------------------------
+# 密码哈希与校验
+# ---------------------------------------------------------------------------
 
 def hash_password(password: str) -> str:
     """使用带随机盐的自适应算法生成密码哈希。"""
@@ -45,6 +61,10 @@ def verify_password(password: str, password_hash: str) -> bool:
     except (TypeError, ValueError):
         return False
 
+
+# ---------------------------------------------------------------------------
+# 登录/管理员校验装饰器
+# ---------------------------------------------------------------------------
 
 def login_required(f):
     """登录校验装饰器。
@@ -82,6 +102,10 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated
 
+
+# ---------------------------------------------------------------------------
+# 当前用户
+# ---------------------------------------------------------------------------
 
 def get_current_user():
     """获取当前登录用户信息（单次请求内缓存，避免重复 DB 查询）。"""

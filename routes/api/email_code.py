@@ -4,6 +4,8 @@ from flask import Blueprint, request, jsonify, session
 
 from services.email import email_code_service, normalize_email, email_service
 from services.captcha import captcha_service
+from services.ratelimit import email_limiter
+from services.ip_ban_service import auto_ban
 from core.logger import log
 from config import get_config_value
 from services.ip import get_client_ip
@@ -95,6 +97,13 @@ def send_email_code():
     if purpose == '找回密码' and not email_service.is_enabled():
         log('EmailCode', '邮件功能未启用', email=email, purpose=purpose, ip=get_client_ip())
         return jsonify({'success': False, 'message': '邮件功能未启用'}), 400
+
+    # IP 频率限制：发送过于频繁时自动封禁该 IP（防止批量刷邮箱验证码）
+    ip = get_client_ip()
+    if not email_limiter.check(ip, request.headers.get('User-Agent', '')):
+        log('EmailCode', '验证码发送过于频繁，触发自动封禁', email=email, purpose=purpose, ip=ip)
+        auto_ban(ip, 'email', reason=f'邮箱验证码发送过于频繁（{purpose}）')
+        return jsonify({'success': False, 'message': '发送过于频繁，请稍后再试'}), 429
 
     # 发送验证码
     success, message = email_code_service.send_code(email, purpose)

@@ -163,7 +163,7 @@ python scripts/build/package.py
 
 * 游戏账号管理（注册申请审批、封禁列表管理）
 
-* IP 封禁管理（封禁 IP/IP 段，支持临时/永久封禁与原因备注，全站 403 拦截，后台一键解封）
+* IP 封禁管理（封禁 IP/IP 段，支持临时/永久封禁与原因备注，全站 403 拦截，后台一键解封；自动识别可疑操作限流并自动封禁，各操作可独立开关、时长可配，白名单 IP 不受影响）
 
 ### 服务器指南
 
@@ -283,6 +283,8 @@ python scripts/build/package.py
 
 * **安全配置**：会话有效期、登录失败锁定次数及时间
 
+* **IP 封禁**：自动封禁总开关、封禁时长（分钟，0 为永久）、登录/注册/找回密码/邮箱验证码异常各自独立开关
+
 * **讨论区配置**：回复实时刷新间隔、每页加载数量
 
 * **外部链接**：卫星地图地址、QQ 群链接
@@ -323,12 +325,18 @@ python scripts/build/package.py
 | `FAVICON_ICON`                | 网站图标（可选 compass/mountain/star/heart）      | `compass`                                   |
 | `MAP_URL`                     | 卫星地图地址                                    | `https://map.bhxz.tw.kg`                    |
 | `QQ_GROUP_URL`                | QQ 群链接                                    | 空                                           |
+| `IP_BAN_WHITELIST`            | 封禁白名单（逗号分隔），白名单 IP 不会被封禁                    | `112.82.136.172`                            |
+| `AUTO_BAN_ENABLED`            | 自动 IP 封禁总开关                                 | `1`（开启）                                    |
+| `AUTO_BAN_DURATION_MINUTES`   | 自动封禁时长（分钟，0 为永久封禁）                          | `30`                                        |
 
 ### 环境变量
 
 | 变量名          | 说明       | 默认值     |
 | ------------ | -------- | ------- |
 | `ENABLE_SSL` | 启用 HTTPS | `0`（禁用） |
+| `IP_BAN_WHITELIST` | 封禁白名单（逗号分隔） | `112.82.136.172` |
+| `AUTO_BAN_ENABLED` | 自动 IP 封禁总开关 | `1`（开启） |
+| `AUTO_BAN_DURATION_MINUTES` | 自动封禁时长（分钟，0 为永久） | `30` |
 
 ### SSL 证书
 

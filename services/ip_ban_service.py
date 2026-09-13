@@ -1,4 +1,4 @@
-"""IP 封禁业务服务：封禁、解封、封禁检查。
+"""IP 封禁业务服务：封禁、解封、封禁检查、自动封禁。
 
 提供：
 - validate_ip() — IP 地址格式校验
@@ -7,6 +7,8 @@
 - unban() — 解除封禁
 - is_banned() — 检查 IP 是否被封禁（带内存缓存，30 秒刷新）
 - cleanup_expired_bans() — 清理已过期的临时封禁
+- auto_ban() — 按配置自动封禁可疑操作来源 IP（白名单 IP 跳过）
+- is_whitelisted() — 判断 IP 是否在封禁白名单中
 
 缓存说明：全站每个请求都会调用 is_banned()，为避免频繁查询数据库，
 使用进程内缓存（30 秒 TTL）；创建/解除封禁时立即失效缓存。
@@ -19,12 +21,28 @@ from datetime import datetime, timedelta
 
 from core.db import get_db
 from core.logger import log
+from config import (
+    IP_BAN_WHITELIST,
+    AUTO_BAN_ENABLED,
+    AUTO_BAN_DURATION_MINUTES,
+)
 
 # 封禁缓存 TTL（秒）
 CACHE_TTL = 30
 
 _ban_cache = {'ts': 0.0, 'banned': {}}  # {ip: reason}
 _ban_cache_lock = threading.Lock()
+
+# 自动封禁：操作类型 → 对应的设置注册表键（默认开启）
+AUTO_BAN_ACTION_SETTINGS = {
+    'login': 'AUTO_BAN_LOGIN_ENABLED',
+    'register': 'AUTO_BAN_REGISTER_ENABLED',
+    'email': 'AUTO_BAN_EMAIL_ENABLED',
+    'forgot_password': 'AUTO_BAN_FORGOT_PASSWORD_ENABLED',
+}
+
+# 系统自动封禁操作人的标记 ID（users 表中不存在该用户，显示为「系统」）
+SYSTEM_BANNER_ID = 0
 
 
 def _now():
@@ -65,13 +83,24 @@ def _invalidate_cache():
         _ban_cache['ts'] = 0.0
 
 
+def is_whitelisted(ip_address):
+    """判断 IP 是否在封禁白名单中（白名单内的 IP 不会被封禁）。"""
+    if not ip_address:
+        return False
+    return ip_address.strip() in IP_BAN_WHITELIST
+
+
 def is_banned(ip_address):
     """检查 IP 是否被封禁。
+
+    白名单内的 IP 恒返回未封禁（即使存在历史封禁记录也不生效）。
 
     Returns:
         (banned: bool, reason: str)
     """
     if not ip_address:
+        return False, ''
+    if is_whitelisted(ip_address):
         return False, ''
     with _ban_cache_lock:
         if time.time() - _ban_cache['ts'] > CACHE_TTL:
@@ -91,6 +120,8 @@ def create_ban(ip_address, reason, banned_by, duration_days=None):
     ip = (ip_address or '').strip()
     if not validate_ip(ip):
         return False, '无效的 IP 地址'
+    if is_whitelisted(ip):
+        return False, '该 IP 在封禁白名单中，不允许封禁'
 
     expires_at = None
     if duration_days:
@@ -131,17 +162,18 @@ def create_ban(ip_address, reason, banned_by, duration_days=None):
 
 
 def get_bans():
-    """查询所有有效封禁（含操作人用户名）。"""
+    """查询所有有效封禁（含操作人用户名；系统自动封禁显示为「系统」）。"""
     with get_db() as conn:
         rows = conn.execute(
             """
-            SELECT b.*, u.username AS banned_by_name
+            SELECT b.*,
+                   CASE WHEN b.banned_by = ? THEN '系统' ELSE u.username END AS banned_by_name
             FROM ip_bans b
             LEFT JOIN users u ON b.banned_by = u.id
             WHERE b.expires_at IS NULL OR b.expires_at > ?
             ORDER BY b.created_at DESC
             """,
-            (_now(),),
+            (SYSTEM_BANNER_ID, _now()),
         ).fetchall()
         return [dict(r) for r in rows]
 
@@ -189,3 +221,62 @@ def cleanup_expired_bans():
     except Exception as exc:
         log('WARNING', 'IpBan', f'清理过期封禁失败: {exc}')
         return 0
+
+
+def auto_ban(ip_address, action, reason=''):
+    """按配置自动封禁可疑操作来源 IP。
+
+    同时满足以下全部条件才会执行封禁：
+    1. 全局总开关 AUTO_BAN_ENABLED 开启（管理后台 → 系统设置可调）
+    2. 该操作对应的子开关开启（登录/注册/邮箱验证码/找回密码分别控制）
+    3. IP 不在封禁白名单中
+    4. IP 当前未被封禁
+
+    封禁时长取 AUTO_BAN_DURATION_MINUTES（分钟，0 = 永久），到期自动解除。
+
+    Args:
+        ip_address: 来源 IP
+        action: 操作类型，取值 login / register / email / forgot_password
+        reason: 自定义封禁原因（为空时自动生成）
+
+    Returns:
+        (banned: bool, message: str)
+    """
+    from config import get_config_value
+
+    if not get_config_value('AUTO_BAN_ENABLED', AUTO_BAN_ENABLED):
+        return False, '自动封禁总开关未开启'
+
+    action_key = AUTO_BAN_ACTION_SETTINGS.get(action)
+    if action_key and not get_config_value(action_key, True):
+        return False, f'「{action}」操作的自动封禁未开启'
+
+    ip = (ip_address or '').strip()
+    if is_whitelisted(ip):
+        log('INFO', 'IpBan', '自动封禁跳过白名单 IP', ip=ip, action=action)
+        return False, '该 IP 在封禁白名单中，跳过自动封禁'
+
+    if not validate_ip(ip):
+        return False, '无效的 IP 地址'
+
+    if is_banned(ip)[0]:
+        return False, '该 IP 已在封禁列表中'
+
+    # 封禁时长：分钟 → 天（create_ban 以天为单位）
+    try:
+        duration_minutes = int(get_config_value(
+            'AUTO_BAN_DURATION_MINUTES', AUTO_BAN_DURATION_MINUTES))
+    except (ValueError, TypeError):
+        duration_minutes = AUTO_BAN_DURATION_MINUTES
+    duration_days = duration_minutes / 1440.0 if duration_minutes > 0 else None
+
+    success, message = create_ban(
+        ip_address=ip,
+        reason=reason or f'自动封禁：{action} 操作异常',
+        banned_by=SYSTEM_BANNER_ID,
+        duration_days=duration_days,
+    )
+    if success:
+        log('Security', '自动封禁生效', ip=ip, action=action,
+            duration_minutes=duration_minutes or '永久')
+    return success, message

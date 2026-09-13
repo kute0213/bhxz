@@ -11,6 +11,7 @@ from config import REGISTER_VERIFY_CODE, MAX_LOGIN_ATTEMPTS, LOGIN_LOCKOUT_TIME,
 from services.captcha import captcha_service
 from services.email import normalize_email, email_code_service
 from services.ratelimit import register_limiter, login_limiter, forgot_password_limiter
+from services.ip_ban_service import auto_ban
 from core.logger import log
 
 
@@ -52,7 +53,8 @@ def register(username, password, confirm, verify_code, captcha_input, captcha_id
     """注册用户。返回 (success, data_or_error)。"""
 
     if not register_limiter.check(ip_address or 'unknown', _get_ua()):
-        log('Register', '注册请求过于频繁', ip=ip_address, username=username)
+        log('Register', '注册请求过于频繁，触发自动封禁', ip=ip_address, username=username)
+        auto_ban(ip_address or 'unknown', 'register')
         return False, '注册请求过于频繁，请稍后再试'
 
     from services.validation import validate_website_username, validate_password_strength
@@ -145,7 +147,8 @@ def login(username, password, captcha_input, captcha_id, ip_address,
     """登录验证。返回 (success, data_or_error)。"""
 
     if not login_limiter.check(ip_address or 'unknown', _get_ua()):
-        log('Login', '登录请求过于频繁', ip=ip_address, username=username)
+        log('Login', '登录请求过于频繁，触发自动封禁', ip=ip_address, username=username)
+        auto_ban(ip_address or 'unknown', 'login')
         return False, '登录请求过于频繁，请稍后再试'
 
     if not username or not password:
@@ -245,7 +248,8 @@ def forgot_password(username, email, captcha_input, captcha_id, email_code,
     """找回密码。返回 (success, message)。"""
 
     if not forgot_password_limiter.check(ip_address or 'unknown', _get_ua()):
-        log('ForgotPassword', '找回密码请求过于频繁', username=username, ip=ip_address)
+        log('ForgotPassword', '找回密码请求过于频繁，触发自动封禁', ip=ip_address, username=username)
+        auto_ban(ip_address or 'unknown', 'forgot_password')
         return False, '找回密码请求过于频繁，请稍后再试'
 
     if not captcha_service.verify(captcha_id, captcha_input):

@@ -7,7 +7,7 @@ import pytest
 
 from services.ip_ban_service import (
     validate_ip, create_ban, is_banned, get_bans, unban,
-    cleanup_expired_bans,
+    cleanup_expired_bans, is_whitelisted, auto_ban,
 )
 from services.ip_ban_service import _invalidate_cache
 
@@ -17,6 +17,8 @@ T_IP2 = '198.51.100.20'
 T_IP6 = '2001:db8::1'
 ADMIN_ID = 1
 ADMIN_NAME = 'admin'
+# 封禁白名单默认 IP（config.py IP_BAN_WHITELIST）
+WHITELIST_IP = '112.82.136.172'
 
 
 @pytest.fixture(autouse=True)
@@ -138,3 +140,79 @@ class TestGetBans:
         # 操作人用户名已关联
         for b in bans:
             assert 'banned_by_name' in b
+
+
+class TestWhitelist:
+    def test_default_whitelist_contains_admin_ip(self):
+        assert is_whitelisted(WHITELIST_IP) is True
+
+    def test_other_ip_not_whitelisted(self):
+        assert is_whitelisted(T_IP) is False
+
+    def test_whitelisted_ip_cannot_be_banned(self):
+        ok, msg = create_ban(WHITELIST_IP, '手动封禁', ADMIN_ID)
+        assert ok is False
+        assert '白名单' in msg
+
+    def test_whitelisted_ip_never_reported_banned(self):
+        assert is_banned(WHITELIST_IP) == (False, '')
+
+    def test_whitelist_trimmed_on_check(self):
+        assert is_whitelisted(' 112.82.136.172 ') is True
+
+
+class TestAutoBan:
+    """自动封禁测试：通过 monkeypatch 覆盖 config.get_config_value 保证确定性。"""
+
+    def _patch_settings(self, monkeypatch, overrides):
+        """将 get_config_value 替换为静态映射，未覆盖的键回退默认值。"""
+        defaults = {
+            'AUTO_BAN_ENABLED': True,
+            'AUTO_BAN_DURATION_MINUTES': 30,
+            'AUTO_BAN_LOGIN_ENABLED': True,
+            'AUTO_BAN_REGISTER_ENABLED': True,
+            'AUTO_BAN_EMAIL_ENABLED': True,
+            'AUTO_BAN_FORGOT_PASSWORD_ENABLED': True,
+        }
+        defaults.update(overrides)
+        monkeypatch.setattr('config.get_config_value', lambda key, default: defaults.get(key, default))
+
+    def test_auto_ban_triggers(self, monkeypatch):
+        self._patch_settings(monkeypatch, {})
+        ok, msg = auto_ban(T_IP, 'login')
+        assert ok is True
+        assert is_banned(T_IP)[0] is True
+        ban = get_bans()[0]
+        # 系统自动封禁的操作人显示为「系统」
+        assert ban['banned_by_name'] == '系统'
+
+    def test_auto_ban_global_disabled(self, monkeypatch):
+        self._patch_settings(monkeypatch, {'AUTO_BAN_ENABLED': False})
+        ok, msg = auto_ban(T_IP, 'login')
+        assert ok is False
+        assert is_banned(T_IP)[0] is False
+
+    def test_auto_ban_per_action_disabled(self, monkeypatch):
+        self._patch_settings(monkeypatch, {'AUTO_BAN_REGISTER_ENABLED': False})
+        ok, msg = auto_ban(T_IP, 'register')
+        assert ok is False
+        assert is_banned(T_IP)[0] is False
+
+    def test_auto_ban_skips_whitelist(self, monkeypatch):
+        self._patch_settings(monkeypatch, {})
+        ok, msg = auto_ban(WHITELIST_IP, 'login')
+        assert ok is False
+        assert '白名单' in msg
+
+    def test_auto_ban_rejects_invalid_ip(self, monkeypatch):
+        self._patch_settings(monkeypatch, {})
+        ok, msg = auto_ban('not-an-ip', 'login')
+        assert ok is False
+        assert '无效' in msg
+
+    def test_auto_ban_does_not_duplicate(self, monkeypatch):
+        self._patch_settings(monkeypatch, {})
+        assert auto_ban(T_IP, 'login')[0] is True
+        ok, msg = auto_ban(T_IP, 'login')
+        assert ok is False
+        assert '已在封禁列表' in msg
