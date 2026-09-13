@@ -10,6 +10,16 @@ from core.db import get_db
 from routes.admin import admin_bp
 
 
+def _normalize_link(raw: str) -> str:
+    """规范化模组链接：去空白，无协议时自动补 https://，空值返回空串。"""
+    link = (raw or '').strip()
+    if not link:
+        return ''
+    if not link.startswith(('http://', 'https://')):
+        link = 'https://' + link
+    return link
+
+
 @admin_bp.route('/admin/mod-intros')
 @admin_required
 def manage_mod_intros():
@@ -35,6 +45,7 @@ def add_mod_intro():
     icon = request.form.get('icon', 'box').strip()
     title = request.form.get('title', '').strip()
     content = request.form.get('content', '').strip()
+    link = _normalize_link(request.form.get('link', ''))
 
     if title and content:
         conn = get_db()
@@ -42,8 +53,8 @@ def add_mod_intro():
             try:
                 now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
                 conn.execute(
-                    "INSERT INTO mod_intros (icon, title, content, created_at) VALUES (?, ?, ?, ?)",
-                    (icon, title, content, now)
+                    "INSERT INTO mod_intros (icon, title, content, link, created_at) VALUES (?, ?, ?, ?, ?)",
+                    (icon, title, content, link, now)
                 )
                 conn.commit()
             except:
@@ -63,14 +74,15 @@ def edit_mod_intro(intro_id):
     icon = request.form.get('icon', 'box').strip()
     title = request.form.get('title', '').strip()
     content = request.form.get('content', '').strip()
+    link = _normalize_link(request.form.get('link', ''))
 
     if title and content:
         conn = get_db()
         try:
             try:
                 conn.execute(
-                    "UPDATE mod_intros SET icon = ?, title = ?, content = ? WHERE id = ?",
-                    (icon, title, content, intro_id)
+                    "UPDATE mod_intros SET icon = ?, title = ?, content = ?, link = ? WHERE id = ?",
+                    (icon, title, content, link, intro_id)
                 )
                 conn.commit()
             except:

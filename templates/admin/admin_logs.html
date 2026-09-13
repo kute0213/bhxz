@@ -8,7 +8,7 @@
                 <i data-lucide="arrow-left" class="w-4 h-4 inline mr-1"></i>返回管理中心
             </a>
             <h1 class="text-xl sm:text-2xl font-bold">系统日志</h1>
-            <p class="text-cream/60 text-sm mt-1">实时查看应用运行日志（最新在前）</p>
+            <p class="text-cream/60 text-sm mt-1">实时查看应用运行日志（按时间顺序，最早在前，与控制台一致）</p>
         </div>
 
         <!-- 控制栏 -->
@@ -81,10 +81,10 @@
         return ev >= fv;
     }
 
-    // 渲染日志（最新在前）
+    // 渲染日志（按时间顺序从上到下，旧→新，与控制台一致）
     function render() {
         var filtered = [];
-        for (var i = entries.length - 1; i >= 0; i--) {
+        for (var i = 0; i < entries.length; i++) {
             if (matchesLevel(entries[i].level, currentLevel)) {
                 filtered.push(entries[i]);
             }
@@ -103,7 +103,7 @@
         container.innerHTML = html;
         logCount.textContent = filtered.length + ' 条';
         if (autoScroll) {
-            container.scrollTop = 0;
+            container.scrollTop = container.scrollHeight;
         }
     }
 
@@ -176,7 +176,7 @@
         autoScroll = !autoScroll;
         this.classList.toggle('bg-gold-400/20', autoScroll);
         if (autoScroll) {
-            container.scrollTop = 0;
+            container.scrollTop = container.scrollHeight;
         }
     });
 

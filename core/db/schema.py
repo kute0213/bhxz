@@ -37,6 +37,7 @@ def init_db():
                 icon TEXT NOT NULL DEFAULT 'box',
                 title TEXT NOT NULL,
                 content TEXT NOT NULL,
+                link TEXT DEFAULT '',
                 sort_order INTEGER DEFAULT 0,
                 created_at TEXT NOT NULL
             )
@@ -348,6 +349,9 @@ def init_db():
 
     # ---- 背景图片：添加 rejected_at 列（被驳回内容 24 小时后自动清理） ----
     add_column_if_not_exists('backgrounds', 'rejected_at', "TEXT DEFAULT NULL")
+
+    # ---- 模组介绍：添加 link 列（点击卡片跳转到模组链接） ----
+    add_column_if_not_exists('mod_intros', 'link', "TEXT DEFAULT ''")
 
     # ---- 彻底删除游戏账号绑定功能：移除旧绑定表 ----
     # 绑定/改密功能已移除，旧库遗留的绑定表不再使用，直接删除。

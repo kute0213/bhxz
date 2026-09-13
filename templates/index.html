@@ -283,6 +283,18 @@
     }
     .mod-card { min-height: 210px; }
     .mod-card .card-icon { margin-bottom: 32px; }
+    a.ocean-card.mod-card-link { display: block; text-decoration: none; }
+    .mod-card-link .mod-link-hint {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        margin-top: 14px;
+        color: #0284c7;
+        font-size: 12px;
+        font-weight: 600;
+    }
+    .mod-card-link:hover .mod-link-hint { color: #0369a1; }
+    .mod-card-link .mod-link-hint svg { width: 13px; height: 13px; }
     .section-action {
         display: inline-flex;
         align-items: center;
@@ -525,12 +537,22 @@
         {% if mod_intros %}
         <div class="mod-grid">
             {% for intro in mod_intros %}
+            {% if intro.link %}
+            <a href="{{ intro.link }}" target="_blank" rel="noopener noreferrer" class="ocean-card mod-card mod-card-link section-fade">
+                <span class="card-number">{{ '%02d'|format(loop.index) }}</span>
+                <div class="card-icon"><i data-lucide="{{ intro.icon or 'box' }}"></i></div>
+                <h3>{{ intro.title }}</h3>
+                <p class="whitespace-pre-wrap">{{ intro.content }}</p>
+                <span class="mod-link-hint"><i data-lucide="external-link"></i>查看详情</span>
+            </a>
+            {% else %}
             <article class="ocean-card mod-card section-fade">
                 <span class="card-number">{{ '%02d'|format(loop.index) }}</span>
                 <div class="card-icon"><i data-lucide="{{ intro.icon or 'box' }}"></i></div>
                 <h3>{{ intro.title }}</h3>
                 <p class="whitespace-pre-wrap">{{ intro.content }}</p>
             </article>
+            {% endif %}
             {% endfor %}
         </div>
         {% else %}
