@@ -81,29 +81,25 @@
             </div>
         </div>
 
-        <!-- ====== 玩家状态 ====== -->
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-5">
-            <div class="pixel-card rounded-xl p-5 text-center">
-                <div class="text-3xl font-bold text-green-400 mb-1" id="status-online">-</div>
-                <div class="text-xs text-cream/60">在线玩家</div>
-            </div>
-            <div class="pixel-card rounded-xl p-5 text-center">
-                <div class="text-3xl font-bold text-gold-400 mb-1" id="status-max">-</div>
-                <div class="text-xs text-cream/60">最大玩家数</div>
-            </div>
-            <div class="pixel-card rounded-xl p-5 text-center">
-                <div class="text-3xl font-bold text-blue-400 mb-1" id="status-status">检测中</div>
-                <div class="text-xs text-cream/60">服务器状态</div>
-            </div>
-        </div>
-
-        <!-- ====== 在线玩家列表 ====== -->
+        <!-- ====== 在线玩家列表（含在线/最大/服务器状态） ====== -->
         <div class="pixel-card rounded-xl p-6">
-            <h2 class="text-lg font-bold mb-4 flex items-center gap-2">
-                <i data-lucide="users" class="w-5 h-5 text-gold-400"></i>
-                在线玩家列表
-                <span class="text-xs text-cream/50 font-normal ml-auto">数据每 5 秒自动更新</span>
-            </h2>
+            <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+                <h2 class="text-lg font-bold flex items-center gap-2">
+                    <i data-lucide="users" class="w-5 h-5 text-gold-400"></i>
+                    在线玩家列表
+                </h2>
+                <div class="flex flex-wrap items-center gap-2 text-xs">
+                    <span class="px-3 py-1.5 bg-forest-900/50 border border-cream/10 rounded-lg text-cream/70">
+                        在线 <b class="text-green-400 ml-1" id="status-online">-</b>
+                    </span>
+                    <span class="px-3 py-1.5 bg-forest-900/50 border border-cream/10 rounded-lg text-cream/70">
+                        最大 <b class="text-gold-400 ml-1" id="status-max">-</b>
+                    </span>
+                    <span class="px-3 py-1.5 bg-forest-900/50 border border-cream/10 rounded-lg text-cream/70">
+                        状态 <b class="ml-1" id="status-status">检测中</b>
+                    </span>
+                </div>
+            </div>
             <div id="player-list" class="flex flex-wrap gap-2">
                 <div class="text-cream/50 text-sm py-4">加载中...</div>
             </div>
@@ -161,10 +157,10 @@
                 var statusEl = document.getElementById('status-status');
                 if (d.error) {
                     statusEl.textContent = '离线';
-                    statusEl.className = 'text-3xl font-bold text-red-400 mb-1';
+                    statusEl.className = 'ml-1 text-red-400';
                 } else {
                     statusEl.textContent = '在线';
-                    statusEl.className = 'text-3xl font-bold text-green-400 mb-1';
+                    statusEl.className = 'ml-1 text-green-400';
                 }
 
                 // 玩家列表
@@ -188,7 +184,7 @@
                 document.getElementById('status-online').textContent = '-';
                 document.getElementById('status-max').textContent = '-';
                 document.getElementById('status-status').textContent = '离线';
-                document.getElementById('status-status').className = 'text-3xl font-bold text-red-400 mb-1';
+                document.getElementById('status-status').className = 'ml-1 text-red-400';
                 document.getElementById('player-list').innerHTML = '<div class="text-red-400/70 text-sm py-4">数据获取失败</div>';
             });
     }

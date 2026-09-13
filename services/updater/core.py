@@ -648,6 +648,7 @@ def _run_update():
 
 # 重启辅助脚本模板：完全独立于当前进程，等待旧进程退出后拉起新服务器。
 # 逻辑为纯 ASCII，仅运行时占位符替换（路径含中文时也安全，Python 源码默认 UTF-8）。
+# cmd 为完整启动命令（解释器 + 脚本 + 原启动参数），不绑定任何特定启动器。
 _RESTART_TEMPLATE = '''\
 import os
 import subprocess
@@ -688,7 +689,7 @@ if sys.platform == 'win32':
 else:
     kwargs['preexec_fn'] = os.setsid
 
-subprocess.Popen([{python_exe!r}, {app_script!r}], **kwargs)
+subprocess.Popen({cmd!r}, **kwargs)
 
 # 自清理
 try:
@@ -698,21 +699,41 @@ except OSError:
 '''
 
 
+def _get_restart_cmd():
+    """构建重启服务器用的完整启动命令（通用方案，不专门适配任何启动器）。
+
+    = 解释器 + 原启动脚本 + 原启动参数 =
+    - 无论服务器是 `python app.py`、venv 内的 python、还是 `uv run app.py`
+      启动的，`sys.executable` 始终指向当前真实解释器，而 uv/虚拟环境的
+      环境变量（VIRTUAL_ENV、PATH、PYTHONPATH 等）已随 restart 脚本继承，
+      直接用该解释器拉起即可复用完全相同的运行环境；
+    - 完整保留 `sys.argv` 中的启动参数（如 --host/--port），不再只写死
+      app.py，避免重启后丢失命令行配置。
+    """
+    python_exe = sys.executable or sys.argv[0]
+    argv0 = sys.argv[0]
+    if not os.path.isabs(argv0):
+        argv0 = os.path.join(APP_ROOT, argv0)
+    # 兜底：argv[0] 异常（如 -c / 内联脚本）时回退到标准入口 app.py
+    if not os.path.isfile(argv0):
+        argv0 = os.path.join(APP_ROOT, 'app.py')
+    return [python_exe, argv0] + list(sys.argv[1:])
+
+
 def _write_restart_script():
     """写入独立重启辅助脚本，返回脚本路径。
 
     使用纯 Python 实现（而非 bat/sh），避免 Windows 下 cmd 编码、
     tasklist 解析、短路径等问题；同时继承原进程完整环境变量，
-    保证 uv / 虚拟环境等任意启动方式下都能正确拉起新进程。
+    并用「原解释器 + 原启动参数」重建启动命令，保证 uv / 虚拟环境等
+    任意启动方式下都能正确拉起新进程。
     """
     pid = os.getpid()
-    python_exe = sys.executable or sys.argv[0]
-    app_script = os.path.join(APP_ROOT, 'app.py')
+    cmd = _get_restart_cmd()
 
     content = _RESTART_TEMPLATE.format(
         old_pid=pid,
-        python_exe=python_exe,
-        app_script=app_script,
+        cmd=cmd,
         app_root=APP_ROOT,
     )
 
@@ -749,8 +770,7 @@ def _launch_restart_script(restart_script):
 
 def _direct_restart():
     """直接启动新进程（兜底方案，当重启脚本写入失败时使用）。"""
-    python_exe = sys.executable or sys.argv[0]
-    script = os.path.join(APP_ROOT, 'app.py')
+    cmd = _get_restart_cmd()
     try:
         kwargs = {
             'cwd': APP_ROOT,
@@ -767,7 +787,7 @@ def _direct_restart():
             )
         else:
             kwargs['preexec_fn'] = os.setsid
-        subprocess.Popen([python_exe, script], **kwargs)
+        subprocess.Popen(cmd, **kwargs)
         _add_event('log', {'message': '✓ 新进程已启动'})
     except Exception as e:
         _add_event('log', {'message': f'✗ 直接启动新进程失败: {e}'})

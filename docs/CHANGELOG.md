@@ -4,6 +4,14 @@
 
 ### 修复
 
+* **subprocess 编码统一 UTF-8（补全 Windows 10 场景）**：`services/process_utils.py` 的 `make_env()` 新增 `PYTHONUTF8=1`（强制 Python 子进程启用 UTF-8 模式），与既有 `PYTHONIOENCODING=utf-8` 一起从源头消除 Windows 10 下子进程 GBK 输出乱码 / `UnicodeDecodeError`；已覆盖 CPU 温度获取、ffmpeg/ffprobe 转码、数据库备份恢复、一键更新等全部子进程场景
+
+* **自动更新重启改为通用启动命令（修复 uv 运行下无法自动启动）**：`services/updater/core.py` 重启逻辑不再写死 `[python, app.py]`，改为 `_get_restart_cmd()` 用「当前真实解释器 + 原启动脚本 + 原启动参数（sys.argv）」重建完整启动命令——无论服务器用 `python`、venv 还是 `uv run` 启动，解释器路径与 uv/虚拟环境变量（随重启脚本继承）天然一致，不针对 uv 做任何特殊处理；同时完整保留 `--host/--port` 等命令行参数，兜底 `_direct_restart()` 同步生效
+
+* **服务器状态页整合玩家板块**：`/server-status` 在线玩家、最大玩家数、服务器状态三个小卡片移入「在线玩家列表」卡片头部，以紧凑徽章展示（在线=绿 / 状态=红/绿），页面更简洁，数据刷新逻辑不变
+
+* **图形验证码进一步优化（字更大 + 干扰更丰富 + 颜色更多）**：字号比例由 `min(96, height*0.68)` 提升为 `min(120, height*0.76)`；干扰横线/斜线由 3~6 条增至 5~8 条、干扰字符由 20~40 个增至 30~50 个，并新增 2~5 个随机彩色圆点干扰；干扰线色池扩充至 14 色、字符深色池扩充至 12 色、浅色干扰字符池扩充至 14 色，随机性更强、更难被机器识别，同时保持人类可读（登录页图片 200×72、`object-fit: contain` 完整显示）
+
 * **修复背景图片与评论等删除失败问题**：`services/background_service.py` 的 `remove_background_files`/`_pick_variant` 对 `sqlite3.Row` 使用 `.get()` 导致 `AttributeError`（背景图片删除/取图失败），改为按键访问 `bg['file_path']`/`bg['id']`；`routes/community/helpers.py` 的 `_respond` 默认重定向端点从不存在的 `community.community_page` 改为 `main.home`，修复讨论区删除回复/帖子时 `url_for` 构建失败返回 500；`templates/discussion/detail.html` 回复删除错误提示统一为「删除失败，请重试。」；删除权限校验正常返回 JSON 失败结果（如「无权限」）而非 500
 
 ### 样式

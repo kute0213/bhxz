@@ -10,9 +10,14 @@ import locale
 
 
 def make_env():
-    """构造禁用输出缓冲的环境变量（PYTHONUNBUFFERED、FORCE_COLOR 等）。"""
+    """构造禁用输出缓冲的环境变量（PYTHONUNBUFFERED、PYTHONUTF8、FORCE_COLOR 等）。
+
+    PYTHONUTF8=1 让 Python 子进程强制启用 UTF-8 模式（Windows 10 下不再
+    输出 GBK 乱码）；PYTHONIOENCODING=utf-8 兜底指定标准流编码。
+    """
     env = os.environ.copy()
     env['PYTHONUNBUFFERED'] = '1'
+    env['PYTHONUTF8'] = '1'
     env['PYTHONIOENCODING'] = 'utf-8'
     env['FORCE_COLOR'] = '1'
     return env
