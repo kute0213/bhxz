@@ -268,6 +268,7 @@ SETTINGS_REGISTRY = [
     ('SITEMAP_REFRESH_TIME', '03:00', 'time', 'Sitemap 刷新时间', '站点地图每天自动刷新的时间（HH:MM 格式）', 'Sitemap'),
     ('SITE_URL', 'http://localhost:5000', 'str', '站点域名', 'Sitemap 中使用的完整域名（含协议和端口，如 https://bhxz.tw.kg）', 'Sitemap'),
     ('SITEMAP_DOMAINS', '', 'str', 'Sitemap 多域名列表', '每行一个完整域名（含协议，如 https://bhxz.tw.kg）。刷新时自动为每个域名生成独立的 sitemap.xml。留空仅使用上方的站点域名。', 'Sitemap'),
+    ('ROBOTS_POLICY', 'all', 'select', '搜索引擎爬虫策略', 'robots.txt 的爬虫访问策略，与 Sitemap 配合使用。可选：all（允许所有爬虫）, home（仅允许主页爬虫）, none（禁止所有爬虫）', 'Sitemap'),
 
     # 安全
     ('SESSION_LIFETIME', 604800, 'int', '会话有效期（秒）', '登录会话过期时间，默认 7 天', '安全配置'),

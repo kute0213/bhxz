@@ -4,6 +4,8 @@
 
 ### 调整
 
+* **新增 /robots.txt（三档爬虫策略，管理面板可配）**：新增 `routes/sitemap.py` 的 `/robots.txt` 路由，与 Sitemap 配合自动在文件中引用 `Sitemap: {站点}/sitemap.xml`；策略通过管理后台 → 系统设置 → Sitemap 分类新增的 `ROBOTS_POLICY` 下拉框切换（热更新即时生效）：`all` 允许所有爬虫（`Allow: /`）、`home` 仅允许主页爬虫（`Allow: /$` + `Disallow: /`）、`none` 禁止所有爬虫（`Disallow: /`）；Sitemap 引用地址优先取 `SITE_URL` 配置，未设置时取当前请求根地址。
+
 * **Sitemap 全量携带 lastmod（自动读取数据库）**：`services/sitemap_cache.py` 重构 URL 条目构建逻辑，新增 `_latest_time()`（查询指定表最新时间字段）与 `_site_latest()`（跨内容表取全站最近更新时间）两个辅助函数；静态页面统一使用全站最近内容更新时间作为 `lastmod`，内容列表页取各自内容表最新一条（比全站时间更准确），指南/讨论帖/公开路径等动态页面取各自记录的 `updated_at`/`created_at`，生成的 sitemap 所有链接均带 `<lastmod>`，不再有缺失项。
 
 * **数据库位置迁移至 `./db` 文件夹**：`config.py` 的 `DB_PATH` 由根目录 `./site.db` 改为 `./db/site.db`，启动时自动创建 `db` 目录；`core/db/connection.py` 新增 `_migrate_legacy_db()`，首次启动自动将旧版根目录下的 `site.db`（含 `-wal`/`-shm`）迁移到新位置，避免升级丢数据；`scripts/restore_db.py`、`scripts/uploads.py` 同步新路径；一键更新不替换列表（`UPDATE_EXCLUDED_FILES` / `services/updater/config.py` 的 `DEFAULT_EXCLUDED` / 更新页占位提示）由 `site.db,site.db-wal,site.db-shm` 改为 `db`；`routes/public/files.py` 敏感路径列表加入 `db` 防止数据库被公开访问。
