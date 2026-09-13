@@ -512,7 +512,7 @@ body::after {
     transition: color var(--transition-fast), background var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast);
 }
 .desktop-nav-link svg, .desktop-nav-toggle svg { width: 15px; height: 15px; }
-.desktop-nav-toggle .nav-caret { width: 13px; height: 13px; transition: transform var(--transition-fast); }
+.desktop-nav-toggle .nav-caret { width: 13px; height: 13px; transition: transform var(--transition-fast); will-change: transform; }
 .desktop-nav-item:hover .desktop-nav-toggle .nav-caret { transform: rotate(180deg); }
 .desktop-nav-link:hover, .desktop-nav-toggle:hover {
     color: #0284c7;

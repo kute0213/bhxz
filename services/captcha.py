@@ -21,6 +21,7 @@ import threading
 from typing import Tuple
 
 from core.logger import log
+from core.scheduler import Scheduler
 
 # 延迟导入 Pillow，避免不必要的依赖检查
 _pil_available = None
@@ -297,23 +298,20 @@ class CaptchaService:
         # 过期时间（秒）和单个验证码最大尝试次数
         self._expire_seconds = 300
         self._max_attempts = 5
-        # 启动后台清理线程，每 60 秒清理一次过期验证码，避免内存泄漏
-        self._cleanup_thread = threading.Thread(
-            target=self._cleanup_loop, name='captcha-cleanup', daemon=True
+        # 统一定时调度器：每 60 秒清理一次过期验证码，避免内存泄漏
+        self._scheduler = Scheduler(
+            name='captcha-cleanup',
+            action=self._cleanup_task,
+            interval=60,
+            run_immediately=False,
         )
-        self._cleanup_thread.start()
+        self._scheduler.start()
 
-    def _cleanup_loop(self):
-        """后台线程：定期清理过期验证码，避免内存泄漏。"""
-        while True:
-            time.sleep(60)
-            try:
-                expired_count = self.cleanup_expired()
-                if expired_count > 0:
-                    log('INFO', 'CaptchaService', f'清理过期验证码 {expired_count} 个', remaining=len(self._captchas))
-            except Exception as e:
-                # 后台线程不应因异常退出
-                log('ERROR', 'CaptchaService', f'清理过期验证码失败: {e}')
+    def _cleanup_task(self):
+        """后台任务：定期清理过期验证码，避免内存泄漏。"""
+        expired_count = self.cleanup_expired()
+        if expired_count > 0:
+            log('INFO', 'CaptchaService', f'清理过期验证码 {expired_count} 个', remaining=len(self._captchas))
 
     def generate(self) -> Tuple[str, str, str]:
         """生成验证码。

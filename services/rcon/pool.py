@@ -19,6 +19,7 @@ from typing import Optional, Tuple
 from mcrcon import MCRcon
 
 from config import get_config_value
+from core.scheduler import Scheduler
 
 
 class RCONConnectionPool:
@@ -70,13 +71,14 @@ class RCONConnectionPool:
         # 预填充连接池
         self._fill_pool()
 
-        # 启动后台清理线程
-        self._cleanup_thread = threading.Thread(
-            target=self._cleanup_loop,
+        # 启动后台清理调度器（每 30 秒清理一次过期空闲连接）
+        self._scheduler = Scheduler(
             name='rcon-pool-cleanup',
-            daemon=True,
+            action=self._cleanup_idle,
+            interval=30,
+            run_immediately=False,
         )
-        self._cleanup_thread.start()
+        self._scheduler.start()
 
     # ------------------------------------------------------------------
     # 公开接口
@@ -179,6 +181,7 @@ class RCONConnectionPool:
 
     def close(self):
         """关闭连接池，释放所有连接。"""
+        self._scheduler.stop()
         with self._lock:
             self._closed = True
             while self._idle:
@@ -273,15 +276,6 @@ class RCONConnectionPool:
             conn = self._create_connection()
             if conn:
                 self._idle.append((conn, time.time()))
-
-    def _cleanup_loop(self):
-        """后台守护线程：定时清理过期空闲连接。"""
-        while not self._closed:
-            time.sleep(30)
-            try:
-                self._cleanup_idle()
-            except Exception:
-                pass
 
     def _cleanup_idle(self):
         """清理超时未使用的空闲连接。"""

@@ -6,17 +6,16 @@
 - cleanup_expired_rejected_guides()      — 清理过期被驳回的服务器指南
 - cleanup_expired_rejected_backgrounds() — 清理过期被驳回的背景图片（含文件）
 - cleanup_all()                          — 统一执行全部清理
-- CleanupScheduler                       — 后台定时线程（每小时执行一次）
+- cleanup_scheduler                      — 统一定时调度器（每 30 分钟执行一次）
 
 说明：审核驳回后保留 24 小时，给作者留出修改重提的时间窗口。
 """
 
-import threading
-import time
 from datetime import datetime, timedelta
 
 from core.db import get_db
 from core.logger import log
+from core.scheduler import Scheduler
 from services.background_service import remove_background_files
 
 # 被驳回内容的保留时长（小时），超时自动删除
@@ -99,36 +98,9 @@ def cleanup_all():
     cleanup_expired_rejected_backgrounds()
 
 
-class CleanupScheduler:
-    """被驳回内容自动清理调度器（后台线程，每小时执行一次）。"""
-
-    def __init__(self, interval=SCHEDULE_INTERVAL):
-        self._interval = interval
-        self._stop_event = threading.Event()
-        self._thread = None
-
-    def start(self):
-        if self._thread and self._thread.is_alive():
-            return
-        self._stop_event.clear()
-        self._thread = threading.Thread(
-            target=self._run, daemon=True, name='cleanup-scheduler'
-        )
-        self._thread.start()
-        log('INFO', 'Cleanup', '被驳回内容清理调度器已启动',
-            interval_seconds=self._interval, keep_hours=REJECTED_KEEP_HOURS)
-
-    def stop(self):
-        self._stop_event.set()
-
-    def _run(self):
-        while not self._stop_event.is_set():
-            try:
-                cleanup_all()
-            except Exception as e:
-                log('ERROR', 'Cleanup', '自动清理执行异常', error=str(e))
-            # 分片等待，便于及时响应停止信号
-            waited = 0
-            while waited < self._interval and not self._stop_event.is_set():
-                time.sleep(5)
-                waited += 5
+# 统一定时调度器：每 SCHEDULE_INTERVAL 秒执行一次清理（算法见 core/scheduler.py）
+cleanup_scheduler = Scheduler(
+    name='cleanup-scheduler',
+    action=cleanup_all,
+    interval=SCHEDULE_INTERVAL,
+)

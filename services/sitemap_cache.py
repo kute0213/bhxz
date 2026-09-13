@@ -10,11 +10,10 @@
 import datetime
 import os
 import threading
-import time
-import traceback
 
 from config import get_config_value, UPLOAD_SITEMAP_DIR
 from core.logger import log
+from core.scheduler import Scheduler
 
 
 class SitemapCache:
@@ -34,9 +33,14 @@ class SitemapCache:
         if self._initialized:
             return
         self._initialized = True
-        self._last_refresh_date = None  # 上次刷新日期（YYYY-MM-DD）
-        self._thread = None
-        self._stop_event = threading.Event()
+        # 统一定时调度器：每天 SITEMAP_REFRESH_TIME 刷新一次（时间点模式，配置热重载）
+        self._scheduler = Scheduler(
+            name='sitemap-cache',
+            action=self._refresh_task,
+            run_at=lambda: get_config_value('SITEMAP_REFRESH_TIME', '03:00'),
+            run_immediately=False,
+            tick=60,
+        )
 
     # ------------------------------------------------------------------
     # 生命周期
@@ -44,20 +48,13 @@ class SitemapCache:
 
     def start(self):
         """启动后台刷新线程。"""
-        if self._thread and self._thread.is_alive():
+        if not self._scheduler.start():
             return
-        self._stop_event.clear()
-        self._thread = threading.Thread(
-            target=self._run_loop, name='sitemap-cache', daemon=True
-        )
-        self._thread.start()
         log('INFO', 'SitemapCache', '已启动，每日自动刷新站点地图')
 
     def stop(self):
         """停止后台线程。"""
-        self._stop_event.set()
-        if self._thread:
-            self._thread.join(timeout=3)
+        self._scheduler.stop()
 
     # ------------------------------------------------------------------
     # 公共 API
@@ -126,48 +123,21 @@ class SitemapCache:
         return ''
 
     def refresh_now(self):
-        """手动立即刷新缓存（供管理面板调用）。"""
+        """手动立即刷新缓存（供管理面板调用），并标记当天已刷新避免重复。"""
         self._refresh()
-        self._last_refresh_date = datetime.datetime.now().strftime('%Y-%m-%d')
+        self._scheduler.mark_done()
         log('INFO', 'SitemapCache', '手动刷新完成')
-
-    # ------------------------------------------------------------------
-    # 后台循环
-    # ------------------------------------------------------------------
-
-    def _run_loop(self):
-        """后台线程：每 60 秒检查一次是否需要刷新。"""
-        while not self._stop_event.is_set():
-            try:
-                self._check_and_refresh()
-            except Exception as e:
-                log('ERROR', 'SitemapCache', f'检查异常: {e}\n{traceback.format_exc()}')
-            self._stop_event.wait(60)
-
-    def _check_and_refresh(self):
-        """检查是否需要刷新：达到刷新时间且当天尚未刷新。"""
-        now = datetime.datetime.now()
-        today = now.strftime('%Y-%m-%d')
-
-        if self._last_refresh_date == today:
-            return  # 今天已刷新过
-
-        # 从配置读取刷新时间
-        refresh_time = get_config_value('SITEMAP_REFRESH_TIME', '03:00')
-        try:
-            hour, minute = map(int, refresh_time.split(':')[:2])
-        except (ValueError, AttributeError):
-            hour, minute = 3, 0
-
-        # 检查是否到了刷新时间
-        if now.hour > hour or (now.hour == hour and now.minute >= minute):
-            self._refresh()
-            self._last_refresh_date = today
-            log('INFO', 'SitemapCache', f'站点地图已刷新 ({today} {refresh_time})')
 
     # ------------------------------------------------------------------
     # 生成缓存
     # ------------------------------------------------------------------
+
+    def _refresh_task(self):
+        """定时触发的刷新任务：刷新站点地图并记录日志。"""
+        self._refresh()
+        now = datetime.datetime.now()
+        refresh_time = get_config_value('SITEMAP_REFRESH_TIME', '03:00')
+        log('INFO', 'SitemapCache', f'站点地图已刷新 ({now.strftime("%Y-%m-%d")} {refresh_time})')
 
     def _refresh(self):
         """为每个配置的域名生成 sitemap XML 并写入文件。"""

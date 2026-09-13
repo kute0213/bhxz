@@ -8,6 +8,7 @@ import threading
 from datetime import datetime
 
 from core.logger import log
+from core.scheduler import Scheduler
 from .service import email_service
 from .templates import verification_code as build_code_html
 
@@ -61,20 +62,14 @@ class EmailCodeService:
         self._expire_seconds = 300  # 5 分钟
         # 发送间隔限制（秒），防止频繁发送
         self._resend_cooldown = 60
-        # 启动后台清理线程，每 5 分钟清理一次过期验证码，避免内存泄漏
-        self._cleanup_thread = threading.Thread(
-            target=self._cleanup_loop, name='email-code-cleanup', daemon=True
+        # 统一定时调度器：每 5 分钟清理一次过期验证码，避免内存泄漏
+        self._scheduler = Scheduler(
+            name='email-code-cleanup',
+            action=self.cleanup_expired,
+            interval=300,
+            run_immediately=False,
         )
-        self._cleanup_thread.start()
-
-    def _cleanup_loop(self):
-        """后台线程：定期清理过期验证码，避免内存泄漏。"""
-        while True:
-            time.sleep(300)  # 5 分钟
-            try:
-                self.cleanup_expired()
-            except Exception as e:
-                log('ERROR', 'EmailCode', f'清理过期验证码失败: {e}')
+        self._scheduler.start()
 
     def _generate_code(self) -> str:
         """生成 6 位数字验证码。"""

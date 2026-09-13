@@ -530,6 +530,7 @@ workspace/
 │   ├── middleware.py         #   请求中间件（访问日志 + 公共文件 + 安全响应标头）
 │   ├── csrf.py               #   CSRF 保护
 │   ├── logger.py             #   日志基础
+│   ├── scheduler.py          #   统一定时调度算法（固定间隔/时间点/失败退避）
 │   ├── server.py             #   WSGI 服务器与优雅关闭
 │   ├── template_context.py   #   模板全局变量
 │   ├── init.py               #   应用初始化
@@ -553,7 +554,7 @@ workspace/
 │   ├── music_service.py      #   兼容性重导出层（大喇叭音频）
 │   ├── process_utils.py      #   子进程工具（编码/缓冲/环境变量）
 │   ├── ratelimit.py          #   IP 频率限制
-│   ├── cleanup_service.py    #   被驳回内容自动清理（定时调度）
+│   ├── cleanup_service.py    #   被驳回内容自动清理（统一定时调度）
 │   ├── settings_manager.py   #   系统设置管理
 │   ├── sitemap_cache.py      #   Sitemap 缓存
 │   ├── updater.py            #   兼容性重导出层（自动更新）
@@ -692,6 +693,10 @@ workspace/
 详见 [docs/CHANGELOG.md](docs/CHANGELOG.md)。
 
 ## 最近更新
+
+* **统一定时调度算法**：新增 `core/scheduler.py` 统一定时调度（固定间隔含失败退避 / 每日时间点、优雅停止、分片等待），已接入被驳回内容自动清理、每日备份、玩家列表追踪、验证码清理、连接池清理、站点地图刷新，行为与原逻辑一致。
+
+* **导航栏动画流畅度优化**：下拉 caret 与滚动收缩动画补上 `will-change: transform` 合成层提示，动画更流畅，视觉效果与时长完全不变。
 
 * **新增 IP 封禁功能**：管理后台新增「IP 封禁」页面（`/admin/ip-bans`），支持添加/解除封禁 IP（IPv4/IPv6/CIDR 段），可设置临时封禁时长或永久封禁并填写原因；被封禁 IP 的所有请求由中间件统一拦截返回 403；内置 30 秒缓存降低查询压力，临时封禁到期自动清理。
 
