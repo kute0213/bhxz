@@ -700,9 +700,16 @@ except OSError:
 
 
 def _get_restart_cmd():
-    """构建重启服务器用的完整启动命令（通用方案，不专门适配任何启动器）。
+    """构建重启服务器用的完整启动命令。
 
-    = 解释器 + 原启动脚本 + 原启动参数 =
+    = 优先使用自定义启动指令（管理后台 → 系统设置 / 一键更新可配置）=
+    - 配置键 RESTART_COMMAND 非空时，按其指定的完整命令重启服务器
+      （如 `uv run app.py` / `python app.py --host 0.0.0.0`）；
+    - 裸的 python / python3 解释器名会被替换为当前真实解释器，
+      保证虚拟环境 / uv 环境下也能正确拉起新进程；
+    - 留空时回退到自动构建：解释器 + 原启动脚本 + 原启动参数。
+
+    = 自动构建方案 =
     - 无论服务器是 `python app.py`、venv 内的 python、还是 `uv run app.py`
       启动的，`sys.executable` 始终指向当前真实解释器，而 uv/虚拟环境的
       环境变量（VIRTUAL_ENV、PATH、PYTHONPATH 等）已随 restart 脚本继承，
@@ -710,6 +717,26 @@ def _get_restart_cmd():
     - 完整保留 `sys.argv` 中的启动参数（如 --host/--port），不再只写死
       app.py，避免重启后丢失命令行配置。
     """
+    # 优先使用自定义启动指令
+    try:
+        from config import get_config_value, RESTART_COMMAND
+        custom = get_config_value('RESTART_COMMAND', RESTART_COMMAND)
+    except Exception:
+        custom = ''
+    if custom and isinstance(custom, str) and custom.strip():
+        try:
+            import shlex
+            parts = shlex.split(custom.strip())
+        except (ValueError, ImportError):
+            parts = custom.strip().split()
+        if parts:
+            # 裸的 python / python3 替换为当前真实解释器，保证运行环境一致
+            if os.path.basename(parts[0]).lower() in (
+                'python', 'python.exe', 'python3', 'python3.exe',
+            ):
+                parts[0] = sys.executable
+            return parts
+
     python_exe = sys.executable or sys.argv[0]
     argv0 = sys.argv[0]
     if not os.path.isabs(argv0):

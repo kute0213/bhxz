@@ -88,6 +88,16 @@
 ghproxy.com=https://ghproxy.com/https://github.com
 kkgithub.com=https://kkgithub.com/https://github.com"></textarea>
                 </div>
+                <!-- 自定义启动指令 -->
+                <div>
+                    <label for="restart-command" class="block text-sm font-medium mb-2">
+                        自定义启动指令
+                        <span class="text-cream/50 text-xs ml-2">更新完成后重启服务器使用的完整命令，留空自动使用「当前解释器 + app.py + 原启动参数」重启</span>
+                    </label>
+                    <input id="restart-command" type="text"
+                              class="w-full px-3 py-2 bg-forest-900/60 border border-cream/20 rounded-lg text-sm focus:outline-none focus:border-gold-400 transition-colors font-mono"
+                              placeholder="如 uv run app.py 或 python app.py --host 0.0.0.0">
+                </div>
                 <!-- 保存按钮 -->
                 <div class="flex justify-end">
                     <button id="save-settings-btn"
@@ -317,6 +327,7 @@ const settingsChevron = document.getElementById('settings-chevron');
 const settingsStatus = document.getElementById('settings-status');
 const excludedInput = document.getElementById('excluded-files');
 const proxiesInput = document.getElementById('github-proxies');
+const restartCommandInput = document.getElementById('restart-command');
 const saveBtn = document.getElementById('save-settings-btn');
 
 function loadUpdateSettings() {
@@ -327,15 +338,19 @@ function loadUpdateSettings() {
             const settings = data.settings || [];
             let excluded = '';
             let proxies = '';
+            let restartCommand = '';
             settings.forEach(function(s) {
                 if (s.key === 'UPDATE_EXCLUDED_FILES') {
                     excluded = s.value || '';
                 } else if (s.key === 'GITHUB_PROXIES') {
                     proxies = s.value || '';
+                } else if (s.key === 'RESTART_COMMAND') {
+                    restartCommand = s.value || '';
                 }
             });
             excludedInput.value = excluded;
             proxiesInput.value = proxies;
+            restartCommandInput.value = restartCommand;
             settingsStatus.textContent = '已加载';
         })
         .catch(function() {
@@ -355,6 +370,7 @@ function saveUpdateSettings() {
             items: [
                 { key: 'UPDATE_EXCLUDED_FILES', value: excludedInput.value },
                 { key: 'GITHUB_PROXIES', value: proxiesInput.value },
+                { key: 'RESTART_COMMAND', value: restartCommandInput.value },
             ]
         })
     })

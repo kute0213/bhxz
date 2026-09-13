@@ -4,11 +4,17 @@
 
 ### 新增
 
+* **IP 封禁管理页内联编辑配置**：IP 封禁管理页面（`/admin/ip-bans`）新增自动封禁开关与时长、可疑访问拦截开关与时长、封禁白名单的内联编辑与保存（新接口 `POST /admin/ip-bans/settings`，仅接受白名单/自动封禁/可疑拦截相关配置键）；`services/ip_ban_service.py` 新增 `get_whitelist()` 优先读取数据库配置实现热更新，`is_whitelisted()` 改为实时读取，白名单修改立即生效，无需跳转系统设置。
+
+* **自定义启动指令（彻底修复自动更新重启失败）**：`config.py` 新增 `RESTART_COMMAND` 配置（默认空，支持环境变量 `RESTART_COMMAND`，管理后台 → 系统设置 / 一键更新配置页均可在线编辑）；`services/updater/core.py` 的 `_get_restart_cmd()` 优先使用自定义指令（`shlex` 解析参数，裸 `python`/`python3` 自动替换为当前真实解释器保证运行环境一致），留空回退自动构建「当前解释器 + app.py + 原启动参数」，覆盖 `python` / venv / `uv run` 任意启动方式。
+
 * **可疑访问拦截**：新增攻击特征扫描器（`services/security_scanner.py`），在请求进入业务处理前扫描路径/查询串/请求体/User-Agent，识别 SQL 注入、XSS、路径穿越、命令注入、敏感文件与漏洞端点探测、恶意扫描 UA 六类攻击特征；命中即返回 403 拦截请求并自动封禁来源 IP（`ban_suspicious_ip`，复用 IP 封禁白名单与 30 秒缓存，封禁原因标注攻击类型与命中片段，操作人显示「系统」，到期自动解除）；管理后台 → 系统设置新增「可疑访问拦截」分类（总开关 `SUSPICIOUS_BLOCK_ENABLED`、封禁时长 `SUSPICIOUS_BLOCK_DURATION_MINUTES`（分钟，0 为永久）、SQL 注入/XSS/路径穿越/命令注入/敏感探测/恶意 UA 六类独立子开关，热更新即时生效）；IP 封禁管理页展示可疑访问拦截状态卡片；静态资源（`/static/`）跳过扫描，URL 层全量特征 + 原始与 URL 解码两层匹配，请求体仅扫描文本类且 ≤1MB 内容中的高置信度特征，避免用户生成内容（Markdown 代码块等）误判；新增 `scripts/tests/test_security_scanner.py` 与 `test_ip_ban.py` 可疑封禁用例（96 项安全用例全部通过）。
 
 * **自动 IP 封禁**：触发限流的可疑操作（登录/注册/找回密码/邮箱验证码）自动封禁来源 IP，封禁时长可配置（默认 30 分钟，0 为永久封禁），到期自动解除；管理后台 → 系统设置新增「IP 封禁」分类（总开关、封禁时长、各操作独立开关），IP 封禁管理页展示自动封禁与白名单状态；封禁白名单在 `config.py` 的 `IP_BAN_WHITELIST` 配置（默认 `112.82.136.172`），白名单 IP 不会被手动或自动封禁。
 
 ### 修复
+
+* **修复 /admin/settings 500 错误**：`templates/admin/admin_settings.html` 因文件截断缺少 `{% endblock %}` 闭合标签，Jinja2 编译抛出 `TemplateSyntaxError: Unexpected end of template`（错误页报告为 Internal Server Error），已基于完整版本重写模板，恢复设置项动态渲染、自动保存、单项/全部恢复默认与确认弹窗等全部功能。
 
 * **subprocess 编码统一 UTF-8（补全 Windows 10 场景）**：`services/process_utils.py` 的 `make_env()` 新增 `PYTHONUTF8=1`（强制 Python 子进程启用 UTF-8 模式），与既有 `PYTHONIOENCODING=utf-8` 一起从源头消除 Windows 10 下子进程 GBK 输出乱码 / `UnicodeDecodeError`；已覆盖 CPU 温度获取、ffmpeg/ffprobe 转码、数据库备份恢复、一键更新等全部子进程场景
 

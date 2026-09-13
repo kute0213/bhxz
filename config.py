@@ -186,6 +186,16 @@ DEBUG_MODE = False
 # 工作线程数
 WORKER_THREADS = 4
 
+# ---------------------------------------------------------------------------
+# 一键更新重启配置
+# ---------------------------------------------------------------------------
+
+# 自定义启动指令：一键更新完成后重启服务器所使用的完整启动命令。
+# 留空（默认）时自动使用「当前解释器 + app.py + 原启动参数」重启；
+# 可设置为如 "uv run app.py" / "python app.py" / "python3 app.py --host 0.0.0.0"。
+# 可在管理后台 → 系统设置 / 一键更新 → 更新设置中在线修改。
+RESTART_COMMAND = os.environ.get('RESTART_COMMAND', '')
+
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(UPLOAD_ATTACHMENTS_DIR, exist_ok=True)
 os.makedirs(UPLOAD_COMMUNITY_DIR, exist_ok=True)
@@ -242,6 +252,7 @@ SETTINGS_REGISTRY = [
     ('LOGIN_LOCKOUT_TIME', 1800, 'int', '登录锁定时间（秒）', '账户被锁定后自动解锁的时间', '安全配置'),
 
     # IP 封禁（自动封禁开关与时长，白名单见 config.py 的 IP_BAN_WHITELIST）
+    ('IP_BAN_WHITELIST', '112.82.136.172', 'str', '封禁白名单', '逗号分隔，白名单内的 IP 不会被封禁（手动封禁与自动封禁均跳过）', 'IP 封禁'),
     ('AUTO_BAN_ENABLED', True, 'bool', '自动 IP 封禁（总开关）', '开启后，触发限流的可疑操作（登录/注册/找回密码/邮箱验证码）将自动封禁对应 IP；封禁白名单 IP 不受影响', 'IP 封禁'),
     ('AUTO_BAN_DURATION_MINUTES', 30, 'int', '自动封禁时长（分钟）', '自动封禁的持续时长，到期自动解除；0 表示永久封禁', 'IP 封禁'),
     ('AUTO_BAN_LOGIN_ENABLED', True, 'bool', '登录异常自动封禁', '登录请求过于频繁时自动封禁该 IP', 'IP 封禁'),
@@ -278,6 +289,7 @@ SETTINGS_REGISTRY = [
     ('BUILD_STATIC_ON_UPDATE', False, 'bool', '更新时构建静态资源', '开启后每次更新都会重新下载外部 CDN 资源（Monaco、hls.js 等），关闭则仅同步代码', '一键更新'),
     ('UPDATE_EXCLUDED_FILES', 'site.db,site.db-wal,site.db-shm,backups,uploads,ssl,.env,.git,__pycache__', 'str', '不替换的文件/文件夹', '逗号分隔，更新时不会被删除或覆盖', '一键更新'),
     ('GITHUB_PROXIES', '', 'str', '自定义 GitHub 代理', '每行一个，格式：名称=URL。留空使用默认代理列表', '一键更新'),
+    ('RESTART_COMMAND', '', 'str', '自定义启动指令', '一键更新完成后重启服务器使用的完整启动命令。留空自动使用「当前解释器 + app.py + 原启动参数」重启。示例：uv run app.py / python app.py --host 0.0.0.0', '一键更新'),
 
     # 外部链接
     ('MAP_URL', 'https://map.bhxz.tw.kg', 'str', '卫星地图地址', '首页卫星地图按钮的链接地址', '外部链接'),

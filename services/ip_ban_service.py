@@ -94,11 +94,24 @@ def _invalidate_cache():
         _ban_cache['ts'] = 0.0
 
 
+def get_whitelist():
+    """获取封禁白名单列表（支持管理后台热更新）。
+
+    优先读取数据库中的 IP_BAN_WHITELIST 设置（逗号分隔字符串），
+    未自定义时回退到 config.py 中的 IP_BAN_WHITELIST 列表。
+    """
+    from config import get_config_value
+    raw = get_config_value('IP_BAN_WHITELIST', IP_BAN_WHITELIST)
+    if isinstance(raw, (list, tuple)):
+        return list(raw)
+    return [ip.strip() for ip in str(raw).split(',') if ip.strip()]
+
+
 def is_whitelisted(ip_address):
     """判断 IP 是否在封禁白名单中（白名单内的 IP 不会被封禁）。"""
     if not ip_address:
         return False
-    return ip_address.strip() in IP_BAN_WHITELIST
+    return ip_address.strip() in get_whitelist()
 
 
 def is_banned(ip_address):
