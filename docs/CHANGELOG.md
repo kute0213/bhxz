@@ -2,6 +2,10 @@
 
 ## \[Unreleased]
 
+### 修复
+
+* **修复背景图片与评论等删除失败问题**：`services/background_service.py` 的 `remove_background_files`/`_pick_variant` 对 `sqlite3.Row` 使用 `.get()` 导致 `AttributeError`（背景图片删除/取图失败），改为按键访问 `bg['file_path']`/`bg['id']`；`routes/community/helpers.py` 的 `_respond` 默认重定向端点从不存在的 `community.community_page` 改为 `main.home`，修复讨论区删除回复/帖子时 `url_for` 构建失败返回 500；`templates/discussion/detail.html` 回复删除错误提示统一为「删除失败，请重试。」；删除权限校验正常返回 JSON 失败结果（如「无权限」）而非 500
+
 ### 样式
 
 * **导航栏动画流畅度优化**：导航栏下拉 caret 箭头与滚动收缩动画补上 `will-change: transform`，提前告知浏览器对变换动画元素做合成层优化，减少重绘重排，动画更流畅——仅做性能提升，动画时长、缓动曲线与视觉效果完全不变

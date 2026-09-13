@@ -12,7 +12,7 @@ def _is_ajax():
 
 def _respond(message, category='success', redirect_to=None):
     """统一响应：AJAX 返回 JSON，否则 flash + redirect"""
-    redirect_url = redirect_to or url_for('community.community_page')
+    redirect_url = redirect_to or url_for('main.home')
     if _is_ajax():
         response = jsonify({
             'success': category == 'success',

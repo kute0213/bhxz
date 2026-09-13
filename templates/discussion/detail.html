@@ -496,10 +496,10 @@ document.addEventListener('DOMContentLoaded', function() {
                             var current = parseInt(replyCountEl.textContent) || 0;
                             replyCountEl.textContent = Math.max(0, current - 1);
                         } else {
-                            Toast.error(data.message || '删除失败');
+                            Toast.error(data.message || '删除失败，请重试。');
                         }
                     })
-                    .catch(function() { Toast.error('删除失败，请稍后重试'); });
+                    .catch(function() { Toast.error('删除失败，请重试。'); });
             }
         });
     });

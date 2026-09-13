@@ -367,7 +367,7 @@ def resolve_background_path(bg, size=None):
     规则：size 为空时返回主图；否则在响应式变体中取与目标最接近
     且不小于目标的档位；该档位文件缺失时逐级回退到主图。
     """
-    main_path = bg.get('file_path') if bg else None
+    main_path = bg['file_path'] if bg else None
     if not main_path or not os.path.isfile(main_path):
         return None
 
@@ -502,7 +502,7 @@ def approve_background(bg_id, admin_id, admin_username, ip_address):
 
 def remove_background_files(bg):
     """删除背景图片本地文件（主图与全部响应式变体）。失败仅记日志。"""
-    main_path = bg.get('file_path') if bg else None
+    main_path = bg['file_path'] if bg else None
     if not main_path or not os.path.isfile(main_path):
         return
     try:
@@ -518,7 +518,7 @@ def remove_background_files(bg):
                 os.remove(variant_path)
     except Exception as exc:
         log('WARNING', 'BackgroundDelete', '背景图片文件删除失败',
-            bg_id=bg.get('id'), error=str(exc))
+            bg_id=bg['id'], error=str(exc))
 
 
 def reject_background(bg_id, admin_id, admin_username, ip_address):
