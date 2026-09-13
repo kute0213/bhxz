@@ -129,11 +129,26 @@ class Firewall:
             if ip:
                 if ip in self._banned:
                     # 黑名单快速拦截：不进入 Flask，最小响应 + 连接关闭
-                    body = b'403 Forbidden'
+                    body = (
+                        '<!DOCTYPE html><html lang="zh-CN"><head><meta charset="utf-8">'
+                        '<meta name="viewport" content="width=device-width, initial-scale=1">'
+                        '<title>403 Forbidden</title>'
+                        '<style>body{margin:0;min-height:100vh;display:flex;align-items:center;'
+                        'justify-content:center;background:#0a0f0d;color:#f5efe0;'
+                        'font-family:system-ui,sans-serif}.card{max-width:520px;padding:48px 24px;'
+                        'text-align:center}h1{margin:0;font-size:96px;color:#f87171}'
+                        '.t{font-size:22px;color:#f5efe0;margin:8px 0 24px}'
+                        'p{color:#f5efe0aa;line-height:1.9;font-size:14px}</style>'
+                        '</head><body><div class="card"><h1>403</h1>'
+                        '<p class="t">Forbidden</p>'
+                        '<p>原因：该 IP 已被封禁，如有疑问请联系管理员。</p>'
+                        '<p>建议：被封禁期间请勿继续访问，否则可能延长封禁。</p>'
+                        '</div></body></html>'
+                    ).encode('utf-8')
                     start_response(
                         '403 Forbidden',
                         [
-                            ('Content-Type', 'text/plain; charset=utf-8'),
+                            ('Content-Type', 'text/html; charset=utf-8'),
                             ('Content-Length', str(len(body))),
                             ('Connection', 'close'),
                             ('X-Firewall', '1'),

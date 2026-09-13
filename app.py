@@ -4,7 +4,8 @@ import signal
 from flask import Flask
 import config
 from core.init import init_app
-from core.server import register_error_handlers, run_server, graceful_shutdown
+from core.server import run_server, graceful_shutdown
+from core.errors import register_error_handlers
 from core.logger import log
 
 

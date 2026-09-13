@@ -4,6 +4,8 @@
 
 ### 调整
 
+* **全站统一错误页（错误号 / 原因 / 建议）**：新增 `core/errors.py` 统一错误页模块与 `templates/error.html` 统一模板，覆盖 400/401/403/404/405/413/429/500/502/503/504 全部常见错误码，每页展示「错误号（如 403 Forbidden）+ 错误原因 + 建议处理方法」；`abort(code, description)` 传参可覆盖默认原因；IP 封禁、可疑访问拦截（`core/middleware.py`）与防火墙黑名单拦截（`core/firewall.py`）均改用统一三要素错误页；删除旧的 `templates/403.html`、`templates/404.html`。同时整理 `core` 目录：错误页逻辑从 `core/server.py` 迁出（该文件恢复为纯 WSGI 服务器职责），`app.py` 改从 `core.errors` 注册错误处理器，`core/helpers.py` 移除重复的渲染函数。
+
 * **新增 /robots.txt（三档爬虫策略，管理面板可配）**：新增 `routes/sitemap.py` 的 `/robots.txt` 路由，与 Sitemap 配合自动在文件中引用 `Sitemap: {站点}/sitemap.xml`；策略通过管理后台 → 系统设置 → Sitemap 分类新增的 `ROBOTS_POLICY` 下拉框切换（热更新即时生效）：`all` 允许所有爬虫（`Allow: /`）、`home` 仅允许主页爬虫（`Allow: /$` + `Disallow: /`）、`none` 禁止所有爬虫（`Disallow: /`）；Sitemap 引用地址优先取 `SITE_URL` 配置，未设置时取当前请求根地址。
 
 * **Sitemap 全量携带 lastmod（自动读取数据库）**：`services/sitemap_cache.py` 重构 URL 条目构建逻辑，新增 `_latest_time()`（查询指定表最新时间字段）与 `_site_latest()`（跨内容表取全站最近更新时间）两个辅助函数；静态页面统一使用全站最近内容更新时间作为 `lastmod`，内容列表页取各自内容表最新一条（比全站时间更准确），指南/讨论帖/公开路径等动态页面取各自记录的 `updated_at`/`created_at`，生成的 sitemap 所有链接均带 `<lastmod>`，不再有缺失项。

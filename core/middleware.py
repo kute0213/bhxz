@@ -137,12 +137,18 @@ def register_hooks(app, try_serve_public):
         （不校验 CSRF、不服务公共文件、不执行路由逻辑）。
         """
         from services.ip_ban_service import is_banned
+        from core.errors import render_error_page
         ip = get_client_ip()
         banned, reason = is_banned(ip)
         if banned:
             log('Security', '被封禁 IP 的请求被拒绝',
                 ip=ip, reason=reason, path=request.path, method=request.method)
-            return '403 Forbidden: 该 IP 已被封禁，如有疑问请联系管理员。', 403
+            return render_error_page(
+                403, 'Forbidden',
+                '该 IP 已被封禁，如有疑问请联系管理员。',
+                '被封禁期间请勿继续访问，否则可能延长封禁。',
+                'shield-alert',
+            ), 403
         return None
 
     @app.before_request
@@ -161,6 +167,7 @@ def register_hooks(app, try_serve_public):
 
         from services.security_scanner import scan_request
         from services.ip_ban_service import ban_suspicious_ip
+        from core.errors import render_error_page
         attack_type, matched = scan_request(
             path=request.path,
             query_string=request.query_string.decode('utf-8', 'ignore'),
@@ -173,7 +180,12 @@ def register_hooks(app, try_serve_public):
                 ip=ip, attack=attack_type, matched=matched,
                 path=request.path, method=request.method)
             ban_suspicious_ip(ip, attack_type, matched)
-            return '403 Forbidden: 请求包含可疑内容，已被拦截。', 403
+            return render_error_page(
+                403, 'Forbidden',
+                '请求包含可疑内容，已被拦截。',
+                '请立刻停止攻击行为，否则将被封禁 IP。',
+                'shield-alert',
+            ), 403
         return None
 
     @app.before_request

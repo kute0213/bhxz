@@ -6,8 +6,6 @@ import signal
 import ssl
 import threading
 
-from flask import render_template
-
 from core.logger import log
 
 _server = None
@@ -74,20 +72,6 @@ def graceful_shutdown(signum, frame):
         daemon=False,
     )
     shutdown_thread.start()
-
-
-def register_error_handlers(app):
-    """注册全局错误处理页面。"""
-
-    @app.errorhandler(404)
-    def page_not_found(e):
-        from core.auth import get_current_user
-        return render_template('404.html', user=get_current_user()), 404
-
-    @app.errorhandler(403)
-    def forbidden(e):
-        from core.auth import get_current_user
-        return render_template('403.html', user=get_current_user()), 403
 
 
 def run_server(app, port=5000, app_root=None):

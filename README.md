@@ -77,6 +77,7 @@ python scripts/build/package.py
 │   ├── auth.py         # 认证装饰器、密码哈希
 │   ├── middleware.py   # 请求中间件
 │   ├── firewall.py     # 高性能多线程防火墙（黑名单快速拦截 + DDoS 检测，运行于 WSGI 入口）
+│   ├── errors.py       # 统一错误页（错误号 / 原因 / 建议，覆盖全部常见 HTTP 错误码）
 │   ├── startup_checks.py # 启动服务器健康检查（数据库/文件/配置，自动修复）
 │   └── ...             # 模板上下文、服务器、CSRF、日志
 ├── services/     # 业务逻辑层（纯 Python，不依赖 Flask）

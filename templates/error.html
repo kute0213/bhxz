@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}{{ code }} {{ title }}{% endblock %}
+{% block content %}
+<section class="page-container flex items-center justify-center py-16">
+    <div class="text-center px-6 max-w-lg">
+        <div class="w-24 h-24 mx-auto {% if code >= 500 %}bg-red-500/10{% else %}bg-gold-400/10{% endif %} rounded-full flex items-center justify-center mb-8">
+            <i data-lucide="{{ icon }}" class="w-12 h-12 {% if code >= 500 %}text-red-400{% else %}text-gold-400{% endif %} opacity-70"></i>
+        </div>
+        <h1 class="text-6xl font-black {% if code >= 500 %}text-red-400{% else %}text-gold-400{% endif %} mb-2">{{ code }}</h1>
+        <p class="text-2xl font-bold text-cream mb-6">{{ title }}</p>
+        <div class="pixel-card rounded-xl p-5 mb-8 text-left space-y-3">
+            <p class="text-sm text-cream/80 flex gap-3">
+                <span class="text-gold-400 font-bold w-16 flex-shrink-0">原因</span>
+                <span>{{ reason }}</span>
+            </p>
+            <p class="text-sm text-cream/80 flex gap-3">
+                <span class="text-gold-400 font-bold w-16 flex-shrink-0">建议</span>
+                <span>{{ advice }}</span>
+            </p>
+        </div>
+        <div class="flex items-center justify-center gap-4">
+            <a href="{{ url_for('main.home') }}" class="btn-primary px-6 py-3 rounded-xl font-bold inline-flex items-center gap-2">
+                <i data-lucide="home" class="w-5 h-5"></i>返回首页
+            </a>
+            {% if not user and code == 401 %}
+            <a href="{{ url_for('main.login') }}" class="btn-secondary px-6 py-3 rounded-xl font-bold inline-flex items-center gap-2">
+                <i data-lucide="log-in" class="w-5 h-5"></i>去登录
+            </a>
+            {% endif %}
+        </div>
+    </div>
+</section>
+{% endblock %}
