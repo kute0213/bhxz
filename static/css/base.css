@@ -5,8 +5,8 @@
 
 /* 颜色变量系统 */
 :root {
-    --bg-primary: #f3f6fa;
-    --bg-secondary: #e8edf4;
+    --bg-primary: #f8fafc;
+    --bg-secondary: #eef2f7;
     --bg-card: rgba(255, 255, 255, 0.78);
     --bg-card-hover: rgba(255, 255, 255, 0.94);
     --bg-glass: rgba(255, 255, 255, 0.74);
@@ -599,8 +599,14 @@ body::after {
     backdrop-filter: blur(40px) saturate(100%);
     -webkit-backdrop-filter: blur(40px) saturate(100%);
     border: 1px solid var(--border-card);
-    transform: translateX(120%);
-    transition: transform var(--transition-bounce);
+    /* 起始位置：屏幕右侧外 120% + 轻微缩放（让弹出有"弹簧"感） */
+    transform: translateX(120%) scale(0.92);
+    transform-origin: top right;
+    /* 使用更强的过冲曲线 + 稍微延长时间：弹出先冲过一点再回位，更有弹性 */
+    transition:
+        transform 0.55s cubic-bezier(0.32, 1.72, 0.56, 1),
+        opacity 0.3s ease;
+    opacity: 0;
     border-radius: 28px;
     box-shadow: 0 8px 40px rgba(15,23,42,0.12);
     overflow: hidden;
@@ -609,7 +615,10 @@ body::after {
     max-width: 480px;
     min-width: 320px;
 }
-.mobile-menu.active { transform: translateX(0); }
+.mobile-menu.active {
+    transform: translateX(0) scale(1);
+    opacity: 1;
+}
 
 /* 平板：略宽 */
 @media (max-width: 1024px) {
@@ -631,7 +640,7 @@ body::after {
 
 .mobile-menu-overlay {
     opacity: 0; visibility: hidden;
-    transition: opacity var(--transition-normal), visibility var(--transition-normal);
+    transition: opacity 0.35s ease, visibility 0.35s ease;
     backdrop-filter: blur(8px) saturate(120%);
     -webkit-backdrop-filter: blur(8px) saturate(120%);
     background: rgba(15,23,42,0.35);

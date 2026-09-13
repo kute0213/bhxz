@@ -308,9 +308,15 @@ def _try_download(urls, zip_path, progress_callback, timeout, label):
 
 
 def _run_update():
-    """执行一键更新（后台线程）。"""
+    """执行一键更新（后台线程）。
+
+    更新顺序：① 优先使用 git（如果当前目录是 git 仓库且系统有 git）→
+              ② 代理下载 → ③ GitHub 直连下载。
+    只要有一条通道能拉取到代码就继续；全部失败才报错。
+    """
     zip_path = None
     temp_dir = None
+    used_git = False
 
     try:
         _add_event('progress', {'percent': 0, 'message': '初始化...'})
@@ -355,124 +361,195 @@ def _run_update():
 
         _add_event('progress', {'percent': 2, 'message': f'已加载配置，{len(protected_paths)} 个受保护路径'})
 
-        _add_event('progress', {'percent': 3, 'message': f'正在检测 {len(proxy_list)} 个代理...'})
-        _add_event('log', {'message': f'╔══ 开始代理检测（共 {len(proxy_list)} 个，超时 3s）'})
-        _add_event('log', {'message': f'║  {", ".join(n for n, *_ in proxy_list)}'})
+        # ------------------------------------------------------------------
+        # 方式 1：Git（优先，最稳定、不绕远）
+        # ------------------------------------------------------------------
+        def _try_git_update():
+            """尝试使用 git pull 更新代码。成功返回 True，失败返回 False 并记录日志。"""
+            git_dir = os.path.join(APP_ROOT, '.git')
+            if not os.path.isdir(git_dir):
+                _add_event('log', {'message': '未检测到 .git 目录，跳过 git 更新'})
+                return False
 
-        available_proxies = detect_fastest_proxy(proxy_list=proxy_list, timeout=3)
+            # 检查系统是否有 git
+            try:
+                subprocess.run(
+                    ['git', '--version'],
+                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5,
+                    encoding='utf-8', errors='replace',
+                )
+            except Exception:
+                _add_event('log', {'message': '系统未安装 git，跳过 git 更新'})
+                return False
 
-        _add_event('log', {'message': f'╚══ 代理检测完成：可用 {len(available_proxies)} 个'})
+            _add_event('progress', {'percent': 5, 'message': '正在通过 Git 拉取更新...'})
+            _add_event('log', {'message': '✓ 检测到 git 仓库，优先使用 git 更新...'})
 
-        if not available_proxies:
-            raise RuntimeError('所有代理均不可达，尝试直连下载')
+            try:
+                # 统一 UTF-8，解决 Windows 中文输出
+                env = os.environ.copy()
+                env['PYTHONIOENCODING'] = 'utf-8'
 
-        name, base_url, download_template, elapsed = available_proxies[0]
-        _add_event('log', {'message': f'→ 使用代理: {name} ({elapsed:.1f}s)'})
+                # fetch
+                proc = subprocess.run(
+                    ['git', 'fetch', '--all', '--tags'],
+                    cwd=APP_ROOT, capture_output=True, timeout=60,
+                    encoding='utf-8', errors='replace', env=env,
+                )
+                if proc.returncode != 0:
+                    _add_event('log', {'message': f'  ✗ git fetch 失败: {proc.stderr.strip()[:200]}'})
+                    return False
 
+                # reset 到 origin/main（保留 protected_paths 本地文件）
+                proc = subprocess.run(
+                    ['git', 'reset', '--hard', 'origin/main'],
+                    cwd=APP_ROOT, capture_output=True, timeout=30,
+                    encoding='utf-8', errors='replace', env=env,
+                )
+                if proc.returncode != 0:
+                    _add_event('log', {'message': f'  ✗ git reset 失败: {proc.stderr.strip()[:200]}'})
+                    return False
+
+                _add_event('log', {'message': '  ✓ git pull 完成，代码已同步到 origin/main'})
+                return True
+            except subprocess.TimeoutExpired:
+                _add_event('log', {'message': '  ✗ git 操作超时'})
+                return False
+            except Exception as e:
+                _add_event('log', {'message': f'  ✗ git 异常: {e}'})
+                return False
+
+        used_git = _try_git_update()
+
+        # ------------------------------------------------------------------
+        # 方式 2 / 3：代理 + 直连（Git 失败时走这条兜底路径）
+        # ------------------------------------------------------------------
         download_success = False
         last_error = ''
 
-        # 构建候选下载 URL 列表 - 尝试多种格式以兼容不同代理
-        candidate_urls = _build_download_urls(download_template, name, base_url)
+        if not used_git:
+            _add_event('progress', {'percent': 3, 'message': f'正在检测 {len(proxy_list)} 个代理...'})
+            _add_event('log', {'message': f'╔══ Git 不可用，开始代理检测（共 {len(proxy_list)} 个，超时 3s）'})
+            _add_event('log', {'message': f'║  {", ".join(n for n, *_ in proxy_list)}'})
 
-        _add_event('log', {'message': f'{"─" * 40}'})
-        _add_event('log', {'message': f'尝试从 {name} 下载更新包...'})
-        _add_event('progress', {'percent': 5, 'message': f'正在从 {name} 下载更新包...'})
+            available_proxies = detect_fastest_proxy(proxy_list=proxy_list, timeout=3)
 
-        zip_path = _make_zip_path()
-        download_start = time.time()
+            _add_event('log', {'message': f'╚══ 代理检测完成：可用 {len(available_proxies)} 个'})
 
-        def _dl_progress(pct):
-            mapped = 5 + int(pct * 65 / 100)
-            _add_event('progress', {'percent': mapped, 'message': f'正在下载更新包... {int(pct)}%'})
-
-        download_success, temp_dir = _try_download(
-            candidate_urls, zip_path, _dl_progress, 30, name
-        )
-
-        if not download_success:
-            _add_event('log', {'message': f'✗ {name} 下载失败（耗时 {time.time() - download_start:.1f}s）'})
-            last_error = f'{name} 下载失败'
-            # 尝试直连下载
-            _add_event('log', {'message': f'{"─" * 40}'})
-            _add_event('log', {'message': '尝试直接下载 GitHub 原始归档（无代理）...'})
-
-            direct_urls = [
-                f'https://github.com/{REPO_ARCHIVE_PATH}',
-                f'https://github.com/kute0213/bhxz/archive/refs/heads/main.zip',
-            ]
-
-            def _direct_progress(pct):
-                mapped = 5 + int(pct * 65 / 100)
-                _add_event('progress', {'percent': mapped, 'message': f'正在直连下载更新包... {int(pct)}%'})
-
-            download_success, temp_dir = _try_download(
-                direct_urls, zip_path, _direct_progress, 15, 'GitHub 直连'
-            )
-            if not download_success:
-                last_error = '直连下载失败'
-
-        if not download_success:
-            raise RuntimeError(
-                f'代理及直连均失败。\n'
-                f'最后错误: {last_error[:300]}'
-            )
-
-        _add_event('progress', {'percent': 72, 'message': '下载完成，正在同步文件...'})
-
-        repo_items = sorted([
-            item for item in os.listdir(temp_dir)
-            if item != '.git'
-        ])
-
-        if not repo_items:
-            raise RuntimeError('仓库为空，没有可同步的文件')
-
-        total_files = 0
-        for item in repo_items:
-            src = os.path.join(temp_dir, item)
-            if os.path.isdir(src):
-                for dirpath, dirnames, filenames in os.walk(src):
-                    total_files += len(filenames)
+            if not available_proxies:
+                _add_event('log', {'message': '所有代理均不可达，尝试直连下载'})
             else:
-                total_files += 1
+                name, base_url, download_template, elapsed = available_proxies[0]
+                _add_event('log', {'message': f'→ 使用代理: {name} ({elapsed:.1f}s)'})
 
-        _add_event('progress', {'percent': 75, 'message': f'将同步 {len(repo_items)} 个项目，{total_files} 个文件...'})
-        _add_event('log', {'message': f'开始同步 {len(repo_items)} 个项目，{total_files} 个文件'})
+                candidate_urls = _build_download_urls(download_template, name, base_url)
 
-        processed = 0
-        remaining_pct = 95 - 75
+                _add_event('log', {'message': f'{"─" * 40}'})
+                _add_event('log', {'message': f'尝试从 {name} 下载更新包...'})
+                _add_event('progress', {'percent': 5, 'message': f'正在从 {name} 下载更新包...'})
 
-        for item in repo_items:
-            if _is_protected(item, protected_paths):
-                _add_event('log', {'message': f'  ⏭ 跳过受保护路径: {item}'})
+                zip_path = _make_zip_path()
+
+                def _dl_progress(pct):
+                    mapped = 5 + int(pct * 65 / 100)
+                    _add_event('progress', {'percent': mapped, 'message': f'正在下载更新包... {int(pct)}%'})
+
+                download_success, temp_dir = _try_download(
+                    candidate_urls, zip_path, _dl_progress, 30, name
+                )
+                if download_success:
+                    used_git = False  # 标记为下载模式，后续走文件同步分支
+                else:
+                    _add_event('log', {'message': f'✗ {name} 下载失败'})
+                    last_error = f'{name} 下载失败'
+
+            if not download_success:
+                _add_event('log', {'message': f'{"─" * 40}'})
+                _add_event('log', {'message': '尝试直接下载 GitHub 原始归档（无代理）...'})
+
+                direct_urls = [
+                    f'https://github.com/{REPO_ARCHIVE_PATH}',
+                    f'https://github.com/kute0213/bhxz/archive/refs/heads/main.zip',
+                ]
+
+                def _direct_progress(pct):
+                    mapped = 5 + int(pct * 65 / 100)
+                    _add_event('progress', {'percent': mapped, 'message': f'正在直连下载更新包... {int(pct)}%'})
+
+                zip_path = _make_zip_path()
+                download_success, temp_dir = _try_download(
+                    direct_urls, zip_path, _direct_progress, 15, 'GitHub 直连'
+                )
+                if not download_success:
+                    last_error = '直连下载失败'
+
+            if not download_success:
+                raise RuntimeError(
+                    f'Git、代理及直连均失败。\n最后错误: {last_error[:300]}'
+                )
+
+        # ------------------------------------------------------------------
+        # 后续步骤：Git 成功或下载成功后共用
+        # ------------------------------------------------------------------
+        if used_git:
+            # Git 方式：已直接写入 APP_ROOT，不需要再同步文件
+            _add_event('progress', {'percent': 85, 'message': 'Git 更新完成'})
+        else:
+            _add_event('progress', {'percent': 72, 'message': '下载完成，正在同步文件...'})
+
+            repo_items = sorted([
+                item for item in os.listdir(temp_dir)
+                if item != '.git'
+            ])
+
+            if not repo_items:
+                raise RuntimeError('仓库为空，没有可同步的文件')
+
+            total_files = 0
+            for item in repo_items:
+                src = os.path.join(temp_dir, item)
+                if os.path.isdir(src):
+                    for dirpath, dirnames, filenames in os.walk(src):
+                        total_files += len(filenames)
+                else:
+                    total_files += 1
+
+            _add_event('progress', {'percent': 75, 'message': f'将同步 {len(repo_items)} 个项目，{total_files} 个文件...'})
+            _add_event('log', {'message': f'开始同步 {len(repo_items)} 个项目，{total_files} 个文件'})
+
+            processed = 0
+            remaining_pct = 95 - 75
+
+            for item in repo_items:
+                if _is_protected(item, protected_paths):
+                    _add_event('log', {'message': f'  ⏭ 跳过受保护路径: {item}'})
+                    _add_event('progress', {
+                        'percent': 75 + int(processed * remaining_pct / total_files),
+                        'message': f'跳过受保护路径: {item}',
+                    })
+                    processed += 1
+                    continue
+
+                src = os.path.join(temp_dir, item)
+                dst = os.path.join(APP_ROOT, item)
+
+                _add_event('log', {'message': f'  → 同步: {item}'})
                 _add_event('progress', {
                     'percent': 75 + int(processed * remaining_pct / total_files),
-                    'message': f'跳过受保护路径: {item}',
+                    'message': f'正在同步 {item}/...',
                 })
-                processed += 1
-                continue
 
-            src = os.path.join(temp_dir, item)
-            dst = os.path.join(APP_ROOT, item)
+                processed += _sync_item(
+                    src, dst, protected_paths, item_rel=item,
+                    log=lambda msg: _add_event('log', {'message': f'    {msg}'}),
+                )
 
-            _add_event('log', {'message': f'  → 同步: {item}'})
-            _add_event('progress', {
-                'percent': 75 + int(processed * remaining_pct / total_files),
-                'message': f'正在同步 {item}/...',
-            })
+            try:
+                shutil.rmtree(temp_dir)
+            except Exception:
+                pass
 
-            processed += _sync_item(
-                src, dst, protected_paths, item_rel=item,
-                log=lambda msg: _add_event('log', {'message': f'    {msg}'}),
-            )
-
-        try:
-            shutil.rmtree(temp_dir)
-        except Exception:
-            pass
-
-        _add_event('log', {'message': f'✓ 同步完成，共处理 {processed} 个文件'})
+            _add_event('log', {'message': f'✓ 同步完成，共处理 {processed} 个文件'})
 
         _build_static = False
         try:

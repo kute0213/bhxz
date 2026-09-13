@@ -8,7 +8,8 @@
 1. 检查旧 DuckDB 数据库是否存在（不存在则跳过）
 2. 检查 duckdb 依赖是否已安装（迁移完成后可移除）
 3. 在 SQLite 中初始化新 schema（复用 init_db）
-4. 逐表复制数据（跳过已删除的 CMD 控制台相关表）
+4. 逐表复制数据：只迁移新旧库共有列，跳过 SQLite 目标表不存在的列
+   （兼容 DuckDB 老库遗留列，例如 music.is_public）
 5. 校验迁移结果并输出统计
 
 注意：
@@ -18,6 +19,7 @@
 
 import os
 import shutil
+import sqlite3
 import sys
 
 # 项目根目录
@@ -59,6 +61,12 @@ def _get_duckdb_tables(conn):
     return {row[0] for row in rows}
 
 
+def _get_sqlite_columns(conn, table):
+    """获取 SQLite 表的列名集合。"""
+    rows = conn.execute(f'PRAGMA table_info("{table}")').fetchall()
+    return {r[1] for r in rows}
+
+
 def migrate():
     if not os.path.isfile(DUCKDB_PATH):
         print('未找到旧数据库 site.duckdb，无需迁移。')
@@ -90,10 +98,10 @@ def migrate():
     init_db()
     print('  -> 表结构初始化完成')
 
-    # 2. 打开旧库，逐表复制
+    # 2. 打开旧库，逐表复制（只迁移新旧库共有列）
     print('[2/4] 复制数据...')
     old_conn = duckdb.connect(DUCKDB_PATH, read_only=True)
-    new_conn = __import__('sqlite3').connect(DB_PATH)
+    new_conn = sqlite3.connect(DB_PATH)
     try:
         old_tables = _get_duckdb_tables(old_conn)
         total = 0
@@ -101,21 +109,47 @@ def migrate():
             if table not in old_tables:
                 print(f'  -> 跳过 {table}（旧库中不存在）')
                 continue
-            rows = old_conn.execute(f'SELECT * FROM "{table}"').fetchall()
-            cols = [desc[0] for desc in old_conn.description]
+
+            # SQLite 目标表的列
+            new_cols = _get_sqlite_columns(new_conn, table)
+            if not new_cols:
+                print(f'  -> 跳过 {table}（SQLite 目标表不存在或为空）')
+                continue
+
+            # 旧库的列（SELECT * 返回所有列）
+            old_rows_sample = old_conn.execute(f'SELECT * FROM "{table}" LIMIT 1').fetchall()
+            old_cursor = old_conn.execute(f'SELECT * FROM "{table}" LIMIT 0')
+            old_cols = [desc[0] for desc in old_cursor.description]
+
+            # 新旧库共有列（按 DuckDB 原始顺序保持字段顺序稳定）
+            common_cols = [c for c in old_cols if c in new_cols]
+            if not common_cols:
+                print(f'  -> 跳过 {table}（新旧库无共有列）')
+                continue
+
+            rows = old_conn.execute(
+                f'SELECT {", ".join(chr(34) + c + chr(34) for c in common_cols)} '
+                f'FROM "{table}"'
+            ).fetchall()
+
             if not rows:
                 print(f'  -> {table}: 0 行')
                 continue
+
             # init_db 可能在空库中预置了默认数据（如 admin 用户、默认模组介绍），
             # 复制前先清空目标表，避免主键冲突
             new_conn.execute(f'DELETE FROM "{table}"')
-            placeholders = ', '.join(['?'] * len(cols))
-            col_sql = ', '.join(f'"{c}"' for c in cols)
+
+            placeholders = ', '.join(['?'] * len(common_cols))
+            col_sql = ', '.join(f'"{c}"' for c in common_cols)
             new_conn.executemany(
                 f'INSERT INTO "{table}" ({col_sql}) VALUES ({placeholders})', rows
             )
             total += len(rows)
-            print(f'  -> {table}: {len(rows)} 行')
+            skipped = len(old_cols) - len(common_cols)
+            suffix = f'（跳过 {skipped} 个旧库遗留列：{", ".join(c for c in old_cols if c not in new_cols)}）' if skipped else ''
+            print(f'  -> {table}: {len(rows)} 行{suffix}')
+
         new_conn.commit()
         print(f'  -> 共迁移 {total} 行')
     finally:
@@ -124,10 +158,14 @@ def migrate():
 
     # 3. 校验
     print('[3/4] 校验迁移结果...')
-    import sqlite3
     check_conn = sqlite3.connect(DB_PATH)
     try:
         for table in TABLES:
+            exists = check_conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table,)
+            ).fetchone()
+            if not exists:
+                continue
             count = check_conn.execute(f'SELECT COUNT(*) FROM "{table}"').fetchone()[0]
             print(f'  -> {table}: {count} 行')
     finally:
@@ -143,6 +181,7 @@ def migrate():
 
     print()
     print('迁移完成！SQLite 数据库已启用 WAL 模式。')
+    print('提示：首次启动会自动运行 init_db 执行 music.is_public → status 的列迁移逻辑。')
     return 0
 
 

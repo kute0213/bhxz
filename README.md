@@ -688,7 +688,15 @@ workspace/
 
 * **同步 GitHub 代码 + 上传**：本地改动已与 GitHub 仓库同步并提交。
 
-* **清理无用代码**：删除顶层残留的 `static/js/base.js`、`static/js/main.js`（模板实际引用 `js/core/base.js` 与 `js/pages/main.js`），删除空的 `static/js/script/` 目录；`static/lib/lib-version.json` 移除已废弃的 `xterm_version` 字段；打包/忽略规则更新为 SQLite 的 `*.db-wal`/`*.db-shm`，移除 DuckDB 残留
+* **整体界面改为纯白主题**：页面背景色从偏冷灰 `#f3f6fa` 调整为纯白系 `#f8fafc`，白色磨砂玻璃质感更干净
+
+* **修复手机端汉堡栏弹出弹性动画**：侧边菜单起始状态加入 `scale(0.92)` + 新缓动曲线 `cubic-bezier(0.32,1.72,0.56,1)`（更强过冲），弹出时先越过终点再回位，同时配合 overlay `0.35s` 淡入，观感更有"弹簧"弹性
+
+* **自动更新：优先 Git，兜底代理+直连**：检测到 `.git` 目录 + 系统有 `git` 时直接 `git fetch --all --tags && git reset --hard origin/main`（UTF-8 编码统一），完全绕开代理；Git 不可用时才回落到代理+GitHub 直连
+
+* **自动更新启动命令默认使用 `{python路径} {项目根目录}/app.py`**：重启脚本与直接兜底都使用 `sys.executable + APP_ROOT/app.py`，不依赖 shell 命令
+
+* **修复迁移脚本列不匹配报错**：旧 DuckDB `music` 表仍有 `is_public` 等遗留列，迁移脚本改为读取 SQLite 目标表的列清单（`PRAGMA table_info`），只复制新旧库共有列，自动跳过已废弃的 `is_public` 等列并在输出中注明跳过内容
 
 * **彻底删除 MinIO 对象存储**：移除 `services/object_storage.py`、MinIO 相关配置与依赖，背景图片改回本地文件存储。
 
