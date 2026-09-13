@@ -350,6 +350,10 @@ def init_db():
     # ---- 背景图片：添加 rejected_at 列（被驳回内容 24 小时后自动清理） ----
     add_column_if_not_exists('backgrounds', 'rejected_at', "TEXT DEFAULT NULL")
 
+    # ---- 背景图片：添加 ratio 列（保存上传图片的自然宽高比，供按屏幕比例取图） ----
+    # 旧数据上传时强制裁剪为 16:9，默认值取 16/9（1.7778）
+    add_column_if_not_exists('backgrounds', 'ratio', 'REAL DEFAULT 1.7778')
+
     # ---- 模组介绍：添加 link 列（点击卡片跳转到模组链接） ----
     add_column_if_not_exists('mod_intros', 'link', "TEXT DEFAULT ''")
 

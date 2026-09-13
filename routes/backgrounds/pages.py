@@ -96,8 +96,9 @@ def delete_background(bg_id):
 def serve_background(bg_id):
     """提供背景图片访问。
 
-    支持 ?size= 参数：前端按设备屏幕宽度请求最合适的档位
-    （768 / 1280 / 1920），服务端就近返回对应变体，实现按设备最佳缩放。
+    支持 ?size= 参数：前端按设备屏幕尺寸请求最合适的档位（768 / 1280 / 1920），
+    服务端就近返回对应变体；支持 ?ratio= 参数：前端携带屏幕宽高比（宽/高），
+    服务端将所选档位中心裁剪到该比例后返回（结果缓存），实现按屏幕比例最适配取图。
     已通过的图片公开可访问；待审核/已驳回图片仅管理员与上传者可预览。
     """
     bg = background_service.get_background(bg_id)
@@ -114,8 +115,15 @@ def serve_background(bg_id):
     if size is not None:
         size = max(1, min(size, 1920))
 
+    ratio = request.args.get('ratio', type=float)
+    if ratio is not None:
+        ratio = max(
+            background_service.RATIO_MIN,
+            min(ratio, background_service.RATIO_MAX),
+        )
+
     try:
-        data = background_service.read_background_data(bg, size=size)
+        data = background_service.read_background_data(bg, size=size, ratio=ratio)
     except Exception:
         data = None
     if not data:

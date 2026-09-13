@@ -99,11 +99,53 @@
         <div class="bg-orb bg-orb-3"></div>
     </div>
 
-    <!-- 全站背景图片：JS 按设备屏幕宽度就近取档（768/1280/1920），无 JS 时回退主图 -->
+    <!-- 全站背景图片：解析到背景元素后立即预加载（不等动画与其他脚本），
+         携带屏幕比例 ratio 与所需尺寸 size，服务端返回比例最适配的图片；无 JS 时回退主图 -->
     {% if active_backgrounds %}
     <div class="site-background" data-background-url="{{ url_for('backgrounds.serve_background', bg_id=active_backgrounds[0].id) }}" style="background-size: {{ background_image_size }};"></div>
     <div class="site-background-overlay"></div>
     <noscript><style>.site-background{background-image:url('{{ url_for('backgrounds.serve_background', bg_id=active_backgrounds[0].id) }}');opacity:1!important}</style></noscript>
+    <script>
+    (function () {
+        var bg = document.querySelector('.site-background');
+        if (!bg) return;
+        var baseUrl = bg.getAttribute('data-background-url');
+        if (!baseUrl) return;
+
+        var SIZES = [768, 1280, 1920];
+
+        // 所需尺寸：屏幕物理像素长边（宽高取大，横竖屏均清晰）
+        var target = Math.max(
+            Math.ceil((window.innerWidth || 1280) * (window.devicePixelRatio || 1)),
+            Math.ceil((window.innerHeight || 720) * (window.devicePixelRatio || 1))
+        );
+        var size = SIZES[0];
+        for (var i = 0; i < SIZES.length; i++) {
+            if (SIZES[i] >= target) { size = SIZES[i]; break; }
+        }
+        if (target > SIZES[SIZES.length - 1]) size = SIZES[SIZES.length - 1];
+
+        // 屏幕宽高比（DPR 等比缩放不影响比例），保留 2 位小数
+        var ratio = (window.innerWidth && window.innerHeight)
+            ? Math.round((window.innerWidth / window.innerHeight) * 100) / 100
+            : 1.78;
+
+        var sep = baseUrl.indexOf('?') === -1 ? '?' : '&';
+        var url = baseUrl + sep + 'size=' + size + '&ratio=' + ratio;
+
+        var img = new Image();
+        img.onload = function () {
+            bg.style.backgroundImage = "url('" + url + "')";
+            bg.classList.add('bg-loaded');
+        };
+        img.onerror = function () {
+            // 比例裁剪不可用或档位缺失时回退自然比例主图
+            bg.style.backgroundImage = "url('" + baseUrl + "')";
+            bg.classList.add('bg-loaded');
+        };
+        img.src = url;
+    })();
+    </script>
     {% endif %}
 
     <!-- 页面过渡遮罩 -->
@@ -381,7 +423,7 @@
         </div>
     </div>
 
-    <script src="{{ url_for('static', filename='js/core/base.js', v='22') }}"></script>
+    <script src="{{ url_for('static', filename='js/core/base.js', v='23') }}"></script>
     <script src="{{ url_for('static', filename='js/pages/main.js', v='11') }}"></script>
     {% if login_welcome_username %}
     <script>

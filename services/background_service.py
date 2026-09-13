@@ -2,8 +2,10 @@
 
 所有函数为 Flask 无关的纯业务逻辑，返回 (success, data_or_error) 元组。
 背景图片存储在 uploads/backgrounds/ 目录，自动转换为 WebP 格式，
-并为不同屏幕尺寸生成多档变体（768 / 1280 / 1920），前端按设备宽度取用，
-实现"上传即转换、按设备最佳缩放"。
+并为不同屏幕尺寸生成多档变体（768 / 1280 / 1920）：
+  - 保存时保持图片自然宽高比并写入 ratio 列（不再强制裁剪 16:9）
+  - 取图时客户端携带屏幕比例，服务端将所选档位中心裁剪到该比例后返回
+    （结果缓存），实现"上传即转换、按设备比例最适配取图"。
 """
 
 import os
@@ -34,10 +36,21 @@ STATUS_LABELS = {
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'tiff'}
 
 # 响应式变体档位：键为前端请求的 size 参数，值为图片长边最大像素。
-# 上传时按此列表生成多档 WebP，serve 时按设备宽度就近取用。
+# 上传时按此列表生成多档 WebP，serve 时按设备尺寸就近取用。
 RESPONSIVE_SIZES = [768, 1280, 1920]
 # 主图档位（全站背景默认使用）
 PRIMARY_SIZE = 1920
+
+# 默认宽高比（旧数据 / 无比例参数时的回退值，对应 16:9）
+RATIO_DEFAULT = 16 / 9
+# 服务端接受的比例（宽/高）范围，超出收窄，避免极端裁剪造成画质损失
+RATIO_MIN = 0.4
+RATIO_MAX = 3.6
+
+# 按屏幕比例裁剪结果缓存（key: (文件路径, 比例保留 2 位)）
+_crop_cache = {}
+_crop_cache_lock = threading.Lock()
+_CROP_CACHE_MAX = 32
 
 # 上传任务进度
 _upload_tasks = {}
@@ -63,6 +76,19 @@ def _validate_image(upload):
     if len(raw) > USER_IMAGE_MAX_BYTES:
         raise ValueError('图片不能超过 10MB')
     return raw, ext
+
+
+def _get_natural_ratio(raw):
+    """读取图片自然宽高比（宽/高，应用 EXIF 旋转后）。失败回退默认 16:9。"""
+    try:
+        image = Image.open(BytesIO(raw))
+        image = ImageOps.exif_transpose(image)
+        w, h = image.size
+        if not w or not h:
+            return RATIO_DEFAULT
+        return max(RATIO_MIN, min(RATIO_MAX, w / h))
+    except Exception:
+        return RATIO_DEFAULT
 
 
 def _smart_crop(image, target_ratio=16/9):
@@ -94,13 +120,14 @@ def _smart_crop(image, target_ratio=16/9):
         return image.crop((0, top, w, top + new_h))
 
 
-def _convert_to_webp(raw, target_size=PRIMARY_SIZE, crop_to_ratio=True):
-    """将图片转换为 WebP 格式，自动适配尺寸并智能裁剪。
+def _convert_to_webp(raw, target_size=PRIMARY_SIZE, crop_to_ratio=False):
+    """将图片转换为 WebP 格式，自动适配尺寸。
 
     Args:
         raw: 原始图片字节数据
         target_size: 目标长边最大像素（默认 1920px）
-        crop_to_ratio: 是否自动裁剪到 16:9 宽高比（默认开启）
+        crop_to_ratio: 是否裁剪到 16:9（默认关闭；保存时保持自然宽高比，
+            裁剪推迟到取图时按屏幕比例进行）
 
     Returns:
         WebP 格式的字节数据
@@ -152,19 +179,22 @@ def _background_filename(bg_id, original_filename):
 def _save_background_variants(bg_id, filename, raw):
     """生成并保存背景图片主图与各档响应式变体。
 
+    保持图片自然宽高比（不再强制裁剪 16:9），裁剪推迟到取图时按屏幕比例进行。
+
     Args:
         bg_id: 背景图片记录 ID
         filename: 原始文件名（用于生成主文件名）
         raw: 原始图片字节
 
     Returns:
-        (主图绝对路径, 统一主文件名)；任一档位处理失败时抛异常（由调用方回滚记录）
+        (主图绝对路径, 统一主文件名, 自然宽高比)；任一档位处理失败时抛异常（由调用方回滚记录）
     """
+    ratio = _get_natural_ratio(raw)
     main_name = _background_filename(bg_id, filename)
     # 主图（1920）优先生成，保证基础路径必然存在
     main_path = os.path.join(UPLOAD_BACKGROUNDS_DIR, main_name)
     with open(main_path, 'wb') as f:
-        f.write(_convert_to_webp(raw, target_size=PRIMARY_SIZE))
+        f.write(_convert_to_webp(raw, target_size=PRIMARY_SIZE, crop_to_ratio=False))
 
     # 其余档位：失败不影响主图，仅记录日志
     for size in RESPONSIVE_SIZES:
@@ -175,12 +205,12 @@ def _save_background_variants(bg_id, filename, raw):
         )
         try:
             with open(variant_path, 'wb') as f:
-                f.write(_convert_to_webp(raw, target_size=size))
+                f.write(_convert_to_webp(raw, target_size=size, crop_to_ratio=False))
         except Exception as exc:
             log('WARNING', 'BackgroundUpload', f'生成 {size}px 变体失败',
                 bg_id=bg_id, error=str(exc))
 
-    return main_path, main_name
+    return main_path, main_name, ratio
 
 
 def start_upload(user_id, username, upload_file, ip_address):
@@ -216,9 +246,9 @@ def start_upload(user_id, username, upload_file, ip_address):
                 filename = original_filename
                 now = _now()
                 cursor = conn.execute(
-                    "INSERT INTO backgrounds (user_id, username, filename, file_path, status, is_active, created_at) "
-                    "VALUES (?, ?, ?, '', ?, 0, ?)",
-                    (user_id, username, filename, STATUS_PENDING, now),
+                    "INSERT INTO backgrounds (user_id, username, filename, file_path, status, is_active, ratio, created_at) "
+                    "VALUES (?, ?, ?, '', ?, 0, ?, ?)",
+                    (user_id, username, filename, STATUS_PENDING, RATIO_DEFAULT, now),
                 )
                 bg_id = cursor.lastrowid
                 conn.commit()
@@ -228,12 +258,12 @@ def start_upload(user_id, username, upload_file, ip_address):
                 _upload_tasks[task_id]['message'] = '正在保存...'
 
             # 生成主图 + 响应式变体并落盘（文件名统一为 bg_<id>_<hash>.webp，不使用原始文件名）
-            save_path, main_name = _save_background_variants(bg_id, original_filename, raw)
+            save_path, main_name, ratio = _save_background_variants(bg_id, original_filename, raw)
 
             with get_db() as conn:
                 conn.execute(
-                    "UPDATE backgrounds SET file_path = ?, filename = ? WHERE id = ?",
-                    (save_path, main_name, bg_id),
+                    "UPDATE backgrounds SET file_path = ?, filename = ?, ratio = ? WHERE id = ?",
+                    (save_path, main_name, ratio, bg_id),
                 )
                 conn.commit()
 
@@ -365,16 +395,60 @@ def resolve_background_path(bg, size=None):
     return main_path
 
 
-def read_background_data(bg, size=None):
-    """读取背景图片字节（按设备尺寸就近取档，兼容历史本地路径）。"""
+def _crop_to_ratio(data, ratio):
+    """将 WebP 字节按目标宽高比中心裁剪，返回新的 WebP 字节。
+
+    原图比例与目标一致（误差 < 0.01）或处理失败时直接返回原数据，避免重复编码。
+    """
+    try:
+        image = Image.open(BytesIO(data))
+        image = ImageOps.exif_transpose(image)
+        image.load()
+    except Exception:
+        return data
+    w, h = image.size
+    if w and h and abs(w / h - ratio) < 0.01:
+        return data
+    image = _smart_crop(image, ratio)
+    output = BytesIO()
+    image.save(output, format='WEBP', quality=85, method=6)
+    return output.getvalue() or data
+
+
+def read_background_data(bg, size=None, ratio=None):
+    """读取背景图片字节（按设备尺寸就近取档，兼容历史本地路径）。
+
+    ratio 非空时，将所选档位图片按该宽高比中心裁剪后再返回（结果缓存），
+    使客户端拿到与其屏幕比例完全匹配的图片，避免多余像素传输。
+    """
     path = resolve_background_path(bg, size=size)
     if not path:
         return None
     try:
         with open(path, 'rb') as file:
-            return file.read()
+            data = file.read()
     except OSError:
         return None
+
+    if ratio is None:
+        return data
+
+    key = (path, round(ratio, 2))
+    with _crop_cache_lock:
+        cached = _crop_cache.get(key)
+    if cached is not None:
+        return cached
+
+    cropped = _crop_to_ratio(data, ratio)
+    if cropped is data:
+        # 原图比例已匹配，无需裁剪也无需缓存（与直接取档结果一致）
+        return data
+
+    with _crop_cache_lock:
+        if len(_crop_cache) >= _CROP_CACHE_MAX:
+            _crop_cache.clear()
+        _crop_cache[key] = cropped
+    return cropped
 
 
 def _send_review_email(bg, approved: bool, admin_username: str):
