@@ -100,6 +100,27 @@ def _ssl_redirect(response):
     return response
 
 
+def _read_scan_body():
+    """读取请求体用于攻击扫描（仅文本类且 ≤1MB）。
+
+    避免对 multipart 大文件上传做全文扫描：二进制内容易误报且损耗性能；
+    文本类内容（表单/JSON）只取高置信度特征匹配（见 security_scanner.BODY_PATTERNS）。
+    """
+    if request.method not in ('POST', 'PUT', 'PATCH'):
+        return ''
+    content_length = request.content_length or 0
+    if content_length <= 0 or content_length > 1024 * 1024:
+        return ''
+    content_type = (request.content_type or '').split(';')[0].strip().lower()
+    if content_type not in ('application/x-www-form-urlencoded', 'application/json', 'text/plain'):
+        return ''
+    try:
+        # get_data 会缓存读取结果，不影响后续 request.form / get_json 解析
+        return request.get_data(cache=True).decode('utf-8', 'ignore')
+    except Exception:
+        return ''
+
+
 def register_hooks(app, try_serve_public):
     """注册所有请求钩子。
 
@@ -122,6 +143,37 @@ def register_hooks(app, try_serve_public):
             log('Security', '被封禁 IP 的请求被拒绝',
                 ip=ip, reason=reason, path=request.path, method=request.method)
             return '403 Forbidden: 该 IP 已被封禁，如有疑问请联系管理员。', 403
+        return None
+
+    @app.before_request
+    def suspicious_request_check_hook():
+        """可疑访问拦截：命中攻击特征（SQL 注入/XSS/路径穿越/命令注入/敏感文件与扫描器探测/恶意扫描 UA）时拦截并自动封禁。
+
+        紧跟在 IP 封禁检查之后；总开关与各攻击类型子开关、封禁时长在
+        管理后台 → 系统设置中配置（见 config.py 的 SUSPICIOUS_BLOCK_*）。
+        """
+        from config import get_config_value, SUSPICIOUS_BLOCK_ENABLED
+        if not get_config_value('SUSPICIOUS_BLOCK_ENABLED', SUSPICIOUS_BLOCK_ENABLED):
+            return None
+        # 静态资源不走攻击扫描（纯文件内容，无注入面，节省每请求开销）
+        if request.path.startswith('/static/'):
+            return None
+
+        from services.security_scanner import scan_request
+        from services.ip_ban_service import ban_suspicious_ip
+        attack_type, matched = scan_request(
+            path=request.path,
+            query_string=request.query_string.decode('utf-8', 'ignore'),
+            body=_read_scan_body(),
+            user_agent=request.headers.get('User-Agent', ''),
+        )
+        if attack_type:
+            ip = get_client_ip()
+            log('Security', '拦截可疑访问并自动封禁',
+                ip=ip, attack=attack_type, matched=matched,
+                path=request.path, method=request.method)
+            ban_suspicious_ip(ip, attack_type, matched)
+            return '403 Forbidden: 请求包含可疑内容，已被拦截。', 403
         return None
 
     @app.before_request

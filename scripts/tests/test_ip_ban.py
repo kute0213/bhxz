@@ -7,7 +7,7 @@ import pytest
 
 from services.ip_ban_service import (
     validate_ip, create_ban, is_banned, get_bans, unban,
-    cleanup_expired_bans, is_whitelisted, auto_ban,
+    cleanup_expired_bans, is_whitelisted, auto_ban, ban_suspicious_ip,
 )
 from services.ip_ban_service import _invalidate_cache
 
@@ -214,5 +214,67 @@ class TestAutoBan:
         self._patch_settings(monkeypatch, {})
         assert auto_ban(T_IP, 'login')[0] is True
         ok, msg = auto_ban(T_IP, 'login')
+        assert ok is False
+        assert '已在封禁列表' in msg
+
+
+class TestBanSuspiciousIp:
+    """可疑访问自动封禁测试：通过 monkeypatch 覆盖 config.get_config_value 保证确定性。"""
+
+    def _patch_settings(self, monkeypatch, overrides):
+        defaults = {
+            'SUSPICIOUS_BLOCK_ENABLED': True,
+            'SUSPICIOUS_BLOCK_DURATION_MINUTES': 60,
+            'SUSPICIOUS_BLOCK_SQLI_ENABLED': True,
+            'SUSPICIOUS_BLOCK_XSS_ENABLED': True,
+            'SUSPICIOUS_BLOCK_PATH_TRAVERSAL_ENABLED': True,
+            'SUSPICIOUS_BLOCK_COMMAND_INJECTION_ENABLED': True,
+            'SUSPICIOUS_BLOCK_SENSITIVE_PROBE_ENABLED': True,
+            'SUSPICIOUS_BLOCK_MALICIOUS_UA_ENABLED': True,
+        }
+        defaults.update(overrides)
+        monkeypatch.setattr('config.get_config_value', lambda key, default: defaults.get(key, default))
+
+    def test_ban_triggers_with_reason(self, monkeypatch):
+        self._patch_settings(monkeypatch, {})
+        ok, msg = ban_suspicious_ip(T_IP, 'sql_injection', "1' OR '1'='1")
+        assert ok is True
+        assert is_banned(T_IP)[0] is True
+        ban = get_bans()[0]
+        # 原因记录攻击类型与命中片段，操作人显示为「系统」
+        assert 'sql_injection' in ban['reason']
+        assert "1' OR '1'='1" in ban['reason']
+        assert ban['banned_by_name'] == '系统'
+
+    def test_global_disabled(self, monkeypatch):
+        self._patch_settings(monkeypatch, {'SUSPICIOUS_BLOCK_ENABLED': False})
+        ok, msg = ban_suspicious_ip(T_IP, 'xss', '<script>')
+        assert ok is False
+        assert '总开关' in msg
+        assert is_banned(T_IP)[0] is False
+
+    def test_per_type_disabled(self, monkeypatch):
+        self._patch_settings(monkeypatch, {'SUSPICIOUS_BLOCK_XSS_ENABLED': False})
+        ok, msg = ban_suspicious_ip(T_IP, 'xss', '<script>')
+        assert ok is False
+        assert '未开启' in msg
+        assert is_banned(T_IP)[0] is False
+
+    def test_skips_whitelist(self, monkeypatch):
+        self._patch_settings(monkeypatch, {})
+        ok, msg = ban_suspicious_ip(WHITELIST_IP, 'sql_injection', 'union select')
+        assert ok is False
+        assert '白名单' in msg
+
+    def test_rejects_invalid_ip(self, monkeypatch):
+        self._patch_settings(monkeypatch, {})
+        ok, msg = ban_suspicious_ip('not-an-ip', 'sql_injection', 'union select')
+        assert ok is False
+        assert '无效' in msg
+
+    def test_does_not_duplicate(self, monkeypatch):
+        self._patch_settings(monkeypatch, {})
+        assert ban_suspicious_ip(T_IP, 'xss', '<script>')[0] is True
+        ok, msg = ban_suspicious_ip(T_IP, 'xss', '<script>')
         assert ok is False
         assert '已在封禁列表' in msg

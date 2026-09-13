@@ -8,6 +8,7 @@
 - is_banned() — 检查 IP 是否被封禁（带内存缓存，30 秒刷新）
 - cleanup_expired_bans() — 清理已过期的临时封禁
 - auto_ban() — 按配置自动封禁可疑操作来源 IP（白名单 IP 跳过）
+- ban_suspicious_ip() — 拦截到可疑访问（SQL 注入/XSS 等攻击特征）时按配置自动封禁来源 IP
 - is_whitelisted() — 判断 IP 是否在封禁白名单中
 
 缓存说明：全站每个请求都会调用 is_banned()，为避免频繁查询数据库，
@@ -39,6 +40,16 @@ AUTO_BAN_ACTION_SETTINGS = {
     'register': 'AUTO_BAN_REGISTER_ENABLED',
     'email': 'AUTO_BAN_EMAIL_ENABLED',
     'forgot_password': 'AUTO_BAN_FORGOT_PASSWORD_ENABLED',
+}
+
+# 可疑访问拦截：攻击类型 → 对应的设置注册表键（默认开启）
+SUSPICIOUS_ACTION_SETTINGS = {
+    'sql_injection': 'SUSPICIOUS_BLOCK_SQLI_ENABLED',
+    'xss': 'SUSPICIOUS_BLOCK_XSS_ENABLED',
+    'path_traversal': 'SUSPICIOUS_BLOCK_PATH_TRAVERSAL_ENABLED',
+    'command_injection': 'SUSPICIOUS_BLOCK_COMMAND_INJECTION_ENABLED',
+    'sensitive_probe': 'SUSPICIOUS_BLOCK_SENSITIVE_PROBE_ENABLED',
+    'malicious_ua': 'SUSPICIOUS_BLOCK_MALICIOUS_UA_ENABLED',
 }
 
 # 系统自动封禁操作人的标记 ID（users 表中不存在该用户，显示为「系统」）
@@ -278,5 +289,69 @@ def auto_ban(ip_address, action, reason=''):
     )
     if success:
         log('Security', '自动封禁生效', ip=ip, action=action,
+            duration_minutes=duration_minutes or '永久')
+    return success, message
+
+
+def ban_suspicious_ip(ip_address, attack_type, matched=''):
+    """拦截到可疑访问（SQL 注入/XSS 等攻击特征）时按配置自动封禁来源 IP。
+
+    与 auto_ban() 的区别：自动封禁面向「限流触发」，本函数面向「攻击特征命中」，
+    使用独立的配置键（SUSPICIOUS_BLOCK_*），总开关、各攻击类型子开关与封禁时长
+    均可在管理后台 → 系统设置中热更新。
+
+    Args:
+        ip_address: 来源 IP
+        attack_type: 攻击类型（sql_injection / xss / path_traversal /
+                     command_injection / sensitive_probe / malicious_ua）
+        matched: 命中的特征片段（写入封禁原因，便于后台追溯）
+
+    Returns:
+        (banned: bool, message: str)
+    """
+    from config import (
+        get_config_value,
+        SUSPICIOUS_BLOCK_ENABLED,
+        SUSPICIOUS_BLOCK_DURATION_MINUTES,
+    )
+
+    if not get_config_value('SUSPICIOUS_BLOCK_ENABLED', SUSPICIOUS_BLOCK_ENABLED):
+        return False, '可疑访问拦截总开关未开启'
+
+    action_key = SUSPICIOUS_ACTION_SETTINGS.get(attack_type)
+    if action_key and not get_config_value(action_key, True):
+        return False, f'「{attack_type}」类型拦截未开启'
+
+    ip = (ip_address or '').strip()
+    if is_whitelisted(ip):
+        log('INFO', 'IpBan', '可疑访问拦截跳过白名单 IP', ip=ip, attack=attack_type)
+        return False, '该 IP 在封禁白名单中，跳过自动封禁'
+
+    if not validate_ip(ip):
+        return False, '无效的 IP 地址'
+
+    if is_banned(ip)[0]:
+        return False, '该 IP 已在封禁列表中'
+
+    # 封禁时长：分钟 → 天（create_ban 以天为单位）
+    try:
+        duration_minutes = int(get_config_value(
+            'SUSPICIOUS_BLOCK_DURATION_MINUTES', SUSPICIOUS_BLOCK_DURATION_MINUTES))
+    except (ValueError, TypeError):
+        duration_minutes = SUSPICIOUS_BLOCK_DURATION_MINUTES
+    duration_days = duration_minutes / 1440.0 if duration_minutes > 0 else None
+
+    reason = f'可疑访问拦截：{attack_type} 攻击'
+    if matched:
+        reason += f'（命中：{matched}）'
+
+    success, message = create_ban(
+        ip_address=ip,
+        reason=reason,
+        banned_by=SYSTEM_BANNER_ID,
+        duration_days=duration_days,
+    )
+    if success:
+        log('Security', '可疑访问自动封禁生效', ip=ip, attack=attack_type,
             duration_minutes=duration_minutes or '永久')
     return success, message

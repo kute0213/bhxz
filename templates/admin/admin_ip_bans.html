@@ -14,8 +14,8 @@
             </a>
         </div>
 
-        <!-- 自动封禁与白名单状态 -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+        <!-- 自动封禁 / 可疑访问拦截 / 白名单状态 -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
             <div class="pixel-card rounded-xl p-6">
                 <div class="flex items-center justify-between mb-2">
                     <h2 class="text-lg font-bold">自动 IP 封禁</h2>
@@ -26,6 +26,21 @@
                     {% endif %}
                 </div>
                 <p class="text-sm text-cream/60 mb-3">触发限流的可疑操作（登录/注册/找回密码/邮箱验证码）将自动封禁来源 IP，封禁时长 {{ auto_ban_duration_minutes }} 分钟，到期自动解除。</p>
+                <a href="{{ url_for('admin.admin_settings_page') }}" class="btn-secondary px-4 py-2 rounded-lg text-sm inline-flex items-center gap-2">
+                    <i data-lucide="settings" class="w-4 h-4"></i>
+                    前往系统设置调整
+                </a>
+            </div>
+            <div class="pixel-card rounded-xl p-6">
+                <div class="flex items-center justify-between mb-2">
+                    <h2 class="text-lg font-bold">可疑访问拦截</h2>
+                    {% if suspicious_block_enabled %}
+                    <span class="text-xs px-2 py-0.5 rounded-full bg-green-500/10 text-green-700 border border-green-500/20">已开启</span>
+                    {% else %}
+                    <span class="text-xs px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/20">已关闭</span>
+                    {% endif %}
+                </div>
+                <p class="text-sm text-cream/60 mb-3">命中攻击特征（SQL 注入/XSS/路径穿越/命令注入/敏感文件与扫描器探测/恶意扫描 UA）的请求将被拦截并自动封禁来源 IP，封禁时长 {{ suspicious_block_duration_minutes }} 分钟，到期自动解除。</p>
                 <a href="{{ url_for('admin.admin_settings_page') }}" class="btn-secondary px-4 py-2 rounded-lg text-sm inline-flex items-center gap-2">
                     <i data-lucide="settings" class="w-4 h-4"></i>
                     前往系统设置调整

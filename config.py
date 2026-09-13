@@ -122,6 +122,24 @@ AUTO_BAN_EMAIL_ENABLED = True
 AUTO_BAN_FORGOT_PASSWORD_ENABLED = True
 
 # ---------------------------------------------------------------------------
+# 可疑访问拦截配置
+# ---------------------------------------------------------------------------
+
+# 可疑访问拦截总开关：开启后，命中攻击特征（SQL 注入/XSS/路径穿越/命令注入/敏感文件与扫描器探测/恶意 UA）的请求将被拦截并自动封禁来源 IP
+SUSPICIOUS_BLOCK_ENABLED = os.environ.get('SUSPICIOUS_BLOCK_ENABLED', '1').lower() in ('1', 'true', 'yes', 'on')
+
+# 可疑访问封禁时长（分钟），0 表示永久封禁；可在管理后台 → 系统设置中热更新
+SUSPICIOUS_BLOCK_DURATION_MINUTES = int(os.environ.get('SUSPICIOUS_BLOCK_DURATION_MINUTES', '60'))
+
+# 各攻击类型拦截子开关（与 SETTINGS_REGISTRY 中同名设置对应）
+SUSPICIOUS_BLOCK_SQLI_ENABLED = True
+SUSPICIOUS_BLOCK_XSS_ENABLED = True
+SUSPICIOUS_BLOCK_PATH_TRAVERSAL_ENABLED = True
+SUSPICIOUS_BLOCK_COMMAND_INJECTION_ENABLED = True
+SUSPICIOUS_BLOCK_SENSITIVE_PROBE_ENABLED = True
+SUSPICIOUS_BLOCK_MALICIOUS_UA_ENABLED = True
+
+# ---------------------------------------------------------------------------
 # 邮件 SMTP 配置
 # ---------------------------------------------------------------------------
 
@@ -230,6 +248,16 @@ SETTINGS_REGISTRY = [
     ('AUTO_BAN_REGISTER_ENABLED', True, 'bool', '注册异常自动封禁', '注册请求过于频繁时自动封禁该 IP', 'IP 封禁'),
     ('AUTO_BAN_EMAIL_ENABLED', True, 'bool', '邮箱验证码异常自动封禁', '邮箱验证码发送过于频繁时自动封禁该 IP', 'IP 封禁'),
     ('AUTO_BAN_FORGOT_PASSWORD_ENABLED', True, 'bool', '找回密码异常自动封禁', '找回密码请求过于频繁时自动封禁该 IP', 'IP 封禁'),
+
+    # 可疑访问拦截（命中攻击特征自动封禁 IP，白名单见 config.py 的 IP_BAN_WHITELIST）
+    ('SUSPICIOUS_BLOCK_ENABLED', True, 'bool', '可疑访问拦截（总开关）', '开启后，命中攻击特征（SQL 注入/XSS/路径穿越/命令注入/敏感文件与扫描器探测/恶意扫描 UA）的请求将被拦截并自动封禁来源 IP；封禁白名单 IP 不受影响', '可疑访问拦截'),
+    ('SUSPICIOUS_BLOCK_DURATION_MINUTES', 60, 'int', '可疑访问封禁时长（分钟）', '拦截可疑访问后自动封禁的持续时长，到期自动解除；0 表示永久封禁', '可疑访问拦截'),
+    ('SUSPICIOUS_BLOCK_SQLI_ENABLED', True, 'bool', 'SQL 注入拦截', '命中 SQL 注入特征（UNION SELECT、布尔/时间盲注、系统表探测、注释符等）时拦截并自动封禁', '可疑访问拦截'),
+    ('SUSPICIOUS_BLOCK_XSS_ENABLED', True, 'bool', 'XSS 跨站脚本拦截', '命中 XSS 特征（<script>、javascript:、事件属性、JS 敏感函数等）时拦截并自动封禁', '可疑访问拦截'),
+    ('SUSPICIOUS_BLOCK_PATH_TRAVERSAL_ENABLED', True, 'bool', '路径穿越拦截', '命中路径穿越特征（../、%2e%2e、空字节、绝对路径探测等）时拦截并自动封禁', '可疑访问拦截'),
+    ('SUSPICIOUS_BLOCK_COMMAND_INJECTION_ENABLED', True, 'bool', '命令注入拦截', '命中命令注入特征（管道/分号+系统命令、反引号、$() 命令替换等）时拦截并自动封禁', '可疑访问拦截'),
+    ('SUSPICIOUS_BLOCK_SENSITIVE_PROBE_ENABLED', True, 'bool', '敏感文件/漏洞端点探测拦截', '命中敏感文件（.env、.git、phpinfo 等）或常见漏洞端点（phpMyAdmin、wp-admin 等）探测时拦截并自动封禁', '可疑访问拦截'),
+    ('SUSPICIOUS_BLOCK_MALICIOUS_UA_ENABLED', True, 'bool', '恶意扫描 UA 拦截', 'User-Agent 命中已知安全扫描器（sqlmap、nikto、nuclei 等）时拦截并自动封禁', '可疑访问拦截'),
 
     # 邮件 SMTP
     ('EMAIL_ENABLED', False, 'bool', '启用邮件功能', '总开关，关闭后所有邮件通知和邮箱验证码均不发送', '邮件配置'),

@@ -165,6 +165,8 @@ python scripts/build/package.py
 
 * IP 封禁管理（封禁 IP/IP 段，支持临时/永久封禁与原因备注，全站 403 拦截，后台一键解封；自动识别可疑操作限流并自动封禁，各操作可独立开关、时长可配，白名单 IP 不受影响）
 
+* 可疑访问拦截（识别 SQL 注入 / XSS / 路径穿越 / 命令注入 / 敏感文件与漏洞端点探测 / 恶意扫描 UA 等攻击特征，命中即拦截并自动封禁来源 IP，总开关与各攻击类型子开关独立配置、封禁时长可配，白名单 IP 不受影响）
+
 ### 服务器指南
 
 * 卡片式列表页，支持置顶与按标题自动排序
@@ -285,6 +287,8 @@ python scripts/build/package.py
 
 * **IP 封禁**：自动封禁总开关、封禁时长（分钟，0 为永久）、登录/注册/找回密码/邮箱验证码异常各自独立开关
 
+* **可疑访问拦截**：总开关、封禁时长（分钟，0 为永久）、SQL 注入 / XSS / 路径穿越 / 命令注入 / 敏感文件与漏洞端点探测 / 恶意扫描 UA 各攻击类型独立开关
+
 * **讨论区配置**：回复实时刷新间隔、每页加载数量
 
 * **外部链接**：卫星地图地址、QQ 群链接
@@ -328,6 +332,14 @@ python scripts/build/package.py
 | `IP_BAN_WHITELIST`            | 封禁白名单（逗号分隔），白名单 IP 不会被封禁                    | `112.82.136.172`                            |
 | `AUTO_BAN_ENABLED`            | 自动 IP 封禁总开关                                 | `1`（开启）                                    |
 | `AUTO_BAN_DURATION_MINUTES`   | 自动封禁时长（分钟，0 为永久封禁）                          | `30`                                        |
+| `SUSPICIOUS_BLOCK_ENABLED`    | 可疑访问拦截总开关（命中攻击特征自动封禁 IP）                    | `1`（开启）                                    |
+| `SUSPICIOUS_BLOCK_DURATION_MINUTES` | 可疑访问封禁时长（分钟，0 为永久封禁）                    | `60`                                        |
+| `SUSPICIOUS_BLOCK_SQLI_ENABLED` | SQL 注入拦截子开关                                       | `True`                                      |
+| `SUSPICIOUS_BLOCK_XSS_ENABLED` | XSS 跨站脚本拦截子开关                                    | `True`                                      |
+| `SUSPICIOUS_BLOCK_PATH_TRAVERSAL_ENABLED` | 路径穿越拦截子开关                           | `True`                                      |
+| `SUSPICIOUS_BLOCK_COMMAND_INJECTION_ENABLED` | 命令注入拦截子开关                      | `True`                                      |
+| `SUSPICIOUS_BLOCK_SENSITIVE_PROBE_ENABLED` | 敏感文件/漏洞端点探测拦截子开关               | `True`                                      |
+| `SUSPICIOUS_BLOCK_MALICIOUS_UA_ENABLED` | 恶意扫描 UA 拦截子开关                        | `True`                                      |
 
 ### 环境变量
 
@@ -337,6 +349,8 @@ python scripts/build/package.py
 | `IP_BAN_WHITELIST` | 封禁白名单（逗号分隔） | `112.82.136.172` |
 | `AUTO_BAN_ENABLED` | 自动 IP 封禁总开关 | `1`（开启） |
 | `AUTO_BAN_DURATION_MINUTES` | 自动封禁时长（分钟，0 为永久） | `30` |
+| `SUSPICIOUS_BLOCK_ENABLED` | 可疑访问拦截总开关 | `1`（开启） |
+| `SUSPICIOUS_BLOCK_DURATION_MINUTES` | 可疑访问封禁时长（分钟，0 为永久） | `60` |
 
 ### SSL 证书
 
@@ -703,6 +717,8 @@ workspace/
 详见 [docs/CHANGELOG.md](docs/CHANGELOG.md)。
 
 ## 最近更新
+
+* **新增可疑访问拦截功能**：新增攻击特征扫描器（`services/security_scanner.py`），在请求进入业务处理前识别 SQL 注入 / XSS / 路径穿越 / 命令注入 / 敏感文件与漏洞端点探测 / 恶意扫描 UA 等攻击特征，命中即拦截请求（403）并自动封禁来源 IP（复用 IP 封禁白名单与缓存，原因标注攻击类型与命中片段，操作人显示「系统」）；管理后台 → 系统设置新增「可疑访问拦截」分类（总开关、封禁时长、各攻击类型独立子开关，热更新即时生效），IP 封禁管理页同步展示可疑访问拦截状态；静态资源与用户生成内容（Markdown 代码块等）不会误判，URL 层全量扫描 + 请求体仅扫描高置信度特征（文本类且 ≤1MB）；新增扫描器与自动封禁单元测试（96 项安全用例全部通过）。
 
 * **subprocess 编码统一 UTF-8（补全 Windows 10 场景）**：`services/process_utils.py` 的 `make_env()` 新增 `PYTHONUTF8=1`（强制 Python 子进程启用 UTF-8 模式），与既有 `PYTHONIOENCODING=utf-8` 一起从源头消除 Windows 10 下子进程 GBK 输出乱码 / `UnicodeDecodeError`；已覆盖 CPU 温度获取、ffmpeg/ffprobe 转码、数据库备份恢复、一键更新等全部子进程场景
 

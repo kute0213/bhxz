@@ -10,6 +10,8 @@ from config import (
     IP_BAN_WHITELIST,
     AUTO_BAN_ENABLED,
     AUTO_BAN_DURATION_MINUTES,
+    SUSPICIOUS_BLOCK_ENABLED,
+    SUSPICIOUS_BLOCK_DURATION_MINUTES,
     get_config_value,
 )
 from routes.admin import admin_bp
@@ -29,6 +31,10 @@ def admin_ip_bans():
         auto_ban_enabled=get_config_value('AUTO_BAN_ENABLED', AUTO_BAN_ENABLED),
         auto_ban_duration_minutes=get_config_value(
             'AUTO_BAN_DURATION_MINUTES', AUTO_BAN_DURATION_MINUTES),
+        suspicious_block_enabled=get_config_value(
+            'SUSPICIOUS_BLOCK_ENABLED', SUSPICIOUS_BLOCK_ENABLED),
+        suspicious_block_duration_minutes=get_config_value(
+            'SUSPICIOUS_BLOCK_DURATION_MINUTES', SUSPICIOUS_BLOCK_DURATION_MINUTES),
     )
 
 
