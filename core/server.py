@@ -47,6 +47,13 @@ def shutdown_application(signum=None):
         except Exception as exc:
             log('WARNING', 'App', f'HTTP 服务关闭异常: {exc}')
 
+    # 停止高性能防火墙（黑名单镜像同步 / DDoS 检测后台线程）
+    try:
+        from core.firewall import firewall
+        firewall.stop()
+    except Exception as exc:
+        log('WARNING', 'App', f'防火墙关闭异常: {exc}')
+
     BackupScheduler().stop()
     email_service.stop()
     sitemap_cache.stop()
@@ -109,12 +116,15 @@ def run_server(app, port=5000, app_root=None):
         log('WARNING', 'App', '回退到 Flask 内置服务器')
         protocol = 'HTTPS' if has_ssl else 'HTTP'
         log('INFO', 'App', f'使用 Flask 内置服务器（{protocol} 模式）')
+        from core.firewall import firewall
+        firewall.start()
         if has_ssl:
             try:
                 ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
                 ssl_context.load_cert_chain(cert_path, key_path)
-                app.run(host='0.0.0.0', port=port, ssl_context=ssl_context,
-                        threaded=True, debug=False)
+                from werkzeug.serving import run_simple
+                run_simple('0.0.0.0', port, firewall.wrap(app),
+                           threaded=True, ssl_context=ssl_context)
             except Exception as e:
                 log('WARNING', 'App', f'SSL 加载失败 ({e})，回退到 HTTP')
                 app.run(host='0.0.0.0', port=port, threaded=True, debug=False)
@@ -123,13 +133,17 @@ def run_server(app, port=5000, app_root=None):
         return
 
     log('INFO', 'App', '使用 Cheroot 服务器')
-    server = CherootServer(
+    from core.firewall import firewall, FirewallServer
+    server = FirewallServer(
         ('0.0.0.0', port),
-        app,
+        firewall.wrap(app),
         request_queue_size=100,
         numthreads=20,
     )
     _server = server
+    # 启动高性能防火墙（黑名单镜像同步 + DDoS 检测 + 黑名单连接强制关闭）
+    firewall.attach_server(server)
+    firewall.start()
 
     if has_ssl:
         log('INFO', 'App', f'HTTPS 模式运行 (端口 {port})')

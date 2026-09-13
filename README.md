@@ -76,6 +76,7 @@ python scripts/build/package.py
 │   ├── db/             # 数据库连接与 schema
 │   ├── auth.py         # 认证装饰器、密码哈希
 │   ├── middleware.py   # 请求中间件
+│   ├── firewall.py     # 高性能多线程防火墙（黑名单快速拦截 + DDoS 检测，运行于 WSGI 入口）
 │   ├── startup_checks.py # 启动服务器健康检查（数据库/文件/配置，自动修复）
 │   └── ...             # 模板上下文、服务器、CSRF、日志
 ├── services/     # 业务逻辑层（纯 Python，不依赖 Flask）
@@ -167,6 +168,8 @@ python scripts/build/package.py
 
 * 可疑访问拦截（识别 SQL 注入 / XSS / 路径穿越 / 命令注入 / 敏感文件与漏洞端点探测 / 恶意扫描 UA 等攻击特征，命中即拦截并自动封禁来源 IP，总开关与各攻击类型子开关独立配置、封禁时长可配，白名单 IP 不受影响）
 
+* DDoS 攻击防护（`core/firewall.py` 极高性能多线程防火墙）：按检测强度统计单位时间窗口内每个 IP 的请求数（低/中/高三档，检测窗口 10 秒），超阈值自动封禁来源 IP（首次限时封禁，时长可配；在违规记录时间窗口内屡教不改自动升级为永久封禁）；黑名单 IP 的请求在进入 Flask 前即被防火墙终结，已建立的连接由后台监控线程利用 Cheroot 连接特性强制关闭（客户端表现为连接被重置，而非收到业务页面）；检测强度、封禁时长、永久封禁触发次数等均可在线热更新，白名单 IP 不受影响
+
 ### 服务器指南
 
 * 卡片式列表页，支持置顶与按标题自动排序
@@ -223,7 +226,7 @@ python scripts/build/package.py
 
 ### 服务器性能监控
 
-* CPU 使用率/温度、内存占用、运行时间
+* CPU 使用率、内存占用、运行时间
 
 * 公开页面，无需登录即可查看
 
@@ -237,9 +240,9 @@ python scripts/build/package.py
 
 * 支持系统设置中配置 RCON 地址、端口、密码
 
-### 申请账号（互动分类）
+### 申请服务器账号（导航分类）
 
-* 导航栏「互动」分类提供「申请账号」入口（`/game-accounts/apply`），登录用户可申请注册 MC 游戏账号（需图形验证码）
+* 主导航栏「导航」分类提供「申请服务器账号」入口（`/game-accounts/apply`），登录用户可申请注册 MC 游戏账号（需图形验证码）
 
 * 提交后进入管理员审批队列，管理员在管理中心「账号注册申请管理」页批准/驳回申请、封禁恶意账号
 
@@ -288,6 +291,8 @@ python scripts/build/package.py
 * **IP 封禁**：自动封禁总开关、封禁时长（分钟，0 为永久）、登录/注册/找回密码/邮箱验证码异常各自独立开关
 
 * **可疑访问拦截**：总开关、封禁时长（分钟，0 为永久）、SQL 注入 / XSS / 路径穿越 / 命令注入 / 敏感文件与漏洞端点探测 / 恶意扫描 UA 各攻击类型独立开关
+
+* **DDoS 防护**：总开关、检测强度（low=宽松 300 次/10 秒 / medium=中等 150 次/10 秒 / high=严格 80 次/10 秒）、首次封禁时长（分钟，0 为直接永久封禁）、永久封禁触发次数（违规记录时间窗口内多次触发自动升级永久封禁）、违规记录时间窗口（小时）
 
 * **讨论区配置**：回复实时刷新间隔、每页加载数量
 
@@ -340,6 +345,11 @@ python scripts/build/package.py
 | `SUSPICIOUS_BLOCK_COMMAND_INJECTION_ENABLED` | 命令注入拦截子开关                      | `True`                                      |
 | `SUSPICIOUS_BLOCK_SENSITIVE_PROBE_ENABLED` | 敏感文件/漏洞端点探测拦截子开关               | `True`                                      |
 | `SUSPICIOUS_BLOCK_MALICIOUS_UA_ENABLED` | 恶意扫描 UA 拦截子开关                        | `True`                                      |
+| `DDOS_GUARD_ENABLED` | DDoS 防护总开关（超阈值自动封禁来源 IP） | `1`（开启） |
+| `DDOS_GUARD_INTENSITY` | DDoS 检测强度（low=宽松 300 次/10 秒 / medium=中等 150 次/10 秒 / high=严格 80 次/10 秒） | `medium` |
+| `DDOS_GUARD_BAN_MINUTES` | DDoS 首次封禁时长（分钟，0 为直接永久封禁） | `30` |
+| `DDOS_GUARD_PERMANENT_AFTER` | 违规记录时间窗口内多次触发达到该次数后永久封禁（屡教不改） | `3` |
+| `DDOS_GUARD_OFFENSE_WINDOW_HOURS` | 违规记录时间窗口（小时），超过后违规次数重新累计 | `24` |
 | `RESTART_COMMAND`          | 一键更新完成后重启服务器的自定义启动指令（如 `uv run app.py` / `python app.py --host 0.0.0.0`，留空自动用「当前解释器 + app.py + 原启动参数」） | 空 |
 
 ### 环境变量
@@ -352,6 +362,11 @@ python scripts/build/package.py
 | `AUTO_BAN_DURATION_MINUTES` | 自动封禁时长（分钟，0 为永久） | `30` |
 | `SUSPICIOUS_BLOCK_ENABLED` | 可疑访问拦截总开关 | `1`（开启） |
 | `SUSPICIOUS_BLOCK_DURATION_MINUTES` | 可疑访问封禁时长（分钟，0 为永久） | `60` |
+| `DDOS_GUARD_ENABLED` | DDoS 防护总开关 | `1`（开启） |
+| `DDOS_GUARD_INTENSITY` | DDoS 检测强度（low/medium/high） | `medium` |
+| `DDOS_GUARD_BAN_MINUTES` | DDoS 首次封禁时长（分钟，0 为永久） | `30` |
+| `DDOS_GUARD_PERMANENT_AFTER` | 永久封禁触发次数 | `3` |
+| `DDOS_GUARD_OFFENSE_WINDOW_HOURS` | 违规记录时间窗口（小时） | `24` |
 | `RESTART_COMMAND` | 一键更新后重启服务器的自定义启动指令 | 空（自动构建） |
 
 ### SSL 证书
@@ -710,6 +725,8 @@ workspace/
 
    * `Strict-Transport-Security`（HSTS）：**仅 HTTPS 请求下发**，避免 HTTP 部署被强制升级而无法访问
 
+9. **极高性能多线程防火墙**（`core/firewall.py`，运行于 WSGI 入口、先于一切 Flask 逻辑）：黑名单 IP 的请求不参与任何业务处理，直接返回最小 403 响应并标记 `Connection: close`；后台监控线程周期性从数据库同步黑名单镜像、利用 Cheroot 连接特性（`linger=False` + `close()`）强制关闭黑名单 IP 的现存连接（含 keep-alive 空闲与处理中的请求），客户端表现为连接被重置；配套 DDoS 攻击检测按强度自动封禁（详见上文功能特性）。
+
 ## 开发注意事项
 
 编写新代码前必查的**分层规范、易错点清单与测试要求**，详见 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)。
@@ -719,6 +736,12 @@ workspace/
 详见 [docs/CHANGELOG.md](docs/CHANGELOG.md)。
 
 ## 最近更新
+
+* **新增 DDoS 攻击防护与极高性能多线程防火墙**：`core/firewall.py` 在 WSGI 入口（先于一切 Flask 逻辑）拦截黑名单 IP，命中即返回最小 403 并利用 Cheroot 连接特性（`linger=False` + `close()`）强制关闭其现存连接（含 keep-alive 空闲与处理中的请求），客户端表现为连接被重置而非收到页面；后台监控线程每 0.5 秒从数据库同步黑名单镜像并扫描关闭黑名单连接；内置 DDoS 检测按强度（low=300/medium=150/high=80 次每 10 秒）统计单位窗口内请求数，超阈值自动封禁来源 IP（首次限时封禁、时长可配，违规记录时间窗口内屡教不改自动升级永久封禁），检测强度/封禁时长/触发次数等配置在线热更新；管理后台 → 系统设置新增「DDoS 防护」分类，白名单 IP 不受影响。
+
+* **移除 CPU 温度检测功能**：`routes/api/public.py` 删除跨平台温度采集（WMI/PowerShell/sysctl/psutil 传感器）与 `/api/server-status` 的 `cpu_temp` 字段，`templates/server_status.html` 移除 CPU 温度展示板块与刷新逻辑。
+
+* **「申请账号」调整**：从导航栏「互动」分类移至「导航」分类，并更名为「申请服务器账号」（桌面端主导航与移动端侧栏同步调整）。
 
 * **修复 /admin/settings 500 错误**：系统设置模板 `admin_settings.html` 因缺少 `{% endblock %}` 闭合标签导致 Jinja2 `TemplateSyntaxError`，已基于完整版本重写，恢复设置项动态渲染、自动保存、恢复默认与确认弹窗等功能，页面正常访问。
 

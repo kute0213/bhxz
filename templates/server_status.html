@@ -57,30 +57,6 @@
             <div class="mt-3 text-xs text-cream/50 text-center" id="status-memory-detail"></div>
         </div>
 
-        <!-- ====== CPU 温度 ====== -->
-        <div class="pixel-card rounded-xl p-6 mb-5">
-            <div class="flex items-center justify-between mb-4">
-                <div class="flex items-center gap-3">
-                    <div class="w-10 h-10 bg-orange-400/15 rounded-xl flex items-center justify-center">
-                        <i data-lucide="thermometer" class="w-5 h-5 text-orange-400"></i>
-                    </div>
-                    <div>
-                        <div class="text-base font-bold text-cream/90">CPU 温度</div>
-                        <div class="text-xs text-cream/50">处理器温度</div>
-                    </div>
-                </div>
-                <span class="text-2xl font-bold text-orange-400" id="status-cpu-temp">-</span>
-            </div>
-            <div class="w-full h-3 bg-forest-900/60 rounded-full overflow-hidden">
-                <div class="h-full rounded-full transition-all duration-700 ease-out" id="temp-bar" style="width: 0%; background: linear-gradient(90deg, #34d399, #fbbf24, #ef4444);"></div>
-            </div>
-            <div class="flex justify-between mt-2 text-xs text-cream/40">
-                <span>0°C</span>
-                <span>50°C</span>
-                <span>100°C</span>
-            </div>
-        </div>
-
         <!-- ====== 在线玩家列表（含在线/最大/服务器状态） ====== -->
         <div class="pixel-card rounded-xl p-6">
             <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
@@ -136,18 +112,6 @@
                     document.getElementById('mem-bar').style.width = Math.min(d.memory_percent, 100) + '%';
                     document.getElementById('status-memory-detail').textContent =
                         '已用 ' + formatBytes(d.memory_used) + ' / 总计 ' + formatBytes(d.memory_total);
-                }
-
-                // CPU 温度
-                var tempEl = document.getElementById('status-cpu-temp');
-                var tempBar = document.getElementById('temp-bar');
-                if (d.cpu_temp !== null && d.cpu_temp !== undefined) {
-                    var temp = typeof d.cpu_temp === 'number' ? d.cpu_temp : parseFloat(d.cpu_temp);
-                    tempEl.textContent = temp.toFixed(1) + '°C';
-                    tempBar.style.width = Math.min(temp / 1.2, 100) + '%';
-                } else {
-                    tempEl.textContent = 'N/A';
-                    tempBar.style.width = '0%';
                 }
 
                 // 玩家概览

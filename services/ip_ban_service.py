@@ -114,6 +114,21 @@ def is_whitelisted(ip_address):
     return ip_address.strip() in get_whitelist()
 
 
+def get_banned_ips():
+    """获取全部有效封禁 IP（内存缓存，供防火墙同步黑名单镜像）。
+
+    Returns:
+        dict: {ip_address: reason}
+    """
+    with _ban_cache_lock:
+        if time.time() - _ban_cache['ts'] > CACHE_TTL:
+            try:
+                _refresh_cache_locked()
+            except Exception as exc:
+                log('WARNING', 'IpBan', f'刷新封禁缓存失败: {exc}')
+        return dict(_ban_cache['banned'])
+
+
 def is_banned(ip_address):
     """检查 IP 是否被封禁。
 

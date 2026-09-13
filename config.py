@@ -140,6 +140,28 @@ SUSPICIOUS_BLOCK_SENSITIVE_PROBE_ENABLED = True
 SUSPICIOUS_BLOCK_MALICIOUS_UA_ENABLED = True
 
 # ---------------------------------------------------------------------------
+# DDoS 攻击防护配置（core/firewall.py 高性能防火墙）
+# ---------------------------------------------------------------------------
+
+# DDoS 防护总开关：开启后按检测强度统计单位窗口内请求数，超阈值自动封禁 IP
+DDOS_GUARD_ENABLED = os.environ.get('DDOS_GUARD_ENABLED', '1').lower() in ('1', 'true', 'yes', 'on')
+
+# 检测强度（low / medium / high）：low=300 次/10秒，medium=150 次/10秒，high=80 次/10秒
+DDOS_GUARD_INTENSITY = os.environ.get('DDOS_GUARD_INTENSITY', 'medium')
+
+# 检测窗口（秒），与强度预设共同决定封禁触发条件
+DDOS_GUARD_WINDOW_SECONDS = 10
+
+# 首次检测到 DDoS 的限时封禁时长（分钟），0 表示直接永久封禁
+DDOS_GUARD_BAN_MINUTES = int(os.environ.get('DDOS_GUARD_BAN_MINUTES', '30'))
+
+# 屡教不改：在 DDOS_GUARD_OFFENSE_WINDOW_HOURS 小时内触发达到该次数即永久封禁
+DDOS_GUARD_PERMANENT_AFTER = int(os.environ.get('DDOS_GUARD_PERMANENT_AFTER', '3'))
+
+# 违规记录的有效时间窗口（小时），超过后重新累计
+DDOS_GUARD_OFFENSE_WINDOW_HOURS = int(os.environ.get('DDOS_GUARD_OFFENSE_WINDOW_HOURS', '24'))
+
+# ---------------------------------------------------------------------------
 # 邮件 SMTP 配置
 # ---------------------------------------------------------------------------
 
@@ -269,6 +291,13 @@ SETTINGS_REGISTRY = [
     ('SUSPICIOUS_BLOCK_COMMAND_INJECTION_ENABLED', True, 'bool', '命令注入拦截', '命中命令注入特征（管道/分号+系统命令、反引号、$() 命令替换等）时拦截并自动封禁', '可疑访问拦截'),
     ('SUSPICIOUS_BLOCK_SENSITIVE_PROBE_ENABLED', True, 'bool', '敏感文件/漏洞端点探测拦截', '命中敏感文件（.env、.git、phpinfo 等）或常见漏洞端点（phpMyAdmin、wp-admin 等）探测时拦截并自动封禁', '可疑访问拦截'),
     ('SUSPICIOUS_BLOCK_MALICIOUS_UA_ENABLED', True, 'bool', '恶意扫描 UA 拦截', 'User-Agent 命中已知安全扫描器（sqlmap、nikto、nuclei 等）时拦截并自动封禁', '可疑访问拦截'),
+
+    # DDoS 防护（core/firewall.py 高性能防火墙，WSGI 入口先于一切逻辑拦截）
+    ('DDOS_GUARD_ENABLED', True, 'bool', 'DDoS 防护（总开关）', '开启后按检测强度统计单位时间窗口内请求数，超阈值自动封禁来源 IP（限时封禁，屡教不改升级永久封禁）；封禁白名单 IP 不受影响', 'DDoS 防护'),
+    ('DDOS_GUARD_INTENSITY', 'medium', 'select', '检测强度', '检测窗口为 10 秒，强度越高越严格。可选：low（宽松，300 次/10秒）, medium（中等，150 次/10秒）, high（严格，80 次/10秒）', 'DDoS 防护'),
+    ('DDOS_GUARD_BAN_MINUTES', 30, 'int', '首次封禁时长（分钟）', '首次检测到 DDoS 行为的限时封禁时长，到期自动解除；0 表示直接永久封禁', 'DDoS 防护'),
+    ('DDOS_GUARD_PERMANENT_AFTER', 3, 'int', '永久封禁触发次数', '在违规记录时间窗口内多次触发 DDoS 达到该次数后，自动升级为永久封禁（屡教不改）', 'DDoS 防护'),
+    ('DDOS_GUARD_OFFENSE_WINDOW_HOURS', 24, 'int', '违规记录时间窗口（小时）', '超过该时间没有再次触发 DDoS，违规次数重新累计', 'DDoS 防护'),
 
     # 邮件 SMTP
     ('EMAIL_ENABLED', False, 'bool', '启用邮件功能', '总开关，关闭后所有邮件通知和邮箱验证码均不发送', '邮件配置'),

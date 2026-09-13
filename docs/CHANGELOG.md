@@ -4,6 +4,18 @@
 
 ### 新增
 
+* **DDoS 攻击防护（极高性能多线程防火墙）**：新增 `core/firewall.py` —— 运行在 WSGI 入口（先于一切 Flask 逻辑）的高性能多线程防火墙。① **黑名单快速拦截**：进程内维护黑名单内存镜像（O(1) 集合查询，每 0.5 秒从数据库同步），命中黑名单的请求不进入路由/模板/数据库/静态文件等任何业务处理，直接返回最小 403 响应并标记 `Connection: close`；后台监控线程同时利用 Cheroot 连接特性（`linger=False` + `close()`）强制关闭黑名单 IP 的现存连接（含 keep-alive 空闲与处理中的请求，覆盖连接管理器 selector 与 WSGI 门禁登记两路来源），客户端表现为连接被重置而非收到页面。② **DDoS 检测**：按检测强度统计单位检测窗口（10 秒）内每个 IP 的请求数（low=宽松 300 次 / medium=中等 150 次 / high=严格 80 次），超阈值立即自动封禁来源 IP（复用 `ip_ban_service.create_ban`，操作人显示「系统」，白名单 IP 跳过）；首次限时封禁（时长可配，默认 30 分钟，0 为直接永久封禁），在违规记录时间窗口（默认 24 小时）内多次触发（默认 3 次）自动升级为**永久封禁**（屡教不改）；静态资源（`/static/`）不计入计数避免误判，计数器与违规记录由后台线程定期清理。③ **配置热更新**：`config.py` 新增 `DDOS_GUARD_ENABLED` / `DDOS_GUARD_INTENSITY` / `DDOS_GUARD_BAN_MINUTES` / `DDOS_GUARD_PERMANENT_AFTER` / `DDOS_GUARD_OFFENSE_WINDOW_HOURS`，管理后台 → 系统设置新增「DDoS 防护」分类，检测强度/封禁时长/触发次数等修改 5 秒内生效，无需重启。④ `core/server.py` 使用 `FirewallServer`（自定义网关向 environ 注入 `cheroot.connection`）集成防火墙，服务器启动/关闭时自动启停防火墙后台线程。
+
+### 移除
+
+* **移除 CPU 温度检测功能**：`routes/api/public.py` 删除跨平台温度采集（psutil 传感器 / Windows WMI / PowerShell / macOS sysctl 与全部子进程调用）与 `/api/server-status` 响应中的 `cpu_temp` 字段；`templates/server_status.html` 删除 CPU 温度展示板块与对应 JavaScript 刷新逻辑。
+
+### 调整
+
+* **「申请账号」入口调整**：从导航栏「互动」分类移至「导航」分类，并更名为「申请服务器账号」（桌面端主导航下拉与移动端侧栏同步调整，`templates/base.html`）。
+
+### 修复
+
 * **IP 封禁管理页内联编辑配置**：IP 封禁管理页面（`/admin/ip-bans`）新增自动封禁开关与时长、可疑访问拦截开关与时长、封禁白名单的内联编辑与保存（新接口 `POST /admin/ip-bans/settings`，仅接受白名单/自动封禁/可疑拦截相关配置键）；`services/ip_ban_service.py` 新增 `get_whitelist()` 优先读取数据库配置实现热更新，`is_whitelisted()` 改为实时读取，白名单修改立即生效，无需跳转系统设置。
 
 * **自定义启动指令（彻底修复自动更新重启失败）**：`config.py` 新增 `RESTART_COMMAND` 配置（默认空，支持环境变量 `RESTART_COMMAND`，管理后台 → 系统设置 / 一键更新配置页均可在线编辑）；`services/updater/core.py` 的 `_get_restart_cmd()` 优先使用自定义指令（`shlex` 解析参数，裸 `python`/`python3` 自动替换为当前真实解释器保证运行环境一致），留空回退自动构建「当前解释器 + app.py + 原启动参数」，覆盖 `python` / venv / `uv run` 任意启动方式。
