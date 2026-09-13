@@ -109,6 +109,22 @@ def register_hooks(app, try_serve_public):
     """
 
     @app.before_request
+    def ip_ban_check_hook():
+        """IP 封禁检查：被封禁 IP 的所有请求一律返回 403。
+
+        注册在所有其他钩子之前，确保被封禁的 IP 不做任何后续处理
+        （不校验 CSRF、不服务公共文件、不执行路由逻辑）。
+        """
+        from services.ip_ban_service import is_banned
+        ip = get_client_ip()
+        banned, reason = is_banned(ip)
+        if banned:
+            log('Security', '被封禁 IP 的请求被拒绝',
+                ip=ip, reason=reason, path=request.path, method=request.method)
+            return '403 Forbidden: 该 IP 已被封禁，如有疑问请联系管理员。', 403
+        return None
+
+    @app.before_request
     def csrf_check_hook():
         """全站 CSRF 防护（除 /api/* 外所有 POST/PUT/DELETE/PATCH 请求）。"""
         from core.csrf import csrf_protect

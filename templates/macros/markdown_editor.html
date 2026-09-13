@@ -28,9 +28,12 @@
     .markdown-editor { grid-template-columns: 1fr; grid-template-rows: auto; max-height: none; }
 }
 .editor-pane, .preview-pane {
-    background: rgba(10, 20, 12, 0.6);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.6);
+    backdrop-filter: blur(22px) saturate(120%);
+    -webkit-backdrop-filter: blur(22px) saturate(120%);
+    border: 1px solid var(--border-card);
     border-radius: 16px;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.6), 0 8px 24px rgba(15,23,42,0.06);
     overflow: hidden;
     display: flex;
     flex-direction: column;
@@ -43,7 +46,7 @@
     background: transparent;
     border: none;
     padding: 1rem;
-    color: #e8e4d9;
+    color: var(--text-primary);
     font-family: 'Fira Code', 'JetBrains Mono', monospace;
     font-size: 0.875rem;
     line-height: 1.7;
@@ -52,10 +55,10 @@
 }
 .preview-pane .pane-header, .editor-pane .pane-header {
     padding: 0.5rem 1rem;
-    background: rgba(255, 255, 255, 0.03);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.5);
+    border-bottom: 1px solid var(--border-subtle);
     font-size: 0.75rem;
-    color: rgba(232, 228, 217, 0.5);
+    color: var(--text-muted);
     display: flex;
     align-items: center;
     gap: 0.5rem;
@@ -71,8 +74,8 @@
     display: flex;
     gap: 0.25rem;
     padding: 0.25rem;
-    background: rgba(255, 255, 255, 0.02);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.5);
+    border-bottom: 1px solid var(--border-subtle);
     flex-shrink: 0;
     flex-wrap: wrap;
 }
@@ -80,29 +83,29 @@
     padding: 0.25rem 0.5rem;
     border-radius: 0.375rem;
     font-size: 0.75rem;
-    color: rgba(232, 228, 217, 0.6);
+    color: var(--text-secondary);
     background: transparent;
     border: none;
     cursor: pointer;
 }
-.editor-toolbar button:hover { background: rgba(255, 255, 255, 0.06); color: #e8e4d9; }
-.prose-docs h1 { font-size: 1.75rem; font-weight: 700; color: #f5e6c8; margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid rgba(245, 230, 200, 0.1); }
-.prose-docs h2 { font-size: 1.4rem; font-weight: 600; color: #f5e6c8; margin-top: 2rem; margin-bottom: 0.75rem; }
-.prose-docs h3 { font-size: 1.15rem; font-weight: 600; color: #d4b878; margin-top: 1.5rem; margin-bottom: 0.5rem; }
-.prose-docs h4 { font-size: 1rem; font-weight: 600; color: #d4b878; margin-top: 1rem; margin-bottom: 0.5rem; }
-.prose-docs p { color: rgba(245, 230, 200, 0.8); line-height: 1.8; margin-bottom: 1rem; }
-.prose-docs ul, .prose-docs ol { color: rgba(245, 230, 200, 0.8); line-height: 1.8; margin-bottom: 1rem; padding-left: 1.5rem; }
+.editor-toolbar button:hover { background: rgba(2, 132, 199, 0.08); color: var(--accent-blue); }
+.prose-docs h1 { font-size: 1.75rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border-card); }
+.prose-docs h2 { font-size: 1.4rem; font-weight: 600; color: var(--text-primary); margin-top: 2rem; margin-bottom: 0.75rem; }
+.prose-docs h3 { font-size: 1.15rem; font-weight: 600; color: var(--accent-indigo); margin-top: 1.5rem; margin-bottom: 0.5rem; }
+.prose-docs h4 { font-size: 1rem; font-weight: 600; color: var(--accent-blue); margin-top: 1rem; margin-bottom: 0.5rem; }
+.prose-docs p { color: var(--text-secondary); line-height: 1.8; margin-bottom: 1rem; }
+.prose-docs ul, .prose-docs ol { color: var(--text-secondary); line-height: 1.8; margin-bottom: 1rem; padding-left: 1.5rem; }
 .prose-docs li { margin-bottom: 0.25rem; }
-.prose-docs code { background: rgba(0, 0, 0, 0.3); padding: 0.15rem 0.4rem; border-radius: 0.25rem; font-size: 0.875rem; color: #d4b878; font-family: monospace; }
-.prose-docs pre { background: rgba(0, 0, 0, 0.4); border: 1px solid rgba(245, 230, 200, 0.1); border-radius: 0.5rem; padding: 1rem; overflow-x: auto; margin-bottom: 1rem; }
-.prose-docs pre code { background: none; padding: 0; color: #a8d8a8; font-size: 0.85rem; line-height: 1.6; }
+.prose-docs code { background: rgba(2, 132, 199, 0.1); padding: 0.15rem 0.4rem; border-radius: 0.25rem; font-size: 0.875rem; color: #0369a1; font-family: monospace; }
+.prose-docs pre { background: #101826; border: 1px solid rgba(15,23,42,0.16); border-radius: 0.5rem; padding: 1rem; overflow-x: auto; margin-bottom: 1rem; }
+.prose-docs pre code { background: none; padding: 0; color: #a5c8e8; font-size: 0.85rem; line-height: 1.6; }
 .prose-docs table { width: 100%; border-collapse: collapse; margin-bottom: 1rem; }
-.prose-docs th { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 2px solid rgba(245, 230, 200, 0.15); color: #f5e6c8; font-weight: 600; font-size: 0.9rem; }
-.prose-docs td { padding: 0.5rem 0.75rem; border-bottom: 1px solid rgba(245, 230, 200, 0.08); color: rgba(245, 230, 200, 0.7); font-size: 0.9rem; }
-.prose-docs blockquote { border-left: 3px solid rgba(212, 184, 120, 0.5); padding-left: 1rem; margin: 1rem 0; color: rgba(245, 230, 200, 0.6); }
-.prose-docs a { color: #d4b878; text-decoration: underline; }
-.prose-docs hr { border: none; border-top: 1px solid rgba(245, 230, 200, 0.1); margin: 2rem 0; }
-.prose-docs strong { color: #f5e6c8; font-weight: 600; }
+.prose-docs th { text-align: left; padding: 0.5rem 0.75rem; border-bottom: 2px solid var(--border-card); color: var(--text-primary); font-weight: 600; font-size: 0.9rem; }
+.prose-docs td { padding: 0.5rem 0.75rem; border-bottom: 1px solid var(--border-card); color: var(--text-secondary); font-size: 0.9rem; }
+.prose-docs blockquote { border-left: 3px solid rgba(96, 165, 250, 0.4); padding-left: 1rem; margin: 1rem 0; color: var(--text-muted); }
+.prose-docs a { color: var(--accent-blue); text-decoration: underline; }
+.prose-docs hr { border: none; border-top: 1px solid var(--border-card); margin: 2rem 0; }
+.prose-docs strong { color: var(--text-primary); font-weight: 600; }
 </style>
 <div class="markdown-editor">
     <div class="editor-pane">

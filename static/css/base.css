@@ -325,26 +325,38 @@ body::after {
    按钮系统 - 白色页面黑色控件
    ============================================ */
 
-/* 主按钮 - 黑色控件（白字） */
+/* 主按钮 - 白色略微透明磨砂玻璃（深色文字） */
 .btn-primary {
-    background: linear-gradient(135deg, #101826, #22304a);
-    backdrop-filter: blur(20px) saturate(110%);
-    -webkit-backdrop-filter: blur(20px) saturate(110%);
-    border: 1px solid rgba(255,255,255,0.14);
+    background: linear-gradient(135deg, rgba(255,255,255,0.82), rgba(248,250,254,0.72));
+    backdrop-filter: blur(22px) saturate(120%);
+    -webkit-backdrop-filter: blur(22px) saturate(120%);
+    border: 1px solid rgba(2,132,199,0.28);
     border-radius: 12px !important;
-    color: #f8fafc;
+    color: #0f172a;
     font-weight: 600;
     transition: transform var(--transition-fast), background var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast);
-    box-shadow: 0 8px 24px rgba(15,23,42,0.18);
+    box-shadow: 0 8px 24px rgba(15,23,42,0.10), inset 0 1px 0 rgba(255,255,255,0.7);
     overflow: hidden;
 }
 .btn-primary:hover {
-    background: linear-gradient(135deg, #1c2b45, #2c3e60);
-    border-color: rgba(255,255,255,0.24);
+    background: linear-gradient(135deg, rgba(255,255,255,0.96), rgba(248,250,254,0.9));
+    border-color: rgba(2,132,199,0.48);
+    color: #0369a1;
     transform: translateY(-1px);
-    box-shadow: 0 12px 30px rgba(15,23,42,0.24), 0 0 22px rgba(2,132,199,0.12), inset 0 0.5px 0 rgba(255,255,255,0.22);
+    box-shadow: 0 12px 30px rgba(15,23,42,0.14), 0 0 22px rgba(2,132,199,0.12), inset 0 1px 0 rgba(255,255,255,0.85);
 }
 .btn-primary:active { transform: translateY(0); }
+/* 保留语义色按钮（红/绿）的强调色，底色同样使用白色磨砂玻璃 */
+.btn-primary.bg-red-500, .btn-primary.bg-red-500:hover {
+    background: linear-gradient(135deg, rgba(225,29,72,0.16), rgba(225,29,72,0.10));
+    border-color: rgba(225,29,72,0.4);
+    color: #be123c;
+}
+.btn-primary.bg-green-500, .btn-primary.bg-green-500:hover {
+    background: linear-gradient(135deg, rgba(34,197,94,0.16), rgba(34,197,94,0.10));
+    border-color: rgba(34,197,94,0.4);
+    color: #15803d;
+}
 
 /* 次按钮 - 白色磨砂玻璃 */
 .btn-secondary {
@@ -865,23 +877,37 @@ a:focus-visible, button:focus-visible { outline: 2px solid rgba(96,165,250,0.45)
 
 .pixel-card, .highlight-card, .intro-card { content-visibility: auto; contain-intrinsic-size: 0 300px; }
 
-.progress-track, .upload-progress-bar { width: 100%; height: 6px; background: rgba(15,23,42,0.08); border-radius: 999px; position: relative; overflow: hidden; }
+/* 进度条 - 白色磨砂玻璃轨道 + 浅蓝渐变填充 */
+.progress-track, .upload-progress-bar {
+    width: 100%; height: 6px;
+    background: rgba(255,255,255,0.68);
+    backdrop-filter: blur(8px) saturate(120%);
+    -webkit-backdrop-filter: blur(8px) saturate(120%);
+    border: 1px solid rgba(2,132,199,0.14);
+    border-radius: 999px; position: relative; overflow: hidden;
+    box-shadow: inset 0 1px 2px rgba(15,23,42,0.08);
+}
 .progress-track.xs { height: 3px; }
 .progress-track.sm { height: 4px; }
 .progress-track.md { height: 6px; }
 .progress-track.lg { height: 8px; }
 
-.progress-fill, .upload-progress-fill { height: 100%; width: 0%; border-radius: 999px; position: relative; transition: width 0.5s cubic-bezier(0.4,0,0.2,1); background: var(--accent-blue); }
-.progress-fill.gold, .upload-progress-fill.gold { background: var(--accent-blue); }
-.progress-fill.green, .upload-progress-fill.green { background: var(--accent-cyan); }
-.progress-fill.blue, .upload-progress-fill.blue { background: var(--accent-blue); }
-.progress-fill.purple, .upload-progress-fill.purple { background: var(--accent-indigo); }
-.progress-fill.red, .upload-progress-fill.red { background: var(--accent-rose); }
-.progress-fill.yellow, .upload-progress-fill.yellow { background: var(--accent-amber); }
+.progress-fill, .upload-progress-fill {
+    height: 100%; width: 0%; border-radius: 999px; position: relative;
+    transition: width 0.5s cubic-bezier(0.4,0,0.2,1);
+    background: linear-gradient(90deg, #7dd3fc, #38bdf8, #0ea5e9);
+    box-shadow: 0 0 10px rgba(56,189,248,0.5), inset 0 1px 0 rgba(255,255,255,0.5);
+}
+.progress-fill.gold, .upload-progress-fill.gold { background: linear-gradient(90deg, #7dd3fc, #38bdf8, #0ea5e9); box-shadow: 0 0 10px rgba(56,189,248,0.5); }
+.progress-fill.green, .upload-progress-fill.green { background: linear-gradient(90deg, #6ee7b7, #34d399, #10b981); box-shadow: 0 0 10px rgba(52,211,153,0.45); }
+.progress-fill.blue, .upload-progress-fill.blue { background: linear-gradient(90deg, #7dd3fc, #38bdf8, #0ea5e9); box-shadow: 0 0 10px rgba(56,189,248,0.5); }
+.progress-fill.purple, .upload-progress-fill.purple { background: linear-gradient(90deg, #c4b5fd, #a78bfa, #8b5cf6); box-shadow: 0 0 10px rgba(139,92,246,0.45); }
+.progress-fill.red, .upload-progress-fill.red { background: linear-gradient(90deg, #fda4af, #fb7185, #f43f5e); box-shadow: 0 0 10px rgba(244,63,94,0.45); }
+.progress-fill.yellow, .upload-progress-fill.yellow { background: linear-gradient(90deg, #fcd34d, #fbbf24, #f59e0b); box-shadow: 0 0 10px rgba(245,158,11,0.45); }
 
 .progress-fill::before, .upload-progress-fill::before {
     content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.55), transparent);
     animation: progressShine 1.5s ease-in-out infinite;
 }
 @keyframes progressShine { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
@@ -928,12 +954,13 @@ pre::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.24); }
 .bg-gold-400\/20 { background: rgba(2,132,199,0.14) !important; }
 .bg-gold-400\/30 { background: rgba(2,132,199,0.22) !important; }
 .bg-gold-400\/50 { background: rgba(2,132,199,0.36) !important; }
-.bg-forest-900 { background: rgba(16,24,38,0.62) !important; }
-.bg-forest-900\/40 { background: rgba(16,24,38,0.4) !important; }
-.bg-forest-900\/50 { background: rgba(16,24,38,0.5) !important; }
-.bg-forest-900\/60 { background: rgba(16,24,38,0.6) !important; }
-.bg-forest-700\/50 { background: rgba(51,65,85,0.08) !important; }
-.bg-forest-700\/40 { background: rgba(51,65,85,0.06) !important; }
+/* 深色工具类 → 白色略微透明磨砂玻璃（配合背景图片显示） */
+.bg-forest-900 { background: rgba(255,255,255,0.6) !important; }
+.bg-forest-900\/40 { background: rgba(255,255,255,0.42) !important; }
+.bg-forest-900\/50 { background: rgba(255,255,255,0.52) !important; }
+.bg-forest-900\/60 { background: rgba(255,255,255,0.62) !important; }
+.bg-forest-700\/50 { background: rgba(255,255,255,0.5) !important; }
+.bg-forest-700\/40 { background: rgba(255,255,255,0.4) !important; }
 
 .from-gold-400 { --tw-gradient-from: var(--accent-blue) !important; }
 .to-gold-500 { --tw-gradient-to: #6d28d9 !important; }
@@ -962,3 +989,92 @@ pre::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.24); }
 .from-gold-500 { --tw-gradient-from: #6d28d9 !important; }
 .peer-checked\:bg-gold-500:checked ~ .peer-checked\:bg-gold-500 { background: #6d28d9 !important; }
 .hover\:shadow-gold-400\/20:hover { --tw-shadow-color: rgba(2,132,199,0.2) !important; }
+
+/* ============================================
+   全站 Lucide 图标：统一浅蓝色风格
+   （导航、下拉、移动菜单、卡片动作等场景；
+   红色/绿色等语义色图标由各自按钮类单独控制）
+   ============================================ */
+.desktop-nav-link svg,
+.desktop-nav-toggle svg,
+.desktop-nav-dropdown-link svg,
+.mobile-menu a svg,
+.section-action svg,
+.nav-more-button svg {
+    color: #38bdf8;
+}
+.desktop-nav-link.active svg,
+.desktop-nav-dropdown-link.active svg { color: #0284c7; }
+.desktop-nav-link:hover svg,
+.desktop-nav-toggle:hover svg,
+.desktop-nav-dropdown-link:hover svg,
+.mobile-menu a:hover svg,
+.nav-more-button:hover svg { color: #0284c7; }
+
+/* ============================================
+   浅色状态文字 → 深色可读版本（白色磨砂玻璃主题）
+   排除代码块：pre/code 内部保持深色背景 + 浅色文字
+   ============================================ */
+.text-red-300:not(pre *):not(code *) { color: #be123c !important; }
+.text-red-400:not(pre *):not(code *) { color: #e11d48 !important; }
+.text-green-300:not(pre *):not(code *) { color: #15803d !important; }
+.text-green-400:not(pre *):not(code *) { color: #16a34a !important; }
+.text-yellow-300:not(pre *):not(code *) { color: #b45309 !important; }
+.text-yellow-400:not(pre *):not(code *) { color: #d97706 !important; }
+.text-blue-300:not(pre *):not(code *) { color: #0369a1 !important; }
+.text-blue-400:not(pre *):not(code *) { color: #0284c7 !important; }
+.text-amber-300:not(pre *):not(code *) { color: #b45309 !important; }
+.text-amber-400:not(pre *):not(code *) { color: #d97706 !important; }
+.text-orange-300:not(pre *):not(code *) { color: #c2410c !important; }
+.text-orange-400:not(pre *):not(code *) { color: #ea580c !important; }
+
+.text-red-400\/70:not(pre *):not(code *) { color: rgba(225,29,72,0.75) !important; }
+.text-red-400\/50:not(pre *):not(code *) { color: rgba(225,29,72,0.55) !important; }
+.text-green-400\/70:not(pre *):not(code *) { color: rgba(22,163,74,0.75) !important; }
+.text-blue-400\/70:not(pre *):not(code *) { color: rgba(2,132,199,0.75) !important; }
+
+.hover\:text-red-300:hover:not(pre *):not(code *) { color: #be123c !important; }
+.hover\:text-red-400:hover:not(pre *):not(code *) { color: #e11d48 !important; }
+.hover\:text-green-300:hover:not(pre *):not(code *) { color: #15803d !important; }
+.hover\:text-green-400:hover:not(pre *):not(code *) { color: #16a34a !important; }
+.hover\:text-blue-300:hover:not(pre *):not(code *) { color: #0369a1 !important; }
+.hover\:text-blue-400:hover:not(pre *):not(code *) { color: #0284c7 !important; }
+.hover\:text-amber-300:hover:not(pre *):not(code *) { color: #b45309 !important; }
+.hover\:text-amber-400:hover:not(pre *):not(code *) { color: #d97706 !important; }
+.hover\:text-yellow-300:hover:not(pre *):not(code *) { color: #b45309 !important; }
+.hover\:text-yellow-400:hover:not(pre *):not(code *) { color: #d97706 !important; }
+.hover\:text-cream:hover { color: var(--text-primary) !important; }
+
+/* 幽灵按钮/浅色底：白色主题下转为淡淡深色底，保证控件可见 */
+.bg-cream\/10 { background: rgba(15,23,42,0.06) !important; }
+.bg-cream\/20 { background: rgba(15,23,42,0.1) !important; }
+.hover\:bg-cream\/5:hover { background: rgba(15,23,42,0.05) !important; }
+.hover\:bg-cream\/10:hover { background: rgba(15,23,42,0.08) !important; }
+.hover\:bg-cream\/20:hover { background: rgba(15,23,42,0.12) !important; }
+
+/* ============================================
+   Markdown 正文（讨论区/指南）：代码块深色卡片保证可读性
+   ============================================ */
+.prose pre {
+    background: #101826 !important;
+    border: 1px solid rgba(15,23,42,0.16);
+    border-radius: 0.5rem;
+    padding: 0.9rem 1rem;
+    overflow-x: auto;
+    margin-bottom: 1rem;
+}
+.prose pre code {
+    background: none !important;
+    padding: 0 !important;
+    color: #a5c8e8 !important;
+    font-size: 0.85rem;
+    line-height: 1.6;
+}
+.prose :not(pre) > code {
+    background: rgba(2,132,199,0.1);
+    color: #0369a1 !important;
+    padding: 0.15rem 0.4rem;
+    border-radius: 0.25rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+}

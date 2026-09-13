@@ -158,7 +158,7 @@ def _save_background_variants(bg_id, filename, raw):
         raw: 原始图片字节
 
     Returns:
-        主图绝对路径；任一档位处理失败时抛异常（由调用方回滚记录）
+        (主图绝对路径, 统一主文件名)；任一档位处理失败时抛异常（由调用方回滚记录）
     """
     main_name = _background_filename(bg_id, filename)
     # 主图（1920）优先生成，保证基础路径必然存在
@@ -180,7 +180,7 @@ def _save_background_variants(bg_id, filename, raw):
             log('WARNING', 'BackgroundUpload', f'生成 {size}px 变体失败',
                 bg_id=bg_id, error=str(exc))
 
-    return main_path
+    return main_path, main_name
 
 
 def start_upload(user_id, username, upload_file, ip_address):
@@ -227,13 +227,13 @@ def start_upload(user_id, username, upload_file, ip_address):
                 _upload_tasks[task_id]['percent'] = 60
                 _upload_tasks[task_id]['message'] = '正在保存...'
 
-            # 生成主图 + 响应式变体并落盘
-            save_path = _save_background_variants(bg_id, original_filename, raw)
+            # 生成主图 + 响应式变体并落盘（文件名统一为 bg_<id>_<hash>.webp，不使用原始文件名）
+            save_path, main_name = _save_background_variants(bg_id, original_filename, raw)
 
             with get_db() as conn:
                 conn.execute(
-                    "UPDATE backgrounds SET file_path = ? WHERE id = ?",
-                    (save_path, bg_id),
+                    "UPDATE backgrounds SET file_path = ?, filename = ? WHERE id = ?",
+                    (save_path, main_name, bg_id),
                 )
                 conn.commit()
 
@@ -408,8 +408,13 @@ def approve_background(bg_id, admin_id, admin_username, ip_address):
             return False, '该背景图片已处理'
 
         conn.execute(
-            "UPDATE backgrounds SET status = ? WHERE id = ?",
+            "UPDATE backgrounds SET status = ?, is_active = 1 WHERE id = ?",
             (STATUS_APPROVED, bg_id),
+        )
+        # 审核通过即直接启用为当前背景，取消其他背景的启用状态
+        conn.execute(
+            "UPDATE backgrounds SET is_active = 0 WHERE id != ? AND is_active = 1",
+            (bg_id,),
         )
         conn.commit()
 

@@ -22,3 +22,4 @@ from routes.admin import backgrounds   # noqa: E402,F401
 from routes.admin import update       # noqa: E402,F401
 from routes.admin import logs         # noqa: E402,F401
 from routes.admin import game_accounts  # noqa: E402,F401
+from routes.admin import ip_bans       # noqa: E402,F401

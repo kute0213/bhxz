@@ -43,7 +43,7 @@
     <!-- 入场动画见 base.css：纯 CSS animation，不依赖 JS，避免白屏 -->
     <noscript><style>.page-content{opacity:1!important;transform:none!important}</style></noscript>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/tailwind.css', v='4') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css', v='31') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css', v='33') }}">
     <script src="{{ url_for('static', filename='lib/purify/purify.min.js', v='1') }}"></script>
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <script>
@@ -126,7 +126,7 @@
             <div class="flex items-center justify-between mb-8 flex-shrink-0">
                 <div class="flex items-center gap-3">
                     <div class="w-10 h-10 bg-gold-400 rounded-lg flex items-center justify-center">
-                        <i data-lucide="compass" class="w-6 h-6 text-forest-900"></i>
+                        <i data-lucide="compass" class="w-6 h-6 text-sky-100"></i>
                     </div>
                     <span class="text-xl font-bold text-gold-400">滨海小镇</span>
                 </div>
@@ -230,7 +230,7 @@
                 <!-- Logo 区域 -->
                 <a href="{{ url_for('main.home') }}" class="flex items-center gap-2 sm:gap-3 flex-shrink-0">
                     <div class="w-9 h-9 sm:w-10 sm:h-10 bg-gold-400 rounded-lg flex items-center justify-center">
-                        <i data-lucide="compass" class="w-5 h-5 sm:w-6 sm:h-6 text-forest-900"></i>
+                        <i data-lucide="compass" class="w-5 h-5 sm:w-6 sm:h-6 text-sky-100"></i>
                     </div>
                     <span class="text-lg sm:text-xl font-bold text-gold-400 hidden xs:inline">滨海小镇</span>
                 </a>

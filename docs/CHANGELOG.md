@@ -4,6 +4,16 @@
 
 ### 新增
 
+* **IP 封禁功能**：管理后台新增「IP 封禁」页面（`/admin/ip-bans`），管理员可添加封禁 IP（支持 IPv4/IPv6 与 CIDR 段）、设置临时封禁时长或永久封禁、填写封禁原因；被封禁 IP 的所有请求（含静态资源）由中间件统一拦截返回 403；管理员可随时在后台解封；服务层内置 30 秒内存缓存降低全站每次请求的数据库查询压力，创建/解封时立即失效缓存，临时封禁到期自动清理。
+
+### 样式
+
+* **控件全面改为白色略微透明磨砂玻璃**：主按钮（`.btn-primary`）由黑色渐变改为白色半透明磨砂玻璃（深色文字 + 蓝色强调边），次按钮/危险按钮/输入框/导航/弹窗/Toast 等控件统一为白色磨砂玻璃质感，更好适配全站背景图片；深色工具类（`.bg-forest-900` 系列）全局映射为白色半透明背景；Markdown 编辑器面板、讨论区与指南正文的代码块保持深色卡片保证可读性，行内代码改为浅蓝底深蓝字；浅色状态文字（红/黄/绿/蓝 300/400 系列）全局映射为深色可读版本（代码块内除外）；指南卡片、广播富文本编辑器、更新日志面板等同步改为白色磨砂玻璃。
+
+* **主页改为白色浅蓝磨砂玻璃风格**：首页从深色海洋风格全面转换为白色浅蓝主题，背景图片在滚动时保持可见（浅白渐变叠层自顶部至中部渐隐、底部再渐显，保证导航可读性且不遮挡背景）；标题改为深色 + 浅蓝渐变强调字，图标统一浅蓝色；滚动条与进度条统一为浅蓝渐变磨砂玻璃风格。
+
+### 新增
+
 * **一用户一账号绑定机制**：`binding_service.create_binding` 与 `routes/game_accounts/bind.py` 的 `api_bind` 均在绑定前检查当前用户是否已绑定，已绑定则返回「一个网站账号只能绑定一个服务器账号，请先解绑当前账号」，保留 MC 用户名唯一性检查
 
 * **绑定需图形验证码**：`POST /game-accounts/api/bind` 请求体新增 `captcha_id`/`captcha` 字段，后端通过 `captcha_service.verify` 校验并 `consume` 消耗；`bind.html` 复用全局 `CaptchaModal` 弹窗（先弹窗验证、再提交表单），不再内联验证码组件
@@ -16,6 +26,8 @@
 
 ### 重构
 
+* **背景图片统一命名**：上传的背景图片不再使用原始文件名，统一按 `bg_<id>_<hash>.webp` 规则重命名存储（原扩展名规范化），避免文件名冲突并便于管理；`background_service.py` 新增 `_background_filename` 命名辅助函数。
+
 * **清理无用代码**：删除顶层残留的 `static/js/base.js`、`static/js/main.js`（模板实际引用 `js/core/base.js` 与 `js/pages/main.js`），删除空的 `static/js/script/` 目录；`static/lib/lib-version.json` 移除已废弃的 `xterm_version` 字段；`scripts/build/package.py` 打包排除项由 `*.duckdb` 更新为 `*.db-wal`/`*.db-shm`；`.gitignore` 移除 DuckDB 残留条目；管理后台备份页文案同步去除「命令日志/定时任务日志」过期描述
 
 * **路由层分层规范全面修复**：移除 `routes/game_accounts/__init__.py` 和 `routes/game_accounts/bind.py` 中所有直接 SQL 查询，改用 `services/game_accounts/binding_service.py` 的服务函数（`get_user_bindings`、`is_mc_username_bound`、`is_bound_to_user`、`create_binding`），彻底消除路由层 `conn.execute()` 调用，严格遵循 MVC 分层架构
@@ -27,6 +39,8 @@
 * **空异常捕获增加日志**：`core/init.py` 中两个 `except Exception: pass` 改为 `log('WARNING', ...)` 记录，便于排查问题
 
 ### 修复
+
+* **背景图片审核通过直接启用**：管理员在后台审核通过背景图片时，该背景自动设为当前显示（`status=approved` 且 `is_active=1`），并同时取消其他背景的激活状态，无需再手动点击启用；「当前显示」按钮与状态徽章（黄色/绿色/蓝色）改为深色文字 + 浅色底，修复 `/backgrounds` 页面浅色文字与浅色底融合导致按钮/徽章不可见的问题。
 
 * **`easyauth_bind.py` 解析容错增强**：`get_player_info` 返回的 `Player Info: {...}` 改为从首个 `{` 截取 JSON 解析，兼容冒号后有空格/无空格、返回中带其他前缀文本的情况；JSON 中 `uuid` 字段可有可无；密码为空时返回「未找到该玩家的密码信息」，密码错误时返回 `error_code='WRONG_PASSWORD'`
 

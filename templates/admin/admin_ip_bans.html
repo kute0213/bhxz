@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}IP 封禁管理{% endblock %}
+{% block content %}
+<section class="page-container py-12">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
+            <div>
+                <h1 class="text-2xl sm:text-3xl font-bold mb-1">IP 封禁管理</h1>
+                <p class="text-cream/60 text-sm">被封禁的 IP 将无法访问网站任何页面（全部返回 403）</p>
+            </div>
+            <a href="{{ url_for('admin.admin_page') }}" class="btn-secondary px-4 py-2 rounded-lg text-sm inline-flex items-center gap-2">
+                <i data-lucide="arrow-left" class="w-4 h-4"></i>
+                返回管理中心
+            </a>
+        </div>
+
+        <!-- 创建封禁 -->
+        <div class="pixel-card rounded-xl p-6 mb-8">
+            <h2 class="text-lg font-bold mb-1">新建封禁</h2>
+            <p class="text-xs text-red-400 mb-4">注意：封禁后该 IP 的所有访问都将被拒绝，包括管理后台。请勿封禁自己的 IP（当前访问 IP：<code class="font-mono">{{ current_ip }}</code>）。</p>
+            <form action="{{ url_for('admin.admin_ip_ban_create') }}" method="POST" class="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end">
+                {{ csrf_field() }}
+                <div class="sm:col-span-1">
+                    <label class="block text-sm text-cream/70 mb-1">IP 地址</label>
+                    <input type="text" name="ip_address" class="input-field w-full px-4 py-2 rounded-lg font-mono" placeholder="如 203.0.113.5" required>
+                </div>
+                <div>
+                    <label class="block text-sm text-cream/70 mb-1">封禁时长（天，留空永久）</label>
+                    <input type="number" name="duration_days" class="input-field w-full px-4 py-2 rounded-lg" placeholder="如 7 / 0.5 = 12 小时" min="0" step="0.1">
+                </div>
+                <div class="sm:col-span-1">
+                    <button type="submit" class="btn-danger px-4 py-2 rounded-lg text-sm w-full">添加封禁</button>
+                </div>
+                <div class="sm:col-span-4">
+                    <label class="block text-sm text-cream/70 mb-1">原因（可选）</label>
+                    <input type="text" name="reason" class="input-field w-full px-4 py-2 rounded-lg" placeholder="封禁原因">
+                </div>
+            </form>
+        </div>
+
+        <!-- 封禁列表 -->
+        <div class="pixel-card rounded-xl overflow-hidden">
+            <div class="overflow-x-auto">
+                <table class="w-full text-sm">
+                    <thead>
+                        <tr class="border-b border-forest-700/50 text-cream/60">
+                            <th class="text-left px-4 py-3 font-medium">ID</th>
+                            <th class="text-left px-4 py-3 font-medium">IP 地址</th>
+                            <th class="text-left px-4 py-3 font-medium">原因</th>
+                            <th class="text-left px-4 py-3 font-medium">操作人</th>
+                            <th class="text-left px-4 py-3 font-medium">封禁时间</th>
+                            <th class="text-left px-4 py-3 font-medium">过期时间</th>
+                            <th class="text-right px-4 py-3 font-medium">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for ban in bans %}
+                        <tr class="border-b border-forest-700/30 hover:bg-blue-500/5 transition-colors">
+                            <td class="px-4 py-3 text-cream/40">{{ ban.id }}</td>
+                            <td class="px-4 py-3 text-cream/80 font-mono text-xs">{{ ban.ip_address }}</td>
+                            <td class="px-4 py-3 text-cream/60">{{ ban.reason or '-' }}</td>
+                            <td class="px-4 py-3 text-cream/60">{{ ban.banned_by_name or '未知' }}</td>
+                            <td class="px-4 py-3 text-cream/60">{{ ban.created_at }}</td>
+                            <td class="px-4 py-3">
+                                {% if ban.expires_at %}
+                                <span class="text-xs px-2 py-0.5 rounded-full bg-yellow-500/10 text-yellow-400 border border-yellow-500/20">{{ ban.expires_at }}</span>
+                                {% else %}
+                                <span class="text-xs px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/20">永久</span>
+                                {% endif %}
+                            </td>
+                            <td class="px-4 py-3 text-right">
+                                <form action="{{ url_for('admin.admin_ip_ban_delete', ban_id=ban.id) }}" method="POST" class="inline" onsubmit="return confirm('确定解除 {{ ban.ip_address }} 的封禁？');">
+                                    {{ csrf_field() }}
+                                    <button type="submit" class="text-green-400 hover:text-green-300 text-xs px-2 py-1 rounded bg-green-500/10 border border-green-500/20">解除封禁</button>
+                                </form>
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="7" class="px-4 py-8 text-center text-cream/40">暂无封禁记录</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}
