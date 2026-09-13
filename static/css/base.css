@@ -388,23 +388,24 @@ body::after {
 }
 .btn-danger:active { transform: translateY(0); }
 
-/* 输入框 - 黑色控件（白字） */
+/* 输入框 - 白色磨砂玻璃控件（深色文字） */
 .input-field {
-    background: rgba(16,24,38,0.92);
-    backdrop-filter: blur(16px) saturate(100%);
-    -webkit-backdrop-filter: blur(16px) saturate(100%);
-    border: 1px solid rgba(255,255,255,0.14);
+    background: rgba(255, 255, 255, 0.82);
+    backdrop-filter: blur(16px) saturate(120%);
+    -webkit-backdrop-filter: blur(16px) saturate(120%);
+    border: 1px solid var(--border-card);
     border-radius: 12px !important;
-    color: #f8fafc;
+    color: var(--text-primary);
     transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
-    box-shadow: inset 0 1px 3px rgba(0,0,0,0.3);
+    box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.05);
 }
 .input-field:focus {
-    border-color: rgba(2,132,199,0.6);
+    border-color: rgba(2, 132, 199, 0.55);
     outline: none;
-    box-shadow: 0 0 0 3px rgba(2,132,199,0.15), inset 0 1px 4px rgba(0,0,0,0.2);
+    background: rgba(255, 255, 255, 0.96);
+    box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.12), inset 0 1px 2px rgba(15, 23, 42, 0.04);
 }
-.input-field::placeholder { color: rgba(248,250,252,0.45); }
+.input-field::placeholder { color: var(--text-muted); }
 
 /* 搜索输入框展开动画 */
 .search-input-wrap { position: relative; }
@@ -421,8 +422,8 @@ body::after {
 }
 
 .modal-input-wrap { padding: 2px 28px 8px; }
-.modal-input-wrap .input-field { background: rgba(16,24,38,0.92); border: 1px solid rgba(255,255,255,0.14); }
-.modal-input-wrap .input-field:focus { border-color: rgba(2,132,199,0.6); box-shadow: 0 0 0 3px rgba(2,132,199,0.15); }
+.modal-input-wrap .input-field { background: rgba(255, 255, 255, 0.86); border: 1px solid var(--border-card); }
+.modal-input-wrap .input-field:focus { border-color: rgba(2,132,199,0.55); box-shadow: 0 0 0 3px rgba(2,132,199,0.12); }
 @media (max-width: 640px) { .modal-input-wrap { padding: 0 20px 4px; } }
 
 .password-strength { margin-top: 10px; }
@@ -587,6 +588,8 @@ body::after {
 }
 @media (min-width: 900px) {
     .desktop-nav { display: flex; }
+    /* 大屏端桌面导航已足够，隐藏汉堡菜单按钮，避免出现两个菜单入口 */
+    .nav-more-button { display: none !important; }
 }
 @media (min-width: 1121px) and (max-width: 1240px) {
     .desktop-nav-link, .desktop-nav-toggle { padding-inline: 9px; }

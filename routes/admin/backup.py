@@ -7,7 +7,7 @@ import shutil
 import subprocess
 from datetime import datetime
 
-from flask import jsonify, abort
+from flask import jsonify, abort, send_file
 
 from core.auth import admin_required, get_current_user
 from core.helpers import render_page
@@ -115,6 +115,40 @@ def api_db_backup_list():
     return jsonify({'backups': backups})
 
 
+@admin_bp.route('/admin/api/db-backup/<int:backup_id>/download')
+@admin_required
+def api_db_backup_download(backup_id):
+    """下载备份文件到本地。"""
+    user = get_current_user()
+
+    conn = get_db()
+    try:
+        row = conn.execute(
+            "SELECT * FROM db_backups WHERE id = ?", (backup_id,)
+        ).fetchone()
+        if not row:
+            return jsonify({'success': False, 'message': '备份记录不存在'}), 404
+
+        backup = dict(row)
+        backup_path = backup.get('backup_path')
+
+        if not backup_path or not os.path.exists(backup_path):
+            return jsonify({'success': False, 'message': '备份文件不存在'}), 404
+
+        backup_name = backup.get('backup_name') or os.path.basename(backup_path)
+        return send_file(
+            backup_path,
+            as_attachment=True,
+            download_name=backup_name,
+            mimetype='application/octet-stream',
+        )
+    except Exception as e:
+        log('ERROR', 'BackupManager', f'下载备份失败: {e}')
+        return jsonify({'success': False, 'message': f'下载失败: {e}'}), 500
+    finally:
+        conn.close()
+
+
 @admin_bp.route('/admin/api/db-backup/<int:backup_id>/delete', methods=['POST', 'DELETE'])
 @admin_required
 def api_db_backup_delete(backup_id):
@@ -122,7 +156,6 @@ def api_db_backup_delete(backup_id):
     user = get_current_user()
 
     from config import BACKUP_DIR
-
     conn = get_db()
     try:
         row = conn.execute(

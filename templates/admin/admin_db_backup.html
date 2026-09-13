@@ -123,6 +123,9 @@
                                 {% else %}进行中{% endif %}
                             </span>
                             {% if b.status == 'success' %}
+                            <button class="btn-download-backup p-1.5 text-gold-400 hover:text-gold-500 transition-colors" title="下载此备份" data-backup-id="{{ b.id }}">
+                                <i data-lucide="download" class="w-4 h-4"></i>
+                            </button>
                             <button class="btn-restore-backup p-1.5 text-blue-400 hover:text-blue-300 transition-colors" title="恢复此备份" data-backup-id="{{ b.id }}">
                                 <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
                             </button>
@@ -216,7 +219,10 @@
                             <span class="px-2 py-1 text-xs rounded-full bg-${statusClass}-500/20 text-${statusClass}-300 border border-${statusClass}-400/20">
                                 ${statusText}
                             </span>
-                            ${isSuccess ? `<button class="btn-restore-backup p-1.5 text-blue-400 hover:text-blue-300 transition-colors" title="恢复此备份" data-backup-id="${backupId}">
+                            ${isSuccess ? `<a class="btn-download-backup p-1.5 text-gold-400 hover:text-gold-500 transition-colors" title="下载此备份" data-backup-id="${backupId}" href="/admin/api/db-backup/${backupId}/download" download>
+                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                            </a>
+                            <button class="btn-restore-backup p-1.5 text-blue-400 hover:text-blue-300 transition-colors" title="恢复此备份" data-backup-id="${backupId}">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
                             </button>` : ''}
                             <button class="btn-delete-backup p-1.5 text-cream/40 hover:text-red-400 transition-colors" title="删除此备份" data-backup-id="${backupId}">
