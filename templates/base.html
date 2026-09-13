@@ -181,9 +181,9 @@
                     <i data-lucide="image" class="w-5 h-5"></i>
                     <span>背景图片</span>
                 </a>
-                <a href="{{ url_for('game_accounts.index') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors">
-                    <i data-lucide="gamepad-2" class="w-5 h-5"></i>
-                    <span>游戏账号</span>
+                <a href="{{ url_for('account_apply.apply_page') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors">
+                    <i data-lucide="user-plus" class="w-5 h-5"></i>
+                    <span>申请账号</span>
                 </a>
 
                 {% if user %}
@@ -269,8 +269,8 @@
                             <a href="{{ url_for('backgrounds.background_list_page') }}" class="desktop-nav-dropdown-link{% if request.endpoint and request.endpoint.startswith('backgrounds.') %} active{% endif %}" role="menuitem">
                                 <i data-lucide="image"></i><span>背景图片</span>
                             </a>
-                            <a href="{{ url_for('game_accounts.index') }}" class="desktop-nav-dropdown-link{% if request.endpoint and request.endpoint.startswith('game_accounts.') %} active{% endif %}" role="menuitem">
-                                <i data-lucide="gamepad-2"></i><span>游戏账号</span>
+                            <a href="{{ url_for('account_apply.apply_page') }}" class="desktop-nav-dropdown-link{% if request.endpoint and request.endpoint.startswith('account_apply.') %} active{% endif %}" role="menuitem">
+                                <i data-lucide="user-plus"></i><span>申请账号</span>
                             </a>
                         </div>
                     </div>

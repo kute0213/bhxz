@@ -43,19 +43,29 @@ def upload_background_page():
 @backgrounds_bp.route('/backgrounds/upload', methods=['POST'])
 @login_required
 def upload_background():
-    """开始异步上传背景图片任务（AJAX）。返回 {task_id} 或 {error}。"""
-    user = get_current_user()
-    upload_file = request.files.get('background_image')
+    """开始异步上传背景图片任务（AJAX）。支持一次提交多个文件。
 
-    success, result = background_service.start_upload(
-        user_id=user['id'],
-        username=user['username'],
-        upload_file=upload_file,
-        ip_address=get_client_ip(),
-    )
-    if success:
-        return jsonify({'task_id': result['task_id']})
-    return jsonify({'error': result}), 400
+    返回 {task_ids: [...]}（每个文件一个独立任务）或 {error}。
+    """
+    user = get_current_user()
+    files = request.files.getlist('background_image')
+    if not files:
+        return jsonify({'error': '请选择图片'}), 400
+
+    task_ids = []
+    for upload_file in files:
+        success, result = background_service.start_upload(
+            user_id=user['id'],
+            username=user['username'],
+            upload_file=upload_file,
+            ip_address=get_client_ip(),
+        )
+        if success:
+            task_ids.append(result['task_id'])
+
+    if not task_ids:
+        return jsonify({'error': '所有文件上传均失败，请检查图片格式与大小'}), 400
+    return jsonify({'task_ids': task_ids})
 
 
 @backgrounds_bp.route('/backgrounds/upload/progress/<task_id>')

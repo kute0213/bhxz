@@ -1,6 +1,6 @@
 # 滨海小镇 - Minecraft 服务器社区网站
 
-基于 Flask 的 Minecraft 服务器社区门户，采用白色磨砂玻璃（White Frosted Glass）设计风格。提供用户系统、游戏账号管理、模组介绍、管理后台、服务器状态监控、全站背景图片、网站图标可配置等功能。
+基于 Flask 的 Minecraft 服务器社区门户，采用白色磨砂玻璃（White Frosted Glass）设计风格。提供用户系统、游戏账号注册申请、模组介绍、管理后台、服务器状态监控、全站背景图片、网站图标可配置等功能。
 
 ## 文档索引
 
@@ -82,7 +82,7 @@ python scripts/build/package.py
 │   ├── backup/         # 数据库备份与恢复
 │   ├── discussion/     # 讨论区（帖子/回复/分类）
 │   ├── email/          # 异步邮件发送
-│   ├── game_accounts/  # 游戏账号绑定与注册申请
+│   ├── game_accounts/  # 游戏账号注册申请（审批/驳回/封禁）
 │   ├── logging/        # 日志自动清理
 │   ├── monitoring/     # CPU/内存/系统/性能追踪（后台线程采集）
 │   ├── music/          # 大喇叭音频（常量/查询/CRUD/上传/收藏）
@@ -97,7 +97,7 @@ python scripts/build/package.py
 │   ├── community/      # 社区留言板
 │   ├── discussion/     # 讨论区（页面+API）
 │   ├── docs/           # 文档页面
-│   ├── game_accounts/  # 游戏账号绑定与注册
+│   ├── game_accounts/  # 申请账号（页面+API，纯申请注册）
 │   ├── guides/         # 服务器指南（页面+API）
 │   ├── main/           # 主站（登录/注册/设置/音乐）
 │   └── public/         # 公开文件服务
@@ -235,27 +235,27 @@ python scripts/build/package.py
 
 * 支持系统设置中配置 RCON 地址、端口、密码
 
-### 游戏账号管理
+### 申请账号（互动分类）
 
-* 一个网站账号只能绑定一个服务器账号（已绑定时需先解绑再绑定其他账号）
+* 导航栏「互动」分类提供「申请账号」入口（`/game-accounts/apply`），登录用户可申请注册 MC 游戏账号（需图形验证码）
 
-* 绑定通过 RCON 执行 `/auth getPlayerInfo 玩家名` 获取 BCrypt 密码哈希，服务端校验密码；绑定/修改密码前需完成图形验证码
+* 提交后进入管理员审批队列，管理员在管理中心「账号注册申请管理」页批准/驳回申请、封禁恶意账号
 
-* 绑定后可在线修改 MC 账号密码（通过 EasyAuth 数据库直连或 RCON，数据库从 MC\_GAME\_FOLDER 自动发现）
-
-* 申请注册 MC 游戏账号（需图形验证码 + 管理员审批，审批通过后自动 RCON 添加白名单）
-
-* 管理员可批准/驳回申请，封禁恶意账号
+* 已彻底移除游戏账号绑定/改密/解绑功能（**保留 RCON 服务**，用于在线玩家监控与申请审批后的白名单处理）
 
 ### 全站背景图片
 
 * 上传图片自动转为 WebP 格式（智能裁剪 16:9 + LANCZOS 缩放），自动生成 768/1280/1920 三档响应式变体，前端按设备屏幕宽度（含 DPR）请求最合适尺寸
+
+* **支持一次上传多个图片文件**：拖放/选择批量上传，逐文件校验格式与大小，每个文件独立上传任务并聚合展示整体进度
 
 * 上传文件统一命名为 `bg_<id>_<hash>.webp`，不再保留原始文件名，避免命名冲突
 
 * 审核通过后自动启用为「当前显示」背景（同时取消其他背景激活状态），无需手动再开启
 
 * 支持审核 / 驳回流程与审核结果邮件通知，管理员与上传者可预览未通过审核的图片
+
+* **被驳回内容 24 小时自动删除**：被驳回超过 24 小时的服务器指南、背景图片等自动清理（删除数据库记录与关联本地文件，含背景主图与响应式变体）
 
 ### 文档系统
 
@@ -352,18 +352,14 @@ export ENABLE_SSL=1 && python app.py
 | `POST /api/email/send-code`    | 发送邮箱验证码                   |
 | `GET /api/email/check-enabled` | 检查邮件功能是否启用                |
 
-### 游戏账号 API（需登录）
+### 申请账号 API（需登录）
 
 | 方法   | 路径                                   | 说明                 |
 | ---- | ------------------------------------ | ------------------ |
-| GET  | `/game-accounts/`                    | 游戏账号首页（已绑定列表）      |
-| POST | `/game-accounts/api/bind`            | 绑定 MC 账号（需图形验证码）     |
-| POST | `/game-accounts/api/unbind`          | 解绑 MC 账号           |
-| GET  | `/game-accounts/api/bound`           | 获取已绑定账号列表          |
-| POST | `/game-accounts/api/change-password` | 修改绑定的 MC 账号密码      |
-| POST | `/game-accounts/api/apply-register`  | 申请注册 MC 游戏账号（需验证码） |
+| GET  | `/game-accounts/apply`               | 申请注册页面             |
+| POST | `/game-accounts/api/apply-register`  | 提交注册申请（需图形验证码）    |
 
-### 游戏账号管理 API（管理员）
+### 申请账号管理 API（管理员）
 
 | 方法     | 路径                                                   | 说明               |
 | ------ | ---------------------------------------------------- | ---------------- |
@@ -501,7 +497,7 @@ app.py ──→ routes/ ──→ services/ ──→ core/
   Flask    蓝图/路由   纯 Python 函数    DB/认证/工具
              │            │
          main/        user/（auth.py / profile.py）
-         docs/        game_accounts/（binding_service.py / registration_service.py）
+         docs/        game_accounts/（registration_service.py）
          public/      attachment_service.py
          admin/       discussion/（topics.py / replies.py / categories.py）
          api/         music/（constants.py / queries.py / crud.py / upload.py / favorites.py）
@@ -509,7 +505,7 @@ app.py ──→ routes/ ──→ services/ ──→ core/
          guides/      updater/（config.py / core.py）
          backgrounds/ backup/（manager.py / scheduler.py）
          game_accounts/ captcha.py （验证码）
-                       easyauth_bind.py （游戏账号密码验证）
+                       cleanup_service.py （被驳回内容自动清理）
                        ratelimit.py （限流）
                        logger.py （日志）
 ```
@@ -542,7 +538,7 @@ workspace/
 │   ├── backup/               #   数据库备份与恢复
 │   ├── discussion/           #   讨论区（帖子/回复/分类）
 │   ├── email/                #   异步邮件发送
-│   ├── game_accounts/        #   游戏账号绑定与注册申请
+│   ├── game_accounts/        #   游戏账号注册申请
 │   ├── monitoring/           #   系统监控（CPU/内存/系统/性能追踪）
 │   ├── music/                #   大喇叭音频（常量/查询/CRUD/上传/收藏）
 │   ├── rcon/                 #   RCON 连接管理、玩家列表追踪、EasyAuth 指令
@@ -553,11 +549,11 @@ workspace/
 │   ├── captcha.py            #   图形验证码
 │   ├── discussion_service.py #   兼容性重导出层（讨论区）
 │   ├── easy_auth_db.py       #   EasyAuth 数据库直连验证
-│   ├── easyauth_bind.py      #   游戏账号密码验证（/auth getPlayerInfo + bcrypt）
 │   ├── ip.py                 #   IP 工具
 │   ├── music_service.py      #   兼容性重导出层（大喇叭音频）
 │   ├── process_utils.py      #   子进程工具（编码/缓冲/环境变量）
 │   ├── ratelimit.py          #   IP 频率限制
+│   ├── cleanup_service.py    #   被驳回内容自动清理（定时调度）
 │   ├── settings_manager.py   #   系统设置管理
 │   ├── sitemap_cache.py      #   Sitemap 缓存
 │   ├── updater.py            #   兼容性重导出层（自动更新）
@@ -571,7 +567,7 @@ workspace/
 │   ├── community/            #   社区留言板
 │   ├── discussion/           #   讨论区（页面+API）
 │   ├── docs/                 #   文档页面
-│   ├── game_accounts/        #   游戏账号绑定与注册
+│   ├── game_accounts/        #   申请账号（页面+API，纯申请注册）
 │   ├── guides/               #   服务器指南（页面+API）
 │   ├── public/               #   公开文件服务
 │   ├── registry.py           #   蓝图注册中心
@@ -636,8 +632,7 @@ workspace/
 | `discussion_replies`      | 讨论回复     | 外键 `topic_id`，支持附件                                                                                              |
 | `music`                   | 大喇叭音频    | `status` 状态机（0=私有/1=待审核/2=已公开，驳回后自动转为私有；旧库 `gain` 列仅保留不再使用），`tags` 逗号分隔标签列，删除记录时同步删除 `uploads/music/<ID>/` 文件目录 |
 | `music_favorites`         | 大喇叭音频收藏  | 联合主键 `(user_id, music_id)`（同一用户对同一音频仅一条收藏）                                                                      |
-| `backgrounds`             | 背景图片     | `status` 审核状态，WebP 格式，响应式变体                                                                                    |
-| `game_account_bindings`   | 游戏账号绑定   | 一个网站用户只能绑定一个 MC 账号（`user_id`/`mc_username` 唯一）                                                                  |
+| `backgrounds`             | 背景图片     | `status` 审核状态，WebP 格式，响应式变体，`rejected_at` 记录驳回时间（超 24h 自动删除）                                            |
 | `game_account_registrations` | 游戏账号注册申请 | 申请注册 MC 账号，管理员审批                                                                                               |
 | `game_account_bans`       | 游戏账号封禁   | 封禁 MC 账号申请资格                                                                                                    |
 

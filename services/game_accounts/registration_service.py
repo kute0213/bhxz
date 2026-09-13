@@ -48,14 +48,6 @@ def create_application(user_id: int, mc_username: str) -> Tuple[bool, str]:
         if existing:
             return False, '该账号已有待处理的注册申请'
 
-        # 检查是否已被绑定
-        bound = conn.execute(
-            "SELECT id FROM game_account_bindings WHERE mc_username = ?",
-            (mc_username,),
-        ).fetchone()
-        if bound:
-            return False, '该账号已被绑定'
-
         now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         conn.execute(
             """INSERT INTO game_account_registrations
@@ -188,7 +180,7 @@ def reject_application(app_id: int, reviewer_id: int, reason: str = '') -> Tuple
 # ---------------------------------------------------------------------------
 
 def ban_account(mc_username: str, reason: str, created_by: int) -> Tuple[bool, str]:
-    """禁止某个 MC 用户名申请注册，同时禁止该账号绑定的官网用户申请新账号。"""
+    """禁止某个 MC 用户名申请注册。"""
     mc_username = mc_username.strip()
     if not mc_username:
         return False, 'MC 用户名不能为空'
@@ -202,24 +194,14 @@ def ban_account(mc_username: str, reason: str, created_by: int) -> Tuple[bool, s
         if existing:
             return False, '该账号已被封禁'
 
-        # 查找绑定该 MC 账号的官网用户
-        binding = conn.execute(
-            "SELECT user_id FROM game_account_bindings WHERE mc_username = ?",
-            (mc_username,),
-        ).fetchone()
-        banned_user_id = binding['user_id'] if binding else None
-
         now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         conn.execute(
-            "INSERT INTO game_account_bans (mc_username, reason, created_at, created_by, user_id) VALUES (?, ?, ?, ?, ?)",
-            (mc_username, reason, now, created_by, banned_user_id),
+            "INSERT INTO game_account_bans (mc_username, reason, created_at, created_by, user_id) VALUES (?, ?, ?, ?, NULL)",
+            (mc_username, reason, now, created_by),
         )
         conn.commit()
 
-        msg = f'已封禁账号 {mc_username}'
-        if banned_user_id:
-            msg += '，该账号绑定的官网用户已失去申请新账号资格'
-        return True, msg
+        return True, f'已封禁账号 {mc_username}'
     except Exception as e:
         return False, f'封禁失败: {e}'
     finally:

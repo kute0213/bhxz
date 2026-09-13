@@ -46,7 +46,6 @@ TABLES = [
     'music',
     'music_favorites',
     'backgrounds',
-    'game_account_bindings',
     'game_account_registrations',
     'game_account_bans',
 ]

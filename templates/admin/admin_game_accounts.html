@@ -66,7 +66,7 @@
                         <label class="text-xs text-cream/60 block mb-1">原因（可选）</label>
                         <input type="text" id="ban-reason" placeholder="封禁原因" class="w-full px-3 py-2 bg-forest-900/60 border border-cream/20 rounded-lg text-sm focus:outline-none focus:border-gold-400">
                     </div>
-                    <button type="submit" class="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-300 text-sm rounded-lg border border-red-500/30">
+                    <button type="submit" class="btn-danger px-4 py-2 text-sm rounded-lg">
                         <i data-lucide="ban" class="w-4 h-4 inline mr-1"></i>封禁
                     </button>
                 </form>
@@ -120,8 +120,8 @@
                             '<div class="text-xs text-cream/50">申请人: ' + escapeHtml(app.applicant) + ' | ' + app.created_at + '</div>' +
                         '</div>' +
                         '<div class="flex items-center gap-2">' +
-                            '<button class="btn-approve px-3 py-1.5 bg-green-500/20 hover:bg-green-500/30 text-green-300 text-xs rounded-lg border border-green-500/30" data-id="' + app.id + '">通过</button>' +
-                            '<button class="btn-reject px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-300 text-xs rounded-lg border border-red-500/30" data-id="' + app.id + '">驳回</button>' +
+                            '<button class="btn-approve btn-primary bg-green-500 px-3 py-1.5 text-xs rounded-lg" data-id="' + app.id + '">通过</button>' +
+                            '<button class="btn-reject btn-danger px-3 py-1.5 text-xs rounded-lg" data-id="' + app.id + '">驳回</button>' +
                         '</div>' +
                     '</div>';
                 }
@@ -221,7 +221,7 @@
                             '<div class="text-cream font-medium">' + escapeHtml(b.mc_username) + '</div>' +
                             '<div class="text-xs text-cream/50">' + (b.reason || '无原因') + ' | 封禁于 ' + b.created_at + ' | ' + (b.created_by_name || '') + '</div>' +
                         '</div>' +
-                        '<button class="btn-unban px-3 py-1.5 bg-gold-400/20 hover:bg-gold-400/30 text-gold-300 text-xs rounded-lg border border-gold-400/30" data-username="' + escapeHtml(b.mc_username) + '">解封</button>' +
+                        '<button class="btn-unban btn-secondary px-3 py-1.5 text-xs rounded-lg" data-username="' + escapeHtml(b.mc_username) + '">解封</button>' +
                     '</div>';
                 }
                 list.innerHTML = html;

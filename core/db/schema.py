@@ -206,15 +206,6 @@ def init_db():
                 created_at TEXT NOT NULL
             )
         '''),
-        # 游戏账号绑定表（一个用户只能绑定一个服务器账号）
-        ('game_account_bindings', '''
-            CREATE TABLE IF NOT EXISTS game_account_bindings (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL UNIQUE,
-                mc_username TEXT NOT NULL UNIQUE,
-                created_at TEXT NOT NULL
-            )
-        '''),
         # 游戏账号注册申请表
         ('game_account_registrations', '''
             CREATE TABLE IF NOT EXISTS game_account_registrations (
@@ -355,38 +346,16 @@ def init_db():
     except Exception as e:
         log('ERROR', 'DB', f'迁移 server_guides.rejected_at 失败: {e}')
 
-    conn.close()
+    # ---- 背景图片：添加 rejected_at 列（被驳回内容 24 小时后自动清理） ----
+    add_column_if_not_exists('backgrounds', 'rejected_at', "TEXT DEFAULT NULL")
 
-
-def cleanup_expired_rejected_guides():
-    """删除拒绝超过 48 小时且未修改的指南。
-
-    兼容旧数据：已拒绝但无 rejected_at 的指南（已由 init_db 填充为 updated_at），
-    同样会在此函数中被清理。
-    """
-    from datetime import datetime, timedelta
-    from core.logger import log
-
-    conn = get_db()
+    # ---- 彻底删除游戏账号绑定功能：移除旧绑定表 ----
+    # 绑定/改密功能已移除，旧库遗留的绑定表不再使用，直接删除。
     try:
-        deadline = (datetime.now() - timedelta(hours=48)).strftime('%Y-%m-%d %H:%M:%S')
-        rows = conn.execute(
-            "SELECT id, title FROM server_guides "
-            "WHERE status = 'rejected' AND rejected_at IS NOT NULL AND rejected_at < ?",
-            (deadline,),
-        ).fetchall()
-        deleted = 0
-        for row in rows:
-            conn.execute("DELETE FROM server_guides WHERE id = ?", (row['id'],))
-            deleted += 1
-            log('INFO', 'Guide', f'拒绝超时自动删除',
-                guide_id=row['id'], title=row['title'])
-        if deleted:
-            conn.commit()
-            log('INFO', 'Guide', f'自动清理过期拒绝指南', count=deleted)
-        return deleted
+        cursor.execute("DROP TABLE IF EXISTS game_account_bindings")
+        conn.commit()
+        log('INFO', 'DB', '已删除废弃的游戏账号绑定表 game_account_bindings')
     except Exception as e:
-        log('ERROR', 'Guide', f'清理过期拒绝指南失败: {e}')
-        return 0
-    finally:
-        conn.close()
+        log('ERROR', 'DB', f'删除 game_account_bindings 表失败: {e}')
+
+    conn.close()

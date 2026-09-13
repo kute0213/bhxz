@@ -426,8 +426,29 @@ def approve_background(bg_id, admin_id, admin_username, ip_address):
     return True, '审核通过'
 
 
+def remove_background_files(bg):
+    """删除背景图片本地文件（主图与全部响应式变体）。失败仅记日志。"""
+    main_path = bg.get('file_path') if bg else None
+    if not main_path or not os.path.isfile(main_path):
+        return
+    try:
+        os.remove(main_path)
+        base_name = os.path.splitext(os.path.basename(main_path))[0]
+        for size in RESPONSIVE_SIZES:
+            if size == PRIMARY_SIZE:
+                continue
+            variant_path = os.path.join(
+                os.path.dirname(main_path), f'{base_name}_{size}.webp'
+            )
+            if os.path.isfile(variant_path):
+                os.remove(variant_path)
+    except Exception as exc:
+        log('WARNING', 'BackgroundDelete', '背景图片文件删除失败',
+            bg_id=bg.get('id'), error=str(exc))
+
+
 def reject_background(bg_id, admin_id, admin_username, ip_address):
-    """驳回背景图片审核。"""
+    """驳回背景图片审核（记录驳回时间，24 小时后由清理服务自动删除）。"""
     with get_db() as conn:
         bg = conn.execute("SELECT * FROM backgrounds WHERE id = ?", (bg_id,)).fetchone()
         if not bg:
@@ -436,8 +457,8 @@ def reject_background(bg_id, admin_id, admin_username, ip_address):
             return False, '该背景图片已处理'
 
         conn.execute(
-            "UPDATE backgrounds SET status = ? WHERE id = ?",
-            (STATUS_REJECTED, bg_id),
+            "UPDATE backgrounds SET status = ?, rejected_at = ? WHERE id = ?",
+            (STATUS_REJECTED, _now(), bg_id),
         )
         conn.commit()
 
@@ -485,22 +506,7 @@ def delete_background(bg_id, user_id, is_admin, ip_address):
             return False, '无权删除'
 
         # 删除本地主图及响应式变体
-        if bg['file_path'] and os.path.isfile(bg['file_path']):
-            try:
-                main_path = bg['file_path']
-                os.remove(main_path)
-                base_name = os.path.splitext(os.path.basename(main_path))[0]
-                for size in RESPONSIVE_SIZES:
-                    if size == PRIMARY_SIZE:
-                        continue
-                    variant_path = os.path.join(
-                        os.path.dirname(main_path), f'{base_name}_{size}.webp'
-                    )
-                    if os.path.isfile(variant_path):
-                        os.remove(variant_path)
-            except Exception as exc:
-                log('WARNING', 'BackgroundDelete', '背景图片文件删除失败',
-                    bg_id=bg_id, error=str(exc))
+        remove_background_files(bg)
 
         conn.execute("DELETE FROM backgrounds WHERE id = ?", (bg_id,))
         conn.commit()

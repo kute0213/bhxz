@@ -22,11 +22,14 @@ def start_background_services():
     from services.email import email_service
     from services.sitemap_cache import sitemap_cache
     from services.rcon import player_tracker
+    from services.cleanup_service import CleanupScheduler
 
     BackupScheduler().start()
     email_service.start()
     sitemap_cache.start()
     player_tracker.start()
+    # 被驳回内容自动清理（指南/背景图片超 24 小时删除）
+    CleanupScheduler().start()
     log('INFO', 'App', '后台服务启动完成')
 
 

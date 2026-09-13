@@ -1,49 +1,31 @@
 {% extends "base.html" %}
-{% block title %}申请游戏账号{% endblock %}
+{% block title %}申请账号{% endblock %}
 {% block content %}
 <section class="page-container py-8 sm:py-12">
     <div class="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
 
         <div class="mb-6 sm:mb-8">
-            <a href="{{ url_for('game_accounts.index') }}" class="text-gold-400 hover:text-gold-300 text-sm inline-block mb-3">
-                <i data-lucide="arrow-left" class="w-4 h-4 inline mr-1"></i>返回游戏账号
+            <a href="{{ url_for('main.home') }}" class="text-sky-600 hover:text-sky-500 text-sm inline-block mb-3">
+                <i data-lucide="arrow-left" class="w-4 h-4 inline mr-1"></i>返回首页
             </a>
             <h1 class="text-xl sm:text-2xl font-bold">申请注册游戏账号</h1>
-            <p class="text-cream/60 text-sm mt-1">申请创建一个新的 Minecraft 游戏账号，需管理员审核批准</p>
+            <p class="text-muted text-sm mt-1">申请创建一个新的 Minecraft 游戏账号，需管理员审核批准</p>
         </div>
 
         <div class="pixel-card rounded-xl p-5 sm:p-6">
             <form id="register-form" class="space-y-5">
                 <div>
-                    <label class="text-sm text-cream/60 block mb-1.5">MC 用户名</label>
-                    <input type="text" id="reg-username" placeholder="输入要注册的 MC 用户名" class="w-full px-3 sm:px-4 py-2.5 bg-forest-900/60 border border-cream/20 rounded-lg text-sm focus:outline-none focus:border-gold-400 transition-colors" autocomplete="off">
+                    <label class="text-sm text-muted block mb-1.5">MC 用户名</label>
+                    <input type="text" id="reg-username" placeholder="输入要注册的 MC 用户名" class="input-field w-full px-3 sm:px-4 py-2.5 text-sm" autocomplete="off">
+                    <p class="text-xs text-muted mt-1.5">3-16 位，仅限字母、数字和下划线</p>
                 </div>
-                <button type="submit" id="apply-btn" class="w-full sm:w-auto px-6 py-2.5 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 text-sm rounded-lg transition-colors border border-blue-500/30 disabled:opacity-50 disabled:cursor-not-allowed">
-                    <i data-lucide="send" class="w-4 h-4 inline mr-1.5"></i>提交申请
+                <button type="submit" id="apply-btn" class="btn-primary px-6 py-2.5 text-sm inline-flex items-center gap-2">
+                    <i data-lucide="send" class="w-4 h-4"></i>提交申请
                 </button>
             </form>
         </div>
     </div>
 </section>
-
-<!-- ===== 验证码弹窗 ===== -->
-<div id="captcha-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm" onclick="if(event.target===this)closeCaptchaModal()">
-    <div class="bg-forest-800 border border-cream/20 rounded-2xl p-6 sm:p-8 w-full max-w-sm mx-4 shadow-2xl" onclick="event.stopPropagation()">
-        <h3 class="text-lg font-bold mb-2">图形验证码</h3>
-        <p class="text-cream/60 text-sm mb-4">请输入验证码以完成申请</p>
-        <div class="flex flex-col items-center gap-3 mb-4">
-            <img id="captcha-image" src="" alt="验证码" class="h-14 rounded-lg cursor-pointer border border-cream/20" onclick="refreshCaptcha()">
-            <input type="text" id="captcha-input" placeholder="输入验证码" maxlength="6" class="w-full px-3 py-2 bg-forest-900/60 border border-cream/20 rounded-lg text-sm focus:outline-none focus:border-gold-400 transition-colors text-center tracking-widest" autocomplete="off">
-            <input type="hidden" id="captcha-id" value="">
-            <p class="text-xs text-cream/40">点击图片刷新验证码</p>
-        </div>
-        <div class="flex justify-end gap-3">
-            <button onclick="closeCaptchaModal()" class="px-4 py-2 text-sm text-cream/60 hover:text-cream transition-colors">取消</button>
-            <button id="captcha-modal-confirm" class="px-5 py-2 bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 text-sm rounded-lg transition-colors border border-blue-500/30">确认提交</button>
-        </div>
-        <p id="captcha-modal-error" class="hidden text-red-400 text-xs mt-3"></p>
-    </div>
-</div>
 {% endblock %}
 
 {% block extra_script %}
@@ -51,24 +33,6 @@
 (function() {
     var pendingRegData = null;
     var applyBtn = document.getElementById('apply-btn');
-
-    function refreshCaptcha() {
-        fetch('/api/captcha/generate')
-            .then(function(r) { return r.json(); })
-            .then(function(d) {
-                if (d.success) {
-                    document.getElementById('captcha-image').src = d.image;
-                    document.getElementById('captcha-id').value = d.captcha_id;
-                }
-            });
-    }
-
-    window.closeCaptchaModal = function() {
-        document.getElementById('captcha-modal').classList.add('hidden');
-        document.getElementById('captcha-input').value = '';
-        document.getElementById('captcha-modal-error').classList.add('hidden');
-        pendingRegData = null;
-    };
 
     document.getElementById('register-form').addEventListener('submit', function(e) {
         e.preventDefault();
@@ -81,24 +45,16 @@
         if (username.indexOf('__') !== -1) { Toast.error('MC 用户名不能包含连续下划线'); return; }
 
         pendingRegData = { mc_username: username };
-        refreshCaptcha();
-        document.getElementById('captcha-input').value = '';
-        document.getElementById('captcha-modal-error').classList.add('hidden');
-        document.getElementById('captcha-modal').classList.remove('hidden');
-        document.getElementById('captcha-input').focus();
+        // 复用全局验证码弹窗（base.js CaptchaModal），验证通过后回调提交
+        CaptchaModal.show('请输入验证码以完成申请', function(captchaId, captchaCode) {
+            submitApplication(captchaId, captchaCode);
+        });
     });
 
-    document.getElementById('captcha-modal-confirm').addEventListener('click', function() {
-        var captcha = document.getElementById('captcha-input').value.trim();
-        var captchaId = document.getElementById('captcha-id').value;
-        var errEl = document.getElementById('captcha-modal-error');
-
-        if (!captcha) { errEl.textContent = '请输入验证码'; errEl.classList.remove('hidden'); return; }
-        if (!pendingRegData) { errEl.textContent = '提交数据丢失，请重新申请'; errEl.classList.remove('hidden'); return; }
-        errEl.classList.add('hidden');
-
+    function submitApplication(captchaId, captchaCode) {
+        if (!pendingRegData) return;
         applyBtn.disabled = true;
-        applyBtn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 inline mr-1.5 animate-spin"></i>提交中...';
+        applyBtn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i>提交中...';
         lucide.createIcons({ targets: [applyBtn] });
 
         fetch('/game-accounts/api/apply-register', {
@@ -107,36 +63,28 @@
             body: JSON.stringify({
                 mc_username: pendingRegData.mc_username,
                 captcha_id: captchaId,
-                captcha: captcha,
+                captcha: captchaCode,
             }),
         })
         .then(function(r) { return r.json(); })
         .then(function(d) {
             if (d.success) {
                 Toast.success(d.message);
-                closeCaptchaModal();
                 document.getElementById('reg-username').value = '';
                 pendingRegData = null;
                 setTimeout(function() {
-                    window.location.href = '{{ url_for("game_accounts.index") }}';
+                    window.location.href = '{{ url_for("main.home") }}';
                 }, 1500);
             } else {
                 Toast.error(d.message);
-                refreshCaptcha();
-                document.getElementById('captcha-input').value = '';
-                document.getElementById('captcha-input').focus();
             }
         })
         .finally(function() {
             applyBtn.disabled = false;
-            applyBtn.innerHTML = '<i data-lucide="send" class="w-4 h-4 inline mr-1.5"></i>提交申请';
+            applyBtn.innerHTML = '<i data-lucide="send" class="w-4 h-4"></i>提交申请';
             lucide.createIcons({ targets: [applyBtn] });
         });
-    });
-
-    document.getElementById('captcha-input').addEventListener('keydown', function(e) {
-        if (e.key === 'Enter') { document.getElementById('captcha-modal-confirm').click(); }
-    });
+    }
 })();
 </script>
 {% endblock %}

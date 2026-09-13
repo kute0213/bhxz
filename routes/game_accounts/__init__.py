@@ -1,44 +1,18 @@
-"""游戏账号蓝图 —— 申请注册 MC 账号与绑定已注册账号。"""
+"""申请账号蓝图 —— 玩家申请注册 Minecraft 游戏账号（需管理员审批）。
+
+已移除游戏账号绑定/改密功能（彻底删除），仅保留申请注册能力。
+申请记录进入 game_account_registrations 表，管理员在后台审批。
+"""
 
 from flask import Blueprint, render_template, request, jsonify
 
 from core.auth import login_required, get_current_user
-from services.easyauth_bind import bind_account
-from services.rcon.easy_auth import change_password as rcon_change_password
-from services.game_accounts.binding_service import (
-    get_user_bindings,
-    is_bound_to_user,
-)
+from services.game_accounts.registration_service import create_application
 
-game_accounts_bp = Blueprint('game_accounts', __name__, url_prefix='/game-accounts')
+account_apply_bp = Blueprint('account_apply', __name__, url_prefix='/game-accounts')
 
 
-# ---------------------------------------------------------------------------
-# 首页
-# ---------------------------------------------------------------------------
-
-@game_accounts_bp.route('/')
-@login_required
-def index():
-    """游戏账号功能首页，显示已绑定账号列表和操作入口。"""
-    user = get_current_user()
-    bound_accounts = get_user_bindings(user['id'])
-    return render_template('game_accounts/index.html', user=user, bound_accounts=bound_accounts)
-
-
-# ---------------------------------------------------------------------------
-# 页面路由
-# ---------------------------------------------------------------------------
-
-@game_accounts_bp.route('/bind')
-@login_required
-def bind_page():
-    """绑定游戏账号页面。"""
-    user = get_current_user()
-    return render_template('game_accounts/bind.html', user=user)
-
-
-@game_accounts_bp.route('/apply')
+@account_apply_bp.route('/apply')
 @login_required
 def apply_page():
     """申请注册游戏账号页面。"""
@@ -46,46 +20,15 @@ def apply_page():
     return render_template('game_accounts/apply.html', user=user)
 
 
-@game_accounts_bp.route('/change-password')
+@account_apply_bp.route('/api/apply-register', methods=['POST'])
 @login_required
-def change_password_page():
-    """修改已绑定账号密码页面。"""
-    user = get_current_user()
-    bound_accounts = get_user_bindings(user['id'])
-    return render_template('game_accounts/change_password.html', user=user, bound_accounts=bound_accounts)
-
-
-# ---------------------------------------------------------------------------
-# API：获取已绑定账号列表
-# ---------------------------------------------------------------------------
-
-@game_accounts_bp.route('/api/bound-accounts')
-@login_required
-def api_bound_accounts():
-    """获取当前用户已绑定的游戏账号列表。"""
-    user = get_current_user()
-    try:
-        accounts = get_user_bindings(user['id'])
-        return jsonify({'success': True, 'accounts': accounts})
-    except Exception as e:
-        return jsonify({'success': False, 'message': f'获取失败: {e}'}), 500
-
-
-# ---------------------------------------------------------------------------
-# API：修改已绑定账号密码
-# ---------------------------------------------------------------------------
-
-@game_accounts_bp.route('/api/change-password', methods=['POST'])
-@login_required
-def api_change_password():
-    """修改已绑定 MC 账号的游戏内密码。
+def api_apply_register():
+    """提交游戏账号注册申请（AJAX）。
 
     请求体 JSON:
         mc_username:  MC 用户名
-        current_password: 当前密码（用于验证）
-        new_password: 新密码
-        captcha_id:  图形验证码 ID
-        captcha:     图形验证码内容
+        captcha_id:   图形验证码 ID
+        captcha:      图形验证码内容
 
     返回:
         { success, message }
@@ -95,50 +38,24 @@ def api_change_password():
     user = get_current_user()
     data = request.get_json(silent=True) or {}
     mc_username = (data.get('mc_username') or '').strip()
-    current_password = data.get('current_password', '')
-    new_password = data.get('new_password', '')
     captcha_id = (data.get('captcha_id') or '').strip()
     captcha_input = (data.get('captcha') or '').strip()
 
     # ── 基础校验 ──
     if not mc_username:
         return jsonify({'success': False, 'message': 'MC 用户名不能为空'}), 400
-    if not current_password:
-        return jsonify({'success': False, 'message': '当前密码不能为空'}), 400
-    if not new_password:
-        return jsonify({'success': False, 'message': '新密码不能为空'}), 400
-    if len(new_password) < 4:
-        return jsonify({'success': False, 'message': '新密码至少 4 个字符'}), 400
-    if len(new_password) > 32:
-        return jsonify({'success': False, 'message': '新密码不能超过 32 个字符'}), 400
+    if len(mc_username) < 3:
+        return jsonify({'success': False, 'message': 'MC 用户名至少 3 个字符'}), 400
+    if len(mc_username) > 16:
+        return jsonify({'success': False, 'message': 'MC 用户名不能超过 16 个字符'}), 400
 
-    # ── 校验图形验证码（验证当前密码前必须通过） ──
+    # ── 校验图形验证码 ──
     if not captcha_id or not captcha_input:
         return jsonify({'success': False, 'message': '请完成图形验证码'}), 400
     if not captcha_service.verify(captcha_id, captcha_input):
         return jsonify({'success': False, 'message': '验证码错误或已过期'}), 400
     captcha_service.consume(captcha_id)
 
-    # ── 检查该账号是否属于当前用户 ──
-    if not is_bound_to_user(mc_username, user['id']):
-        return jsonify({'success': False, 'message': '该账号未绑定或不属于你'}), 400
-
-    # ── 验证当前密码 ──
-    result = bind_account(mc_username, current_password)
-    if not result['success']:
-        return jsonify({'success': False, 'message': '当前密码验证失败: ' + result['message']}), 401
-
-    # ── 修改密码 ──
-    try:
-        succ, msg = rcon_change_password(mc_username, new_password)
-        if succ:
-            return jsonify({'success': True, 'message': '密码修改成功，下次登录游戏时请使用新密码'})
-        else:
-            return jsonify({'success': False, 'message': f'密码修改失败: {msg}'}), 500
-    except Exception as e:
-        return jsonify({'success': False, 'message': f'密码修改异常: {e}'}), 500
-
-
-# 导入子模块注册路由
-from routes.game_accounts import register   # noqa: E402,F401
-from routes.game_accounts import bind       # noqa: E402,F401
+    # ── 提交申请 ──
+    success, message = create_application(user['id'], mc_username)
+    return jsonify({'success': success, 'message': message})

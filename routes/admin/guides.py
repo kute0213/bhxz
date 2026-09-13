@@ -7,7 +7,6 @@ from flask import redirect, url_for, flash, abort, request, jsonify
 from core.auth import admin_required, get_current_user
 from core.helpers import render_page
 from core.db import get_db
-from core.db.schema import cleanup_expired_rejected_guides
 from services.email import email_service, guide_review_result as build_result_html
 from routes.admin import admin_bp
 
@@ -40,10 +39,10 @@ def _notify_author_guide_result(guide_title, author_email, approved, reason=''):
 @admin_bp.route('/admin/guides')
 @admin_required
 def admin_guides():
-    """管理后台：指南列表（含待审核）。"""
-    # 清理拒绝超过48小时的指南
-    cleanup_expired_rejected_guides()
+    """管理后台：指南列表（含待审核）。
 
+    被驳回指南超过 24 小时由 services.cleanup_service 定时自动删除。
+    """
     conn = get_db()
     try:
         rows = conn.execute(

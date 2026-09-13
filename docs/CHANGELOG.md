@@ -12,17 +12,15 @@
 
 * **主页改为白色浅蓝磨砂玻璃风格**：首页从深色海洋风格全面转换为白色浅蓝主题，背景图片在滚动时保持可见（浅白渐变叠层自顶部至中部渐隐、底部再渐显，保证导航可读性且不遮挡背景）；标题改为深色 + 浅蓝渐变强调字，图标统一浅蓝色；滚动条与进度条统一为浅蓝渐变磨砂玻璃风格。
 
+* **危险操作按钮统一为淡红色磨砂玻璃**：管理中心的驳回按钮（`admin_game_accounts.html`）等危险操作按钮改用 `.btn-danger` 类——淡红色半透明磨砂玻璃质感，与全站白色磨砂玻璃控件风格一致，同时通过颜色区分危险操作；控件样式集中定义（`.btn-primary`/`.btn-secondary`/`.btn-danger`/`.pixel-card`/`.input-field`），便于后续统一修改
+
 ### 新增
 
-* **一用户一账号绑定机制**：`binding_service.create_binding` 与 `routes/game_accounts/bind.py` 的 `api_bind` 均在绑定前检查当前用户是否已绑定，已绑定则返回「一个网站账号只能绑定一个服务器账号，请先解绑当前账号」，保留 MC 用户名唯一性检查
+* **被驳回内容 24 小时自动删除**：新增 `services/cleanup_service.py` 的 `CleanupScheduler` 定时调度（`core/init.py` 注册，每 30 分钟执行一次），自动清理被驳回超过 24 小时的内容——服务器指南、背景图片等，删除数据库记录的同时删除关联的本地文件（背景主图与响应式变体等），释放存储空间
 
-* **绑定需图形验证码**：`POST /game-accounts/api/bind` 请求体新增 `captcha_id`/`captcha` 字段，后端通过 `captcha_service.verify` 校验并 `consume` 消耗；`bind.html` 复用全局 `CaptchaModal` 弹窗（先弹窗验证、再提交表单），不再内联验证码组件
+* **「申请账号」入口（互动分类）**：导航栏「互动」下拉菜单新增「申请账号」入口（`account_apply` 蓝图，页面 `/game-accounts/apply`；管理 API 见 `routes/admin/account_applications.py`），登录用户可申请注册 MC 游戏账号，提交后进入管理员审批队列（`game_account_registrations` 表），管理后台「账号注册申请管理」可审批/驳回/封禁
 
-* **导航栏「服务器账号」入口**：桌面端、平板端、移动端三个导航区域均添加「服务器账号」按钮，登录后可见，点击直达游戏账号管理首页
-* **管理中心「游戏账号管理」页面**：新增 `admin_game_account_bindings.html` 页面，管理员可查看所有用户已绑定的 MC 游戏账号（含绑定用户、绑定时间），支持管理员强制解绑
-* **管理中心功能拆分**：原「游戏账号管理」改名为「账号注册申请管理」，新增「游戏账号管理」独立入口，两者功能分离
-
-* **游戏账号解绑功能**：MC 账号列表新增「解绑」按钮，点击后弹出确认弹窗，确认后通过 AJAX 调用解绑 API 移除绑定记录，行自动淡出消除。绑定服务层新增 `create_binding`、`is_bound_to_user`、`unbind_account` 等函数，`routes/game_accounts/bind.py` 新增 `POST /game-accounts/api/unbind` 端点
+* **背景图片支持一次性上传多个文件**：`/backgrounds/upload` 支持拖放/选择多个图片文件（前端文件列表展示、单个移除、格式与 10MB 大小校验），后端为每个文件创建独立上传任务并返回任务 ID 数组（`routes/backgrounds/pages.py` 改用 `request.files.getlist` 批量处理），前端聚合展示整体上传进度
 
 ### 重构
 
@@ -30,27 +28,19 @@
 
 * **清理无用代码**：删除顶层残留的 `static/js/base.js`、`static/js/main.js`（模板实际引用 `js/core/base.js` 与 `js/pages/main.js`），删除空的 `static/js/script/` 目录；`static/lib/lib-version.json` 移除已废弃的 `xterm_version` 字段；`scripts/build/package.py` 打包排除项由 `*.duckdb` 更新为 `*.db-wal`/`*.db-shm`；`.gitignore` 移除 DuckDB 残留条目；管理后台备份页文案同步去除「命令日志/定时任务日志」过期描述
 
-* **路由层分层规范全面修复**：移除 `routes/game_accounts/__init__.py` 和 `routes/game_accounts/bind.py` 中所有直接 SQL 查询，改用 `services/game_accounts/binding_service.py` 的服务函数（`get_user_bindings`、`is_mc_username_bound`、`is_bound_to_user`、`create_binding`），彻底消除路由层 `conn.execute()` 调用，严格遵循 MVC 分层架构
-
-* **服务层增强**：`binding_service.py` 新增 `create_binding`（创建绑定记录，含双重并发检查）、`is_bound_to_user`（按用户名+用户ID 校验所有权）函数，所有函数返回 `(success, data_or_error)` 元组
-
 * **大文件按功能模块拆分为子包**：`services/music_service.py`（861行）→ `services/music/`（constants.py / queries.py / crud.py / upload.py / favorites.py），`services/user_service.py`（648行）→ `services/user/`（auth.py / profile.py / admin.py），`services/updater.py`（660行）→ `services/updater/`（config.py / core.py），`services/discussion_service.py`（531行）→ `services/discussion/`（topics.py / replies.py / categories.py）；保留原文件作为兼容性重导出层（`from services.music import *`），旧代码无需修改导入路径
 
 * **空异常捕获增加日志**：`core/init.py` 中两个 `except Exception: pass` 改为 `log('WARNING', ...)` 记录，便于排查问题
+
+* **彻底删除游戏账号绑定/改密功能**：移除游戏账号绑定、改密、解绑相关代码与数据——删除 `routes/game_accounts/bind.py`、`routes/game_accounts/register.py`、`services/game_accounts/binding_service.py`、`services/easyauth_bind.py` 及模板 `game_accounts/bind.html`、`game_accounts/change_password.html`、`game_accounts/index.html`、`admin/admin_game_account_bindings.html`；数据库删除 `game_account_bindings` 表（`core/db/schema.py` 与 `scripts/migrate_db.py` 同步）；**保留 RCON 服务**（`services/rcon/`）与申请注册能力；`game_accounts` 蓝图重构为纯申请注册（`/game-accounts/apply` + `/api/apply-register`），管理后台合并为「账号注册申请管理」
 
 ### 修复
 
 * **背景图片审核通过直接启用**：管理员在后台审核通过背景图片时，该背景自动设为当前显示（`status=approved` 且 `is_active=1`），并同时取消其他背景的激活状态，无需再手动点击启用；「当前显示」按钮与状态徽章（黄色/绿色/蓝色）改为深色文字 + 浅色底，修复 `/backgrounds` 页面浅色文字与浅色底融合导致按钮/徽章不可见的问题。
 
-* **`easyauth_bind.py` 解析容错增强**：`get_player_info` 返回的 `Player Info: {...}` 改为从首个 `{` 截取 JSON 解析，兼容冒号后有空格/无空格、返回中带其他前缀文本的情况；JSON 中 `uuid` 字段可有可无；密码为空时返回「未找到该玩家的密码信息」，密码错误时返回 `error_code='WRONG_PASSWORD'`
-
-* **RCON 密码验证恢复为 `/auth getPlayerInfo` + bcrypt**：服务器确认支持该指令，返回 JSON 格式玩家信息（含密码哈希）。`easyauth_bind.py` 重写为直接解析 JSON 并用 bcrypt.checkpw 比对，删除冗余的 `verify_login` 多重验证流程
-
 * **站点地图更新**：移除已删除的 `/performance` 页面，新增 `/server-status` 和 `/interact` 页面的 sitemap 条目
 
 * **平板导航简化为横屏/竖屏模式**：移除独立的平板端导航代码路径（`md:flex lg:hidden`），平板横屏直接使用桌面端导航（`md:flex`），竖屏使用移动端导航，减少代码冗余
-
-* **修复** **`routes/game_accounts/__init__.py`** **缺少** **`get_db`** **导入**：`change_password_page`、`api_bound_accounts`、`api_change_password` 三个路由函数直接使用 `get_db()` 但未在文件顶部导入，会导致 NameError 运行时错误。现通过服务层函数替代，已移除对 `get_db` 的依赖
 
 * **图形验证码优化（修复「验证码太小」）**：默认尺寸 360x128 → 420x150，字号增大（`font_size = min(96, int(height*0.68))`）；干扰元素升级——3~6 条明快色系（红/橙/蓝/绿/紫/青等）彩色干扰横线/斜线、字符后方 20~40 个浅色小号干扰字符（数字/字母/短横线/点）、背景噪点数量增加并随机浅色着色（不再只是灰色）；字符颜色改为从深色系（深蓝/深红/深绿/深紫/墨黑/深棕）随机选取，保持清晰可辨；位数（4 位）与字符集不变，`generate()`/`verify()`/`consume()` 接口不变；弹窗图片 `max-w-[360px]` 放宽至 `max-w-[420px]`
 

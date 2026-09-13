@@ -1,6 +1,6 @@
 """EasyAuth 插件指令封装 —— 注册、改密、删除、查询等。
 
-密码验证使用 /auth getPlayerInfo + bcrypt（见 services/easyauth_bind.py）。
+密码验证使用 /auth getPlayerInfo + bcrypt 比对。
 
 通过 RCON 向 Minecraft 服务器发送 EasyAuth 插件指令。
 所有函数返回 (success, message) 元组。
