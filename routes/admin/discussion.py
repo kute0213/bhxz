@@ -6,14 +6,14 @@
 from flask import request, redirect, url_for, flash
 
 from core.auth import admin_required, get_current_user
-from core.web.helpers import render_page
+from utils.helpers import render_page
 from core.db import get_db
 from routes.admin import admin_bp
-from services.discussion_service import (
+from services.discussion import (
     delete_topic, toggle_pin, toggle_lock,
     create_category, delete_category, get_categories_with_counts,
 )
-from core.web.ip import get_client_ip
+from utils.ip import get_client_ip
 
 
 @admin_bp.route('/admin/discussion')

@@ -77,11 +77,10 @@ python scripts/build/package.py
 │   │   └── __init__.py
 │   ├── server/               #   WSGI 服务器与优雅关闭
 │   │   └── __init__.py
-│   ├── web/                  #   Web 层：路由辅助、中间件、CSRF、错误页、IP 工具、验证码、安全扫描
-│   │   ├── helpers.py, middleware.py, template_context.py, csrf.py, errors.py
-│   │   ├── ip.py, ratelimit.py, validation.py, captcha.py, security_scanner.py
-│   ├── system/               #   系统层：日志、调度、启动检查、应用初始化、子进程工具
-│   │   ├── logger.py, scheduler.py, startup_checks.py, init.py, process_utils.py
+│   ├── web/                  #   Web 层：中间件、CSRF、错误页
+│   │   ├── __init__.py, middleware.py, csrf.py, errors.py
+│   ├── system/               #   系统层：日志、调度、启动检查、应用初始化
+│   │   ├── __init__.py, logger.py, scheduler.py, startup_checks.py, init.py
 │   ├── db/                   #   数据库连接与 schema
 │   ├── firewall/             #   高性能防火墙（DuckDB 引擎 + 连接级阻断 + DDoS 防护）
 │   │   ├── __init__.py       #   全局单例 + 统一 API
@@ -102,7 +101,12 @@ python scripts/build/package.py
 │   ├── rcon/           # RCON 连接管理、玩家列表追踪、EasyAuth 指令
 │   ├── updater/        # 自动更新（配置/核心逻辑）
 │   ├── user/           # 用户（认证/资料/管理）
-│   └── ...             # 其他单文件服务（附件/背景/验证码/限流/调度/设置/等）
+│   ├── attachment_service/  #   附件上传/清理
+│   ├── background_service/  #   背景图片业务（WebP 转换 + 响应式变体）
+│   ├── cleanup_service/     #   被驳回内容自动清理
+│   ├── easy_auth_db/        #   EasyAuth 数据库直连验证
+│   ├── settings_manager/    #   系统设置管理
+│   └── sitemap_cache/       #   Sitemap 缓存服务
 ├── routes/       # HTTP 路由层（Flask Blueprint）
 │   ├── admin/          # 管理后台（用户/备份/设置/日志/更新/游戏账号/指南/音乐/讨论等）
 │   ├── api/            # 公开 API（性能/统计/验证码/邮箱）
@@ -125,8 +129,9 @@ python scripts/build/package.py
 │   ├── music/          # 大喇叭音频页面
 │   └── ...             # 基础页面（首页/登录/注册/设置/404/403）
 ├── static/       # 静态资源（CSS/JS/本地化第三方库）
+├── utils/        # 共享工具函数（IP/限流/验证/验证码/安全扫描/模板辅助/子进程）
 ├── docs/         # 项目文档
-├── scripts/      # 构建（build/）与测试（tests/）
+├── scripts/      # 数据库迁移（migrate_db/、restore_db/）与测试（tests/）
 ├── uploads/      # 运行期上传数据
 │   ├── attachments/    # 留言板/讨论区附件
 │   ├── backgrounds/    # 全站背景图片
@@ -547,20 +552,24 @@ app.py ──→ routes/ ──→ services/ ──→ core/
   │            │            │            │
   │         HTTP 层     业务逻辑层    基础设施层
   │            │            │            │
-  Flask    蓝图/路由   纯 Python 函数    DB/认证/工具
+  Flask    蓝图/路由   纯 Python 函数    DB/认证/防火墙
              │            │
-         main/        user/（auth.py / profile.py）
-         docs/        game_accounts/（registration_service.py）
-         public/      attachment_service.py
-         admin/       discussion/（topics.py / replies.py / categories.py）
-         api/         music/（constants.py / queries.py / crud.py / upload.py / favorites.py）
-         discussion/  rcon/（client.py / pool.py / easy_auth.py）
-         guides/      updater/（config.py / core.py）
-         backgrounds/ backup/（manager.py / scheduler.py）
-         game_accounts/ captcha.py （验证码）
-                       cleanup_service.py （被驳回内容自动清理）
-                       ratelimit.py （限流）
-                       logger.py （日志）
+         main/        user/（auth / profile）
+         docs/        game_accounts/（registration_service）
+         public/      discussion/（topics / replies / categories）
+         admin/       music/（constants / queries / crud / upload / favorites）
+         api/         rcon/（client / pool / easy_auth）
+         discussion/  email/（service / code / templates / sanitize）
+         guides/      updater/（config / core）
+         backgrounds/ backup/（manager / scheduler）
+         sitemap/     attachment_service/（附件上传/清理）
+         game_accounts/ background_service/（背景图片业务）
+                      cleanup_service/（被驳回内容自动清理）
+                      settings_manager/（系统设置管理）
+                      sitemap_cache/（Sitemap 缓存）
+                      easy_auth_db/（EasyAuth 数据库直连）
+                      monitoring/（系统性能监控）
+                      logging/（日志自动清理）
 ```
 
 | 层级     | 目录          | 职责                                              | 禁止                                |
@@ -582,11 +591,10 @@ workspace/
 │   │   └── __init__.py
 │   ├── server/               #   WSGI 服务器与优雅关闭
 │   │   └── __init__.py
-│   ├── web/                  #   Web 层：路由辅助、中间件、CSRF、错误页、IP 工具、验证码、安全扫描
-│   │   ├── helpers.py, middleware.py, template_context.py, csrf.py, errors.py
-│   │   ├── ip.py, ratelimit.py, validation.py, captcha.py, security_scanner.py
-│   ├── system/               #   系统层：日志、调度、启动检查、应用初始化、子进程工具
-│   │   ├── logger.py, scheduler.py, startup_checks.py, init.py, process_utils.py
+│   ├── web/                  #   Web 层：中间件、CSRF、错误页
+│   │   ├── __init__.py, middleware.py, csrf.py, errors.py
+│   ├── system/               #   系统层：日志、调度、启动检查、应用初始化
+│   │   ├── __init__.py, logger.py, scheduler.py, startup_checks.py, init.py
 │   ├── db/                   #   数据库连接与 schema
 │   ├── firewall/             #   高性能防火墙（DuckDB 引擎 + 连接级阻断 + DDoS 防护）
 │   │   ├── __init__.py       #   全局单例 + 统一 API
@@ -606,21 +614,12 @@ workspace/
 │   ├── rcon/                 #   RCON 连接管理、玩家列表追踪、EasyAuth 指令
 │   ├── updater/              #   自动更新（配置/核心逻辑）
 │   ├── user/                 #   用户（认证/资料/管理）
-│   ├── attachment_service.py #   附件上传/清理
-│   ├── background_service.py #   背景图片业务（WebP 转换 + 响应式变体）
-│   ├── captcha.py            #   图形验证码
-│   ├── discussion_service.py #   兼容性重导出层（讨论区）
-│   ├── easy_auth_db.py       #   EasyAuth 数据库直连验证
-│   ├── ip.py                 #   IP 工具
-│   ├── music_service.py      #   兼容性重导出层（大喇叭音频）
-│   ├── process_utils.py      #   子进程工具（编码/缓冲/环境变量）
-│   ├── ratelimit.py          #   IP 频率限制
-│   ├── cleanup_service.py    #   被驳回内容自动清理（统一定时调度）
-│   ├── settings_manager.py   #   系统设置管理
-│   ├── sitemap_cache.py      #   Sitemap 缓存
-│   ├── updater.py            #   兼容性重导出层（自动更新）
-│   ├── user_service.py       #   兼容性重导出层（用户）
-│   └── validation.py         #   输入验证统一模块
+│   ├── attachment_service/   #   附件上传/清理
+│   ├── background_service/   #   背景图片业务（WebP 转换 + 响应式变体）
+│   ├── cleanup_service/      #   被驳回内容自动清理（统一定时调度）
+│   ├── easy_auth_db/         #   EasyAuth 数据库直连验证
+│   ├── settings_manager/     #   系统设置管理
+│   ├── sitemap_cache/        #   Sitemap 缓存服务
 ├── routes/                   # HTTP 路由层
 │   ├── main/                 #   首页、登录、注册、设置、音乐
 │   ├── admin/                #   管理后台（用户/备份/设置/日志/更新/游戏账号/指南/音乐/讨论/广播/背景等）
@@ -632,8 +631,7 @@ workspace/
 │   ├── game_accounts/        #   申请账号（页面+API，纯申请注册）
 │   ├── guides/               #   服务器指南（页面+API）
 │   ├── public/               #   公开文件服务
-│   ├── registry.py           #   蓝图注册中心
-│   └── sitemap.py            #   站点地图
+│   └── sitemap/              #   站点地图 & robots.txt
 ├── static/                   # 静态资源（CSS/JS）
 │   ├── css/                  #   样式（tailwind/base）
 │   ├── js/                   #   脚本（core/通用, pages/页面）

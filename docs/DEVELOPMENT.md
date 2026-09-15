@@ -131,9 +131,9 @@ def do_something(user_id, value, ip_address):
 
 * `core/db/` — 数据库连接封装
 
-* `core/auth.py` — 认证装饰器、密码哈希
+* `core/auth/` — 认证装饰器、密码哈希
 
-* `core/middleware.py` — 请求中间件
+* `core/web/middleware.py` — 请求中间件
 
 ## 新增功能的流程
 
@@ -141,11 +141,26 @@ def do_something(user_id, value, ip_address):
 2. 在 `routes/` 中创建薄层路由，调用服务函数
 3. 在 `scripts/tests/` 中编写测试覆盖
 
+## 工具函数层规范（utils/）
+
+通用工具函数集中存放于 `utils/` 目录，不含任何业务逻辑：
+
+| 文件 | 职责 |
+|------|------|
+| `helpers.py` | 模板辅助函数（分页、站点信息、当前用户注入） |
+| `ip.py` | IP 获取、信任代理判断 |
+| `ratelimit.py` | 请求速率限制（注册/登录/验证码） |
+| `validation.py` | 密码强度、邮箱格式校验 |
+| `captcha.py` | 图形验证码生成与校验 |
+| `security_scanner.py` | 攻击特征扫描（SQL注入/XSS/路径穿越等） |
+| `process_utils.py` | 子进程环境统一（UTF-8） |
+| `template_context.py` | 模板全局上下文注入 |
+
 ## 代码复用原则
 
 发现重复代码时，正确做法是**抽取到 services**，而非复制粘贴：
 
-* 附件处理始终使用 `services/attachment_service.py`
+* 附件处理始终使用 `services/attachment_service/`
 
 * 用户操作始终使用 `services/user/` 子模块
 

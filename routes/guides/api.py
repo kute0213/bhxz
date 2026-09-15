@@ -7,8 +7,8 @@ from flask import request, jsonify, abort
 
 from core.auth import login_required, get_current_user
 from core.db import get_db
-from core.web.ip import get_client_ip
-from core.web.captcha import captcha_service
+from utils.ip import get_client_ip
+from utils.captcha import captcha_service
 from services.email import email_service, guide_review_pending as build_pending_html
 from routes.guides import guides_bp
 

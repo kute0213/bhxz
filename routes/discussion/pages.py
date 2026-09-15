@@ -6,12 +6,12 @@
 from flask import request, redirect, url_for, flash, abort
 
 from core.auth import login_required, get_current_user
-from core.web.helpers import render_page
+from utils.helpers import render_page
 from core.db import get_db
 from routes.discussion import discussion_bp
 from config import get_config_value
-from core.web.ip import get_client_ip
-from services.discussion_service import (
+from utils.ip import get_client_ip
+from services.discussion import (
     get_categories, get_category_dict, get_topics_page, get_topic_detail,
     create_topic, edit_topic,
 )

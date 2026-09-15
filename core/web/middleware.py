@@ -7,7 +7,7 @@ from flask import request, session
 from werkzeug.exceptions import HTTPException
 
 from core.system.logger import log
-from core.web.ip import get_client_ip
+from utils.ip import get_client_ip
 
 # 跳过公共文件服务的路径前缀（这些路径由 Flask 蓝图处理）
 ROUTE_PREFIXES = (
@@ -165,7 +165,7 @@ def register_hooks(app, try_serve_public):
         if request.path.startswith('/static/'):
             return None
 
-        from core.web.security_scanner import scan_request
+        from utils.security_scanner import scan_request
         from core.firewall import ban_suspicious_ip
         from core.web.errors import render_error_page
         attack_type, matched = scan_request(

@@ -2,6 +2,17 @@
 
 ## \[Unreleased]
 
+### 重构
+
+* **彻底模块化重构项目文件结构**：
+  * **core 精简**：将 8 个非核心工具函数（`helpers.py` / `ip.py` / `ratelimit.py` / `validation.py` / `captcha.py` / `security_scanner.py` / `process_utils.py` / `template_context.py`）从 `core/web/` 迁至新 `utils/` 目录，防火墙 (`core/firewall/`) 保持不变
+  * **全部文件夹分类**：消除所有目录根目录的散乱文件（`__init__.py` 除外），将 12 个单文件转换为子包结构：
+    * `services/`：`attachment_service/`、`background_service/`、`cleanup_service/`、`easy_auth_db/`、`settings_manager/`、`sitemap_cache/`（兼容层同步删除）
+    * `routes/`：`sitemap/`（原 `routes/sitemap.py`）
+    * `scripts/`：`migrate_db/`、`restore_db/`（原 `scripts/migrate_db.py`、`scripts/restore_db.py`）
+  * **删除兼容层**：移除 `services/music_service.py`、`services/user_service.py`、`services/updater.py`、`routes/registry.py` 等所有单文件重导出兼容层，更新全部 12 处相关导入
+  * **配置层统一**：`routes/__init__.py` 合并蓝图注册，消除独立 `routes/registry.py`
+
 ### 调整
 
 * **全站统一错误页（错误号 / 原因 / 建议）**：新增 `core/errors.py` 统一错误页模块与 `templates/error.html` 统一模板，覆盖 400/401/403/404/405/413/429/500/502/503/504 全部常见错误码，每页展示「错误号（如 403 Forbidden）+ 错误原因 + 建议处理方法」；`abort(code, description)` 传参可覆盖默认原因；IP 封禁、可疑访问拦截（`core/middleware.py`）与防火墙黑名单拦截（`core/firewall.py`）均改用统一三要素错误页；删除旧的 `templates/403.html`、`templates/404.html`。同时整理 `core` 目录：错误页逻辑从 `core/server.py` 迁出（该文件恢复为纯 WSGI 服务器职责），`app.py` 改从 `core.errors` 注册错误处理器，`core/helpers.py` 移除重复的渲染函数。

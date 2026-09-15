@@ -5,7 +5,7 @@ from datetime import datetime
 from flask import redirect, url_for, flash, abort, request, jsonify
 
 from core.auth import admin_required, get_current_user
-from core.web.helpers import render_page
+from utils.helpers import render_page
 from core.db import get_db
 from services.email import email_service, guide_review_result as build_result_html
 from routes.admin import admin_bp

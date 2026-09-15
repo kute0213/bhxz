@@ -23,7 +23,7 @@ def create_application(user_id: int, mc_username: str) -> Tuple[bool, str]:
     Returns:
         (success, message)
     """
-    from core.web.validation import validate_mc_username
+    from utils.validation import validate_mc_username
 
     mc_username = mc_username.strip()
     valid_mc, mc_err = validate_mc_username(mc_username)

@@ -7,7 +7,7 @@ import re
 from flask import request, jsonify, abort, flash, redirect, url_for
 
 from core.auth import admin_required, get_current_user
-from core.web.helpers import render_page
+from utils.helpers import render_page
 from routes.admin import admin_bp
 from config import SETTINGS_REGISTRY, get_config_value
 from core.system.logger import log

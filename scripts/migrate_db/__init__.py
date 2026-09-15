@@ -23,7 +23,7 @@ import sqlite3
 import sys
 
 # 项目根目录
-APP_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+APP_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 sys.path.insert(0, APP_ROOT)
 
 from config import DB_PATH  # noqa: E402

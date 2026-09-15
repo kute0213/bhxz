@@ -7,7 +7,7 @@ import json
 import os
 from collections import defaultdict
 
-from core.web.ip import get_client_ip
+from utils.ip import get_client_ip
 
 _STATE_PATH = '/tmp/ratelimit_state.json'
 

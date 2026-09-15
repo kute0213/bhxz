@@ -20,11 +20,11 @@ from flask import (
 )
 
 from core.auth import login_required, get_current_user
-from core.web.helpers import render_page
+from utils.helpers import render_page
 from config import UPLOAD_MUSIC_DIR
 from routes.main import main_bp
-from services import music_service
-from core.web.ip import get_client_ip
+import services.music as music_service
+from utils.ip import get_client_ip
 
 
 @main_bp.route('/music')

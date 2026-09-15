@@ -5,7 +5,7 @@ from io import BytesIO
 
 from PIL import Image
 
-from core.web.captcha import captcha_service, generate_char_captcha, verify_captcha
+from utils.captcha import captcha_service, generate_char_captcha, verify_captcha
 
 
 def test_captcha_image_has_readable_dimensions():

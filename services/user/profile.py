@@ -57,7 +57,7 @@ def _clean_user_media(keys, user_id):
 def change_username(user_id, current_username, new_username, current_password, ip_address):
     """修改用户名。返回 (success, message)。"""
 
-    from core.web.validation import validate_website_username
+    from utils.validation import validate_website_username
     valid, err = validate_website_username(new_username)
     if not valid:
         return False, err

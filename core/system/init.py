@@ -6,7 +6,7 @@ import sys
 from flask import Flask
 
 from core.system.logger import log
-from core.web.template_context import register_template_context
+from utils.template_context import register_template_context
 
 
 def register_hooks(app, try_serve_public):
@@ -62,7 +62,7 @@ def init_app(app, app_root):
     run_startup_checks(app_root)
 
     log('INFO', 'App', '正在注册蓝图...')
-    from routes.registry import register_blueprints
+    from routes import register_blueprints
     try_serve_public = register_blueprints(app)
 
     register_hooks(app, try_serve_public)

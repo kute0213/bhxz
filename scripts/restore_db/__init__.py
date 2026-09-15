@@ -22,14 +22,14 @@ import shutil
 import subprocess
 
 # 项目根目录
-APP_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+APP_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 BACKUP_DIR = os.path.join(APP_ROOT, 'backups', 'db')
 DB_PATH = os.path.join(APP_ROOT, 'db', 'site.db')
 FLAG_FILE = os.path.join(BACKUP_DIR, '.restore_flag')
 
 # 独立脚本运行时 sys.path[0] 为 scripts/，需手动加入项目根目录以便导入 services
 sys.path.insert(0, APP_ROOT)
-from core.system.process_utils import make_env  # noqa: E402
+from utils.process_utils import make_env  # noqa: E402
 
 
 def main():

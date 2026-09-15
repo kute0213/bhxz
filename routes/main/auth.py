@@ -13,11 +13,11 @@ from config import (
     LOGIN_CAPTCHA_THRESHOLD, LOGIN_CAPTCHA_RESET_SECONDS,
 )
 from services.email import normalize_email
-from services.user_service import (
+from services.user import (
     register, login, forgot_password, check_username_available,
 )
 from core.system.logger import log
-from core.web.ip import get_client_ip
+from utils.ip import get_client_ip
 from routes.main import main_bp
 
 
