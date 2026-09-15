@@ -14,8 +14,8 @@ import time
 from dataclasses import dataclass, field
 from typing import List, Optional
 
-from core.logger import log
-from core.scheduler import Scheduler
+from core.system.logger import log
+from core.system.scheduler import Scheduler
 from services.rcon.client import execute_command
 
 

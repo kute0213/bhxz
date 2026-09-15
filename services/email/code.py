@@ -7,8 +7,8 @@ import time
 import threading
 from datetime import datetime
 
-from core.logger import log
-from core.scheduler import Scheduler
+from core.system.logger import log
+from core.system.scheduler import Scheduler
 from .service import email_service
 from .templates import verification_code as build_code_html
 

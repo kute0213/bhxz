@@ -20,8 +20,8 @@ import uuid
 import threading
 from typing import Tuple
 
-from core.logger import log
-from core.scheduler import Scheduler
+from core.system.logger import log
+from core.system.scheduler import Scheduler
 
 # 延迟导入 Pillow，避免不必要的依赖检查
 _pil_available = None

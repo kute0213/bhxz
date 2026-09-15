@@ -22,8 +22,8 @@ from config import (
     FFMPEG_THREADS,
     AUDIO_MAX_BYTES,
 )
-from core.logger import log
-from services.process_utils import make_env, decode_output
+from core.system.logger import log
+from core.system.process_utils import make_env, decode_output
 from services.music.constants import (
     HLS_SEGMENT_SECONDS,
     STATUS_PENDING,

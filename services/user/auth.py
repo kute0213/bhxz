@@ -8,11 +8,11 @@ from flask import request
 from core.auth import hash_password, verify_password
 from core.db import get_db
 from config import REGISTER_VERIFY_CODE, MAX_LOGIN_ATTEMPTS, LOGIN_LOCKOUT_TIME, get_config_value
-from services.captcha import captcha_service
+from core.web.captcha import captcha_service
 from services.email import normalize_email, email_code_service
-from services.ratelimit import register_limiter, login_limiter, forgot_password_limiter
+from core.web.ratelimit import register_limiter, login_limiter, forgot_password_limiter
 from core.firewall import auto_ban
-from core.logger import log
+from core.system.logger import log
 
 
 def _get_ua():
@@ -27,7 +27,7 @@ def check_username_available(username):
     """按不区分大小写的规则检查用户名是否可以注册。"""
     username = (username or '').strip()
 
-    from services.validation import validate_website_username
+    from core.web.validation import validate_website_username
     valid, err = validate_website_username(username)
     if not valid:
         return False, err
@@ -57,7 +57,7 @@ def register(username, password, confirm, verify_code, captcha_input, captcha_id
         auto_ban(ip_address or 'unknown', 'register')
         return False, '注册请求过于频繁，请稍后再试'
 
-    from services.validation import validate_website_username, validate_password_strength
+    from core.web.validation import validate_website_username, validate_password_strength
     valid_uname, uname_err = validate_website_username(username)
     if not valid_uname:
         log('Register', '用户名格式不符合要求', username=username, ip=ip_address)
@@ -293,7 +293,7 @@ def forgot_password(username, email, captcha_input, captcha_id, email_code,
         log('ForgotPassword', '邮箱验证码错误', username=username, email=email, ip=ip_address)
         return False, '邮箱验证码错误或已过期'
 
-    from services.validation import validate_password_strength
+    from core.web.validation import validate_password_strength
     valid_pwd, pwd_err = validate_password_strength(new_password)
     if not valid_pwd:
         log('ForgotPassword', '新密码不符合要求', username=username, ip=ip_address)

@@ -3,18 +3,33 @@
 from flask import redirect, url_for, flash, request, jsonify
 
 from core.auth import admin_required, get_current_user
-from core.helpers import render_page
+from core.web.helpers import render_page
 from core.firewall import (
     ban_ip, unban_ip, get_bans, get_whitelist, is_whitelisted,
     whitelist_add, whitelist_remove, SYSTEM_BANNER_ID,
-    add_warning, get_warnings, get_warning_count,
+    add_warning, get_warnings, get_warning_count, get_all_warnings,
 )
-from services.ip import get_client_ip
+from core.web.ip import get_client_ip
 from config import (
     AUTO_BAN_ENABLED,
     AUTO_BAN_DURATION_MINUTES,
+    AUTO_BAN_LOGIN_ENABLED,
+    AUTO_BAN_REGISTER_ENABLED,
+    AUTO_BAN_EMAIL_ENABLED,
+    AUTO_BAN_FORGOT_PASSWORD_ENABLED,
     SUSPICIOUS_BLOCK_ENABLED,
     SUSPICIOUS_BLOCK_DURATION_MINUTES,
+    SUSPICIOUS_BLOCK_SQLI_ENABLED,
+    SUSPICIOUS_BLOCK_XSS_ENABLED,
+    SUSPICIOUS_BLOCK_PATH_TRAVERSAL_ENABLED,
+    SUSPICIOUS_BLOCK_COMMAND_INJECTION_ENABLED,
+    SUSPICIOUS_BLOCK_SENSITIVE_PROBE_ENABLED,
+    SUSPICIOUS_BLOCK_MALICIOUS_UA_ENABLED,
+    DDOS_GUARD_ENABLED,
+    DDOS_GUARD_INTENSITY,
+    DDOS_GUARD_BAN_MINUTES,
+    DDOS_GUARD_PERMANENT_AFTER,
+    DDOS_GUARD_OFFENSE_WINDOW_HOURS,
     get_config_value,
 )
 from routes.admin import admin_bp
@@ -23,10 +38,11 @@ from routes.admin import admin_bp
 @admin_bp.route('/admin/firewall')
 @admin_required
 def admin_firewall():
-    """管理后台：防火墙总览页（封禁管理 + 白名单 + 配置）。"""
+    """管理后台：防火墙总览页（封禁管理 + 白名单 + 全部配置）。"""
     bans = get_bans()
     current_ip = get_client_ip()
     whitelist = get_whitelist()
+    warnings = get_all_warnings()
     # 检查当前 IP 状态
     from core.firewall import is_banned
     current_banned, current_reason = is_banned(current_ip)
@@ -37,13 +53,32 @@ def admin_firewall():
         current_banned=current_banned,
         current_reason=current_reason,
         whitelist=whitelist,
+        warnings=warnings,
+        # 自动 IP 封禁
         auto_ban_enabled=get_config_value('AUTO_BAN_ENABLED', AUTO_BAN_ENABLED),
         auto_ban_duration_minutes=get_config_value(
             'AUTO_BAN_DURATION_MINUTES', AUTO_BAN_DURATION_MINUTES),
+        auto_ban_login_enabled=get_config_value('AUTO_BAN_LOGIN_ENABLED', True),
+        auto_ban_register_enabled=get_config_value('AUTO_BAN_REGISTER_ENABLED', True),
+        auto_ban_email_enabled=get_config_value('AUTO_BAN_EMAIL_ENABLED', True),
+        auto_ban_forgot_password_enabled=get_config_value('AUTO_BAN_FORGOT_PASSWORD_ENABLED', True),
+        # 可疑访问拦截
         suspicious_block_enabled=get_config_value(
             'SUSPICIOUS_BLOCK_ENABLED', SUSPICIOUS_BLOCK_ENABLED),
         suspicious_block_duration_minutes=get_config_value(
             'SUSPICIOUS_BLOCK_DURATION_MINUTES', SUSPICIOUS_BLOCK_DURATION_MINUTES),
+        suspicious_sqli_enabled=get_config_value('SUSPICIOUS_BLOCK_SQLI_ENABLED', True),
+        suspicious_xss_enabled=get_config_value('SUSPICIOUS_BLOCK_XSS_ENABLED', True),
+        suspicious_path_traversal_enabled=get_config_value('SUSPICIOUS_BLOCK_PATH_TRAVERSAL_ENABLED', True),
+        suspicious_command_injection_enabled=get_config_value('SUSPICIOUS_BLOCK_COMMAND_INJECTION_ENABLED', True),
+        suspicious_sensitive_probe_enabled=get_config_value('SUSPICIOUS_BLOCK_SENSITIVE_PROBE_ENABLED', True),
+        suspicious_malicious_ua_enabled=get_config_value('SUSPICIOUS_BLOCK_MALICIOUS_UA_ENABLED', True),
+        # DDoS 防护
+        ddos_guard_enabled=get_config_value('DDOS_GUARD_ENABLED', True),
+        ddos_guard_intensity=get_config_value('DDOS_GUARD_INTENSITY', 'medium'),
+        ddos_guard_ban_minutes=get_config_value('DDOS_GUARD_BAN_MINUTES', 30),
+        ddos_guard_permanent_after=get_config_value('DDOS_GUARD_PERMANENT_AFTER', 3),
+        ddos_guard_offense_window_hours=get_config_value('DDOS_GUARD_OFFENSE_WINDOW_HOURS', 24),
     )
 
 
@@ -52,8 +87,23 @@ FIREWALL_CONFIG_KEYS = {
     'FIREWALL_WHITELIST',
     'AUTO_BAN_ENABLED',
     'AUTO_BAN_DURATION_MINUTES',
+    'AUTO_BAN_LOGIN_ENABLED',
+    'AUTO_BAN_REGISTER_ENABLED',
+    'AUTO_BAN_EMAIL_ENABLED',
+    'AUTO_BAN_FORGOT_PASSWORD_ENABLED',
     'SUSPICIOUS_BLOCK_ENABLED',
     'SUSPICIOUS_BLOCK_DURATION_MINUTES',
+    'SUSPICIOUS_BLOCK_SQLI_ENABLED',
+    'SUSPICIOUS_BLOCK_XSS_ENABLED',
+    'SUSPICIOUS_BLOCK_PATH_TRAVERSAL_ENABLED',
+    'SUSPICIOUS_BLOCK_COMMAND_INJECTION_ENABLED',
+    'SUSPICIOUS_BLOCK_SENSITIVE_PROBE_ENABLED',
+    'SUSPICIOUS_BLOCK_MALICIOUS_UA_ENABLED',
+    'DDOS_GUARD_ENABLED',
+    'DDOS_GUARD_INTENSITY',
+    'DDOS_GUARD_BAN_MINUTES',
+    'DDOS_GUARD_PERMANENT_AFTER',
+    'DDOS_GUARD_OFFENSE_WINDOW_HOURS',
 }
 
 
@@ -78,13 +128,28 @@ def admin_firewall_settings():
             errors.append({'key': key, 'message': '无效的设置键'})
             continue
         try:
-            if key in ('AUTO_BAN_ENABLED', 'SUSPICIOUS_BLOCK_ENABLED'):
+            # 布尔类型
+            if key in ('AUTO_BAN_ENABLED', 'AUTO_BAN_LOGIN_ENABLED', 'AUTO_BAN_REGISTER_ENABLED',
+                       'AUTO_BAN_EMAIL_ENABLED', 'AUTO_BAN_FORGOT_PASSWORD_ENABLED',
+                       'SUSPICIOUS_BLOCK_ENABLED', 'SUSPICIOUS_BLOCK_SQLI_ENABLED',
+                       'SUSPICIOUS_BLOCK_XSS_ENABLED', 'SUSPICIOUS_BLOCK_PATH_TRAVERSAL_ENABLED',
+                       'SUSPICIOUS_BLOCK_COMMAND_INJECTION_ENABLED',
+                       'SUSPICIOUS_BLOCK_SENSITIVE_PROBE_ENABLED',
+                       'SUSPICIOUS_BLOCK_MALICIOUS_UA_ENABLED', 'DDOS_GUARD_ENABLED'):
                 if isinstance(value, str):
                     value = value.lower() in ('1', 'true', 'yes', 'on')
                 else:
                     value = bool(value)
-            elif key in ('AUTO_BAN_DURATION_MINUTES', 'SUSPICIOUS_BLOCK_DURATION_MINUTES'):
+            # 整数类型
+            elif key in ('AUTO_BAN_DURATION_MINUTES', 'SUSPICIOUS_BLOCK_DURATION_MINUTES',
+                         'DDOS_GUARD_BAN_MINUTES', 'DDOS_GUARD_PERMANENT_AFTER',
+                         'DDOS_GUARD_OFFENSE_WINDOW_HOURS'):
                 value = int(value)
+            # 字符串/选择类型
+            elif key == 'DDOS_GUARD_INTENSITY':
+                value = str(value).lower()
+                if value not in ('low', 'medium', 'high'):
+                    value = 'medium'
             settings_manager.set(key, value)
             saved.append(key)
         except Exception as e:

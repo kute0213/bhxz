@@ -12,7 +12,7 @@ import threading
 import time
 import weakref
 
-from core.logger import log
+from core.system.logger import log
 
 # 黑名单同步周期（秒）
 SYNC_INTERVAL = 0.5

@@ -20,7 +20,7 @@ from core.firewall.service import (
     SYSTEM_BANNER_ID,
 )
 from core.firewall.database import get_db
-from core.logger import log
+from core.system.logger import log
 
 # DDoS 检测强度预设：单位检测窗口（秒）内允许的最大请求数
 DDOS_INTENSITY_PRESETS = {

@@ -145,7 +145,7 @@ def _match_first(patterns, text):
 
 
 def scan_request(path, query_string='', body='', user_agent=''):
-    """扫描一次请求，返回 (attack_type, matched)；未命中返回 (None, '')。
+    """扫描一次请求，返回 (attack_type, matched)；未命中返回 (None, '').
 
     Args:
         path: 请求路径（已解码）

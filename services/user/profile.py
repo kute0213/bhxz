@@ -7,7 +7,7 @@ from core.auth import hash_password, validate_password, verify_password
 from core.db import get_db
 from config import get_config_value
 from services.email import email_code_service
-from core.logger import log
+from core.system.logger import log
 from services.attachment_service import clean_attachment_json
 
 
@@ -57,7 +57,7 @@ def _clean_user_media(keys, user_id):
 def change_username(user_id, current_username, new_username, current_password, ip_address):
     """修改用户名。返回 (success, message)。"""
 
-    from services.validation import validate_website_username
+    from core.web.validation import validate_website_username
     valid, err = validate_website_username(new_username)
     if not valid:
         return False, err

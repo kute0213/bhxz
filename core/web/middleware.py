@@ -6,8 +6,8 @@
 from flask import request, session
 from werkzeug.exceptions import HTTPException
 
-from core.logger import log
-from services.ip import get_client_ip
+from core.system.logger import log
+from core.web.ip import get_client_ip
 
 # 跳过公共文件服务的路径前缀（这些路径由 Flask 蓝图处理）
 ROUTE_PREFIXES = (
@@ -137,7 +137,7 @@ def register_hooks(app, try_serve_public):
         （不校验 CSRF、不服务公共文件、不执行路由逻辑）。
         """
         from core.firewall import is_banned
-        from core.errors import render_error_page
+        from core.web.errors import render_error_page
         ip = get_client_ip()
         banned, reason = is_banned(ip)
         if banned:
@@ -165,9 +165,9 @@ def register_hooks(app, try_serve_public):
         if request.path.startswith('/static/'):
             return None
 
-        from services.security_scanner import scan_request
+        from core.web.security_scanner import scan_request
         from core.firewall import ban_suspicious_ip
-        from core.errors import render_error_page
+        from core.web.errors import render_error_page
         attack_type, matched = scan_request(
             path=request.path,
             query_string=request.query_string.decode('utf-8', 'ignore'),
@@ -191,7 +191,7 @@ def register_hooks(app, try_serve_public):
     @app.before_request
     def csrf_check_hook():
         """全站 CSRF 防护（除 /api/* 外所有 POST/PUT/DELETE/PATCH 请求）。"""
-        from core.csrf import csrf_protect
+        from core.web.csrf import csrf_protect
         csrf_protect()
 
     @app.before_request

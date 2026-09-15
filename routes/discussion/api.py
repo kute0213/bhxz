@@ -8,7 +8,7 @@ from flask import request, abort, url_for, jsonify
 from core.auth import login_required, get_current_user
 from routes.discussion import discussion_bp
 from routes.community.helpers import _respond
-from services.ip import get_client_ip
+from core.web.ip import get_client_ip
 from services.discussion_service import (
     reply_to_topic,
     delete_reply as svc_delete_reply,

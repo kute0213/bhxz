@@ -72,32 +72,25 @@ python scripts/build/package.py
 ```
 /workspace
 ├── app.py / config.py / requirements.txt   # 入口、配置、依赖
-├── core/         # 基础设施层（DB/认证/中间件/服务器）
-│   ├── auth/           #   认证装饰器、密码哈希（from core.auth import ...）
+├── core/         # 基础设施层（auth/server/web/system/db/firewall）
+│   ├── auth/                 #   认证装饰器、密码哈希
 │   │   └── __init__.py
-│   ├── server/         #   WSGI 服务器与优雅关闭（from core.server import ...）
+│   ├── server/               #   WSGI 服务器与优雅关闭
 │   │   └── __init__.py
-│   ├── web/            #   路由辅助函数、请求中间件、模板上下文、CSRF、错误页
-│   │   ├── helpers.py
-│   │   ├── middleware.py
-│   │   ├── template_context.py
-│   │   ├── csrf.py
-│   │   └── errors.py
-│   ├── system/         #   日志、调度、启动检查、应用初始化
-│   │   ├── logger.py
-│   │   ├── scheduler.py
-│   │   ├── startup_checks.py
-│   │   └── init.py
-│   ├── db/             #   数据库连接与 schema
-│   ├── firewall/       #   高性能防火墙模块（DuckDB 引擎 + 连接级阻断 + DDoS 防护）
-│   │   ├── __init__.py       # 全局单例 Firewall、统一 API
-│   │   ├── database.py       # DuckDB 引擎（独立高性能数据库，db/firewall.duckdb）
-│   │   ├── service.py        # 统一业务层（封禁/白名单/警告/配置）
+│   ├── web/                  #   Web 层：路由辅助、中间件、CSRF、错误页、IP 工具、验证码、安全扫描
+│   │   ├── helpers.py, middleware.py, template_context.py, csrf.py, errors.py
+│   │   ├── ip.py, ratelimit.py, validation.py, captcha.py, security_scanner.py
+│   ├── system/               #   系统层：日志、调度、启动检查、应用初始化、子进程工具
+│   │   ├── logger.py, scheduler.py, startup_checks.py, init.py, process_utils.py
+│   ├── db/                   #   数据库连接与 schema
+│   ├── firewall/             #   高性能防火墙（DuckDB 引擎 + 连接级阻断 + DDoS 防护）
+│   │   ├── __init__.py       #   全局单例 + 统一 API
+│   │   ├── database.py       #   DuckDB 引擎
+│   │   ├── service.py        #   封禁/白名单/警告/自动封禁
 │   │   ├── connection_filter.py  # 连接级黑名单拦截 + 强制断开
-│   │   ├── ddos.py           # DDoS 检测（防误判：静态资源/媒体不计入）
-│   │   ├── monitor.py        # 后台监控（同步黑名单/强制关闭/定时清理）
-│   │   └── wrappers.py       # WSGI 门禁（二次拦截兜底）
-│   └── firewall.py     #   向后兼容重导出层（旧路径导入仍可用）
+│   │   ├── ddos.py           #   DDoS 检测（防误判）
+│   │   ├── monitor.py        #   后台监控
+│   │   └── wrappers.py       #   WSGI 门禁
 ├── services/     # 业务逻辑层（纯 Python，不依赖 Flask）
 │   ├── backup/         # 数据库备份与恢复
 │   ├── discussion/     # 讨论区（帖子/回复/分类）
@@ -575,7 +568,7 @@ app.py ──→ routes/ ──→ services/ ──→ core/
 | **入口** | `app.py`    | Flask 实例、蓝图注册、WSGI 服务器                          | 不得包含业务逻辑                          |
 | **路由** | `routes/`   | HTTP 请求解析、参数校验、Session 管理、响应构造                  | 不得包含 SQL、事务、业务逻辑                  |
 | **服务** | `services/` | 纯业务逻辑，Flask 无关，返回 `(success, data_or_error)` 元组 | 不得导入 Flask、不得直接操作 request/session |
-| **核心** | `core/`     | 数据库连接、认证装饰器、中间件                                 | 不得包含业务逻辑，不得导入 services            |
+| **核心** | `core/`     | 数据库连接、认证装饰器、中间件、Web 工具、系统工具、防火墙                | 不得包含业务逻辑，不得导入 services            |
 
 ### 目录结构
 
@@ -585,29 +578,24 @@ workspace/
 ├── config.py                 # 全局配置
 ├── requirements.txt          # Python 依赖
 ├── core/                     # 基础设施层
+│   ├── auth/                 #   认证装饰器、密码哈希
+│   │   └── __init__.py
+│   ├── server/               #   WSGI 服务器与优雅关闭
+│   │   └── __init__.py
+│   ├── web/                  #   Web 层：路由辅助、中间件、CSRF、错误页、IP 工具、验证码、安全扫描
+│   │   ├── helpers.py, middleware.py, template_context.py, csrf.py, errors.py
+│   │   ├── ip.py, ratelimit.py, validation.py, captcha.py, security_scanner.py
+│   ├── system/               #   系统层：日志、调度、启动检查、应用初始化、子进程工具
+│   │   ├── logger.py, scheduler.py, startup_checks.py, init.py, process_utils.py
 │   ├── db/                   #   数据库连接与 schema
-│   ├── auth/                 #   认证装饰器、密码哈希（包结构，兼容旧导入）
-│   ├── server/               #   WSGI 服务器与优雅关闭（包结构，兼容旧导入）
-│   ├── web/                  #   路由辅助函数、请求中间件、模板上下文、CSRF、错误页
-│   │   ├── helpers.py
-│   │   ├── middleware.py
-│   │   ├── template_context.py
-│   │   ├── csrf.py
-│   │   └── errors.py
-│   ├── system/               #   日志、调度、启动检查、应用初始化
-│   │   ├── logger.py
-│   │   ├── scheduler.py
-│   │   ├── startup_checks.py
-│   │   └── init.py
-│   ├── firewall/             #   高性能防火墙模块（DuckDB 引擎 + 连接级阻断 + DDoS 防护）
-│   │   ├── __init__.py
-│   │   ├── database.py
-│   │   ├── service.py
-│   │   ├── connection_filter.py
-│   │   ├── ddos.py
-│   │   ├── monitor.py
-│   │   └── wrappers.py
-│   └── firewall.py          #   向后兼容重导出层
+│   ├── firewall/             #   高性能防火墙（DuckDB 引擎 + 连接级阻断 + DDoS 防护）
+│   │   ├── __init__.py       #   全局单例 + 统一 API
+│   │   ├── database.py       #   DuckDB 引擎
+│   │   ├── service.py        #   封禁/白名单/警告/自动封禁
+│   │   ├── connection_filter.py  # 连接级黑名单拦截 + 强制断开
+│   │   ├── ddos.py           #   DDoS 检测（防误判）
+│   │   ├── monitor.py        #   后台监控
+│   │   └── wrappers.py       #   WSGI 门禁
 ├── services/                 # 业务逻辑层（纯 Python，不依赖 Flask）
 │   ├── backup/               #   数据库备份与恢复
 │   ├── discussion/           #   讨论区（帖子/回复/分类）
@@ -732,7 +720,7 @@ workspace/
 6. 写入独立跨平台重启脚本，确保旧进程完全退出后启动新进程（解决 Windows 环境下进程管理问题）；启动命令**优先使用自定义启动指令**（`RESTART_COMMAND`，可在系统设置 / 一键更新配置页在线设置，支持 `uv run app.py` 等任意写法，裸 `python` 自动替换为当前真实解释器），留空则自动用「当前解释器 + app.py + 原启动参数」重建，兼容 `python` / venv / `uv run` 任意启动方式
 7. **服务器重启后自动运行健康检查**：数据库完整性检查、文件结构检查、配置完整性检查、uploads 目录结构检查，自动修复不删除文件
 
-> 实现详见 `services/updater/core.py`（通过 SSE 推送实时下载进度到前端）。每次启动的健康检查由 `core/startup_checks.py` 负责。
+> 实现详见 `services/updater/core.py`（通过 SSE 推送实时下载进度到前端）。每次启动的健康检查由 `core/system/startup_checks.py` 负责。
 
 ### 安全要点
 
@@ -743,7 +731,7 @@ workspace/
 5. Session Cookie 启用 `HttpOnly` + `SameSite=Lax`（HTTPS 下自动加 `Secure`）
 6. 邮箱唯一性检查（一个邮箱仅可注册一个账号）
 7. IP 频率限制（注册/登录）
-8. **全站安全响应标头**（`core/middleware.py` 集中下发，覆盖 HTML/API/SSE/静态资源）：
+8. **全站安全响应标头**（`core/web/middleware.py` 集中下发，覆盖 HTML/API/SSE/静态资源）：
 
    * `Content-Security-Policy`：仅允许本站脚本/样式/资源，禁用 `object`，限制 `form-action`/`frame-ancestors` 等（已放行内联脚本/样式与 HLS blob worker，避免误伤自身功能）
 
@@ -757,7 +745,7 @@ workspace/
 
    * `Strict-Transport-Security`（HSTS）：**仅 HTTPS 请求下发**，避免 HTTP 部署被强制升级而无法访问
 
-9. **极高性能多线程防火墙**（`core/firewall.py`，运行于 WSGI 入口、先于一切 Flask 逻辑）：黑名单 IP 的请求不参与任何业务处理，直接返回最小 403 响应并标记 `Connection: close`；后台监控线程周期性从数据库同步黑名单镜像、利用 Cheroot 连接特性（`linger=False` + `close()`）强制关闭黑名单 IP 的现存连接（含 keep-alive 空闲与处理中的请求），客户端表现为连接被重置；配套 DDoS 攻击检测按强度自动封禁（详见上文功能特性）。
+9. **极高性能多线程防火墙**（`core/firewall/`，运行于 WSGI 入口、先于一切 Flask 逻辑）：黑名单 IP 的请求不参与任何业务处理，直接返回最小 403 响应并标记 `Connection: close`；后台监控线程周期性从数据库同步黑名单镜像、利用 Cheroot 连接特性（`linger=False` + `close()`）强制关闭黑名单 IP 的现存连接（含 keep-alive 空闲与处理中的请求），客户端表现为连接被重置；配套 DDoS 攻击检测按强度自动封禁（详见上文功能特性）。
 
 ## 开发注意事项
 
@@ -769,7 +757,7 @@ workspace/
 
 ## 最近更新
 
-* **新增 DDoS 攻击防护与极高性能多线程防火墙**：`core/firewall.py` 在 WSGI 入口（先于一切 Flask 逻辑）拦截黑名单 IP，命中即返回最小 403 并利用 Cheroot 连接特性（`linger=False` + `close()`）强制关闭其现存连接（含 keep-alive 空闲与处理中的请求），客户端表现为连接被重置而非收到页面；后台监控线程每 0.5 秒从数据库同步黑名单镜像并扫描关闭黑名单连接；内置 DDoS 检测按强度（low=300/medium=150/high=80 次每 10 秒）统计单位窗口内请求数，超阈值自动封禁来源 IP（首次限时封禁、时长可配，违规记录时间窗口内屡教不改自动升级永久封禁），检测强度/封禁时长/触发次数等配置在线热更新；管理后台 → 系统设置新增「DDoS 防护」分类，白名单 IP 不受影响。
+* **新增 DDoS 攻击防护与极高性能多线程防火墙**：`core/firewall/` 在 WSGI 入口（先于一切 Flask 逻辑）拦截黑名单 IP，命中即返回最小 403 并利用 Cheroot 连接特性（`linger=False` + `close()`）强制关闭其现存连接（含 keep-alive 空闲与处理中的请求），客户端表现为连接被重置而非收到页面；后台监控线程每 0.5 秒从数据库同步黑名单镜像并扫描关闭黑名单连接；内置 DDoS 检测按强度（low=300/medium=150/high=80 次每 10 秒）统计单位窗口内请求数，超阈值自动封禁来源 IP（首次限时封禁、时长可配，违规记录时间窗口内屡教不改自动升级永久封禁），检测强度/封禁时长/触发次数等配置在线热更新；管理后台 → 系统设置新增「DDoS 防护」分类，白名单 IP 不受影响。
 
 * **移除 CPU 温度检测功能**：`routes/api/public.py` 删除跨平台温度采集（WMI/PowerShell/sysctl/psutil 传感器）与 `/api/server-status` 的 `cpu_temp` 字段，`templates/server_status.html` 移除 CPU 温度展示板块与刷新逻辑。
 
@@ -795,7 +783,7 @@ workspace/
 
 * **背景图片按屏幕比例最适配取图**：保存时自动记录图片自然宽高比（`backgrounds.ratio`，不再强制裁剪 16:9）；客户端在页面解析到背景元素后立即预加载（不等动画与其他脚本），自动携带屏幕宽高比与物理像素长边请求图片；服务端将所选档位中心裁剪到该比例后返回（结果缓存）。横屏/竖屏均获得与屏幕比例完全匹配且像素充足的图片，移动端清晰度大幅提升。
 
-* **统一定时调度算法**：新增 `core/scheduler.py` 统一定时调度（固定间隔含失败退避 / 每日时间点、优雅停止、分片等待），已接入被驳回内容自动清理、每日备份、玩家列表追踪、验证码清理、连接池清理、站点地图刷新，行为与原逻辑一致。
+* **统一定时调度算法**：新增 `core/system/scheduler.py` 统一定时调度（固定间隔含失败退避 / 每日时间点、优雅停止、分片等待），已接入被驳回内容自动清理、每日备份、玩家列表追踪、验证码清理、连接池清理、站点地图刷新，行为与原逻辑一致。
 
 * **导航栏动画流畅度优化**：下拉 caret 与滚动收缩动画补上 `will-change: transform` 合成层提示，动画更流畅，视觉效果与时长完全不变。
 
@@ -872,7 +860,7 @@ workspace/
 
 * **一键更新重写**：重写 `services/updater/core.py` 更新逻辑，实现跨平台独立重启脚本（Windows 批处理 / Linux Shell），通过 `tasklist` 检测旧进程退出后启动新进程，解决 Windows 环境下更新后服务器无法正常重启的问题。修复前端日志重复显示问题，调整重启检测时机避免误判。
 
-- **启动健康检查取代更新脚本**：移除更新脚本功能，新增 `core/startup_checks.py`，每次启动固定运行服务器健康检查——数据库完整性、文件结构、配置完整性、uploads 目录结构检查，自动尝试修复且不删除任何文件。`core/init.py` 集成该检查，在数据库初始化前执行。
+- **启动健康检查取代更新脚本**：移除更新脚本功能，新增 `core/system/startup_checks.py`，每次启动固定运行服务器健康检查——数据库完整性、文件结构、配置完整性、uploads 目录结构检查，自动尝试修复且不删除任何文件。`core/system/init.py` 集成该检查，在数据库初始化前执行。
 
 - **错误页面修复**：修复 403/404 错误页面未传递 `user` 上下文变量，导致登录用户显示"请登录"的问题。
 

@@ -4,7 +4,7 @@ import json
 import datetime
 
 from core.db import get_db
-from core.logger import log
+from core.system.logger import log
 from services.attachment_service import save_attachments, clean_attachment_json, parse_attachment_json, clean_attachments
 from services.discussion.categories import get_category_dict
 

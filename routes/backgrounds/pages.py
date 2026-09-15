@@ -8,10 +8,10 @@ from io import BytesIO
 from flask import request, jsonify, send_file, abort
 
 from core.auth import get_current_user, login_required
-from core.helpers import render_page
+from core.web.helpers import render_page
 from routes.backgrounds import backgrounds_bp
 from services import background_service
-from services.ip import get_client_ip
+from core.web.ip import get_client_ip
 
 
 @backgrounds_bp.route('/backgrounds')

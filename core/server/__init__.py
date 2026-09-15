@@ -6,7 +6,7 @@ import signal
 import ssl
 import threading
 
-from core.logger import log
+from core.system.logger import log
 
 _server = None
 _shutdown_started = False

@@ -7,7 +7,7 @@ import shutil
 import os
 
 from core.db import get_db
-from core.logger import log
+from core.system.logger import log
 from services.music.constants import STATUS_PRIVATE, STATUS_PENDING, STATUS_PUBLIC
 from services.music.queries import get_music, _music_dir, parse_tags
 

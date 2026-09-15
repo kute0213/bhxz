@@ -21,7 +21,7 @@ from cheroot.wsgi import Gateway_10, Server as CherootWSGIServer
 from cheroot.server import HTTPConnection
 
 from core.firewall import database
-from core.logger import log
+from core.system.logger import log
 
 
 class BanFilterConnection(HTTPConnection):

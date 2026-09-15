@@ -5,7 +5,7 @@
 
 import pytest
 
-from services.security_scanner import (
+from core.web.security_scanner import (
     scan_request,
     TYPE_SQL_INJECTION,
     TYPE_XSS,

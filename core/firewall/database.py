@@ -13,7 +13,7 @@ import threading
 
 import duckdb
 
-from core.logger import log
+from core.system.logger import log
 
 DB_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),

@@ -11,7 +11,7 @@ from email.mime.multipart import MIMEMultipart
 from email.utils import formataddr
 
 from config import get_config_value
-from core.logger import log
+from core.system.logger import log
 
 
 class EmailService:

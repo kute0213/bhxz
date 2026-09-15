@@ -3,7 +3,7 @@
 from flask import abort
 
 from core.auth import admin_required
-from core.helpers import render_page
+from core.web.helpers import render_page
 from core.db import get_db
 from routes.admin import admin_bp
 

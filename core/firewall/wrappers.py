@@ -8,7 +8,7 @@
 
 import weakref
 
-from core.logger import log
+from core.system.logger import log
 
 
 class FirewallWSGIWrapper:

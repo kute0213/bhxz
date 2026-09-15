@@ -12,7 +12,7 @@ import time
 from datetime import datetime
 
 from core.db import get_db
-from core.logger import log
+from core.system.logger import log
 
 
 # ---------------------------------------------------------------------------

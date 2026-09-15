@@ -19,7 +19,7 @@ from typing import Optional, Tuple
 from mcrcon import MCRcon
 
 from config import get_config_value
-from core.scheduler import Scheduler
+from core.system.scheduler import Scheduler
 
 
 class RCONConnectionPool:

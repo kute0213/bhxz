@@ -3,12 +3,12 @@
 from flask import Blueprint, request, jsonify, session
 
 from services.email import email_code_service, normalize_email, email_service
-from services.captcha import captcha_service
-from services.ratelimit import email_limiter
+from core.web.captcha import captcha_service
+from core.web.ratelimit import email_limiter
 from core.firewall import auto_ban
-from core.logger import log
+from core.system.logger import log
 from config import get_config_value
-from services.ip import get_client_ip
+from core.web.ip import get_client_ip
 
 
 email_code_bp = Blueprint('email_code', __name__)

@@ -17,7 +17,7 @@ from typing import Optional
 from mcrcon import MCRcon
 
 from config import get_config_value
-from core.logger import log
+from core.system.logger import log
 
 
 def _get_rcon_config() -> tuple:

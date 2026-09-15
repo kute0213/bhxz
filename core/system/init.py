@@ -5,14 +5,14 @@ import sys
 
 from flask import Flask
 
-from core.logger import log
-from core.template_context import register_template_context
+from core.system.logger import log
+from core.web.template_context import register_template_context
 
 
 def register_hooks(app, try_serve_public):
     """注册请求钩子。"""
     log('INFO', 'App', '正在注册请求钩子...')
-    from core.middleware import register_hooks as _register_hooks
+    from core.web.middleware import register_hooks as _register_hooks
     _register_hooks(app, try_serve_public)
 
 
@@ -35,7 +35,7 @@ def start_background_services():
 
 def init_app(app, app_root):
     """初始化应用：启动检查、数据库、蓝图、钩子、模板上下文、后台服务。"""
-    from core.startup_checks import run_startup_checks
+    from core.system.startup_checks import run_startup_checks
     from core.db import init_db
 
     # 确保工作目录始终是项目根目录
@@ -55,7 +55,7 @@ def init_app(app, app_root):
     log('INFO', 'App', '数据库初始化完成')
 
     # 数据库就绪后刷新日志等级缓存（从 settings 表读取）
-    from core.logger import refresh_log_level
+    from core.system.logger import refresh_log_level
     refresh_log_level()
 
     # 每次启动执行服务器健康检查（自动修复，不删文件）

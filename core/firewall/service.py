@@ -16,7 +16,7 @@ from datetime import datetime, timedelta
 from typing import Optional
 
 from core.firewall.database import get_db, vacuum
-from core.logger import log
+from core.system.logger import log
 
 # 封禁缓存 TTL（秒）
 CACHE_TTL = 30
@@ -107,38 +107,15 @@ def validate_ip(ip_address):
 
 
 def get_whitelist():
-    """获取防火墙白名单列表。
-
-    优先读取 DuckDB firewall_config 表中 FIREWALL_WHITELIST 的值，
-    未自定义时回退到 config.py 中的 FIREWALL_WHITELIST（向后兼容：仍尝试读取旧键名 IP_BAN_WHITELIST）。
-    """
+    """获取防火墙白名单列表（仅从 DuckDB 读取）。"""
     with _whitelist_cache_lock:
         if time.time() - _whitelist_cache['ts'] > WHITELIST_CACHE_TTL:
             try:
-                # 先从 DuckDB 读取白名单
                 with get_db() as conn:
                     rows = conn.execute(
                         "SELECT ip_address FROM firewall_whitelist"
                     ).fetchall()
                 whitelist = [row[0] for row in rows]
-                # 再从 config 回退/追加（向后兼容）
-                try:
-                    from config import get_config_value, FIREWALL_WHITELIST as _FIREWALL_WHITELIST_FALLBACK
-                    cfg = get_config_value('FIREWALL_WHITELIST', _FIREWALL_WHITELIST_FALLBACK)
-                    # 尝试向后兼容旧键名
-                    if not cfg:
-                        cfg = get_config_value('IP_BAN_WHITELIST', _FIREWALL_WHITELIST_FALLBACK)
-                    if isinstance(cfg, (list, tuple)):
-                        for ip in cfg:
-                            if ip.strip() and ip.strip() not in whitelist:
-                                whitelist.append(ip.strip())
-                    else:
-                        for ip in str(cfg).split(','):
-                            ip = ip.strip()
-                            if ip and ip not in whitelist:
-                                whitelist.append(ip)
-                except Exception:
-                    pass
                 _whitelist_cache['data'] = whitelist
                 _whitelist_cache['ts'] = time.time()
             except Exception as exc:
@@ -634,6 +611,32 @@ def get_warning_count(ip_address, hours=24):
             return row[0] if row else 0
     except Exception:
         return 0
+
+
+def get_all_warnings(hours=24):
+    """获取所有 IP 在指定小时内的警告汇总。
+
+    Returns:
+        list[dict]: 警告记录列表（含 ip_address, warning, created_at, count）
+    """
+    try:
+        with get_db() as conn:
+            rows = conn.execute(
+                "SELECT ip_address, warning, "
+                "       strftime('%%Y-%%m-%%d %%H:%%M:%%S', MAX(created_at)) AS created_at, "
+                "       COUNT(*) AS cnt "
+                "FROM firewall_warnings "
+                "WHERE created_at >= CURRENT_TIMESTAMP - INTERVAL '{} hours' "
+                "GROUP BY ip_address, warning "
+                "ORDER BY created_at DESC".format(hours),
+            ).fetchall()
+            return [
+                {'ip_address': r[0], 'warning': r[1], 'created_at': r[2], 'count': r[3]}
+                for r in rows
+            ]
+    except Exception as exc:
+        log('WARNING', 'Firewall', f'查询全部警告记录失败: {exc}')
+        return []
 
 
 def clear_warnings(ip_address):

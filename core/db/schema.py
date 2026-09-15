@@ -4,7 +4,7 @@ import hashlib
 from datetime import datetime
 
 from core.db.connection import get_db
-from core.logger import log
+from core.system.logger import log
 
 
 def init_db():

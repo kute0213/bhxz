@@ -24,7 +24,7 @@
 import threading
 from datetime import datetime
 
-from core.logger import log
+from core.system.logger import log
 
 
 # ---------------------------------------------------------------------------

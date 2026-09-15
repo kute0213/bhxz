@@ -1,7 +1,7 @@
 """用户业务服务 - 管理员操作（删除用户、切换管理员权限）。"""
 
 from core.db import get_db
-from core.logger import log
+from core.system.logger import log
 from services.attachment_service import clean_attachment_json
 from services.user.profile import _get_user_media_keys, _clean_user_attachments, _clean_user_media
 

@@ -6,14 +6,14 @@
 from flask import request, jsonify
 
 from core.auth import admin_required, get_current_user
-from core.helpers import render_page
+from core.web.helpers import render_page
 from routes.admin import admin_bp
 from services.game_accounts.registration_service import (
     get_pending_applications, get_all_applications,
     approve_application, reject_application,
     ban_account, unban_account, get_banned_accounts,
 )
-from services.validation import validate_mc_username, validate_ban_reason
+from core.web.validation import validate_mc_username, validate_ban_reason
 
 
 @admin_bp.route('/admin/game-accounts')

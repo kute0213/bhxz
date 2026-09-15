@@ -14,7 +14,7 @@ import sqlite3
 import threading
 
 from config import DB_PATH, APP_ROOT
-from core.logger import log
+from core.system.logger import log
 
 
 def _migrate_legacy_db():

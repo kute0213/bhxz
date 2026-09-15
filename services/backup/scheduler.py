@@ -10,8 +10,8 @@ import datetime
 import threading
 
 from config import get_config_value
-from core.logger import log
-from core.scheduler import Scheduler
+from core.system.logger import log
+from core.system.scheduler import Scheduler
 
 
 class BackupScheduler:

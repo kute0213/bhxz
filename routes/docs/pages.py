@@ -3,7 +3,7 @@
 import os
 from flask import jsonify, abort
 from core.auth import get_current_user
-from core.helpers import render_page
+from core.web.helpers import render_page
 from routes.docs import docs_bp
 
 # docs/ 目录位于项目根目录下
