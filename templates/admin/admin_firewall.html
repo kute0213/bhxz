@@ -1,18 +1,51 @@
 {% extends "base.html" %}
-{% block title %}IP 封禁管理{% endblock %}
+{% block title %}防火墙管理{% endblock %}
 {% block content %}
 <section class="page-container py-12">
     <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
             <div>
-                <h1 class="text-2xl sm:text-3xl font-bold mb-1">IP 封禁管理</h1>
-                <p class="text-cream/60 text-sm">被封禁的 IP 将无法访问网站任何页面（全部返回 403）</p>
+                <h1 class="text-2xl sm:text-3xl font-bold mb-1">防火墙管理</h1>
+                <p class="text-cream/60 text-sm">管理 IP 封禁、可疑访问拦截与白名单，被封禁的 IP 将无法访问网站任何页面（全部返回 403）</p>
             </div>
             <a href="{{ url_for('admin.admin_page') }}" class="btn-secondary px-4 py-2 rounded-lg text-sm inline-flex items-center gap-2">
                 <i data-lucide="arrow-left" class="w-4 h-4"></i>
                 返回管理中心
             </a>
         </div>
+
+        <!-- 当前 IP 状态 -->
+        {% if current_banned %}
+        <div class="pixel-card rounded-xl p-6 mb-8 border-2 border-red-500/30 bg-red-500/5">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-red-500/20 rounded-full flex items-center justify-center flex-shrink-0">
+                    <i data-lucide="shield-off" class="w-5 h-5 text-red-400"></i>
+                </div>
+                <div>
+                    <h2 class="text-lg font-bold text-red-400">⚠ 当前 IP 已被封禁</h2>
+                    <p class="text-sm text-cream/60 mt-1">
+                        您的 IP <code class="font-mono text-red-300">{{ current_ip }}</code> 当前处于封禁状态。
+                        {% if current_reason %}原因：<span class="text-red-300">{{ current_reason }}</span>{% endif %}
+                    </p>
+                    <p class="text-xs text-cream/40 mt-1">请将您的 IP 添加到白名单以恢复访问，或联系其他管理员处理。</p>
+                </div>
+            </div>
+        </div>
+        {% else %}
+        <div class="pixel-card rounded-xl p-6 mb-8 border border-green-500/20 bg-green-500/5">
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 bg-green-500/20 rounded-full flex items-center justify-center flex-shrink-0">
+                    <i data-lucide="shield-check" class="w-5 h-5 text-green-400"></i>
+                </div>
+                <div>
+                    <h2 class="text-lg font-bold text-green-400">当前 IP 状态正常</h2>
+                    <p class="text-sm text-cream/60 mt-1">
+                        您的 IP <code class="font-mono text-green-300">{{ current_ip }}</code> 未被封禁。
+                    </p>
+                </div>
+            </div>
+        </div>
+        {% endif %}
 
         <!-- 自动封禁 / 可疑访问拦截 / 白名单状态（可直接编辑配置） -->
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
@@ -37,7 +70,7 @@
                         <input type="number" id="auto-ban-duration" value="{{ auto_ban_duration_minutes }}" min="0"
                                class="input-field w-full px-4 py-2 rounded-lg">
                     </div>
-                    <button onclick="saveIpBanConfig([{ key: 'AUTO_BAN_ENABLED', value: document.getElementById('auto-ban-enabled').checked }, { key: 'AUTO_BAN_DURATION_MINUTES', value: document.getElementById('auto-ban-duration').value }], this)"
+                    <button onclick="saveFirewallConfig([{ key: 'AUTO_BAN_ENABLED', value: document.getElementById('auto-ban-enabled').checked }, { key: 'AUTO_BAN_DURATION_MINUTES', value: document.getElementById('auto-ban-duration').value }], this)"
                             class="btn-primary w-full px-4 py-2 rounded-lg text-sm inline-flex items-center justify-center gap-2">
                         <i data-lucide="save" class="w-4 h-4"></i>
                         保存自动封禁配置
@@ -65,7 +98,7 @@
                         <input type="number" id="suspicious-duration" value="{{ suspicious_block_duration_minutes }}" min="0"
                                class="input-field w-full px-4 py-2 rounded-lg">
                     </div>
-                    <button onclick="saveIpBanConfig([{ key: 'SUSPICIOUS_BLOCK_ENABLED', value: document.getElementById('suspicious-enabled').checked }, { key: 'SUSPICIOUS_BLOCK_DURATION_MINUTES', value: document.getElementById('suspicious-duration').value }], this)"
+                    <button onclick="saveFirewallConfig([{ key: 'SUSPICIOUS_BLOCK_ENABLED', value: document.getElementById('suspicious-enabled').checked }, { key: 'SUSPICIOUS_BLOCK_DURATION_MINUTES', value: document.getElementById('suspicious-duration').value }], this)"
                             class="btn-primary w-full px-4 py-2 rounded-lg text-sm inline-flex items-center justify-center gap-2">
                         <i data-lucide="save" class="w-4 h-4"></i>
                         保存拦截配置
@@ -80,7 +113,7 @@
                           class="input-field w-full px-4 py-2 rounded-lg font-mono text-xs"
                           placeholder="如 112.82.136.172, 127.0.0.1">{{ whitelist | join(', ') }}</textarea>
                 <div class="mt-3">
-                    <button onclick="saveIpBanConfig([{ key: 'IP_BAN_WHITELIST', value: document.getElementById('whitelist-input').value }], this)"
+                    <button onclick="saveFirewallConfig([{ key: 'FIREWALL_WHITELIST', value: document.getElementById('whitelist-input').value }], this)"
                             class="btn-primary w-full px-4 py-2 rounded-lg text-sm inline-flex items-center justify-center gap-2">
                         <i data-lucide="save" class="w-4 h-4"></i>
                         保存白名单
@@ -89,11 +122,39 @@
             </div>
         </div>
 
+        <!-- 白名单快捷管理 -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
+            <div class="pixel-card rounded-xl p-6">
+                <h2 class="text-lg font-bold mb-1">添加白名单</h2>
+                <p class="text-sm text-cream/60 mb-4">将 IP 添加至白名单，该 IP 将不会被任何封禁规则拦截。</p>
+                <form action="{{ url_for('admin.admin_firewall_whitelist_add') }}" method="POST" class="flex gap-3 items-end">
+                    {{ csrf_field() }}
+                    <div class="flex-1">
+                        <label class="block text-sm text-cream/70 mb-1">IP 地址</label>
+                        <input type="text" name="ip_address" class="input-field w-full px-4 py-2 rounded-lg font-mono" placeholder="如 203.0.113.5" required>
+                    </div>
+                    <button type="submit" class="btn-primary px-4 py-2 rounded-lg text-sm whitespace-nowrap">添加</button>
+                </form>
+            </div>
+            <div class="pixel-card rounded-xl p-6">
+                <h2 class="text-lg font-bold mb-1">移除白名单</h2>
+                <p class="text-sm text-cream/60 mb-4">将 IP 移出白名单，该 IP 将受封禁规则约束。</p>
+                <form action="{{ url_for('admin.admin_firewall_whitelist_remove') }}" method="POST" class="flex gap-3 items-end">
+                    {{ csrf_field() }}
+                    <div class="flex-1">
+                        <label class="block text-sm text-cream/70 mb-1">IP 地址</label>
+                        <input type="text" name="ip_address" class="input-field w-full px-4 py-2 rounded-lg font-mono" placeholder="如 203.0.113.5" required>
+                    </div>
+                    <button type="submit" class="btn-danger px-4 py-2 rounded-lg text-sm whitespace-nowrap">移除</button>
+                </form>
+            </div>
+        </div>
+
         <!-- 创建封禁 -->
         <div class="pixel-card rounded-xl p-6 mb-8">
             <h2 class="text-lg font-bold mb-1">新建封禁</h2>
             <p class="text-xs text-red-400 mb-4">注意：封禁后该 IP 的所有访问都将被拒绝，包括管理后台。请勿封禁自己的 IP（当前访问 IP：<code class="font-mono">{{ current_ip }}</code>）。</p>
-            <form action="{{ url_for('admin.admin_ip_ban_create') }}" method="POST" class="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end">
+            <form action="{{ url_for('admin.admin_firewall_create') }}" method="POST" class="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end">
                 {{ csrf_field() }}
                 <div class="sm:col-span-1">
                     <label class="block text-sm text-cream/70 mb-1">IP 地址</label>
@@ -144,7 +205,7 @@
                                 {% endif %}
                             </td>
                             <td class="px-4 py-3 text-right">
-                                <form action="{{ url_for('admin.admin_ip_ban_delete', ban_id=ban.id) }}" method="POST" class="inline" onsubmit="return confirm('确定解除 {{ ban.ip_address }} 的封禁？');">
+                                <form action="{{ url_for('admin.admin_firewall_delete', ban_id=ban.id) }}" method="POST" class="inline" onsubmit="return confirm('确定解除 {{ ban.ip_address }} 的封禁？');">
                                     {{ csrf_field() }}
                                     <button type="submit" class="text-green-400 hover:text-green-300 text-xs px-2 py-1 rounded bg-green-500/10 border border-green-500/20">解除封禁</button>
                                 </form>
@@ -165,15 +226,15 @@
 
 {% block extra_script %}
 <script>
-// 保存 IP 封禁配置（白名单 / 自动封禁 / 可疑访问拦截）
-function saveIpBanConfig(items, btn) {
+// 保存防火墙配置（白名单 / 自动封禁 / 可疑访问拦截）
+function saveFirewallConfig(items, btn) {
     if (!btn) return;
     const originalHtml = btn.innerHTML;
     btn.disabled = true;
     btn.innerHTML = '<i data-lucide="loader" class="w-4 h-4 animate-spin"></i> 保存中...';
     if (window.lucide) lucide.createIcons();
 
-    fetch('{{ url_for("admin.admin_ip_ban_settings") }}', {
+    fetch('{{ url_for("admin.admin_firewall_settings") }}', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ items: items })

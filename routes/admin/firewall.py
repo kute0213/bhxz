@@ -1,10 +1,14 @@
-"""管理员 IP 封禁管理路由。"""
+"""管理员防火墙管理路由 —— 已从 IP 封禁全面迁移至防火墙模块。"""
 
 from flask import redirect, url_for, flash, request, jsonify
 
 from core.auth import admin_required, get_current_user
 from core.helpers import render_page
-from services import ip_ban_service
+from core.firewall import (
+    ban_ip, unban_ip, get_bans, get_whitelist, is_whitelisted,
+    whitelist_add, whitelist_remove, SYSTEM_BANNER_ID,
+    add_warning, get_warnings, get_warning_count,
+)
 from services.ip import get_client_ip
 from config import (
     AUTO_BAN_ENABLED,
@@ -16,17 +20,23 @@ from config import (
 from routes.admin import admin_bp
 
 
-@admin_bp.route('/admin/ip-bans')
+@admin_bp.route('/admin/firewall')
 @admin_required
-def admin_ip_bans():
-    """管理后台：IP 封禁列表。"""
-    bans = ip_ban_service.get_bans()
+def admin_firewall():
+    """管理后台：防火墙总览页（封禁管理 + 白名单 + 配置）。"""
+    bans = get_bans()
     current_ip = get_client_ip()
+    whitelist = get_whitelist()
+    # 检查当前 IP 状态
+    from core.firewall import is_banned
+    current_banned, current_reason = is_banned(current_ip)
     return render_page(
-        'admin/admin_ip_bans.html',
+        'admin/admin_firewall.html',
         bans=bans,
         current_ip=current_ip,
-        whitelist=ip_ban_service.get_whitelist(),
+        current_banned=current_banned,
+        current_reason=current_reason,
+        whitelist=whitelist,
         auto_ban_enabled=get_config_value('AUTO_BAN_ENABLED', AUTO_BAN_ENABLED),
         auto_ban_duration_minutes=get_config_value(
             'AUTO_BAN_DURATION_MINUTES', AUTO_BAN_DURATION_MINUTES),
@@ -37,9 +47,9 @@ def admin_ip_bans():
     )
 
 
-# IP 封禁管理页可直接编辑的配置键
-IP_BAN_CONFIG_KEYS = {
-    'IP_BAN_WHITELIST',
+# 防火墙管理页可直接编辑的配置键
+FIREWALL_CONFIG_KEYS = {
+    'FIREWALL_WHITELIST',
     'AUTO_BAN_ENABLED',
     'AUTO_BAN_DURATION_MINUTES',
     'SUSPICIOUS_BLOCK_ENABLED',
@@ -47,13 +57,10 @@ IP_BAN_CONFIG_KEYS = {
 }
 
 
-@admin_bp.route('/admin/ip-bans/settings', methods=['POST'])
+@admin_bp.route('/admin/firewall/settings', methods=['POST'])
 @admin_required
-def admin_ip_ban_settings():
-    """保存 IP 封禁相关配置（白名单/自动封禁开关与时长/可疑拦截开关与时长）。
-
-    在 IP 封禁管理页面直接编辑并保存，无需跳转到系统设置。
-    """
+def admin_firewall_settings():
+    """保存防火墙配置（白名单/自动封禁开关与时长/可疑拦截开关与时长）。"""
     from services.settings_manager import settings_manager
 
     data = request.get_json() or {}
@@ -67,7 +74,7 @@ def admin_ip_ban_settings():
     for item in items:
         key = item.get('key')
         value = item.get('value')
-        if not key or key not in IP_BAN_CONFIG_KEYS:
+        if not key or key not in FIREWALL_CONFIG_KEYS:
             errors.append({'key': key, 'message': '无效的设置键'})
             continue
         try:
@@ -93,9 +100,9 @@ def admin_ip_ban_settings():
     })
 
 
-@admin_bp.route('/admin/ip-bans/create', methods=['POST'])
+@admin_bp.route('/admin/firewall/create', methods=['POST'])
 @admin_required
-def admin_ip_ban_create():
+def admin_firewall_create():
     """管理后台：创建封禁。"""
     user = get_current_user()
 
@@ -105,29 +112,60 @@ def admin_ip_ban_create():
 
     if not ip_address:
         flash('IP 地址不能为空', 'error')
-        return redirect(url_for('admin.admin_ip_bans'))
+        return redirect(url_for('admin.admin_firewall'))
 
-    success, message = ip_ban_service.create_ban(
+    # 将天数转换为分钟
+    duration_minutes = None
+    if duration_days:
+        try:
+            duration_minutes = float(duration_days) * 1440
+        except (ValueError, TypeError):
+            flash('封禁时长无效', 'error')
+            return redirect(url_for('admin.admin_firewall'))
+
+    success, message = ban_ip(
         ip_address=ip_address,
         reason=reason,
         banned_by=user['id'],
-        duration_days=duration_days or None,
+        duration_minutes=duration_minutes,
     )
     flash(message, 'success' if success else 'error')
-    return redirect(url_for('admin.admin_ip_bans'))
+    return redirect(url_for('admin.admin_firewall'))
 
 
-@admin_bp.route('/admin/ip-bans/<int:ban_id>/delete', methods=['POST'])
+@admin_bp.route('/admin/firewall/<int:ban_id>/delete', methods=['POST'])
 @admin_required
-def admin_ip_ban_delete(ban_id):
+def admin_firewall_delete(ban_id):
     """管理后台：解除封禁。"""
-    user = get_current_user()
-
-    success, message = ip_ban_service.unban(
-        ban_id=ban_id,
-        admin_id=user['id'],
-        admin_username=user['username'],
-        ip_address=get_client_ip(),
-    )
+    success, message, _ = unban_ip(ban_id=ban_id)
     flash(message, 'success' if success else 'error')
-    return redirect(url_for('admin.admin_ip_bans'))
+    return redirect(url_for('admin.admin_firewall'))
+
+
+# ---- 白名单快捷管理 ----
+
+
+@admin_bp.route('/admin/firewall/whitelist/add', methods=['POST'])
+@admin_required
+def admin_firewall_whitelist_add():
+    """管理后台：添加白名单。"""
+    ip_address = (request.form.get('ip_address') or '').strip()
+    if not ip_address:
+        flash('IP 地址不能为空', 'error')
+        return redirect(url_for('admin.admin_firewall'))
+    success, message = whitelist_add(ip_address)
+    flash(message, 'success' if success else 'error')
+    return redirect(url_for('admin.admin_firewall'))
+
+
+@admin_bp.route('/admin/firewall/whitelist/remove', methods=['POST'])
+@admin_required
+def admin_firewall_whitelist_remove():
+    """管理后台：移除白名单。"""
+    ip_address = (request.form.get('ip_address') or '').strip()
+    if not ip_address:
+        flash('IP 地址不能为空', 'error')
+        return redirect(url_for('admin.admin_firewall'))
+    success, message = whitelist_remove(ip_address)
+    flash(message, 'success' if success else 'error')
+    return redirect(url_for('admin.admin_firewall'))

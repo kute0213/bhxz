@@ -73,13 +73,31 @@ python scripts/build/package.py
 /workspace
 ├── app.py / config.py / requirements.txt   # 入口、配置、依赖
 ├── core/         # 基础设施层（DB/认证/中间件/服务器）
-│   ├── db/             # 数据库连接与 schema
-│   ├── auth.py         # 认证装饰器、密码哈希
-│   ├── middleware.py   # 请求中间件
-│   ├── firewall.py     # 高性能多线程防火墙（黑名单快速拦截 + DDoS 检测，运行于 WSGI 入口）
-│   ├── errors.py       # 统一错误页（错误号 / 原因 / 建议，覆盖全部常见 HTTP 错误码）
-│   ├── startup_checks.py # 启动服务器健康检查（数据库/文件/配置，自动修复）
-│   └── ...             # 模板上下文、服务器、CSRF、日志
+│   ├── auth/           #   认证装饰器、密码哈希（from core.auth import ...）
+│   │   └── __init__.py
+│   ├── server/         #   WSGI 服务器与优雅关闭（from core.server import ...）
+│   │   └── __init__.py
+│   ├── web/            #   路由辅助函数、请求中间件、模板上下文、CSRF、错误页
+│   │   ├── helpers.py
+│   │   ├── middleware.py
+│   │   ├── template_context.py
+│   │   ├── csrf.py
+│   │   └── errors.py
+│   ├── system/         #   日志、调度、启动检查、应用初始化
+│   │   ├── logger.py
+│   │   ├── scheduler.py
+│   │   ├── startup_checks.py
+│   │   └── init.py
+│   ├── db/             #   数据库连接与 schema
+│   ├── firewall/       #   高性能防火墙模块（DuckDB 引擎 + 连接级阻断 + DDoS 防护）
+│   │   ├── __init__.py       # 全局单例 Firewall、统一 API
+│   │   ├── database.py       # DuckDB 引擎（独立高性能数据库，db/firewall.duckdb）
+│   │   ├── service.py        # 统一业务层（封禁/白名单/警告/配置）
+│   │   ├── connection_filter.py  # 连接级黑名单拦截 + 强制断开
+│   │   ├── ddos.py           # DDoS 检测（防误判：静态资源/媒体不计入）
+│   │   ├── monitor.py        # 后台监控（同步黑名单/强制关闭/定时清理）
+│   │   └── wrappers.py       # WSGI 门禁（二次拦截兜底）
+│   └── firewall.py     #   向后兼容重导出层（旧路径导入仍可用）
 ├── services/     # 业务逻辑层（纯 Python，不依赖 Flask）
 │   ├── backup/         # 数据库备份与恢复
 │   ├── discussion/     # 讨论区（帖子/回复/分类）
@@ -165,11 +183,11 @@ python scripts/build/package.py
 
 * 游戏账号管理（注册申请审批、封禁列表管理）
 
-* IP 封禁管理（封禁 IP/IP 段，支持临时/永久封禁与原因备注，全站 403 拦截，后台一键解封；自动识别可疑操作限流并自动封禁，各操作可独立开关、时长可配，白名单 IP 不受影响；**页面内直接编辑**自动封禁 / 可疑拦截开关与时长、白名单，无需跳转系统设置）
+* 防火墙管理（IP 封禁/IP 白名单/违规警告：独立高性能 DuckDB 数据库，支持临时/永久封禁，全站 403 拦截，后台一键解封；自动识别可疑操作限流并自动封禁，各操作可独立开关、时长可配；**页面内直接编辑**自动封禁/可疑拦截/DDoS 防护开关与时长、白名单，无需跳转系统设置）
 
 * 可疑访问拦截（识别 SQL 注入 / XSS / 路径穿越 / 命令注入 / 敏感文件与漏洞端点探测 / 恶意扫描 UA 等攻击特征，命中即拦截并自动封禁来源 IP，总开关与各攻击类型子开关独立配置、封禁时长可配，白名单 IP 不受影响）
 
-* DDoS 攻击防护（`core/firewall.py` 极高性能多线程防火墙）：按检测强度统计单位时间窗口内每个 IP 的请求数（低/中/高三档，检测窗口 10 秒），超阈值自动封禁来源 IP（首次限时封禁，时长可配；在违规记录时间窗口内屡教不改自动升级为永久封禁）；黑名单 IP 的请求在进入 Flask 前即被防火墙终结，已建立的连接由后台监控线程利用 Cheroot 连接特性强制关闭（客户端表现为连接被重置，而非收到业务页面）；检测强度、封禁时长、永久封禁触发次数等均可在线热更新，白名单 IP 不受影响
+* DDoS 攻击防护（高性能防火墙模块 `core/firewall/`）：独立 DuckDB 数据库存储封禁/白名单/警告/攻击日志，连接级阻断在请求解析前直接强制断开黑名单 TCP 连接（自定义 Cheroot BanFilterConnection），不返回任何 HTTP 响应，客户端收到连接重置/EOF。按检测强度统计单位时间窗口内每个 IP 的请求数（低/中/高三档，检测窗口 10 秒），**防误判机制**：静态资源（`.css/.js/.ico`）、媒体文件（`.mp3/.ts/.m3u8/.webp`）、公共路径（`/static/`、`/music/<id>.mp3`）不计入请求计数，音频下载不会误判为 DDoS。超阈值自动封禁来源 IP（首次限时封禁；屡教不改升级永久封禁）。后台监控线程同步黑名单镜像、强制关闭已建立的空闲连接（先注销连接管理器再关闭，线程安全），定时清理过期数据与 VACUUM。检测强度、封禁时长、永久封禁触发次数等可在线热更新，白名单 IP 不受影响
 
 ### 服务器指南
 
@@ -289,7 +307,7 @@ python scripts/build/package.py
 
 * **安全配置**：会话有效期、登录失败锁定次数及时间
 
-* **IP 封禁**：自动封禁总开关、封禁时长（分钟，0 为永久）、登录/注册/找回密码/邮箱验证码异常各自独立开关
+* **防火墙**：自动封禁总开关、封禁时长（分钟，0 为永久）、白名单、登录/注册/找回密码/邮箱验证码异常各自独立开关
 
 * **可疑访问拦截**：总开关、封禁时长（分钟，0 为永久）、SQL 注入 / XSS / 路径穿越 / 命令注入 / 敏感文件与漏洞端点探测 / 恶意扫描 UA 各攻击类型独立开关
 
@@ -335,7 +353,7 @@ python scripts/build/package.py
 | `FAVICON_ICON`                | 网站图标（可选 compass/mountain/star/heart）      | `compass`                                   |
 | `MAP_URL`                     | 卫星地图地址                                    | `https://map.bhxz.tw.kg`                    |
 | `QQ_GROUP_URL`                | QQ 群链接                                    | 空                                           |
-| `IP_BAN_WHITELIST`            | 封禁白名单（逗号分隔），白名单 IP 不会被封禁                    | `112.82.136.172`                            |
+| `FIREWALL_WHITELIST`          | 封禁白名单（逗号分隔），白名单 IP 不会被封禁                    | `112.82.136.172`                            |
 | `AUTO_BAN_ENABLED`            | 自动 IP 封禁总开关                                 | `1`（开启）                                    |
 | `AUTO_BAN_DURATION_MINUTES`   | 自动封禁时长（分钟，0 为永久封禁）                          | `30`                                        |
 | `SUSPICIOUS_BLOCK_ENABLED`    | 可疑访问拦截总开关（命中攻击特征自动封禁 IP）                    | `1`（开启）                                    |
@@ -358,7 +376,7 @@ python scripts/build/package.py
 | 变量名          | 说明       | 默认值     |
 | ------------ | -------- | ------- |
 | `ENABLE_SSL` | 启用 HTTPS | `0`（禁用） |
-| `IP_BAN_WHITELIST` | 封禁白名单（逗号分隔） | `112.82.136.172` |
+| `FIREWALL_WHITELIST` | 封禁白名单（逗号分隔） | `112.82.136.172` |
 | `AUTO_BAN_ENABLED` | 自动 IP 封禁总开关 | `1`（开启） |
 | `AUTO_BAN_DURATION_MINUTES` | 自动封禁时长（分钟，0 为永久） | `30` |
 | `SUSPICIOUS_BLOCK_ENABLED` | 可疑访问拦截总开关 | `1`（开启） |
@@ -568,15 +586,28 @@ workspace/
 ├── requirements.txt          # Python 依赖
 ├── core/                     # 基础设施层
 │   ├── db/                   #   数据库连接与 schema
-│   ├── auth.py               #   认证装饰器、密码哈希
-│   ├── middleware.py         #   请求中间件（访问日志 + 公共文件 + 安全响应标头）
-│   ├── csrf.py               #   CSRF 保护
-│   ├── logger.py             #   日志基础
-│   ├── scheduler.py          #   统一定时调度算法（固定间隔/时间点/失败退避）
-│   ├── server.py             #   WSGI 服务器与优雅关闭
-│   ├── template_context.py   #   模板全局变量
-│   ├── init.py               #   应用初始化
-│   ├── startup_checks.py     #   启动服务器健康检查（数据库/文件/配置，自动修复）
+│   ├── auth/                 #   认证装饰器、密码哈希（包结构，兼容旧导入）
+│   ├── server/               #   WSGI 服务器与优雅关闭（包结构，兼容旧导入）
+│   ├── web/                  #   路由辅助函数、请求中间件、模板上下文、CSRF、错误页
+│   │   ├── helpers.py
+│   │   ├── middleware.py
+│   │   ├── template_context.py
+│   │   ├── csrf.py
+│   │   └── errors.py
+│   ├── system/               #   日志、调度、启动检查、应用初始化
+│   │   ├── logger.py
+│   │   ├── scheduler.py
+│   │   ├── startup_checks.py
+│   │   └── init.py
+│   ├── firewall/             #   高性能防火墙模块（DuckDB 引擎 + 连接级阻断 + DDoS 防护）
+│   │   ├── __init__.py
+│   │   ├── database.py
+│   │   ├── service.py
+│   │   ├── connection_filter.py
+│   │   ├── ddos.py
+│   │   ├── monitor.py
+│   │   └── wrappers.py
+│   └── firewall.py          #   向后兼容重导出层
 ├── services/                 # 业务逻辑层（纯 Python，不依赖 Flask）
 │   ├── backup/               #   数据库备份与恢复
 │   ├── discussion/           #   讨论区（帖子/回复/分类）

@@ -48,7 +48,7 @@ def shutdown_application(signum=None):
     # 停止高性能防火墙（黑名单镜像同步 / DDoS 检测后台线程）
     try:
         from core.firewall import firewall
-        firewall.stop()
+        firewall.stop_monitor()
     except Exception as exc:
         log('WARNING', 'App', f'防火墙关闭异常: {exc}')
 
@@ -101,7 +101,7 @@ def run_server(app, port=5000, app_root=None):
         protocol = 'HTTPS' if has_ssl else 'HTTP'
         log('INFO', 'App', f'使用 Flask 内置服务器（{protocol} 模式）')
         from core.firewall import firewall
-        firewall.start()
+        firewall.start_monitor()
         if has_ssl:
             try:
                 ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
@@ -127,7 +127,7 @@ def run_server(app, port=5000, app_root=None):
     _server = server
     # 启动高性能防火墙（黑名单镜像同步 + DDoS 检测 + 黑名单连接强制关闭）
     firewall.attach_server(server)
-    firewall.start()
+    firewall.start_monitor()
 
     if has_ssl:
         log('INFO', 'App', f'HTTPS 模式运行 (端口 {port})')

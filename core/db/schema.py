@@ -110,17 +110,9 @@ def init_db():
                 expires_at TEXT DEFAULT NULL
             )
         '''),
-        # IP 封禁表（expires_at 为空 = 永久封禁）
-        ('ip_bans', '''
-            CREATE TABLE IF NOT EXISTS ip_bans (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                ip_address TEXT NOT NULL,
-                reason TEXT DEFAULT '',
-                banned_by INTEGER NOT NULL,
-                created_at TEXT NOT NULL,
-                expires_at TEXT DEFAULT NULL
-            )
-        '''),
+        # IP 封禁已迁移至防火墙模块 —— 数据存储在 db/firewall.duckdb（firewall_bans 表）
+        # 详见 core/firewall/database.py 与 core/firewall/service.py
+        # 如需查询历史封禁数据，请使用 core.firewall 提供的公共 API
         # 广播邮件日志表
         ('broadcast_logs', '''
             CREATE TABLE IF NOT EXISTS broadcast_logs (

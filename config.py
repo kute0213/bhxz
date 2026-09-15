@@ -103,11 +103,11 @@ LOGIN_CAPTCHA_RESET_SECONDS = 1800
 LOGIN_LOCKOUT_TIME = 1800
 
 # ---------------------------------------------------------------------------
-# IP 封禁配置
+# 防火墙配置（IP 封禁与白名单）
 # ---------------------------------------------------------------------------
 
 # IP 封禁白名单（逗号分隔），白名单内的 IP 不会被封禁（手动封禁与自动封禁均跳过）
-IP_BAN_WHITELIST = [ip.strip() for ip in os.environ.get('IP_BAN_WHITELIST', '112.82.136.172').split(',') if ip.strip()]
+FIREWALL_WHITELIST = [ip.strip() for ip in os.environ.get('FIREWALL_WHITELIST', '112.82.136.172').split(',') if ip.strip()]
 
 # 自动 IP 封禁总开关：开启后，触发限流的可疑操作将自动封禁对应 IP
 AUTO_BAN_ENABLED = os.environ.get('AUTO_BAN_ENABLED', '1').lower() in ('1', 'true', 'yes', 'on')
@@ -275,8 +275,8 @@ SETTINGS_REGISTRY = [
     ('MAX_LOGIN_ATTEMPTS', 5, 'int', '登录失败锁定次数', '超过后临时锁定账户', '安全配置'),
     ('LOGIN_LOCKOUT_TIME', 1800, 'int', '登录锁定时间（秒）', '账户被锁定后自动解锁的时间', '安全配置'),
 
-    # IP 封禁（自动封禁开关与时长，白名单见 config.py 的 IP_BAN_WHITELIST）
-    ('IP_BAN_WHITELIST', '112.82.136.172', 'str', '封禁白名单', '逗号分隔，白名单内的 IP 不会被封禁（手动封禁与自动封禁均跳过）', 'IP 封禁'),
+    # 防火墙（自动封禁开关与时长，白名单见 config.py 的 FIREWALL_WHITELIST）
+    ('FIREWALL_WHITELIST', '112.82.136.172', 'str', '封禁白名单', '逗号分隔，白名单内的 IP 不会被封禁（手动封禁与自动封禁均跳过）', 'IP 封禁'),
     ('AUTO_BAN_ENABLED', True, 'bool', '自动 IP 封禁（总开关）', '开启后，触发限流的可疑操作（登录/注册/找回密码/邮箱验证码）将自动封禁对应 IP；封禁白名单 IP 不受影响', 'IP 封禁'),
     ('AUTO_BAN_DURATION_MINUTES', 30, 'int', '自动封禁时长（分钟）', '自动封禁的持续时长，到期自动解除；0 表示永久封禁', 'IP 封禁'),
     ('AUTO_BAN_LOGIN_ENABLED', True, 'bool', '登录异常自动封禁', '登录请求过于频繁时自动封禁该 IP', 'IP 封禁'),
@@ -284,7 +284,7 @@ SETTINGS_REGISTRY = [
     ('AUTO_BAN_EMAIL_ENABLED', True, 'bool', '邮箱验证码异常自动封禁', '邮箱验证码发送过于频繁时自动封禁该 IP', 'IP 封禁'),
     ('AUTO_BAN_FORGOT_PASSWORD_ENABLED', True, 'bool', '找回密码异常自动封禁', '找回密码请求过于频繁时自动封禁该 IP', 'IP 封禁'),
 
-    # 可疑访问拦截（命中攻击特征自动封禁 IP，白名单见 config.py 的 IP_BAN_WHITELIST）
+    # 可疑访问拦截（命中攻击特征自动封禁 IP，白名单见 config.py 的 FIREWALL_WHITELIST）
     ('SUSPICIOUS_BLOCK_ENABLED', True, 'bool', '可疑访问拦截（总开关）', '开启后，命中攻击特征（SQL 注入/XSS/路径穿越/命令注入/敏感文件与扫描器探测/恶意扫描 UA）的请求将被拦截并自动封禁来源 IP；封禁白名单 IP 不受影响', '可疑访问拦截'),
     ('SUSPICIOUS_BLOCK_DURATION_MINUTES', 60, 'int', '可疑访问封禁时长（分钟）', '拦截可疑访问后自动封禁的持续时长，到期自动解除；0 表示永久封禁', '可疑访问拦截'),
     ('SUSPICIOUS_BLOCK_SQLI_ENABLED', True, 'bool', 'SQL 注入拦截', '命中 SQL 注入特征（UNION SELECT、布尔/时间盲注、系统表探测、注释符等）时拦截并自动封禁', '可疑访问拦截'),
