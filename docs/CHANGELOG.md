@@ -13,7 +13,11 @@
 * **防火墙误封内置回环地址**：添加 `BUILTIN_SAFE_IPS`（`127.0.0.1` / `::1` / `localhost`），在所有检查路径（`is_whitelisted`、`ban_ip`、`is_banned`、`sync_blacklist`、WSGI 门禁）中跳过这些地址，确保永远不会被封禁
 * **`_refresh_ban_cache` 死锁**：该函数在被 `is_banned` 持有 `_ban_cache_lock` 时调用，其内部又试图重复获取同一个非可重入锁导致死锁；移除内部重复加锁，改为由调用方保证锁安全
 * **白名单未合并 config.py 配置**：`get_whitelist()` 只查询 DuckDB `firewall_whitelist` 表，未包含 `config.py` 定义的 `FIREWALL_WHITELIST`；现改为合并两者，config 的白名单作为启动基线，DuckDB 的白名单为运行时补充
-* **Windows 10 启动失败：`services/email/` 与 stdlib 冲突 & 子包化后相对导入路径错误**：重命名 `services/email/` → `services/mail/` 避免与 Python 标准库 `email` 包命名冲突（Windows 大小写不敏感文件系统下尤其严重）；修复 `services/mail/code/__init__.py` 中 `from .service` → `from ..service` 等相对导入路径，子包化后 `code/` 下的 `.service` 错误解析为 `code.service` 而非 `service`
+* **Windows 兼容性修复：重命名 `services/email/` → `services/mail/` 避免与 stdlib `email` 包命名冲突（Windows 大小写不敏感文件系统下尤其严重）**
+* **`services/mail/code/` → `services/mail/verification/`**：`code` 与 stdlib `code` 模块命名冲突
+* **`services/user/profile/` → `services/user/profiles/`**：`profile` 与 stdlib `profile` 模块命名冲突
+* **`services/mail/code/__init__.py` 相对导入错误**：`from .service` → `from ..service`，子包化后 `.service` 错误解析为 `code.service` 而非同级 `service`
+* **`services/backup/scheduler/__init__.py` 相对导入错误**：`from .manager` → `from ..manager`，同理 `scheduler.manager` 而非 `backup.manager`
 
 ### core 精简（本次）
 

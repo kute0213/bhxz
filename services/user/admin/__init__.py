@@ -3,7 +3,7 @@
 from core.db import get_db
 from core.system.logger import log
 from services.attachment_service import clean_attachment_json
-from services.user.profile import _get_user_media_keys, _clean_user_attachments, _clean_user_media
+from services.user.profiles import _get_user_media_keys, _clean_user_attachments, _clean_user_media
 
 
 def admin_delete_user(admin_user, target_user_id, ip_address):

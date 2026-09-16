@@ -77,7 +77,7 @@ class BackupScheduler:
 
     def _do_backup(self):
         """执行定时备份。"""
-        from .manager import BackupManager
+        from ..manager import BackupManager
         log('INFO', 'BackupScheduler', '开始定时自动备份...')
         backup_id, thread = BackupManager().start_backup(
             backup_type='scheduled',

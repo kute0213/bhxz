@@ -9,7 +9,7 @@ from services.user.auth import (
     login,
     forgot_password,
 )
-from services.user.profile import (
+from services.user.profiles import (
     change_username,
     change_password,
     change_email,
