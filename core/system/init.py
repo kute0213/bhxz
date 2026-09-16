@@ -6,7 +6,7 @@ import sys
 from flask import Flask
 
 from core.system.logger import log
-from core.shared.template_context import register_template_context
+from core.web.template_context import register_template_context
 
 
 def register_hooks(app, try_serve_public):

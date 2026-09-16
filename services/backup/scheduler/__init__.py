@@ -11,7 +11,7 @@ import threading
 
 from config import get_config_value
 from core.system.logger import log
-from core.system.scheduler import Scheduler
+from core.shared.scheduler import Scheduler
 
 
 class BackupScheduler:

@@ -13,6 +13,14 @@
 * **`_refresh_ban_cache` 死锁**：该函数在被 `is_banned` 持有 `_ban_cache_lock` 时调用，其内部又试图重复获取同一个非可重入锁导致死锁；移除内部重复加锁，改为由调用方保证锁安全
 * **白名单未合并 config.py 配置**：`get_whitelist()` 只查询 DuckDB `firewall_whitelist` 表，未包含 `config.py` 定义的 `FIREWALL_WHITELIST`；现改为合并两者，config 的白名单作为启动基线，DuckDB 的白名单为运行时补充
 
+### core 精简（本次）
+
+* **扁平化 `core/auth/` → `core/auth.py`**：单文件子包降级为普通模块，减少一层目录嵌套
+* **扁平化 `core/server/` → `core/server.py`**：同上
+* **`core/shared/helpers.py` → `core/web/helpers.py`**：依赖 Flask 的辅助函数归入 Web 层
+* **`core/shared/template_context.py` → `core/web/template_context.py`**：Flask 模板上下文处理器归入 Web 层
+* **`core/system/scheduler.py` → `core/shared/scheduler.py`**：通用调度工具从系统层归入共享工具
+
 ### 重构
 
 * **彻底模块化重构项目文件结构**：
