@@ -3,7 +3,7 @@
 from flask import jsonify, abort
 
 from core.auth import admin_required, get_current_user
-from core.shared.helpers import render_page
+from core.helpers import render_page
 from routes.admin import admin_bp
 from services import background_service
 from core.shared.ip import get_client_ip

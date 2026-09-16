@@ -6,7 +6,7 @@
 from flask import redirect, url_for, flash, abort, request
 
 from core.auth import admin_required, get_current_user
-from core.shared.helpers import render_page
+from core.helpers import render_page
 from core.db import get_db
 from routes.admin import admin_bp
 from services.user import admin_delete_user as _svc_delete_user, admin_toggle_admin as _svc_toggle_admin

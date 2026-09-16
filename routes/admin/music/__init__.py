@@ -6,7 +6,7 @@
 from flask import redirect, url_for, flash, request
 
 from core.auth import admin_required, get_current_user
-from core.shared.helpers import render_page
+from core.helpers import render_page
 from routes.admin import admin_bp
 import services.music as music_service
 from services.mail import email_service, music_review_result as build_result_html

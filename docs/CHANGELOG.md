@@ -18,6 +18,7 @@
 * **`services/user/profile/` → `services/user/profiles/`**：`profile` 与 stdlib `profile` 模块命名冲突
 * **`services/mail/code/__init__.py` 相对导入错误**：`from .service` → `from ..service`，子包化后 `.service` 错误解析为 `code.service` 而非同级 `service`
 * **`services/backup/scheduler/__init__.py` 相对导入错误**：`from .manager` → `from ..manager`，同理 `scheduler.manager` 而非 `backup.manager`
+* **17 处 `core.shared.helpers` 残留旧路径**：`helpers.py` 已合并至 `core/helpers.py`，但 17 个路由模块仍引用 `core.shared.helpers`，已全部批量修正为 `core.helpers`
 
 ### core 精简（本次）
 

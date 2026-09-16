@@ -4,7 +4,7 @@ from flask import abort, request, redirect, url_for, flash
 from datetime import datetime
 
 from core.auth import get_current_user, login_required
-from core.shared.helpers import render_page
+from core.helpers import render_page
 from core.db import get_db
 from core.shared.captcha import captcha_service
 from routes.guides import guides_bp

@@ -8,7 +8,7 @@ from io import BytesIO
 from flask import request, jsonify, send_file, abort
 
 from core.auth import get_current_user, login_required
-from core.shared.helpers import render_page
+from core.helpers import render_page
 from routes.backgrounds import backgrounds_bp
 from services import background_service
 from core.shared.ip import get_client_ip

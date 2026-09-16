@@ -6,7 +6,7 @@
 from flask import request, redirect, url_for, flash, abort
 
 from core.auth import login_required, get_current_user
-from core.shared.helpers import render_page
+from core.helpers import render_page
 from core.db import get_db
 from routes.discussion import discussion_bp
 from config import get_config_value

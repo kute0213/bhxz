@@ -10,7 +10,7 @@ from datetime import datetime
 from flask import jsonify, abort, send_file
 
 from core.auth import admin_required, get_current_user
-from core.shared.helpers import render_page
+from core.helpers import render_page
 from core.db import get_db
 from config import DB_PATH, BACKUP_DIR, APP_ROOT
 from routes.admin import admin_bp
