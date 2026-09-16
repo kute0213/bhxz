@@ -5,7 +5,7 @@ from flask import Flask
 import config
 from core.system.init import init_app
 from core.server import run_server, graceful_shutdown
-from core.web.errors import register_error_handlers
+from web.errors import register_error_handlers
 from core.system.logger import log
 
 

@@ -19,7 +19,7 @@ from flask import send_file, abort, request, redirect, url_for, flash
 
 from config import APP_ROOT
 from core.auth import login_required, get_current_user
-from core.web.helpers import render_page
+from web.helpers import render_page
 from core.db import get_db
 from routes.public import public_bp
 

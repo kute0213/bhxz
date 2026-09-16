@@ -21,6 +21,10 @@
 * **`core/shared/template_context.py` → `core/web/template_context.py`**：Flask 模板上下文处理器归入 Web 层
 * **`core/system/scheduler.py` → `core/shared/scheduler.py`**：通用调度工具从系统层归入共享工具
 
+### Web 层独立
+
+* **`core/web/` → `web/`**：将全部 Web 层模块（`csrf.py`、`errors.py`、`middleware.py`、`helpers.py`、`template_context.py`）从 `core/` 迁出为独立顶层包 `web/`，导入路径从 `core.web.*` 改为 `web.*`
+
 ### 重构
 
 * **彻底模块化重构项目文件结构**：

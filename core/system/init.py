@@ -6,13 +6,13 @@ import sys
 from flask import Flask
 
 from core.system.logger import log
-from core.web.template_context import register_template_context
+from web.template_context import register_template_context
 
 
 def register_hooks(app, try_serve_public):
     """注册请求钩子。"""
     log('INFO', 'App', '正在注册请求钩子...')
-    from core.web.middleware import register_hooks as _register_hooks
+    from web.middleware import register_hooks as _register_hooks
     _register_hooks(app, try_serve_public)
 
 

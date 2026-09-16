@@ -20,7 +20,7 @@ from flask import (
 )
 
 from core.auth import login_required, get_current_user
-from core.web.helpers import render_page
+from web.helpers import render_page
 from config import UPLOAD_MUSIC_DIR
 from routes.main import main_bp
 import services.music as music_service
