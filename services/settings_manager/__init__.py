@@ -245,3 +245,8 @@ def set_setting(key: str, value):
 def get_all_settings():
     """获取所有设置（便捷函数）。"""
     return settings_manager.get_all()
+
+
+def delete_setting(key: str):
+    """删除设置值（便捷函数）。"""
+    settings_manager.delete(key)
