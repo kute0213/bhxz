@@ -12,7 +12,7 @@ from config import (
     get_config_value, REGISTER_VERIFY_CODE,
     LOGIN_CAPTCHA_THRESHOLD, LOGIN_CAPTCHA_RESET_SECONDS,
 )
-from services.email import normalize_email
+from services.mail import normalize_email
 from services.user import (
     register, login, forgot_password, check_username_available,
 )

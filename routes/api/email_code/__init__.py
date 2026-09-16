@@ -2,7 +2,7 @@
 
 from flask import Blueprint, request, jsonify, session
 
-from services.email import email_code_service, normalize_email, email_service
+from services.mail import email_code_service, normalize_email, email_service
 from core.shared.captcha import captcha_service
 from core.shared.ratelimit import email_limiter
 from core.firewall import auto_ban

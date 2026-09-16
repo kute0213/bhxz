@@ -9,7 +9,7 @@ from core.auth import login_required, get_current_user
 from core.db import get_db
 from core.shared.ip import get_client_ip
 from core.shared.captcha import captcha_service
-from services.email import email_service, guide_review_pending as build_pending_html
+from services.mail import email_service, guide_review_pending as build_pending_html
 from routes.guides import guides_bp
 
 

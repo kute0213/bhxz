@@ -34,7 +34,7 @@ def shutdown_application(signum=None):
         log('INFO', 'App', f'收到信号 {signum}，正在关闭服务器...')
 
     from services.backup import BackupScheduler
-    from services.email import email_service
+    from services.mail import email_service
     from services.sitemap_cache import sitemap_cache
     from core.db import get_db
 

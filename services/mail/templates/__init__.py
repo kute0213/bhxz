@@ -20,7 +20,7 @@ import os
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-# 定位 templates/emails/ 目录（当前文件位于 services/email/templates.py）
+# 定位 templates/emails/ 目录（当前文件位于 services/mail/templates/__init__.py）
 _BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 _EMAIL_TEMPLATES_DIR = os.path.join(_BASE_DIR, 'templates', 'emails')
 
@@ -147,7 +147,7 @@ def broadcast_message(subject: str, html_body: str, sender_name: str = '滨海�
 
     Args:
         subject: 邮件主题
-        html_body: 已由 services/email/sanitize.sanitize_email_html 清洗过的富文本正文
+        html_body: 已由 services/mail/sanitize.sanitize_email_html 清洗过的富文本正文
         sender_name: 发送者显示名称
 
     Returns:

@@ -6,7 +6,7 @@ from datetime import datetime
 from core.auth import hash_password, validate_password, verify_password
 from core.db import get_db
 from config import get_config_value
-from services.email import email_code_service
+from services.mail import email_code_service
 from core.system.logger import log
 from services.attachment_service import clean_attachment_json
 

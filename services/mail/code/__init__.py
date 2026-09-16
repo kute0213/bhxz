@@ -9,8 +9,8 @@ from datetime import datetime
 
 from core.system.logger import log
 from core.shared.scheduler import Scheduler
-from .service import email_service
-from .templates import verification_code as build_code_html
+from ..service import email_service
+from ..templates import verification_code as build_code_html
 
 
 def normalize_email(email: str) -> str:

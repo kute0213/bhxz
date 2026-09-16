@@ -19,7 +19,7 @@ def register_hooks(app, try_serve_public):
 def start_background_services():
     """启动所有后台服务。"""
     from services.backup import BackupScheduler
-    from services.email import email_service
+    from services.mail import email_service
     from services.sitemap_cache import sitemap_cache
     from services.rcon import player_tracker
     from services.cleanup_service import cleanup_scheduler
