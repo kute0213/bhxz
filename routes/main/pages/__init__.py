@@ -5,7 +5,7 @@
 
 import os
 from flask import send_from_directory, current_app, abort
-from web.helpers import render_page
+from core.helpers import render_page
 from core.db import get_db
 from config import get_config_value, APP_ROOT
 from routes.main import main_bp

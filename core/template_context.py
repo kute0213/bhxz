@@ -5,7 +5,7 @@ from markupsafe import Markup
 
 from config import get_config_value
 from services import background_service
-from web.csrf import get_csrf_token
+from core.csrf import get_csrf_token
 
 
 def register_template_context(app):

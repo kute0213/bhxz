@@ -5,7 +5,7 @@
 
 from flask import request, redirect, url_for, session, flash
 from core.auth import login_required, get_current_user
-from web.helpers import render_page
+from core.helpers import render_page
 from services.email import normalize_email
 from services.user import (
     change_username as svc_change_username,

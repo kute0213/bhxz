@@ -6,6 +6,7 @@
 
 * **删除根目录 `utils/`**：`utils/` 所有文件已迁至 `core/shared/`，删除空的 `utils/` 目录
 * **`services/` 和 `routes/` 全部子包化**：所有非 `__init__.py` 的 Python 文件均已转换为子包结构，实现彻底的文件夹分类
+* **`web/` 独立顶层包回滚至 `core/`**：因根目录不允许新增文件夹，将临时迁出的 `web/` 顶层包（`csrf.py`、`errors.py`、`helpers.py`、`middleware.py`、`template_context.py`）移回 `core/` 扁平放置，导入路径从 `web.*` 恢复为 `core.*`
 
 ### 修复
 
@@ -17,13 +18,11 @@
 
 * **扁平化 `core/auth/` → `core/auth.py`**：单文件子包降级为普通模块，减少一层目录嵌套
 * **扁平化 `core/server/` → `core/server.py`**：同上
-* **`core/shared/helpers.py` → `core/web/helpers.py`**：依赖 Flask 的辅助函数归入 Web 层
-* **`core/shared/template_context.py` → `core/web/template_context.py`**：Flask 模板上下文处理器归入 Web 层
+* **`core/web/helpers.py` → `core/helpers.py`**：依赖 Flask 的辅助函数归入 core 根层
+* **`core/web/template_context.py` → `core/template_context.py`**：Flask 模板上下文处理器归入 core 根层
+* **`core/shared/helpers.py` → `core/helpers.py`**：合并 shared 与 web 的 helpers 为统一文件
+* **`core/shared/template_context.py` → `core/template_context.py`**：同上
 * **`core/system/scheduler.py` → `core/shared/scheduler.py`**：通用调度工具从系统层归入共享工具
-
-### Web 层独立
-
-* **`core/web/` → `web/`**：将全部 Web 层模块（`csrf.py`、`errors.py`、`middleware.py`、`helpers.py`、`template_context.py`）从 `core/` 迁出为独立顶层包 `web/`，导入路径从 `core.web.*` 改为 `web.*`
 
 ### 重构
 
