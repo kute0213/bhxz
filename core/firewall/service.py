@@ -31,6 +31,9 @@ _whitelist_cache_lock = threading.Lock()
 # 系统自动封禁操作人的标记 ID（users 表中不存在该用户，显示为「系统」）
 SYSTEM_BANNER_ID = 0
 
+# 内置安全 IP —— 永远不受防火墙影响（不能封禁、始终视为白名单）
+BUILTIN_SAFE_IPS = frozenset({'127.0.0.1', '::1', 'localhost'})
+
 # 自动封禁：操作类型 → 对应的设置注册表键（默认开启）
 AUTO_BAN_ACTION_SETTINGS = {
     'login': 'AUTO_BAN_LOGIN_ENABLED',
@@ -80,9 +83,10 @@ def _refresh_ban_cache():
                 banned[row[0]] = row[1] or ''
     except Exception as exc:
         log('WARNING', 'Firewall', f'刷新封禁缓存失败: {exc}')
-    with _ban_cache_lock:
-        _ban_cache['banned'] = banned
-        _ban_cache['ts'] = time.time()
+    # 注意：_refresh_ban_cache 总是在 _ban_cache_lock 已持有的上下文中调用
+    #（见 is_banned 与 get_banned_ips），因此这里不重复获取锁以避免死锁
+    _ban_cache['banned'] = banned
+    _ban_cache['ts'] = time.time()
 
 
 # ---------------------------------------------------------------------------
@@ -107,7 +111,14 @@ def validate_ip(ip_address):
 
 
 def get_whitelist():
-    """获取防火墙白名单列表（仅从 DuckDB 读取）。"""
+    """获取防火墙白名单列表（合并 config.py FIREWALL_WHITELIST + DuckDB 运行时白名单）。
+
+    config.py 中定义的白名单作为启动时基线（如默认 112.82.136.172），
+    DuckDB firewall_whitelist 表存储通过管理后台等运行时添加的白名单，
+    两者共同生效。
+    """
+    from config import FIREWALL_WHITELIST as CONFIG_WHITELIST
+
     with _whitelist_cache_lock:
         if time.time() - _whitelist_cache['ts'] > WHITELIST_CACHE_TTL:
             try:
@@ -115,7 +126,15 @@ def get_whitelist():
                     rows = conn.execute(
                         "SELECT ip_address FROM firewall_whitelist"
                     ).fetchall()
-                whitelist = [row[0] for row in rows]
+                duckdb_whitelist = [row[0] for row in rows]
+                merged = list(CONFIG_WHITELIST) + duckdb_whitelist
+                # 去重（保留顺序）
+                seen = set()
+                whitelist = []
+                for ip in merged:
+                    if ip not in seen:
+                        seen.add(ip)
+                        whitelist.append(ip)
                 _whitelist_cache['data'] = whitelist
                 _whitelist_cache['ts'] = time.time()
             except Exception as exc:
@@ -124,10 +143,17 @@ def get_whitelist():
 
 
 def is_whitelisted(ip_address):
-    """判断 IP 是否在防火墙白名单中（白名单内的 IP 不会被执行任何封禁操作）。"""
+    """判断 IP 是否在防火墙白名单或内置安全 IP 列表中。
+
+    内置安全 IP（127.0.0.1、::1）永远不受防火墙影响，始终视为白名单。
+    白名单内的 IP 不会被执行任何封禁操作。
+    """
     if not ip_address:
         return False
-    return ip_address.strip() in get_whitelist()
+    ip = ip_address.strip()
+    if ip in BUILTIN_SAFE_IPS:
+        return True
+    return ip in get_whitelist()
 
 
 def whitelist_add(ip_address):
@@ -198,6 +224,8 @@ def ban_ip(ip_address, reason, banned_by=SYSTEM_BANNER_ID, duration_minutes=None
     ip = (ip_address or '').strip()
     if not validate_ip(ip):
         return False, '无效的 IP 地址'
+    if ip in BUILTIN_SAFE_IPS:
+        return False, '不能封禁本地回环地址'
     if is_whitelisted(ip):
         return False, '该 IP 在防火墙白名单中，不允许封禁'
 

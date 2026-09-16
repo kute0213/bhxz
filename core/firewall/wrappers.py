@@ -41,6 +41,10 @@ class FirewallWSGIWrapper:
         ip = environ.get('REMOTE_ADDR') or ''
 
         if ip:
+            # 内置安全 IP（127.0.0.1、::1）跳过所有防火墙检查
+            if ip in ('127.0.0.1', '::1', 'localhost'):
+                return self._app(environ, start_response)
+
             # 1) 黑名单拦截兜底
             if self._fw.is_banned(ip):
                 conn = environ.get('cheroot.connection')

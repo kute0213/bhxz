@@ -29,7 +29,7 @@ FLAG_FILE = os.path.join(BACKUP_DIR, '.restore_flag')
 
 # 独立脚本运行时 sys.path[0] 为 scripts/，需手动加入项目根目录以便导入 services
 sys.path.insert(0, APP_ROOT)
-from utils.process_utils import make_env  # noqa: E402
+from core.shared.process_utils import make_env  # noqa: E402
 
 
 def main():

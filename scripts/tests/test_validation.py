@@ -2,7 +2,7 @@
 
 import pytest
 
-from utils.validation import (
+from core.shared.validation import (
     validate_mc_username, validate_website_username,
     validate_password_strength, validate_game_password,
     is_weak_password, sanitize_rcon_input,

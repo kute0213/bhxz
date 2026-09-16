@@ -2,6 +2,17 @@
 
 ## \[Unreleased]
 
+### 结构优化（本次）
+
+* **删除根目录 `utils/`**：`utils/` 所有文件已迁至 `core/shared/`，删除空的 `utils/` 目录
+* **`services/` 和 `routes/` 全部子包化**：所有非 `__init__.py` 的 Python 文件均已转换为子包结构，实现彻底的文件夹分类
+
+### 修复
+
+* **防火墙误封内置回环地址**：添加 `BUILTIN_SAFE_IPS`（`127.0.0.1` / `::1` / `localhost`），在所有检查路径（`is_whitelisted`、`ban_ip`、`is_banned`、`sync_blacklist`、WSGI 门禁）中跳过这些地址，确保永远不会被封禁
+* **`_refresh_ban_cache` 死锁**：该函数在被 `is_banned` 持有 `_ban_cache_lock` 时调用，其内部又试图重复获取同一个非可重入锁导致死锁；移除内部重复加锁，改为由调用方保证锁安全
+* **白名单未合并 config.py 配置**：`get_whitelist()` 只查询 DuckDB `firewall_whitelist` 表，未包含 `config.py` 定义的 `FIREWALL_WHITELIST`；现改为合并两者，config 的白名单作为启动基线，DuckDB 的白名单为运行时补充
+
 ### 重构
 
 * **彻底模块化重构项目文件结构**：

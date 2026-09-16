@@ -33,7 +33,7 @@ def api_apply_register():
     返回:
         { success, message }
     """
-    from utils.captcha import captcha_service
+    from core.shared.captcha import captcha_service
 
     user = get_current_user()
     data = request.get_json(silent=True) or {}

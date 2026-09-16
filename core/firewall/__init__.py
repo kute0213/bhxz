@@ -85,11 +85,16 @@ class Firewall:
     # ---- 黑名单镜像（连接过滤器 / WSGI 门禁快速查询）----
 
     def is_banned(self, ip):
-        """O(1) 黑名单查询（供连接过滤器在请求解析前快速拦截）。"""
-        return bool(ip) and ip in self._banned_set
+        """O(1) 黑名单查询（供连接过滤器在请求解析前快速拦截）。
+
+        内置安全 IP（127.0.0.1、::1）永远返回未封禁。
+        """
+        if not ip or ip in ('127.0.0.1', '::1', 'localhost'):
+            return False
+        return ip in self._banned_set
 
     def sync_blacklist(self):
-        """从 DuckDB 同步有效封禁到内存镜像。"""
+        """从 DuckDB 同步有效封禁到内存镜像（排除内置安全 IP）。"""
         try:
             from core.firewall.database import get_db
             with get_db() as conn:
@@ -98,8 +103,10 @@ class Firewall:
                     "WHERE expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP"
                 ).fetchall()
             banned = {}
+            safe = {'127.0.0.1', '::1', 'localhost'}
             for row in rows:
-                banned[row[0]] = row[1] or ''
+                if row[0] not in safe:
+                    banned[row[0]] = row[1] or ''
             with self._state_lock:
                 self._banned_set = set(banned.keys())
                 self._banned_reasons = banned
