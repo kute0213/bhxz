@@ -5,7 +5,6 @@
 - get_ip_info() — 异步查询 IP 地理信息
 """
 
-import os
 import threading
 from flask import request
 

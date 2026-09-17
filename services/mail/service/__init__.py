@@ -5,7 +5,6 @@ import ssl
 import threading
 import queue
 import traceback
-from datetime import datetime
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from email.utils import formataddr

@@ -8,7 +8,6 @@ import tempfile
 import zipfile
 import threading
 import subprocess
-from collections import deque
 
 from config import APP_ROOT
 from services.updater.config import (

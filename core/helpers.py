@@ -1,7 +1,7 @@
 """路由辅助函数 —— 减少重复的 get_current_user() + render_template() 模式。"""
 
-from flask import render_template, flash, redirect, url_for, request
-from core.auth import get_current_user, admin_required
+from flask import render_template, flash, redirect, url_for
+from core.auth import get_current_user
 
 
 def render_page(template, **kwargs):

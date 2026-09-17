@@ -6,7 +6,7 @@
 
 from datetime import datetime
 
-from flask import request, jsonify, g
+from flask import request, jsonify
 
 from core.auth import admin_required, get_current_user
 from core.helpers import render_page

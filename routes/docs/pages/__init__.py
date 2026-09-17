@@ -2,7 +2,6 @@
 
 import os
 from flask import jsonify, abort
-from core.auth import get_current_user
 from core.helpers import render_page
 from routes.docs import docs_bp
 

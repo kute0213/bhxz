@@ -5,7 +5,7 @@
 
 import json
 
-from flask import render_template, Response, stream_with_context, abort
+from flask import render_template, Response, stream_with_context
 
 from core.auth import admin_required, get_current_user
 from routes.admin import admin_bp

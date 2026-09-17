@@ -8,8 +8,6 @@
 
 import weakref
 
-from core.system.logger import log
-
 
 class FirewallWSGIWrapper:
     """WSGI 包装器：黑名单快速拦截 + 连接登记 + DDoS 计数。

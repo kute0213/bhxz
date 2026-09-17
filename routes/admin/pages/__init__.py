@@ -1,7 +1,5 @@
 """管理后台页面路由：仪表盘。"""
 
-from flask import abort
-
 from core.auth import admin_required
 from core.helpers import render_page
 from core.db import get_db

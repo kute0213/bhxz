@@ -20,7 +20,6 @@ import shutil
 import tarfile
 import time
 from urllib.request import Request, urlopen, build_opener, HTTPRedirectHandler, HTTPSHandler
-from urllib.error import URLError, HTTPError
 
 # ---------------------------------------------------------------------------
 # 路径配置

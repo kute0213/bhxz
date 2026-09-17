@@ -15,7 +15,6 @@
 import os
 import sys
 import importlib
-import pkgutil
 
 from core.system.logger import log
 

@@ -4,13 +4,12 @@
 """
 
 import re
-from flask import request, jsonify, abort, flash, redirect, url_for
+from flask import request, jsonify
 
-from core.auth import admin_required, get_current_user
+from core.auth import admin_required
 from core.helpers import render_page
 from routes.admin import admin_bp
 from config import SETTINGS_REGISTRY, get_config_value
-from core.system.logger import log
 from services.settings_manager import settings_manager
 
 

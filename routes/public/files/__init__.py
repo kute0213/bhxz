@@ -12,7 +12,6 @@ r"""公开文件/目录服务。
 """
 
 import os
-import platform
 import mimetypes
 from datetime import datetime
 from flask import send_file, abort, request, redirect, url_for, flash

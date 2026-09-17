@@ -57,7 +57,7 @@ def add_mod_intro():
                     (icon, title, content, link, now)
                 )
                 conn.commit()
-            except:
+            except Exception:
                 conn.rollback()
         finally:
             conn.close()
@@ -85,7 +85,7 @@ def edit_mod_intro(intro_id):
                     (icon, title, content, link, intro_id)
                 )
                 conn.commit()
-            except:
+            except Exception:
                 conn.rollback()
         finally:
             conn.close()
@@ -104,7 +104,7 @@ def delete_mod_intro(intro_id):
         try:
             conn.execute("DELETE FROM mod_intros WHERE id = ?", (intro_id,))
             conn.commit()
-        except:
+        except Exception:
             conn.rollback()
     finally:
         conn.close()

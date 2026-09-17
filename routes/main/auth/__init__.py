@@ -6,7 +6,7 @@
 from urllib.parse import urlparse
 import time
 
-from flask import render_template, request, redirect, url_for, session, flash, jsonify, current_app
+from flask import render_template, request, redirect, url_for, session, jsonify, current_app
 from core.auth import get_current_user
 from config import (
     get_config_value, REGISTER_VERIFY_CODE,

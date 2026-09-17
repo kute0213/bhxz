@@ -8,8 +8,7 @@ import re
 
 from core.db import get_db
 from config import UPLOAD_MUSIC_DIR
-from core.system.logger import log
-from services.music.constants import STATUS_PUBLIC, STATUS_PENDING, STATUS_PRIVATE
+from services.music.constants import STATUS_PUBLIC, STATUS_PENDING
 
 
 def parse_tags(raw):

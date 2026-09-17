@@ -3,7 +3,7 @@
 import os
 from io import BytesIO
 
-from flask import abort, current_app, flash, redirect, request, send_file, url_for
+from flask import abort, flash, redirect, request, send_file, url_for
 
 from config import UPLOAD_DIR, USER_IMAGE_MAX_BYTES
 from core.auth import get_current_user, login_required

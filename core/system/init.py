@@ -3,8 +3,6 @@
 import os
 import sys
 
-from flask import Flask
-
 from core.system.logger import log
 from core.template_context import register_template_context
 

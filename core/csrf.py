@@ -14,7 +14,7 @@
 
 import hmac
 import secrets
-from flask import session, request, abort, g
+from flask import session, request, abort
 
 
 def get_csrf_token():

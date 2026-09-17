@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from flask import redirect, url_for, flash, abort, request, jsonify
+from flask import redirect, url_for, flash, abort, request
 
 from core.auth import admin_required, get_current_user
 from core.helpers import render_page

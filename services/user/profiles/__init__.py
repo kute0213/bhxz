@@ -1,7 +1,6 @@
 """用户业务服务 - 个人资料管理（修改用户名、密码、邮箱、注销账号）。"""
 
 import os
-from datetime import datetime
 
 from core.auth import hash_password, validate_password, verify_password
 from core.db import get_db

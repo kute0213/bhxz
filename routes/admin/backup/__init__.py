@@ -3,11 +3,10 @@
 import os
 import sys
 import json
-import shutil
 import subprocess
 from datetime import datetime
 
-from flask import jsonify, abort, send_file
+from flask import jsonify, send_file
 
 from core.auth import admin_required, get_current_user
 from core.helpers import render_page

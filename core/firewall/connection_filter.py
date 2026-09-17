@@ -14,13 +14,9 @@
     防止 worker 线程 put_conn() 重复注册已关闭 fd 触发 KeyError
 """
 
-import socket
-import threading
-
 from cheroot.wsgi import Gateway_10, Server as CherootWSGIServer
 from cheroot.server import HTTPConnection
 
-from core.firewall import database
 from core.system.logger import log
 
 

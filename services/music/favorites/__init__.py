@@ -3,11 +3,8 @@
 所有函数为 Flask 无关的纯业务逻辑，返回 (success, data_or_error) 元组。
 """
 
-import threading
-import time
-
 from core.db import get_db
-from services.music.constants import STATUS_PUBLIC, UPLOAD_TASK_TTL
+from services.music.constants import STATUS_PUBLIC
 from services.music.queries import get_music
 
 

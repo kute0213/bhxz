@@ -13,9 +13,7 @@ import ipaddress
 import threading
 import time
 from datetime import datetime, timedelta
-from typing import Optional
-
-from core.firewall.database import get_db, vacuum
+from core.firewall.database import get_db
 from core.system.logger import log
 
 # 封禁缓存 TTL（秒）
