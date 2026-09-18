@@ -1,11 +1,16 @@
-"""防火墙后台监控线程 —— 同步黑名单 + 强制关闭黑名单连接 + 定时清理。
+"""防火墙后台监控 —— 单线程 1 秒周期，集中执行所有定时任务。
 
-职责：
-  1. 每 0.5 秒从 DuckDB 同步有效封禁到内存黑名单镜像
-  2. 每 0.5 秒扫描服务器活跃连接，强制关闭黑名单 IP 的连接
-  3. 每 30 秒清理 DuckDB 中的过期封禁
-  4. 每 5 分钟清理过期的 DDoS 计数与违规记录
-  5. 每 1 小时执行 VACUUM 回收存储空间
+职责（按执行频率排列）：
+  [1s] 同步所有内存缓存（IP 封禁、账号封禁、白名单）
+  [1s] 强制关闭黑名单 IP 的现存连接
+  [60s] 清理过期的 IP 封禁与账号封禁
+  [120s] 清理过期的 DDoS 计数与违规记录
+  [3600s] VACUUM 回收存储空间
+
+架构优势：
+  - 单一 daemon 线程，无需多线程协调
+  - 使用 time.monotonic() 高精度计时，避免系统时间跳变影响
+  - 所有任务共用同一个 1 秒 tick 循环，零额外开销
 """
 
 import threading
@@ -14,81 +19,115 @@ import weakref
 
 from core.system.logger import log
 
-# 黑名单同步周期（秒）
-SYNC_INTERVAL = 0.5
-# 强制关闭连接扫描周期（秒）
-CLOSE_INTERVAL = 0.5
-# DDoS 清理周期（秒）
-DDOS_PRUNE_INTERVAL = 30
-# 过期封禁清理周期（秒）
-CLEANUP_INTERVAL = 60
-# VACUUM 周期（秒）
-VACUUM_INTERVAL = 3600
+# ---- 执行间隔（秒） ----
+SYNC_INTERVAL = 1.0        # 缓存同步
+CLOSE_INTERVAL = 1.0       # 强制关闭连接
+CLEANUP_INTERVAL = 60.0    # 清理过期封禁
+DDOS_PRUNE_INTERVAL = 120.0  # 清理 DDoS 计数
+SPAM_PRUNE_INTERVAL = 120.0  # 清理刷屏记录
+VACUUM_INTERVAL = 3600.0   # VACUUM
 
 
 class FirewallMonitor:
-    """防火墙后台监控器。"""
+    """防火墙后台监控器 —— 单线程 1 秒 tick 循环。"""
 
     def __init__(self, firewall_instance):
-        """
-        Args:
-            firewall_instance: Firewall 单例（拥有 _banned_set, _server, _state_lock 等）
-        """
         self._fw = firewall_instance
         self._stop = threading.Event()
-        self._threads = []
+        self._thread = None
 
     def start(self):
-        if self._threads:
+        if self._thread and self._thread.is_alive():
             return
         self._stop.clear()
-        t1 = threading.Thread(target=self._monitor_loop, name='fw-monitor', daemon=True)
-        t2 = threading.Thread(target=self._cleanup_loop, name='fw-cleanup', daemon=True)
-        t1.start()
-        t2.start()
-        self._threads = [t1, t2]
-        log('INFO', 'Firewall', '防火墙后台监控已启动')
+        self._thread = threading.Thread(
+            target=self._tick_loop, name='fw-tick', daemon=True
+        )
+        self._thread.start()
+        log('INFO', 'Firewall', '防火墙后台监控已启动 (1s tick)')
 
     def stop(self):
         self._stop.set()
-        for t in self._threads:
+        if self._thread:
             try:
-                t.join(timeout=2)
+                self._thread.join(timeout=3)
             except Exception:
                 pass
-        self._threads = []
+            self._thread = None
         log('INFO', 'Firewall', '防火墙后台监控已停止')
 
-    def _monitor_loop(self):
-        """监控循环：同步黑名单 + 强制关闭黑名单连接。"""
-        ddos_prune_time = time.time()
-        while not self._stop.is_set():
-            try:
-                self._fw.sync_blacklist()
-                self._force_close_banned()
-                now = time.time()
-                if now - ddos_prune_time > DDOS_PRUNE_INTERVAL:
-                    self._prune_ddos()
-                    ddos_prune_time = now
-            except Exception as exc:
-                log('WARNING', 'FirewallMonitor', f'监控循环异常: {exc}')
-            self._stop.wait(CLOSE_INTERVAL)
+    def _tick_loop(self):
+        """1 秒 tick 循环 —— 所有定时任务在此集中调度。"""
+        # 初始化时间基准
+        tick_count = 0
+        last_sync = 0.0
+        last_close = 0.0
+        last_cleanup = 0.0
+        last_ddos_prune = 0.0
+        last_spam_prune = 0.0
+        last_vacuum = 0.0
 
-    def _cleanup_loop(self):
-        """清理循环：过期封禁 + VACUUM。"""
-        vacuum_time = time.time()
         while not self._stop.is_set():
-            self._stop.wait(CLEANUP_INTERVAL)
-            try:
-                from core.firewall.service import cleanup_expired
-                cleanup_expired()
-                now = time.time()
-                if now - vacuum_time > VACUUM_INTERVAL:
+            now = time.monotonic()
+
+            # ---- [1s] 同步内存缓存 ----
+            if now - last_sync >= SYNC_INTERVAL:
+                try:
+                    from core.firewall.database import sync_all_to_cache
+                    sync_all_to_cache()
+                except Exception as exc:
+                    log('WARNING', 'fw-tick', f'缓存同步异常: {exc}')
+                last_sync = now
+
+            # ---- [1s] 强制关闭黑名单连接 ----
+            if now - last_close >= CLOSE_INTERVAL:
+                try:
+                    self._force_close_banned()
+                except Exception as exc:
+                    log('WARNING', 'fw-tick', f'强制关闭连接异常: {exc}')
+                last_close = now
+
+            # ---- [60s] 清理过期封禁（IP + 账号） ----
+            if now - last_cleanup >= CLEANUP_INTERVAL:
+                try:
+                    self._cleanup_expired_bans()
+                except Exception as exc:
+                    log('WARNING', 'fw-tick', f'清理过期封禁异常: {exc}')
+                last_cleanup = now
+
+            # ---- [120s] 清理 DDoS 计数 ----
+            if now - last_ddos_prune >= DDOS_PRUNE_INTERVAL:
+                try:
+                    self._prune_ddos()
+                except Exception as exc:
+                    log('WARNING', 'fw-tick', f'DDoS 清理异常: {exc}')
+                last_ddos_prune = now
+
+            # ---- [120s] 清理刷屏记录 ----
+            if now - last_spam_prune >= SPAM_PRUNE_INTERVAL:
+                try:
+                    from core.firewall.spam import prune_spam
+                    prune_spam()
+                except Exception as exc:
+                    log('WARNING', 'fw-tick', f'刷屏记录清理异常: {exc}')
+                last_spam_prune = now
+
+            # ---- [3600s] VACUUM ----
+            if now - last_vacuum >= VACUUM_INTERVAL:
+                try:
                     from core.firewall.database import vacuum
                     vacuum()
-                    vacuum_time = now
-            except Exception as exc:
-                log('WARNING', 'FirewallMonitor', f'清理循环异常: {exc}')
+                except Exception as exc:
+                    log('WARNING', 'fw-tick', f'VACUUM 异常: {exc}')
+                last_vacuum = now
+
+            tick_count += 1
+            # 等待 1 秒（或被 stop 唤醒）
+            self._stop.wait(1.0)
+
+    # ------------------------------------------------------------------
+    # 强制关闭黑名单连接
+    # ------------------------------------------------------------------
 
     def _force_close_banned(self):
         """强制关闭所有黑名单 IP 的现存连接。"""
@@ -109,19 +148,21 @@ class FirewallMonitor:
                 except Exception:
                     dead.append(key)
                     continue
-                if addr and addr in fw._banned_set:
-                    try:
-                        conn.linger = False
-                        conn.close()
-                        log('Security', '防火墙: 监控强制关闭黑名单连接', ip=addr)
-                    except Exception:
-                        pass
-                    dead.append(key)
+                if addr:
+                    from core.firewall.database import is_ip_banned_cache
+                    if is_ip_banned_cache(addr)[0]:
+                        try:
+                            conn.linger = False
+                            conn.close()
+                            log('Security', '防火墙: 监控强制关闭黑名单连接', ip=addr)
+                        except Exception:
+                            pass
+                        dead.append(key)
             for key in dead:
                 conns.pop(key, None)
 
     def _scan_server_connections(self):
-        """从 Cheroot 连接管理器登记活跃连接（含 keep-alive 空闲连接）。"""
+        """从 Cheroot 连接管理器登记活跃连接。"""
         server = self._fw._server
         if server is None:
             return
@@ -144,11 +185,51 @@ class FirewallMonitor:
         except Exception:
             pass
 
+    # ------------------------------------------------------------------
+    # 清理过期封禁
+    # ------------------------------------------------------------------
+
+    def _cleanup_expired_bans(self):
+        """清理所有过期的 IP 封禁和账号封禁记录。"""
+        from core.firewall.database import get_db
+        deleted_ip = 0
+        deleted_account = 0
+        try:
+            with get_db() as conn:
+                result = conn.execute(
+                    "DELETE FROM firewall_bans "
+                    "WHERE expires_at IS NOT NULL AND expires_at <= CURRENT_TIMESTAMP"
+                )
+                try:
+                    deleted_ip = result.fetchone()[0]
+                except Exception:
+                    pass
+        except Exception as exc:
+            log('WARNING', 'fw-tick', f'清理过期 IP 封禁失败: {exc}')
+
+        try:
+            with get_db() as conn:
+                result = conn.execute(
+                    "DELETE FROM firewall_account_bans "
+                    "WHERE expires_at IS NOT NULL AND expires_at <= CURRENT_TIMESTAMP"
+                )
+                try:
+                    deleted_account = result.fetchone()[0]
+                except Exception:
+                    pass
+        except Exception as exc:
+            log('WARNING', 'fw-tick', f'清理过期账号封禁失败: {exc}')
+
+        if deleted_ip or deleted_account:
+            log('INFO', 'Firewall', f'过期封禁清理: IP={deleted_ip}, 账号={deleted_account}')
+
+    # ------------------------------------------------------------------
+    # DDoS 计数清理
+    # ------------------------------------------------------------------
+
     def _prune_ddos(self):
         """清理过期的 DDoS 计数。"""
         from config import get_config_value
-        from core.firewall.ddos import DDoSDetector
-        # 访问 firewall 实例上的 _ddos_detector
         fw = self._fw
         detector = getattr(fw, '_ddos_detector', None)
         if detector is not None:

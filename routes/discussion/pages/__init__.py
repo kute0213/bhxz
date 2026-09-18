@@ -43,10 +43,15 @@ def create():
     categories = get_categories()
 
     if request.method == 'POST':
+        from core.firewall.spam import check_spam, record_activity
+        title = request.form.get('title', '').strip()
+        if check_spam(user_id=user['id'], content_type='discussion_topic', content=title):
+            flash('发布过于频繁，请稍后再试', 'error')
+            return redirect(url_for('discussion.list'))
         success, message = create_topic(
             user_id=user['id'],
             username=user['username'],
-            title=request.form.get('title', '').strip(),
+            title=title,
             content=request.form.get('content', '').strip(),
             category_id=request.form.get('category_id', type=int),
             tags=request.form.get('tags', '').strip(),
@@ -54,6 +59,7 @@ def create():
             ip_address=get_client_ip(),
         )
         if success:
+            record_activity(user_id=user['id'], content_type='discussion_topic', content=title)
             return redirect(url_for('discussion.list'))
         flash(message, 'error')
         return render_page('discussion/create.html', categories=categories,

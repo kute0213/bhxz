@@ -52,6 +52,10 @@ def upload_background():
     if not files:
         return jsonify({'error': '请选择图片'}), 400
 
+    from core.firewall.spam import check_spam, record_activity
+    if check_spam(user_id=user['id'], content_type='background', content=files[0].filename or 'background'):
+        return jsonify({'error': '上传过于频繁，请稍后再试'}), 400
+
     task_ids = []
     for upload_file in files:
         success, result = background_service.start_upload(
@@ -61,6 +65,7 @@ def upload_background():
             ip_address=get_client_ip(),
         )
         if success:
+            record_activity(user_id=user['id'], content_type='background', content=upload_file.filename or 'background')
             task_ids.append(result['task_id'])
 
     if not task_ids:

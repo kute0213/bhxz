@@ -32,11 +32,25 @@ from core.firewall.service import (
     whitelist_remove,
     auto_ban,
     ban_suspicious_ip,
+    # 账号封禁
+    ban_account,
+    unban_account,
+    unban_account_by_user,
+    is_account_banned,
+    get_account_bans,
+    get_account_ban,
+    # 刷屏记录
+    record_spam,
+    get_spam_log,
+    get_user_spam_count,
+    clear_spam_log,
+    # 警告系统
     add_warning,
     get_warnings,
     get_warning_count,
     get_all_warnings,
     clear_warnings,
+    # 常量
     SYSTEM_BANNER_ID,
 )
 
@@ -73,45 +87,23 @@ class Firewall:
         if hasattr(self, '_initialized') and self._initialized:
             return
         self._initialized = True
-        # 黑名单内存镜像（O(1) 查询热路径）
-        self._banned_set = set()
-        self._banned_reasons = {}
         self._state_lock = __import__('threading').Lock()
-        # Cheroot 服务器引用
         self._server = None
-        # 监控器
         self._monitor = None
 
-    # ---- 黑名单镜像（连接过滤器 / WSGI 门禁快速查询）----
+    # ---- 黑名单查询 ----
 
     def is_banned(self, ip):
-        """O(1) 黑名单查询（供连接过滤器在请求解析前快速拦截）。
-
-        内置安全 IP（127.0.0.1、::1）永远返回未封禁。
-        """
+        """O(1) 黑名单查询（使用数据库层内存缓存）。"""
         if not ip or ip in ('127.0.0.1', '::1', 'localhost'):
             return False
-        return ip in self._banned_set
+        from core.firewall.database import is_ip_banned_cache
+        return is_ip_banned_cache(ip)[0]
 
-    def sync_blacklist(self):
-        """从 DuckDB 同步有效封禁到内存镜像（排除内置安全 IP）。"""
-        try:
-            from core.firewall.database import get_db
-            with get_db() as conn:
-                rows = conn.execute(
-                    "SELECT ip_address, reason FROM firewall_bans "
-                    "WHERE expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP"
-                ).fetchall()
-            banned = {}
-            safe = {'127.0.0.1', '::1', 'localhost'}
-            for row in rows:
-                if row[0] not in safe:
-                    banned[row[0]] = row[1] or ''
-            with self._state_lock:
-                self._banned_set = set(banned.keys())
-                self._banned_reasons = banned
-        except Exception:
-            pass
+    def is_account_banned(self, user_id):
+        """O(1) 账号封禁查询（使用数据库层内存缓存）。"""
+        from core.firewall.database import is_account_banned_cache
+        return is_account_banned_cache(user_id)[0]
 
     # ---- WSGI 包装 ----
 

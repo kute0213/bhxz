@@ -23,14 +23,21 @@ from services.discussion import (
 @login_required
 def reply(topic_id):
     user = get_current_user()
+    from core.firewall.spam import check_spam, record_activity
+    content = request.form.get('content', '').strip()
+    if check_spam(user_id=user['id'], content_type='discussion_reply', content=content):
+        return _respond('发布过于频繁，请稍后再试', 'error',
+                        redirect_to=url_for('discussion.detail', topic_id=topic_id))
     success, message = reply_to_topic(
         user_id=user['id'],
         username=user['username'],
         topic_id=topic_id,
-        content=request.form.get('content', '').strip(),
+        content=content,
         attachment_files=request.files.getlist('attachments'),
         ip_address=get_client_ip(),
     )
+    if success:
+        record_activity(user_id=user['id'], content_type='discussion_reply', content=content)
     return _respond(message, 'success' if success else 'error',
                     redirect_to=url_for('discussion.detail', topic_id=topic_id))
 

@@ -97,6 +97,10 @@ def upload_music():
     is_public = request.form.get('is_public') in ('1', 'on', 'true')
     upload_file = request.files.get('audio_file')
 
+    from core.firewall.spam import check_spam, record_activity
+    if check_spam(user_id=user['id'], content_type='music', content=title):
+        return jsonify({'error': '上传过于频繁，请稍后再试'}), 400
+
     success, result = music_service.start_upload(
         user_id=user['id'],
         username=user['username'],
@@ -107,6 +111,7 @@ def upload_music():
         tags=tags,
     )
     if success:
+        record_activity(user_id=user['id'], content_type='music', content=title)
         return jsonify({'task_id': result['task_id']})
     return jsonify({'error': result}), 400
 

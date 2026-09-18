@@ -7,7 +7,7 @@ from core.helpers import render_page
 from core.firewall import (
     ban_ip, unban_ip, get_bans, get_whitelist,
     whitelist_add, whitelist_remove,
-    get_all_warnings,
+    get_all_warnings, get_account_bans, ban_account, unban_account,
 )
 from core.shared.ip import get_client_ip
 from config import (
@@ -232,5 +232,88 @@ def admin_firewall_whitelist_remove():
         flash('IP 地址不能为空', 'error')
         return redirect(url_for('admin.admin_firewall'))
     success, message = whitelist_remove(ip_address)
+    flash(message, 'success' if success else 'error')
+    return redirect(url_for('admin.admin_firewall'))
+
+
+# ---- 账号封禁管理 ----
+
+
+@admin_bp.route('/admin/firewall/account-bans')
+@admin_required
+def admin_firewall_account_bans():
+    """管理后台：账号封禁列表页。"""
+    account_bans = get_account_bans()
+    # Try to resolve usernames from the users table
+    from core.db import get_db
+    bans_with_username = []
+    for ban in account_bans:
+        ban = dict(ban)
+        try:
+            conn = get_db()
+            row = conn.execute(
+                "SELECT username FROM users WHERE id = ?", (ban['user_id'],)
+            ).fetchone()
+            ban['username'] = row[0] if row else f"用户{ban['user_id']}"
+            conn.close()
+            # Also get banner's username
+            if ban['banned_by']:
+                conn2 = get_db()
+                banner = conn2.execute(
+                    "SELECT username FROM users WHERE id = ?", (ban['banned_by'],)
+                ).fetchone()
+                ban['banned_by_name'] = banner[0] if banner else f"用户{ban['banned_by']}"
+                conn2.close()
+            else:
+                ban['banned_by_name'] = '系统'
+        except Exception:
+            ban['username'] = f"用户{ban['user_id']}"
+            ban['banned_by_name'] = '系统'
+        bans_with_username.append(ban)
+    return render_page('admin/admin_firewall.html', account_bans=bans_with_username)
+
+
+@admin_bp.route('/admin/firewall/ban-account', methods=['POST'])
+@admin_required
+def admin_firewall_ban_account():
+    """管理后台：创建账号封禁。"""
+    user = get_current_user()
+    user_id = (request.form.get('user_id') or '').strip()
+    reason = (request.form.get('reason') or '').strip()
+    duration_minutes = (request.form.get('duration_minutes') or '').strip()
+
+    if not user_id:
+        flash('用户 ID 不能为空', 'error')
+        return redirect(url_for('admin.admin_firewall'))
+
+    try:
+        uid = int(user_id)
+    except (ValueError, TypeError):
+        flash('用户 ID 必须为数字', 'error')
+        return redirect(url_for('admin.admin_firewall'))
+
+    dur = None
+    if duration_minutes:
+        try:
+            dur = int(duration_minutes)
+        except (ValueError, TypeError):
+            flash('封禁时长无效', 'error')
+            return redirect(url_for('admin.admin_firewall'))
+
+    success, message = ban_account(
+        user_id=uid,
+        reason=reason or '管理员封禁',
+        banned_by=user['id'],
+        duration_minutes=dur,
+    )
+    flash(message, 'success' if success else 'error')
+    return redirect(url_for('admin.admin_firewall'))
+
+
+@admin_bp.route('/admin/firewall/unban-account/<int:ban_id>', methods=['POST'])
+@admin_required
+def admin_firewall_unban_account(ban_id):
+    """管理后台：解除账号封禁。"""
+    success, message, _ = unban_account(ban_id)
     flash(message, 'success' if success else 'error')
     return redirect(url_for('admin.admin_firewall'))

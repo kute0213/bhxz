@@ -42,6 +42,11 @@ def admin_broadcast_send():
     html_body = data.get('html') or ''
     confirm = data.get('confirm') == 'CONFIRM'
 
+    # Anti-spam
+    from core.firewall.spam import check_spam, record_activity
+    if check_spam(user_id=user['id'], content_type='broadcast', content=subject):
+        return jsonify({'success': False, 'message': '发送过于频繁，请稍后再试'})
+
     # 1. 检查邮件功能是否启用
     if not email_service.is_enabled():
         return jsonify({'success': False, 'message': '邮件功能未启用，请先在系统设置中配置 SMTP'})
@@ -88,7 +93,7 @@ def admin_broadcast_send():
         email_service.send(to=email, subject=subject_line, body=plain_body, html=html)
         sent_count += 1
 
-    # 6. 记录广播日志（失败不影响主流程）
+    record_activity(user_id=user['id'], content_type='broadcast', content=subject)
     try:
         log_conn = get_db()
         try:

@@ -1,4 +1,4 @@
-"""防火墙统一业务服务 —— 封禁 IP、白名单管理、警告系统、自动封禁。
+"""防火墙统一业务服务 —— 封禁 IP/账号、白名单管理、警告系统、自动封禁、刷屏记录。
 
 为所有路由模块提供统一、安全的调用接口：
     from core.firewall import ban_ip, unban_ip, is_banned, ...
@@ -6,25 +6,25 @@
 设计要点：
   - 所有写操作通过 DuckDB 持久化，同时失效内存缓存
   - 白名单 IP 在任何封禁操作中都会被跳过
+  - 内存缓存由 monitor.py 每秒同步，service 层只负责失效通知
   - 所有函数公开、线程安全、异常安全（内部 catch 一切异常）
 """
 
 import ipaddress
-import threading
 import time
 from datetime import datetime, timedelta
+
 from core.firewall.database import get_db
+from core.firewall.database import (
+    invalidate_cache,
+    invalidate_ip_cache,
+    invalidate_account_cache,
+    invalidate_whitelist_cache,
+    is_ip_banned_cache,
+    is_account_banned_cache,
+    is_whitelisted_cache,
+)
 from core.system.logger import log
-
-# 封禁缓存 TTL（秒）
-CACHE_TTL = 30
-_ban_cache = {'ts': 0.0, 'banned': {}}
-_ban_cache_lock = threading.Lock()
-
-# 白名单缓存 TTL（秒）
-WHITELIST_CACHE_TTL = 10
-_whitelist_cache = {'ts': 0.0, 'data': []}
-_whitelist_cache_lock = threading.Lock()
 
 # 系统自动封禁操作人的标记 ID（users 表中不存在该用户，显示为「系统」）
 SYSTEM_BANNER_ID = 0
@@ -52,42 +52,6 @@ SUSPICIOUS_ACTION_SETTINGS = {
 
 
 # ---------------------------------------------------------------------------
-# 内部缓存
-# ---------------------------------------------------------------------------
-
-def _invalidate_cache():
-    """使封禁缓存失效（下次检查时重新加载）。"""
-    with _ban_cache_lock:
-        _ban_cache['ts'] = 0.0
-
-
-def _invalidate_whitelist_cache():
-    """使白名单缓存失效。"""
-    with _whitelist_cache_lock:
-        _whitelist_cache['ts'] = 0.0
-
-
-def _refresh_ban_cache():
-    """刷新封禁缓存。"""
-    cleanup_expired()
-    banned = {}
-    try:
-        with get_db() as conn:
-            rows = conn.execute(
-                "SELECT ip_address, reason FROM firewall_bans "
-                "WHERE expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP"
-            ).fetchall()
-            for row in rows:
-                banned[row[0]] = row[1] or ''
-    except Exception as exc:
-        log('WARNING', 'Firewall', f'刷新封禁缓存失败: {exc}')
-    # 注意：_refresh_ban_cache 总是在 _ban_cache_lock 已持有的上下文中调用
-    #（见 is_banned 与 get_banned_ips），因此这里不重复获取锁以避免死锁
-    _ban_cache['banned'] = banned
-    _ban_cache['ts'] = time.time()
-
-
-# ---------------------------------------------------------------------------
 # IP 格式校验
 # ---------------------------------------------------------------------------
 
@@ -109,35 +73,14 @@ def validate_ip(ip_address):
 
 
 def get_whitelist():
-    """获取防火墙白名单列表（合并 config.py FIREWALL_WHITELIST + DuckDB 运行时白名单）。
+    """获取防火墙白名单列表（从内存缓存读取，由监控线程每秒同步）。
 
-    config.py 中定义的白名单作为启动时基线（如默认 112.82.136.172），
-    DuckDB firewall_whitelist 表存储通过管理后台等运行时添加的白名单，
-    两者共同生效。
+    Returns:
+        list[str]: IP 地址列表
     """
-    from config import FIREWALL_WHITELIST as CONFIG_WHITELIST
-
-    with _whitelist_cache_lock:
-        if time.time() - _whitelist_cache['ts'] > WHITELIST_CACHE_TTL:
-            try:
-                with get_db() as conn:
-                    rows = conn.execute(
-                        "SELECT ip_address FROM firewall_whitelist"
-                    ).fetchall()
-                duckdb_whitelist = [row[0] for row in rows]
-                merged = list(CONFIG_WHITELIST) + duckdb_whitelist
-                # 去重（保留顺序）
-                seen = set()
-                whitelist = []
-                for ip in merged:
-                    if ip not in seen:
-                        seen.add(ip)
-                        whitelist.append(ip)
-                _whitelist_cache['data'] = whitelist
-                _whitelist_cache['ts'] = time.time()
-            except Exception as exc:
-                log('WARNING', 'Firewall', f'刷新白名单缓存失败: {exc}')
-        return list(_whitelist_cache['data'])
+    from core.firewall import database as _db
+    cached = getattr(_db, '_cache', {}).get('whitelist', set())
+    return list(cached)
 
 
 def is_whitelisted(ip_address):
@@ -151,7 +94,7 @@ def is_whitelisted(ip_address):
     ip = ip_address.strip()
     if ip in BUILTIN_SAFE_IPS:
         return True
-    return ip in get_whitelist()
+    return is_whitelisted_cache(ip)
 
 
 def whitelist_add(ip_address):
@@ -169,11 +112,11 @@ def whitelist_add(ip_address):
         with get_db() as conn:
             conn.execute(
                 "INSERT INTO firewall_whitelist (ip_address) VALUES (?)",
-                (ip,)
+                (ip,),
             )
     except Exception as exc:
         return False, f'添加白名单失败: {exc}'
-    _invalidate_whitelist_cache()
+    invalidate_whitelist_cache()
     log('INFO', 'Firewall', '白名单添加', ip=ip)
     return True, f'已将 {ip} 加入白名单'
 
@@ -189,11 +132,11 @@ def whitelist_remove(ip_address):
         with get_db() as conn:
             conn.execute(
                 "DELETE FROM firewall_whitelist WHERE ip_address = ?",
-                (ip,)
+                (ip,),
             )
     except Exception as exc:
         return False, f'移除白名单失败: {exc}'
-    _invalidate_whitelist_cache()
+    invalidate_whitelist_cache()
     log('INFO', 'Firewall', '白名单移除', ip=ip)
     return True, f'已将 {ip} 移出白名单'
 
@@ -232,7 +175,9 @@ def ban_ip(ip_address, reason, banned_by=SYSTEM_BANNER_ID, duration_minutes=None
         try:
             mins = float(duration_minutes)
             if mins > 0:
-                expires_at = (datetime.now() + timedelta(minutes=mins)).strftime('%Y-%m-%d %H:%M:%S')
+                expires_at = (datetime.now() + timedelta(minutes=mins)).strftime(
+                    '%Y-%m-%d %H:%M:%S'
+                )
         except (ValueError, TypeError):
             return False, '封禁时长无效'
 
@@ -256,10 +201,12 @@ def ban_ip(ip_address, reason, banned_by=SYSTEM_BANNER_ID, duration_minutes=None
         log('ERROR', 'Firewall', f'创建封禁失败: {exc}', ip=ip)
         return False, '创建封禁失败'
 
-    _invalidate_cache()
+    invalidate_ip_cache()
     duration_text = '永久' if expires_at is None else f'{duration_minutes} 分钟'
-    log('INFO', 'Firewall', 'IP 封禁创建',
-        ip=ip, banned_by=banned_by, duration=duration_text)
+    log(
+        'INFO', 'Firewall', 'IP 封禁创建',
+        ip=ip, banned_by=banned_by, duration=duration_text,
+    )
     return True, f'已封禁 {ip}（{duration_text}）'
 
 
@@ -282,7 +229,7 @@ def unban_ip(ban_id):
             conn.execute("DELETE FROM firewall_bans WHERE id = ?", (ban_id,))
     except Exception as exc:
         return False, f'解除封禁失败: {exc}', ''
-    _invalidate_cache()
+    invalidate_ip_cache()
     log('INFO', 'Firewall', 'IP 封禁解除', ban_id=ban_id, ip=ip_address)
     return True, f'已解除 {ip_address} 的封禁', ip_address
 
@@ -304,42 +251,31 @@ def unban_by_ip(ip_address):
             )
     except Exception as exc:
         return False, f'解除封禁失败: {exc}'
-    _invalidate_cache()
+    invalidate_ip_cache()
     log('INFO', 'Firewall', 'IP 封禁解除（按 IP）', ip=ip)
     return True, f'已解除 {ip} 的封禁'
 
 
 def is_banned(ip_address):
-    """检查 IP 是否被封禁。
+    """检查 IP 是否被封禁（使用 database.py 内存缓存，O(1) 查询）。
 
     白名单内的 IP 恒返回未封禁（即使存在历史封禁记录也不生效）。
-    带 30 秒进程内缓存，适合每请求调用。
 
     Returns:
         (banned: bool, reason: str)
     """
     if not ip_address:
         return False, ''
-    if is_whitelisted(ip_address):
+    ip = ip_address.strip()
+    if ip in BUILTIN_SAFE_IPS:
         return False, ''
-    with _ban_cache_lock:
-        if time.time() - _ban_cache['ts'] > CACHE_TTL:
-            _refresh_ban_cache()
-        if ip_address in _ban_cache['banned']:
-            return True, _ban_cache['banned'].get(ip_address, '')
-        # CIDR 段匹配（如 192.168.0.0/24）
-        for banned_ip, reason in _ban_cache['banned'].items():
-            if '/' in banned_ip:
-                try:
-                    if ipaddress.ip_address(ip_address) in ipaddress.ip_network(banned_ip, strict=False):
-                        return True, reason
-                except ValueError:
-                    pass
+    if is_whitelisted_cache(ip):
         return False, ''
+    return is_ip_banned_cache(ip)
 
 
 def get_bans():
-    """查询所有有效封禁。"""
+    """查询所有有效 IP 封禁。"""
     try:
         with get_db() as conn:
             rows = conn.execute(
@@ -352,24 +288,20 @@ def get_bans():
                 "WHERE expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP "
                 "ORDER BY created_at DESC"
             ).fetchall()
-            result = []
-            for row in rows:
-                result.append({
-                    'id': row[0],
-                    'ip_address': row[1],
-                    'reason': row[2],
-                    'banned_by': row[3],
-                    'created_at': row[4],
-                    'expires_at': row[5],
-                })
-            return result
+            return [
+                {
+                    'id': r[0], 'ip_address': r[1], 'reason': r[2],
+                    'banned_by': r[3], 'created_at': r[4], 'expires_at': r[5],
+                }
+                for r in rows
+            ]
     except Exception as exc:
         log('WARNING', 'Firewall', f'查询封禁列表失败: {exc}')
         return []
 
 
 def get_ban(ban_id):
-    """查询单条封禁记录。"""
+    """查询单条 IP 封禁记录。"""
     try:
         with get_db() as conn:
             row = conn.execute(
@@ -383,12 +315,8 @@ def get_ban(ban_id):
             ).fetchone()
             if row:
                 return {
-                    'id': row[0],
-                    'ip_address': row[1],
-                    'reason': row[2],
-                    'banned_by': row[3],
-                    'created_at': row[4],
-                    'expires_at': row[5],
+                    'id': row[0], 'ip_address': row[1], 'reason': row[2],
+                    'banned_by': row[3], 'created_at': row[4], 'expires_at': row[5],
                 }
         return None
     except Exception:
@@ -396,30 +324,321 @@ def get_ban(ban_id):
 
 
 def get_banned_ips():
-    """获取全部有效封禁 IP（内存缓存，供防火墙快速同步黑名单镜像）。
+    """获取全部有效封禁 IP（从内存缓存读取）。
 
     Returns:
         dict: {ip_address: reason}
     """
-    with _ban_cache_lock:
-        if time.time() - _ban_cache['ts'] > CACHE_TTL:
-            _refresh_ban_cache()
-        return dict(_ban_cache['banned'])
+    from core.firewall import database as _db
+    cached = getattr(_db, '_cache', {}).get('banned_ips', {})
+    return dict(cached)
 
 
 def cleanup_expired():
-    """清理已过期的临时封禁。"""
+    """清理已过期的临时 IP 封禁（由监控线程定期调用，此处保留供手动调用）。"""
     try:
         with get_db() as conn:
-            result = conn.execute(
+            conn.execute(
                 "DELETE FROM firewall_bans "
                 "WHERE expires_at IS NOT NULL AND expires_at <= CURRENT_TIMESTAMP"
             )
-            deleted = result.fetchone()
-            # DuckDB 的 DELETE 返回的是结果集，不是 rowcount
-            # 我们需要用另一种方式获取删除数量
     except Exception as exc:
-        log('WARNING', 'Firewall', f'清理过期封禁失败: {exc}')
+        log('WARNING', 'Firewall', f'清理过期 IP 封禁失败: {exc}')
+
+
+# ---------------------------------------------------------------------------
+# 账号封禁管理
+# ---------------------------------------------------------------------------
+
+
+def ban_account(user_id, reason, banned_by=SYSTEM_BANNER_ID, duration_minutes=None):
+    """创建账号封禁。
+
+    Args:
+        user_id: 用户 ID
+        reason: 封禁原因
+        banned_by: 操作人 ID（0 = 系统）
+        duration_minutes: 封禁时长（分钟），None 表示永久封禁
+
+    Returns:
+        (success: bool, message: str)
+    """
+    if not user_id or user_id < 0:
+        return False, '无效的用户 ID'
+
+    expires_at = None
+    if duration_minutes is not None:
+        try:
+            mins = float(duration_minutes)
+            if mins > 0:
+                expires_at = (datetime.now() + timedelta(minutes=mins)).strftime(
+                    '%Y-%m-%d %H:%M:%S'
+                )
+        except (ValueError, TypeError):
+            return False, '封禁时长无效'
+
+    try:
+        with get_db() as conn:
+            now = _now_str()
+            existing = conn.execute(
+                "SELECT id FROM firewall_account_bans WHERE user_id = ? "
+                "AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)",
+                (user_id,),
+            ).fetchone()
+            if existing:
+                return False, '该账号已在封禁列表中'
+
+            conn.execute(
+                "INSERT INTO firewall_account_bans "
+                "(user_id, reason, banned_by, created_at, expires_at) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (user_id, reason, banned_by, now, expires_at),
+            )
+    except Exception as exc:
+        log('ERROR', 'Firewall', f'创建账号封禁失败: {exc}', user_id=user_id)
+        return False, '创建账号封禁失败'
+
+    invalidate_account_cache()
+    duration_text = '永久' if expires_at is None else f'{duration_minutes} 分钟'
+    log(
+        'INFO', 'Firewall', '账号封禁创建',
+        user_id=user_id, banned_by=banned_by, duration=duration_text,
+    )
+    return True, f'已封禁用户 {user_id}（{duration_text}）'
+
+
+def unban_account(ban_id):
+    """按记录 ID 解除账号封禁。
+
+    Returns:
+        (success: bool, message: str, user_id: int)
+    """
+    user_id = 0
+    try:
+        with get_db() as conn:
+            row = conn.execute(
+                "SELECT user_id FROM firewall_account_bans WHERE id = ?",
+                (ban_id,),
+            ).fetchone()
+            if not row:
+                return False, '封禁记录不存在', 0
+            user_id = row[0]
+            conn.execute(
+                "DELETE FROM firewall_account_bans WHERE id = ?",
+                (ban_id,),
+            )
+    except Exception as exc:
+        return False, f'解除账号封禁失败: {exc}', 0
+    invalidate_account_cache()
+    log('INFO', 'Firewall', '账号封禁解除', ban_id=ban_id, user_id=user_id)
+    return True, f'已解除用户 {user_id} 的封禁', user_id
+
+
+def unban_account_by_user(user_id):
+    """按用户 ID 解除账号封禁。
+
+    Returns:
+        (success: bool, message: str)
+    """
+    if not user_id:
+        return False, '用户 ID 不能为空'
+    try:
+        with get_db() as conn:
+            conn.execute(
+                "DELETE FROM firewall_account_bans WHERE user_id = ?",
+                (user_id,),
+            )
+    except Exception as exc:
+        return False, f'解除账号封禁失败: {exc}'
+    invalidate_account_cache()
+    log('INFO', 'Firewall', '账号封禁解除（按用户）', user_id=user_id)
+    return True, f'已解除用户 {user_id} 的封禁'
+
+
+def is_account_banned(user_id):
+    """检查账号是否被封禁（使用 database.py 内存缓存）。
+
+    Returns:
+        (banned: bool, reason: str)
+    """
+    if not user_id or user_id < 0:
+        return False, ''
+    return is_account_banned_cache(user_id)
+
+
+def get_account_bans():
+    """查询所有有效账号封禁。"""
+    try:
+        with get_db() as conn:
+            rows = conn.execute(
+                "SELECT id, user_id, reason, banned_by, "
+                "       strftime('%Y-%m-%d %H:%M:%S', created_at) AS created_at, "
+                "       CASE WHEN expires_at IS NULL THEN NULL "
+                "            ELSE strftime('%Y-%m-%d %H:%M:%S', expires_at) "
+                "       END AS expires_at "
+                "FROM firewall_account_bans "
+                "WHERE expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP "
+                "ORDER BY created_at DESC"
+            ).fetchall()
+            return [
+                {
+                    'id': r[0], 'user_id': r[1], 'reason': r[2],
+                    'banned_by': r[3], 'created_at': r[4], 'expires_at': r[5],
+                }
+                for r in rows
+            ]
+    except Exception as exc:
+        log('WARNING', 'Firewall', f'查询账号封禁列表失败: {exc}')
+        return []
+
+
+def get_account_ban(ban_id):
+    """查询单条账号封禁记录。"""
+    try:
+        with get_db() as conn:
+            row = conn.execute(
+                "SELECT id, user_id, reason, banned_by, "
+                "       strftime('%Y-%m-%d %H:%M:%S', created_at) AS created_at, "
+                "       CASE WHEN expires_at IS NULL THEN NULL "
+                "            ELSE strftime('%Y-%m-%d %H:%M:%S', expires_at) "
+                "       END AS expires_at "
+                "FROM firewall_account_bans WHERE id = ?",
+                (ban_id,),
+            ).fetchone()
+            if row:
+                return {
+                    'id': row[0], 'user_id': row[1], 'reason': row[2],
+                    'banned_by': row[3], 'created_at': row[4], 'expires_at': row[5],
+                }
+        return None
+    except Exception:
+        return None
+
+
+# ---------------------------------------------------------------------------
+# 刷屏记录
+# ---------------------------------------------------------------------------
+
+
+def record_spam(user_id, content_type, content_preview='', action='flag'):
+    """记录一次刷屏行为到日志表。
+
+    Args:
+        user_id: 用户 ID
+        content_type: 内容类型（discussion_topic, discussion_reply, guide, music 等）
+        content_preview: 内容预览（可选）
+        action: 采取的动作（flag / ban）
+    """
+    try:
+        with get_db() as conn:
+            conn.execute(
+                "INSERT INTO firewall_spam_log "
+                "(user_id, content_type, content_preview, action, created_at) "
+                "VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)",
+                (user_id, content_type, content_preview, action),
+            )
+    except Exception as exc:
+        log('WARNING', 'Firewall', f'记录刷屏日志失败: {exc}', user_id=user_id)
+
+
+def get_spam_log(hours=24):
+    """获取指定小时内的刷屏日志列表（含用户名，通过 LEFT JOIN 关联）。
+
+    Args:
+        hours: 时间窗口（小时）
+
+    Returns:
+        list[dict]: 刷屏日志记录列表
+    """
+    try:
+        with get_db() as conn:
+            # DuckDB 不支持跨数据库 JOIN，这里尝试直接关联
+            # 如果 main.users 在同一 DuckDB 中则有效，否则 username 回退为 '[已删除]'
+            try:
+                rows = conn.execute(
+                    "SELECT s.id, s.user_id, "
+                    "       COALESCE(u.username, '[已删除]') AS username, "
+                    "       s.content_type, s.content_preview, s.action, "
+                    "       strftime('%Y-%m-%d %H:%M:%S', s.created_at) AS created_at "
+                    "FROM firewall_spam_log s "
+                    "LEFT JOIN main.users u ON s.user_id = u.id "
+                    "WHERE s.created_at >= CURRENT_TIMESTAMP - INTERVAL '{} hours' "
+                    "ORDER BY s.created_at DESC".format(hours),
+                ).fetchall()
+                return [
+                    {
+                        'id': r[0], 'user_id': r[1], 'username': r[2],
+                        'content_type': r[3], 'content_preview': r[4],
+                        'action': r[5], 'created_at': r[6],
+                    }
+                    for r in rows
+                ]
+            except Exception:
+                # 如果跨数据库 JOIN 失败，降级为查询不包含 username
+                rows = conn.execute(
+                    "SELECT s.id, s.user_id, "
+                    "       s.content_type, s.content_preview, s.action, "
+                    "       strftime('%Y-%m-%d %H:%M:%S', s.created_at) AS created_at "
+                    "FROM firewall_spam_log s "
+                    "WHERE s.created_at >= CURRENT_TIMESTAMP - INTERVAL '{} hours' "
+                    "ORDER BY s.created_at DESC".format(hours),
+                ).fetchall()
+                return [
+                    {
+                        'id': r[0], 'user_id': r[1],
+                        'username': '[已删除]',
+                        'content_type': r[2], 'content_preview': r[3],
+                        'action': r[4], 'created_at': r[5],
+                    }
+                    for r in rows
+                ]
+    except Exception as exc:
+        log('WARNING', 'Firewall', f'查询刷屏日志失败: {exc}')
+        return []
+
+
+def get_user_spam_count(user_id, hours=1):
+    """获取用户在指定小时内的刷屏记录数。
+
+    Args:
+        user_id: 用户 ID
+        hours: 时间窗口（小时）
+
+    Returns:
+        int: 刷屏记录数
+    """
+    try:
+        with get_db() as conn:
+            row = conn.execute(
+                "SELECT COUNT(*) FROM firewall_spam_log "
+                "WHERE user_id = ? "
+                "  AND created_at >= CURRENT_TIMESTAMP - INTERVAL '{} hours'".format(
+                    hours
+                ),
+                (user_id,),
+            ).fetchone()
+            return row[0] if row else 0
+    except Exception:
+        return 0
+
+
+def clear_spam_log(user_id=None):
+    """清除刷屏日志记录。
+
+    Args:
+        user_id: 如果提供，只清除该用户的记录；否则清除全部
+    """
+    try:
+        with get_db() as conn:
+            if user_id:
+                conn.execute(
+                    "DELETE FROM firewall_spam_log WHERE user_id = ?",
+                    (user_id,),
+                )
+            else:
+                conn.execute("DELETE FROM firewall_spam_log")
+    except Exception:
+        pass
 
 
 # ---------------------------------------------------------------------------
@@ -468,7 +687,9 @@ def auto_ban(ip_address, action, reason=''):
         return False, '该 IP 已在封禁列表中'
 
     try:
-        duration_minutes = int(get_config_value('AUTO_BAN_DURATION_MINUTES', AUTO_BAN_DURATION_MINUTES))
+        duration_minutes = int(
+            get_config_value('AUTO_BAN_DURATION_MINUTES', AUTO_BAN_DURATION_MINUTES)
+        )
     except (ValueError, TypeError):
         duration_minutes = AUTO_BAN_DURATION_MINUTES
 
@@ -479,8 +700,10 @@ def auto_ban(ip_address, action, reason=''):
         duration_minutes=duration_minutes if duration_minutes > 0 else None,
     )
     if success:
-        log('Security', '自动封禁生效', ip=ip, action=action,
-            duration_minutes=duration_minutes or '永久')
+        log(
+            'Security', '自动封禁生效', ip=ip, action=action,
+            duration_minutes=duration_minutes or '永久',
+        )
     return success, message
 
 
@@ -503,7 +726,11 @@ def ban_suspicious_ip(ip_address, attack_type, matched=''):
     Returns:
         (banned: bool, message: str)
     """
-    from config import get_config_value, SUSPICIOUS_BLOCK_ENABLED, SUSPICIOUS_BLOCK_DURATION_MINUTES
+    from config import (
+        get_config_value,
+        SUSPICIOUS_BLOCK_ENABLED,
+        SUSPICIOUS_BLOCK_DURATION_MINUTES,
+    )
 
     if not get_config_value('SUSPICIOUS_BLOCK_ENABLED', SUSPICIOUS_BLOCK_ENABLED):
         return False, '可疑访问拦截总开关未开启'
@@ -525,8 +752,12 @@ def ban_suspicious_ip(ip_address, attack_type, matched=''):
         return False, '该 IP 已在封禁列表中'
 
     try:
-        duration_minutes = int(get_config_value(
-            'SUSPICIOUS_BLOCK_DURATION_MINUTES', SUSPICIOUS_BLOCK_DURATION_MINUTES))
+        duration_minutes = int(
+            get_config_value(
+                'SUSPICIOUS_BLOCK_DURATION_MINUTES',
+                SUSPICIOUS_BLOCK_DURATION_MINUTES,
+            )
+        )
     except (ValueError, TypeError):
         duration_minutes = SUSPICIOUS_BLOCK_DURATION_MINUTES
 
@@ -541,8 +772,10 @@ def ban_suspicious_ip(ip_address, attack_type, matched=''):
         duration_minutes=duration_minutes if duration_minutes > 0 else None,
     )
     if success:
-        log('Security', '可疑访问自动封禁生效', ip=ip, attack=attack_type,
-            duration_minutes=duration_minutes or '永久')
+        log(
+            'Security', '可疑访问自动封禁生效', ip=ip, attack=attack_type,
+            duration_minutes=duration_minutes or '永久',
+        )
     return success, message
 
 
@@ -631,7 +864,9 @@ def get_warning_count(ip_address, hours=24):
             row = conn.execute(
                 "SELECT COUNT(*) FROM firewall_warnings "
                 "WHERE ip_address = ? "
-                "  AND created_at >= CURRENT_TIMESTAMP - INTERVAL '{} hours'".format(hours),
+                "  AND created_at >= CURRENT_TIMESTAMP - INTERVAL '{} hours'".format(
+                    hours
+                ),
                 (ip,),
             ).fetchone()
             return row[0] if row else 0
@@ -657,7 +892,10 @@ def get_all_warnings(hours=24):
                 "ORDER BY created_at DESC".format(hours),
             ).fetchall()
             return [
-                {'ip_address': r[0], 'warning': r[1], 'created_at': r[2], 'count': r[3]}
+                {
+                    'ip_address': r[0], 'warning': r[1],
+                    'created_at': r[2], 'count': r[3],
+                }
                 for r in rows
             ]
     except Exception as exc:
