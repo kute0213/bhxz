@@ -2,553 +2,431 @@
 {% block title %}防火墙管理{% endblock %}
 {% block content %}
 <section class="page-container py-12">
-    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
-            <div>
-                <h1 class="text-2xl sm:text-3xl font-bold mb-1">防火墙管理</h1>
-                <p class="text-cream/60 text-sm">管理 IP 封禁、可疑访问拦截、DDoS 防护与白名单，被封禁的 IP 将无法访问网站任何页面（全部返回 403）</p>
-            </div>
-            <a href="{{ url_for('admin.admin_page') }}" class="btn-secondary px-4 py-2 rounded-lg text-sm inline-flex items-center gap-2">
-                <i data-lucide="arrow-left" class="w-4 h-4"></i>
-                返回管理中心
-            </a>
-        </div>
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 
-        <!-- 当前 IP 状态 -->
-        {% if current_banned %}
-        <div class="pixel-card rounded-xl p-6 mb-8 border-2 border-red-500/30 bg-red-500/5">
-            <div class="flex items-center gap-3">
-                <div class="w-10 h-10 bg-red-500/20 rounded-full flex items-center justify-center flex-shrink-0">
-                    <i data-lucide="shield-off" class="w-5 h-5 text-red-400"></i>
-                </div>
-                <div>
-                    <h2 class="text-lg font-bold text-red-400">⚠ 当前 IP 已被封禁</h2>
-                    <p class="text-sm text-cream/60 mt-1">
-                        您的 IP <code class="font-mono text-red-300">{{ current_ip }}</code> 当前处于封禁状态。
-                        {% if current_reason %}原因：<span class="text-red-300">{{ current_reason }}</span>{% endif %}
-                    </p>
-                    <p class="text-xs text-cream/40 mt-1">请将您的 IP 添加到白名单以恢复访问，或联系其他管理员处理。</p>
-                </div>
-            </div>
-        </div>
-        {% else %}
-        <div class="pixel-card rounded-xl p-6 mb-8 border border-green-500/20 bg-green-500/5">
-            <div class="flex items-center gap-3">
-                <div class="w-10 h-10 bg-green-500/20 rounded-full flex items-center justify-center flex-shrink-0">
-                    <i data-lucide="shield-check" class="w-5 h-5 text-green-400"></i>
-                </div>
-                <div>
-                    <h2 class="text-lg font-bold text-green-400">当前 IP 状态正常</h2>
-                    <p class="text-sm text-cream/60 mt-1">
-                        您的 IP <code class="font-mono text-green-300">{{ current_ip }}</code> 未被封禁。
-                    </p>
-                </div>
-            </div>
-        </div>
-        {% endif %}
-
-        <!-- 4 个快速状态卡 -->
-        <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-            <div class="pixel-card rounded-xl p-4">
-                <div class="flex items-center justify-between mb-2">
-                    <span class="text-sm text-cream/60">DDoS 防护</span>
-                    <i data-lucide="shield" class="w-4 h-4 text-gold-400"></i>
-                </div>
-                <div class="flex items-center gap-2">
-                    <span class="text-xs px-2 py-0.5 rounded-full {% if ddos_guard_enabled %}bg-green-500/10 text-green-400 border border-green-500/20{% else %}bg-red-500/10 text-red-400 border border-red-500/20{% endif %}">
-                        {{ '已开启' if ddos_guard_enabled else '已关闭' }}
-                    </span>
-                    <span class="text-xs text-cream/40">强度: {{ ddos_guard_intensity }}</span>
-                </div>
-            </div>
-            <div class="pixel-card rounded-xl p-4">
-                <div class="flex items-center justify-between mb-2">
-                    <span class="text-sm text-cream/60">自动 IP 封禁</span>
-                    <i data-lucide="ban" class="w-4 h-4 text-gold-400"></i>
-                </div>
-                <span class="text-xs px-2 py-0.5 rounded-full {% if auto_ban_enabled %}bg-green-500/10 text-green-400 border border-green-500/20{% else %}bg-red-500/10 text-red-400 border border-red-500/20{% endif %}">
-                    {{ '已开启' if auto_ban_enabled else '已关闭' }}
-                </span>
-            </div>
-            <div class="pixel-card rounded-xl p-4">
-                <div class="flex items-center justify-between mb-2">
-                    <span class="text-sm text-cream/60">可疑访问拦截</span>
-                    <i data-lucide="search-x" class="w-4 h-4 text-gold-400"></i>
-                </div>
-                <span class="text-xs px-2 py-0.5 rounded-full {% if suspicious_block_enabled %}bg-green-500/10 text-green-400 border border-green-500/20{% else %}bg-red-500/10 text-red-400 border border-red-500/20{% endif %}">
-                    {{ '已开启' if suspicious_block_enabled else '已关闭' }}
-                </span>
-            </div>
-            <div class="pixel-card rounded-xl p-4">
-                <div class="flex items-center justify-between mb-2">
-                    <span class="text-sm text-cream/60">白名单</span>
-                    <i data-lucide="user-check" class="w-4 h-4 text-gold-400"></i>
-                </div>
-                <span class="text-xs text-cream/60">{{ whitelist | length }} 个 IP</span>
-            </div>
-        </div>
-
-        <!-- DDoS 防护 -->
-        <div class="pixel-card rounded-xl p-6 mb-8">
-            <div class="flex items-center justify-between mb-4">
-                <div>
-                    <h2 class="text-lg font-bold flex items-center gap-2">
-                        <i data-lucide="shield" class="w-5 h-5 text-gold-400"></i>
-                        DDoS 防护
-                    </h2>
-                    <p class="text-sm text-cream/60 mt-1">基于速率限制的 DDoS 攻击防护，自动检测异常流量并封禁攻击 IP。</p>
-                </div>
-                {% if ddos_guard_enabled %}
-                <span id="ddos-badge" class="text-xs px-2 py-0.5 rounded-full bg-green-500/10 text-green-400 border border-green-500/20">已开启</span>
-                {% else %}
-                <span id="ddos-badge" class="text-xs px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/20">已关闭</span>
-                {% endif %}
-            </div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
-                <label class="flex items-center justify-between gap-2 cursor-pointer">
-                    <span class="text-sm text-cream/80">启用 DDoS 防护</span>
-                    <input type="checkbox" id="ddos-guard-enabled" {% if ddos_guard_enabled %}checked{% endif %}
-                           class="w-4 h-4 accent-gold-500">
-                </label>
-                <div>
-                    <label for="ddos-guard-intensity" class="block text-sm text-cream/80 mb-1">检测强度</label>
-                    <select id="ddos-guard-intensity" class="input-field w-full px-4 py-2 rounded-lg">
-                        <option value="low" {% if ddos_guard_intensity == 'low' %}selected{% endif %}>低 - 宽松检测，减少误报</option>
-                        <option value="medium" {% if ddos_guard_intensity == 'medium' %}selected{% endif %}>中 - 均衡检测（推荐）</option>
-                        <option value="high" {% if ddos_guard_intensity == 'high' %}selected{% endif %}>高 - 严格检测，灵敏度高</option>
-                    </select>
-                    <p class="text-xs text-cream/40 mt-1">强度越高，对异常流量的敏感度越高</p>
-                </div>
-                <div>
-                    <label for="ddos-guard-ban-minutes" class="block text-sm text-cream/80 mb-1">封禁时长（分钟）</label>
-                    <input type="number" id="ddos-guard-ban-minutes" value="{{ ddos_guard_ban_minutes }}" min="1"
-                           class="input-field w-full px-4 py-2 rounded-lg">
-                </div>
-                <div>
-                    <label for="ddos-guard-permanent-after" class="block text-sm text-cream/80 mb-1">永久封禁触发次数</label>
-                    <input type="number" id="ddos-guard-permanent-after" value="{{ ddos_guard_permanent_after }}" min="1"
-                           class="input-field w-full px-4 py-2 rounded-lg">
-                    <p class="text-xs text-cream/40 mt-1">同一 IP 累积被封禁达到此次数后永久封禁</p>
-                </div>
-                <div>
-                    <label for="ddos-guard-offense-window" class="block text-sm text-cream/80 mb-1">违规统计窗口（小时）</label>
-                    <input type="number" id="ddos-guard-offense-window" value="{{ ddos_guard_offense_window_hours }}" min="1"
-                           class="input-field w-full px-4 py-2 rounded-lg">
-                    <p class="text-xs text-cream/40 mt-1">在此时间窗口内统计违规次数</p>
-                </div>
-            </div>
-            <button onclick="saveDdosConfig(this)"
-                    class="btn-primary px-4 py-2 rounded-lg text-sm inline-flex items-center justify-center gap-2">
-                <i data-lucide="save" class="w-4 h-4"></i>
-                保存 DDoS 配置
-            </button>
-        </div>
-
-        <!-- 自动 IP 封禁 -->
-        <div class="pixel-card rounded-xl p-6 mb-8">
-            <div class="flex items-center justify-between mb-4">
-                <div>
-                    <h2 class="text-lg font-bold flex items-center gap-2">
-                        <i data-lucide="ban" class="w-5 h-5 text-gold-400"></i>
-                        自动 IP 封禁
-                    </h2>
-                    <p class="text-sm text-cream/60 mt-1">触发限流的可疑操作将自动封禁来源 IP，可分别控制各场景的触发开关。</p>
-                </div>
-                {% if auto_ban_enabled %}
-                <span id="auto-ban-badge" class="text-xs px-2 py-0.5 rounded-full bg-green-500/10 text-green-400 border border-green-500/20">已开启</span>
-                {% else %}
-                <span id="auto-ban-badge" class="text-xs px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/20">已关闭</span>
-                {% endif %}
-            </div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-                <label class="flex items-center justify-between gap-2 cursor-pointer">
-                    <span class="text-sm text-cream/80">启用自动封禁</span>
-                    <input type="checkbox" id="auto-ban-enabled" {% if auto_ban_enabled %}checked{% endif %}
-                           class="w-4 h-4 accent-gold-500">
-                </label>
-                <div>
-                    <label for="auto-ban-duration" class="block text-sm text-cream/80 mb-1">封禁时长（分钟，0 = 永久）</label>
-                    <input type="number" id="auto-ban-duration" value="{{ auto_ban_duration_minutes }}" min="0"
-                           class="input-field w-full px-4 py-2 rounded-lg">
-                </div>
-            </div>
-            <div class="mb-4">
-                <p class="text-sm text-cream/80 mb-2">触发场景：</p>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <label class="flex items-center justify-between gap-2 cursor-pointer p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
-                        <span class="text-sm text-cream/80">
-                            <i data-lucide="log-in" class="w-4 h-4 inline-block mr-1 text-gold-400"></i>
-                            登录异常
-                        </span>
-                        <input type="checkbox" id="auto-ban-login-enabled" {% if auto_ban_login_enabled %}checked{% endif %}
-                               class="w-4 h-4 accent-gold-500">
-                    </label>
-                    <label class="flex items-center justify-between gap-2 cursor-pointer p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
-                        <span class="text-sm text-cream/80">
-                            <i data-lucide="user-plus" class="w-4 h-4 inline-block mr-1 text-gold-400"></i>
-                            注册异常
-                        </span>
-                        <input type="checkbox" id="auto-ban-register-enabled" {% if auto_ban_register_enabled %}checked{% endif %}
-                               class="w-4 h-4 accent-gold-500">
-                    </label>
-                    <label class="flex items-center justify-between gap-2 cursor-pointer p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
-                        <span class="text-sm text-cream/80">
-                            <i data-lucide="mail" class="w-4 h-4 inline-block mr-1 text-gold-400"></i>
-                            邮箱验证码异常
-                        </span>
-                        <input type="checkbox" id="auto-ban-email-enabled" {% if auto_ban_email_enabled %}checked{% endif %}
-                               class="w-4 h-4 accent-gold-500">
-                    </label>
-                    <label class="flex items-center justify-between gap-2 cursor-pointer p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
-                        <span class="text-sm text-cream/80">
-                            <i data-lucide="key-round" class="w-4 h-4 inline-block mr-1 text-gold-400"></i>
-                            找回密码异常
-                        </span>
-                        <input type="checkbox" id="auto-ban-forgot-password-enabled" {% if auto_ban_forgot_password_enabled %}checked{% endif %}
-                               class="w-4 h-4 accent-gold-500">
-                    </label>
-                </div>
-            </div>
-            <button onclick="saveAutoBanConfig(this)"
-                    class="btn-primary px-4 py-2 rounded-lg text-sm inline-flex items-center justify-center gap-2">
-                <i data-lucide="save" class="w-4 h-4"></i>
-                保存自动封禁配置
-            </button>
-        </div>
-
-        <!-- 可疑访问拦截 -->
-        <div class="pixel-card rounded-xl p-6 mb-8">
-            <div class="flex items-center justify-between mb-4">
-                <div>
-                    <h2 class="text-lg font-bold flex items-center gap-2">
-                        <i data-lucide="search-x" class="w-5 h-5 text-gold-400"></i>
-                        可疑访问拦截
-                    </h2>
-                    <p class="text-sm text-cream/60 mt-1">命中攻击特征的请求将被拦截并自动封禁来源 IP，可分别控制各检测维度的开关。</p>
-                </div>
-                {% if suspicious_block_enabled %}
-                <span id="suspicious-badge" class="text-xs px-2 py-0.5 rounded-full bg-green-500/10 text-green-400 border border-green-500/20">已开启</span>
-                {% else %}
-                <span id="suspicious-badge" class="text-xs px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/20">已关闭</span>
-                {% endif %}
-            </div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-                <label class="flex items-center justify-between gap-2 cursor-pointer">
-                    <span class="text-sm text-cream/80">启用可疑访问拦截</span>
-                    <input type="checkbox" id="suspicious-enabled" {% if suspicious_block_enabled %}checked{% endif %}
-                           class="w-4 h-4 accent-gold-500">
-                </label>
-                <div>
-                    <label for="suspicious-duration" class="block text-sm text-cream/80 mb-1">封禁时长（分钟，0 = 永久）</label>
-                    <input type="number" id="suspicious-duration" value="{{ suspicious_block_duration_minutes }}" min="0"
-                           class="input-field w-full px-4 py-2 rounded-lg">
-                </div>
-            </div>
-            <div class="mb-4">
-                <p class="text-sm text-cream/80 mb-2">检测维度：</p>
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    <label class="flex items-center justify-between gap-2 cursor-pointer p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
-                        <span class="text-sm text-cream/80">
-                            <i data-lucide="database" class="w-4 h-4 inline-block mr-1 text-gold-400"></i>
-                            SQL 注入
-                        </span>
-                        <input type="checkbox" id="suspicious-sqli-enabled" {% if suspicious_sqli_enabled %}checked{% endif %}
-                               class="w-4 h-4 accent-gold-500">
-                    </label>
-                    <label class="flex items-center justify-between gap-2 cursor-pointer p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
-                        <span class="text-sm text-cream/80">
-                            <i data-lucide="code" class="w-4 h-4 inline-block mr-1 text-gold-400"></i>
-                            XSS
-                        </span>
-                        <input type="checkbox" id="suspicious-xss-enabled" {% if suspicious_xss_enabled %}checked{% endif %}
-                               class="w-4 h-4 accent-gold-500">
-                    </label>
-                    <label class="flex items-center justify-between gap-2 cursor-pointer p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
-                        <span class="text-sm text-cream/80">
-                            <i data-lucide="folder-tree" class="w-4 h-4 inline-block mr-1 text-gold-400"></i>
-                            路径穿越
-                        </span>
-                        <input type="checkbox" id="suspicious-path-traversal-enabled" {% if suspicious_path_traversal_enabled %}checked{% endif %}
-                               class="w-4 h-4 accent-gold-500">
-                    </label>
-                    <label class="flex items-center justify-between gap-2 cursor-pointer p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
-                        <span class="text-sm text-cream/80">
-                            <i data-lucide="terminal" class="w-4 h-4 inline-block mr-1 text-gold-400"></i>
-                            命令注入
-                        </span>
-                        <input type="checkbox" id="suspicious-command-injection-enabled" {% if suspicious_command_injection_enabled %}checked{% endif %}
-                               class="w-4 h-4 accent-gold-500">
-                    </label>
-                    <label class="flex items-center justify-between gap-2 cursor-pointer p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
-                        <span class="text-sm text-cream/80">
-                            <i data-lucide="file-search" class="w-4 h-4 inline-block mr-1 text-gold-400"></i>
-                            敏感文件探测
-                        </span>
-                        <input type="checkbox" id="suspicious-sensitive-probe-enabled" {% if suspicious_sensitive_probe_enabled %}checked{% endif %}
-                               class="w-4 h-4 accent-gold-500">
-                    </label>
-                    <label class="flex items-center justify-between gap-2 cursor-pointer p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
-                        <span class="text-sm text-cream/80">
-                            <i data-lucide="bot" class="w-4 h-4 inline-block mr-1 text-gold-400"></i>
-                            恶意扫描 UA
-                        </span>
-                        <input type="checkbox" id="suspicious-malicious-ua-enabled" {% if suspicious_malicious_ua_enabled %}checked{% endif %}
-                               class="w-4 h-4 accent-gold-500">
-                    </label>
-                </div>
-            </div>
-            <button onclick="saveSuspiciousConfig(this)"
-                    class="btn-primary px-4 py-2 rounded-lg text-sm inline-flex items-center justify-center gap-2">
-                <i data-lucide="save" class="w-4 h-4"></i>
-                保存拦截配置
-            </button>
-        </div>
-
-        <!-- 白名单管理 -->
-        <div class="pixel-card rounded-xl p-6 mb-8">
-            <h2 class="text-lg font-bold flex items-center gap-2 mb-1">
-                <i data-lucide="user-check" class="w-5 h-5 text-gold-400"></i>
-                封禁白名单
-            </h2>
-            <p class="text-sm text-cream/60 mb-4">白名单内的 IP 不会被封禁（手动封禁与自动封禁均跳过）。</p>
-            <div class="mb-4">
-                <label for="whitelist-input" class="block text-sm text-cream/80 mb-1">白名单 IP（逗号分隔）</label>
-                <textarea id="whitelist-input" rows="3"
-                          class="input-field w-full px-4 py-2 rounded-lg font-mono text-xs"
-                          placeholder="如 112.82.136.172, 127.0.0.1">{{ whitelist | join(', ') }}</textarea>
-            </div>
-            <button onclick="saveFirewallConfig([{ key: 'FIREWALL_WHITELIST', value: document.getElementById('whitelist-input').value }], this)"
-                    class="btn-primary px-4 py-2 rounded-lg text-sm inline-flex items-center justify-center gap-2">
-                <i data-lucide="save" class="w-4 h-4"></i>
-                保存白名单
-            </button>
-        </div>
-
-        <!-- 白名单快捷管理 -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-8">
-            <div class="pixel-card rounded-xl p-6">
-                <h2 class="text-lg font-bold mb-1">添加白名单</h2>
-                <p class="text-sm text-cream/60 mb-4">将 IP 添加至白名单，该 IP 将不会被任何封禁规则拦截。</p>
-                <form action="{{ url_for('admin.admin_firewall_whitelist_add') }}" method="POST" class="flex gap-3 items-end">
-                    {{ csrf_field() }}
-                    <div class="flex-1">
-                        <label class="block text-sm text-cream/70 mb-1">IP 地址</label>
-                        <input type="text" name="ip_address" class="input-field w-full px-4 py-2 rounded-lg font-mono" placeholder="如 203.0.113.5" required>
-                    </div>
-                    <button type="submit" class="btn-primary px-4 py-2 rounded-lg text-sm whitespace-nowrap">添加</button>
-                </form>
-            </div>
-            <div class="pixel-card rounded-xl p-6">
-                <h2 class="text-lg font-bold mb-1">移除白名单</h2>
-                <p class="text-sm text-cream/60 mb-4">将 IP 移出白名单，该 IP 将受封禁规则约束。</p>
-                <form action="{{ url_for('admin.admin_firewall_whitelist_remove') }}" method="POST" class="flex gap-3 items-end">
-                    {{ csrf_field() }}
-                    <div class="flex-1">
-                        <label class="block text-sm text-cream/70 mb-1">IP 地址</label>
-                        <input type="text" name="ip_address" class="input-field w-full px-4 py-2 rounded-lg font-mono" placeholder="如 203.0.113.5" required>
-                    </div>
-                    <button type="submit" class="btn-danger px-4 py-2 rounded-lg text-sm whitespace-nowrap">移除</button>
-                </form>
-            </div>
-        </div>
-
-        <!-- 创建封禁 -->
-        <div class="pixel-card rounded-xl p-6 mb-8">
-            <h2 class="text-lg font-bold mb-1">新建封禁</h2>
-            <p class="text-xs text-red-400 mb-4">注意：封禁后该 IP 的所有访问都将被拒绝，包括管理后台。请勿封禁自己的 IP（当前访问 IP：<code class="font-mono">{{ current_ip }}</code>）。</p>
-            <form action="{{ url_for('admin.admin_firewall_create') }}" method="POST" class="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end">
-                {{ csrf_field() }}
-                <div class="sm:col-span-1">
-                    <label class="block text-sm text-cream/70 mb-1">IP 地址</label>
-                    <input type="text" name="ip_address" class="input-field w-full px-4 py-2 rounded-lg font-mono" placeholder="如 203.0.113.5" required>
-                </div>
-                <div>
-                    <label class="block text-sm text-cream/70 mb-1">封禁时长（天，留空永久）</label>
-                    <input type="number" name="duration_days" class="input-field w-full px-4 py-2 rounded-lg" placeholder="如 7 / 0.5 = 12 小时" min="0" step="0.1">
-                </div>
-                <div class="sm:col-span-1">
-                    <button type="submit" class="btn-danger px-4 py-2 rounded-lg text-sm w-full">添加封禁</button>
-                </div>
-                <div class="sm:col-span-4">
-                    <label class="block text-sm text-cream/70 mb-1">原因（可选）</label>
-                    <input type="text" name="reason" class="input-field w-full px-4 py-2 rounded-lg" placeholder="封禁原因">
-                </div>
-            </form>
-        </div>
-
-        <!-- 违规警告 -->
-        <div class="pixel-card rounded-xl p-6 mb-8">
-            <div class="flex items-center justify-between mb-4">
-                <div>
-                    <h2 class="text-lg font-bold flex items-center gap-2">
-                        <i data-lucide="alert-triangle" class="w-5 h-5 text-gold-400"></i>
-                        违规警告
-                    </h2>
-                    <p class="text-sm text-cream/60 mt-1">记录了被防火墙检测到的可疑 IP 违规行为。</p>
-                </div>
-            </div>
-            {% if warnings %}
-            <div class="overflow-x-auto">
-                <table class="w-full text-sm">
-                    <thead>
-                        <tr class="border-b border-forest-700/50 text-cream/60">
-                            <th class="text-left px-4 py-3 font-medium">IP 地址</th>
-                            <th class="text-left px-4 py-3 font-medium">原因</th>
-                            <th class="text-left px-4 py-3 font-medium">时间</th>
-                            <th class="text-right px-4 py-3 font-medium">次数</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for w in warnings %}
-                        <tr class="border-b border-forest-700/30 hover:bg-yellow-500/5 transition-colors">
-                            <td class="px-4 py-3 font-mono text-xs text-cream/80">{{ w.ip_address }}</td>
-                            <td class="px-4 py-3 text-cream/60">{{ w.warning }}</td>
-                            <td class="px-4 py-3 text-cream/40">{{ w.created_at }}</td>
-                            <td class="px-4 py-3 text-right">
-                                <span class="text-xs px-2 py-0.5 rounded-full bg-yellow-500/10 text-yellow-400 border border-yellow-500/20">{{ w.count }}</span>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-            {% else %}
-            <div class="text-center py-8">
-                <i data-lucide="check-circle" class="w-10 h-10 mx-auto mb-2 text-green-400/60"></i>
-                <p class="text-sm text-cream/40">暂无违规警告记录</p>
-            </div>
-            {% endif %}
-        </div>
-
-        <!-- 封禁列表 -->
-        <div class="pixel-card rounded-xl overflow-hidden">
-            <div class="px-6 pt-6 pb-2">
-                <h2 class="text-lg font-bold flex items-center gap-2">
-                    <i data-lucide="list" class="w-5 h-5 text-gold-400"></i>
-                    封禁列表
-                </h2>
-            </div>
-            <div class="overflow-x-auto">
-                <table class="w-full text-sm">
-                    <thead>
-                        <tr class="border-b border-forest-700/50 text-cream/60">
-                            <th class="text-left px-4 py-3 font-medium">ID</th>
-                            <th class="text-left px-4 py-3 font-medium">IP 地址</th>
-                            <th class="text-left px-4 py-3 font-medium">原因</th>
-                            <th class="text-left px-4 py-3 font-medium">操作人</th>
-                            <th class="text-left px-4 py-3 font-medium">封禁时间</th>
-                            <th class="text-left px-4 py-3 font-medium">过期时间</th>
-                            <th class="text-right px-4 py-3 font-medium">操作</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for ban in bans %}
-                        <tr class="border-b border-forest-700/30 hover:bg-blue-500/5 transition-colors">
-                            <td class="px-4 py-3 text-cream/40">{{ ban.id }}</td>
-                            <td class="px-4 py-3 text-cream/80 font-mono text-xs">{{ ban.ip_address }}</td>
-                            <td class="px-4 py-3 text-cream/60">{{ ban.reason or '-' }}</td>
-                            <td class="px-4 py-3 text-cream/60">{{ ban.banned_by_name or '未知' }}</td>
-                            <td class="px-4 py-3 text-cream/60">{{ ban.created_at }}</td>
-                            <td class="px-4 py-3">
-                                {% if ban.expires_at %}
-                                <span class="text-xs px-2 py-0.5 rounded-full bg-yellow-500/10 text-yellow-400 border border-yellow-500/20">{{ ban.expires_at }}</span>
-                                {% else %}
-                                <span class="text-xs px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/20">永久</span>
-                                {% endif %}
-                            </td>
-                            <td class="px-4 py-3 text-right">
-                                <form action="{{ url_for('admin.admin_firewall_delete', ban_id=ban.id) }}" method="POST" class="inline" onsubmit="return confirm('确定解除 {{ ban.ip_address }} 的封禁？');">
-                                    {{ csrf_field() }}
-                                    <button type="submit" class="text-green-400 hover:text-green-300 text-xs px-2 py-1 rounded bg-green-500/10 border border-green-500/20">解除封禁</button>
-                                </form>
-                            </td>
-                        </tr>
-                        {% else %}
-                        <tr>
-                            <td colspan="7" class="px-4 py-8 text-center text-cream/40">暂无封禁记录</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
+    <!-- 页眉导航 -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+      <div>
+        <h1 class="text-2xl sm:text-3xl font-bold mb-1">防火墙管理</h1>
+        <p class="text-cream/60 text-sm">管理 IP 封禁、账号封禁与防火墙配置</p>
+      </div>
+      <a href="{{ url_for('admin.admin_page') }}" class="btn-secondary px-4 py-2 rounded-lg text-sm inline-flex items-center gap-2">
+        <i data-lucide="arrow-left" class="w-4 h-4"></i>
+        返回管理中心
+      </a>
     </div>
+
+    <!-- Tab 导航 -->
+    <div class="pixel-card rounded-xl mb-6">
+      <div class="px-4 sm:px-6">
+        <ul class="flex gap-1 -mb-px border-b border-forest-700/30">
+          <li>
+            <a href="{{ url_for('admin.admin_firewall') }}"
+               class="inline-block px-4 py-3 text-sm font-medium border-b-2 transition-colors
+                      {{ 'border-gold-400 text-gold-400' if page == 'ip_bans' else 'border-transparent text-cream/60 hover:text-cream/80 hover:border-cream/30' }}">
+              <i data-lucide="ban" class="w-4 h-4 inline-block -mt-0.5 mr-1"></i>
+              IP 封禁
+            </a>
+          </li>
+          <li>
+            <a href="{{ url_for('admin.admin_firewall_account_bans') }}"
+               class="inline-block px-4 py-3 text-sm font-medium border-b-2 transition-colors
+                      {{ 'border-gold-400 text-gold-400' if page == 'account_bans' else 'border-transparent text-cream/60 hover:text-cream/80 hover:border-cream/30' }}">
+              <i data-lucide="user-x" class="w-4 h-4 inline-block -mt-0.5 mr-1"></i>
+              账号封禁
+            </a>
+          </li>
+          <li>
+            <a href="{{ url_for('admin.admin_firewall_settings_page') }}"
+               class="inline-block px-4 py-3 text-sm font-medium border-b-2 transition-colors
+                      {{ 'border-gold-400 text-gold-400' if page == 'settings' else 'border-transparent text-cream/60 hover:text-cream/80 hover:border-cream/30' }}">
+              <i data-lucide="settings" class="w-4 h-4 inline-block -mt-0.5 mr-1"></i>
+              设置
+            </a>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- ============ IP 封禁页面 ============ -->
+    {% if page == 'ip_bans' %}
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <!-- IP 封禁列表 -->
+      <div class="lg:col-span-2">
+        <div class="pixel-card rounded-xl overflow-hidden">
+          <div class="px-6 pt-6 pb-2">
+            <h2 class="text-lg font-bold flex items-center gap-2">
+              <i data-lucide="ban" class="w-5 h-5 text-gold-400"></i>
+              IP 封禁列表
+            </h2>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="border-b border-forest-700/50 text-cream/60">
+                  <th class="text-left px-4 py-3 font-medium">IP 地址</th>
+                  <th class="text-left px-4 py-3 font-medium">原因</th>
+                  <th class="text-left px-4 py-3 font-medium">操作人</th>
+                  <th class="text-left px-4 py-3 font-medium">创建时间</th>
+                  <th class="text-left px-4 py-3 font-medium">过期时间</th>
+                  <th class="text-right px-4 py-3 font-medium">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for ban in bans %}
+                <tr class="border-b border-forest-700/30 hover:bg-blue-500/5 transition-colors {{ 'bg-yellow-500/5' if ban.ip_address == current_ip }}">
+                  <td class="px-4 py-3 font-mono text-xs text-cream/80"><code>{{ ban.ip_address }}</code></td>
+                  <td class="px-4 py-3 text-cream/60">{{ ban.reason or '-' }}</td>
+                  <td class="px-4 py-3 text-cream/60">{{ ban.banned_by }}</td>
+                  <td class="px-4 py-3 text-cream/40 text-xs">{{ ban.created_at[:19] }}</td>
+                  <td class="px-4 py-3">
+                    {% if ban.expires_at %}
+                    <span class="text-xs px-2 py-0.5 rounded-full bg-yellow-500/10 text-yellow-400 border border-yellow-500/20">{{ ban.expires_at[:19] }}</span>
+                    {% else %}
+                    <span class="text-xs px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/20">永久</span>
+                    {% endif %}
+                  </td>
+                  <td class="px-4 py-3 text-right">
+                    <form method="POST" action="{{ url_for('admin.admin_firewall_delete', ban_id=ban.id) }}" class="inline" onsubmit="return confirm('确定解除 {{ ban.ip_address }} 的封禁？');">
+                      <button type="submit" class="text-green-400 hover:text-green-300 text-xs px-2 py-1 rounded bg-green-500/10 border border-green-500/20">解封</button>
+                    </form>
+                  </td>
+                </tr>
+                {% else %}
+                <tr>
+                  <td colspan="6" class="px-4 py-8 text-center text-cream/40">暂无封禁记录</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- 右侧面板 -->
+      <div class="space-y-6">
+        <!-- IP 手动封禁 -->
+        <div class="pixel-card rounded-xl p-6">
+          <h2 class="text-lg font-bold mb-1">手动封禁 IP</h2>
+          <p class="text-xs text-red-400 mb-4">注意：请勿封禁自己的 IP（当前：<code class="font-mono">{{ current_ip }}</code>）</p>
+          <form method="POST" action="{{ url_for('admin.admin_firewall_ban') }}">
+            <div class="space-y-3">
+              <div>
+                <label class="block text-sm text-cream/70 mb-1">IP 地址</label>
+                <input type="text" name="ip_address" class="input-field w-full px-4 py-2 rounded-lg font-mono" placeholder="192.168.1.1" required>
+              </div>
+              <div>
+                <label class="block text-sm text-cream/70 mb-1">原因</label>
+                <input type="text" name="reason" class="input-field w-full px-4 py-2 rounded-lg" placeholder="可选">
+              </div>
+              <div>
+                <label class="block text-sm text-cream/70 mb-1">封禁天数（留空 = 永久）</label>
+                <input type="number" name="duration_days" class="input-field w-full px-4 py-2 rounded-lg" placeholder="可选" min="0" step="0.1">
+              </div>
+              <button type="submit" class="btn-danger w-full px-4 py-2 rounded-lg text-sm">封禁 IP</button>
+            </div>
+          </form>
+        </div>
+
+        <!-- IP 白名单 -->
+        <div class="pixel-card rounded-xl p-6">
+          <h2 class="text-lg font-bold mb-3">IP 白名单</h2>
+          <form method="POST" action="{{ url_for('admin.admin_firewall_whitelist_add') }}" class="flex gap-2 mb-3">
+            <input type="text" name="ip_address" class="input-field flex-1 px-4 py-2 rounded-lg font-mono text-sm" placeholder="添加白名单 IP" required>
+            <button type="submit" class="btn-primary px-3 py-2 rounded-lg text-sm whitespace-nowrap">添加</button>
+          </form>
+          {% if whitelist %}
+          <ul class="divide-y divide-forest-700/30">
+            {% for ip in whitelist %}
+            <li class="flex items-center justify-between py-2">
+              <code class="text-sm text-cream/80">{{ ip }}</code>
+              <form method="POST" action="{{ url_for('admin.admin_firewall_whitelist_remove') }}" class="inline">
+                <input type="hidden" name="ip_address" value="{{ ip }}">
+                <button type="submit" class="text-red-400 hover:text-red-300 text-xs">移除</button>
+              </form>
+            </li>
+            {% endfor %}
+          </ul>
+          {% else %}
+          <p class="text-cream/40 text-sm">暂无白名单</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- ============ 账号封禁页面 ============ -->
+    {% if page == 'account_bans' %}
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div class="lg:col-span-2">
+        <div class="pixel-card rounded-xl overflow-hidden">
+          <div class="px-6 pt-6 pb-2">
+            <h2 class="text-lg font-bold flex items-center gap-2">
+              <i data-lucide="user-x" class="w-5 h-5 text-gold-400"></i>
+              账号封禁列表
+            </h2>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="border-b border-forest-700/50 text-cream/60">
+                  <th class="text-left px-4 py-3 font-medium">用户 ID</th>
+                  <th class="text-left px-4 py-3 font-medium">用户名</th>
+                  <th class="text-left px-4 py-3 font-medium">原因</th>
+                  <th class="text-left px-4 py-3 font-medium">操作人</th>
+                  <th class="text-left px-4 py-3 font-medium">创建时间</th>
+                  <th class="text-left px-4 py-3 font-medium">过期时间</th>
+                  <th class="text-right px-4 py-3 font-medium">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for ban in account_bans %}
+                <tr class="border-b border-forest-700/30 hover:bg-blue-500/5 transition-colors">
+                  <td class="px-4 py-3 text-cream/80">{{ ban.user_id }}</td>
+                  <td class="px-4 py-3 text-cream/80">{{ ban.username }}</td>
+                  <td class="px-4 py-3 text-cream/60">{{ ban.reason or '-' }}</td>
+                  <td class="px-4 py-3 text-cream/60">{{ ban.banned_by_name }}</td>
+                  <td class="px-4 py-3 text-cream/40 text-xs">{{ ban.created_at[:19] }}</td>
+                  <td class="px-4 py-3">
+                    {% if ban.expires_at %}
+                    <span class="text-xs px-2 py-0.5 rounded-full bg-yellow-500/10 text-yellow-400 border border-yellow-500/20">{{ ban.expires_at[:19] }}</span>
+                    {% else %}
+                    <span class="text-xs px-2 py-0.5 rounded-full bg-red-500/10 text-red-400 border border-red-500/20">永久</span>
+                    {% endif %}
+                  </td>
+                  <td class="px-4 py-3 text-right">
+                    <form method="POST" action="{{ url_for('admin.admin_firewall_unban_account', ban_id=ban.id) }}" class="inline" onsubmit="return confirm('确定解封该账号？');">
+                      <button type="submit" class="text-green-400 hover:text-green-300 text-xs px-2 py-1 rounded bg-green-500/10 border border-green-500/20">解封</button>
+                    </form>
+                  </td>
+                </tr>
+                {% else %}
+                <tr>
+                  <td colspan="7" class="px-4 py-8 text-center text-cream/40">暂无账号封禁记录</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="pixel-card rounded-xl p-6">
+          <h2 class="text-lg font-bold mb-3">手动封禁账号</h2>
+          <form method="POST" action="{{ url_for('admin.admin_firewall_ban_account') }}">
+            <div class="space-y-3">
+              <div>
+                <label class="block text-sm text-cream/70 mb-1">用户 ID</label>
+                <input type="number" name="user_id" class="input-field w-full px-4 py-2 rounded-lg" placeholder="用户 ID" required>
+              </div>
+              <div>
+                <label class="block text-sm text-cream/70 mb-1">原因</label>
+                <input type="text" name="reason" class="input-field w-full px-4 py-2 rounded-lg" placeholder="可选">
+              </div>
+              <div>
+                <label class="block text-sm text-cream/70 mb-1">封禁时长（分钟，留空=永久）</label>
+                <input type="number" name="duration_minutes" class="input-field w-full px-4 py-2 rounded-lg" placeholder="可选">
+              </div>
+              <button type="submit" class="btn-danger w-full px-4 py-2 rounded-lg text-sm">封禁账号</button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- ============ 设置页面 ============ -->
+    {% if page == 'settings' %}
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div class="lg:col-span-2">
+        <div class="pixel-card rounded-xl p-6">
+          <h2 class="text-lg font-bold mb-4">防火墙配置</h2>
+          <form id="settings-form" class="space-y-6">
+
+            <!-- 自动 IP 封禁 -->
+            <div>
+              <h3 class="text-base font-semibold text-cream/80 border-b border-forest-700/30 pb-2 mb-3">自动 IP 封禁</h3>
+              <div class="space-y-3">
+                <label class="flex items-center justify-between gap-2 cursor-pointer">
+                  <span class="text-sm text-cream/80">启用自动封禁</span>
+                  <input type="checkbox" id="cfg-AUTO_BAN_ENABLED" {{ 'checked' if auto_ban_enabled }} class="w-4 h-4 accent-gold-500">
+                </label>
+                <div>
+                  <label class="block text-sm text-cream/70 mb-1">封禁时长（分钟）</label>
+                  <input type="number" id="cfg-AUTO_BAN_DURATION_MINUTES" value="{{ auto_ban_duration_minutes }}" class="input-field w-full px-4 py-2 rounded-lg">
+                </div>
+                <label class="flex items-center justify-between gap-2 cursor-pointer p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
+                  <span class="text-sm text-cream/80"><i data-lucide="log-in" class="w-4 h-4 inline-block mr-1 text-gold-400"></i>登录失败</span>
+                  <input type="checkbox" id="cfg-AUTO_BAN_LOGIN_ENABLED" {{ 'checked' if auto_ban_login_enabled }} class="w-4 h-4 accent-gold-500">
+                </label>
+                <label class="flex items-center justify-between gap-2 cursor-pointer p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
+                  <span class="text-sm text-cream/80"><i data-lucide="user-plus" class="w-4 h-4 inline-block mr-1 text-gold-400"></i>注册异常</span>
+                  <input type="checkbox" id="cfg-AUTO_BAN_REGISTER_ENABLED" {{ 'checked' if auto_ban_register_enabled }} class="w-4 h-4 accent-gold-500">
+                </label>
+                <label class="flex items-center justify-between gap-2 cursor-pointer p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
+                  <span class="text-sm text-cream/80"><i data-lucide="mail" class="w-4 h-4 inline-block mr-1 text-gold-400"></i>邮件验证异常</span>
+                  <input type="checkbox" id="cfg-AUTO_BAN_EMAIL_ENABLED" {{ 'checked' if auto_ban_email_enabled }} class="w-4 h-4 accent-gold-500">
+                </label>
+                <label class="flex items-center justify-between gap-2 cursor-pointer p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
+                  <span class="text-sm text-cream/80"><i data-lucide="key-round" class="w-4 h-4 inline-block mr-1 text-gold-400"></i>找回密码异常</span>
+                  <input type="checkbox" id="cfg-AUTO_BAN_FORGOT_PASSWORD_ENABLED" {{ 'checked' if auto_ban_forgot_password_enabled }} class="w-4 h-4 accent-gold-500">
+                </label>
+              </div>
+            </div>
+
+            <!-- 可疑访问拦截 -->
+            <div>
+              <h3 class="text-base font-semibold text-cream/80 border-b border-forest-700/30 pb-2 mb-3">可疑访问拦截</h3>
+              <div class="space-y-3">
+                <label class="flex items-center justify-between gap-2 cursor-pointer">
+                  <span class="text-sm text-cream/80">启用可疑拦截</span>
+                  <input type="checkbox" id="cfg-SUSPICIOUS_BLOCK_ENABLED" {{ 'checked' if suspicious_block_enabled }} class="w-4 h-4 accent-gold-500">
+                </label>
+                <div>
+                  <label class="block text-sm text-cream/70 mb-1">封禁时长（分钟）</label>
+                  <input type="number" id="cfg-SUSPICIOUS_BLOCK_DURATION_MINUTES" value="{{ suspicious_block_duration_minutes }}" class="input-field w-full px-4 py-2 rounded-lg">
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <label class="flex items-center justify-between gap-2 cursor-pointer p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
+                    <span class="text-sm text-cream/80"><i data-lucide="database" class="w-4 h-4 inline-block mr-1 text-gold-400"></i>SQL 注入</span>
+                    <input type="checkbox" id="cfg-SUSPICIOUS_BLOCK_SQLI_ENABLED" {{ 'checked' if suspicious_sqli_enabled }} class="w-4 h-4 accent-gold-500">
+                  </label>
+                  <label class="flex items-center justify-between gap-2 cursor-pointer p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
+                    <span class="text-sm text-cream/80"><i data-lucide="code" class="w-4 h-4 inline-block mr-1 text-gold-400"></i>XSS</span>
+                    <input type="checkbox" id="cfg-SUSPICIOUS_BLOCK_XSS_ENABLED" {{ 'checked' if suspicious_xss_enabled }} class="w-4 h-4 accent-gold-500">
+                  </label>
+                  <label class="flex items-center justify-between gap-2 cursor-pointer p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
+                    <span class="text-sm text-cream/80"><i data-lucide="folder-tree" class="w-4 h-4 inline-block mr-1 text-gold-400"></i>路径遍历</span>
+                    <input type="checkbox" id="cfg-SUSPICIOUS_BLOCK_PATH_TRAVERSAL_ENABLED" {{ 'checked' if suspicious_path_traversal_enabled }} class="w-4 h-4 accent-gold-500">
+                  </label>
+                  <label class="flex items-center justify-between gap-2 cursor-pointer p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
+                    <span class="text-sm text-cream/80"><i data-lucide="terminal" class="w-4 h-4 inline-block mr-1 text-gold-400"></i>命令注入</span>
+                    <input type="checkbox" id="cfg-SUSPICIOUS_BLOCK_COMMAND_INJECTION_ENABLED" {{ 'checked' if suspicious_command_injection_enabled }} class="w-4 h-4 accent-gold-500">
+                  </label>
+                  <label class="flex items-center justify-between gap-2 cursor-pointer p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
+                    <span class="text-sm text-cream/80"><i data-lucide="file-search" class="w-4 h-4 inline-block mr-1 text-gold-400"></i>敏感探测</span>
+                    <input type="checkbox" id="cfg-SUSPICIOUS_BLOCK_SENSITIVE_PROBE_ENABLED" {{ 'checked' if suspicious_sensitive_probe_enabled }} class="w-4 h-4 accent-gold-500">
+                  </label>
+                  <label class="flex items-center justify-between gap-2 cursor-pointer p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
+                    <span class="text-sm text-cream/80"><i data-lucide="bot" class="w-4 h-4 inline-block mr-1 text-gold-400"></i>恶意 UA</span>
+                    <input type="checkbox" id="cfg-SUSPICIOUS_BLOCK_MALICIOUS_UA_ENABLED" {{ 'checked' if suspicious_malicious_ua_enabled }} class="w-4 h-4 accent-gold-500">
+                  </label>
+                </div>
+              </div>
+            </div>
+
+            <!-- DDoS 防护 -->
+            <div>
+              <h3 class="text-base font-semibold text-cream/80 border-b border-forest-700/30 pb-2 mb-3">DDoS 防护</h3>
+              <div class="space-y-3">
+                <label class="flex items-center justify-between gap-2 cursor-pointer">
+                  <span class="text-sm text-cream/80">启用 DDoS 防护</span>
+                  <input type="checkbox" id="cfg-DDOS_GUARD_ENABLED" {{ 'checked' if ddos_guard_enabled }} class="w-4 h-4 accent-gold-500">
+                </label>
+                <div>
+                  <label class="block text-sm text-cream/70 mb-1">防护强度</label>
+                  <select id="cfg-DDOS_GUARD_INTENSITY" class="input-field w-full px-4 py-2 rounded-lg">
+                    <option value="low" {{ 'selected' if ddos_guard_intensity == 'low' }}>低</option>
+                    <option value="medium" {{ 'selected' if ddos_guard_intensity == 'medium' }}>中</option>
+                    <option value="high" {{ 'selected' if ddos_guard_intensity == 'high' }}>高</option>
+                  </select>
+                </div>
+                <div>
+                  <label class="block text-sm text-cream/70 mb-1">封禁时长（分钟）</label>
+                  <input type="number" id="cfg-DDOS_GUARD_BAN_MINUTES" value="{{ ddos_guard_ban_minutes }}" class="input-field w-full px-4 py-2 rounded-lg">
+                </div>
+                <div>
+                  <label class="block text-sm text-cream/70 mb-1">永久封禁次数阈值</label>
+                  <input type="number" id="cfg-DDOS_GUARD_PERMANENT_AFTER" value="{{ ddos_guard_permanent_after }}" class="input-field w-full px-4 py-2 rounded-lg">
+                </div>
+                <div>
+                  <label class="block text-sm text-cream/70 mb-1">违规统计窗口（小时）</label>
+                  <input type="number" id="cfg-DDOS_GUARD_OFFENSE_WINDOW_HOURS" value="{{ ddos_guard_offense_window_hours }}" class="input-field w-full px-4 py-2 rounded-lg">
+                </div>
+              </div>
+            </div>
+
+            <button type="button" class="btn-primary px-6 py-2 rounded-lg text-sm inline-flex items-center gap-2" onclick="saveFirewallSettings()">
+              <i data-lucide="save" class="w-4 h-4"></i>
+              保存设置
+            </button>
+            <span id="settings-status" class="ms-2 text-sm"></span>
+          </form>
+        </div>
+      </div>
+
+      <!-- 右侧：警告日志 -->
+      <div>
+        <div class="pixel-card rounded-xl overflow-hidden">
+          <div class="px-6 pt-6 pb-2">
+            <h2 class="text-lg font-bold flex items-center gap-2">
+              <i data-lucide="alert-triangle" class="w-5 h-5 text-gold-400"></i>
+              警告日志
+            </h2>
+          </div>
+          <div class="overflow-y-auto" style="max-height:500px">
+            <table class="w-full text-sm">
+              <thead>
+                <tr class="border-b border-forest-700/50 text-cream/60">
+                  <th class="text-left px-4 py-2 font-medium">IP</th>
+                  <th class="text-left px-4 py-2 font-medium">时间</th>
+                  <th class="text-left px-4 py-2 font-medium">内容</th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for w in warnings %}
+                <tr class="border-b border-forest-700/30 hover:bg-yellow-500/5 transition-colors">
+                  <td class="px-4 py-2 font-mono text-xs text-cream/80"><code>{{ w.ip_address }}</code></td>
+                  <td class="px-4 py-2 text-cream/40 text-xs">{{ w.created_at[:19] }}</td>
+                  <td class="px-4 py-2 text-cream/60 text-xs">{{ w.warning[:50] }}</td>
+                </tr>
+                {% else %}
+                <tr>
+                  <td colspan="3" class="px-4 py-8 text-center text-cream/40">暂无警告</td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+  </div>
 </section>
 {% endblock %}
 
 {% block extra_script %}
 <script>
-// 通用保存防火墙配置
-function saveFirewallConfig(items, btn) {
-    if (!btn) return;
-    const originalHtml = btn.innerHTML;
-    btn.disabled = true;
-    btn.innerHTML = '<i data-lucide="loader" class="w-4 h-4 animate-spin"></i> 保存中...';
-    if (window.lucide) lucide.createIcons();
-
-    fetch('{{ url_for("admin.admin_firewall_settings") }}', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ items: items })
-    })
-    .then(r => r.json())
-    .then(data => {
-        if (data.success) {
-            Toast.success(data.message || '配置已保存');
-            setTimeout(function () { window.location.reload(); }, 800);
-        } else {
-            Toast.error(data.message || '保存失败');
-        }
-        btn.disabled = false;
-        btn.innerHTML = originalHtml;
-        if (window.lucide) lucide.createIcons();
-    })
-    .catch(function () {
-        Toast.error('网络错误，请重试');
-        btn.disabled = false;
-        btn.innerHTML = originalHtml;
-        if (window.lucide) lucide.createIcons();
-    });
-}
-
-// 保存 DDoS 配置
-function saveDdosConfig(btn) {
-    var items = [
-        { key: 'DDOS_GUARD_ENABLED', value: document.getElementById('ddos-guard-enabled').checked },
-        { key: 'DDOS_GUARD_INTENSITY', value: document.getElementById('ddos-guard-intensity').value },
-        { key: 'DDOS_GUARD_BAN_MINUTES', value: document.getElementById('ddos-guard-ban-minutes').value },
-        { key: 'DDOS_GUARD_PERMANENT_AFTER', value: document.getElementById('ddos-guard-permanent-after').value },
-        { key: 'DDOS_GUARD_OFFENSE_WINDOW_HOURS', value: document.getElementById('ddos-guard-offense-window').value },
-    ];
-    saveFirewallConfig(items, btn);
-}
-
-// 保存自动封禁配置
-function saveAutoBanConfig(btn) {
-    var items = [
-        { key: 'AUTO_BAN_ENABLED', value: document.getElementById('auto-ban-enabled').checked },
-        { key: 'AUTO_BAN_DURATION_MINUTES', value: document.getElementById('auto-ban-duration').value },
-        { key: 'AUTO_BAN_LOGIN_ENABLED', value: document.getElementById('auto-ban-login-enabled').checked },
-        { key: 'AUTO_BAN_REGISTER_ENABLED', value: document.getElementById('auto-ban-register-enabled').checked },
-        { key: 'AUTO_BAN_EMAIL_ENABLED', value: document.getElementById('auto-ban-email-enabled').checked },
-        { key: 'AUTO_BAN_FORGOT_PASSWORD_ENABLED', value: document.getElementById('auto-ban-forgot-password-enabled').checked },
-    ];
-    saveFirewallConfig(items, btn);
-}
-
-// 保存可疑拦截配置
-function saveSuspiciousConfig(btn) {
-    var items = [
-        { key: 'SUSPICIOUS_BLOCK_ENABLED', value: document.getElementById('suspicious-enabled').checked },
-        { key: 'SUSPICIOUS_BLOCK_DURATION_MINUTES', value: document.getElementById('suspicious-duration').value },
-        { key: 'SUSPICIOUS_BLOCK_SQLI_ENABLED', value: document.getElementById('suspicious-sqli-enabled').checked },
-        { key: 'SUSPICIOUS_BLOCK_XSS_ENABLED', value: document.getElementById('suspicious-xss-enabled').checked },
-        { key: 'SUSPICIOUS_BLOCK_PATH_TRAVERSAL_ENABLED', value: document.getElementById('suspicious-path-traversal-enabled').checked },
-        { key: 'SUSPICIOUS_BLOCK_COMMAND_INJECTION_ENABLED', value: document.getElementById('suspicious-command-injection-enabled').checked },
-        { key: 'SUSPICIOUS_BLOCK_SENSITIVE_PROBE_ENABLED', value: document.getElementById('suspicious-sensitive-probe-enabled').checked },
-        { key: 'SUSPICIOUS_BLOCK_MALICIOUS_UA_ENABLED', value: document.getElementById('suspicious-malicious-ua-enabled').checked },
-    ];
-    saveFirewallConfig(items, btn);
+function saveFirewallSettings() {
+  const keys = {{ FIREWALL_CONFIG_KEYS|list|tojson }};
+  var items = [];
+  keys.forEach(function(key) {
+    var el = document.getElementById('cfg-' + key);
+    if (!el) return;
+    var value;
+    if (el.type === 'checkbox') {
+      value = el.checked;
+    } else {
+      value = el.value;
+    }
+    items.push({key: key, value: value});
+  });
+  fetch('{{ url_for("admin.admin_firewall_settings_save") }}', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({items: items})
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(data) {
+    var status = document.getElementById('settings-status');
+    status.textContent = data.message;
+    status.className = data.success ? 'ms-2 text-green-400' : 'ms-2 text-red-400';
+  })
+  .catch(function(err) {
+    document.getElementById('settings-status').textContent = '保存失败: ' + err;
+  });
 }
 </script>
 {% endblock %}

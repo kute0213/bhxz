@@ -10,6 +10,7 @@
 import os
 import threading
 import time
+from datetime import datetime
 
 import duckdb
 
@@ -316,3 +317,84 @@ def vacuum():
     except Exception as exc:
         log('WARNING', 'FirewallDB', f'VACUUM 失败: {exc}')
         return False
+
+
+# ---------------------------------------------------------------------------
+# 过期时间堆 —— 按时间排序，逐个清理，避免全表扫描
+# ---------------------------------------------------------------------------
+
+import heapq
+
+_expiry_heap = []
+_expiry_heap_lock = threading.Lock()
+
+
+def push_expiry(expires_at_str: str, ban_type: str, ban_id: int):
+    """将封禁的过期时间推入堆。
+
+    Args:
+        expires_at_str: DuckDB CURRENT_TIMESTAMP 格式字符串 'YYYY-MM-DD HH:MM:SS'
+        ban_type: 'ip' 或 'account'
+        ban_id: 对应封禁表的 id
+    """
+    if not expires_at_str:
+        return
+    try:
+        # 解析为时间戳（秒）
+        dt = datetime.strptime(expires_at_str, '%Y-%m-%d %H:%M:%S')
+        ts = dt.timestamp()
+        with _expiry_heap_lock:
+            heapq.heappush(_expiry_heap, (ts, ban_type, ban_id))
+    except (ValueError, TypeError):
+        pass
+
+
+def pop_expired(now_ts: float = None) -> list:
+    """弹出所有已过期的堆条目。
+
+    Returns:
+        list of (ts, ban_type, ban_id) — 所有已过期的条目
+    """
+    if now_ts is None:
+        now_ts = time.time()
+    expired = []
+    with _expiry_heap_lock:
+        while _expiry_heap and _expiry_heap[0][0] <= now_ts:
+            expired.append(heapq.heappop(_expiry_heap))
+    return expired
+
+
+def load_expiry_heap():
+    """启动时从 DuckDB 重建过期堆。"""
+    global _expiry_heap
+    try:
+        heap = []
+        with get_db() as conn:
+            # IP bans
+            rows = conn.execute(
+                "SELECT id, expires_at FROM firewall_bans "
+                "WHERE expires_at IS NOT NULL"
+            ).fetchall()
+            for row in rows:
+                bid, expires = row
+                if expires:
+                    try:
+                        dt = datetime.strptime(str(expires), '%Y-%m-%d %H:%M:%S')
+                        heap.append((dt.timestamp(), 'ip', bid))
+                    except ValueError:
+                        pass
+        with _expiry_heap_lock:
+            _expiry_heap = heap
+            heapq.heapify(_expiry_heap)
+        log('INFO', 'FirewallDB', f'过期堆已重建，共 {len(heap)} 条目')
+    except Exception as exc:
+        log('WARNING', 'FirewallDB', f'重建过期堆失败: {exc}')
+
+
+def remove_from_expiry_heap(ban_type: str, ban_id: int):
+    """从过期堆中移除指定条目（惰性过滤：标记删除由 monitor 过滤）。
+
+    由于 heap 不支持常规删除，采用惰性方式：在清理时检查记录是否仍有效。
+    此函数保留用于 future 优化。
+    """
+    pass  # 惰性处理：实际删除由 _cleanup_expired_bans 在查询时验证

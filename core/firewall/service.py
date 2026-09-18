@@ -23,6 +23,7 @@ from core.firewall.database import (
     is_ip_banned_cache,
     is_account_banned_cache,
     is_whitelisted_cache,
+    push_expiry,
 )
 from core.system.logger import log
 
@@ -192,11 +193,14 @@ def ban_ip(ip_address, reason, banned_by=SYSTEM_BANNER_ID, duration_minutes=None
             if existing:
                 return False, '该 IP 已在封禁列表中'
 
-            conn.execute(
+            result = conn.execute(
                 "INSERT INTO firewall_bans (ip_address, reason, banned_by, created_at, expires_at) "
-                "VALUES (?, ?, ?, ?, ?)",
+                "VALUES (?, ?, ?, ?, ?) RETURNING id",
                 (ip, reason, banned_by, now, expires_at),
             )
+            new_id = result.fetchone()[0]
+            # 注册过期时间
+            push_expiry(expires_at, 'ip', new_id)
     except Exception as exc:
         log('ERROR', 'Firewall', f'创建封禁失败: {exc}', ip=ip)
         return False, '创建封禁失败'
@@ -388,12 +392,15 @@ def ban_account(user_id, reason, banned_by=SYSTEM_BANNER_ID, duration_minutes=No
             if existing:
                 return False, '该账号已在封禁列表中'
 
-            conn.execute(
+            result = conn.execute(
                 "INSERT INTO firewall_account_bans "
                 "(user_id, reason, banned_by, created_at, expires_at) "
-                "VALUES (?, ?, ?, ?, ?)",
+                "VALUES (?, ?, ?, ?, ?) RETURNING id",
                 (user_id, reason, banned_by, now, expires_at),
             )
+            new_id = result.fetchone()[0]
+            # 注册过期时间
+            push_expiry(expires_at, 'account', new_id)
     except Exception as exc:
         log('ERROR', 'Firewall', f'创建账号封禁失败: {exc}', user_id=user_id)
         return False, '创建账号封禁失败'
