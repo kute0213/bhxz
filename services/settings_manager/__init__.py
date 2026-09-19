@@ -91,9 +91,13 @@ class SettingsManager:
         try:
             conn = get_db()
             try:
-                row = conn.execute(
-                    "SELECT value FROM settings WHERE key = ?", (key,)
-                ).fetchone()
+                # 使用 with conn: 保持锁在整个查询+读取周期内持有，
+                # 避免 cursor.fetchone() 在锁外执行时被另一个线程的 execute() 打断
+                # 导致 sqlite3 C 层 SQLITE_MISUSE（"bad parameter or other API misuse"）
+                with conn:
+                    row = conn.execute(
+                        "SELECT value FROM settings WHERE key = ?", (key,)
+                    ).fetchone()
             except Exception as e:
                 err_str = str(e)
                 # 表不存在是首次启动的正常现象，不刷 ERROR 日志
