@@ -131,25 +131,18 @@ def register_hooks(app, try_serve_public):
 
     @app.before_request
     def ip_ban_check_hook():
-        """IP 封禁检查：被封禁 IP 的所有请求一律返回 403。
+        """IP 封禁兜底检查：被封 IP 直接断开，不产生页面。
 
-        注册在所有其他钩子之前，确保被封禁的 IP 不做任何后续处理
-        （不校验 CSRF、不服务公共文件、不执行路由逻辑）。
+        WSGI 门禁（FirewallWSGIWrapper）已拦截绝大多数被封 IP 的请求；
+        此钩子仅作为跨平台兜底（例如 Flask 开发服务器的 werkzeug 环境中，
+        WSGI 层关闭 socket 后仍可能由 werkzeug 的内部机制触发 before_request），
+        不渲染页面、不查询额外数据，直接返回空 403 断开连接。
         """
         from core.firewall import is_banned
-        from core.errors import render_error_page
         ip = get_client_ip()
-        banned, reason = is_banned(ip)
+        banned, _reason = is_banned(ip)
         if banned:
-            log('Security', '被封禁 IP 的请求被拒绝',
-                ip=ip, reason=reason, path=request.path, method=request.method)
-            return render_error_page(
-                403, 'Forbidden',
-                '该 IP 已被封禁，如有疑问请联系管理员。',
-                '被封禁期间请勿继续访问，否则可能延长封禁。',
-                'shield-alert',
-            ), 403
-        return None
+            return '', 403, {'Connection': 'close'}
 
     @app.before_request
     def suspicious_request_check_hook():

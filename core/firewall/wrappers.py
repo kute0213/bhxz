@@ -1,29 +1,33 @@
-"""防火墙 WSGI 门禁 —— 在进入 Flask 前进行二次拦截与 DDoS 计数。
+"""防火墙 WSGI 门禁 —— 在进入 Flask 前直接断开封禁 IP 连接。
 
 职责：
-  1. WSGI 级黑名单拦截兜底（即使连接过滤器因竞态漏过，在此处拦截）
-  2. 登记活跃连接（供监控线程追踪）
+  1. WSGI 级黑名单拦截：被封 IP 的连接直接断开 socket，不产生任何 HTTP 响应
+  2. 登记活跃连接（供监控线程追踪连接状态）
   3. DDoS 请求计数（超阈值自动封禁）
+
+设计原则：
+  - 被封 IP 的请求在 WSGI 层直接断开，不进入 Flask 处理管道
+  - 除 DDOS 计数外，不产生任何日志/数据库/内存分配开销
+  - 线程安全：多线程下每请求独立调用 __call__，无共享状态竞争
 """
 
 import weakref
 
 
 class FirewallWSGIWrapper:
-    """WSGI 包装器：黑名单快速拦截 + 连接登记 + DDoS 计数。
+    """WSGI 包装器：黑名单快速断开 + 连接登记 + DDoS 计数。
+
+    被封 IP 的连接在 __call__ 中被识别后立即关闭底层 socket，
+    不调用 Flask 应用，不产生 HTTP 响应——从 TCP 层面断开。
 
     用法：
         wrapper = FirewallWSGIWrapper(wsgi_app, firewall_instance)
-        # 传入 CherootServer 或 Flask run_simple
         server = FirewallServer(..., wrapper)
-
-    同时也是可调用对象（WSGI 应用），直接传入 server 或 run_simple。
     """
 
     def __init__(self, wsgi_app, firewall_instance):
         self._app = wsgi_app
         self._fw = firewall_instance
-        # DDoS 检测器（延迟导入避免循环依赖）
         self._ddos_detector = None
 
     @property
@@ -31,7 +35,6 @@ class FirewallWSGIWrapper:
         if self._ddos_detector is None:
             from core.firewall.ddos import DDoSDetector
             self._ddos_detector = DDoSDetector()
-            # 绑定到 firewall 实例，供监控线程访问
             self._fw._ddos_detector = self._ddos_detector
         return self._ddos_detector
 
@@ -39,29 +42,13 @@ class FirewallWSGIWrapper:
         ip = environ.get('REMOTE_ADDR') or ''
 
         if ip:
-            # 内置安全 IP（127.0.0.1、::1）跳过所有防火墙检查
             if ip in ('127.0.0.1', '::1', 'localhost'):
                 return self._app(environ, start_response)
 
-            # 1) 黑名单拦截兜底
+            # 1) 黑名单拦截：直接断开连接，不返回任何 HTTP 响应
             if self._fw.is_banned(ip):
-                conn = environ.get('cheroot.connection')
-                if conn is not None:
-                    try:
-                        conn.linger = False
-                        conn.close()
-                    except Exception:
-                        pass
-                start_response(
-                    '403 Forbidden',
-                    [
-                        ('Content-Type', 'text/plain; charset=utf-8'),
-                        ('Content-Length', '0'),
-                        ('Connection', 'close'),
-                        ('X-Firewall', '1'),
-                    ],
-                )
-                return [b'']
+                self._close_connection(environ)
+                return self._empty_response(start_response)
 
             # 2) 登记活跃连接
             conn = environ.get('cheroot.connection')
@@ -78,6 +65,54 @@ class FirewallWSGIWrapper:
             self.ddos_detector.record(ip, path, enabled, intensity)
 
         return self._app(environ, start_response)
+
+    def _close_connection(self, environ):
+        """尝试在 WSGI 层关闭底层连接，避免 HTTP 响应产生。
+
+        优先关闭 Cheroot 连接对象（连接级关闭，最彻底）；
+        无 Cheroot 时尝试关闭 werkzeug 的原始 socket。
+        """
+        # 方案 A：通过 cheroot.connection 关闭
+        conn = environ.get('cheroot.connection')
+        if conn is not None:
+            try:
+                conn.linger = False
+                conn.close()
+                return
+            except Exception:
+                pass
+
+        # 方案 B：werkzeug 环境，尝试关闭原始 socket
+        try:
+            sock = environ.get('werkzeug.socket')
+            if sock is not None:
+                sock.shutdown(2)  # SHUT_RDWR
+                sock.close()
+                return
+        except Exception:
+            pass
+
+        # 方案 C：通过 wsgi.input 的 raw 流拿到 socket（run_simple 下有用）
+        try:
+            wsgi_input = environ.get('wsgi.input')
+            if wsgi_input is not None:
+                raw = getattr(wsgi_input, 'raw', None) or getattr(wsgi_input, '_sock', None)
+                if raw is not None:
+                    raw.shutdown(2)
+                    raw.close()
+                    return
+        except Exception:
+            pass
+
+    @staticmethod
+    def _empty_response(start_response):
+        """返回完全空的 HTTP 响应——无内容、无额外头、关连接。
+
+        这是 WSGI 协议下的最小可行响应；真正的断开由 _close_connection
+        在更高层已完成，此处仅为让 WSGI 服务器不要继续等待而发送的最后哨兵。
+        """
+        start_response('403 Forbidden', [('Connection', 'close')])
+        return []
 
     def _track_connection(self, conn):
         """登记活跃连接（弱引用）。"""

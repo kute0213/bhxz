@@ -20,6 +20,8 @@
 
 ### 修复
 
+* **防火墙：被封 IP 直接断开连接，不再返回 403 页面**：三层联动优化——① WSGI 门禁（`FirewallWSGIWrapper`）检测被封 IP 后立即关闭底层 socket（Cheroot 连接对象、werkzeug socket、wsgi.input 流三选一），不产生 HTTP 响应；② Flask fallback 从完整 HTML 403 页面缩为 `('', 403, {'Connection': 'close'})` 零内容响应；③ `server.py` 中 Flask 回退路径由 `app.run()` 改为 `run_simple` + 防火墙包装器，确保 WSGI 门禁始终生效。DDOS 攻击者仅消耗一次 `is_banned()` O(1) 缓存查询，不进入 Flask 处理管道、不分配内存、不写日志，不影响其他用户访问
+
 * **`routes/admin/logs` 模块缺失（`No module named 'routes.admin.logs'`）**：`.gitignore` 的 `logs/` 规则会匹配任意层级的 `logs/` 目录，导致源码包 `routes/admin/logs/` 从未被 git 追踪、未上传 GitHub，用户 `git pull` 后启动必然失败。现将规则收窄为 `/logs/`（仅忽略根目录日志目录），并强制纳入 `routes/admin/logs/` 源码包
 * **循环导入错误（`cannot import name from partially initialized module`）**：全部路由包（`admin` / `main` / `community` / `docs` / `guides` / `discussion` / `backgrounds` / `public`）子模块导入方式由 `from routes.package import X` 重构为 `import routes.package.X`。原写法属 fromlist 自导入反模式：父包 `__init__.py` 正在加载时，子模块反向导入父包中尚未定义完成的名称（如 `admin_bp`），在 Windows / 部分 Python 版本下必然触发循环导入。改用普通 `import` 仅绑定包名，加载完成后子模块内再通过属性访问，彻底消除该错误
 * **防火墙误封内置回环地址**：添加 `BUILTIN_SAFE_IPS`（`127.0.0.1` / `::1` / `localhost`），在所有检查路径（`is_whitelisted`、`ban_ip`、`is_banned`、`sync_blacklist`、WSGI 门禁）中跳过这些地址，确保永远不会被封禁

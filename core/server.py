@@ -85,6 +85,9 @@ def run_server(app, port=5000, app_root=None):
     """使用 Cheroot 作为 WSGI 服务器，可选 SSL。"""
     global _server
 
+    from core.firewall import firewall
+    wrapped_app = firewall.wrap(app)
+
     log('INFO', 'App', f'工作目录: {os.getcwd()}')
     log('INFO', 'App', f'APP_ROOT: {app_root}')
 
@@ -104,30 +107,29 @@ def run_server(app, port=5000, app_root=None):
         from cheroot.wsgi import Server as CherootServer
     except ImportError:
         log('ERROR', 'App', 'Cheroot 未安装，请执行: pip install cheroot')
-        log('WARNING', 'App', '回退到 Flask 内置服务器')
-        protocol = 'HTTPS' if has_ssl else 'HTTP'
-        log('INFO', 'App', f'使用 Flask 内置服务器（{protocol} 模式）')
-        from core.firewall import firewall
+        log('WARNING', 'App', '回退到 Flask 内置服务器（WSGI 防火墙仍生效）')
         firewall.start_monitor()
+        from werkzeug.serving import run_simple
+        ssl_context = None
         if has_ssl:
             try:
                 ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
                 ssl_context.load_cert_chain(cert_path, key_path)
-                from werkzeug.serving import run_simple
-                run_simple('0.0.0.0', port, firewall.wrap(app),
-                           threaded=True, ssl_context=ssl_context)
             except Exception as e:
                 log('WARNING', 'App', f'SSL 加载失败 ({e})，回退到 HTTP')
-                app.run(host='0.0.0.0', port=port, threaded=True, debug=False)
-        else:
-            app.run(host='0.0.0.0', port=port, threaded=True, debug=False)
+        protocol = 'HTTPS' if ssl_context else 'HTTP'
+        log('INFO', 'App', f'使用 run_simple（{protocol} 模式）')
+        run_simple(
+            '0.0.0.0', port, wrapped_app,
+            threaded=True, ssl_context=ssl_context,
+        )
         return
 
     log('INFO', 'App', '使用 Cheroot 服务器')
     from core.firewall import firewall, FirewallServer
     server = FirewallServer(
         ('0.0.0.0', port),
-        firewall.wrap(app),
+        wrapped_app,
         request_queue_size=100,
         numthreads=20,
     )
