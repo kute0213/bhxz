@@ -4,6 +4,6 @@ from flask import Blueprint
 
 discussion_bp = Blueprint('discussion', __name__, template_folder='../../templates/discussion')
 
-# 导入子模块以注册路由
-from routes.discussion import pages  # noqa: E402,F401
-from routes.discussion import api    # noqa: E402,F401
+# 导入子模块以注册路由（使用普通 import，避免 fromlist 循环导入反模式）
+import routes.discussion.pages  # noqa: E402,F401
+import routes.discussion.api    # noqa: E402,F401

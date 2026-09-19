@@ -4,4 +4,5 @@ from flask import Blueprint
 
 docs_bp = Blueprint('docs', __name__)
 
-from routes.docs import pages  # noqa: E402,F401
+# 导入子模块以注册路由（使用普通 import，避免 fromlist 循环导入反模式）
+import routes.docs.pages  # noqa: E402,F401

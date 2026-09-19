@@ -7,19 +7,22 @@ from flask import Blueprint
 
 admin_bp = Blueprint('admin', __name__)
 
-# 导入子模块以注册路由
-from routes.admin import pages       # noqa: E402,F401
-from routes.admin import users       # noqa: E402,F401
-from routes.admin import mod_intros   # noqa: E402,F401
-from routes.admin import guides       # noqa: E402,F401
-from routes.admin import guide_bans   # noqa: E402,F401
-from routes.admin import backup       # noqa: E402,F401
-from routes.admin import settings     # noqa: E402,F401
-from routes.admin import broadcast    # noqa: E402,F401
-from routes.admin import discussion   # noqa: E402,F401
-from routes.admin import music        # noqa: E402,F401
-from routes.admin import backgrounds   # noqa: E402,F401
-from routes.admin import update       # noqa: E402,F401
-from routes.admin import logs         # noqa: E402,F401
-from routes.admin import account_applications  # noqa: E402,F401
-from routes.admin import firewall      # noqa: E402,F401
+# 导入子模块以注册路由。
+# 注意：必须使用普通 import（而非 `from routes.admin import X`）。
+# fromlist 自导入在子模块处于"导入中"状态时会抛出
+# "cannot import name X from partially initialized module"，是经典的循环导入反模式。
+import routes.admin.pages            # noqa: E402,F401
+import routes.admin.users            # noqa: E402,F401
+import routes.admin.mod_intros       # noqa: E402,F401
+import routes.admin.guides           # noqa: E402,F401
+import routes.admin.guide_bans       # noqa: E402,F401
+import routes.admin.backup           # noqa: E402,F401
+import routes.admin.settings         # noqa: E402,F401
+import routes.admin.broadcast        # noqa: E402,F401
+import routes.admin.discussion       # noqa: E402,F401
+import routes.admin.music            # noqa: E402,F401
+import routes.admin.backgrounds      # noqa: E402,F401
+import routes.admin.update           # noqa: E402,F401
+import routes.admin.logs             # noqa: E402,F401
+import routes.admin.account_applications  # noqa: E402,F401
+import routes.admin.firewall         # noqa: E402,F401

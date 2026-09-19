@@ -7,5 +7,5 @@ from flask import Blueprint
 
 community_bp = Blueprint('community', __name__)
 
-# 导入子模块以注册路由
-from routes.community import pages    # noqa: E402,F401
+# 导入子模块以注册路由（使用普通 import，避免 fromlist 循环导入反模式）
+import routes.community.pages  # noqa: E402,F401

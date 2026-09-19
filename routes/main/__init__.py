@@ -7,9 +7,9 @@ from flask import Blueprint
 
 main_bp = Blueprint('main', __name__)
 
-# 导入子模块以注册路由
-from routes.main import pages     # noqa: E402,F401
-from routes.main import auth      # noqa: E402,F401
-from routes.main import settings  # noqa: E402,F401
-from routes.main import media     # noqa: E402,F401
-from routes.main import music     # noqa: E402,F401
+# 导入子模块以注册路由（使用普通 import，避免 fromlist 循环导入反模式）
+import routes.main.pages     # noqa: E402,F401
+import routes.main.auth      # noqa: E402,F401
+import routes.main.settings  # noqa: E402,F401
+import routes.main.media     # noqa: E402,F401
+import routes.main.music     # noqa: E402,F401

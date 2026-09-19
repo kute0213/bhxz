@@ -7,7 +7,8 @@ from flask import Blueprint
 
 public_bp = Blueprint('public', __name__)
 
-from routes.public import files  # noqa: E402,F401
+# 导入子模块以注册路由（使用普通 import，避免 fromlist 循环导入反模式）
+import routes.public.files  # noqa: E402,F401
 from routes.public.files import try_serve_public  # noqa: E402,F401
 
 __all__ = ['public_bp', 'try_serve_public']

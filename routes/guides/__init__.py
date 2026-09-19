@@ -4,5 +4,6 @@ from flask import Blueprint
 
 guides_bp = Blueprint('guides', __name__)
 
-from routes.guides import pages  # noqa: E402,F401
-from routes.guides import api    # noqa: E402,F401
+# 导入子模块以注册路由（使用普通 import，避免 fromlist 循环导入反模式）
+import routes.guides.pages  # noqa: E402,F401
+import routes.guides.api    # noqa: E402,F401
