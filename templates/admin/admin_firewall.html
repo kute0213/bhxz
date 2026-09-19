@@ -56,107 +56,83 @@
       </div>
     </div>
 
-    <!-- ============ 主页：IP 封禁 + 账号封禁列表 ============ -->
+    <!-- ============ 主页：统一封禁列表（IP + 账号合并，按时间倒序） ============ -->
     {% if page == 'main' %}
-    <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
-
-      <!-- IP 封禁列表 -->
-      <div>
-        <div class="pixel-card rounded-xl overflow-hidden">
-          <div class="px-6 pt-6 pb-2 flex items-center justify-between">
-            <h2 class="text-lg font-bold flex items-center gap-2">
-              <i data-lucide="ban" class="w-5 h-5 text-gold-400"></i>
-              IP 封禁
-            </h2>
-            {% if whitelist %}
-            <span class="text-xs text-cream/40">白名单 {{ whitelist|length }} 个</span>
-            {% endif %}
-          </div>
-          <div class="overflow-x-auto">
-            <table class="w-full text-sm">
-              <thead>
-                <tr class="border-b border-forest-700/50 text-cream/60">
-                  <th class="text-left px-4 py-3 font-medium">IP</th>
-                  <th class="text-left px-4 py-3 font-medium">原因</th>
-                  <th class="text-left px-4 py-3 font-medium">过期</th>
-                  <th class="text-right px-4 py-3 font-medium">操作</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for ban in bans %}
-                <tr class="border-b border-forest-700/30 hover:bg-blue-500/5 transition-colors {{ 'bg-yellow-500/5' if ban.ip_address == current_ip }}">
-                  <td class="px-4 py-3 font-mono text-xs text-cream/80"><code>{{ ban.ip_address }}</code></td>
-                  <td class="px-4 py-3 text-cream/60 text-xs">{{ ban.reason[:30] if ban.reason else '-' }}</td>
-                  <td class="px-4 py-3">
-                    {% if ban.expires_at %}
-                    <span class="text-xs px-2 py-0.5 rounded-full bg-yellow-500/10 text-yellow-400">{{ ban.expires_at[:10] }}</span>
-                    {% else %}
-                    <span class="text-xs px-2 py-0.5 rounded-full bg-red-500/10 text-red-400">永久</span>
-                    {% endif %}
-                  </td>
-                  <td class="px-4 py-3 text-right space-x-1">
-                    <button onclick="showBanDetail({{ ban.id }}, 'ip')" class="text-blue-400 hover:text-blue-300 text-xs px-2 py-1 rounded bg-blue-500/10 border border-blue-500/20">详情</button>
-                    <form method="POST" action="{{ url_for('admin.admin_firewall_delete', ban_id=ban.id) }}" class="inline" onsubmit="return confirm('解除 {{ ban.ip_address }}？');">
-                      <button type="submit" class="text-green-400 hover:text-green-300 text-xs px-2 py-1 rounded bg-green-500/10 border border-green-500/20">解封</button>
-                    </form>
-                  </td>
-                </tr>
-                {% else %}
-                <tr><td colspan="5" class="px-4 py-8 text-center text-cream/40">暂无 IP 封禁</td></tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
+    <div class="max-w-4xl mx-auto">
+      <div class="pixel-card rounded-xl overflow-hidden">
+        <div class="px-6 pt-6 pb-2 flex items-center justify-between">
+          <h2 class="text-lg font-bold flex items-center gap-2">
+            <i data-lucide="ban" class="w-5 h-5 text-gold-400"></i>
+            封禁列表
+          </h2>
+          <span class="text-xs text-cream/40">共 <span id="ban-count">{{ bans|length }}</span> / <span id="ban-total">{{ bans_total }}</span> 条</span>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full text-sm">
+            <thead>
+              <tr class="border-b border-forest-700/50 text-cream/60">
+                <th class="text-left px-4 py-3 font-medium w-16">类型</th>
+                <th class="text-left px-4 py-3 font-medium">目标</th>
+                <th class="text-left px-4 py-3 font-medium">原因</th>
+                <th class="text-left px-4 py-3 font-medium">时间</th>
+                <th class="text-left px-4 py-3 font-medium">过期</th>
+                <th class="text-right px-4 py-3 font-medium w-28">操作</th>
+              </tr>
+            </thead>
+            <tbody id="ban-list-body">
+              {% for ban in bans %}
+              <tr class="ban-row border-b border-forest-700/30 hover:bg-blue-500/5 transition-colors {{ 'bg-yellow-500/5' if ban.ban_type == 'ip' and ban.identifier == current_ip }}">
+                <td class="px-4 py-3">
+                  {% if ban.ban_type == 'ip' %}
+                  <span class="text-xs px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-400">IP</span>
+                  {% else %}
+                  <span class="text-xs px-2 py-0.5 rounded-full bg-violet-500/10 text-violet-400">账号</span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3 text-cream/80 text-xs font-mono">{{ ban.identifier_label }}</td>
+                <td class="px-4 py-3 text-cream/60 text-xs">{{ ban.reason[:30] if ban.reason else '-' }}</td>
+                <td class="px-4 py-3 text-cream/40 text-xs">{{ ban.created_at[:16] if ban.created_at else '-' }}</td>
+                <td class="px-4 py-3">
+                  {% if ban.expires_at %}
+                  <span class="text-xs px-2 py-0.5 rounded-full bg-yellow-500/10 text-yellow-400">{{ ban.expires_at[:10] }}</span>
+                  {% else %}
+                  <span class="text-xs px-2 py-0.5 rounded-full bg-red-500/10 text-red-400">永久</span>
+                  {% endif %}
+                </td>
+                <td class="px-4 py-3 text-right space-x-1">
+                  <button onclick="showBanDetail({{ ban.id }}, '{{ ban.ban_type }}')" class="text-blue-400 hover:text-blue-300 text-xs px-2 py-1 rounded bg-blue-500/10 border border-blue-500/20">详情</button>
+                  {% if ban.ban_type == 'ip' %}
+                  <form method="POST" action="{{ url_for('admin.admin_firewall_delete', ban_id=ban.id) }}" class="inline" onsubmit="return confirm('解除 {{ ban.identifier }}？');">
+                    <button type="submit" class="text-green-400 hover:text-green-300 text-xs px-2 py-1 rounded bg-green-500/10 border border-green-500/20">解封</button>
+                  </form>
+                  {% else %}
+                  <form method="POST" action="{{ url_for('admin.admin_firewall_unban_account', ban_id=ban.id) }}" class="inline" onsubmit="return confirm('解封 {{ ban.username or ban.identifier }}？');">
+                    <button type="submit" class="text-green-400 hover:text-green-300 text-xs px-2 py-1 rounded bg-green-500/10 border border-green-500/20">解封</button>
+                  </form>
+                  {% endif %}
+                </td>
+              </tr>
+              {% else %}
+              <tr id="ban-empty-row"><td colspan="6" class="px-4 py-8 text-center text-cream/40">暂无封禁记录</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        <!-- 加载更多 -->
+        <div id="ban-load-more-wrap" class="px-6 py-4 text-center border-t border-forest-700/30 {{ 'hidden' if bans|length >= bans_total }}"
+             {% if bans|length >= bans_total %}style="display:none;"{% endif %}>
+          <button id="ban-load-more-btn"
+                  data-page="1"
+                  class="btn-primary px-6 py-2 rounded-lg text-sm inline-flex items-center gap-2"
+                  onclick="loadMoreBans()">
+            <i data-lucide="chevron-down" class="w-4 h-4"></i>
+            加载更多
+          </button>
+        </div>
+        <div id="ban-loading-wrap" class="px-6 py-4 text-center hidden">
+          <span class="text-cream/40 text-sm"><i data-lucide="loader-circle" class="w-4 h-4 inline-block animate-spin"></i> 加载中...</span>
         </div>
       </div>
-
-      <!-- 账号封禁列表 -->
-      <div>
-        <div class="pixel-card rounded-xl overflow-hidden">
-          <div class="px-6 pt-6 pb-2">
-            <h2 class="text-lg font-bold flex items-center gap-2">
-              <i data-lucide="user-x" class="w-5 h-5 text-gold-400"></i>
-              账号封禁
-            </h2>
-          </div>
-          <div class="overflow-x-auto">
-            <table class="w-full text-sm">
-              <thead>
-                <tr class="border-b border-forest-700/50 text-cream/60">
-                  <th class="text-left px-4 py-3 font-medium">用户</th>
-                  <th class="text-left px-4 py-3 font-medium">原因</th>
-                  <th class="text-left px-4 py-3 font-medium">过期</th>
-                  <th class="text-right px-4 py-3 font-medium">操作</th>
-                </tr>
-              </thead>
-              <tbody>
-                {% for ban in account_bans %}
-                <tr class="border-b border-forest-700/30 hover:bg-blue-500/5 transition-colors">
-                  <td class="px-4 py-3 text-cream/80 text-xs">{{ ban.username }}<span class="text-cream/40 ml-1">#{{ ban.user_id }}</span></td>
-                  <td class="px-4 py-3 text-cream/60 text-xs">{{ ban.reason[:30] if ban.reason else '-' }}</td>
-                  <td class="px-4 py-3">
-                    {% if ban.expires_at %}
-                    <span class="text-xs px-2 py-0.5 rounded-full bg-yellow-500/10 text-yellow-400">{{ ban.expires_at[:10] }}</span>
-                    {% else %}
-                    <span class="text-xs px-2 py-0.5 rounded-full bg-red-500/10 text-red-400">永久</span>
-                    {% endif %}
-                  </td>
-                  <td class="px-4 py-3 text-right space-x-1">
-                    <button onclick="showBanDetail({{ ban.id }}, 'account')" class="text-blue-400 hover:text-blue-300 text-xs px-2 py-1 rounded bg-blue-500/10 border border-blue-500/20">详情</button>
-                    <form method="POST" action="{{ url_for('admin.admin_firewall_unban_account', ban_id=ban.id) }}" class="inline" onsubmit="return confirm('解封 {{ ban.username }}？');">
-                      <button type="submit" class="text-green-400 hover:text-green-300 text-xs px-2 py-1 rounded bg-green-500/10 border border-green-500/20">解封</button>
-                    </form>
-                  </td>
-                </tr>
-                {% else %}
-                <tr><td colspan="5" class="px-4 py-8 text-center text-cream/40">暂无账号封禁</td></tr>
-                {% endfor %}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-
     </div>
     {% endif %}
 
@@ -652,6 +628,81 @@ function showBanDetail(banId, banType) {
 
 function closeBanDetail() {
   document.getElementById('ban-detail-modal').classList.add('hidden');
+}
+
+/* ---- 封禁列表：加载更多 ---- */
+function loadMoreBans() {
+  var btn = document.getElementById('ban-load-more-btn');
+  var loadingWrap = document.getElementById('ban-loading-wrap');
+  var loadMoreWrap = document.getElementById('ban-load-more-wrap');
+  var tbody = document.getElementById('ban-list-body');
+  var banCount = document.getElementById('ban-count');
+
+  var page = parseInt(btn.dataset.page) + 1;
+
+  btn.disabled = true;
+  loadingWrap.classList.remove('hidden');
+
+  fetch('{{ url_for("admin.admin_firewall_bans_api") }}?page=' + page)
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (!data.success || data.items.length === 0) return;
+
+      // 移除空状态提示行
+      var emptyRow = document.getElementById('ban-empty-row');
+      if (emptyRow) emptyRow.remove();
+
+      data.items.forEach(function(item) {
+        var typeClass = item.ban_type === 'ip' ? 'bg-rose-500/10 text-rose-400' : 'bg-violet-500/10 text-violet-400';
+        var typeLabel = item.ban_type === 'ip' ? 'IP' : '账号';
+
+        var expiresHtml = item.is_permanent
+          ? '<span class="text-xs px-2 py-0.5 rounded-full bg-red-500/10 text-red-400">永久</span>'
+          : '<span class="text-xs px-2 py-0.5 rounded-full bg-yellow-500/10 text-yellow-400">' + escapeHtml(item.expires_date || '') + '</span>';
+
+        var actionsHtml =
+          '<button onclick="showBanDetail(' + item.id + ', \'' + item.ban_type + '\')" class="text-blue-400 hover:text-blue-300 text-xs px-2 py-1 rounded bg-blue-500/10 border border-blue-500/20">详情</button>';
+
+        if (item.ban_type === 'ip') {
+          actionsHtml += '<form method="POST" action="/admin/firewall/' + item.id + '/delete" class="inline" onsubmit="return confirm(\'解除 ' + escapeHtml(item.identifier) + '？\');">' +
+            '<button type="submit" class="text-green-400 hover:text-green-300 text-xs px-2 py-1 rounded bg-green-500/10 border border-green-500/20">解封</button></form>';
+        } else {
+          actionsHtml += '<form method="POST" action="/admin/firewall/unban-account/' + item.id + '" class="inline" onsubmit="return confirm(\'解封 ' + escapeHtml(item.username || item.identifier) + '？\');">' +
+            '<button type="submit" class="text-green-400 hover:text-green-300 text-xs px-2 py-1 rounded bg-green-500/10 border border-green-500/20">解封</button></form>';
+        }
+
+        var tr = document.createElement('tr');
+        tr.className = 'ban-row border-b border-forest-700/30 hover:bg-blue-500/5 transition-colors';
+        tr.innerHTML =
+          '<td class="px-4 py-3"><span class="text-xs px-2 py-0.5 rounded-full ' + typeClass + '">' + typeLabel + '</span></td>' +
+          '<td class="px-4 py-3 text-cream/80 text-xs font-mono">' + escapeHtml(item.identifier_label) + '</td>' +
+          '<td class="px-4 py-3 text-cream/60 text-xs">' + escapeHtml(item.reason || '-') + '</td>' +
+          '<td class="px-4 py-3 text-cream/40 text-xs">' + escapeHtml((item.created_at || '').slice(0, 16)) + '</td>' +
+          '<td class="px-4 py-3">' + expiresHtml + '</td>' +
+          '<td class="px-4 py-3 text-right space-x-1">' + actionsHtml + '</td>';
+        tbody.appendChild(tr);
+      });
+
+      // 更新页码和计数
+      btn.dataset.page = page;
+      banCount.textContent = tbody.querySelectorAll('.ban-row').length;
+
+      // 没有更多数据时隐藏按钮
+      if (!data.has_more) {
+        loadMoreWrap.classList.add('hidden');
+        if (loadMoreWrap.style) loadMoreWrap.style.display = 'none';
+      }
+
+      // 重新渲染新图标的 lucide
+      if (typeof lucide !== 'undefined') lucide.createIcons();
+    })
+    .catch(function(err) {
+      console.error('加载更多封禁记录失败:', err);
+    })
+    .finally(function() {
+      btn.disabled = false;
+      loadingWrap.classList.add('hidden');
+    });
 }
 
 // 点击遮罩关闭弹窗

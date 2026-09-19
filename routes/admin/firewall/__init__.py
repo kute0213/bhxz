@@ -12,6 +12,7 @@ from core.firewall import (
     get_account_whitelist,            # 账号白名单
     whitelist_account, unwhitelist_account,
     ban_ip_manual, ban_account_manual,  # 手动封禁（自动推送 context）
+    get_combined_bans,                 # 合并封禁列表
 )
 from core.shared.ip import get_client_ip
 from config import (
@@ -68,16 +69,15 @@ def _resolve_account_usernames(account_bans):
 @admin_bp.route('/admin/firewall')
 @admin_required
 def admin_firewall():
-    """主页：同时显示 IP 封禁与账号封禁列表。"""
-    bans = get_bans()
-    account_bans = _resolve_account_usernames(get_account_bans())
+    """主页：合并的 IP + 账号封禁列表，分页每页 10 条。"""
+    bans, total = get_combined_bans(offset=0, limit=10)
     current_ip = get_client_ip()
     whitelist = get_whitelist()
     account_whitelist = get_account_whitelist()
     return render_page(
         'admin/admin_firewall.html',
         page='main',
-        bans=bans, account_bans=account_bans,
+        bans=bans, bans_total=total,
         current_ip=current_ip, whitelist=whitelist,
         account_whitelist=account_whitelist,
     )
@@ -158,6 +158,39 @@ FIREWALL_CONFIG_KEYS = {
     'CONTENT_INJECTION_BAN_ENABLED',
     'CONTENT_INJECTION_BAN_DURATION_MINUTES',
 }
+
+# ===========================================================================
+# 合并封禁列表 API（分页）
+# ===========================================================================
+
+
+@admin_bp.route('/admin/firewall/bans/api')
+@admin_required
+def admin_firewall_bans_api():
+    """返回合并封禁列表 JSON（分页，每页 10 条）。"""
+    page = request.args.get('page', 1, type=int)
+    if page < 1:
+        page = 1
+    offset = (page - 1) * 10
+    bans, total = get_combined_bans(offset=offset, limit=10)
+    has_more = (offset + 10) < total
+    items = []
+    for b in bans:
+        items.append({
+            'id': b['id'],
+            'ban_type': b['ban_type'],
+            'identifier': b['identifier'],
+            'identifier_label': b['identifier_label'],
+            'user_id': b['user_id'],
+            'username': b['username'],
+            'reason': (b['reason'] or '')[:30],
+            'created_at': b['created_at'],
+            'expires_at': b['expires_at'],
+            'is_permanent': b['expires_at'] is None,
+            'expires_date': b['expires_at'][:10] if b['expires_at'] else None,
+        })
+    return jsonify({'success': True, 'items': items, 'total': total, 'has_more': has_more, 'page': page})
+
 
 # ===========================================================================
 # API / POST 操作

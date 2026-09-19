@@ -547,6 +547,78 @@ def get_account_ban(ban_id):
         return None
 
 
+def get_combined_bans(offset=0, limit=10):
+    """获取合并后的封禁列表（IP + 账号），按时间倒序，分页。
+
+    将 IP 封禁与账号封禁统一为相同结构，按 created_at DESC 排序。
+    账号封禁自动解析用户名。
+
+    Args:
+        offset: 跳过条数
+        limit: 每页条数
+
+    Returns:
+        (list[dict], total): (当前页记录, 总记录数)
+    """
+    try:
+        ip_bans = get_bans()
+        account_bans_raw = get_account_bans()
+
+        # 统一化为标准格式
+        combined = []
+
+        for b in ip_bans:
+            combined.append({
+                'id': b['id'],
+                'ban_type': 'ip',
+                'identifier': b['ip_address'],
+                'identifier_label': b['ip_address'],
+                'user_id': None,
+                'username': None,
+                'reason': b.get('reason', ''),
+                'banned_by': b.get('banned_by', 0),
+                'created_at': b.get('created_at', ''),
+                'expires_at': b.get('expires_at'),
+            })
+
+        # 解析账号禁用户名
+        from core.db import get_db as get_sqlite
+        for b in account_bans_raw:
+            uid = b['user_id']
+            username = None
+            try:
+                conn = get_sqlite()
+                row = conn.execute(
+                    "SELECT username FROM users WHERE id = ?", (uid,)
+                ).fetchone()
+                username = row[0] if row else None
+                conn.close()
+            except Exception:
+                pass
+            combined.append({
+                'id': b['id'],
+                'ban_type': 'account',
+                'identifier': str(uid),
+                'identifier_label': (username or f'用户{uid}') + f' #{uid}',
+                'user_id': uid,
+                'username': username,
+                'reason': b.get('reason', ''),
+                'banned_by': b.get('banned_by', 0),
+                'created_at': b.get('created_at', ''),
+                'expires_at': b.get('expires_at'),
+            })
+
+        # 按时间倒序
+        combined.sort(key=lambda x: x['created_at'] or '', reverse=True)
+
+        total = len(combined)
+        page = combined[offset:offset + limit]
+        return page, total
+    except Exception as exc:
+        log('WARNING', 'Firewall', f'查询合并封禁列表失败: {exc}')
+        return [], 0
+
+
 # ---------------------------------------------------------------------------
 # 刷屏记录
 # ---------------------------------------------------------------------------
