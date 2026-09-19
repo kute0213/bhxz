@@ -1,4 +1,4 @@
-"""管理员后台 —— 游戏账号注册申请审批、封禁管理。
+"""管理员后台 —— 游戏账号注册申请审批、封禁管理、游戏服务器封禁审批。
 
 （原 routes/admin/game_accounts.py 精简重命名：已删除游戏账号绑定管理部分）
 """
@@ -12,6 +12,14 @@ from services.game_accounts.registration_service import (
     get_pending_applications, get_all_applications,
     approve_application, reject_application,
     ban_account, unban_account, get_banned_accounts,
+)
+from services.game_server_ban import (
+    get_pending_applications as get_pending_ban_applications,
+    get_all_applications as get_all_ban_applications,
+    get_active_bans as get_active_game_bans,
+    approve_application as approve_ban_application,
+    reject_application as reject_ban_application,
+    pardon_player,
 )
 from core.shared.validation import validate_mc_username, validate_ban_reason
 
@@ -101,4 +109,58 @@ def api_unban(mc_username):
     if not valid_mc:
         return jsonify({'success': False, 'message': mc_err}), 400
     succ, msg = unban_account(mc_username)
+    return jsonify({'success': succ, 'message': msg})
+
+
+# ---------------------------------------------------------------------------
+# 游戏服务器封禁申请审批（用户申请 → RCON ban → 到期自动 pardon）
+# ---------------------------------------------------------------------------
+
+@admin_bp.route('/admin/game-bans')
+@admin_required
+def admin_game_bans():
+    """游戏服务器封禁审批页面。"""
+    return render_page('admin/admin_game_bans.html')
+
+
+@admin_bp.route('/admin/api/game-bans')
+@admin_required
+def api_get_game_bans():
+    """获取待审批申请、当前生效封禁与全部历史记录。"""
+    return jsonify({
+        'success': True,
+        'pending': get_pending_ban_applications(),
+        'active': get_active_game_bans(),
+        'all': get_all_ban_applications(),
+    })
+
+
+@admin_bp.route('/admin/api/game-bans/<int:app_id>/approve', methods=['POST'])
+@admin_required
+def api_approve_game_ban(app_id):
+    """同意封禁：执行 RCON `ban <玩家名>`，可设置封禁时长。"""
+    user = get_current_user()
+    data = request.get_json(silent=True) or {}
+    duration_minutes = data.get('duration_minutes')
+    succ, msg = approve_ban_application(app_id, user['id'], duration_minutes)
+    return jsonify({'success': succ, 'message': msg})
+
+
+@admin_bp.route('/admin/api/game-bans/<int:app_id>/reject', methods=['POST'])
+@admin_required
+def api_reject_game_ban(app_id):
+    """驳回封禁申请。"""
+    user = get_current_user()
+    data = request.get_json(silent=True) or {}
+    reason = (data.get('reason') or '').strip()
+    succ, msg = reject_ban_application(app_id, user['id'], reason)
+    return jsonify({'success': succ, 'message': msg})
+
+
+@admin_bp.route('/admin/api/game-bans/<int:app_id>/pardon', methods=['POST'])
+@admin_required
+def api_pardon_game_ban(app_id):
+    """手动提前解封：执行 RCON `pardon <玩家名>`。"""
+    user = get_current_user()
+    succ, msg = pardon_player(app_id, user['id'])
     return jsonify({'success': succ, 'message': msg})

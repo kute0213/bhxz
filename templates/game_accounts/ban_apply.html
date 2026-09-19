@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}申请封禁玩家{% endblock %}
+{% block content %}
+<section class="page-container py-8 sm:py-12">
+    <div class="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
+
+        <div class="mb-6 sm:mb-8">
+            <a href="{{ url_for('main.home') }}" class="text-sky-600 hover:text-sky-500 text-sm inline-block mb-3">
+                <i data-lucide="arrow-left" class="w-4 h-4 inline mr-1"></i>返回首页
+            </a>
+            <h1 class="text-xl sm:text-2xl font-bold">申请封禁游戏服务器账号</h1>
+            <p class="text-muted text-sm mt-1">举报违规玩家，提交后由管理员审核，审核通过将在游戏服务器内执行封禁</p>
+        </div>
+
+        <div class="pixel-card rounded-xl p-5 sm:p-6">
+            <form id="ban-apply-form" class="space-y-5">
+                <div>
+                    <label class="text-sm text-muted block mb-1.5">封禁玩家名</label>
+                    <input type="text" id="apply-player" placeholder="输入要封禁的玩家游戏名" class="input-field w-full px-3 sm:px-4 py-2.5 text-sm" autocomplete="off">
+                    <p class="text-xs text-muted mt-1.5">3-16 位，仅限字母、数字和下划线（游戏内封禁使用的名字）</p>
+                </div>
+                <div>
+                    <label class="text-sm text-muted block mb-1.5">封禁玩家QQ名</label>
+                    <input type="text" id="apply-qq" placeholder="输入该玩家的 QQ 昵称或 QQ 号" class="input-field w-full px-3 sm:px-4 py-2.5 text-sm" autocomplete="off">
+                    <p class="text-xs text-muted mt-1.5">用于管理员核实玩家身份</p>
+                </div>
+                <div>
+                    <label class="text-sm text-muted block mb-1.5">封禁理由</label>
+                    <textarea id="apply-reason" rows="4" placeholder="请详细描述封禁原因（如违规行为、时间等）" class="input-field w-full px-3 sm:px-4 py-2.5 text-sm resize-y"></textarea>
+                </div>
+                <button type="submit" id="apply-btn" class="btn-primary px-6 py-2.5 text-sm inline-flex items-center gap-2">
+                    <i data-lucide="send" class="w-4 h-4"></i>提交申请
+                </button>
+            </form>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_script %}
+<script>
+(function() {
+    var pendingBanData = null;
+    var applyBtn = document.getElementById('apply-btn');
+
+    document.getElementById('ban-apply-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        var player = document.getElementById('apply-player').value.trim();
+        var qq = document.getElementById('apply-qq').value.trim();
+        var reason = document.getElementById('apply-reason').value.trim();
+
+        if (!player) { Toast.error('请输入封禁玩家名'); return; }
+        if (player.length < 3) { Toast.error('玩家名至少 3 个字符'); return; }
+        if (player.length > 16) { Toast.error('玩家名不能超过 16 个字符'); return; }
+        if (!/^[a-zA-Z0-9_]+$/.test(player)) { Toast.error('玩家名只能包含字母、数字和下划线'); return; }
+        if (player.indexOf('__') !== -1) { Toast.error('玩家名不能包含连续下划线'); return; }
+        if (!qq) { Toast.error('请输入封禁玩家QQ名'); return; }
+        if (!reason) { Toast.error('请输入封禁理由'); return; }
+        if (reason.length > 500) { Toast.error('封禁理由不能超过 500 字'); return; }
+
+        pendingBanData = { player_name: player, qq_name: qq, reason: reason };
+        // 复用全局验证码弹窗（base.js CaptchaModal），验证通过后回调提交
+        CaptchaModal.show('请输入验证码以完成申请', function(captchaId, captchaCode) {
+            submitApplication(captchaId, captchaCode);
+        });
+    });
+
+    function submitApplication(captchaId, captchaCode) {
+        if (!pendingBanData) return;
+        applyBtn.disabled = true;
+        applyBtn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i>提交中...';
+        lucide.createIcons({ targets: [applyBtn] });
+
+        fetch('/game-accounts/api/ban-apply', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                player_name: pendingBanData.player_name,
+                qq_name: pendingBanData.qq_name,
+                reason: pendingBanData.reason,
+                captcha_id: captchaId,
+                captcha: captchaCode,
+            }),
+        })
+        .then(function(r) { return r.json(); })
+        .then(function(d) {
+            if (d.success) {
+                Toast.success(d.message);
+                pendingBanData = null;
+                setTimeout(function() {
+                    window.location.href = '{{ url_for("main.home") }}';
+                }, 1500);
+            } else {
+                Toast.error(d.message);
+            }
+        })
+        .finally(function() {
+            applyBtn.disabled = false;
+            applyBtn.innerHTML = '<i data-lucide="send" class="w-4 h-4"></i>提交申请';
+            lucide.createIcons({ targets: [applyBtn] });
+        });
+    }
+})();
+</script>
+{% endblock %}

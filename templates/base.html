@@ -217,6 +217,10 @@
                     <i data-lucide="user-plus" class="w-5 h-5"></i>
                     <span>申请服务器账号</span>
                 </a>
+                <a href="{{ url_for('account_apply.ban_apply_page') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors">
+                    <i data-lucide="shield-x" class="w-5 h-5"></i>
+                    <span>申请封禁玩家</span>
+                </a>
 
                 <div class="text-xs text-cream/40 font-medium uppercase tracking-wider px-4 mb-2 mt-6">互动</div>
                 <a href="{{ url_for('main.music_page') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors">
@@ -299,6 +303,9 @@
                             </a>
                             <a href="{{ url_for('account_apply.apply_page') }}" class="desktop-nav-dropdown-link{% if request.endpoint and request.endpoint.startswith('account_apply.') %} active{% endif %}" role="menuitem">
                                 <i data-lucide="user-plus"></i><span>申请服务器账号</span>
+                            </a>
+                            <a href="{{ url_for('account_apply.ban_apply_page') }}" class="desktop-nav-dropdown-link" role="menuitem">
+                                <i data-lucide="shield-x"></i><span>申请封禁玩家</span>
                             </a>
                         </div>
                     </div>

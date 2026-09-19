@@ -21,6 +21,7 @@ def start_background_services():
     from services.sitemap_cache import sitemap_cache
     from services.rcon import player_tracker
     from services.cleanup_service import cleanup_scheduler
+    from services.game_server_ban import game_ban_scheduler
 
     BackupScheduler().start()
     email_service.start()
@@ -28,6 +29,8 @@ def start_background_services():
     player_tracker.start()
     # 被驳回内容自动清理（指南/背景图片超 24 小时删除）
     cleanup_scheduler.start()
+    # 游戏服务器封禁到期自动解封（每 60 秒检查一次）
+    game_ban_scheduler.start()
     log('INFO', 'App', '后台服务启动完成')
 
 

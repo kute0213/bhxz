@@ -2,6 +2,10 @@
 
 ## \[Unreleased]
 
+### 新增
+
+* **游戏服务器封禁申请（用户申请 → 管理员审批 → RCON 自动执行）**：用户在「申请封禁玩家」页提交封禁玩家名、封禁玩家QQ名、封禁理由（图形验证码保护）；管理员在管理中心「游戏账号封禁」页（新增入口卡片）查看待审批 / 生效封禁 / 历史记录三个 Tab，可同意（可设封禁天数，留空为永久）或驳回（可填驳回原因），支持手动提前解封；同意后通过 RCON 执行 `ban 玩家游戏名`（无引号），封禁到期由后台定时任务（`game-ban-scheduler`，每 60 秒检查一次）执行 `pardon 玩家游戏名`（无引号）自动解封。新增 `game_server_ban_applications` 表（含 `idx_game_ban_expiry (status, expires_at)` 索引）与 `services/game_server_ban/` 服务层；玩家名经 `sanitize_rcon_username` 清洗杜绝 RCON 命令注入；RCON 连接失败（返回 `RCON ` 前缀错误）不推进状态、下个周期自动重试，单周期最多处理 50 条避免 RCON 长时间占用
+
 ### 结构优化（本次）
 
 * **`static/` 合并至 `templates/static/`**：Flask 通过 `static_folder='templates/static'` 显式指定静态目录，模板与静态资源统一存放；静态资源 URL 路径 `/static/*` 保持不变，模板中全部 `url_for('static', ...)` 引用无需改动；同步更新 `build_static.py` / `package.py` / 验证码字体 / favicon 路由 / `.gitignore` 中的文件系统路径，移除启动检查中遗留的死目录 `static/uploads/*`

@@ -223,6 +223,25 @@ def init_db():
                 created_by INTEGER DEFAULT NULL
             )
         '''),
+        # 游戏服务器封禁申请表（用户申请 → 管理员审批 → RCON ban → 到期自动 pardon）
+        # status: pending=待审批 approved=已封禁 rejected=已驳回 expired=已到期自动解封
+        ('game_server_ban_applications', '''
+            CREATE TABLE IF NOT EXISTS game_server_ban_applications (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                applicant_id INTEGER NOT NULL,       -- 申请人（网站用户 ID）
+                player_name TEXT NOT NULL,           -- 封禁玩家名（MC 游戏名）
+                qq_name TEXT DEFAULT '',             -- 封禁玩家QQ名
+                reason TEXT DEFAULT '',              -- 封禁理由
+                status TEXT NOT NULL DEFAULT 'pending',
+                reject_reason TEXT DEFAULT '',       -- 驳回原因
+                reviewed_by INTEGER DEFAULT NULL,    -- 审批人（网站用户 ID）
+                reviewed_at TEXT DEFAULT NULL,       -- 审批时间
+                expires_at TEXT DEFAULT NULL,        -- 封禁到期时间（NULL = 永久）
+                executed_at TEXT DEFAULT NULL,       -- RCON ban 执行时间
+                pardoned_at TEXT DEFAULT NULL,       -- RCON pardon 执行时间
+                created_at TEXT NOT NULL             -- 申请时间
+            )
+        '''),
     ]
 
     for table_name, ddl in tables:
@@ -252,6 +271,15 @@ def init_db():
     add_column_if_not_exists('users', 'locked_until', "TEXT DEFAULT ''")
     # 游戏账号封禁表：添加 user_id 列，支持封禁官网账号申请资格
     add_column_if_not_exists('game_account_bans', 'user_id', 'INTEGER DEFAULT NULL')
+
+    # 游戏服务器封禁申请：自动解封查询索引（status + expires_at，避免全表扫描）
+    try:
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_game_ban_expiry "
+            "ON game_server_ban_applications (status, expires_at)"
+        )
+    except Exception as e:
+        log('ERROR', 'DB', f'创建 game_server_ban_applications 索引失败: {e}')
 
     # ---- 大喇叭音频：公开审核机制迁移 ----
     # 老库使用 is_public（0/1）标记公开，新库改用 status（0=私有 1=待审核 2=已公开）

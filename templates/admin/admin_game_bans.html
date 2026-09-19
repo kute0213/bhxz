@@ -1,0 +1,272 @@
+{% extends "base.html" %}
+{% block title %}游戏账号封禁管理{% endblock %}
+{% block content %}
+<section class="page-container py-12">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="mb-8">
+            <a href="{{ url_for('admin.admin_page') }}" class="text-gold-400 hover:text-gold-300 text-sm mb-2 inline-block">
+                <i data-lucide="arrow-left" class="w-4 h-4 inline mr-1"></i>返回管理中心
+            </a>
+            <h1 class="text-xl sm:text-2xl font-bold">游戏账号封禁管理</h1>
+            <p class="text-cream/60 text-sm mt-1">审批封禁申请，通过后执行 RCON ban；到期自动执行 pardon 解封</p>
+        </div>
+
+        <!-- Tab -->
+        <div class="flex gap-1 mb-6 p-1 bg-forest-900/60 rounded-xl">
+            <button class="tab-btn flex-1 px-4 py-2 text-sm rounded-lg transition-colors bg-gold-400/20 text-gold-300 font-medium" data-tab="pending">
+                待审批 <span id="pending-count" class="ml-1 text-xs">(0)</span>
+            </button>
+            <button class="tab-btn flex-1 px-4 py-2 text-sm rounded-lg transition-colors text-cream/60 hover:text-cream" data-tab="active">
+                生效封禁 <span id="active-count" class="ml-1 text-xs">(0)</span>
+            </button>
+            <button class="tab-btn flex-1 px-4 py-2 text-sm rounded-lg transition-colors text-cream/60 hover:text-cream" data-tab="history">
+                历史记录
+            </button>
+        </div>
+
+        <!-- 待审批 -->
+        <div id="tab-pending" class="tab-content">
+            <div class="pixel-card rounded-xl p-6">
+                <div id="pending-list" class="space-y-3">
+                    <div class="text-cream/50 text-sm text-center py-6">加载中...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 生效封禁 -->
+        <div id="tab-active" class="tab-content hidden">
+            <div class="pixel-card rounded-xl p-6">
+                <div id="active-list" class="space-y-3">
+                    <div class="text-cream/50 text-sm text-center py-6">加载中...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 历史记录 -->
+        <div id="tab-history" class="tab-content hidden">
+            <div class="pixel-card rounded-xl p-6">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="text-cream/50 border-b border-cream/10">
+                                <th class="text-left py-2 px-2">玩家名</th>
+                                <th class="text-left py-2 px-2">QQ名</th>
+                                <th class="text-left py-2 px-2">申请人</th>
+                                <th class="text-left py-2 px-2">理由</th>
+                                <th class="text-left py-2 px-2">状态</th>
+                                <th class="text-left py-2 px-2">申请时间</th>
+                                <th class="text-left py-2 px-2">到期时间</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-list"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_script %}
+<script>
+(function() {
+
+    // Tab 切换
+    document.querySelectorAll('.tab-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('.tab-btn').forEach(function(b) {
+                b.className = 'tab-btn flex-1 px-4 py-2 text-sm rounded-lg transition-colors text-cream/60 hover:text-cream';
+            });
+            this.className = 'tab-btn flex-1 px-4 py-2 text-sm rounded-lg transition-colors bg-gold-400/20 text-gold-300 font-medium';
+            document.querySelectorAll('.tab-content').forEach(function(t) { t.classList.add('hidden'); });
+            document.getElementById('tab-' + this.dataset.tab).classList.remove('hidden');
+            if (this.dataset.tab === 'pending') loadPending();
+            if (this.dataset.tab === 'active') loadActive();
+            if (this.dataset.tab === 'history') loadHistory();
+        });
+    });
+
+    function loadPending() {
+        var list = document.getElementById('pending-list');
+        fetch('/admin/api/game-bans')
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                if (!d.success) { list.innerHTML = '<div class="text-red-400 text-sm text-center py-6">加载失败</div>'; return; }
+                var pending = d.pending;
+                document.getElementById('pending-count').textContent = '(' + pending.length + ')';
+                if (pending.length === 0) {
+                    list.innerHTML = '<div class="text-cream/50 text-sm text-center py-6">暂无待审批的封禁申请</div>';
+                    return;
+                }
+                var html = '';
+                for (var i = 0; i < pending.length; i++) {
+                    var app = pending[i];
+                    html += '<div class="px-4 py-3 bg-forest-900/40 rounded-lg">' +
+                        '<div class="flex items-start justify-between gap-3 flex-wrap">' +
+                            '<div class="min-w-[180px]">' +
+                                '<div class="text-cream font-medium">' + escapeHtml(app.player_name) + '</div>' +
+                                '<div class="text-xs text-cream/50 mt-0.5">QQ名: ' + escapeHtml(app.qq_name || '-') +
+                                    ' | 申请人: ' + escapeHtml(app.applicant_name || '-') + ' | ' + app.created_at + '</div>' +
+                            '</div>' +
+                            '<div class="flex items-center gap-2">' +
+                                '<button class="btn-approve btn-primary bg-green-500 px-3 py-1.5 text-xs rounded-lg" data-id="' + app.id + '">同意封禁</button>' +
+                                '<button class="btn-reject btn-danger px-3 py-1.5 text-xs rounded-lg" data-id="' + app.id + '">驳回</button>' +
+                            '</div>' +
+                        '</div>' +
+                        '<div class="text-sm text-cream/80 mt-2 bg-forest-900/40 rounded-lg px-3 py-2">' +
+                            '<span class="text-cream/50 text-xs">封禁理由：</span>' + escapeHtml(app.reason || '无') +
+                        '</div>' +
+                    '</div>';
+                }
+                list.innerHTML = html;
+                bindPendingActions();
+            });
+    }
+
+    function bindPendingActions() {
+        document.querySelectorAll('.btn-approve').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                CustomModal.prompt('请输入封禁时长（天），留空或填 0 表示永久封禁：', {
+                    title: '同意封禁：RCON ban',
+                    placeholder: '如 7（留空 = 永久）',
+                    trigger: this,
+                    callback: function(days) {
+                        if (days === null) return;
+                        var id = btn.dataset.id;
+                        var durationMinutes = null;
+                        days = String(days).trim();
+                        if (days !== '') {
+                            var n = parseInt(days, 10);
+                            if (isNaN(n) || n < 0) { CustomModal.alert('请输入有效的天数', { type: 'error' }); return; }
+                            durationMinutes = n > 0 ? n * 1440 : null;
+                        }
+                        fetch('/admin/api/game-bans/' + id + '/approve', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({ duration_minutes: durationMinutes }),
+                        })
+                        .then(function(r) { return r.json(); })
+                        .then(function(d) {
+                            CustomModal.alert(d.message, { type: d.success ? 'success' : 'error' });
+                            if (d.success) loadPending();
+                        });
+                    }
+                });
+            });
+        });
+        document.querySelectorAll('.btn-reject').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                CustomModal.prompt('驳回原因（可选）：', {
+                    title: '驳回封禁申请',
+                    placeholder: '输入驳回原因（可选）',
+                    trigger: this,
+                    callback: function(reason) {
+                        if (reason === null) return;
+                        var id = btn.dataset.id;
+                        fetch('/admin/api/game-bans/' + id + '/reject', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({ reason: reason }),
+                        })
+                        .then(function(r) { return r.json(); })
+                        .then(function(d) {
+                            CustomModal.alert(d.message, { type: d.success ? 'success' : 'error' });
+                            if (d.success) loadPending();
+                        });
+                    }
+                });
+            });
+        });
+    }
+
+    function loadActive() {
+        var list = document.getElementById('active-list');
+        fetch('/admin/api/game-bans')
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                if (!d.success) return;
+                var active = d.active;
+                document.getElementById('active-count').textContent = '(' + active.length + ')';
+                if (active.length === 0) {
+                    list.innerHTML = '<div class="text-cream/50 text-sm text-center py-6">当前没有生效的封禁</div>';
+                    return;
+                }
+                var html = '';
+                for (var i = 0; i < active.length; i++) {
+                    var b = active[i];
+                    html += '<div class="flex items-center justify-between gap-3 flex-wrap px-4 py-3 bg-forest-900/40 rounded-lg">' +
+                        '<div class="min-w-[200px]">' +
+                            '<div class="text-cream font-medium">' + escapeHtml(b.player_name) + '</div>' +
+                            '<div class="text-xs text-cream/50 mt-0.5">' + escapeHtml(b.reason || '无理由') +
+                                ' | 封禁于 ' + b.executed_at + '</div>' +
+                            '<div class="text-xs mt-1 ' + (b.expires_at ? 'text-yellow-400' : 'text-red-400') + '">' +
+                                (b.expires_at ? '到期时间: ' + b.expires_at : '永久封禁') + '</div>' +
+                        '</div>' +
+                        '<button class="btn-pardon btn-secondary px-3 py-1.5 text-xs rounded-lg" data-id="' + b.id + '" data-player="' + escapeHtml(b.player_name) + '">手动解封</button>' +
+                    '</div>';
+                }
+                list.innerHTML = html;
+                document.querySelectorAll('.btn-pardon').forEach(function(btn) {
+                    btn.addEventListener('click', function() {
+                        CustomModal.confirm('确认解封 ' + btn.dataset.player + ' ？（将执行 RCON pardon）', {
+                            trigger: this,
+                            callback: function(confirmed) {
+                                if (!confirmed) return;
+                                fetch('/admin/api/game-bans/' + btn.dataset.id + '/pardon', { method: 'POST' })
+                                    .then(function(r) { return r.json(); })
+                                    .then(function(d) {
+                                        CustomModal.alert(d.message, { type: d.success ? 'success' : 'error' });
+                                        if (d.success) { loadActive(); loadHistory(); }
+                                    });
+                            }
+                        });
+                    });
+                });
+            });
+    }
+
+    function loadHistory() {
+        fetch('/admin/api/game-bans')
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                if (!d.success) return;
+                var all = d.all;
+                var tbody = document.getElementById('history-list');
+                if (all.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="7" class="text-center text-cream/50 py-6">暂无记录</td></tr>';
+                    return;
+                }
+                var html = '';
+                for (var i = 0; i < all.length; i++) {
+                    var a = all[i];
+                    var badge = a.status === 'approved' ? 'text-green-400'
+                        : a.status === 'expired' ? 'text-blue-400'
+                        : a.status === 'rejected' ? 'text-red-400' : 'text-yellow-400';
+                    var statusText = a.status === 'approved' ? '已封禁'
+                        : a.status === 'expired' ? '已解封'
+                        : a.status === 'rejected' ? '已驳回' : '待审批';
+                    html += '<tr class="border-b border-cream/10 hover:bg-forest-900/20">' +
+                        '<td class="py-2 px-2 text-cream">' + escapeHtml(a.player_name) + '</td>' +
+                        '<td class="py-2 px-2 text-cream/70">' + escapeHtml(a.qq_name || '-') + '</td>' +
+                        '<td class="py-2 px-2 text-cream/70">' + escapeHtml(a.applicant_name || '-') + '</td>' +
+                        '<td class="py-2 px-2 text-cream/70 max-w-[200px] truncate" title="' + escapeHtml(a.reason || '') + '">' + escapeHtml(a.reason || '-') + '</td>' +
+                        '<td class="py-2 px-2 ' + badge + '">' + statusText + '</td>' +
+                        '<td class="py-2 px-2 text-cream/50 text-xs">' + a.created_at + '</td>' +
+                        '<td class="py-2 px-2 text-cream/50 text-xs">' + (a.expires_at || (a.status === 'approved' ? '永久' : '-')) + '</td>' +
+                    '</tr>';
+                }
+                tbody.innerHTML = html;
+            });
+    }
+
+    function escapeHtml(str) {
+        var div = document.createElement('div');
+        div.appendChild(document.createTextNode(str == null ? '' : str));
+        return div.innerHTML;
+    }
+
+    // 初始加载
+    loadPending();
+})();
+</script>
+{% endblock %}

@@ -8,6 +8,7 @@ from flask import Blueprint, render_template, request, jsonify
 
 from core.auth import login_required, get_current_user
 from services.game_accounts.registration_service import create_application
+from services.game_server_ban import create_application as create_ban_application
 
 account_apply_bp = Blueprint('account_apply', __name__, url_prefix='/game-accounts')
 
@@ -58,4 +59,56 @@ def api_apply_register():
 
     # ── 提交申请 ──
     success, message = create_application(user['id'], mc_username)
+    return jsonify({'success': success, 'message': message})
+
+
+# ---------------------------------------------------------------------------
+# 游戏服务器封禁申请（用户发起 → 管理员审批 → RCON ban → 到期自动 pardon）
+# ---------------------------------------------------------------------------
+
+@account_apply_bp.route('/ban-apply')
+@login_required
+def ban_apply_page():
+    """申请封禁游戏服务器账号页面。"""
+    user = get_current_user()
+    return render_template('game_accounts/ban_apply.html', user=user)
+
+
+@account_apply_bp.route('/api/ban-apply', methods=['POST'])
+@login_required
+def api_ban_apply():
+    """提交游戏服务器封禁申请（AJAX）。
+
+    请求体 JSON:
+        player_name: 封禁玩家名（MC 游戏名）
+        qq_name:     封禁玩家QQ名
+        reason:      封禁理由
+        captcha_id:  图形验证码 ID
+        captcha:     图形验证码内容
+
+    返回:
+        { success, message }
+    """
+    from core.shared.captcha import captcha_service
+
+    user = get_current_user()
+    data = request.get_json(silent=True) or {}
+    player_name = (data.get('player_name') or '').strip()
+    qq_name = (data.get('qq_name') or '').strip()
+    reason = (data.get('reason') or '').strip()
+    captcha_id = (data.get('captcha_id') or '').strip()
+    captcha_input = (data.get('captcha') or '').strip()
+
+    if not player_name or not qq_name or not reason:
+        return jsonify({'success': False, 'message': '请完整填写玩家名、QQ名与封禁理由'}), 400
+
+    # ── 校验图形验证码 ──
+    if not captcha_id or not captcha_input:
+        return jsonify({'success': False, 'message': '请完成图形验证码'}), 400
+    if not captcha_service.verify(captcha_id, captcha_input):
+        return jsonify({'success': False, 'message': '验证码错误或已过期'}), 400
+    captcha_service.consume(captcha_id)
+
+    # ── 提交申请 ──
+    success, message = create_ban_application(user['id'], player_name, qq_name, reason)
     return jsonify({'success': success, 'message': message})
