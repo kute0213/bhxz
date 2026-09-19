@@ -24,6 +24,14 @@ from core.firewall.database import (
     is_account_banned_cache,
     is_whitelisted_cache,
     push_expiry,
+    record_ban_detail,     # 自动记录封禁详情
+    push_ban_context,      # 从 WSGI/DDOS 层传递上下文
+    get_ban_detail,        # 查询封禁详情
+    # 账号白名单
+    get_account_whitelist_db,
+    is_account_whitelisted_db,
+    whitelist_account_db,
+    unwhitelist_account_db,
 )
 from core.system.logger import log
 
@@ -211,6 +219,14 @@ def ban_ip(ip_address, reason, banned_by=SYSTEM_BANNER_ID, duration_minutes=None
         'INFO', 'Firewall', 'IP 封禁创建',
         ip=ip, banned_by=banned_by, duration=duration_text,
     )
+
+    # 自动记录封禁详情（收集自请求上下文 + 线程本地，无额外参数）
+    record_ban_detail(
+        ban_id=new_id, ban_type='ip',
+        ip_address=ip, reason=reason, banned_by=banned_by,
+        created_at=now, expires_at=expires_at,
+    )
+
     return True, f'已封禁 {ip}（{duration_text}）'
 
 
@@ -411,6 +427,15 @@ def ban_account(user_id, reason, banned_by=SYSTEM_BANNER_ID, duration_minutes=No
         'INFO', 'Firewall', '账号封禁创建',
         user_id=user_id, banned_by=banned_by, duration=duration_text,
     )
+
+    # 自动记录封禁详情
+    record_ban_detail(
+        ban_id=new_id, ban_type='account',
+        ip_address='', reason=reason, banned_by=banned_by,
+        created_at=now, expires_at=expires_at,
+        user_id=user_id,
+    )
+
     return True, f'已封禁用户 {user_id}（{duration_text}）'
 
 
@@ -700,6 +725,12 @@ def auto_ban(ip_address, action, reason=''):
     except (ValueError, TypeError):
         duration_minutes = AUTO_BAN_DURATION_MINUTES
 
+    # 推送操作上下文（被 ban_ip 内的 record_ban_detail 自动拾取）
+    push_ban_context(
+        action_source='auto_ban',
+        matched_text=f'action={action}',
+    )
+
     success, message = ban_ip(
         ip_address=ip,
         reason=reason or f'自动封禁：{action} 操作异常',
@@ -771,6 +802,13 @@ def ban_suspicious_ip(ip_address, attack_type, matched=''):
     reason = f'可疑访问拦截：{attack_type} 攻击'
     if matched:
         reason += f'（命中：{matched}）'
+
+    # 推送攻击上下文（被 ban_ip 内的 record_ban_detail 自动拾取）
+    push_ban_context(
+        attack_type=attack_type,
+        matched_text=matched,
+        action_source='suspicious',
+    )
 
     success, message = ban_ip(
         ip_address=ip,
@@ -927,3 +965,88 @@ def clear_warnings(ip_address):
             )
     except Exception:
         pass
+
+
+# ---------------------------------------------------------------------------
+# 账号白名单管理
+# ---------------------------------------------------------------------------
+
+
+def get_account_whitelist():
+    """获取所有账号白名单。"""
+    return get_account_whitelist_db()
+
+
+def is_account_whitelisted(user_id):
+    """检查账号是否在白名单中。"""
+    return is_account_whitelisted_db(user_id)
+
+
+def whitelist_account(user_id, note=''):
+    """添加账号到白名单。"""
+    if not user_id or user_id <= 0:
+        return False, '无效的用户 ID'
+    if whitelist_account_db(user_id, note):
+        log('INFO', 'Firewall', '账号白名单添加', user_id=user_id)
+        return True, f'已将用户 {user_id} 加入白名单'
+    return False, '添加账号白名单失败（可能已存在）'
+
+
+def unwhitelist_account(user_id):
+    """从白名单移除账号。"""
+    if not user_id or user_id <= 0:
+        return False, '无效的用户 ID'
+    unwhitelist_account_db(user_id)
+    log('INFO', 'Firewall', '账号白名单移除', user_id=user_id)
+    return True, f'已将用户 {user_id} 移出白名单'
+
+
+# ---------------------------------------------------------------------------
+# 封禁详情查询
+# ---------------------------------------------------------------------------
+
+
+def get_ban_detail_service(ban_id):
+    """查询单条封禁的详细信息（含操作人用户名解析）。"""
+    detail = get_ban_detail(ban_id)
+    if detail is None:
+        return None
+    # 解析封禁操作人用户名
+    if detail.get('banned_by'):
+        try:
+            from core.db import get_db as get_sqlite_db
+            conn = get_sqlite_db()
+            row = conn.execute(
+                "SELECT username FROM users WHERE id = ?",
+                (detail['banned_by'],),
+            ).fetchone()
+            detail['banned_by_name'] = row[0] if row else f"用户{detail['banned_by']}"
+            conn.close()
+        except Exception:
+            detail['banned_by_name'] = f"用户{detail['banned_by']}"
+    else:
+        detail['banned_by_name'] = '系统'
+    return detail
+
+
+# ---------------------------------------------------------------------------
+# 手工封禁推送上下文
+# ---------------------------------------------------------------------------
+
+
+def ban_ip_manual(ip_address, reason, banned_by, duration_minutes=None):
+    """管理员手动封禁 IP（自动设置 action_source=manual）。"""
+    push_ban_context(action_source='manual')
+    return ban_ip(
+        ip_address=ip_address, reason=reason,
+        banned_by=banned_by, duration_minutes=duration_minutes,
+    )
+
+
+def ban_account_manual(user_id, reason, banned_by, duration_minutes=None):
+    """管理员手动封禁账号（自动设置 action_source=manual）。"""
+    push_ban_context(action_source='manual')
+    return ban_account(
+        user_id=user_id, reason=reason,
+        banned_by=banned_by, duration_minutes=duration_minutes,
+    )

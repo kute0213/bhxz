@@ -177,6 +177,7 @@ CREATE SEQUENCE IF NOT EXISTS seq_firewall_account_bans START 1;
 CREATE SEQUENCE IF NOT EXISTS seq_firewall_warnings START 1;
 CREATE SEQUENCE IF NOT EXISTS seq_firewall_ddos_log START 1;
 CREATE SEQUENCE IF NOT EXISTS seq_firewall_spam_log START 1;
+CREATE SEQUENCE IF NOT EXISTS seq_firewall_ban_details START 1;
 
 CREATE TABLE IF NOT EXISTS firewall_bans (
     id INTEGER PRIMARY KEY DEFAULT nextval('seq_firewall_bans'),
@@ -204,6 +205,38 @@ CREATE TABLE IF NOT EXISTS firewall_whitelist (
     ip_address VARCHAR PRIMARY KEY,
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS firewall_account_whitelist (
+    user_id INTEGER PRIMARY KEY,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    note VARCHAR DEFAULT ''
+);
+
+CREATE TABLE IF NOT EXISTS firewall_ban_details (
+    id INTEGER PRIMARY KEY DEFAULT nextval('seq_firewall_ban_details'),
+    ban_id INTEGER NOT NULL,
+    ban_type VARCHAR NOT NULL DEFAULT 'ip',
+    ip_address VARCHAR DEFAULT '',
+    reason TEXT DEFAULT '',
+    banned_by INTEGER DEFAULT 0,
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP,
+    user_agent TEXT DEFAULT '',
+    request_path TEXT DEFAULT '',
+    request_method VARCHAR DEFAULT '',
+    referer TEXT DEFAULT '',
+    attack_type VARCHAR DEFAULT '',
+    matched_text TEXT DEFAULT '',
+    action_source VARCHAR DEFAULT 'manual',
+    request_headers TEXT DEFAULT '',
+    query_string TEXT DEFAULT '',
+    request_body_preview TEXT DEFAULT '',
+    action_ip VARCHAR DEFAULT '',
+    action_username VARCHAR DEFAULT '',
+    additional_info TEXT DEFAULT ''
+);
+CREATE INDEX IF NOT EXISTS idx_ban_details_ban_id ON firewall_ban_details(ban_id);
+CREATE INDEX IF NOT EXISTS idx_ban_details_created ON firewall_ban_details(created_at);
 
 CREATE TABLE IF NOT EXISTS firewall_warnings (
     id INTEGER PRIMARY KEY DEFAULT nextval('seq_firewall_warnings'),
@@ -408,3 +441,261 @@ def remove_from_expiry_heap(ban_type: str, ban_id: int):
     此函数保留用于 future 优化。
     """
     pass  # 惰性处理：实际删除由 _cleanup_expired_bans 在查询时验证
+
+
+# ---------------------------------------------------------------------------
+# 封禁详情记录 —— 自动记录每次封禁的完整上下文
+# ---------------------------------------------------------------------------
+
+# 线程本地存储：用于从 WSGI 层传递封禁上下文到 service 层
+_thread_ban_ctx = threading.local()
+
+
+def push_ban_context(**kwargs):
+    """将封禁上下文推入当前线程（由 WSGI 门禁/DDoS 检测器在封禁前调用）。
+
+    不需要额外参数的模块无需感知此函数，记录由 ban_ip/ban_account 自动完成。
+    """
+    ctx = getattr(_thread_ban_ctx, 'context', {})
+    ctx.update({k: v for k, v in kwargs.items() if v})
+    _thread_ban_ctx.context = ctx
+
+
+def pop_ban_context():
+    """弹出并返回当前线程的封禁上下文。"""
+    ctx = getattr(_thread_ban_ctx, 'context', {})
+    if ctx:
+        _thread_ban_ctx.context = {}
+    return ctx
+
+
+def record_ban_detail(
+    ban_id, ban_type='ip', ip_address='', reason='', banned_by=0,
+    created_at=None, expires_at=None,
+    **extra
+):
+    """记录封禁详细信息到 firewall_ban_details 表。
+
+    结合自动收集的请求上下文（push_ban_context 传入 + 自动采集）和显式参数。
+    失败不影响主封禁流程。
+
+    Args:
+        ban_id: 封禁记录 ID
+        ban_type: 'ip' 或 'account'
+        ip_address: 被封 IP
+        reason: 封禁原因
+        banned_by: 操作人 ID
+        created_at: 封禁创建时间
+        expires_at: 过期时间
+        extra: 额外的 key=value 存入 additional_info JSON
+    """
+    # 从线程本地收集上下文（WSGI/DDOS 层推入的请求信息）
+    thread_ctx = pop_ban_context()
+    # 尝试从 Flask 请求上下文自动收集
+    try:
+        from flask import request as _flask_req
+        if _flask_req:
+            thread_ctx.setdefault('user_agent', _flask_req.headers.get('User-Agent', ''))
+            thread_ctx.setdefault('request_path', _flask_req.path)
+            thread_ctx.setdefault('request_method', _flask_req.method)
+            thread_ctx.setdefault('referer', _flask_req.headers.get('Referer', ''))
+            thread_ctx.setdefault('action_ip', _flask_req.remote_addr or '')
+            qs = _flask_req.query_string
+            if qs:
+                thread_ctx.setdefault('query_string', qs.decode('utf-8', 'ignore'))
+            try:
+                from flask import session
+                thread_ctx.setdefault('action_username', session.get('username', ''))
+            except Exception:
+                pass
+            try:
+                import json
+                hdrs = {}
+                for k, v in _flask_req.headers:
+                    if len(json.dumps(hdrs)) > 3000:
+                        break
+                    hdrs[k] = v
+                thread_ctx.setdefault('request_headers', json.dumps(hdrs, ensure_ascii=False))
+            except Exception:
+                pass
+    except (RuntimeError, Exception):
+        pass  # 不在请求上下文中
+
+    # 构造 SQL 参数
+    detail_kwargs = {
+        'ban_id': ban_id,
+        'ban_type': ban_type,
+        'ip_address': ip_address or '',
+        'reason': reason or '',
+        'banned_by': banned_by or 0,
+        'created_at': created_at or time.strftime('%Y-%m-%d %H:%M:%S'),
+        'expires_at': expires_at,
+        'user_agent': thread_ctx.get('user_agent', ''),
+        'request_path': thread_ctx.get('request_path', ''),
+        'request_method': thread_ctx.get('request_method', ''),
+        'referer': thread_ctx.get('referer', ''),
+        'attack_type': thread_ctx.get('attack_type', ''),
+        'matched_text': thread_ctx.get('matched_text', ''),
+        'action_source': thread_ctx.get('action_source', ''),
+        'request_headers': thread_ctx.get('request_headers', ''),
+        'query_string': thread_ctx.get('query_string', ''),
+        'request_body_preview': thread_ctx.get('request_body_preview', ''),
+        'action_ip': thread_ctx.get('action_ip', ''),
+        'action_username': thread_ctx.get('action_username', ''),
+    }
+    # additional_info：将 extra 参数及其它额外信息存为 JSON
+    try:
+        import json as _json
+        extra_json = {}
+        if extra:
+            extra_json.update(extra)
+        # 把 thread_ctx 中未映射到列的字段也存进去
+        for k, v in thread_ctx.items():
+            if k not in detail_kwargs:
+                extra_json[k] = str(v)[:500]
+        detail_kwargs['additional_info'] = _json.dumps(extra_json, ensure_ascii=False)
+    except Exception:
+        detail_kwargs['additional_info'] = ''
+
+    try:
+        with get_db() as conn:
+            conn.execute(
+                "INSERT INTO firewall_ban_details "
+                "(ban_id, ban_type, ip_address, reason, banned_by, "
+                " created_at, expires_at, "
+                " user_agent, request_path, request_method, referer, "
+                " attack_type, matched_text, action_source, "
+                " request_headers, query_string, request_body_preview, "
+                " action_ip, action_username, additional_info) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    detail_kwargs['ban_id'],
+                    detail_kwargs['ban_type'],
+                    detail_kwargs['ip_address'],
+                    detail_kwargs['reason'],
+                    detail_kwargs['banned_by'],
+                    detail_kwargs['created_at'],
+                    detail_kwargs['expires_at'],
+                    detail_kwargs['user_agent'],
+                    detail_kwargs['request_path'],
+                    detail_kwargs['request_method'],
+                    detail_kwargs['referer'],
+                    detail_kwargs['attack_type'],
+                    detail_kwargs['matched_text'],
+                    detail_kwargs['action_source'],
+                    detail_kwargs['request_headers'],
+                    detail_kwargs['query_string'],
+                    detail_kwargs['request_body_preview'],
+                    detail_kwargs['action_ip'],
+                    detail_kwargs['action_username'],
+                    detail_kwargs['additional_info'],
+                ),
+            )
+    except Exception as exc:
+        log('WARNING', 'FirewallDB', f'记录封禁详情失败: {exc}', ban_id=ban_id)
+
+
+def get_ban_detail(ban_id):
+    """查询单条封禁的详细信息。
+
+    Args:
+        ban_id: 封禁记录 ID
+
+    Returns:
+        dict | None: 封禁详情，含所有字段
+    """
+    try:
+        with get_db() as conn:
+            row = conn.execute(
+                "SELECT id, ban_id, ban_type, ip_address, reason, banned_by, "
+                "       strftime('%Y-%m-%d %H:%M:%S', created_at) AS created_at, "
+                "       CASE WHEN expires_at IS NULL THEN NULL "
+                "            ELSE strftime('%Y-%m-%d %H:%M:%S', expires_at) "
+                "       END AS expires_at, "
+                "       user_agent, request_path, request_method, referer, "
+                "       attack_type, matched_text, action_source, "
+                "       request_headers, query_string, request_body_preview, "
+                "       action_ip, action_username, additional_info "
+                "FROM firewall_ban_details "
+                "WHERE ban_id = ? ORDER BY id DESC LIMIT 1",
+                (ban_id,),
+            ).fetchone()
+            if not row:
+                return None
+            return {
+                'id': row[0], 'ban_id': row[1], 'ban_type': row[2],
+                'ip_address': row[3], 'reason': row[4],
+                'banned_by': row[5], 'created_at': row[6], 'expires_at': row[7],
+                'user_agent': row[8], 'request_path': row[9],
+                'request_method': row[10], 'referer': row[11],
+                'attack_type': row[12], 'matched_text': row[13],
+                'action_source': row[14], 'request_headers': row[15],
+                'query_string': row[16], 'request_body_preview': row[17],
+                'action_ip': row[18], 'action_username': row[19],
+                'additional_info': row[20],
+            }
+    except Exception as exc:
+        log('WARNING', 'FirewallDB', f'查询封禁详情失败: {exc}', ban_id=ban_id)
+        return None
+
+
+# ---------------------------------------------------------------------------
+# 账号白名单管理
+# ---------------------------------------------------------------------------
+
+
+def get_account_whitelist_db():
+    """从 DuckDB 查询账号白名单。"""
+    try:
+        with get_db() as conn:
+            rows = conn.execute(
+                "SELECT user_id, strftime('%Y-%m-%d %H:%M:%S', created_at) AS created_at, note "
+                "FROM firewall_account_whitelist ORDER BY created_at DESC"
+            ).fetchall()
+            return [
+                {'user_id': r[0], 'created_at': r[1], 'note': r[2]}
+                for r in rows
+            ]
+    except Exception as exc:
+        log('WARNING', 'FirewallDB', f'查询账号白名单失败: {exc}')
+        return []
+
+
+def is_account_whitelisted_db(user_id):
+    """检查账号是否在白名单中。"""
+    try:
+        with get_db() as conn:
+            row = conn.execute(
+                "SELECT 1 FROM firewall_account_whitelist WHERE user_id = ?",
+                (user_id,),
+            ).fetchone()
+            return row is not None
+    except Exception:
+        return False
+
+
+def whitelist_account_db(user_id, note=''):
+    """添加账号白名单。"""
+    try:
+        with get_db() as conn:
+            conn.execute(
+                "INSERT INTO firewall_account_whitelist (user_id, note) VALUES (?, ?)",
+                (user_id, note),
+            )
+            return True
+        return True
+    except Exception:
+        return False
+
+
+def unwhitelist_account_db(user_id):
+    """移除账号白名单。"""
+    try:
+        with get_db() as conn:
+            conn.execute(
+                "DELETE FROM firewall_account_whitelist WHERE user_id = ?",
+                (user_id,),
+            )
+        return True
+    except Exception:
+        return False

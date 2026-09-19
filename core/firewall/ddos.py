@@ -19,7 +19,7 @@ from core.firewall.service import (
     is_whitelisted,
     SYSTEM_BANNER_ID,
 )
-from core.firewall.database import get_db
+from core.firewall.database import get_db, push_ban_context
 from core.system.logger import log
 
 # DDoS 检测强度预设：单位检测窗口（秒）内允许的最大请求数
@@ -162,6 +162,12 @@ class DDoSDetector:
                 f'{threshold} 次，封禁 {ban_minutes} 分钟）'
             )
             duration_minutes = ban_minutes if ban_minutes > 0 else None
+
+        # 推送 DDoS 上下文（被 ban_ip 内的 record_ban_detail 自动拾取）
+        push_ban_context(
+            action_source='ddos',
+            matched_text=f'threshold={threshold}, window={DDOS_WINDOW_SECONDS}s',
+        )
 
         success, message = ban_ip(
             ip_address=ip,

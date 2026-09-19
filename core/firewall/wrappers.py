@@ -13,6 +13,8 @@
 
 import weakref
 
+from core.firewall.database import push_ban_context
+
 
 class FirewallWSGIWrapper:
     """WSGI 包装器：黑名单快速断开 + 连接登记 + DDoS 计数。
@@ -55,13 +57,21 @@ class FirewallWSGIWrapper:
             if conn is not None:
                 self._track_connection(conn)
 
-            # 3) DDoS 计数
+            # 3) DDoS 计数 — 先推送请求上下文，供 ban_ip 自动记录封禁详情
             from config import get_config_value
             enabled = get_config_value('DDOS_GUARD_ENABLED', True)
             intensity = str(
                 get_config_value('DDOS_GUARD_INTENSITY', 'medium') or 'medium'
             ).lower()
             path = environ.get('PATH_INFO') or ''
+            push_ban_context(
+                request_path=path,
+                request_method=environ.get('REQUEST_METHOD', ''),
+                user_agent=environ.get('HTTP_USER_AGENT', ''),
+                referer=environ.get('HTTP_REFERER', ''),
+                query_string=environ.get('QUERY_STRING', ''),
+                action_ip=ip,
+            )
             self.ddos_detector.record(ip, path, enabled, intensity)
 
         return self._app(environ, start_response)

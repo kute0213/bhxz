@@ -8,6 +8,10 @@ from core.firewall import (
     ban_ip, unban_ip, get_bans, get_whitelist,
     whitelist_add, whitelist_remove,
     get_all_warnings, get_account_bans, ban_account, unban_account,
+    get_ban_detail_service,           # 封禁详情查询
+    get_account_whitelist,            # 账号白名单
+    whitelist_account, unwhitelist_account,
+    ban_ip_manual, ban_account_manual,  # 手动封禁（自动推送 context）
 )
 from core.shared.ip import get_client_ip
 from config import (
@@ -69,11 +73,13 @@ def admin_firewall():
     account_bans = _resolve_account_usernames(get_account_bans())
     current_ip = get_client_ip()
     whitelist = get_whitelist()
+    account_whitelist = get_account_whitelist()
     return render_page(
         'admin/admin_firewall.html',
         page='main',
         bans=bans, account_bans=account_bans,
         current_ip=current_ip, whitelist=whitelist,
+        account_whitelist=account_whitelist,
     )
 
 
@@ -312,3 +318,94 @@ def admin_firewall_whitelist_remove():
     success, message = whitelist_remove(ip_address)
     flash(message, 'success' if success else 'error')
     return redirect(url_for('admin.admin_firewall'))
+
+
+# ===========================================================================
+# 白名单设置页面
+# ===========================================================================
+
+@admin_bp.route('/admin/firewall/whitelist')
+@admin_required
+def admin_firewall_whitelist_page():
+    """IP 白名单 + 账号白名单设置页面。"""
+    whitelist = get_whitelist()
+    account_whitelist = get_account_whitelist()
+
+    # 为账号白名单补充用户名
+    from core.db import get_db
+    enriched = []
+    for entry in account_whitelist:
+        try:
+            conn = get_db()
+            row = conn.execute(
+                "SELECT username FROM users WHERE id = ?",
+                (entry['user_id'],),
+            ).fetchone()
+            entry['username'] = row[0] if row else f"用户{entry['user_id']}"
+            conn.close()
+        except Exception:
+            entry['username'] = f"用户{entry['user_id']}"
+        enriched.append(entry)
+
+    return render_page(
+        'admin/admin_firewall.html',
+        page='whitelist',
+        whitelist=whitelist,
+        account_whitelist=enriched,
+    )
+
+
+@admin_bp.route('/admin/firewall/whitelist/account/add', methods=['POST'])
+@admin_required
+def admin_firewall_whitelist_account_add():
+    """添加账号白名单。"""
+    user_id = (request.form.get('user_id') or '').strip()
+    note = (request.form.get('note') or '').strip()
+    if not user_id:
+        flash('用户 ID 不能为空', 'error')
+        return redirect(url_for('admin.admin_firewall_whitelist_page'))
+    try:
+        uid = int(user_id)
+    except (ValueError, TypeError):
+        flash('用户 ID 必须为数字', 'error')
+        return redirect(url_for('admin.admin_firewall_whitelist_page'))
+    success, message = whitelist_account(uid, note)
+    flash(message, 'success' if success else 'error')
+    return redirect(url_for('admin.admin_firewall_whitelist_page'))
+
+
+@admin_bp.route('/admin/firewall/whitelist/account/remove', methods=['POST'])
+@admin_required
+def admin_firewall_whitelist_account_remove():
+    """移除账号白名单。"""
+    user_id = (request.form.get('user_id') or '').strip()
+    if not user_id:
+        flash('用户 ID 不能为空', 'error')
+        return redirect(url_for('admin.admin_firewall_whitelist_page'))
+    try:
+        uid = int(user_id)
+    except (ValueError, TypeError):
+        flash('用户 ID 必须为数字', 'error')
+        return redirect(url_for('admin.admin_firewall_whitelist_page'))
+    success, message = unwhitelist_account(uid)
+    flash(message, 'success' if success else 'error')
+    return redirect(url_for('admin.admin_firewall_whitelist_page'))
+
+
+# ===========================================================================
+# 封禁详情 API
+# ===========================================================================
+
+@admin_bp.route('/admin/firewall/<int:ban_id>/detail')
+@admin_required
+def admin_firewall_ban_detail(ban_id):
+    """封禁详情 API：返回 JSON 格式的完整封禁信息，供前端弹窗展示。
+
+    权限控制：仅管理员可访问（@admin_required）。
+    """
+    if ban_id <= 0:
+        return jsonify({'success': False, 'message': '无效的封禁 ID'}), 400
+    detail = get_ban_detail_service(ban_id)
+    if detail is None:
+        return jsonify({'success': False, 'message': '封禁详情不存在'}), 404
+    return jsonify({'success': True, 'detail': detail})
