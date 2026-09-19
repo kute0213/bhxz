@@ -209,14 +209,8 @@ DEBUG_MODE = False
 WORKER_THREADS = 4
 
 # ---------------------------------------------------------------------------
-# 一键更新重启配置
+# 目录准备
 # ---------------------------------------------------------------------------
-
-# 自定义启动指令：一键更新完成后重启服务器所使用的完整启动命令。
-# 留空（默认）时自动使用「当前解释器 + app.py + 原启动参数」重启；
-# 可设置为如 "uv run app.py" / "python app.py" / "python3 app.py --host 0.0.0.0"。
-# 可在管理后台 → 系统设置 / 一键更新 → 更新设置中在线修改。
-RESTART_COMMAND = os.environ.get('RESTART_COMMAND', '')
 
 os.makedirs(os.path.join(APP_ROOT, 'db'), exist_ok=True)
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -326,7 +320,6 @@ SETTINGS_REGISTRY = [
     ('BUILD_STATIC_ON_UPDATE', False, 'bool', '更新时构建静态资源', '开启后每次更新都会重新下载外部 CDN 资源（Monaco、hls.js 等），关闭则仅同步代码', '一键更新'),
     ('UPDATE_EXCLUDED_FILES', 'db,backups,uploads,ssl,.env,.git,__pycache__', 'str', '不替换的文件/文件夹', '逗号分隔，更新时不会被删除或覆盖', '一键更新'),
     ('GITHUB_PROXIES', '', 'str', '自定义 GitHub 代理', '每行一个，格式：名称=URL。留空使用默认代理列表', '一键更新'),
-    ('RESTART_COMMAND', '', 'str', '自定义启动指令', '一键更新完成后重启服务器使用的完整启动命令。留空自动使用「当前解释器 + app.py + 原启动参数」重启。示例：uv run app.py / python app.py --host 0.0.0.0', '一键更新'),
 
     # 外部链接
     ('MAP_URL', 'https://map.bhxz.tw.kg', 'str', '卫星地图地址', '首页卫星地图按钮的链接地址', '外部链接'),

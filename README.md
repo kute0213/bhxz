@@ -378,7 +378,6 @@ python scripts/build/package.py
 | `DDOS_GUARD_BAN_MINUTES` | DDoS 首次封禁时长（分钟，0 为直接永久封禁） | `30` |
 | `DDOS_GUARD_PERMANENT_AFTER` | 违规记录时间窗口内多次触发达到该次数后永久封禁（屡教不改） | `3` |
 | `DDOS_GUARD_OFFENSE_WINDOW_HOURS` | 违规记录时间窗口（小时），超过后违规次数重新累计 | `24` |
-| `RESTART_COMMAND`          | 一键更新完成后重启服务器的自定义启动指令（如 `uv run app.py` / `python app.py --host 0.0.0.0`，留空自动用「当前解释器 + app.py + 原启动参数」） | 空 |
 
 ### 环境变量
 
@@ -395,7 +394,6 @@ python scripts/build/package.py
 | `DDOS_GUARD_BAN_MINUTES` | DDoS 首次封禁时长（分钟，0 为永久） | `30` |
 | `DDOS_GUARD_PERMANENT_AFTER` | 永久封禁触发次数 | `3` |
 | `DDOS_GUARD_OFFENSE_WINDOW_HOURS` | 违规记录时间窗口（小时） | `24` |
-| `RESTART_COMMAND` | 一键更新后重启服务器的自定义启动指令 | 空（自动构建） |
 
 ### SSL 证书
 
@@ -720,15 +718,15 @@ workspace/
 
 用户通过管理后台的「一键更新」功能，从 GitHub 获取最新代码：
 
-1. 系统自动检测最快代理，下载 GitHub 仓库的 ZIP 压缩包
-2. 解压后同步到本地（跳过受保护文件：数据库、配置、上传文件等）
-3. 同步前自动**暂存本地独有文件**（仓库中不存在、如 `scripts/ffmpeg/` 下未入库的二进制），复制完成后自动恢复，避免更新误删本地资产
+1. **并发检测全部镜像源**（内置 14 个 GitHub 加速镜像，可在线追加自定义代理），自动跳过不可达源，按延迟升序依次尝试下载仓库 ZIP
+2. 代理源全部失败时自动回退 GitHub 直连下载，直连失败再回退 Git 拉取（当前目录为 git 仓库时）
+3. 解压后同步到本地（跳过受保护文件：数据库、配置、上传文件等）
 4. 不替换列表支持**子目录路径**（如 `scripts/ffmpeg`）：命中后该子目录在更新时不会被删除、覆盖或新增文件，完全保持本地现状；其余内容正常跟随仓库
-5. 自动运行 `scripts/build/build_static.py` 构建静态资源
-6. 写入独立跨平台重启脚本，确保旧进程完全退出后启动新进程（解决 Windows 环境下进程管理问题）；启动命令**优先使用自定义启动指令**（`RESTART_COMMAND`，可在系统设置 / 一键更新配置页在线设置，支持 `uv run app.py` 等任意写法，裸 `python` 自动替换为当前真实解释器），留空则自动用「当前解释器 + app.py + 原启动参数」重建，兼容 `python` / venv / `uv run` 任意启动方式
+5. 可选自动运行 `scripts/build/build_static.py` 构建静态资源（配置 `BUILD_STATIC_ON_UPDATE` 开启）
+6. **更新完成后不再自动重启服务器**，页面提示「请手动重启服务器使新代码生效」，由管理员确认后重启，避免自动重启导致的服务中断
 7. **服务器重启后自动运行健康检查**：数据库完整性检查、文件结构检查、配置完整性检查、uploads 目录结构检查，自动修复不删除文件
 
-> 实现详见 `services/updater/core.py`（通过 SSE 推送实时下载进度到前端）。每次启动的健康检查由 `core/system/startup_checks.py` 负责。
+> 实现详见 `services/updater/core/`（通过 SSE 推送实时下载进度到前端）。每次启动的健康检查由 `core/system/startup_checks.py` 负责。
 
 ### 安全要点
 

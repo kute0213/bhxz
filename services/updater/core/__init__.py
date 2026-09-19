@@ -225,14 +225,19 @@ def _extract_zip(zip_path, extract_dir):
 
 
 def _detect_fastest_proxy(proxy_list, timeout=3):
-    """检测最快的可用代理。
+    """并发检测所有代理的可用性与延迟，返回按延迟升序排序的可用列表。
 
-    通过尝试访问代理的首页来测试连通性，不依赖特定 URL 格式。
+    每个代理独立线程测试（避免大量镜像串行检测导致的长时间阻塞），
+    测试方式：访问代理根地址，非 5xx 状态码即视为可用（镜像可能对
+    首页返回 403/404，但资源路径仍可下载）。
     """
     import requests as req_lib
 
-    for name, base_url, tmpl in proxy_list:
-        # 解析代理的原始域名作为测试 URL
+    results = []
+    lock = threading.Lock()
+
+    def _probe(item):
+        name, base_url, tmpl = item
         test_url = base_url.rstrip('/')
         try:
             start = time.time()
@@ -241,14 +246,25 @@ def _detect_fastest_proxy(proxy_list, timeout=3):
             })
             if resp.status_code < 500:  # 任何非服务器错误都算可用
                 latency = time.time() - start
-                _add_event('log', {
-                    'message': f'  ✓ {name} ({latency:.2f}s)'
-                })
-                return [(name, base_url, tmpl, latency)]
+                with lock:
+                    results.append((name, base_url, tmpl, latency))
         except Exception:
             pass
 
-    return []
+    threads = []
+    for item in proxy_list:
+        t = threading.Thread(target=_probe, args=(item,), daemon=True)
+        t.start()
+        threads.append(t)
+    for t in threads:
+        t.join()
+
+    results.sort(key=lambda r: r[3])  # 按延迟升序
+    for name, base_url, tmpl, latency in results:
+        _add_event('log', {
+            'message': f'  ✓ {name} ({latency:.2f}s)'
+        })
+    return results
 
 
 def _build_download_urls(download_template, name, base_url):
@@ -432,25 +448,25 @@ def _run_update():
         if not available_proxies:
             _add_event('log', {'message': '所有代理均不可达，尝试直连下载'})
         else:
-            name, base_url, download_template, elapsed = available_proxies[0]
-            _add_event('log', {'message': f'→ 使用代理: {name} ({elapsed:.1f}s)'})
-
-            candidate_urls = _build_download_urls(download_template, name, base_url)
-
-            _add_event('log', {'message': f'{"─" * 40}'})
-            _add_event('log', {'message': f'尝试从 {name} 下载更新包...'})
-            _add_event('progress', {'percent': 5, 'message': f'正在从 {name} 下载更新包...'})
-
-            zip_path = _make_zip_path()
+            _add_event('log', {'message': f'→ 共 {len(available_proxies)} 个可用镜像，按延迟依次尝试'})
 
             def _dl_progress(pct):
                 mapped = 5 + int(pct * 65 / 100)
                 _add_event('progress', {'percent': mapped, 'message': f'正在下载更新包... {int(pct)}%'})
 
-            download_success, temp_dir = _try_download(
-                candidate_urls, zip_path, _dl_progress, 30, name
-            )
-            if not download_success:
+            for name, base_url, download_template, elapsed in available_proxies:
+                _add_event('log', {'message': f'{"─" * 40}'})
+                _add_event('log', {'message': f'尝试从 {name} 下载更新包（{elapsed:.1f}s）...'})
+                _add_event('progress', {'percent': 5, 'message': f'正在从 {name} 下载更新包...'})
+
+                candidate_urls = _build_download_urls(download_template, name, base_url)
+                zip_path = _make_zip_path()
+
+                download_success, temp_dir = _try_download(
+                    candidate_urls, zip_path, _dl_progress, 30, name
+                )
+                if download_success:
+                    break
                 _add_event('log', {'message': f'✗ {name} 下载失败'})
                 last_error = f'{name} 下载失败'
 
@@ -592,33 +608,11 @@ def _run_update():
             else:
                 _add_event('log', {'message': '[WARN] 未找到构建脚本: scripts/build/build_static.py'})
 
-        _add_event('progress', {'percent': 99, 'message': '同步完成，正在准备重启...'})
-        _add_event('log', {'message': '正在准备重启服务器...'})
-
-        # 写入重启脚本，再发送 done 事件，确保重启脚本已就绪
-        _add_event('progress', {'percent': 100, 'message': '正在重启服务器...'})
-        restart_script = _write_restart_script()
-
-        if restart_script and os.path.isfile(restart_script):
-            # 启动重启脚本（独立进程组，不依赖当前进程存活）
-            try:
-                _launch_restart_script(restart_script)
-                _add_event('log', {'message': '✓ 重启脚本已启动，服务器将在旧进程退出后自动重启'})
-            except Exception as e:
-                _add_event('log', {'message': f'✗ 启动重启脚本失败: {e}'})
-                # 重启脚本失败时，尝试直接重启
-                _add_event('log', {'message': '尝试直接启动新进程...'})
-                _direct_restart()
-
-        # 发送 done 事件（此时重启脚本已就绪，新进程必会启动）
+        _add_event('progress', {'percent': 100, 'message': '更新完成'})
         _add_event('done', {
             'success': True,
-            'message': '更新成功，服务器正在重启...',
+            'message': '更新完成，请手动重启服务器使新代码生效',
         })
-
-        # 给前端一点时间处理 done 事件
-        time.sleep(1)
-        _shutdown_current_process()
 
     except Exception as e:
         error_msg = str(e)
@@ -638,194 +632,3 @@ def _run_update():
                 shutil.rmtree(temp_dir, ignore_errors=True)
             except Exception:
                 pass
-
-
-# ---------------------------------------------------------------------------
-# 重启逻辑（单一 Python 辅助脚本，跨平台，无编码问题）
-# ---------------------------------------------------------------------------
-
-
-# 重启辅助脚本模板：完全独立于当前进程，等待旧进程退出后拉起新服务器。
-# 逻辑为纯 ASCII，仅运行时占位符替换（路径含中文时也安全，Python 源码默认 UTF-8）。
-# cmd 为完整启动命令（解释器 + 脚本 + 原启动参数），不绑定任何特定启动器。
-_RESTART_TEMPLATE = '''\
-import os
-import subprocess
-import sys
-import time
-
-
-def _process_alive(pid):
-    """跨平台判断进程是否存活（Windows 下同样适用）。"""
-    try:
-        os.kill(pid, 0)
-        return True
-    except OSError:
-        return False
-
-
-# 等待旧进程退出（最多 60 秒，避免新进程端口占用）
-for _ in range(60):
-    if not _process_alive({old_pid}):
-        break
-    time.sleep(1)
-
-kwargs = {{
-    'cwd': {app_root!r},
-    'env': os.environ.copy(),  # 继承原进程环境（含 uv/虚拟环境变量）
-    'stdin': subprocess.DEVNULL,
-    'stdout': subprocess.DEVNULL,
-    'stderr': subprocess.DEVNULL,
-    'close_fds': True,
-}}
-if sys.platform == 'win32':
-    # DETACHED_PROCESS: 脱离会话独立运行，不弹出窗口
-    kwargs['creationflags'] = (
-        subprocess.CREATE_NEW_PROCESS_GROUP
-        | subprocess.CREATE_NO_WINDOW
-        | 0x00000004
-    )
-else:
-    kwargs['preexec_fn'] = os.setsid
-
-subprocess.Popen({cmd!r}, **kwargs)
-
-# 自清理
-try:
-    os.remove(os.path.abspath(__file__))
-except OSError:
-    pass
-'''
-
-
-def _get_restart_cmd():
-    """构建重启服务器用的完整启动命令。
-
-    = 优先使用自定义启动指令（管理后台 → 系统设置 / 一键更新可配置）=
-    - 配置键 RESTART_COMMAND 非空时，按其指定的完整命令重启服务器
-      （如 `uv run app.py` / `python app.py --host 0.0.0.0`）；
-    - 裸的 python / python3 解释器名会被替换为当前真实解释器，
-      保证虚拟环境 / uv 环境下也能正确拉起新进程；
-    - 留空时回退到自动构建：解释器 + 原启动脚本 + 原启动参数。
-
-    = 自动构建方案 =
-    - 无论服务器是 `python app.py`、venv 内的 python、还是 `uv run app.py`
-      启动的，`sys.executable` 始终指向当前真实解释器，而 uv/虚拟环境的
-      环境变量（VIRTUAL_ENV、PATH、PYTHONPATH 等）已随 restart 脚本继承，
-      直接用该解释器拉起即可复用完全相同的运行环境；
-    - 完整保留 `sys.argv` 中的启动参数（如 --host/--port），不再只写死
-      app.py，避免重启后丢失命令行配置。
-    """
-    # 优先使用自定义启动指令
-    try:
-        from config import get_config_value, RESTART_COMMAND
-        custom = get_config_value('RESTART_COMMAND', RESTART_COMMAND)
-    except Exception:
-        custom = ''
-    if custom and isinstance(custom, str) and custom.strip():
-        try:
-            import shlex
-            parts = shlex.split(custom.strip())
-        except (ValueError, ImportError):
-            parts = custom.strip().split()
-        if parts:
-            # 裸的 python / python3 替换为当前真实解释器，保证运行环境一致
-            if os.path.basename(parts[0]).lower() in (
-                'python', 'python.exe', 'python3', 'python3.exe',
-            ):
-                parts[0] = sys.executable
-            return parts
-
-    python_exe = sys.executable or sys.argv[0]
-    argv0 = sys.argv[0]
-    if not os.path.isabs(argv0):
-        argv0 = os.path.join(APP_ROOT, argv0)
-    # 兜底：argv[0] 异常（如 -c / 内联脚本）时回退到标准入口 app.py
-    if not os.path.isfile(argv0):
-        argv0 = os.path.join(APP_ROOT, 'app.py')
-    return [python_exe, argv0] + list(sys.argv[1:])
-
-
-def _write_restart_script():
-    """写入独立重启辅助脚本，返回脚本路径。
-
-    使用纯 Python 实现（而非 bat/sh），避免 Windows 下 cmd 编码、
-    tasklist 解析、短路径等问题；同时继承原进程完整环境变量，
-    并用「原解释器 + 原启动参数」重建启动命令，保证 uv / 虚拟环境等
-    任意启动方式下都能正确拉起新进程。
-    """
-    pid = os.getpid()
-    cmd = _get_restart_cmd()
-
-    content = _RESTART_TEMPLATE.format(
-        old_pid=pid,
-        cmd=cmd,
-        app_root=APP_ROOT,
-    )
-
-    path = os.path.join(tempfile.gettempdir(), f'bhxz_restart_{pid}.py')
-    try:
-        with open(path, 'w', encoding='utf-8', newline='\n') as f:
-            f.write(content)
-        return path
-    except Exception as e:
-        _add_event('log', {'message': f'  ✗ 写入重启脚本失败: {e}'})
-        return None
-
-
-def _launch_restart_script(restart_script):
-    """启动重启辅助脚本（独立进程组，不依赖当前进程存活）。"""
-    python_exe = sys.executable or sys.argv[0]
-    popen_kwargs = {
-        'cwd': APP_ROOT,
-        'close_fds': True,
-        'stdout': subprocess.DEVNULL,
-        'stderr': subprocess.DEVNULL,
-        'stdin': subprocess.DEVNULL,
-    }
-    if sys.platform == 'win32':
-        popen_kwargs['creationflags'] = (
-            subprocess.CREATE_NEW_PROCESS_GROUP
-            | subprocess.CREATE_NO_WINDOW
-            | 0x00000004  # DETACHED_PROCESS
-        )
-    else:
-        popen_kwargs['preexec_fn'] = os.setsid
-    subprocess.Popen([python_exe, restart_script], **popen_kwargs)
-
-
-def _direct_restart():
-    """直接启动新进程（兜底方案，当重启脚本写入失败时使用）。"""
-    cmd = _get_restart_cmd()
-    try:
-        kwargs = {
-            'cwd': APP_ROOT,
-            'close_fds': True,
-            'stdout': subprocess.DEVNULL,
-            'stderr': subprocess.DEVNULL,
-            'stdin': subprocess.DEVNULL,
-        }
-        if sys.platform == 'win32':
-            kwargs['creationflags'] = (
-                subprocess.CREATE_NEW_PROCESS_GROUP
-                | subprocess.CREATE_NO_WINDOW
-                | 0x00000004  # DETACHED_PROCESS
-            )
-        else:
-            kwargs['preexec_fn'] = os.setsid
-        subprocess.Popen(cmd, **kwargs)
-        _add_event('log', {'message': '✓ 新进程已启动'})
-    except Exception as e:
-        _add_event('log', {'message': f'✗ 直接启动新进程失败: {e}'})
-
-
-def _shutdown_current_process():
-    """关闭当前进程。"""
-    _add_event('log', {'message': '正在关闭旧服务器进程...'})
-    if sys.platform == 'win32':
-        import signal
-        try:
-            os.kill(os.getpid(), signal.SIGTERM)
-        except Exception:
-            pass
-    sys.exit(0)
