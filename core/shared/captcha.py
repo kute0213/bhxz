@@ -21,7 +21,7 @@ import threading
 from typing import Tuple
 
 from core.system.logger import log
-from core.shared.scheduler import Scheduler
+from core.shared.scheduler import register_task
 
 # 延迟导入 Pillow，避免不必要的依赖检查
 _pil_available = None
@@ -323,14 +323,13 @@ class CaptchaService:
         # 过期时间（秒）和单个验证码最大尝试次数
         self._expire_seconds = 300
         self._max_attempts = 5
-        # 统一定时调度器：每 60 秒清理一次过期验证码，避免内存泄漏
-        self._scheduler = Scheduler(
+        # 统一任务注册表：每 60 秒清理一次过期验证码，避免内存泄漏
+        register_task(
             name='captcha-cleanup',
             action=self._cleanup_task,
             interval=60,
             run_immediately=False,
         )
-        self._scheduler.start()
 
     def _cleanup_task(self):
         """后台任务：定期清理过期验证码，避免内存泄漏。"""

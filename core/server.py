@@ -52,6 +52,13 @@ def shutdown_application(signum=None):
     except Exception as exc:
         log('WARNING', 'App', f'防火墙关闭异常: {exc}')
 
+    # 停止统一任务注册表（tick 线程 + 执行器）
+    try:
+        from core.shared.scheduler import stop_task_scheduler
+        stop_task_scheduler()
+    except Exception as exc:
+        log('WARNING', 'App', f'任务注册表关闭异常: {exc}')
+
     BackupScheduler().stop()
     email_service.stop()
     sitemap_cache.stop()

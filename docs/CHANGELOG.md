@@ -4,6 +4,8 @@
 
 ### 新增
 
+* **统一任务注册模块（`core/shared/scheduler/` 包）**：全站所有定时执行功能的唯一入口（**防火墙除外**，防火墙保持独立实现）。任务按下次执行时间排序（`ScheduledTask`），注册表单线程（`TaskRegistry`）**每秒检测队首最早到期任务**，到期即取出派发并继续检查下一个；派发走 `TaskExecutor` 两种后台执行方式（`pool` 共享守护线程池 / `thread` 独立守护线程），**tick 线程永不阻塞**；任务执行期间从注册表取出、完成才重新入列，**天然防重叠执行**；基于 `time.monotonic()` 计时，不受系统时间跳变影响。保留两种调度模式：固定间隔（连续失败按 `backoff_factor/backoff_max` 退避）与每日时间点 `HH:MM`（支持配置热重载、当天去重、`mark_done()` 手动跳过当天）。8 个既有定时任务（验证码清理、邮箱验证码清理、RCON 连接池清理、玩家列表追踪、被驳回内容自动清理、每日数据库备份、站点地图刷新、游戏服务器封禁到期自动解封）全部迁移到注册表，行为与原逻辑一致；删除旧 `core/shared/scheduler.py`。全局 API：`register_task / unregister_task / start_task_scheduler / stop_task_scheduler`
+
 * **游戏服务器封禁申请（用户申请 → 管理员审批 → RCON 自动执行）**：用户在「申请封禁玩家」页提交封禁玩家名、封禁玩家QQ名、封禁理由（图形验证码保护）；管理员在管理中心「游戏账号封禁」页（新增入口卡片）查看待审批 / 生效封禁 / 历史记录三个 Tab，可同意（可设封禁天数，留空为永久）或驳回（可填驳回原因），支持手动提前解封；同意后通过 RCON 执行 `ban 玩家游戏名`（无引号），封禁到期由后台定时任务（`game-ban-scheduler`，每 60 秒检查一次）执行 `pardon 玩家游戏名`（无引号）自动解封。新增 `game_server_ban_applications` 表（含 `idx_game_ban_expiry (status, expires_at)` 索引）与 `services/game_server_ban/` 服务层；玩家名经 `sanitize_rcon_username` 清洗杜绝 RCON 命令注入；RCON 连接失败（返回 `RCON ` 前缀错误）不推进状态、下个周期自动重试，单周期最多处理 50 条避免 RCON 长时间占用
 
 ### 结构优化（本次）

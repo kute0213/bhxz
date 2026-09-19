@@ -5,7 +5,7 @@ import re
 import string
 import time
 import threading
-from core.shared.scheduler import Scheduler
+from core.shared.scheduler import register_task
 from ..service import email_service
 from ..templates import verification_code as build_code_html
 
@@ -59,14 +59,13 @@ class EmailCodeService:
         self._expire_seconds = 300  # 5 分钟
         # 发送间隔限制（秒），防止频繁发送
         self._resend_cooldown = 60
-        # 统一定时调度器：每 5 分钟清理一次过期验证码，避免内存泄漏
-        self._scheduler = Scheduler(
+        # 统一任务注册表：每 5 分钟清理一次过期验证码，避免内存泄漏
+        register_task(
             name='email-code-cleanup',
             action=self.cleanup_expired,
             interval=300,
             run_immediately=False,
         )
-        self._scheduler.start()
 
     def _generate_code(self) -> str:
         """生成 6 位数字验证码。"""

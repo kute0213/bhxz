@@ -19,7 +19,7 @@ from typing import Optional, Tuple
 from mcrcon import MCRcon
 
 from config import get_config_value
-from core.shared.scheduler import Scheduler
+from core.shared.scheduler import register_task, unregister_task
 
 
 class RCONConnectionPool:
@@ -71,14 +71,13 @@ class RCONConnectionPool:
         # 预填充连接池
         self._fill_pool()
 
-        # 启动后台清理调度器（每 30 秒清理一次过期空闲连接）
-        self._scheduler = Scheduler(
+        # 统一任务注册表：每 30 秒清理一次过期空闲连接
+        register_task(
             name='rcon-pool-cleanup',
             action=self._cleanup_idle,
             interval=30,
             run_immediately=False,
         )
-        self._scheduler.start()
 
     # ------------------------------------------------------------------
     # 公开接口
@@ -181,7 +180,7 @@ class RCONConnectionPool:
 
     def close(self):
         """关闭连接池，释放所有连接。"""
-        self._scheduler.stop()
+        unregister_task('rcon-pool-cleanup')
         with self._lock:
             self._closed = True
             while self._idle:

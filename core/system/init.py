@@ -16,6 +16,7 @@ def register_hooks(app, try_serve_public):
 
 def start_background_services():
     """启动所有后台服务。"""
+    from core.shared.scheduler import start_task_scheduler
     from services.backup import BackupScheduler
     from services.mail import email_service
     from services.sitemap_cache import sitemap_cache
@@ -23,14 +24,14 @@ def start_background_services():
     from services.cleanup_service import cleanup_scheduler
     from services.game_server_ban import game_ban_scheduler
 
+    # 先启动统一任务注册表（每秒检测，全站定时任务共用，见 core/shared/scheduler/）
+    start_task_scheduler()
     BackupScheduler().start()
     email_service.start()
     sitemap_cache.start()
     player_tracker.start()
-    # 被驳回内容自动清理（指南/背景图片超 24 小时删除）
-    cleanup_scheduler.start()
-    # 游戏服务器封禁到期自动解封（每 60 秒检查一次）
-    game_ban_scheduler.start()
+    # 被驳回内容自动清理（指南/背景图片超 24 小时删除）—— 导入即完成注册
+    # 游戏服务器封禁到期自动解封（每 60 秒检查一次）—— 导入即完成注册
     log('INFO', 'App', '后台服务启动完成')
 
 

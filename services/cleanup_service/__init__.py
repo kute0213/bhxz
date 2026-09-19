@@ -15,7 +15,7 @@ from datetime import datetime, timedelta
 
 from core.db import get_db
 from core.system.logger import log
-from core.shared.scheduler import Scheduler
+from core.shared.scheduler import register_task
 from services.background_service import remove_background_files
 
 # 被驳回内容的保留时长（小时），超时自动删除
@@ -98,8 +98,8 @@ def cleanup_all():
     cleanup_expired_rejected_backgrounds()
 
 
-# 统一定时调度器：每 SCHEDULE_INTERVAL 秒执行一次清理（算法见 core/scheduler.py）
-cleanup_scheduler = Scheduler(
+# 统一任务注册表：每 SCHEDULE_INTERVAL 秒执行一次清理
+cleanup_scheduler = register_task(
     name='cleanup-scheduler',
     action=cleanup_all,
     interval=SCHEDULE_INTERVAL,

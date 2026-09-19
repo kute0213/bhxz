@@ -16,7 +16,7 @@ from datetime import datetime, timedelta
 
 from core.db import get_db
 from core.system.logger import log
-from core.shared.scheduler import Scheduler
+from core.shared.scheduler import register_task
 from core.shared.validation import validate_mc_username, sanitize_rcon_username
 from services.rcon.client import execute_command
 
@@ -402,8 +402,8 @@ def process_expired_bans():
         conn.close()
 
 
-# 统一调度器：每 AUTO_PARDON_INTERVAL 秒检查一次到期的封禁（算法见 core/shared/scheduler.py）
-game_ban_scheduler = Scheduler(
+# 统一任务注册表：每 AUTO_PARDON_INTERVAL 秒检查一次到期的封禁
+game_ban_scheduler = register_task(
     name='game-ban-scheduler',
     action=process_expired_bans,
     interval=AUTO_PARDON_INTERVAL,

@@ -79,8 +79,10 @@ python scripts/build/package.py
 │   │   └── __init__.py
 │   ├── web/                  #   Web 层：中间件、CSRF、错误页
 │   │   ├── __init__.py, middleware.py, csrf.py, errors.py
-│   ├── system/               #   系统层：日志、调度、启动检查、应用初始化
-│   │   ├── __init__.py, logger.py, scheduler.py, startup_checks.py, init.py
+│   ├── system/               #   系统层：日志、启动检查、应用初始化
+│   │   ├── __init__.py, logger.py, startup_checks.py, init.py
+│   ├── shared/               #   共享工具
+│   │   └── scheduler/        #   统一任务注册表（task / executors / registry）
 │   ├── db/                   #   数据库连接与 schema
 │   ├── firewall/             #   高性能防火墙（DuckDB 引擎 + 连接级阻断 + DDoS 防护）
 │   │   ├── __init__.py       #   全局单例 + 统一 API
@@ -243,6 +245,12 @@ python scripts/build/package.py
 * **音频 ID 并发安全**：上传在持锁事务内完成数据库插入与 ID 读取（`with get_db()` + INSERT 后立即读 `lastrowid`），多用户同时上传也不会串号——文件目录名与数据库记录严格对应，播放链接与删除清理均可靠（修复历史并发上传导致编号错乱、无法播放、删除残留文件的问题）
 
 * **ffmpeg 多线程转码**：上传转码统一加 `-threads` 参数（`FFMPEG_THREADS`），每个上传任务是独立 ffmpeg 子进程与独立输出目录，多用户同时上传天然并行，不会出现「文件正在使用」冲突
+
+### 统一定时任务调度
+
+* **统一任务注册模块（`core/shared/scheduler/`）**：全站所有定时执行功能的唯一入口（**防火墙除外**，防火墙保持独立实现）。任务按下次执行时间排序，注册表单线程每秒检测队首（最早到期）任务，到期即派发并检查下一个；派发不阻塞——执行走共享守护线程池（`pool`，默认）或独立守护线程（`thread`），任务执行期间从注册表取出、完成才重新入列，天然防重叠执行
+* 两种调度模式：**固定间隔**（连续失败可按退避算法延长间隔）与**每日时间点**（`HH:MM`，支持配置热重载，当天至多执行一次，手动完成可跳过当天）
+* 已接入：验证码清理、邮箱验证码清理、RCON 连接池清理、玩家列表追踪（含失败退避）、被驳回内容自动清理、每日数据库备份、站点地图刷新、游戏服务器封禁到期自动解封
 
 ### 服务器性能监控
 
@@ -596,8 +604,10 @@ workspace/
 │   │   └── __init__.py
 │   ├── web/                  #   Web 层：中间件、CSRF、错误页
 │   │   ├── __init__.py, middleware.py, csrf.py, errors.py
-│   ├── system/               #   系统层：日志、调度、启动检查、应用初始化
-│   │   ├── __init__.py, logger.py, scheduler.py, startup_checks.py, init.py
+│   ├── system/               #   系统层：日志、启动检查、应用初始化
+│   │   ├── __init__.py, logger.py, startup_checks.py, init.py
+│   ├── shared/               #   共享工具
+│   │   └── scheduler/        #   统一任务注册表（task / executors / registry）
 │   ├── db/                   #   数据库连接与 schema
 │   ├── firewall/             #   高性能防火墙（DuckDB 引擎 + 连接级阻断 + DDoS 防护）
 │   │   ├── __init__.py       #   全局单例 + 统一 API
@@ -669,7 +679,7 @@ workspace/
 | 组件      | 异步方式                               |
 | ------- | ---------------------------------- |
 | 日志写入器   | 队列 + 后台线程批量写入                      |
-| 数据库备份调度器 | 后台线程每日定时执行                         |
+| 统一任务注册表 | 单 tick 线程每秒检测 + 共享线程池派发（`core/shared/scheduler/`，全站定时任务共用，防火墙除外） |
 | IP 地理信息 | 后台线程异步更新缓存                         |
 | CPU 监控  | 后台线程定期采样（2 秒）                      |
 
@@ -755,6 +765,8 @@ workspace/
 
 ## 最近更新
 
+* **统一任务注册模块（`core/shared/scheduler/` 包）**：全站所有定时执行功能的唯一入口（**防火墙除外**，防火墙保持独立实现）。任务按下次执行时间排序（`ScheduledTask`），注册表单线程（`TaskRegistry`）**每秒检测队首最早到期任务**，到期即取出派发并继续检查下一个；派发走 `TaskExecutor` 两种后台执行方式（`pool` 共享守护线程池 / `thread` 独立守护线程），**tick 线程永不阻塞**；任务执行期间从注册表取出、完成才重新入列，**天然防重叠执行**；基于 `time.monotonic()` 计时，不受系统时间跳变影响。保留两种调度模式：固定间隔（连续失败按 `backoff_factor/backoff_max` 退避）与每日时间点 `HH:MM`（支持配置热重载、当天去重、`mark_done()` 手动跳过当天）。8 个既有定时任务（验证码清理、邮箱验证码清理、RCON 连接池清理、玩家列表追踪、被驳回内容自动清理、每日数据库备份、站点地图刷新、游戏服务器封禁到期自动解封）全部迁移到注册表，行为与原逻辑一致；删除旧 `core/shared/scheduler.py`。全局 API：`register_task / unregister_task / start_task_scheduler / stop_task_scheduler`
+
 * **新增 DDoS 攻击防护与极高性能多线程防火墙**：`core/firewall/` 在 WSGI 入口（先于一切 Flask 逻辑）拦截黑名单 IP，命中即返回最小 403 并利用 Cheroot 连接特性（`linger=False` + `close()`）强制关闭其现存连接（含 keep-alive 空闲与处理中的请求），客户端表现为连接被重置而非收到页面；后台监控线程每 0.5 秒从数据库同步黑名单镜像并扫描关闭黑名单连接；内置 DDoS 检测按强度（low=300/medium=150/high=80 次每 10 秒）统计单位窗口内请求数，超阈值自动封禁来源 IP（首次限时封禁、时长可配，违规记录时间窗口内屡教不改自动升级永久封禁），检测强度/封禁时长/触发次数等配置在线热更新；管理后台 → 系统设置新增「DDoS 防护」分类，白名单 IP 不受影响。
 
 * **移除 CPU 温度检测功能**：`routes/api/public.py` 删除跨平台温度采集（WMI/PowerShell/sysctl/psutil 传感器）与 `/api/server-status` 的 `cpu_temp` 字段，`templates/server_status.html` 移除 CPU 温度展示板块与刷新逻辑。
@@ -781,7 +793,7 @@ workspace/
 
 * **背景图片按屏幕比例最适配取图**：保存时自动记录图片自然宽高比（`backgrounds.ratio`，不再强制裁剪 16:9）；客户端在页面解析到背景元素后立即预加载（不等动画与其他脚本），自动携带屏幕宽高比与物理像素长边请求图片；服务端将所选档位中心裁剪到该比例后返回（结果缓存）。横屏/竖屏均获得与屏幕比例完全匹配且像素充足的图片，移动端清晰度大幅提升。
 
-* **统一定时调度算法**：新增 `core/system/scheduler.py` 统一定时调度（固定间隔含失败退避 / 每日时间点、优雅停止、分片等待），已接入被驳回内容自动清理、每日备份、玩家列表追踪、验证码清理、连接池清理、站点地图刷新，行为与原逻辑一致。
+* **统一定时调度算法**：新增 `core/shared/scheduler/` 统一定时调度（固定间隔含失败退避 / 每日时间点、优雅停止），已接入被驳回内容自动清理、每日备份、玩家列表追踪、验证码清理、连接池清理、站点地图刷新，行为与原逻辑一致。
 
 * **导航栏动画流畅度优化**：下拉 caret 与滚动收缩动画补上 `will-change: transform` 合成层提示，动画更流畅，视觉效果与时长完全不变。
 

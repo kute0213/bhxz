@@ -14,7 +14,7 @@ import threading
 from config import get_config_value, UPLOAD_SITEMAP_DIR
 from core.db import get_db
 from core.system.logger import log
-from core.shared.scheduler import Scheduler
+from core.shared.scheduler import register_task, unregister_task
 
 
 class SitemapCache:
@@ -34,13 +34,12 @@ class SitemapCache:
         if self._initialized:
             return
         self._initialized = True
-        # 统一定时调度器：每天 SITEMAP_REFRESH_TIME 刷新一次（时间点模式，配置热重载）
-        self._scheduler = Scheduler(
+        # 统一任务注册表：每天 SITEMAP_REFRESH_TIME 刷新一次（时间点模式，配置热重载）
+        self._task = register_task(
             name='sitemap-cache',
             action=self._refresh_task,
             run_at=lambda: get_config_value('SITEMAP_REFRESH_TIME', '03:00'),
             run_immediately=False,
-            tick=60,
         )
 
     # ------------------------------------------------------------------
@@ -48,14 +47,12 @@ class SitemapCache:
     # ------------------------------------------------------------------
 
     def start(self):
-        """启动后台刷新线程。"""
-        if not self._scheduler.start():
-            return
+        """任务已注册到统一注册表（start_task_scheduler 后自动生效）。"""
         log('INFO', 'SitemapCache', '已启动，每日自动刷新站点地图')
 
     def stop(self):
-        """停止后台线程。"""
-        self._scheduler.stop()
+        """从统一注册表注销定时任务。"""
+        unregister_task('sitemap-cache')
 
     # ------------------------------------------------------------------
     # 公共 API
@@ -126,7 +123,7 @@ class SitemapCache:
     def refresh_now(self):
         """手动立即刷新缓存（供管理面板调用），并标记当天已刷新避免重复。"""
         self._refresh()
-        self._scheduler.mark_done()
+        self._task.mark_done()
         log('INFO', 'SitemapCache', '手动刷新完成')
 
     # ------------------------------------------------------------------

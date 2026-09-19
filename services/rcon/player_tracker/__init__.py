@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from typing import List, Optional
 
 from core.system.logger import log
-from core.shared.scheduler import Scheduler
+from core.shared.scheduler import register_task, unregister_task
 from services.rcon.client import execute_command
 
 
@@ -83,8 +83,8 @@ class PlayerTracker:
         self._cache: PlayerList = PlayerList()
         self._name = 'rcon-player-tracker'
         self._max_backoff = 60.0  # 最大退避间隔（秒）
-        # 统一定时调度器：固定间隔 + 失败退避（每次失败 +5 秒，上限 60 秒）
-        self._scheduler = Scheduler(
+        # 统一任务注册表：固定间隔 + 失败退避（每次失败 +5 秒，上限 60 秒）
+        self._task = register_task(
             name=self._name,
             action=self._track,
             interval=self._interval,
@@ -103,14 +103,12 @@ class PlayerTracker:
             return self._cache
 
     def start(self):
-        """启动追踪线程。"""
-        if not self._scheduler.start():
-            return
+        """任务已注册到统一注册表（start_task_scheduler 后自动生效）。"""
         log('INFO', 'RCON', '玩家列表追踪器已启动')
 
     def stop(self):
-        """停止追踪线程。"""
-        self._scheduler.stop()
+        """从统一注册表注销追踪任务。"""
+        unregister_task(self._name)
         log('INFO', 'RCON', '玩家列表追踪器已停止')
 
     def reset(self):
@@ -135,7 +133,7 @@ class PlayerTracker:
 
     @property
     def is_running(self) -> bool:
-        return self._scheduler.is_running
+        return not self._task.removed
 
 
 # 模块级单例
