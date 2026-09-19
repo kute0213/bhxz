@@ -487,11 +487,11 @@ server {
 python scripts/build/build_static.py
 ```
 
-* 下载 Lucide、marked、字体及 Monaco Editor（约 12MB）到 `static/lib/`
+* 下载 Lucide、marked、字体及 Monaco Editor（约 12MB）到 `templates/static/lib/`
 
-* 结果写入 `static/lib/lib-version.json`
+* 结果写入 `templates/static/lib/lib-version.json`
 
-* `static/lib/monaco/`（~12MB）被 `.gitignore` 排除，**不提交到 Git**
+* `templates/static/lib/monaco/`（~12MB）被 `.gitignore` 排除，**不提交到 Git**
 
 * 用户通过一键更新或从 GitHub 下载 ZIP 后，都需要运行此命令以补齐 Monaco
 

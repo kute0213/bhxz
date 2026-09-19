@@ -36,7 +36,7 @@ python app.py
 python scripts/build/build_static.py
 ```
 
-这会下载以下资源到 `static/lib/`：
+这会下载以下资源到 `templates/static/lib/`：
 
 * **Lucide Icons** — 图标库
 
@@ -127,8 +127,8 @@ python scripts/build/package.py
 │   ├── guides/         # 服务器指南页面
 │   ├── macros/         # 通用模板宏（模态框/编辑/进度条/音乐）
 │   ├── music/          # 大喇叭音频页面
+│   ├── static/         # 静态资源（CSS/JS/本地化第三方库，随模板目录存放）
 │   └── ...             # 基础页面（首页/登录/注册/设置/404/403）
-├── static/       # 静态资源（CSS/JS/本地化第三方库）
 ├── utils/        # 共享工具函数（IP/限流/验证/验证码/安全扫描/模板辅助/子进程）
 ├── docs/         # 项目文档
 ├── scripts/      # 数据库迁移（migrate_db/、restore_db/）与测试（tests/）
@@ -515,7 +515,7 @@ export ENABLE_SSL=1 && python app.py
 
 1. 修改 `scripts/build/build_static.py` 中的版本号
 2. 运行 `python scripts/build/build_static.py` 重新下载
-3. 提交 `static/lib/` 目录到 Git（`static/lib/monaco/` 除外）
+3. 提交 `templates/static/lib/` 目录到 Git（`templates/static/lib/monaco/` 除外）
 
 #### 添加新的外部资源
 
@@ -632,10 +632,6 @@ workspace/
 │   ├── guides/               #   服务器指南（页面+API）
 │   ├── public/               #   公开文件服务
 │   └── sitemap/              #   站点地图 & robots.txt
-├── static/                   # 静态资源（CSS/JS）
-│   ├── css/                  #   样式（tailwind/base）
-│   ├── js/                   #   脚本（core/通用, pages/页面）
-│   └── lib/                  #   本地化第三方库（构建生成）
 ├── templates/                # Jinja2 模板
 │   ├── admin/                #   管理后台页面
 │   ├── backgrounds/          #   背景图片页面
@@ -645,6 +641,7 @@ workspace/
 │   ├── guides/               #   服务器指南页面
 │   ├── macros/               #   通用模板宏（模态框/编辑器/进度条/音乐）
 │   ├── music/                #   大喇叭音频页面
+│   ├── static/               #   静态资源（CSS/JS/本地化第三方库，构建生成 lib/）
 │   └── ...                   #   基础页面
 ├── docs/                     # 项目文档
 └── scripts/

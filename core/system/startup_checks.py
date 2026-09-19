@@ -129,14 +129,6 @@ _REQUIRED_DIRS = [
     'ssl',
     'logs',
     'scripts/build',
-    'static/uploads',
-    'static/uploads/avatars',
-    'static/uploads/backgrounds',
-    'static/uploads/guides',
-    'static/uploads/music',
-    'static/uploads/temp',
-    'static/uploads/community',
-    'static/uploads/attachments',
 ]
 
 

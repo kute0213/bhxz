@@ -47,16 +47,16 @@ def _check_pil():
     return _pil_available
 
 
-# 项目内嵌字体路径（跨平台兼容）
+# 项目内嵌字体路径（跨平台兼容）—— 上溯三级到项目根目录
 _FONT_PATH = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    'static', 'lib', 'fonts', 'DejaVuSans-Bold.ttf'
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    'templates', 'static', 'lib', 'fonts', 'DejaVuSans-Bold.ttf'
 )
 
 
 def _load_font(size: int):
     """加载粗体验证码字体，按优先级尝试：
-    1. 项目内嵌字体（static/lib/fonts/DejaVuSans-Bold.ttf）
+    1. 项目内嵌字体（templates/static/lib/fonts/DejaVuSans-Bold.ttf）
     2. 常见 Linux 路径
     3. 常见 macOS 路径
     """

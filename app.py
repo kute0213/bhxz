@@ -53,7 +53,7 @@ _is_child = _is_mp_spawn_child()
 
 from datetime import timedelta
 
-app = Flask(__name__)
+app = Flask(__name__, static_folder='templates/static')
 app.secret_key = config.SECRET_KEY
 app.config['MAX_CONTENT_LENGTH'] = config.MAX_CONTENT_LENGTH
 app.config['TEMPLATES_AUTO_RELOAD'] = os.environ.get('FLASK_ENV') == 'development'

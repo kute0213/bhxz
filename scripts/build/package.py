@@ -27,7 +27,7 @@ EXCLUDE_FILES = {
 }
 
 # 需要跳过其内容的子路径（monaco 大文件，由 build_static.py 按需重建）
-EXCLUDE_SUBPATH = ('static/lib/monaco',)
+EXCLUDE_SUBPATH = ('templates/static/lib/monaco',)
 
 count = 0
 with zipfile.ZipFile(OUT_ZIP, 'w', zipfile.ZIP_DEFLATED) as zf:

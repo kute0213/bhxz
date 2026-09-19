@@ -40,7 +40,7 @@ def favicon():
     if icon_name not in allowed:
         icon_name = 'compass'
 
-    favicon_dir = os.path.join(APP_ROOT, 'static', 'favicons')
+    favicon_dir = os.path.join(APP_ROOT, 'templates', 'static', 'favicons')
     return send_from_directory(favicon_dir, f'{icon_name}.svg', mimetype='image/svg+xml')
 
 

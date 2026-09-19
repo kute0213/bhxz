@@ -129,7 +129,13 @@ def sync_all_to_cache():
 
 
 def is_ip_banned_cache(ip: str) -> tuple:
-    """内存缓存查询 IP 封禁状态。返回 (banned: bool, reason: str)。"""
+    """内存缓存查询 IP 封禁状态。返回 (banned: bool, reason: str)。
+
+    缓存尚未同步（如服务刚启动、监控线程未就绪）时主动同步一次，
+    保证冷启动与测试环境下查询结果正确。
+    """
+    if _cache['banned_ips_ts'] == 0.0:
+        sync_ip_bans_to_cache()
     banned_map = _cache['banned_ips']
     if ip in banned_map:
         return True, banned_map[ip]
@@ -147,6 +153,8 @@ def is_ip_banned_cache(ip: str) -> tuple:
 
 def is_account_banned_cache(user_id: int) -> tuple:
     """内存缓存查询账号封禁状态。返回 (banned: bool, reason: str)。"""
+    if _cache['banned_accounts_ts'] == 0.0:
+        sync_account_bans_to_cache()
     banned_map = _cache['banned_accounts']
     if user_id in banned_map:
         return True, banned_map[user_id]
@@ -155,6 +163,8 @@ def is_account_banned_cache(user_id: int) -> tuple:
 
 def is_whitelisted_cache(ip: str) -> bool:
     """内存缓存查询白名单状态。"""
+    if _cache['whitelist_ts'] == 0.0:
+        sync_whitelist_to_cache()
     return ip in _cache['whitelist']
 
 # ---------------------------------------------------------------------------

@@ -6,12 +6,12 @@
 使用方式：
     python scripts/build/build_static.py
 
-运行后会生成：
-    static/lib/lucide/        - Lucide 图标库
-    static/lib/marked/        - Marked.js Markdown 渲染
-    static/lib/hls/           - hls.js HLS 播放支持（自定义音频播放器）
-    static/lib/fonts/         - Google Fonts 字体文件（Noto Sans SC + JetBrains Mono）
-    static/lib/monaco/        - Monaco Editor 代码编辑器（HTTP 下载，无需 npm）
+运行后会生成（templates/static/ 目录下）：
+    lib/lucide/        - Lucide 图标库
+    lib/marked/        - Marked.js Markdown 渲染
+    lib/hls/           - hls.js HLS 播放支持（自定义音频播放器）
+    lib/fonts/         - Google Fonts 字体文件（Noto Sans SC + JetBrains Mono）
+    lib/monaco/        - Monaco Editor 代码编辑器（HTTP 下载，无需 npm）
 """
 
 import os
@@ -27,7 +27,7 @@ from urllib.request import Request, urlopen, build_opener, HTTPRedirectHandler, 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 # 从 scripts/build/ 上溯两级得到项目根目录（/workspace）
 PROJECT_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, '..', '..'))
-STATIC_DIR = os.path.join(PROJECT_ROOT, 'static')
+STATIC_DIR = os.path.join(PROJECT_ROOT, 'templates', 'static')
 LIB_DIR = os.path.join(STATIC_DIR, 'lib')
 
 DOWNLOAD_TIMEOUT = 30
@@ -351,7 +351,7 @@ def download_monaco():
                         size_mb += os.path.getsize(fp)
                     except Exception:
                         pass
-            print(f'  [OK] Monaco Editor 已复制到 static/lib/monaco/ ({size_mb / 1024 / 1024:.1f} MB)')
+            print(f'  [OK] Monaco Editor 已复制到 templates/static/lib/monaco/ ({size_mb / 1024 / 1024:.1f} MB)')
         else:
             print(f'  [FAIL] 未找到 min/vs 目录: {src_vs}')
 

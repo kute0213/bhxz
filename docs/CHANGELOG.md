@@ -4,6 +4,7 @@
 
 ### 结构优化（本次）
 
+* **`static/` 合并至 `templates/static/`**：Flask 通过 `static_folder='templates/static'` 显式指定静态目录，模板与静态资源统一存放；静态资源 URL 路径 `/static/*` 保持不变，模板中全部 `url_for('static', ...)` 引用无需改动；同步更新 `build_static.py` / `package.py` / 验证码字体 / favicon 路由 / `.gitignore` 中的文件系统路径，移除启动检查中遗留的死目录 `static/uploads/*`
 * **删除根目录 `utils/`**：`utils/` 所有文件已迁至 `core/shared/`，删除空的 `utils/` 目录
 * **`services/` 和 `routes/` 全部子包化**：所有非 `__init__.py` 的 Python 文件均已转换为子包结构，实现彻底的文件夹分类
 * **`web/` 独立顶层包回滚至 `core/`**：因根目录不允许新增文件夹，将临时迁出的 `web/` 顶层包（`csrf.py`、`errors.py`、`helpers.py`、`middleware.py`、`template_context.py`）移回 `core/` 扁平放置，导入路径从 `web.*` 恢复为 `core.*`

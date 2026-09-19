@@ -9,7 +9,7 @@ from core.firewall import (
     validate_ip, ban_ip, is_banned, get_bans, unban_ip,
     cleanup_expired, is_whitelisted, auto_ban, ban_suspicious_ip,
 )
-from core.firewall.service import _invalidate_cache
+from core.firewall.service import invalidate_cache as _invalidate_cache
 
 # 测试用 IP 段（RFC 5737 保留，不会与真实用户冲突）
 T_IP = '198.51.100.10'
