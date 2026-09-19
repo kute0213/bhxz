@@ -97,6 +97,19 @@ def upload_music():
     is_public = request.form.get('is_public') in ('1', 'on', 'true')
     upload_file = request.files.get('audio_file')
 
+    # 内容注入检测（标题、标签都可能被注入）
+    from core.firewall.content_filter import check_content_injection
+    inj_content = title
+    if tags:
+        inj_content += '\n' + tags
+    inj_result = check_content_injection(
+        user_id=user['id'], content=inj_content,
+        content_type='music', ip_address=get_client_ip(),
+        username=user['username'],
+    )
+    if inj_result['blocked']:
+        return jsonify({'error': inj_result['message']}), 400
+
     from core.firewall.spam import check_spam, record_activity
     if check_spam(user_id=user['id'], content_type='music', content=title):
         return jsonify({'error': '上传过于频繁，请稍后再试'}), 400

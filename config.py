@@ -121,6 +121,13 @@ AUTO_BAN_REGISTER_ENABLED = True
 AUTO_BAN_EMAIL_ENABLED = True
 AUTO_BAN_FORGOT_PASSWORD_ENABLED = True
 
+# 发布内容注入检测总开关：开启后，用户发布的讨论/指南等包含 XSS/HTML/JS 注入的内容将被拦截
+# 首次拦截仅拒绝发布，累计 2 次后自动封禁账号；可在管理后台 → 系统设置中热更新
+CONTENT_INJECTION_BAN_ENABLED = os.environ.get('CONTENT_INJECTION_BAN_ENABLED', '1').lower() in ('1', 'true', 'yes', 'on')
+
+# 内容注入封禁时长（分钟），0 表示永久封禁；可在管理后台 → 系统设置中热更新
+CONTENT_INJECTION_BAN_DURATION_MINUTES = int(os.environ.get('CONTENT_INJECTION_BAN_DURATION_MINUTES', '30'))
+
 # ---------------------------------------------------------------------------
 # 可疑访问拦截配置
 # ---------------------------------------------------------------------------
@@ -283,6 +290,10 @@ SETTINGS_REGISTRY = [
     ('AUTO_BAN_REGISTER_ENABLED', True, 'bool', '注册异常自动封禁', '注册请求过于频繁时自动封禁该 IP', 'IP 封禁'),
     ('AUTO_BAN_EMAIL_ENABLED', True, 'bool', '邮箱验证码异常自动封禁', '邮箱验证码发送过于频繁时自动封禁该 IP', 'IP 封禁'),
     ('AUTO_BAN_FORGOT_PASSWORD_ENABLED', True, 'bool', '找回密码异常自动封禁', '找回密码请求过于频繁时自动封禁该 IP', 'IP 封禁'),
+
+    # 发布内容注入检测（发布内容包含 XSS/HTML/JS 注入时拦截，累计 2 次自动封禁账号）
+    ('CONTENT_INJECTION_BAN_ENABLED', True, 'bool', '发布内容注入拦截（总开关）', '开启后，用户发布的讨论/指南等内容中包含 XSS/HTML/JS 注入的将被拦截。首次拦截仅拒绝发布，累计 2 次后自动封禁账号', '内容注入检测'),
+    ('CONTENT_INJECTION_BAN_DURATION_MINUTES', 30, 'int', '内容注入封禁时长（分钟）', '累计 2 次内容注入后自动封禁账号的持续时长，到期自动解除；0 表示永久封禁', '内容注入检测'),
 
     # 可疑访问拦截（命中攻击特征自动封禁 IP，白名单见 config.py 的 FIREWALL_WHITELIST）
     ('SUSPICIOUS_BLOCK_ENABLED', True, 'bool', '可疑访问拦截（总开关）', '开启后，命中攻击特征（SQL 注入/XSS/路径穿越/命令注入/敏感文件与扫描器探测/恶意扫描 UA）的请求将被拦截并自动封禁来源 IP；封禁白名单 IP 不受影响', '可疑访问拦截'),

@@ -178,6 +178,7 @@ CREATE SEQUENCE IF NOT EXISTS seq_firewall_warnings START 1;
 CREATE SEQUENCE IF NOT EXISTS seq_firewall_ddos_log START 1;
 CREATE SEQUENCE IF NOT EXISTS seq_firewall_spam_log START 1;
 CREATE SEQUENCE IF NOT EXISTS seq_firewall_ban_details START 1;
+CREATE SEQUENCE IF NOT EXISTS seq_firewall_content_injections START 1;
 
 CREATE TABLE IF NOT EXISTS firewall_bans (
     id INTEGER PRIMARY KEY DEFAULT nextval('seq_firewall_bans'),
@@ -273,6 +274,19 @@ CREATE TABLE IF NOT EXISTS firewall_config (
     value VARCHAR NOT NULL,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS firewall_content_injections (
+    id INTEGER PRIMARY KEY DEFAULT nextval('seq_firewall_content_injections'),
+    user_id INTEGER NOT NULL,
+    content_type VARCHAR NOT NULL DEFAULT '',
+    injection_type VARCHAR NOT NULL DEFAULT '',
+    content_preview VARCHAR DEFAULT '',
+    ip_address VARCHAR DEFAULT '',
+    matched_pattern VARCHAR DEFAULT '',
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS idx_content_inj_user ON firewall_content_injections(user_id);
+CREATE INDEX IF NOT EXISTS idx_content_inj_time ON firewall_content_injections(created_at);
 """
 
 
@@ -699,3 +713,44 @@ def unwhitelist_account_db(user_id):
         return True
     except Exception:
         return False
+
+
+# ---------------------------------------------------------------------------
+# 发布内容注入记录
+# ---------------------------------------------------------------------------
+
+INJECTION_WARNING_LIMIT = 2  # 2 次注入警告后自动封禁
+INJECTION_WARNING_WINDOW_HOURS = 24
+
+
+def record_content_injection(user_id, content_type, injection_type, content_preview, ip_address, matched_pattern):
+    """记录一次发布内容注入警告到 DuckDB。
+
+    Returns:
+        int: 用户在该时间窗口内的总注入警告次数
+    """
+    try:
+        with get_db() as conn:
+            conn.execute(
+                "INSERT INTO firewall_content_injections "
+                "(user_id, content_type, injection_type, content_preview, ip_address, matched_pattern, created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)",
+                (user_id, content_type, injection_type, content_preview[:200], ip_address, matched_pattern),
+            )
+    except Exception as exc:
+        log('WARNING', 'FirewallDB', f'记录内容注入警告失败: {exc}', user_id=user_id)
+    return get_user_injection_count(user_id, INJECTION_WARNING_WINDOW_HOURS)
+
+
+def get_user_injection_count(user_id, hours=INJECTION_WARNING_WINDOW_HOURS):
+    """获取用户在指定小时内注入警告次数。"""
+    try:
+        with get_db() as conn:
+            row = conn.execute(
+                "SELECT COUNT(*) FROM firewall_content_injections "
+                "WHERE user_id = ? AND created_at >= CURRENT_TIMESTAMP - INTERVAL '{} hours'".format(hours),
+                (user_id,),
+            ).fetchone()
+            return row[0] if row else 0
+    except Exception:
+        return 0

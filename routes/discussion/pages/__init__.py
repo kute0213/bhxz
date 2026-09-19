@@ -44,7 +44,18 @@ def create():
 
     if request.method == 'POST':
         from core.firewall.spam import check_spam, record_activity
+        from core.firewall.content_filter import check_content_injection
         title = request.form.get('title', '').strip()
+        content_text = request.form.get('content', '').strip()
+        # 内容注入检测（含标题+正文）
+        inj_result = check_content_injection(
+            user_id=user['id'], content=title + '\n' + content_text,
+            content_type='discussion_topic', ip_address=get_client_ip(),
+            username=user['username'],
+        )
+        if inj_result['blocked']:
+            flash(inj_result['message'], 'error')
+            return redirect(url_for('discussion.list'))
         if check_spam(user_id=user['id'], content_type='discussion_topic', content=title):
             flash('发布过于频繁，请稍后再试', 'error')
             return redirect(url_for('discussion.list'))
@@ -107,6 +118,18 @@ def edit(topic_id):
         abort(403)
 
     if request.method == 'POST':
+        from core.firewall.content_filter import check_content_injection
+        title = request.form.get('title', '').strip()
+        content_text = request.form.get('content', '').strip()
+        # 内容注入检测
+        inj_result = check_content_injection(
+            user_id=user['id'], content=title + '\n' + content_text,
+            content_type='discussion_topic', ip_address=get_client_ip(),
+            username=user['username'],
+        )
+        if inj_result['blocked']:
+            flash(inj_result['message'], 'error')
+            return redirect(url_for('discussion.detail', topic_id=topic_id))
         success, message = edit_topic(
             topic_id=topic_id,
             user_id=user['id'],

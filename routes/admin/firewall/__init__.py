@@ -116,6 +116,9 @@ def admin_firewall_settings_page():
         ddos_guard_ban_minutes=get_config_value('DDOS_GUARD_BAN_MINUTES', 30),
         ddos_guard_permanent_after=get_config_value('DDOS_GUARD_PERMANENT_AFTER', 3),
         ddos_guard_offense_window_hours=get_config_value('DDOS_GUARD_OFFENSE_WINDOW_HOURS', 24),
+        # 发布内容注入检测
+        content_injection_enabled=get_config_value('CONTENT_INJECTION_BAN_ENABLED', True),
+        content_injection_duration=get_config_value('CONTENT_INJECTION_BAN_DURATION_MINUTES', 30),
     )
 
 
@@ -151,6 +154,9 @@ FIREWALL_CONFIG_KEYS = {
     'DDOS_GUARD_ENABLED', 'DDOS_GUARD_INTENSITY',
     'DDOS_GUARD_BAN_MINUTES', 'DDOS_GUARD_PERMANENT_AFTER',
     'DDOS_GUARD_OFFENSE_WINDOW_HOURS',
+    # 发布内容注入检测
+    'CONTENT_INJECTION_BAN_ENABLED',
+    'CONTENT_INJECTION_BAN_DURATION_MINUTES',
 }
 
 # ===========================================================================

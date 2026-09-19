@@ -24,7 +24,17 @@ from services.discussion import (
 def reply(topic_id):
     user = get_current_user()
     from core.firewall.spam import check_spam, record_activity
+    from core.firewall.content_filter import check_content_injection
     content = request.form.get('content', '').strip()
+    # 内容注入检测
+    inj_result = check_content_injection(
+        user_id=user['id'], content=content,
+        content_type='discussion_reply', ip_address=get_client_ip(),
+        username=user['username'],
+    )
+    if inj_result['blocked']:
+        return _respond(inj_result['message'], 'error',
+                        redirect_to=url_for('discussion.detail', topic_id=topic_id))
     if check_spam(user_id=user['id'], content_type='discussion_reply', content=content):
         return _respond('发布过于频繁，请稍后再试', 'error',
                         redirect_to=url_for('discussion.detail', topic_id=topic_id))

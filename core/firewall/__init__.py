@@ -67,6 +67,9 @@ from core.firewall.connection_filter import BanFilterConnection, FirewallGateway
 from core.firewall.wrappers import FirewallWSGIWrapper
 from core.firewall.monitor import FirewallMonitor
 
+# 发布内容注入检测
+from core.firewall.content_filter import check_content_injection
+
 # 防火墙全局单例（集成连接过滤器 + WSGI 门禁 + 后台监控）
 class Firewall:
     """防火墙主入口：管理连接过滤器、WSGI 门禁与后台监控。

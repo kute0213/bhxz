@@ -96,6 +96,17 @@ def guide_create():
             flash('标题和内容不能为空', 'error')
             return render_page('guides/form.html', guide=None)
 
+        # 内容注入检测
+        from core.firewall.content_filter import check_content_injection
+        inj_result = check_content_injection(
+            user_id=user['id'], content=title + '\n' + content,
+            content_type='guide', ip_address=get_client_ip(),
+            username=user['username'],
+        )
+        if inj_result['blocked']:
+            flash(inj_result['message'], 'error')
+            return render_page('guides/form.html', guide=None)
+
         # 验证图形验证码
         captcha_input = (request.form.get('captcha') or '').strip()
         captcha_id = (request.form.get('captcha_id') or '').strip()
@@ -164,6 +175,17 @@ def guide_edit(guide_id):
 
         if not title or not content:
             flash('标题和内容不能为空', 'error')
+            return render_page('guides/form.html', guide=guide)
+
+        # 内容注入检测
+        from core.firewall.content_filter import check_content_injection
+        inj_result = check_content_injection(
+            user_id=user['id'], content=title + '\n' + content,
+            content_type='guide', ip_address=get_client_ip(),
+            username=user['username'],
+        )
+        if inj_result['blocked']:
+            flash(inj_result['message'], 'error')
             return render_page('guides/form.html', guide=guide)
 
         # 验证图形验证码
