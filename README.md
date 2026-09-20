@@ -491,7 +491,7 @@ export ENABLE_SSL=1 && python app.py
 
 * **模板宏复用**：`templates/macros/music_macros.html` 提取音频状态徽章、复制广播 m3u 链接按钮、复制唱片 MP3 按钮、复制时长（秒）按钮、自定义播放器（`music_audio_player`）与播放器脚本（`music_player_assets`）为公共宏，`music/list.html`、`music/my.html` 与 `admin/admin_music.html` 统一调用，消除重复代码
 
-* **全局弹窗模板**：`templates/macros/modal.html` 提供 `modal_overlay` 宏，统一渲染自定义弹窗骨架（alert / confirm / prompt 共用），由 `base.html` 引入一次，配合 `core/base.js` 的 `CustomModal` 控制，取代全部原生 `alert` / `confirm` / `prompt`
+* **统一弹窗模板系统**：`templates/macros/modal.html` 提供 `modal_overlay`（CustomModal 骨架）、`modal_shell`（页面级弹窗容器，支持尺寸/图标/颜色自定义）、`modal_captcha`（图形验证码弹窗）、`modal_close_script`（全局 `openModal`/`closeModal` 控制器）四组宏，配合 `base.js` 的 `CustomModal`（alert/confirm/prompt）统一全站所有弹窗样式，取代全部原生 `alert`/`confirm`/`prompt` 及手写弹窗
 
 ### 交互效果
 
@@ -501,7 +501,7 @@ export ENABLE_SSL=1 && python app.py
 | 按钮水波纹    | CSS `ripple` 动画                                                                                                                                      |
 | 滚动淡入     | `IntersectionObserver`                                                                                                                               |
 | 页面过渡     | `requestAnimationFrame` 控制 `.page-ready` 类切换                                                                                                         |
-| 自定义弹窗    | 磨砂玻璃风格，放大居中动画、触发元素位置感知；`CustomModal` 统一提供 alert / confirm / prompt（Promise + 回调双风格），自动拦截 `onsubmit="return confirm(...)"` 表单与 `onclick` 确认链接，全站无原生弹窗 |
+| 统一弹窗系统  | 磨砂玻璃风格，CSS 过渡动画 + 全局 `openModal`/`closeModal` 控制；CustomModal 提供 alert/confirm/prompt（Promise + 回调双风格），自动拦截 `onsubmit="return confirm(...)"` 表单；`modal_shell` 宏支持页面级内容弹窗，全站无原生弹窗 |
 | Toast 提示 | 四种类型（success/error/warning/info）                                                                                                                     |
 
 ### 性能优化

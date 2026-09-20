@@ -2,6 +2,10 @@
 
 ## \[Unreleased]
 
+### 样式
+
+* **全站统一弹窗系统重构**：创建 `macros/modal.html` 统一弹窗模板宏（`modal_shell`/`modal_captcha`/`modal_overlay`/`modal_close_script`），新增磨砂玻璃弹窗 CSS（尺寸变体、图标颜色类、响应式适配、过渡动画）；统一 `openModal`/`closeModal` 全局函数；重构 `admin_settings`/`broadcast`/`firewall`/`guides` 及 `register` 页面所有弹窗使用模板宏；修复 `admin_broadcast.html` 引用已删除元素的 ESC 处理器
+
 ### 新增
 
 * **一键更新镜像源扩充至 14 个 + 并发检测**：内置 GitHub 加速镜像由 4 个扩充到 14 个（gh-proxy.com / ghproxy.net / mirror.ghproxy.com / ghfast.top / github.moeyy.xyz / slink.ltd / gh.ddlc.top / gh.h233.eu.org / ghproxy.1888866.xyz / hub.gitmirror.com / gh-proxy.net / github.boki.moe / gh.llkk.cc / kkgithub.com）；代理连通性检测由串行改为**多线程并发**（14 个镜像最坏耗时从 42s 降到约 3s），并按延迟升序返回全部可用源，下载时依次尝试，不再只依赖第一个
