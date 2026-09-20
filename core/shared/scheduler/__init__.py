@@ -10,7 +10,7 @@
   - 派发不阻塞：执行走后台线程池（pool）/ 独立线程（thread），tick 永不阻塞
   - 防重叠：任务到期即从注册表取出，执行完成才重新入列
   - 固定间隔（含失败退避）与每日时间点两种调度模式
-  - 防火墙（core/firewall）不使用本模块，保持独立实现
+  - 防火墙（routes/firewall）不使用本模块，保持独立实现
 
 用法：
     from core.shared.scheduler import (

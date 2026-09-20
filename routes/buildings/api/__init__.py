@@ -17,8 +17,8 @@ def add_comment(building_id):
     """发表评论。"""
     user = get_current_user()
 
-    from core.firewall.spam import check_spam, record_activity
-    from core.firewall.content_filter import check_content_injection
+    from routes.firewall.spam import check_spam, record_activity
+    from routes.firewall.content_filter import check_content_injection
 
     content = (request.form.get('content') or '').strip()
     if not content:

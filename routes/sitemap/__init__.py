@@ -3,7 +3,8 @@
 可直接访问 /sitemap.xml 获取 XML 格式的站点地图。
 每日凌晨由 services/sitemap_cache.py 后台线程自动刷新，
 为每个配置的域名生成独立的 XML 文件存入 /uploads/sitemap/ 目录。
-/robots.txt 按管理面板配置的爬虫策略返回，并引用 Sitemap。
+/robots.txt 按管理面板配置的爬虫策略返回，自动添加 Crawl‑delay 与防火墙防误判规则，
+防止爬虫被 DDoS 防护误封。
 """
 
 from flask import Blueprint, Response, request
@@ -12,16 +13,16 @@ from services.sitemap_cache import sitemap_cache
 
 sitemap_bp = Blueprint('sitemap', __name__)
 
+# 所有爬虫都不得访问的内部路径（避免触发防火墙可疑访问规则）
+_DISALLOWED_PATHS = """
+Disallow: /admin/
+Disallow: /api/
+Disallow: /uploads/
+Disallow: /_debug/
+"""
 
-# 三种爬虫策略对应的 robots.txt 模板（{base} 会被替换为站点根地址）
-_ROBOTS_TEMPLATES = {
-    # 允许所有爬虫抓取全部页面
-    'all': "User-agent: *\nAllow: /\n\nSitemap: {base}/sitemap.xml\n",
-    # 仅允许爬虫抓取主页（/$ 为 Google 等主流爬虫支持的锚定语法）
-    'home': "User-agent: *\nAllow: /$\nDisallow: /\n\nSitemap: {base}/sitemap.xml\n",
-    # 禁止所有爬虫
-    'none': "User-agent: *\nDisallow: /\n",
-}
+# 爬虫请求间隔（秒），防止触发 DDoS 防护阈值（中等强度 150 次/10秒）
+_CRAWL_DELAY = "Crawl-delay: 5\n"
 
 
 def _robots_base_url() -> str:
@@ -32,12 +33,55 @@ def _robots_base_url() -> str:
     return request.url_root.rstrip('/')
 
 
+def _generate_robots(policy: str, base: str) -> str:
+    """根据策略和基础 URL 生成完整的 robots.txt 内容。
+
+    策略：
+      - all:   允许抓取公开页面，但限制内管理后台等路径
+      - home:  仅允许抓取主页
+      - none:  禁止所有爬虫
+
+    所有策略都附加 Crawl‑delay 和防火墙防误判路径白名单，
+    防止合法爬虫被 DDoS 防护模块误封。
+    """
+    if policy == 'none':
+        return (
+            "User-agent: *\n"
+            "Disallow: /\n"
+        )
+
+    if policy == 'home':
+        return (
+            "User-agent: *\n"
+            "Allow: /$\n"
+            f"{_DISALLOWED_PATHS}"
+            f"{_CRAWL_DELAY}"
+            "\n"
+            f"Sitemap: {base}/sitemap.xml\n"
+        )
+
+    # 'all' 策略 —— 允许公开页面，限制敏感路径
+    return (
+        "User-agent: *\n"
+        "Allow: /\n"
+        f"{_DISALLOWED_PATHS}"
+        f"{_CRAWL_DELAY}"
+        "\n"
+        f"Sitemap: {base}/sitemap.xml\n"
+    )
+
+
 @sitemap_bp.route('/robots.txt')
 def robots():
-    """按管理面板配置的爬虫策略返回 robots.txt。"""
+    """按管理面板配置的爬虫策略返回 robots.txt。
+
+    自动添加：
+      - Crawl‑delay：防止爬虫触发 DDoS 防护阈值
+      - Disallow /admin/、/api/ 等敏感路径：防止防火墙误判爬虫请求为恶意探测
+    """
     policy = get_config_value('ROBOTS_POLICY', 'all')
-    template = _ROBOTS_TEMPLATES.get(policy, _ROBOTS_TEMPLATES['all'])
-    content = template.format(base=_robots_base_url())
+    base = _robots_base_url()
+    content = _generate_robots(policy, base)
     return Response(
         content,
         mimetype='text/plain; charset=utf-8',

@@ -9,7 +9,7 @@
   6. WSGI 门禁 — 在进入 Flask 前二次拦截（兜底）
 
 使用方式（路由/服务中）：
-    from core.firewall import ban_ip, unban_ip, is_banned, is_whitelisted, ...
+    from routes.firewall import ban_ip, unban_ip, is_banned, is_whitelisted, ...
 
 安全说明：
     - 白名单 IP 不会被执行任何封禁操作
@@ -17,7 +17,7 @@
     - DuckDB 文件位于 db/firewall.duckdb，独立于主站业务数据库
 """
 
-from core.firewall.service import (
+from routes.firewall.service import (
     ban_ip,
     unban_ip,
     unban_by_ip,
@@ -63,24 +63,24 @@ from core.firewall.service import (
     SYSTEM_BANNER_ID,
 )
 
-from core.firewall.connection_filter import BanFilterConnection, FirewallGateway, FirewallServer
-from core.firewall.wrappers import FirewallWSGIWrapper
-from core.firewall.monitor import FirewallMonitor
+from routes.firewall.connection_filter import BanFilterConnection, FirewallGateway, FirewallServer
+from routes.firewall.wrappers import FirewallWSGIWrapper
+from routes.firewall.monitor import FirewallMonitor
 
 # 发布内容注入检测
-from core.firewall.content_filter import check_content_injection
+from routes.firewall.content_filter import check_content_injection
 
-from core.firewall.service import get_combined_bans
+from routes.firewall.service import get_combined_bans
 
 # 防火墙全局单例（集成连接过滤器 + WSGI 门禁 + 后台监控）
 class Firewall:
     """防火墙主入口：管理连接过滤器、WSGI 门禁与后台监控。
 
     用法：
-        from core.firewall import firewall
+        from routes.firewall import firewall
 
         # 在 server.py 中使用 FirewallServer
-        from core.firewall.connection_filter import FirewallServer
+        from routes.firewall.connection_filter import FirewallServer
         server = FirewallServer(..., firewall.wrap(app))
 
         # 注册后台监控
@@ -111,12 +111,12 @@ class Firewall:
         """O(1) 黑名单查询（使用数据库层内存缓存）。"""
         if not ip or ip in ('127.0.0.1', '::1', 'localhost'):
             return False
-        from core.firewall.database import is_ip_banned_cache
+        from routes.firewall.database import is_ip_banned_cache
         return is_ip_banned_cache(ip)[0]
 
     def is_account_banned(self, user_id):
         """O(1) 账号封禁查询（使用数据库层内存缓存）。"""
-        from core.firewall.database import is_account_banned_cache
+        from routes.firewall.database import is_account_banned_cache
         return is_account_banned_cache(user_id)[0]
 
     # ---- WSGI 包装 ----

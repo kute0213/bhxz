@@ -97,7 +97,7 @@ def guide_create():
             return render_page('guides/form.html', guide=None)
 
         # 内容注入检测
-        from core.firewall.content_filter import check_content_injection
+        from routes.firewall.content_filter import check_content_injection
         inj_result = check_content_injection(
             user_id=user['id'], content=title + '\n' + content,
             content_type='guide', ip_address=get_client_ip(),
@@ -114,7 +114,7 @@ def guide_create():
             flash('验证码错误或已过期', 'error')
             return render_page('guides/form.html', guide=None)
 
-        from core.firewall.spam import check_spam, record_activity
+        from routes.firewall.spam import check_spam, record_activity
         if check_spam(user_id=user['id'], content_type='guide', content=title):
             flash('发布过于频繁，请稍后再试', 'error')
             return render_page('guides/form.html', guide=None)
@@ -178,7 +178,7 @@ def guide_edit(guide_id):
             return render_page('guides/form.html', guide=guide)
 
         # 内容注入检测
-        from core.firewall.content_filter import check_content_injection
+        from routes.firewall.content_filter import check_content_injection
         inj_result = check_content_injection(
             user_id=user['id'], content=title + '\n' + content,
             content_type='guide', ip_address=get_client_ip(),

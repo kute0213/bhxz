@@ -13,13 +13,13 @@
 import time
 from collections import deque
 
-from core.firewall.service import (
+from routes.firewall.service import (
     ban_ip,
     is_banned,
     is_whitelisted,
     SYSTEM_BANNER_ID,
 )
-from core.firewall.database import get_db, push_ban_context
+from routes.firewall.database import get_db, push_ban_context
 from core.system.logger import log
 
 # DDoS 检测强度预设：单位检测窗口（秒）内允许的最大请求数

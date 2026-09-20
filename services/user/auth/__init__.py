@@ -11,7 +11,7 @@ from config import REGISTER_VERIFY_CODE, MAX_LOGIN_ATTEMPTS, LOGIN_LOCKOUT_TIME
 from core.shared.captcha import captcha_service
 from services.mail import email_code_service
 from core.shared.ratelimit import register_limiter, login_limiter, forgot_password_limiter
-from core.firewall import auto_ban
+from routes.firewall import auto_ban
 from core.system.logger import log
 
 

@@ -14,7 +14,7 @@ from routes.buildings import buildings_bp
 
 @buildings_bp.route('/buildings')
 def building_list():
-    """公共建筑列表（默认展示已审核通过的；?my=1 展示当前用户的）。"""
+    """公共建筑列表（?my=1 展示当前用户的；默认展示全部）。"""
     user = get_current_user()
     conn = get_db()
     try:
@@ -35,7 +35,6 @@ def building_list():
                 SELECT b.*, u.username as author_name
                 FROM public_buildings b
                 LEFT JOIN users u ON b.author_id = u.id
-                WHERE b.status = 'approved'
                 ORDER BY b.published_at DESC, b.title ASC
                 """
             ).fetchall()
@@ -49,7 +48,7 @@ def building_list():
 @buildings_bp.route('/buildings/create', methods=['GET', 'POST'])
 @login_required
 def building_create():
-    """成员发布新公共建筑（进入待审核状态）。"""
+    """成员发布新公共建筑（发布即公开）。"""
     user = get_current_user()
 
     if request.method == 'POST':
@@ -64,7 +63,7 @@ def building_create():
             return render_page('buildings/create.html', building=None)
 
         # 内容注入检测
-        from core.firewall.content_filter import check_content_injection
+        from routes.firewall.content_filter import check_content_injection
         inj_result = check_content_injection(
             user_id=user['id'],
             content=f'{title}\n{warp_name}\n{description}\n{usage_info}\n{notes}',
@@ -83,7 +82,7 @@ def building_create():
             flash('验证码错误或已过期', 'error')
             return render_page('buildings/create.html', building=None)
 
-        from core.firewall.spam import check_spam, record_activity
+        from routes.firewall.spam import check_spam, record_activity
         if check_spam(user_id=user['id'], content_type='building', content=title):
             flash('发布过于频繁，请稍后再试', 'error')
             return render_page('buildings/create.html', building=None)
@@ -95,14 +94,14 @@ def building_create():
                 """
                 INSERT INTO public_buildings
                 (title, warp_name, description, usage_info, notes, author_id,
-                 status, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+                 status, published_at, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, 'approved', ?, ?, ?)
                 """,
-                (title, warp_name, description, usage_info, notes, user['id'], now, now),
+                (title, warp_name, description, usage_info, notes, user['id'], now, now, now),
             )
             conn.commit()
             record_activity(user_id=user['id'], content_type='building', content=title)
-            flash('公共建筑已提交，等待管理员审核', 'success')
+            flash('公共建筑已发布', 'success')
             return redirect(url_for('buildings.building_list', my=1))
         except Exception as e:
             conn.rollback()
@@ -115,7 +114,7 @@ def building_create():
 
 @buildings_bp.route('/buildings/<int:building_id>')
 def building_detail(building_id):
-    """公共建筑详情页（已审核通过可公开；作者可看自己的待审核）。"""
+    """公共建筑详情页（公开；作者可在我的建筑中查看）。"""
     user = get_current_user()
     conn = get_db()
     author_reported = False
@@ -126,9 +125,9 @@ def building_detail(building_id):
                 SELECT b.*, u.username as author_name
                 FROM public_buildings b
                 LEFT JOIN users u ON b.author_id = u.id
-                WHERE b.id = ? AND (b.status = 'approved' OR b.author_id = ?)
+                WHERE b.id = ?
                 """,
-                (building_id, user['id']),
+                (building_id,),
             ).fetchone()
             # 检查当前用户是否已举报过此建筑
             r = conn.execute(
@@ -142,7 +141,7 @@ def building_detail(building_id):
                 SELECT b.*, u.username as author_name
                 FROM public_buildings b
                 LEFT JOIN users u ON b.author_id = u.id
-                WHERE b.id = ? AND b.status = 'approved'
+                WHERE b.id = ?
                 """,
                 (building_id,),
             ).fetchone()

@@ -5,11 +5,11 @@
 
 import pytest
 
-from core.firewall import (
+from routes.firewall import (
     validate_ip, ban_ip, is_banned, get_bans, unban_ip,
     cleanup_expired, is_whitelisted, auto_ban, ban_suspicious_ip,
 )
-from core.firewall.service import invalidate_cache as _invalidate_cache
+from routes.firewall.service import invalidate_cache as _invalidate_cache
 
 # 测试用 IP 段（RFC 5737 保留，不会与真实用户冲突）
 T_IP = '198.51.100.10'
@@ -24,7 +24,7 @@ WHITELIST_IP = '112.82.136.172'
 @pytest.fixture(autouse=True)
 def _cleanup_ban_records():
     """每个用例前后清理测试 IP 段的封禁记录。"""
-    from core.firewall.database import get_db
+    from routes.firewall.database import get_db
 
     def _clean():
         with get_db() as conn:

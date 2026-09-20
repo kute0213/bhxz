@@ -5,7 +5,7 @@ from flask import Blueprint, request, jsonify, session
 from services.mail import email_code_service, normalize_email, email_service
 from core.shared.captcha import captcha_service
 from core.shared.ratelimit import email_limiter
-from core.firewall import auto_ban
+from routes.firewall import auto_ban
 from core.system.logger import log
 from config import get_config_value
 from core.shared.ip import get_client_ip

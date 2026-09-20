@@ -43,8 +43,8 @@ def create():
     categories = get_categories()
 
     if request.method == 'POST':
-        from core.firewall.spam import check_spam, record_activity
-        from core.firewall.content_filter import check_content_injection
+        from routes.firewall.spam import check_spam, record_activity
+        from routes.firewall.content_filter import check_content_injection
         title = request.form.get('title', '').strip()
         content_text = request.form.get('content', '').strip()
         # 内容注入检测（含标题+正文）
@@ -118,7 +118,7 @@ def edit(topic_id):
         abort(403)
 
     if request.method == 'POST':
-        from core.firewall.content_filter import check_content_injection
+        from routes.firewall.content_filter import check_content_injection
         title = request.form.get('title', '').strip()
         content_text = request.form.get('content', '').strip()
         # 内容注入检测

@@ -43,7 +43,7 @@ def admin_broadcast_send():
     confirm = data.get('confirm') == 'CONFIRM'
 
     # Anti-spam
-    from core.firewall.spam import check_spam, record_activity
+    from routes.firewall.spam import check_spam, record_activity
     if check_spam(user_id=user['id'], content_type='broadcast', content=subject):
         return jsonify({'success': False, 'message': '发送过于频繁，请稍后再试'})
 

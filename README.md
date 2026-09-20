@@ -72,7 +72,7 @@ python scripts/build/package.py
 ```
 /workspace
 ├── app.py / config.py / requirements.txt   # 入口、配置、依赖
-├── core/         # 基础设施层（auth/server/web/system/db/firewall）
+├── core/         # 基础设施层（auth/server/web/system/db/shared）
 │   ├── auth/                 #   认证装饰器、密码哈希
 │   │   └── __init__.py
 │   ├── server/               #   WSGI 服务器与优雅关闭
@@ -114,14 +114,16 @@ python scripts/build/package.py
 │   ├── admin/          # 管理后台（用户/备份/设置/日志/更新/游戏账号/指南/音乐/讨论等）
 │   ├── api/            # 公开 API（性能/统计/验证码/邮箱）
 │   ├── backgrounds/    # 背景图片页面
+│   ├── buildings/      # 公共建筑（页面+API，发布即公开，无需审核）
 │   ├── community/      # 社区留言板
 │   ├── discussion/     # 讨论区（页面+API）
 │   ├── docs/           # 文档页面
+│   ├── firewall/       # 高性能防火墙（DuckDB 引擎 + 连接级阻断 + DDoS 防护 + 可疑访问拦截）
 │   ├── game_accounts/  # 申请账号（页面+API，纯申请注册）
 │   ├── guides/         # 服务器指南（页面+API）
-│   ├── buildings/      # 公共建筑（页面+API）
 │   ├── main/           # 主站（登录/注册/设置/音乐）
-│   └── public/         # 公开文件服务
+│   ├── public/         # 公开文件服务
+│   └── sitemap/        # Sitemap & robots.txt（自动添加 Crawl-delay 防防火墙误判）
 ├── templates/    # Jinja2 模板
 │   ├── admin/          # 管理后台页面
 │   ├── backgrounds/    # 背景图片页面
@@ -194,7 +196,7 @@ python scripts/build/package.py
 
 * 可疑访问拦截（识别 SQL 注入 / XSS / 路径穿越 / 命令注入 / 敏感文件与漏洞端点探测 / 恶意扫描 UA 等攻击特征，命中即拦截并自动封禁来源 IP，总开关与各攻击类型子开关独立配置、封禁时长可配，白名单 IP 不受影响）
 
-* DDoS 攻击防护（高性能防火墙模块 `core/firewall/`）：独立 DuckDB 数据库存储封禁/白名单/警告/攻击日志，连接级阻断在请求解析前直接强制断开黑名单 TCP 连接（自定义 Cheroot BanFilterConnection），不返回任何 HTTP 响应，客户端收到连接重置/EOF。按检测强度统计单位时间窗口内每个 IP 的请求数（低/中/高三档，检测窗口 10 秒），**防误判机制**：静态资源（`.css/.js/.ico`）、媒体文件（`.mp3/.ts/.m3u8/.webp`）、公共路径（`/static/`、`/music/<id>.mp3`）不计入请求计数，音频下载不会误判为 DDoS。超阈值自动封禁来源 IP（首次限时封禁；屡教不改升级永久封禁）。后台监控线程同步黑名单镜像、强制关闭已建立的空闲连接（先注销连接管理器再关闭，线程安全），定时清理过期数据与 VACUUM。检测强度、封禁时长、永久封禁触发次数等可在线热更新，白名单 IP 不受影响
+* DDoS 攻击防护（高性能防火墙模块 `routes/firewall/`）：独立 DuckDB 数据库存储封禁/白名单/警告/攻击日志，连接级阻断在请求解析前直接强制断开黑名单 TCP 连接（自定义 Cheroot BanFilterConnection），不返回任何 HTTP 响应，客户端收到连接重置/EOF。按检测强度统计单位时间窗口内每个 IP 的请求数（低/中/高三档，检测窗口 10 秒），**防误判机制**：静态资源（`.css/.js/.ico`）、媒体文件（`.mp3/.ts/.m3u8/.webp`）、公共路径（`/static/`、`/music/<id>.mp3`、`/robots.txt`、`/sitemap.xml`）不计入请求计数，音频下载不会误判为 DDoS。超阈值自动封禁来源 IP（首次限时封禁；屡教不改升级永久封禁）。后台监控线程同步黑名单镜像、强制关闭已建立的空闲连接（先注销连接管理器再关闭，线程安全），定时清理过期数据与 VACUUM。检测强度、封禁时长、永久封禁触发次数等可在线热更新，白名单 IP 不受影响。robots.txt 自动添加 Crawl‑delay 与敏感路径 Disallow 规则，防止合法爬虫被误封
 
 ### 服务器指南
 
@@ -208,11 +210,10 @@ python scripts/build/package.py
 
 ### 公共建筑
 
-* 服务器公共建筑列表页面，用户可发布自己的建筑（标题、领地名、介绍、使用方式、注意事项）
+* 公共建筑列表页面，用户可发布自己的建筑（标题、领地名、介绍、使用方式、注意事项），**发布即公开，无需管理员审核**
 * 一键复制传送指令 `/res tp 领地名`
 * 评论功能：登录用户可发表评论，作者/管理员可删除评论
 * 举报功能：用户可举报违规建筑，管理员在后台可查看举报并删除建筑
-* 审核工作流：新提交建筑进入待审核状态，管理员通过后公开可见
 * 接入防火墙内容检测、防刷机制和图形验证码
 
 ### 讨论区
@@ -774,6 +775,8 @@ workspace/
 详见 [docs/CHANGELOG.md](docs/CHANGELOG.md)。
 
 ## 最近更新
+
+* **防火墙迁移至路由层 + 公共建筑去审核 + robots.txt 安全增强**：防火墙模块从 `core/firewall/` 整体迁移至 `routes/firewall/`（路由层，更合理的分层），所有导入引用同步更新；公共建筑**发布即公开**，彻底移除管理员审核流程（删除 approve/reject 路由、模板按钮、仪表盘统计），管理员 403 问题一并修复；全站验证码统一使用 `core.shared.captcha.captcha_service` 单例；robots.txt 路由升级为函数式生成，根据策略自动附加 Crawl‑delay（5 秒）与敏感路径 Disallow 规则，配合 DDoS 防护的 `/robots.txt` 白名单，防止合法爬虫被防火墙误封；更新所有过期注释引用。
 
 * **修复公共建筑验证码与防火墙增强**：修复公共建筑发布页验证码提交无反应（脚本块 `extra_js`→`extra_script` 匹配+阻止默认提交）；发布页「验证并提交」按钮触发图形验证码弹窗，通过验证后自动提交表单；建筑评论新增图形验证码验证，提交前弹出验证码弹窗；防火墙设置页新增「发布频率限制」配置区域（公共建筑/建筑评论/话题/回复/指南/背景/音乐等 7 种内容类型均可独立配置次数与检测窗口），settings API 支持所有频率限制项热保存；`core/firewall/spam.py` 新增 `get_spam_limit()` 函数优先读取系统设置动态配置。
 

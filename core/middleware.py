@@ -138,7 +138,7 @@ def register_hooks(app, try_serve_public):
         WSGI 层关闭 socket 后仍可能由 werkzeug 的内部机制触发 before_request），
         不渲染页面、不查询额外数据，直接返回空 403 断开连接。
         """
-        from core.firewall import is_banned
+        from routes.firewall import is_banned
         ip = get_client_ip()
         banned, _reason = is_banned(ip)
         if banned:
@@ -159,7 +159,7 @@ def register_hooks(app, try_serve_public):
             return None
 
         from core.shared.security_scanner import scan_request
-        from core.firewall import ban_suspicious_ip
+        from routes.firewall import ban_suspicious_ip
         from core.errors import render_error_page
         attack_type, matched = scan_request(
             path=request.path,

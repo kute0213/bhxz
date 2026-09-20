@@ -154,7 +154,7 @@ SUSPICIOUS_BLOCK_SENSITIVE_PROBE_ENABLED = True
 SUSPICIOUS_BLOCK_MALICIOUS_UA_ENABLED = True
 
 # ---------------------------------------------------------------------------
-# DDoS 攻击防护配置（core/firewall.py 高性能防火墙）
+# DDoS 攻击防护配置（routes/firewall 高性能防火墙）
 # ---------------------------------------------------------------------------
 
 # DDoS 防护总开关：开启后按检测强度统计单位窗口内请求数，超阈值自动封禁 IP
@@ -313,7 +313,7 @@ SETTINGS_REGISTRY = [
     ('SUSPICIOUS_BLOCK_SENSITIVE_PROBE_ENABLED', True, 'bool', '敏感文件/漏洞端点探测拦截', '命中敏感文件（.env、.git、phpinfo 等）或常见漏洞端点（phpMyAdmin、wp-admin 等）探测时拦截并自动封禁', '可疑访问拦截'),
     ('SUSPICIOUS_BLOCK_MALICIOUS_UA_ENABLED', True, 'bool', '恶意扫描 UA 拦截', 'User-Agent 命中已知安全扫描器（sqlmap、nikto、nuclei 等）时拦截并自动封禁', '可疑访问拦截'),
 
-    # DDoS 防护（core/firewall.py 高性能防火墙，WSGI 入口先于一切逻辑拦截）
+    # DDoS 防护（routes/firewall 高性能防火墙，WSGI 入口先于一切逻辑拦截）
     ('DDOS_GUARD_ENABLED', True, 'bool', 'DDoS 防护（总开关）', '开启后按检测强度统计单位时间窗口内请求数，超阈值自动封禁来源 IP（限时封禁，屡教不改升级永久封禁）；封禁白名单 IP 不受影响', 'DDoS 防护'),
     ('DDOS_GUARD_INTENSITY', 'medium', 'select', '检测强度', '检测窗口为 10 秒，强度越高越严格。可选：low（宽松，300 次/10秒）, medium（中等，150 次/10秒）, high（严格，80 次/10秒）', 'DDoS 防护'),
     ('DDOS_GUARD_BAN_MINUTES', 30, 'int', '首次封禁时长（分钟）', '首次检测到 DDoS 行为的限时封禁时长，到期自动解除；0 表示直接永久封禁', 'DDoS 防护'),

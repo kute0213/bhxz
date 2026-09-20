@@ -52,7 +52,7 @@ def upload_background():
     if not files:
         return jsonify({'error': '请选择图片'}), 400
 
-    from core.firewall.spam import check_spam, record_activity
+    from routes.firewall.spam import check_spam, record_activity
     if check_spam(user_id=user['id'], content_type='background', content=files[0].filename or 'background'):
         return jsonify({'error': '上传过于频繁，请稍后再试'}), 400
 

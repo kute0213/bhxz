@@ -6,7 +6,7 @@
   - 同一用户 2 次注入警告后自动封禁账号（时长可在设置面板调节）
 
 使用方式：
-    from core.firewall.content_filter import check_content_injection
+    from routes.firewall.content_filter import check_content_injection
     result = check_content_injection(user_id=uid, content=text, content_type='discussion_topic')
     if result['blocked']:
         # 拒绝发布，显示 result['message']
@@ -17,8 +17,8 @@
 """
 
 import re
-from core.firewall.database import record_content_injection, get_user_injection_count, INJECTION_WARNING_LIMIT
-from core.firewall.service import ban_account, is_account_whitelisted
+from routes.firewall.database import record_content_injection, get_user_injection_count, INJECTION_WARNING_LIMIT
+from routes.firewall.service import ban_account, is_account_whitelisted
 from core.system.logger import log
 from config import get_config_value
 
@@ -166,7 +166,7 @@ def check_content_injection(user_id, content, content_type='', ip_address='', us
             user_id=user_id)
 
         # 推送 ban_context 以便记录详情
-        from core.firewall.database import push_ban_context
+        from routes.firewall.database import push_ban_context
         push_ban_context(
             attack_type='content_injection',
             matched_text=primary['matched'][:200],

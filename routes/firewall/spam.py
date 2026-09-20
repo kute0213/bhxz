@@ -6,7 +6,7 @@
   - 由其他模块（讨论、指南、音乐等）在发布内容前调用 check_spam()
 
 使用方式：
-    from core.firewall.spam import check_spam
+    from routes.firewall.spam import check_spam
     if check_spam(user_id=uid, content_type='discussion_topic', content=text):
         return '发布过于频繁，请稍后再试', 429
 """
@@ -125,7 +125,7 @@ class SpamDetector:
 
         if total_violations >= AUTO_BAN_AFTER:
             # 延迟导入避免循环依赖
-            from core.firewall import ban_account
+            from routes.firewall import ban_account
             ban_account(
                 user_id=user_id,
                 reason=f'自动封禁：刷屏违规 {total_violations} 次',

@@ -23,8 +23,8 @@ from services.discussion import (
 @login_required
 def reply(topic_id):
     user = get_current_user()
-    from core.firewall.spam import check_spam, record_activity
-    from core.firewall.content_filter import check_content_injection
+    from routes.firewall.spam import check_spam, record_activity
+    from routes.firewall.content_filter import check_content_injection
     content = request.form.get('content', '').strip()
     # 内容注入检测
     inj_result = check_content_injection(

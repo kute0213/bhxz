@@ -4,8 +4,8 @@ from flask import redirect, url_for, flash, request, jsonify
 
 from core.auth import admin_required, get_current_user
 from core.helpers import render_page
-from core.firewall.spam import SPAM_LIMITS
-from core.firewall import (
+from routes.firewall.spam import SPAM_LIMITS
+from routes.firewall import (
     ban_ip, unban_ip, get_bans, get_whitelist,
     whitelist_add, whitelist_remove,
     get_all_warnings, get_account_bans, ban_account, unban_account,

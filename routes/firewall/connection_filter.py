@@ -56,7 +56,7 @@ class BanFilterConnection(HTTPConnection):
 
     def communicate(self):
         ip = self._peer_ip()
-        from core.firewall import firewall
+        from routes.firewall import firewall
         if firewall.is_banned(ip):
             self._drop_banned(ip)
             return False

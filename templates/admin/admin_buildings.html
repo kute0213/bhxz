@@ -73,13 +73,7 @@
                             </td>
                             <td class="px-4 py-3 text-cream/60">{{ b.author_name or '未知' }}</td>
                             <td class="px-4 py-3">
-                                {% if b.status == 'pending' %}
-                                <span class="text-xs px-2 py-0.5 rounded-full bg-yellow-500/10 text-yellow-400">待审核</span>
-                                {% elif b.status == 'approved' %}
-                                <span class="text-xs px-2 py-0.5 rounded-full bg-green-500/10 text-green-400">已通过</span>
-                                {% elif b.status == 'rejected' %}
-                                <span class="text-xs px-2 py-0.5 rounded-full bg-red-500/10 text-red-400">已拒绝</span>
-                                {% endif %}
+                                <span class="text-xs px-2 py-0.5 rounded-full bg-green-500/10 text-green-400">已发布</span>
                             </td>
                             <td class="px-4 py-3">
                                 {% if b.pending_report_count > 0 %}
@@ -90,18 +84,9 @@
                             </td>
                             <td class="px-4 py-3">
                                 <div class="flex items-center gap-2">
-                                    {% if b.status == 'pending' %}
-                                    <form method="POST" action="{{ url_for('admin.admin_building_approve', building_id=b.id) }}" style="display:inline">
-                                        <button type="submit" class="text-xs px-2 py-1 rounded bg-green-500/10 text-green-400 border border-green-500/20 hover:bg-green-500/20">通过</button>
-                                    </form>
-                                    <button onclick="showRejectModal({{ b.id }})" class="text-xs px-2 py-1 rounded bg-red-500/10 text-red-400 border border-red-500/20 hover:bg-red-500/20">拒绝</button>
-                                    {% endif %}
                                     <form method="POST" action="{{ url_for('admin.admin_building_delete', building_id=b.id) }}" style="display:inline" onsubmit="return confirm('确定删除「{{ b.title }}」？此操作不可恢复。')">
                                         <button type="submit" class="text-xs px-2 py-1 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20">删除</button>
                                     </form>
-                                    {% if b.status == 'rejected' and b.rejected_reason %}
-                                    <span class="text-xs text-cream/40" title="{{ b.rejected_reason }}">原因：{{ b.rejected_reason[:20] }}</span>
-                                    {% endif %}
                                 </div>
                             </td>
                         </tr>
@@ -116,25 +101,4 @@
     </div>
 </section>
 
-{% call modal_shell('reject-modal', size='sm', title='拒绝建筑', icon='x-circle', icon_color='red', close_on_overlay='false') %}
-    <div class="modal-body">
-        <form id="reject-form" method="POST">
-            <label class="block text-sm text-[var(--text-secondary)] mb-1.5">拒绝原因（可选）</label>
-            <input type="text" name="reason" class="input-field w-full px-4 py-3 rounded-lg" placeholder="请输入拒绝原因">
-        </form>
-    </div>
-    <div class="modal-footer">
-        <button type="button" class="btn-secondary" onclick="closeModal('reject-modal')">取消</button>
-        <button type="submit" form="reject-form" class="btn-primary" style="background:var(--accent-red, #be123c);border-color:var(--accent-red, #be123c);">确认拒绝</button>
-    </div>
-{% endcall %}
-{{ modal_close_script() }}
-<script>
-var _reject_building_id = 0;
-function showRejectModal(buildingId) {
-    _reject_building_id = buildingId;
-    document.getElementById('reject-form').action = '/admin/buildings/' + buildingId + '/reject';
-    openModal('reject-modal');
-}
-</script>
 {% endblock %}

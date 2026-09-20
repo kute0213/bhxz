@@ -111,8 +111,8 @@ def init_db():
             )
         '''),
         # IP 封禁已迁移至防火墙模块 —— 数据存储在 db/firewall.duckdb（firewall_bans 表）
-        # 详见 core/firewall/database.py 与 core/firewall/service.py
-        # 如需查询历史封禁数据，请使用 core.firewall 提供的公共 API
+        # 详见 routes/firewall/database.py 与 routes/firewall/service.py
+        # 如需查询历史封禁数据，请使用 routes.firewall 提供的公共 API
         # 广播邮件日志表
         ('broadcast_logs', '''
             CREATE TABLE IF NOT EXISTS broadcast_logs (

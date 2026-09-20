@@ -98,7 +98,7 @@ def upload_music():
     upload_file = request.files.get('audio_file')
 
     # 内容注入检测（标题、标签都可能被注入）
-    from core.firewall.content_filter import check_content_injection
+    from routes.firewall.content_filter import check_content_injection
     inj_content = title
     if tags:
         inj_content += '\n' + tags
@@ -110,7 +110,7 @@ def upload_music():
     if inj_result['blocked']:
         return jsonify({'error': inj_result['message']}), 400
 
-    from core.firewall.spam import check_spam, record_activity
+    from routes.firewall.spam import check_spam, record_activity
     if check_spam(user_id=user['id'], content_type='music', content=title):
         return jsonify({'error': '上传过于频繁，请稍后再试'}), 400
 

@@ -13,7 +13,7 @@
 
 import weakref
 
-from core.firewall.database import push_ban_context
+from routes.firewall.database import push_ban_context
 
 
 class FirewallWSGIWrapper:
@@ -35,7 +35,7 @@ class FirewallWSGIWrapper:
     @property
     def ddos_detector(self):
         if self._ddos_detector is None:
-            from core.firewall.ddos import DDoSDetector
+            from routes.firewall.ddos import DDoSDetector
             self._ddos_detector = DDoSDetector()
             self._fw._ddos_detector = self._ddos_detector
         return self._ddos_detector
