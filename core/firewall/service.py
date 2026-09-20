@@ -11,6 +11,7 @@
 """
 
 import ipaddress
+import threading
 import time
 from datetime import datetime, timedelta
 
@@ -48,6 +49,10 @@ AUTO_BAN_ACTION_SETTINGS = {
     'email': 'AUTO_BAN_EMAIL_ENABLED',
     'forgot_password': 'AUTO_BAN_FORGOT_PASSWORD_ENABLED',
 }
+
+# 自动封禁屡教不改记录：{ ip: [count, first_timestamp] }
+_auto_ban_offenses = {}
+_auto_ban_offenses_lock = threading.Lock()
 
 # 可疑访问拦截：攻击类型 → 对应的设置注册表键（默认开启）
 SUSPICIOUS_ACTION_SETTINGS = {
@@ -797,6 +802,28 @@ def auto_ban(ip_address, action, reason=''):
     except (ValueError, TypeError):
         duration_minutes = AUTO_BAN_DURATION_MINUTES
 
+    # ---- 屡教不改检测 ----
+    permanent_after = int(get_config_value('AUTO_BAN_PERMANENT_AFTER', 0) or 0)
+    offense_hours = int(get_config_value('AUTO_BAN_OFFENSE_WINDOW_HOURS', 24) or 24)
+
+    if permanent_after > 0:
+        now = time.time()
+        with _auto_ban_offenses_lock:
+            rec = _auto_ban_offenses.get(ip)
+            if rec and now - rec[1] <= offense_hours * 3600:
+                rec[0] += 1
+            else:
+                rec = [1, now]
+                _auto_ban_offenses[ip] = rec
+            offense_count = rec[0]
+
+        if offense_count >= permanent_after:
+            # 达到阈值 → 永久封禁，清空记录
+            with _auto_ban_offenses_lock:
+                _auto_ban_offenses.pop(ip, None)
+            duration_minutes = 0  # 将触发下面的 0 → None 转换
+            reason = f'自动封禁：{action} 操作异常（屡次触发，永久封禁）'
+
     # 推送操作上下文（被 ban_ip 内的 record_ban_detail 自动拾取）
     push_ban_context(
         action_source='auto_ban',
@@ -815,6 +842,18 @@ def auto_ban(ip_address, action, reason=''):
             duration_minutes=duration_minutes or '永久',
         )
     return success, message
+
+
+def prune_auto_ban_offenses():
+    """清理过期的自动封禁违规记录（超过窗口时间则清除）。"""
+    from config import get_config_value
+    offense_hours = int(get_config_value('AUTO_BAN_OFFENSE_WINDOW_HOURS', 24) or 24)
+    now = time.time()
+    cutoff = now - offense_hours * 3600
+    with _auto_ban_offenses_lock:
+        expired = [ip for ip, rec in _auto_ban_offenses.items() if rec[1] < cutoff]
+        for ip in expired:
+            del _auto_ban_offenses[ip]
 
 
 # ---------------------------------------------------------------------------

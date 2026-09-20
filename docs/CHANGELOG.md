@@ -2,6 +2,10 @@
 
 ## \[Unreleased]
 
+### 安全
+
+* **自动封禁屡教不改升级永久封禁**：新增 `AUTO_BAN_PERMANENT_AFTER`（阈值次数，0=关闭）和 `AUTO_BAN_OFFENSE_WINDOW_HOURS`（统计窗口）配置，IP 在窗口内被自动封禁达到阈值次数后升级为永久封禁；配置后台热更新，内存违规记录每 120 秒自动清理
+
 ### 样式
 
 * **全站统一弹窗系统重构**：创建 `macros/modal.html` 统一弹窗模板宏（`modal_shell`/`modal_captcha`/`modal_overlay`/`modal_close_script`），新增磨砂玻璃弹窗 CSS（尺寸变体、图标颜色类、响应式适配、过渡动画）；统一 `openModal`/`closeModal` 全局函数；重构 `admin_settings`/`broadcast`/`firewall`/`guides` 及 `register` 页面所有弹窗使用模板宏；修复 `admin_broadcast.html` 引用已删除元素的 ESC 处理器

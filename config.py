@@ -121,6 +121,13 @@ AUTO_BAN_REGISTER_ENABLED = True
 AUTO_BAN_EMAIL_ENABLED = True
 AUTO_BAN_FORGOT_PASSWORD_ENABLED = True
 
+# 屡教不改：在 AUTO_BAN_OFFENSE_WINDOW_HOURS 小时内被自动封禁达到该次数即升级为永久封禁
+# 0 表示关闭此功能（保持原有行为）
+AUTO_BAN_PERMANENT_AFTER = int(os.environ.get('AUTO_BAN_PERMANENT_AFTER', '0'))
+
+# 违规记录的有效时间窗口（小时），超过后重新累计
+AUTO_BAN_OFFENSE_WINDOW_HOURS = int(os.environ.get('AUTO_BAN_OFFENSE_WINDOW_HOURS', '24'))
+
 # 发布内容注入检测总开关：开启后，用户发布的讨论/指南等包含 XSS/HTML/JS 注入的内容将被拦截
 # 首次拦截仅拒绝发布，累计 2 次后自动封禁账号；可在管理后台 → 系统设置中热更新
 CONTENT_INJECTION_BAN_ENABLED = os.environ.get('CONTENT_INJECTION_BAN_ENABLED', '1').lower() in ('1', 'true', 'yes', 'on')
@@ -285,6 +292,8 @@ SETTINGS_REGISTRY = [
     ('FIREWALL_WHITELIST', '112.82.136.172', 'str', '封禁白名单', '逗号分隔，白名单内的 IP 不会被封禁（手动封禁与自动封禁均跳过）', 'IP 封禁'),
     ('AUTO_BAN_ENABLED', True, 'bool', '自动 IP 封禁（总开关）', '开启后，触发限流的可疑操作（登录/注册/找回密码/邮箱验证码）将自动封禁对应 IP；封禁白名单 IP 不受影响', 'IP 封禁'),
     ('AUTO_BAN_DURATION_MINUTES', 30, 'int', '自动封禁时长（分钟）', '自动封禁的持续时长，到期自动解除；0 表示永久封禁', 'IP 封禁'),
+    ('AUTO_BAN_PERMANENT_AFTER', 0, 'int', '永久封禁触发次数', '在违规统计窗口内多次触发自动封禁达到该次数后，自动升级为永久封禁（屡教不改）；0 表示关闭此功能', 'IP 封禁'),
+    ('AUTO_BAN_OFFENSE_WINDOW_HOURS', 24, 'int', '违规统计窗口（小时）', '超过该时间没有再次触发自动封禁，违规次数重新累计', 'IP 封禁'),
     ('AUTO_BAN_LOGIN_ENABLED', True, 'bool', '登录异常自动封禁', '登录请求过于频繁时自动封禁该 IP', 'IP 封禁'),
     ('AUTO_BAN_REGISTER_ENABLED', True, 'bool', '注册异常自动封禁', '注册请求过于频繁时自动封禁该 IP', 'IP 封禁'),
     ('AUTO_BAN_EMAIL_ENABLED', True, 'bool', '邮箱验证码异常自动封禁', '邮箱验证码发送过于频繁时自动封禁该 IP', 'IP 封禁'),

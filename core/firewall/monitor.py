@@ -23,6 +23,7 @@ from core.system.logger import log
 SYNC_INTERVAL = 1.0        # 缓存同步
 CLEANUP_INTERVAL = 1.0     # 清理过期封禁（使用过期堆）
 DDOS_PRUNE_INTERVAL = 120.0  # 清理 DDoS 计数
+AUTO_BAN_PRUNE_INTERVAL = 120.0  # 清理自动封禁违规记录
 SPAM_PRUNE_INTERVAL = 120.0  # 清理刷屏记录
 VACUUM_INTERVAL = 3600.0   # VACUUM
 
@@ -62,6 +63,7 @@ class FirewallMonitor:
         last_sync = 0.0
         last_cleanup = 0.0
         last_ddos_prune = 0.0
+        last_auto_ban_prune = 0.0
         last_spam_prune = 0.0
         last_vacuum = 0.0
 
@@ -100,6 +102,15 @@ class FirewallMonitor:
                 except Exception as exc:
                     log('WARNING', 'fw-tick', f'DDoS 清理异常: {exc}')
                 last_ddos_prune = now
+
+            # ---- [120s] 清理自动封禁违规记录 ----
+            if now - last_auto_ban_prune >= AUTO_BAN_PRUNE_INTERVAL:
+                try:
+                    from core.firewall.service import prune_auto_ban_offenses
+                    prune_auto_ban_offenses()
+                except Exception as exc:
+                    log('WARNING', 'fw-tick', f'自动封禁违规记录清理异常: {exc}')
+                last_auto_ban_prune = now
 
             # ---- [120s] 清理刷屏记录 ----
             if now - last_spam_prune >= SPAM_PRUNE_INTERVAL:
