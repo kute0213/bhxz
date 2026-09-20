@@ -93,7 +93,7 @@ python scripts/build/package.py
 │   │   ├── monitor.py        #   后台监控
 │   │   └── wrappers.py       #   WSGI 门禁
 ├── services/     # 业务逻辑层（纯 Python，不依赖 Flask）
-│   ├── backup/         # 数据库备份与恢复
+│   ├── backup/               #   数据备份（/uploads/ 全量 zip 极限压缩）
 │   ├── discussion/     # 讨论区（帖子/回复/分类）
 │   ├── email/          # 异步邮件发送
 │   ├── game_accounts/  # 游戏账号注册申请（审批/驳回/封禁）
@@ -139,8 +139,10 @@ python scripts/build/package.py
 │   ├── attachments/    # 留言板/讨论区附件
 │   ├── backgrounds/    # 全站背景图片
 │   ├── community/      # 社区资源
-│   └── music/          # 大喇叭音频（每个音频一个 ID 目录，含 m3u8、ts 分片与唱片 MP3）
-├── backups/      # 数据库备份
+│   ├── music/          # 大喇叭音频（每个音频一个 ID 目录，含 m3u8、ts 分片与唱片 MP3）
+│   └── db/             # 数据库文件（site.db + firewall.duckdb）
+├── backups/      # 数据备份
+│   └── uploads/        # /uploads/ 全量 zip 极限压缩备份
 └── ssl/          # HTTPS 证书（可选）
 ```
 
@@ -174,7 +176,7 @@ python scripts/build/package.py
 
 * 系统日志（实时查看，SSE 推送，支持等级过滤、自动滚动；按时间顺序从上到下展示，与控制台一致）
 
-* 数据库备份（手动/自动，进度条，一键恢复）
+* 数据备份（手动/自动，极限压缩 zip，进度条，一键解压恢复）
 
 * 公开文件管理
 
@@ -250,7 +252,7 @@ python scripts/build/package.py
 
 * **统一任务注册模块（`core/shared/scheduler/`）**：全站所有定时执行功能的唯一入口（**防火墙除外**，防火墙保持独立实现）。任务按下次执行时间排序，注册表单线程每秒检测队首（最早到期）任务，到期即派发并检查下一个；派发不阻塞——执行走共享守护线程池（`pool`，默认）或独立守护线程（`thread`），任务执行期间从注册表取出、完成才重新入列，天然防重叠执行
 * 两种调度模式：**固定间隔**（连续失败可按退避算法延长间隔）与**每日时间点**（`HH:MM`，支持配置热重载，当天至多执行一次，手动完成可跳过当天）
-* 已接入：验证码清理、邮箱验证码清理、RCON 连接池清理、玩家列表追踪（含失败退避）、被驳回内容自动清理、每日数据库备份、站点地图刷新、游戏服务器封禁到期自动解封
+* 已接入：验证码清理、邮箱验证码清理、RCON 连接池清理、玩家列表追踪（含失败退避）、被驳回内容自动清理、每日 /uploads/ 全量 zip 备份、站点地图刷新、游戏服务器封禁到期自动解封
 
 ### 服务器性能监控
 
@@ -310,7 +312,7 @@ python scripts/build/package.py
 
 * **日志**：日志输出等级
 
-* **数据库备份**：自动备份时间、保留份数、超时、备份前 CHECKPOINT
+* **数据备份**：自动备份时间、保留份数、超时
 
 * **Sitemap**：刷新时间、站点域名、多域名列表、搜索引擎爬虫策略（robots.txt：允许所有 / 仅主页 / 禁止所有）
 
@@ -344,7 +346,7 @@ python scripts/build/package.py
 
 | 配置项                           | 说明                                        | 默认值                                         |
 | ----------------------------- | ----------------------------------------- | ------------------------------------------- |
-| `DB_PATH`                     | 数据库文件路径                                   | `./db/site.db`                             |
+| `DB_PATH`                     | 数据库文件路径                                   | `./uploads/db/site.db`                     |
 | `UPLOAD_DIR`                  | 上传文件目录                                    | `./uploads`                                 |
 | `UPLOAD_MUSIC_DIR`            | 大喇叭音频存放目录                                 | `./uploads/music`                           |
 | `MUSIC_ALLOWED_EXTENSIONS`    | 大喇叭音频允许上传的格式                              | `mp3/wav/ogg/m4a/flac`                      |
@@ -616,7 +618,7 @@ workspace/
 │   │   ├── monitor.py        #   后台监控
 │   │   └── wrappers.py       #   WSGI 门禁
 ├── services/                 # 业务逻辑层（纯 Python，不依赖 Flask）
-│   ├── backup/               #   数据库备份与恢复
+│   ├── backup/               #   数据备份（/uploads/ 全量 zip 极限压缩）
 │   ├── discussion/           #   讨论区（帖子/回复/分类）
 │   ├── email/                #   异步邮件发送
 │   ├── game_accounts/        #   游戏账号注册申请
@@ -706,13 +708,13 @@ workspace/
 
 > 旧版 DuckDB 数据库（`site.duckdb`）可通过 `scripts/migrate_db.py` 一键迁移到 SQLite（迁移前会自动备份旧库）。
 
-#### 数据库备份
+#### 数据备份
 
 每日凌晨 3:00（可配置）自动执行：
 
-1. 清理 WAL（CHECKPOINT）→ SQLite 在线备份 API（`Connection.backup()`）→ 校验备份文件 → 清理旧备份
+1. 扫描 `/uploads/` 目录下所有文件 → 极限压缩打包为 zip（ZIP_DEFLATED, level 9）→ 校验 zip 完整性 → 清理旧备份
 
-管理后台支持手动触发，显示实时进度条；恢复前自动备份当前数据库。
+管理后台支持手动触发，显示实时进度条；支持一键解压恢复。
 
 ### 一键更新机制
 
@@ -763,6 +765,8 @@ workspace/
 
 ## 最近更新
 
+* **数据库迁移至 `uploads/db/` + 备份改为全量 zip 极限压缩**：`db/` 文件夹整体移至 `uploads/db/`，所有路径引用更新；备份方式由 SQLite 在线备份改为扫描 `/uploads/` 目录下全部文件，使用 ZIP_DEFLATED+level 9 极限压缩打包为 zip，存放于 `backups/uploads/`；管理后台备份页面同步更新，支持一键解压恢复、进度条与历史管理。
+
 * **统一任务注册模块（`core/shared/scheduler/` 包）**：全站所有定时执行功能的唯一入口（**防火墙除外**，防火墙保持独立实现）。任务按下次执行时间排序（`ScheduledTask`），注册表单线程（`TaskRegistry`）**每秒检测队首最早到期任务**，到期即取出派发并继续检查下一个；派发走 `TaskExecutor` 两种后台执行方式（`pool` 共享守护线程池 / `thread` 独立守护线程），**tick 线程永不阻塞**；任务执行期间从注册表取出、完成才重新入列，**天然防重叠执行**；基于 `time.monotonic()` 计时，不受系统时间跳变影响。保留两种调度模式：固定间隔（连续失败按 `backoff_factor/backoff_max` 退避）与每日时间点 `HH:MM`（支持配置热重载、当天去重、`mark_done()` 手动跳过当天）。8 个既有定时任务（验证码清理、邮箱验证码清理、RCON 连接池清理、玩家列表追踪、被驳回内容自动清理、每日数据库备份、站点地图刷新、游戏服务器封禁到期自动解封）全部迁移到注册表，行为与原逻辑一致；删除旧 `core/shared/scheduler.py`。全局 API：`register_task / unregister_task / start_task_scheduler / stop_task_scheduler`
 
 * **新增 DDoS 攻击防护与极高性能多线程防火墙**：`core/firewall/` 在 WSGI 入口（先于一切 Flask 逻辑）拦截黑名单 IP，命中即返回最小 403 并利用 Cheroot 连接特性（`linger=False` + `close()`）强制关闭其现存连接（含 keep-alive 空闲与处理中的请求），客户端表现为连接被重置而非收到页面；后台监控线程每 0.5 秒从数据库同步黑名单镜像并扫描关闭黑名单连接；内置 DDoS 检测按强度（low=300/medium=150/high=80 次每 10 秒）统计单位窗口内请求数，超阈值自动封禁来源 IP（首次限时封禁、时长可配，违规记录时间窗口内屡教不改自动升级永久封禁），检测强度/封禁时长/触发次数等配置在线热更新；管理后台 → 系统设置新增「DDoS 防护」分类，白名单 IP 不受影响。
@@ -807,7 +811,7 @@ workspace/
 
 * **修复大屏端重复显示汉堡菜单**：`>=900px` 大屏端桌面导航（首页/导航/互动/账号）已足够，隐藏汉堡菜单按钮（`.nav-more-button`），避免出现两个菜单入口；小屏端仍保留右侧滑出菜单。
 
-* **数据库备份功能增强**：新增「下载备份」能力——备份历史中成功备份可一键下载到本地（新增 `admin/api/db-backup/<id>/download` 接口，后端 `send_file` 流式下发，前端下载按钮在静态与 JS 动态渲染中均已接入）。
+* **数据备份增强**：新增「下载备份」能力——备份历史中成功备份可一键下载到本地（新增 `admin/api/db-backup/<id>/download` 接口，后端 `send_file` 流式下发，前端下载按钮在静态与 JS 动态渲染中均已接入）。
 
 * **撤回更新优先 Git，改回优先代理下载**：一键更新顺序调整为「① 代理下载 → ② GitHub 直连 → ③ Git（仅当前目录是 git 仓库且系统有 git 时兜底）」，回到代理下载为主、稳定优先的同步方式。
 
