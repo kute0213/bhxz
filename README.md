@@ -184,7 +184,7 @@ python scripts/build/package.py
 
 * 广播邮件（富文本所见即所得编辑器 + 白名单 HTML 清洗，安全防 XSS）
 
-* 手动更新脚本（`scripts/update.sh` — 从 GitHub 拉取最新代码，支持本地修改暂存与恢复）
+* 手动更新脚本（`scripts/update.py` — 跨平台，从 GitHub 拉取最新代码，支持本地修改暂存与恢复）
 
 * 游戏账号管理（注册申请审批、封禁列表管理）
 
@@ -730,9 +730,9 @@ workspace/
 
 ### 手动更新脚本
 
-项目提供了手动更新脚本 [`scripts/update.sh`](scripts/update.sh)，通过 Git 从 GitHub 拉取最新代码：
+项目提供了手动更新脚本 [`scripts/update.py`](scripts/update.py)，通过 Git 从 GitHub 拉取最新代码：
 
-1. 运行 `bash scripts/update.sh`
+1. 运行 `python scripts/update.py`
 2. 脚本自动检测 git 环境和远程更新
 3. 显示更新内容预览（最近提交记录），确认后执行
 4. 支持本地修改暂存（`git stash`），更新后自动恢复
