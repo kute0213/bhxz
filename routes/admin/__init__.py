@@ -15,6 +15,7 @@ import routes.admin.pages            # noqa: E402,F401
 import routes.admin.users            # noqa: E402,F401
 import routes.admin.mod_intros       # noqa: E402,F401
 import routes.admin.guides           # noqa: E402,F401
+import routes.admin.buildings        # noqa: E402,F401
 import routes.admin.guide_bans       # noqa: E402,F401
 import routes.admin.backup           # noqa: E402,F401
 import routes.admin.settings         # noqa: E402,F401

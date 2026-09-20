@@ -201,9 +201,13 @@
                     <i data-lucide="home" class="w-5 h-5"></i>
                     <span>首页</span>
                 </a>
-                <a href="{{ url_for('guides.guide_list') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors">
+                <a href="{{ url_for('guides.guide_list') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors{% if request.endpoint and request.endpoint.startswith('guides.') %} active{% endif %}">
                     <i data-lucide="book-open" class="w-5 h-5"></i>
-                    <span>服务器指南</span>
+                    <span>服务器指南与通告</span>
+                </a>
+                <a href="{{ url_for('buildings.building_list') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors{% if request.endpoint and request.endpoint.startswith('buildings.') %} active{% endif %}">
+                    <i data-lucide="building-2" class="w-5 h-5"></i>
+                    <span>公共建筑</span>
                 </a>
                 <a href="{{ url_for('discussion.list') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors">
                     <i data-lucide="message-square" class="w-5 h-5"></i>
@@ -293,7 +297,10 @@
                         </button>
                         <div class="desktop-nav-dropdown" role="menu">
                             <a href="{{ url_for('guides.guide_list') }}" class="desktop-nav-dropdown-link{% if request.endpoint and request.endpoint.startswith('guides.') %} active{% endif %}" role="menuitem">
-                                <i data-lucide="book-open"></i><span>服务器指南</span>
+                                <i data-lucide="book-open"></i><span>服务器指南与通告</span>
+                            </a>
+                            <a href="{{ url_for('buildings.building_list') }}" class="desktop-nav-dropdown-link{% if request.endpoint and request.endpoint.startswith('buildings.') %} active{% endif %}" role="menuitem">
+                                <i data-lucide="building-2"></i><span>公共建筑</span>
                             </a>
                             <a href="{{ url_for('discussion.list') }}" class="desktop-nav-dropdown-link{% if request.endpoint and request.endpoint.startswith('discussion.') %} active{% endif %}" role="menuitem">
                                 <i data-lucide="message-square"></i><span>讨论</span>

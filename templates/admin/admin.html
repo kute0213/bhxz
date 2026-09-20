@@ -9,7 +9,7 @@
         <!-- 数据统计 -->
         <div class="mb-10 sm:mb-12">
             {{ section_title(title='数据统计', icon='bar-chart-2') }}
-            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 sm:gap-4">
+            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-8 gap-3 sm:gap-4">
                 <div class="pixel-card rounded-xl p-4 text-center">
                     <div class="text-xl sm:text-2xl font-bold text-gold-400 mb-1 break-all">{{ stats.total_users }}</div>
                     <div class="text-xs text-cream/60">注册用户</div>
@@ -28,11 +28,19 @@
                 </div>
                 <div class="pixel-card rounded-xl p-4 text-center">
                     <div class="text-xl sm:text-2xl font-bold text-gold-400 mb-1 break-all">{{ stats.total_guides }}</div>
-                    <div class="text-xs text-cream/60">服务器指南</div>
+                    <div class="text-xs text-cream/60">指南与通告</div>
                 </div>
                 <div class="pixel-card rounded-xl p-4 text-center">
                     <div class="text-xl sm:text-2xl font-bold text-gold-400 mb-1 break-all">{{ stats.pending_guides }}</div>
                     <div class="text-xs text-cream/60">待审核指南</div>
+                </div>
+                <div class="pixel-card rounded-xl p-4 text-center">
+                    <div class="text-xl sm:text-2xl font-bold text-gold-400 mb-1 break-all">{{ stats.total_buildings }}</div>
+                    <div class="text-xs text-cream/60">公共建筑</div>
+                </div>
+                <div class="pixel-card rounded-xl p-4 text-center">
+                    <div class="text-xl sm:text-2xl font-bold text-gold-400 mb-1 break-all">{{ stats.pending_buildings }}</div>
+                    <div class="text-xs text-cream/60">待审核建筑</div>
                 </div>
                 <div class="pixel-card rounded-xl p-4 text-center">
                     <div class="text-xl sm:text-2xl font-bold text-gold-400 mb-1 break-all">{{ stats.total_discussion_topics }}</div>
@@ -73,8 +81,16 @@
                     <div class="w-12 h-12 mb-4 bg-gold-400/20 rounded-xl flex items-center justify-center">
                         <i data-lucide="book-open" class="w-6 h-6 text-gold-400"></i>
                     </div>
-                    <h3 class="text-lg font-bold mb-2">服务器指南管理</h3>
-                    <p class="text-cream/60 text-sm">审核、编辑和管理服务器指南</p>
+                    <h3 class="text-lg font-bold mb-2">指南与通告管理</h3>
+                    <p class="text-cream/60 text-sm">审核、编辑和管理指南与通告</p>
+                    <span class="inline-block mt-4 text-gold-400 text-sm font-medium">进入管理 →</span>
+                </a>
+                <a href="{{ url_for('admin.admin_buildings') }}" class="pixel-card rounded-xl p-6 block hover:no-underline">
+                    <div class="w-12 h-12 mb-4 bg-gold-400/20 rounded-xl flex items-center justify-center">
+                        <i data-lucide="building-2" class="w-6 h-6 text-gold-400"></i>
+                    </div>
+                    <h3 class="text-lg font-bold mb-2">公共建筑管理</h3>
+                    <p class="text-cream/60 text-sm">审核建筑、处理举报信息</p>
                     <span class="inline-block mt-4 text-gold-400 text-sm font-medium">进入管理 →</span>
                 </a>
                 <a href="{{ url_for('admin.admin_update_page') }}" class="pixel-card rounded-xl p-6 block hover:no-underline">

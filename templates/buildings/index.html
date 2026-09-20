@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block title %}公共建筑{% endblock %}
+{% block extra_style %}
+<style>
+.building-card {
+    background: linear-gradient(145deg, rgba(255,255,255,0.78) 0%, rgba(248,250,254,0.66) 50%, rgba(255,255,255,0.78) 100%);
+    backdrop-filter: blur(40px) saturate(110%);
+    -webkit-backdrop-filter: blur(40px) saturate(110%);
+    border: 1px solid var(--border-card);
+    border-radius: 24px !important;
+    box-shadow: 0 8px 32px rgba(15,23,42,0.1), inset 0 1px 0 rgba(255,255,255,0.6);
+    position: relative; overflow: hidden;
+    transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+}
+.building-card:hover {
+    border-color: rgba(2,132,199,0.3);
+    transform: translateY(-2px);
+    box-shadow: 0 12px 40px rgba(15,23,42,0.14), inset 0 1px 0 rgba(255,255,255,0.7);
+}
+.building-card::after {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 50%; border-radius: 24px 24px 0 0; pointer-events: none;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0) 100%);
+}
+.building-card-top-bar {
+    position: absolute; top: 0; left: 0; right: 0; height: 4px;
+    background: linear-gradient(90deg,
+        rgba(96, 165, 250, 0) 0%,
+        rgba(96, 165, 250, 0.6) 15%,
+        #60a5fa 30%,
+        #3b82f6 50%,
+        #2563eb 70%,
+        rgba(37, 99, 235, 0.6) 85%,
+        rgba(37, 99, 235, 0) 100%
+    );
+    border-radius: 24px 24px 0 0; z-index: 1; pointer-events: none;
+}
+.building-status-badge {
+    display: inline-flex; align-items: center; gap: 0.25rem;
+    font-size: 0.75rem; padding: 0.125rem 0.5rem; border-radius: 9999px;
+}
+.building-status-pending { background: rgba(217, 119, 6, 0.12); color: #b45309; border: 1px solid rgba(217, 119, 6, 0.3); }
+.building-status-approved { background: rgba(22, 163, 74, 0.12); color: #15803d; border: 1px solid rgba(22, 163, 74, 0.3); }
+.building-status-rejected { background: rgba(225, 29, 72, 0.12); color: #be123c; border: 1px solid rgba(225, 29, 72, 0.3); }
+</style>
+{% endblock %}
+{% block content %}
+<section class="page-container py-12">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="text-center mb-10 sm:mb-12">
+            <h1 class="text-2xl sm:text-3xl font-bold mb-3">{{ '我的建筑' if my_mode else '公共建筑' }}</h1>
+            <p class="text-cream/60 text-sm sm:text-base">{{ '我发布的公共建筑' if my_mode else '分享你在滨海小镇的杰作，使用 /res tp 领地名 一键前往参观' }}</p>
+        </div>
+
+        {% if user %}
+        <div class="mb-8 flex flex-wrap items-center gap-3 justify-center">
+            {% if my_mode %}
+            <a href="{{ url_for('buildings.building_list') }}" class="btn-secondary px-4 py-2 rounded-lg text-sm inline-flex items-center gap-2">
+                <i data-lucide="building-2" class="w-4 h-4"></i>全部建筑
+            </a>
+            {% else %}
+            <a href="{{ url_for('buildings.building_list') }}?my=1" class="btn-secondary px-4 py-2 rounded-lg text-sm inline-flex items-center gap-2">
+                <i data-lucide="file-text" class="w-4 h-4"></i>我的建筑
+            </a>
+            {% endif %}
+            <a href="{{ url_for('buildings.building_create') }}" class="btn-primary px-4 py-2 rounded-lg text-sm inline-flex items-center gap-2">
+                <i data-lucide="plus" class="w-4 h-4"></i>发布建筑
+            </a>
+        </div>
+        {% endif %}
+
+        {% if buildings %}
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+            {% for b in buildings %}
+            <div class="building-card block p-6">
+                <div class="building-card-top-bar"></div>
+                <div class="relative z-10">
+                    <div class="flex items-center gap-2 mb-2">
+                        {% if my_mode %}
+                        <span class="building-status-badge
+                            {% if b.status == 'pending' %}building-status-pending{% elif b.status == 'approved' %}building-status-approved{% else %}building-status-rejected{% endif %}">
+                            {% if b.status == 'pending' %}待审核{% elif b.status == 'approved' %}已通过{% else %}已拒绝{% endif %}
+                        </span>
+                        {% endif %}
+                    </div>
+                    <a href="{{ url_for('buildings.building_detail', building_id=b.id) }}" class="hover:no-underline">
+                        <h3 class="text-lg font-bold mb-1 text-cream">{{ b.title }}</h3>
+                        <div class="inline-flex items-center gap-1 text-xs text-[var(--accent-blue)] bg-[var(--accent-blue)]/10 px-2 py-0.5 rounded-full mb-3">
+                            <i data-lucide="map-pin" class="w-3 h-3"></i>
+                            <span class="font-mono">/res tp {{ b.warp_name }}</span>
+                        </div>
+                        <p class="text-cream/60 text-sm leading-relaxed mb-4 line-clamp-3">{{ b.description[:150] }}{{ '...' if b.description|length > 150 else '' }}</p>
+                    </a>
+                    <div class="flex items-center justify-between text-xs text-cream/40">
+                        <span class="flex items-center gap-1"><i data-lucide="user" class="w-3 h-3"></i>{{ b.author_name or '未知' }}</span>
+                        <span class="flex items-center gap-1"><i data-lucide="eye" class="w-3 h-3"></i>{{ b.view_count or 0 }}</span>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="text-center py-16">
+            <div class="pixel-card rounded-xl p-8 sm:p-12 max-w-lg mx-auto">
+                <i data-lucide="building-2" class="w-12 h-12 text-cream/30 mx-auto mb-4"></i>
+                <p class="text-cream/60 text-lg mb-2">暂无公共建筑</p>
+                <p class="text-cream/40 text-sm">快来发布你的第一个建筑吧</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</section>
+{% endblock %}

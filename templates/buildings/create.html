@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}发布公共建筑{% endblock %}
+{% block content %}
+<section class="page-container py-12">
+    <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="text-center mb-8">
+            <div class="w-16 h-16 mx-auto bg-gold-400/20 rounded-full flex items-center justify-center mb-4">
+                <i data-lucide="building-2" class="w-8 h-8 text-gold-400"></i>
+            </div>
+            <h1 class="text-2xl sm:text-3xl font-bold mb-2">发布公共建筑</h1>
+            <p class="text-cream/60 text-sm">分享你在滨海小镇的建筑杰作</p>
+        </div>
+
+        <form id="post-form" method="POST" class="pixel-card rounded-xl p-6 sm:p-8 space-y-5">
+        {{ csrf_field() }}
+            <input type="hidden" name="captcha_id" id="captcha-id-hidden" value="">
+            <input type="hidden" name="captcha" id="captcha-hidden" value="">
+
+            <div>
+                <label class="block text-sm font-medium mb-2 text-cream/80">建筑标题 <span class="text-red-400">*</span></label>
+                <input type="text" name="title" required maxlength="50" class="input-field w-full px-4 py-3 rounded-lg" placeholder="给你的建筑取个响亮的名字">
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium mb-2 text-cream/80">领地名（Warp Name） <span class="text-red-400">*</span></label>
+                <input type="text" name="warp_name" required maxlength="50" class="input-field w-full px-4 py-3 rounded-lg font-mono" placeholder="例如: my_castle">
+                <p class="mt-1 text-xs text-cream/50">玩家可使用 <code class="text-gold-400 bg-black/20 px-1 rounded">/res tp 领地名</code> 传送至此建筑</p>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium mb-2 text-cream/80">建筑介绍 <span class="text-red-400">*</span></label>
+                <textarea name="description" required rows="5" class="input-field w-full px-4 py-3 rounded-lg" placeholder="描述你的建筑，如风格、特色、建造历程等"></textarea>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium mb-2 text-cream/80">使用方式 <span class="text-cream/40">（可选）</span></label>
+                <textarea name="usage_info" rows="3" class="input-field w-full px-4 py-3 rounded-lg" placeholder="如果建筑有特殊功能，请说明如何使用"></textarea>
+            </div>
+
+            <div>
+                <label class="block text-sm font-medium mb-2 text-cream/80">注意事项 <span class="text-cream/40">（可选）</span></label>
+                <textarea name="notes" rows="3" class="input-field w-full px-4 py-3 rounded-lg" placeholder="其他人参观时需要注意的事项"></textarea>
+            </div>
+
+            <div class="pt-4 border-t border-forest-700/30">
+                <button type="button" id="show-captcha-btn" class="btn-primary w-full py-3 rounded-lg font-bold">
+                    <i data-lucide="shield-check" class="w-5 h-5 inline-block mr-1"></i>验证并提交
+                </button>
+            </div>
+        </form>
+    </div>
+</section>
+{% endblock %}
+{% block extra_js %}
+<script>
+(function () {
+    function init() {
+        var form = document.getElementById('post-form');
+        var btn = document.getElementById('show-captcha-btn');
+        if (!form || !btn || typeof CaptchaModal === 'undefined') return;
+
+        btn.addEventListener('click', function () {
+            CaptchaModal.show('请完成图形验证码后提交', function (captchaId, code) {
+                document.getElementById('captcha-id-hidden').value = captchaId;
+                document.getElementById('captcha-hidden').value = code;
+                form.submit();
+            });
+        });
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,219 @@
+{% extends "base.html" %}
+{% block title %}{{ building.title }} - 公共建筑{% endblock %}
+{% block content %}
+<section class="page-container py-12">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+        <!-- 导航返回 -->
+        <a href="{{ url_for('buildings.building_list') }}" class="inline-flex items-center gap-1.5 text-sm text-cream/60 hover:text-gold-400 mb-6 transition-colors">
+            <i data-lucide="arrow-left" class="w-4 h-4"></i>返回建筑列表
+        </a>
+
+        <!-- 建筑主体 -->
+        <div class="pixel-card rounded-xl p-6 sm:p-8 mb-8">
+            <div class="flex items-start justify-between gap-4 mb-4">
+                <div>
+                    <h1 class="text-2xl sm:text-3xl font-bold mb-2">{{ building.title }}</h1>
+                    <div class="flex items-center gap-3 text-sm text-cream/60 flex-wrap">
+                        <span class="flex items-center gap-1"><i data-lucide="user" class="w-4 h-4"></i>{{ building.author_name or '未知' }}</span>
+                        <span class="flex items-center gap-1"><i data-lucide="calendar" class="w-4 h-4"></i>{{ (building.published_at or building.created_at)[:10] }}</span>
+                        <span class="flex items-center gap-1"><i data-lucide="eye" class="w-4 h-4"></i>{{ building.view_count or 0 }} 次浏览</span>
+                        <span class="flex items-center gap-1"><i data-lucide="message-circle" class="w-4 h-4"></i>{{ building.comment_count }} 条评论</span>
+                    </div>
+                </div>
+                {% if user and user.id != building.author_id %}
+                <button type="button" id="report-btn" class="flex-shrink-0 text-cream/40 hover:text-red-400 transition-colors p-2" title="举报此建筑">
+                    <i data-lucide="flag" class="w-5 h-5"></i>
+                </button>
+                {% endif %}
+            </div>
+
+            <!-- 传送信息 -->
+            <div class="bg-black/[0.03] rounded-xl p-4 mb-6">
+                <div class="flex items-center justify-between flex-wrap gap-3">
+                    <div>
+                        <span class="text-xs text-cream/50 block mb-1">传送指令</span>
+                        <code id="tp-command" class="text-lg font-mono font-bold text-[var(--accent-blue)]">/res tp {{ building.warp_name }}</code>
+                    </div>
+                    <button onclick="copyTeleport()" class="btn-primary px-4 py-2 rounded-lg text-sm inline-flex items-center gap-2">
+                        <i data-lucide="copy" class="w-4 h-4"></i>
+                        <span id="copy-label">复制指令</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 建筑介绍 -->
+            <div class="mb-6">
+                <h2 class="text-lg font-semibold mb-3 text-cream/80">建筑介绍</h2>
+                <div class="text-cream/70 text-sm leading-relaxed whitespace-pre-wrap">{{ building.description }}</div>
+            </div>
+
+            {% if building.usage_info %}
+            <div class="mb-6">
+                <h2 class="text-lg font-semibold mb-3 text-cream/80">使用方式</h2>
+                <div class="text-cream/70 text-sm leading-relaxed whitespace-pre-wrap">{{ building.usage_info }}</div>
+            </div>
+            {% endif %}
+
+            {% if building.notes %}
+            <div class="bg-yellow-500/5 border border-yellow-500/20 rounded-xl p-4">
+                <div class="flex items-start gap-2">
+                    <i data-lucide="alert-triangle" class="w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5"></i>
+                    <div>
+                        <h3 class="text-sm font-semibold text-yellow-400 mb-1">注意事项</h3>
+                        <div class="text-yellow-300/70 text-sm whitespace-pre-wrap">{{ building.notes }}</div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <!-- 评论区 -->
+        <div class="pixel-card rounded-xl p-6 sm:p-8">
+            <h2 class="text-lg font-bold mb-4 flex items-center gap-2">
+                <i data-lucide="message-circle" class="w-5 h-5 text-gold-400"></i>
+                评论 ({{ building.comment_count }})
+            </h2>
+
+            {% if user %}
+            <form id="comment-form" class="mb-6" onsubmit="return submitComment(event)">
+                <textarea id="comment-input" rows="3" class="input-field w-full px-4 py-3 rounded-lg mb-3" placeholder="发表你的看法..." maxlength="500" required></textarea>
+                <div class="flex justify-end">
+                    <button type="submit" class="btn-primary px-5 py-2 rounded-lg text-sm">发表评论</button>
+                </div>
+            </form>
+            {% else %}
+            <div class="mb-6 p-4 bg-black/[0.03] rounded-xl text-center text-sm text-cream/50">
+                请<a href="{{ url_for('main.login') }}" class="text-gold-400 hover:underline">登录</a>后发表评论
+            </div>
+            {% endif %}
+
+            <div id="comments-list" class="space-y-4">
+                {% for c in comments %}
+                <div class="comment-item p-4 bg-black/[0.03] rounded-xl" data-comment-id="{{ c.id }}">
+                    <div class="flex items-center justify-between mb-2">
+                        <div class="flex items-center gap-2">
+                            <span class="text-sm font-medium text-cream/80">{{ c.username or '未知' }}</span>
+                            <span class="text-xs text-cream/40">{{ c.created_at[:16] }}</span>
+                        </div>
+                        {% if user and (user.id == c.user_id or user.id == building.author_id or user.is_admin) %}
+                        <button onclick="deleteComment({{ c.id }})" class="text-xs text-red-400/60 hover:text-red-400 transition-colors">删除</button>
+                        {% endif %}
+                    </div>
+                    <p class="text-sm text-cream/70 whitespace-pre-wrap">{{ c.content }}</p>
+                </div>
+                {% else %}
+                <div class="text-center py-8 text-cream/40 text-sm">暂无评论，抢个沙发吧～</div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</section>
+
+{% include 'macros/modal.html' %}
+
+{% call modal_shell('report-modal', size='sm', title='举报公共建筑', icon='flag', icon_color='red', close_on_overlay='false') %}
+    <div class="modal-body">
+        <p class="text-sm text-[var(--text-secondary)] mb-3">请说明举报 <b class="text-[var(--accent-blue)]">{{ building.title }}</b> 的原因：</p>
+        <textarea id="report-reason" rows="4" class="input-field w-full px-4 py-3 rounded-lg" placeholder="请详细描述违规内容..." maxlength="500"></textarea>
+    </div>
+    <div class="modal-footer">
+        <button type="button" class="btn-secondary" onclick="closeModal('report-modal')">取消</button>
+        <button type="button" class="btn-primary" style="background:var(--accent-red, #be123c);border-color:var(--accent-red, #be123c);" onclick="submitReport()">提交举报</button>
+    </div>
+{% endcall %}
+
+{% from 'macros/modal.html' import modal_close_script %}
+{{ modal_close_script() }}
+{% endblock %}
+{% block extra_js %}
+<script>
+// ---- 一键复制传送指令 ----
+function copyTeleport() {
+    var cmd = document.getElementById('tp-command').textContent.trim();
+    if (navigator.clipboard) {
+        navigator.clipboard.writeText(cmd).then(function() {
+            var label = document.getElementById('copy-label');
+            label.textContent = '已复制';
+            setTimeout(function() { label.textContent = '复制指令'; }, 2000);
+        }).catch(function() { fallbackCopy(cmd); });
+    } else { fallbackCopy(cmd); }
+}
+function fallbackCopy(text) {
+    var ta = document.createElement('textarea');
+    ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); document.getElementById('copy-label').textContent = '已复制';
+        setTimeout(function() { document.getElementById('copy-label').textContent = '复制指令'; }, 2000);
+    } catch(e) {}
+    document.body.removeChild(ta);
+}
+
+// ---- 评论 ----
+function submitComment(e) {
+    e.preventDefault();
+    var content = document.getElementById('comment-input').value.trim();
+    if (!content) { alert('评论内容不能为空'); return false; }
+    var btn = e.target.querySelector('button[type="submit"]');
+    btn.disabled = true; btn.textContent = '发布中...';
+    var formData = new FormData();
+    formData.append('content', content);
+    fetch('/buildings/{{ building.id }}/comment', { method: 'POST', body: formData })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.success) {
+            var list = document.getElementById('comments-list');
+            var empty = list.querySelector('.text-center.py-8');
+            if (empty) empty.remove();
+            var div = document.createElement('div');
+            div.className = 'comment-item p-4 bg-black/[0.03] rounded-xl';
+            div.innerHTML =
+                '<div class="flex items-center justify-between mb-2">' +
+                '<div class="flex items-center gap-2"><span class="text-sm font-medium text-cream/80">' + data.comment.username + '</span>' +
+                '<span class="text-xs text-cream/40">' + data.comment.created_at.slice(0, 16) + '</span></div></div>' +
+                '<p class="text-sm text-cream/70 whitespace-pre-wrap">' + escapeHtml(data.comment.content) + '</p>';
+            list.insertBefore(div, list.firstChild);
+            document.getElementById('comment-input').value = '';
+            location.reload();  // 简单处理：刷新更新评论数
+        } else { alert(data.message); }
+    }).catch(function() { alert('评论失败，请重试'); })
+    .finally(function() { btn.disabled = false; btn.textContent = '发表评论'; });
+    return false;
+}
+
+function deleteComment(commentId) {
+    if (!confirm('确定删除此评论？')) return;
+    var formData = new FormData();
+    fetch('/buildings/comment/' + commentId + '/delete', { method: 'POST', body: formData })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.success) {
+            var el = document.querySelector('.comment-item[data-comment-id="' + commentId + '"]');
+            if (el) el.remove();
+            location.reload();
+        } else { alert(data.message); }
+    }).catch(function() { alert('删除失败'); });
+}
+
+// ---- 举报 ----
+document.getElementById('report-btn') && document.getElementById('report-btn').addEventListener('click', function() {
+    openModal('report-modal');
+});
+function submitReport() {
+    var reason = document.getElementById('report-reason').value.trim();
+    if (!reason) { alert('请填写举报原因'); return; }
+    var formData = new FormData();
+    formData.append('reason', reason);
+    fetch('/buildings/{{ building.id }}/report', { method: 'POST', body: formData })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        alert(data.message);
+        if (data.success) { closeModal('report-modal'); document.getElementById('report-reason').value = ''; }
+    }).catch(function() { alert('举报失败'); });
+}
+
+function escapeHtml(text) {
+    var d = document.createElement('div');
+    d.textContent = text; return d.innerHTML;
+}
+</script>
+{% endblock %}

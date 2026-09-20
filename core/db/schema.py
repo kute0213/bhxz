@@ -242,6 +242,47 @@ def init_db():
                 created_at TEXT NOT NULL             -- 申请时间
             )
         '''),
+        # 公共建筑表
+        ('public_buildings', '''
+            CREATE TABLE IF NOT EXISTS public_buildings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                title TEXT NOT NULL,
+                warp_name TEXT NOT NULL,
+                description TEXT NOT NULL,
+                usage_info TEXT DEFAULT '',
+                notes TEXT DEFAULT '',
+                author_id INTEGER NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                view_count INTEGER DEFAULT 0,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                published_at TEXT DEFAULT NULL,
+                rejected_reason TEXT DEFAULT '',
+                rejected_at TEXT DEFAULT NULL
+            )
+        '''),
+        # 建筑评论表
+        ('building_comments', '''
+            CREATE TABLE IF NOT EXISTS building_comments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                building_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                content TEXT NOT NULL,
+                created_at TEXT NOT NULL
+            )
+        '''),
+        # 建筑举报表
+        ('building_reports', '''
+            CREATE TABLE IF NOT EXISTS building_reports (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                building_id INTEGER NOT NULL,
+                reporter_id INTEGER NOT NULL,
+                reason TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'pending',
+                created_at TEXT NOT NULL,
+                resolved_at TEXT DEFAULT NULL
+            )
+        '''),
     ]
 
     for table_name, ddl in tables:

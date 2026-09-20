@@ -118,7 +118,8 @@ python scripts/build/package.py
 │   ├── discussion/     # 讨论区（页面+API）
 │   ├── docs/           # 文档页面
 │   ├── game_accounts/  # 申请账号（页面+API，纯申请注册）
-│   ├── guides/         # 服务器指南（页面+API）
+│   ├── guides/         # 服务器指南与通告（页面+API）
+│   ├── buildings/      # 公共建筑（页面+API）
 │   ├── main/           # 主站（登录/注册/设置/音乐）
 │   └── public/         # 公开文件服务
 ├── templates/    # Jinja2 模板
@@ -127,7 +128,8 @@ python scripts/build/package.py
 │   ├── discussion/     # 讨论区页面
 │   ├── emails/         # 邮件模板
 │   ├── game_accounts/  # 游戏账号页面
-│   ├── guides/         # 服务器指南页面
+│   ├── guides/         # 服务器指南与通告页面
+│   ├── buildings/      # 公共建筑（列表/详情/发布）
 │   ├── macros/         # 通用模板宏（模态框/编辑/进度条/音乐）
 │   ├── music/          # 大喇叭音频页面
 │   ├── static/         # 静态资源（CSS/JS/本地化第三方库，随模板目录存放）
@@ -203,6 +205,15 @@ python scripts/build/package.py
 * 成员提交需审核，管理员直接发布
 
 * 封禁机制（用户名/IP，限时或永久）
+
+### 公共建筑
+
+* 服务器公共建筑列表页面，用户可发布自己的建筑（标题、领地名、介绍、使用方式、注意事项）
+* 一键复制传送指令 `/res tp 领地名`
+* 评论功能：登录用户可发表评论，作者/管理员可删除评论
+* 举报功能：用户可举报违规建筑，管理员在后台可查看举报并删除建筑
+* 审核工作流：新提交建筑进入待审核状态，管理员通过后公开可见
+* 接入防火墙内容检测、防刷机制和图形验证码
 
 ### 讨论区
 
@@ -635,7 +646,7 @@ workspace/
 │   ├── sitemap_cache/        #   Sitemap 缓存服务
 ├── routes/                   # HTTP 路由层
 │   ├── main/                 #   首页、登录、注册、设置、音乐
-│   ├── admin/                #   管理后台（用户/备份/设置/日志/更新/游戏账号/指南/音乐/讨论/广播/背景等）
+│   ├── admin/                #   管理后台（用户/备份/设置/日志/更新/游戏账号/指南/音乐/讨论/广播/背景/公共建筑等）
 │   ├── api/                  #   JSON API（性能/统计/验证码/邮箱）
 │   ├── backgrounds/          #   背景图片页面
 │   ├── community/            #   社区留言板
@@ -705,6 +716,9 @@ workspace/
 | `backgrounds`             | 背景图片     | `status` 审核状态，WebP 格式，响应式变体，`rejected_at` 记录驳回时间（超 24h 自动删除）                                            |
 | `game_account_registrations` | 游戏账号注册申请 | 申请注册 MC 账号，管理员审批                                                                                               |
 | `game_account_bans`       | 游戏账号封禁   | 封禁 MC 账号申请资格                                                                                                    |
+| `public_buildings`        | 公共建筑     | 标题/领地名/介绍/使用方式/注意事项，审核工作流（pending→approved/rejected）                                                        |
+| `building_comments`       | 建筑评论     | 外键 `building_id`，支持作者/管理员删除                                                                                       |
+| `building_reports`        | 建筑举报     | 外键 `building_id`，待处理→驳回流程                                                                                         |
 
 > 旧版 DuckDB 数据库（`site.duckdb`）可通过 `scripts/migrate_db.py` 一键迁移到 SQLite（迁移前会自动备份旧库）。
 

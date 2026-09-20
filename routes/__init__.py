@@ -17,6 +17,7 @@ def register_blueprints(app: Flask):
     from routes.api import api_bp, captcha_bp, email_code_bp
     from routes.docs import docs_bp
     from routes.guides import guides_bp
+    from routes.buildings import buildings_bp
     from routes.discussion import discussion_bp
     from routes.backgrounds import backgrounds_bp
     from routes.public import public_bp, try_serve_public
@@ -26,7 +27,7 @@ def register_blueprints(app: Flask):
     blueprints = [
         public_bp, main_bp, community_bp, admin_bp,
         api_bp, captcha_bp, email_code_bp,
-        docs_bp, guides_bp, discussion_bp,
+        docs_bp, guides_bp, buildings_bp, discussion_bp,
         backgrounds_bp, sitemap_bp, account_apply_bp,
     ]
     for bp in blueprints:
