@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}服务器指南与通告{% endblock %}
+{% block title %}服务器指南{% endblock %}
 {% block extra_style %}
 <style>
 .guide-card {
@@ -58,7 +58,7 @@
 <section class="page-container py-12">
     <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="text-center mb-10 sm:mb-12">
-            <h1 class="text-2xl sm:text-3xl font-bold mb-3">{{ '我的指南' if my_mode else '服务器指南与通告' }}</h1>
+            <h1 class="text-2xl sm:text-3xl font-bold mb-3">{{ '我的指南' if my_mode else '服务器指南' }}</h1>
             <p class="text-cream/60 text-sm sm:text-base">{{ '我提交或编辑过的指南' if my_mode else '探索滨海小镇的玩法与最新公告' }}</p>
         </div>
 
@@ -120,7 +120,7 @@
         <div class="text-center py-16">
             <div class="pixel-card rounded-xl p-8 sm:p-12 max-w-lg mx-auto">
                 <i data-lucide="book-open" class="w-12 h-12 text-cream/30 mx-auto mb-4"></i>
-                <p class="text-cream/60 text-lg mb-2">暂无指南与通告</p>
+                <p class="text-cream/60 text-lg mb-2">暂无服务器指南</p>
                 <p class="text-cream/40 text-sm">管理员或成员可以添加新指南</p>
             </div>
         </div>

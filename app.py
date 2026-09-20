@@ -81,6 +81,8 @@ if not _is_child:
         traceback.print_exc(file=sys.stderr)
         sys.stderr.flush()
         raise
+    from core.system.logger import log
+    log('INFO', 'App', '所有服务已加载完成，服务器已启动')
 
 
 # ---------------------------------------------------------------------------

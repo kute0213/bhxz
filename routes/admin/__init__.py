@@ -23,7 +23,6 @@ import routes.admin.broadcast        # noqa: E402,F401
 import routes.admin.discussion       # noqa: E402,F401
 import routes.admin.music            # noqa: E402,F401
 import routes.admin.backgrounds      # noqa: E402,F401
-import routes.admin.update           # noqa: E402,F401
 import routes.admin.logs             # noqa: E402,F401
 import routes.admin.account_applications  # noqa: E402,F401
 import routes.admin.firewall         # noqa: E402,F401

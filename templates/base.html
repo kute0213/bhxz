@@ -203,11 +203,7 @@
                 </a>
                 <a href="{{ url_for('guides.guide_list') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors{% if request.endpoint and request.endpoint.startswith('guides.') %} active{% endif %}">
                     <i data-lucide="book-open" class="w-5 h-5"></i>
-                    <span>服务器指南与通告</span>
-                </a>
-                <a href="{{ url_for('buildings.building_list') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors{% if request.endpoint and request.endpoint.startswith('buildings.') %} active{% endif %}">
-                    <i data-lucide="building-2" class="w-5 h-5"></i>
-                    <span>公共建筑</span>
+                    <span>服务器指南</span>
                 </a>
                 <a href="{{ url_for('discussion.list') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors">
                     <i data-lucide="message-square" class="w-5 h-5"></i>
@@ -217,6 +213,12 @@
                     <i data-lucide="activity" class="w-5 h-5"></i>
                     <span>服务器状态</span>
                 </a>
+
+                <div class="text-xs text-cream/40 font-medium uppercase tracking-wider px-4 mb-2 mt-6">服务器互动</div>
+                <a href="{{ url_for('buildings.building_list') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors{% if request.endpoint and request.endpoint.startswith('buildings.') %} active{% endif %}">
+                    <i data-lucide="building-2" class="w-5 h-5"></i>
+                    <span>公共建筑</span>
+                </a>
                 <a href="{{ url_for('account_apply.apply_page') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors{% if request.endpoint and request.endpoint.startswith('account_apply.') %} active{% endif %}">
                     <i data-lucide="user-plus" class="w-5 h-5"></i>
                     <span>申请服务器账号</span>
@@ -225,8 +227,6 @@
                     <i data-lucide="shield-x" class="w-5 h-5"></i>
                     <span>申请封禁玩家</span>
                 </a>
-
-                <div class="text-xs text-cream/40 font-medium uppercase tracking-wider px-4 mb-2 mt-6">互动</div>
                 <a href="{{ url_for('main.music_page') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors">
                     <i data-lucide="music" class="w-5 h-5"></i>
                     <span>大喇叭音频</span>
@@ -297,10 +297,7 @@
                         </button>
                         <div class="desktop-nav-dropdown" role="menu">
                             <a href="{{ url_for('guides.guide_list') }}" class="desktop-nav-dropdown-link{% if request.endpoint and request.endpoint.startswith('guides.') %} active{% endif %}" role="menuitem">
-                                <i data-lucide="book-open"></i><span>服务器指南与通告</span>
-                            </a>
-                            <a href="{{ url_for('buildings.building_list') }}" class="desktop-nav-dropdown-link{% if request.endpoint and request.endpoint.startswith('buildings.') %} active{% endif %}" role="menuitem">
-                                <i data-lucide="building-2"></i><span>公共建筑</span>
+                                <i data-lucide="book-open"></i><span>服务器指南</span>
                             </a>
                             <a href="{{ url_for('discussion.list') }}" class="desktop-nav-dropdown-link{% if request.endpoint and request.endpoint.startswith('discussion.') %} active{% endif %}" role="menuitem">
                                 <i data-lucide="message-square"></i><span>讨论</span>
@@ -308,20 +305,23 @@
                             <a href="{{ url_for('main.server_status') }}" class="desktop-nav-dropdown-link{% if request.endpoint == 'main.server_status' %} active{% endif %}" role="menuitem">
                                 <i data-lucide="activity"></i><span>服务器状态</span>
                             </a>
+                        </div>
+                    </div>
+                    <div class="desktop-nav-item">
+                        <button type="button" class="desktop-nav-toggle" aria-haspopup="true">
+                            <i data-lucide="users"></i><span>服务器互动</span>
+                            <i data-lucide="chevron-down" class="nav-caret"></i>
+                        </button>
+                        <div class="desktop-nav-dropdown" role="menu">
+                            <a href="{{ url_for('buildings.building_list') }}" class="desktop-nav-dropdown-link{% if request.endpoint and request.endpoint.startswith('buildings.') %} active{% endif %}" role="menuitem">
+                                <i data-lucide="building-2"></i><span>公共建筑</span>
+                            </a>
                             <a href="{{ url_for('account_apply.apply_page') }}" class="desktop-nav-dropdown-link{% if request.endpoint and request.endpoint.startswith('account_apply.') %} active{% endif %}" role="menuitem">
                                 <i data-lucide="user-plus"></i><span>申请服务器账号</span>
                             </a>
                             <a href="{{ url_for('account_apply.ban_apply_page') }}" class="desktop-nav-dropdown-link" role="menuitem">
                                 <i data-lucide="shield-x"></i><span>申请封禁玩家</span>
                             </a>
-                        </div>
-                    </div>
-                    <div class="desktop-nav-item">
-                        <button type="button" class="desktop-nav-toggle" aria-haspopup="true">
-                            <i data-lucide="users"></i><span>互动</span>
-                            <i data-lucide="chevron-down" class="nav-caret"></i>
-                        </button>
-                        <div class="desktop-nav-dropdown" role="menu">
                             <a href="{{ url_for('main.music_page') }}" class="desktop-nav-dropdown-link{% if request.endpoint and request.endpoint.startswith('main.music') %} active{% endif %}" role="menuitem">
                                 <i data-lucide="music"></i><span>大喇叭音频</span>
                             </a>

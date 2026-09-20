@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}指南与通告管理{% endblock %}
+{% block title %}指南管理{% endblock %}
 {% block extra_style %}
 <style>
 .status-pending { background: rgba(234, 179, 8, 0.15); color: #facc15; border: 1px solid rgba(234, 179, 8, 0.25); }
@@ -28,8 +28,8 @@
     <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-8">
             <div>
-                <h1 class="text-2xl sm:text-3xl font-bold mb-1">服务器指南与通告管理</h1>
-                <p class="text-cream/60 text-sm">审核、编辑和管理所有指南与通告</p>
+                <h1 class="text-2xl sm:text-3xl font-bold mb-1">服务器指南管理</h1>
+                <p class="text-cream/60 text-sm">审核、编辑和管理所有服务器指南</p>
             </div>
             <div class="flex items-center gap-3">
                 <a href="{{ url_for('admin.admin_guide_bans') }}" class="btn-secondary px-4 py-2 rounded-lg text-sm inline-flex items-center gap-2">
