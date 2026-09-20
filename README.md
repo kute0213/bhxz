@@ -775,6 +775,8 @@ workspace/
 
 ## 最近更新
 
+* **修复公共建筑验证码与防火墙增强**：修复公共建筑发布页验证码提交无反应（脚本块 `extra_js`→`extra_script` 匹配+阻止默认提交）；发布页「验证并提交」按钮触发图形验证码弹窗，通过验证后自动提交表单；建筑评论新增图形验证码验证，提交前弹出验证码弹窗；防火墙设置页新增「发布频率限制」配置区域（公共建筑/建筑评论/话题/回复/指南/背景/音乐等 7 种内容类型均可独立配置次数与检测窗口），settings API 支持所有频率限制项热保存；`core/firewall/spam.py` 新增 `get_spam_limit()` 函数优先读取系统设置动态配置。
+
 * **数据库迁移至 `uploads/db/` + 备份改为全量 zip 极限压缩**：`db/` 文件夹整体移至 `uploads/db/`，所有路径引用更新；备份方式由 SQLite 在线备份改为扫描 `/uploads/` 目录下全部文件，使用 ZIP_DEFLATED+level 9 极限压缩打包为 zip，存放于 `backups/uploads/`；管理后台备份页面同步更新，支持一键解压恢复、进度条与历史管理。
 
 * **统一任务注册模块（`core/shared/scheduler/` 包）**：全站所有定时执行功能的唯一入口（**防火墙除外**，防火墙保持独立实现）。任务按下次执行时间排序（`ScheduledTask`），注册表单线程（`TaskRegistry`）**每秒检测队首最早到期任务**，到期即取出派发并继续检查下一个；派发走 `TaskExecutor` 两种后台执行方式（`pool` 共享守护线程池 / `thread` 独立守护线程），**tick 线程永不阻塞**；任务执行期间从注册表取出、完成才重新入列，**天然防重叠执行**；基于 `time.monotonic()` 计时，不受系统时间跳变影响。保留两种调度模式：固定间隔（连续失败按 `backoff_factor/backoff_max` 退避）与每日时间点 `HH:MM`（支持配置热重载、当天去重、`mark_done()` 手动跳过当天）。8 个既有定时任务（验证码清理、邮箱验证码清理、RCON 连接池清理、玩家列表追踪、被驳回内容自动清理、每日数据库备份、站点地图刷新、游戏服务器封禁到期自动解封）全部迁移到注册表，行为与原逻辑一致；删除旧 `core/shared/scheduler.py`。全局 API：`register_task / unregister_task / start_task_scheduler / stop_task_scheduler`
