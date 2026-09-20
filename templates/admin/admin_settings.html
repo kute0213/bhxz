@@ -38,14 +38,9 @@
 <script>
     (function () {
         const settingsContainer = document.getElementById('settings-container');
-        const saveStatus = document.getElementById('save-status');
-        const btnSave = document.getElementById('btn-save');
         const btnResetAll = document.getElementById('btn-reset-all');
-        const confirmModal = document.getElementById('confirm-modal');
-        const confirmTitle = document.getElementById('confirm-title');
-        const confirmMessage = document.getElementById('confirm-message');
-        const confirmOk = document.getElementById('confirm-ok');
-        const confirmCancel = document.getElementById('confirm-cancel');
+        const btnSave = document.getElementById('btn-save');
+        const saveStatus = document.getElementById('save-status');
 
         let originalValues = {};
         let dirty = false;
@@ -357,33 +352,17 @@
             });
         }
 
-        // 显示确认对话框
+        // 显示确认对话框（使用统一 CustomModal）
         function showConfirm(title, message) {
             return new Promise(function (resolve) {
-                confirmTitle.textContent = title;
-                confirmMessage.textContent = message;
-                confirmModal.classList.remove('hidden');
-                confirmModal.classList.add('flex');
-
-                function cleanup() {
-                    confirmModal.classList.add('hidden');
-                    confirmModal.classList.remove('flex');
-                    confirmOk.removeEventListener('click', onOk);
-                    confirmCancel.removeEventListener('click', onCancel);
-                }
-
-                function onOk() {
-                    cleanup();
-                    resolve(true);
-                }
-
-                function onCancel() {
-                    cleanup();
-                    resolve(false);
-                }
-
-                confirmOk.addEventListener('click', onOk);
-                confirmCancel.addEventListener('click', onCancel);
+                CustomModal.confirm(message, {
+                    title: title,
+                    type: 'warning',
+                    confirmText: '确认重置',
+                    callback: function (confirmed) {
+                        resolve(!!confirmed);
+                    }
+                });
             });
         }
 
@@ -426,15 +405,5 @@
 {% endblock %}
 
 {% block page_modals %}
-    <!-- 确认对话框 -->
-    <div id="confirm-modal" class="fixed inset-0 bg-black/60 z-50 hidden items-center justify-center">
-        <div class="bg-forest-800 border border-cream/20 rounded-xl p-6 max-w-md w-full mx-4 shadow-2xl">
-            <h3 id="confirm-title" class="text-lg font-bold mb-2">确认操作</h3>
-            <p id="confirm-message" class="text-cream/70 text-sm mb-6">确定要执行此操作吗？</p>
-            <div class="flex items-center justify-end gap-2">
-                <button id="confirm-cancel" class="px-4 py-2 text-cream/70 hover:text-cream text-sm transition-colors">取消</button>
-                <button id="confirm-ok" class="px-4 py-2 bg-red-500 hover:bg-red-400 text-white text-sm rounded-lg transition-colors">确认</button>
-            </div>
-        </div>
-    </div>
+    {# 统一弹窗由 base.html 的 CustomModal 提供 #}
 {% endblock %}

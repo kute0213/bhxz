@@ -125,10 +125,10 @@ var _previewGuideId = null;
 function showRejectModal(id) {
     const form = document.getElementById('reject-form');
     form.action = '/admin/guides/' + id + '/reject';
-    document.getElementById('reject-modal').classList.remove('hidden');
+    openModal('reject-modal');
 }
 function hideRejectModal() {
-    document.getElementById('reject-modal').classList.add('hidden');
+    closeModal('reject-modal');
 }
 function showPreviewModal(btn) {
     if (!window.DOMPurify || !window.marked) {
@@ -141,15 +141,13 @@ function showPreviewModal(btn) {
     document.getElementById('preview-title').textContent = data.title;
     document.getElementById('preview-content').innerHTML = data.content
         ? DOMPurify.sanitize(marked.parse(data.content))
-        : '<p class="text-cream/40 text-center py-8">暂无内容</p>';
+        : '<p class="text-[var(--text-tertiary)] text-center py-8">暂无内容</p>';
     document.getElementById('preview-approve-form').action = '/admin/guides/' + _previewGuideId + '/approve';
-    document.getElementById('preview-modal').classList.remove('hidden');
-    document.body.style.overflow = 'hidden';
+    openModal('preview-modal');
 }
 function hidePreviewModal() {
     _previewGuideId = null;
-    document.getElementById('preview-modal').classList.add('hidden');
-    document.body.style.overflow = '';
+    closeModal('preview-modal');
 }
 function rejectFromPreview() {
     if (_previewGuideId === null) return;
@@ -160,46 +158,39 @@ function rejectFromPreview() {
 {% endblock %}
 
 {% block page_modals %}
+{% from 'macros/modal.html' import modal_shell %}
+
 <!-- 拒绝弹窗 -->
-<div id="reject-modal" class="fixed inset-0 z-50 hidden">
-    <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="hideRejectModal()"></div>
-    <div class="absolute inset-0 flex items-center justify-center p-4">
-        <div class="relative w-full max-w-md pixel-card rounded-2xl p-6">
-            <h3 class="text-lg font-bold mb-4">拒绝指南</h3>
-            <form id="reject-form" method="POST">
-                {{ csrf_field() }}
-                <div class="mb-4">
-                    <label class="block text-sm text-cream/70 mb-1">拒绝原因（可选）</label>
-                    <input type="text" name="reason" class="w-full px-4 py-2 rounded-lg bg-forest-900/60 border border-forest-700/50 text-cream focus:border-gold-400/50 focus:outline-none" placeholder="请输入拒绝原因">
-                </div>
-                <div class="flex items-center justify-end gap-3">
-                    <button type="button" onclick="hideRejectModal()" class="btn-secondary px-4 py-2 rounded-lg text-sm">取消</button>
-                    <button type="submit" class="btn-primary px-4 py-2 rounded-lg text-sm bg-red-500 hover:bg-red-600 border-red-500">确认拒绝</button>
-                </div>
-            </form>
-        </div>
+{% call modal_shell('reject-modal', size='sm', title='拒绝指南',
+                     icon='x-circle', icon_color='red', close_on_overlay='false') %}
+    <div class="modal-body">
+        <form id="reject-form" method="POST">
+            {{ csrf_field() }}
+            <label class="block text-sm text-[var(--text-secondary)] mb-1.5">拒绝原因（可选）</label>
+            <input type="text" name="reason" class="input-field w-full px-4 py-3 rounded-lg"
+                   placeholder="请输入拒绝原因">
+        </form>
     </div>
-</div>
+    <div class="modal-footer">
+        <button type="button" class="btn-secondary" onclick="closeModal('reject-modal')">取消</button>
+        <button type="submit" form="reject-form" class="btn-primary" style="background:var(--accent-red, #be123c);border-color:var(--accent-red, #be123c);">确认拒绝</button>
+    </div>
+{% endcall %}
 
 <!-- 预览弹窗 -->
-<div id="preview-modal" class="fixed inset-0 z-50 hidden">
-    <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="hidePreviewModal()"></div>
-    <div class="absolute inset-0 flex items-center justify-center p-4">
-        <div class="relative w-full max-w-3xl max-h-[85vh] min-h-0 overflow-y-auto pixel-card rounded-2xl p-6 sm:p-8">
-            <div class="flex items-center justify-between mb-6">
-                <h3 class="text-lg font-bold" id="preview-title"></h3>
-                <button onclick="hidePreviewModal()" class="text-cream/60 hover:text-cream p-1"><i data-lucide="x" class="w-5 h-5"></i></button>
-            </div>
-            <div id="preview-content" class="prose-docs overflow-y-auto max-h-[55vh]"></div>
-            <div class="flex items-center justify-end gap-3 pt-6 border-t border-forest-700/50 mt-6">
-                <button type="button" onclick="hidePreviewModal()" class="btn-secondary px-4 py-2 rounded-lg text-sm">关闭</button>
-                <form id="preview-approve-form" method="POST" class="inline">
-                    {{ csrf_field() }}
-                    <button type="submit" class="btn-primary px-4 py-2 rounded-lg text-sm bg-green-500 hover:bg-green-600 border-green-500">通过审核</button>
-                </form>
-                <button type="button" onclick="rejectFromPreview()" class="btn-primary px-4 py-2 rounded-lg text-sm bg-red-500 hover:bg-red-600 border-red-500">拒绝</button>
-            </div>
-        </div>
+{% call modal_shell('preview-modal', size='lg', title='预览指南',
+                     icon='eye', icon_color='blue', close_on_overlay='false') %}
+    <div class="modal-body">
+        <h2 class="text-lg font-bold text-[var(--text-primary)] mb-2" id="preview-title"></h2>
+        <div id="preview-content" class="overflow-y-auto"></div>
     </div>
-</div>
+    <div class="modal-footer">
+        <button type="button" class="btn-secondary" onclick="closeModal('preview-modal')">关闭</button>
+        <form id="preview-approve-form" method="POST" class="inline">
+            {{ csrf_field() }}
+            <button type="submit" class="btn-primary" style="background:var(--accent-green, #059669);border-color:var(--accent-green, #059669);">通过审核</button>
+        </form>
+        <button type="button" class="btn-primary" style="background:var(--accent-red, #be123c);border-color:var(--accent-red, #be123c);" onclick="rejectFromPreview()">拒绝</button>
+    </div>
+{% endcall %}
 {% endblock %}

@@ -95,43 +95,52 @@
 {% endblock %}
 
 {% block page_modals %}
-<!-- 群内验证码弹窗（每次打开注册页都需要输入） -->
-<div id="group-code-modal" style="display: {% if group_code_verified %}none{% else %}block{% endif %}; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.4); backdrop-filter: blur(8px) saturate(120%); -webkit-backdrop-filter: blur(8px) saturate(120%); z-index: 50;">
-    <div class="pixel-card" style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); max-width: 28rem; width: calc(100% - 2rem); padding: 1.5rem;">
-        <div class="absolute top-4 left-4 right-4 flex items-center justify-between z-10">
-            {% if show_back_to_login %}
-            <a href="{{ url_for('main.login') }}" class="btn-secondary inline-flex items-center gap-1.5 px-3 py-2 text-sm" title="返回登录页">
-                <i data-lucide="arrow-left" class="w-4 h-4"></i>
-                <span>返回上一步</span>
-            </a>
-            {% endif %}
-            <a href="{{ url_for('main.home') }}" class="ml-auto btn-secondary inline-flex items-center justify-center w-9 h-9" title="关闭并返回主页" aria-label="关闭注册窗口">
-                <i data-lucide="x" class="w-5 h-5"></i>
-            </a>
-        </div>
+{% from 'macros/modal.html' import modal_shell %}
 
-        <div class="text-center mb-6 pt-12">
-            <div class="w-14 h-14 mx-auto bg-gold-400/20 rounded-full flex items-center justify-center mb-4">
-                <i data-lucide="shield-check" class="w-7 h-7 text-gold-400"></i>
-            </div>
-            <h2 class="text-lg font-bold text-gold-400 mb-2">群内验证码</h2>
-            <p class="text-cream/60 text-sm">请输入QQ群公告中的验证码以继续注册</p>
+<!-- 群内验证码弹窗（每次打开注册页都需要输入） -->
+{% set modal_display = 'none' if group_code_verified else 'flex' %}
+{% call modal_shell('group-code-modal', size='sm', close_on_overlay='false') %}
+    <div class="modal-body text-center">
+        <div class="w-14 h-14 mx-auto bg-[var(--accent-amber)]/20 rounded-full flex items-center justify-center mb-4 mt-2">
+            <i data-lucide="shield-check" class="w-7 h-7 text-[var(--accent-amber)]"></i>
         </div>
+        <h2 class="text-lg font-bold text-[var(--text-primary)] mb-2">群内验证码</h2>
+        <p class="text-[var(--text-secondary)] text-sm mb-5">请输入QQ群公告中的验证码以继续注册</p>
         <div class="space-y-4">
             <div>
-                <label class="block text-sm font-medium mb-2 text-cream/80">验证码</label>
-                <input type="text" id="group-code-input" class="input-field w-full px-4 py-3 rounded-lg" placeholder="请输入群内验证码" autocomplete="off">
+                <input type="text" id="group-code-input" class="input-field w-full px-4 py-3 rounded-lg"
+                       placeholder="请输入群内验证码" autocomplete="off">
             </div>
             <button type="button" id="group-code-submit" class="btn-primary w-full py-3 rounded-lg font-bold">
                 验证并继续
             </button>
-            <p class="text-xs text-cream/40 text-center">
+            <p class="text-xs text-[var(--text-tertiary)] text-center">
                 <i data-lucide="info" class="w-3 h-3 inline mr-1"></i>
                 验证码可在QQ群公告中获取
             </p>
         </div>
     </div>
-</div>
+    <div class="modal-footer justify-center gap-4 pt-2">
+        {% if show_back_to_login %}
+        <a href="{{ url_for('main.login') }}" class="btn-secondary inline-flex items-center gap-1.5 px-3 py-2 text-sm">
+            <i data-lucide="arrow-left" class="w-4 h-4"></i>返回上一步
+        </a>
+        {% endif %}
+        <a href="{{ url_for('main.home') }}" class="btn-secondary inline-flex items-center justify-center w-9 h-9" title="关闭并返回主页">
+            <i data-lucide="x" class="w-5 h-5"></i>
+        </a>
+    </div>
+{% endcall %}
+
+<script>
+// 初始状态：如已验证则关闭弹窗，否则打开
+document.addEventListener('DOMContentLoaded', function() {
+    if ({{ 'true' if group_code_verified else 'false' }}) {
+        // 已验证，确保弹窗关闭
+        closeModal('group-code-modal');
+    }
+});
+</script>
 {% endblock %}
 
 {% block extra_script %}
@@ -215,12 +224,12 @@
     const formSection = document.getElementById('register-form-section');
 
     function showModal() {
-        modal.style.display = 'block';
+        openModal('group-code-modal');
         setTimeout(function() { input.focus(); }, 100);
     }
 
     function hideModal() {
-        modal.style.display = 'none';
+        closeModal('group-code-modal');
         formSection.style.display = 'flex';
         if (window.lucide) lucide.createIcons();
     }
@@ -268,7 +277,7 @@
         .then(function(res) { return res.json(); })
         .then(function(data) {
             if (data.verified) {
-                modal.style.display = 'none';
+                closeModal('group-code-modal');
                 formSection.style.display = 'flex';
                 if (window.lucide) lucide.createIcons();
             } else {

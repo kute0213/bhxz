@@ -119,32 +119,21 @@
 {% endblock %}
 
 {% block page_modals %}
-    <!-- 确认发送弹窗 -->
-    <div id="confirm-modal" class="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 hidden items-center justify-center p-4">
-        <div class="bg-forest-800 border border-gold-400/30 rounded-2xl shadow-2xl max-w-md w-full p-6 pixel-card">
-            <div class="flex items-center gap-3 mb-4">
-                <div class="w-10 h-10 bg-red-500/20 rounded-full flex items-center justify-center flex-shrink-0">
-                    <i data-lucide="alert-triangle" class="w-5 h-5 text-red-400"></i>
-                </div>
-                <div>
-                    <h3 class="text-lg font-bold text-red-400">确认发送广播</h3>
-                    <p class="text-sm text-cream/60">此操作不可撤销</p>
-                </div>
-            </div>
-            <div class="space-y-2 mb-6">
-                <p class="text-sm text-cream/80">您即将向 <b id="confirm-count" class="text-gold-400">0</b> 位用户发送邮件广播。</p>
-                <p class="text-sm text-cream/60">主题：<span id="confirm-subject" class="font-medium">—</span></p>
-            </div>
-            <div class="flex gap-3">
-                <button id="confirm-cancel" class="flex-1 px-4 py-2.5 bg-forest-700 hover:bg-forest-600 rounded-lg text-sm transition-colors">
-                    取消
-                </button>
-                <button id="confirm-ok" class="flex-1 px-4 py-2.5 bg-red-500 hover:bg-red-400 text-white rounded-lg text-sm font-bold transition-colors">
-                    确认发送
-                </button>
-            </div>
+    {% from 'macros/modal.html' import modal_shell %}
+{% call modal_shell('confirm-modal', size='sm', title='确认发送广播',
+                     icon='alert-triangle', icon_color='red', close_on_overlay='false') %}
+    <div class="modal-body">
+        <p class="text-sm text-[var(--text-secondary)] mb-4">您即将向 <b id="confirm-count" class="text-[var(--accent-blue)]">0</b> 位用户发送邮件广播。</p>
+        <div class="bg-black/[0.03] rounded-xl p-4">
+            <p class="text-xs text-[var(--text-tertiary)] mb-1">主题</p>
+            <p id="confirm-subject" class="text-sm font-medium text-[var(--text-primary)] break-words">—</p>
         </div>
     </div>
+    <div class="modal-footer">
+        <button type="button" class="btn-secondary" id="confirm-cancel">取消</button>
+        <button type="button" class="btn-primary" id="confirm-ok" style="background:var(--accent-red, #be123c);border-color:var(--accent-red, #be123c);">确认发送</button>
+    </div>
+{% endcall %}
 {% endblock %}
 
 {% block extra_script %}
@@ -156,14 +145,12 @@
     var subject = $('subject');
     var editor = $('rich-editor');
     var userCount = $('user-count');
-    var confirmModal = $('confirm-modal');
     var confirmOk = $('confirm-ok');
     var confirmCancel = $('confirm-cancel');
     var richCount = $('rich-count');
 
-    // 确认弹窗在 page_modals 中，确保获取到
-    if (!confirmModal || !confirmOk || !confirmCancel || !editor) {
-        console.error('广播页面：关键元素未找到');
+    if (!editor) {
+        console.error('广播页面：编辑器未找到');
         return;
     }
 
@@ -289,13 +276,11 @@
         }
         $('confirm-subject').textContent = subject.value.trim();
         $('confirm-count').textContent = userCount.textContent;
-        confirmModal.classList.remove('hidden');
-        confirmModal.classList.add('flex');
+        openModal('confirm-modal');
     });
 
     function closeConfirm() {
-        confirmModal.classList.add('hidden');
-        confirmModal.classList.remove('flex');
+        closeModal('confirm-modal');
     }
 
     confirmCancel.addEventListener('click', closeConfirm);
@@ -342,12 +327,7 @@
         });
     });
 
-    // ESC 关闭确认框
-    document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape' && !confirmModal.classList.contains('hidden')) {
-            closeConfirm();
-        }
-    });
+    // ESC 由全局 modal_close_script 处理器统一管理
 })();
 </script>
 {% endblock %}

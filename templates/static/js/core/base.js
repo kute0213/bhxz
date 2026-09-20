@@ -742,14 +742,14 @@ var CaptchaModal = (function () {
         captchaHint.textContent = hint || '请完成图形验证码';
         captchaCodeInput.value = '';
         captchaCallback = callback;
-        modal.style.display = 'block';
+        openModal('captcha-modal');
         loadModalCaptcha();
-        setTimeout(function() { captchaCodeInput.focus(); }, 100);
+        setTimeout(function() { captchaCodeInput.focus(); }, 150);
     }
 
     function hide() {
         if (!modal) return;
-        modal.style.display = 'none';
+        closeModal('captcha-modal');
         captchaCallback = null;
     }
 

@@ -398,39 +398,16 @@
     {# 页面级弹窗挂载点（在 body 下，不受 .page-content 的 transform 影响） #}
     {% block page_modals %}{% endblock %}
 
-    <!-- 图形验证码弹窗（全局共享，由 base.js 的 CaptchaModal 控制） -->
-    <div id="captcha-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0, 0, 0, 0.4); backdrop-filter: blur(8px) saturate(120%); -webkit-backdrop-filter: blur(8px) saturate(120%); z-index: 51;">
-        <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); background: linear-gradient(145deg, rgba(255,255,255,0.98) 0%, rgba(248,250,254,0.98) 100%); backdrop-filter: blur(28px) saturate(105%); -webkit-backdrop-filter: blur(28px) saturate(105%); border: 1px solid rgba(15, 23, 42, 0.1); border-radius: 16px; box-shadow: 0 16px 48px rgba(15, 23, 42, 0.18); max-width: 28rem; width: calc(100% - 2rem); padding: 1.5rem;">
-            <div class="text-center mb-6">
-                <div class="w-14 h-14 mx-auto bg-gold-400/20 rounded-full flex items-center justify-center mb-4">
-                    <i data-lucide="shield" class="w-7 h-7 text-gold-400"></i>
-                </div>
-                <h2 class="text-lg font-bold text-gold-400 mb-2">图形验证码</h2>
-                <p class="text-cream/60 text-sm" id="captcha-modal-hint">请完成图形验证码</p>
-            </div>
-            <div class="space-y-4">
-                <div class="flex items-center justify-center gap-3">
-                    <img id="modal-captcha-img" src="" alt="验证码加载中" class="w-full max-w-[420px] h-auto rounded-lg cursor-pointer hover:opacity-90 transition-opacity border border-forest-700/50 bg-cream/90" title="点击刷新验证码" style="image-rendering: auto;">
-                    <input type="hidden" id="modal-captcha-id" value="">
-                    <button type="button" id="modal-captcha-refresh" class="p-2 text-cream/50 hover:text-gold-400 transition-colors rounded-lg hover:bg-cream/5" title="刷新验证码">
-                        <i data-lucide="refresh-cw" class="w-5 h-5"></i>
-                    </button>
-                </div>
-                <div>
-                    <label class="block text-sm font-medium mb-2 text-cream/80">验证码</label>
-                    <input type="text" id="modal-captcha-input" class="input-field w-full px-4 py-3 rounded-lg text-center tracking-[0.35em] uppercase" placeholder="输入 4 位验证码（不区分大小写）" autocomplete="off" autocapitalize="characters" spellcheck="false" minlength="4" maxlength="4">
-                </div>
-                <button type="button" id="modal-captcha-submit" class="btn-primary w-full py-3 rounded-lg font-bold">
-                    验证
-                </button>
-                <button type="button" id="modal-captcha-close" class="w-full py-2 text-cream/50 hover:text-cream/80 text-sm transition-colors">
-                    取消
-                </button>
-            </div>
-        </div>
-    </div>
+    <!-- 图形验证码弹窗（全局共享） -->
+    {% from 'macros/modal.html' import modal_captcha %}
+    {{ modal_captcha() }}
 
     <script src="{{ url_for('static', filename='js/core/base.js', v='23') }}"></script>
+
+    {# 统一弹窗控制器 #}
+    {% from 'macros/modal.html' import modal_close_script %}
+    {{ modal_close_script() }}
+
     <script src="{{ url_for('static', filename='js/pages/main.js', v='11') }}"></script>
     {% if login_welcome_username %}
     <script>

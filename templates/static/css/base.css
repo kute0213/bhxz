@@ -684,7 +684,13 @@ body.page-leaving .page-transition-overlay { opacity: 1; pointer-events: all; }
 .glass-shine::after { content: ''; position: absolute; top: 0; left: -100%; width: 100%; height: 100%; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.02), transparent); transition: left 0.8s cubic-bezier(0.4,0,0.2,1); pointer-events: none; }
 .glass-shine:hover::after { left: 100%; }
 
-/* 自定义弹窗（磨砂玻璃） */
+/* ===========================================================================
+   统一弹窗系统（磨砂玻璃风格 · 全平台兼容）
+   支持 CustomModal（active class）和页面级弹窗（display 切换）两种模式
+   =========================================================================== */
+
+/* 遮罩层基底 —— display:flex 默认打开，通过 visibility 控制 CustomModal 动画，
+   页面级弹窗用 style="display:none"（更高优先级）覆写。 */
 .modal-overlay {
     position: fixed; inset: 0; z-index: 1000;
     background: rgba(0,0,0,0); backdrop-filter: blur(0px);
@@ -693,7 +699,10 @@ body.page-leaving .page-transition-overlay { opacity: 1; pointer-events: all; }
     opacity: 0; visibility: hidden;
     transition: opacity 0.3s ease, visibility 0.3s ease, background 0.3s ease;
 }
-.modal-overlay.active { opacity: 1; visibility: visible; background: rgba(0,0,0,0.5); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+.modal-overlay.active,
+.modal-overlay.open { opacity: 1; visibility: visible; background: rgba(0,0,0,0.5); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); }
+
+/* 弹窗内容卡片 */
 .modal-box {
     background: linear-gradient(145deg, rgba(255,255,255,0.98) 0%, rgba(248,250,254,0.98) 100%);
     backdrop-filter: blur(48px) saturate(100%);
@@ -705,6 +714,8 @@ body.page-leaving .page-transition-overlay { opacity: 1; pointer-events: all; }
     transform: scale(1) translate(0,0); opacity: 1;
     transition: transform var(--transition-bounce), opacity 0.3s ease;
     overflow: hidden;
+    max-height: 90vh;
+    display: flex; flex-direction: column;
 }
 .modal-box::before {
     content: ''; position: absolute; inset: 0; border-radius: inherit;
@@ -712,24 +723,71 @@ body.page-leaving .page-transition-overlay { opacity: 1; pointer-events: all; }
     pointer-events: none; z-index: 0; mix-blend-mode: screen;
 }
 .modal-box > * { position: relative; z-index: 1; }
-.modal-header { padding: 24px 28px 18px; border-bottom: 1px solid var(--border-subtle); display: flex; align-items: center; gap: 14px; }
-.modal-icon { width: 50px; height: 50px; border-radius: 14px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-.modal-icon.warning { background: rgba(225,29,72,0.1); color: #be123c; border: 1px solid rgba(225,29,72,0.2); }
-.modal-icon.info { background: rgba(2,132,199,0.1); color: var(--accent-blue); border: 1px solid rgba(2,132,199,0.2); }
-.modal-icon.success { background: rgba(2,132,199,0.12); color: #0369a1; border: 1px solid rgba(2,132,199,0.22); }
-.modal-title { font-size: 19px; font-weight: 700; color: var(--text-primary); }
-.modal-body { padding: 24px 28px; color: var(--text-secondary); font-size: 15px; line-height: 1.7; }
-.modal-footer { padding: 18px 28px 24px; border-top: 1px solid var(--border-subtle); display: flex; gap: 12px; justify-content: flex-end; }
-.modal-footer .btn-primary, .modal-footer .btn-secondary { padding: 11px 26px; border-radius: 14px; font-size: 14px; }
 
+/* 尺寸变体 */
+.modal-size-sm { width: 400px; }
+.modal-size-md { width: 440px; }  /* 默认 */
+.modal-size-lg { width: 560px; }
+.modal-size-xl { width: 720px; }
+.modal-size-full { width: 95vw; max-width: 1200px; }
+
+/* 头部 */
+.modal-header {
+    padding: 24px 28px 18px; border-bottom: 1px solid var(--border-subtle);
+    display: flex; align-items: center; gap: 14px; flex-shrink: 0;
+}
+.modal-icon {
+    width: 50px; height: 50px; border-radius: 14px;
+    display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+}
+.modal-icon.warning,
+.modal-icon-red    { background: rgba(225,29,72,0.1); color: #be123c; border: 1px solid rgba(225,29,72,0.2); }
+.modal-icon.info,
+.modal-icon-blue   { background: rgba(2,132,199,0.1); color: var(--accent-blue); border: 1px solid rgba(2,132,199,0.2); }
+.modal-icon.success,
+.modal-icon-green  { background: rgba(5,150,105,0.1); color: #059669; border: 1px solid rgba(5,150,105,0.2); }
+.modal-icon-amber  { background: rgba(217,119,6,0.1); color: var(--accent-amber); border: 1px solid rgba(217,119,6,0.2); }
+.modal-icon-purple { background: rgba(124,58,237,0.1); color: #7c3aed; border: 1px solid rgba(124,58,237,0.2); }
+.modal-title {
+    font-size: 19px; font-weight: 700; color: var(--text-primary);
+    flex: 1; min-width: 0;
+}
+.modal-close {
+    width: 36px; height: 36px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text-tertiary); background: transparent; border: none; cursor: pointer;
+    transition: background 0.2s, color 0.2s; flex-shrink: 0;
+}
+.modal-close:hover { background: rgba(0,0,0,0.06); color: var(--text-primary); }
+
+/* 主体（可滚动） */
+.modal-body {
+    padding: 24px 28px; color: var(--text-secondary);
+    font-size: 15px; line-height: 1.7; overflow-y: auto; flex: 1; min-height: 0;
+}
+
+/* 输入框区域（prompt 模式） */
+.modal-input-wrap { padding: 0 28px 4px; }
+
+/* 底部按钮 */
+.modal-footer {
+    padding: 18px 28px 24px; border-top: 1px solid var(--border-subtle);
+    display: flex; gap: 12px; justify-content: flex-end; flex-shrink: 0;
+}
+.modal-footer .btn-primary,
+.modal-footer .btn-secondary { padding: 11px 26px; border-radius: 14px; font-size: 14px; }
+
+/* 响应式适配 */
 @media (max-width: 640px) {
-    .modal-box { width: calc(100vw - 32px); max-width: calc(100vw - 32px); border-radius: 20px !important; }
+    .modal-box { width: calc(100vw - 32px) !important; max-width: calc(100vw - 32px) !important; border-radius: 20px !important; max-height: 85vh; }
     .modal-header { padding: 18px 20px 14px; gap: 10px; }
     .modal-icon { width: 40px; height: 40px; border-radius: 12px; }
     .modal-title { font-size: 17px; }
     .modal-body { padding: 18px 20px; font-size: 14px; }
     .modal-footer { padding: 14px 20px 18px; flex-direction: column-reverse; gap: 8px; }
-    .modal-footer .btn-primary, .modal-footer .btn-secondary { width: 100%; padding: 10px 20px; text-align: center; }
+    .modal-footer .btn-primary,
+    .modal-footer .btn-secondary { width: 100%; padding: 10px 20px; text-align: center; }
+    .modal-close { width: 32px; height: 32px; }
 }
 
 /* Toast 通知系统（磨砂玻璃） */

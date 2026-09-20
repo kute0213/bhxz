@@ -466,29 +466,19 @@
   </div>
 </section>
 
-<!-- ============ 封禁详情弹窗 Modal ============ -->
-<div id="ban-detail-modal" class="fixed inset-0 z-50 hidden overflow-y-auto" style="background:rgba(0,0,0,0.7);">
-  <div class="min-h-screen flex items-center justify-center p-4">
-    <div class="bg-forest-900 border border-forest-600/40 rounded-xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
-      <div class="sticky top-0 bg-forest-900 border-b border-forest-700/30 px-6 py-4 flex items-center justify-between rounded-t-xl z-10">
-        <h3 class="text-lg font-bold flex items-center gap-2">
-          <i data-lucide="info" class="w-5 h-5 text-gold-400"></i>
-          封禁详情
-          <span id="detail-badge" class="text-xs px-2 py-0.5 rounded-full bg-forest-700/50 text-cream/60 ml-2"></span>
-        </h3>
-        <button onclick="closeBanDetail()" class="text-cream/40 hover:text-cream/80 transition-colors">
-          <i data-lucide="x" class="w-5 h-5"></i>
-        </button>
-      </div>
-      <div id="detail-body" class="p-6 space-y-3 text-sm">
-        <div class="text-center text-cream/40 py-8">
-          <i data-lucide="loader-circle" class="w-6 h-6 inline-block animate-spin"></i>
-          <span class="ml-2">加载中...</span>
+{% from 'macros/modal.html' import modal_shell %}
+{% call modal_shell('ban-detail-modal', size='lg', title='封禁详情',
+                     icon='info', icon_color='blue', close_on_overlay='false') %}
+    <div class="modal-body" id="detail-body">
+        <div class="text-center text-[var(--text-tertiary)] py-8">
+            <i data-lucide="loader-circle" class="w-6 h-6 inline-block animate-spin"></i>
+            <span class="ml-2">加载中...</span>
         </div>
-      </div>
     </div>
-  </div>
-</div>
+    <div class="modal-footer">
+        <button type="button" class="btn-secondary" onclick="closeModal('ban-detail-modal')">关闭</button>
+    </div>
+{% endcall %}
 
 {% endblock %}
 
@@ -526,13 +516,10 @@ function saveFirewallSettings() {
 
 /* ---- 封禁详情弹窗 ---- */
 function showBanDetail(banId, banType) {
-  var modal = document.getElementById('ban-detail-modal');
   var body = document.getElementById('detail-body');
-  var badge = document.getElementById('detail-badge');
 
-  modal.classList.remove('hidden');
-  badge.textContent = banType === 'ip' ? 'IP 封禁' : '账号封禁';
-  body.innerHTML = '<div class="text-center text-cream/40 py-8"><i data-lucide="loader-circle" class="w-6 h-6 inline-block animate-spin"></i><span class="ml-2">加载中...</span></div>';
+  openModal('ban-detail-modal');
+  body.innerHTML = '<div class="text-center text-[var(--text-tertiary)] py-8"><i data-lucide="loader-circle" class="w-6 h-6 inline-block animate-spin"></i><span class="ml-2">加载中...</span></div>';
   // 重新渲染 lucide 图标
   if (typeof lucide !== 'undefined') lucide.createIcons();
 
@@ -627,7 +614,7 @@ function showBanDetail(banId, banType) {
 }
 
 function closeBanDetail() {
-  document.getElementById('ban-detail-modal').classList.add('hidden');
+  closeModal('ban-detail-modal');
 }
 
 /* ---- 封禁列表：加载更多 ---- */
@@ -704,19 +691,6 @@ function loadMoreBans() {
       loadingWrap.classList.add('hidden');
     });
 }
-
-// 点击遮罩关闭弹窗
-document.addEventListener('click', function(e) {
-  var modal = document.getElementById('ban-detail-modal');
-  if (modal && !modal.classList.contains('hidden') && e.target === modal) {
-    closeBanDetail();
-  }
-});
-
-// ESC 键关闭弹窗
-document.addEventListener('keydown', function(e) {
-  if (e.key === 'Escape') closeBanDetail();
-});
 
 function row(label, value) {
   return '<div><span class="text-cream/50 text-xs block mb-0.5">' + label + '</span><span class="text-cream/80 text-sm">' + value + '</span></div>';

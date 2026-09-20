@@ -1,17 +1,27 @@
-{# 全局自定义弹窗骨架（alert / confirm / prompt 通用）
+{# ============================================================================
+   统一弹窗系统（全平台兼容 · 磨砂玻璃风格）
+   
+   提供以下宏：
+     1. modal_overlay()       — 给 CustomModal JS 用的 alert/confirm/prompt 骨架
+     2. modal_shell()         — 页面级弹窗容器，配合 {% call %} 使用
+     3. modal_captcha()       — 图形验证码弹窗（全局共享）
+     4. modal_close_script()  — 注入 closeModal() 等全局 JS 辅助函数（放 base.html 底部）
+   
+   所有弹窗共享同一套 CSS 类（.modal-overlay / .modal-box / .modal-header / …），
+   保证外观统一、按钮复用 .btn-primary / .btn-secondary、输入框复用 .input-field。
+   ============================================================================ #}
 
-统一由 base.js 的 CustomModal 控制，取代原生 alert / confirm / prompt。
-所有弹窗样式统一走 .modal-overlay / .modal-box 磨砂玻璃风格，
-按钮复用 .btn-primary / .btn-secondary，输入框复用 .input-field。
 
-引入方式（仅需一次，置于页面 body 最下方）：
-    {% from 'macros/modal.html' import modal_overlay %}
-    {{ modal_overlay() }}
-
-注意：必须放在 .page-content 之外，避免受其 transform 影响导致 fixed 定位错乱。
-#}
+{## 1. CustomModal 弹窗骨架（alert / confirm / prompt）
+ #
+ # 由 base.js 的 CustomModal 控制，取代原生 alert / confirm / prompt。
+ # 引入方式（仅需一次，置于 <body> 最下方）：
+ #     {% from 'macros/modal.html' import modal_overlay %}
+ #     {{ modal_overlay() }}
+ # 注意：必须放在 .page-content 之外，避免受其 transform 影响导致 fixed 定位错乱。
+ ##}
 {% macro modal_overlay() -%}
-<!-- 自定义弹窗（CustomModal：alert / confirm / prompt 共用骨架） -->
+<!-- 通用弹窗骨架（CustomModal：alert / confirm / prompt） -->
 <div class="modal-overlay" id="custom-modal">
     <div class="modal-box" id="modal-box">
         <div class="modal-header">
@@ -31,4 +41,132 @@
         </div>
     </div>
 </div>
+{%- endmacro %}
+
+
+{## 2. 页面级弹窗容器（modal_shell）
+ #
+ # 用于在 {% block page_modals %} 中定义各类内容弹窗，
+ # 通过 {% call modal_shell(...) %} ... {% endcall %} 包裹具体内容。
+ #
+ # 参数：
+ #   id          — 弹窗 DOM id（必填）
+ #   size        — 尺寸：sm / md / lg / xl / full（默认 md）
+ #   title       — 弹窗标题（默认空）
+ #   icon        — modal-header 左侧图标名称（lucide 图标名，默认空 = 不显示）
+ #   icon_color  — 图标背景色：blue / red / green / amber / purple（默认 blue）
+ #   close_on_overlay — 点击遮罩是否关闭（默认 true）
+ #
+ # 用法示例：
+ #   {% call modal_shell('ban-detail-modal', size='lg', title='封禁详情',
+ #                        icon='info', icon_color='blue') %}
+ #       <div class="modal-body">
+ #           … 内容 …
+ #       </div>
+ #       <div class="modal-footer">
+ #           <button class="btn-secondary" onclick="closeModal('ban-detail-modal')">关闭</button>
+ #       </div>
+ #   {% endcall %}
+ ##}
+{% macro modal_shell(id, size='md', title='', icon='', icon_color='blue', close_on_overlay='true') -%}
+<div id="{{ id }}" class="modal-overlay"
+     {% if close_on_overlay == 'true' %}onclick="if(event.target===this)closeModal('{{ id }}')"{% endif %}>
+    <div class="modal-box modal-size-{{ size }}">
+        {% if title or icon %}
+        <div class="modal-header">
+            {% if icon %}
+            <div class="modal-icon modal-icon-{{ icon_color }}">
+                <i data-lucide="{{ icon }}" class="w-5 h-5"></i>
+            </div>
+            {% endif %}
+            <div class="modal-title">{{ title }}</div>
+            <button type="button" class="modal-close" onclick="closeModal('{{ id }}')">
+                <i data-lucide="x" class="w-5 h-5"></i>
+            </button>
+        </div>
+        {% endif %}
+        {{ caller() }}
+    </div>
+</div>
+{%- endmacro %}
+
+
+{## 3. 图形验证码弹窗（全局共享）
+ #
+ # 由 base.js 的 CaptchaModal 控制。
+ # 在 base.html 中调用 {{ modal_captcha() }} 替代原有内联 HTML。
+ ##}
+{% macro modal_captcha() -%}
+{% call modal_shell('captcha-modal', size='sm', title='图形验证码',
+                     icon='shield', icon_color='amber', close_on_overlay='false') %}
+    <div class="modal-body">
+        <p class="text-center text-sm text-[var(--text-secondary)] mb-5" id="captcha-modal-hint">请完成图形验证码</p>
+        <div class="space-y-4">
+            <div class="flex items-center justify-center gap-3">
+                <img id="modal-captcha-img" src="" alt="验证码加载中"
+                     class="w-full max-w-[420px] h-auto rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
+                     title="点击刷新验证码" style="image-rendering: auto;">
+                <input type="hidden" id="modal-captcha-id" value="">
+                <button type="button" id="modal-captcha-refresh"
+                        class="p-2 text-[var(--text-tertiary)] hover:text-[var(--accent-amber)] transition-colors rounded-lg hover:bg-black/5"
+                        title="刷新验证码">
+                    <i data-lucide="refresh-cw" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div>
+                <label class="block text-sm font-medium mb-1.5 text-[var(--text-secondary)]">验证码</label>
+                <input type="text" id="modal-captcha-input"
+                       class="input-field w-full px-4 py-3 rounded-lg text-center tracking-[0.35em] uppercase"
+                       placeholder="输入 4 位验证码（不区分大小写）"
+                       autocomplete="off" autocapitalize="characters" spellcheck="false"
+                       minlength="4" maxlength="4">
+            </div>
+        </div>
+    </div>
+    <div class="modal-footer">
+        <button type="button" id="modal-captcha-close" class="btn-secondary" onclick="CaptchaModal.hide()">取消</button>
+        <button type="button" id="modal-captcha-submit" class="btn-primary">验证</button>
+    </div>
+{% endcall %}
+{%- endmacro %}
+
+
+{## 4. 注入关闭弹窗的全局 JS 函数
+ #
+ # 在 base.html 底部加载。
+ ##}
+{% macro modal_close_script() -%}
+<script>
+// 统一弹窗控制器（打开/关闭页面级弹窗，使用 .open class 触发 CSS 过渡动画）
+window.openModal = function(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.style.display = 'flex';
+    // 强制 reflow 后添加 .open class 触发 CSS 过渡
+    el.offsetHeight;
+    el.classList.add('open');
+    document.body.style.overflow = 'hidden';
+    if (typeof lucide !== 'undefined') try { lucide.createIcons(); } catch(e) {}
+};
+window.closeModal = function(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    el.classList.remove('open');
+    // 等待 CSS 过渡结束后隐藏
+    setTimeout(function() {
+        el.style.display = 'none';
+    }, 300);
+    document.body.style.overflow = '';
+};
+// 点击 Escape 关闭所有打开的 modal-overlay
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') {
+        document.querySelectorAll('.modal-overlay.open').forEach(function(m) {
+            m.classList.remove('open');
+            setTimeout(function() { m.style.display = 'none'; }, 300);
+            document.body.style.overflow = '';
+        });
+    }
+});
+</script>
 {%- endmacro %}
