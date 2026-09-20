@@ -18,7 +18,7 @@ from core.system.logger import log
 
 DB_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-    'db',
+    'uploads', 'db',
 )
 DB_PATH = os.path.join(DB_DIR, 'firewall.duckdb')
 

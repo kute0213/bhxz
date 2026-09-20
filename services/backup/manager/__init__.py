@@ -1,11 +1,9 @@
 """
-数据库备份与优化服务。
+/uploads/ 全量数据备份服务 —— 极限压缩打包为 zip。
 
 功能：
-- 使用 SQLite 在线备份 API 将数据库备份到 BACKUP_DIR
+- 将 /uploads/ 文件夹下的所有内容压缩为 zip（ZIP_DEFLATED, level 9）
 - 自动清理过期备份（保留 MAX_BACKUPS 份，支持热重载）
-- 备份前执行 CHECKPOINT（可选，支持热重载）
-- 备份前清理过期日志（可选，支持热重载）
 - 记录备份历史到 db_backups 表
 - 提供进度回调接口（供前端进度条展示）
 - 后台线程执行，不阻塞主进程
@@ -18,11 +16,12 @@
 import os
 import threading
 import time
+import zipfile
 from datetime import datetime
 
 from config import (
-    DB_PATH,
-    BACKUP_DIR,
+    UPLOAD_DIR,
+    UPLOADS_BACKUP_DIR,
     BACKUP_FILENAME_FORMAT,
     get_config_value,
 )
@@ -34,7 +33,7 @@ from core.system.logger import log
 # ---------------------------------------------------------------------------
 
 class BackupManager:
-    """数据库备份管理器（单例）。"""
+    """数据备份管理器（单例）。"""
 
     _instance = None
     _lock = threading.Lock()
@@ -59,7 +58,7 @@ class BackupManager:
     # ------------------------------------------------------------------
 
     def start_backup(self, backup_type='manual', progress_callback=None):
-        """启动数据库备份（后台线程执行）。
+        """启动数据备份（后台线程执行）。
 
         Args:
             backup_type: 'scheduled' 或 'manual'
@@ -79,7 +78,7 @@ class BackupManager:
         thread = threading.Thread(
             target=self._run_backup,
             args=(backup_id, backup_type, progress_callback),
-            name=f'db-backup-{backup_id}',
+            name=f'data-backup-{backup_id}',
             daemon=True,
         )
         thread.start()
@@ -114,7 +113,7 @@ class BackupManager:
         from core.db import get_db
         now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         backup_name = datetime.now().strftime(BACKUP_FILENAME_FORMAT)
-        backup_path = os.path.join(BACKUP_DIR, backup_name)
+        backup_path = os.path.join(UPLOADS_BACKUP_DIR, backup_name)
 
         conn = get_db()
         try:
@@ -162,49 +161,49 @@ class BackupManager:
         size_bytes = 0
 
         try:
-            # 读取当前配置（支持热重载）
-            do_checkpoint = get_config_value('BACKUP_CHECKPOINT', True)
-
             # 阶段 1: 准备
             self._report_progress(5, '准备备份...', progress_callback)
-            os.makedirs(BACKUP_DIR, exist_ok=True)
+            os.makedirs(UPLOADS_BACKUP_DIR, exist_ok=True)
 
             backup_name = datetime.now().strftime(BACKUP_FILENAME_FORMAT)
-            backup_path = os.path.join(BACKUP_DIR, backup_name)
+            backup_path = os.path.join(UPLOADS_BACKUP_DIR, backup_name)
 
             # 更新记录中的路径
             self._update_backup_record(backup_id, backup_name=backup_name, backup_path=backup_path)
 
-            # 阶段 2: CHECKPOINT（合并 WAL 到主文件）
-            if do_checkpoint:
-                self._report_progress(30, '执行 CHECKPOINT...', progress_callback)
-                try:
-                    self._run_checkpoint()
-                except Exception as e:
-                    log('ERROR', 'BackupManager', f'CHECKPOINT 失败: {e}')
+            # 阶段 2: 统计文件数量（用于进度计算）
+            self._report_progress(10, '统计文件...', progress_callback)
+            total_files = 0
+            for dirpath, dirnames, filenames in os.walk(UPLOAD_DIR):
+                total_files += len(filenames)
+            if total_files == 0:
+                total_files = 1  # 避免除零
 
-            # 阶段 3: 使用 SQLite 在线备份 API（避免文件锁定问题）
-            self._report_progress(50, f'执行在线备份到 {backup_name}...', progress_callback)
+            # 阶段 3: 极限压缩打包
+            self._report_progress(20, f'正在压缩 {total_files} 个文件...', progress_callback)
+            processed = 0
 
-            if not os.path.exists(DB_PATH):
-                raise FileNotFoundError(f'数据库文件不存在: {DB_PATH}')
-
-            # 使用 sqlite3 的在线备份 API（Connection.backup），
-            # 避免 shutil.copy2 在 Windows 上因文件被锁定而失败
-            from core.db import get_db
-            conn = get_db()
-            try:
-                conn.backup_to(backup_path)
-            except Exception as e:
-                # 清理可能产生的临时文件
-                try:
-                    if os.path.exists(backup_path):
-                        os.remove(backup_path)
-                except OSError:
-                    pass
-                raise RuntimeError(f'在线备份失败: {e}') from e
-            finally:
-                conn.close()
+            with zipfile.ZipFile(
+                backup_path, 'w',
+                compression=zipfile.ZIP_DEFLATED,
+                compresslevel=9,
+            ) as zf:
+                for dirpath, dirnames, filenames in os.walk(UPLOAD_DIR):
+                    for fname in filenames:
+                        # 跳过 DuckDB/SQLite WAL/SHM 临时文件
+                        if fname.endswith('-wal') or fname.endswith('-shm'):
+                            continue
+                        full_path = os.path.join(dirpath, fname)
+                        # zip 内使用相对路径
+                        arcname = os.path.relpath(full_path, os.path.dirname(UPLOAD_DIR))
+                        try:
+                            zf.write(full_path, arcname)
+                        except Exception as e:
+                            log('WARNING', 'BackupManager', f'压缩文件跳过 {full_path}: {e}')
+                        processed += 1
+                        if processed % max(1, total_files // 5) == 0:
+                            pct = 20 + int(processed / total_files * 55)
+                            self._report_progress(pct, f'已压缩 {processed}/{total_files}...', progress_callback)
 
             size_bytes = os.path.getsize(backup_path)
 
@@ -227,6 +226,12 @@ class BackupManager:
             log('ERROR', 'BackupManager', f'备份失败: {e}')
             import traceback
             traceback.print_exc()
+            # 清理不完整的 zip
+            if backup_path and os.path.exists(backup_path):
+                try:
+                    os.remove(backup_path)
+                except OSError:
+                    pass
 
         finally:
             elapsed = round(time.time() - start_time, 2)
@@ -252,24 +257,13 @@ class BackupManager:
 
             self._current_progress = None
 
-    def _run_checkpoint(self):
-        """执行 CHECKPOINT，将 WAL 合并到主数据库文件。"""
-        from core.db import get_db
-        conn = get_db()
-        try:
-            conn.execute('CHECKPOINT')
-            conn.commit()
-        finally:
-            conn.close()
-
     def _verify_backup(self, backup_path):
-        """验证备份文件是否可读（打开并执行简单查询）。"""
-        import sqlite3
-        conn = sqlite3.connect(backup_path)
-        try:
-            conn.execute("SELECT name FROM sqlite_master WHERE type='table' LIMIT 1")
-        finally:
-            conn.close()
+        """验证 zip 备份文件是否完整可读。"""
+        import zipfile
+        with zipfile.ZipFile(backup_path, 'r') as zf:
+            bad = zf.testzip()
+            if bad:
+                raise RuntimeError(f'备份文件损坏，首个坏文件: {bad}')
 
     def _cleanup_old_backups(self):
         """删除超出 MAX_BACKUPS 限制的旧备份（文件 + 记录）。支持热重载。"""

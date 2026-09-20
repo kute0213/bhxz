@@ -7,7 +7,7 @@ APP_ROOT = os.path.dirname(os.path.abspath(__file__))
 # 本地开发配置写在项目根目录 .env；系统环境变量优先，不会被文件覆盖。
 load_dotenv(os.path.join(APP_ROOT, '.env'), override=False)
 
-DB_PATH = os.path.join(APP_ROOT, 'db', 'site.db')
+DB_PATH = os.path.join(APP_ROOT, 'uploads', 'db', 'site.db')
 UPLOAD_DIR = os.path.join(APP_ROOT, 'uploads')
 UPLOAD_ATTACHMENTS_DIR = os.path.join(UPLOAD_DIR, 'attachments')
 UPLOAD_COMMUNITY_DIR = os.path.join(UPLOAD_DIR, 'community')
@@ -58,12 +58,15 @@ REGISTER_VERIFY_CODE = 'binhai_xz'
 # 数据库备份配置
 # ---------------------------------------------------------------------------
 
-# 备份文件存放目录（SQLite 使用在线备份 API，避免文件锁定问题）
-BACKUP_DIR = os.path.join(APP_ROOT, 'backups', 'db')
+# 备份文件存放目录（zip 压缩包存储目录）
+BACKUP_DIR = os.path.join(APP_ROOT, 'backups')
+
+# /uploads/ 全量数据备份目录
+UPLOADS_BACKUP_DIR = os.path.join(BACKUP_DIR, 'uploads')
 
 # 备份文件名格式（使用 strftime 占位符，将被替换为当前时间）
-# 例: backup_%Y%m%d_%H%M%S.db -> backup_20240115_030000.db
-BACKUP_FILENAME_FORMAT = 'backup_%Y%m%d_%H%M%S.db'
+# 例: backup_%Y%m%d_%H%M%S.zip -> backup_20240115_030000.zip
+BACKUP_FILENAME_FORMAT = 'backup_%Y%m%d_%H%M%S.zip'
 
 # 自动备份时间（24小时制 HH:MM 格式字符串），默认每天凌晨 3 点
 BACKUP_SCHEDULED_TIME = '03:00'
@@ -73,9 +76,6 @@ MAX_BACKUPS = 30
 
 # 备份执行超时时间（秒），防止备份过程卡住
 BACKUP_TIMEOUT = 3600  # 1 小时
-
-# 数据库优化时是否执行 CHECKPOINT （将 WAL 合并到主文件，减少文件大小）
-BACKUP_CHECKPOINT = True
 
 # 信任代理白名单列表（仅当 request.remote_addr 在此列表中时，才读取代理头部获取真实 IP）
 TRUSTED_PROXIES = []
@@ -219,14 +219,14 @@ WORKER_THREADS = 4
 # 目录准备
 # ---------------------------------------------------------------------------
 
-os.makedirs(os.path.join(APP_ROOT, 'db'), exist_ok=True)
+os.makedirs(os.path.join(UPLOAD_DIR, 'db'), exist_ok=True)
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(UPLOAD_ATTACHMENTS_DIR, exist_ok=True)
 os.makedirs(UPLOAD_COMMUNITY_DIR, exist_ok=True)
 os.makedirs(UPLOAD_SITEMAP_DIR, exist_ok=True)
 os.makedirs(UPLOAD_MUSIC_DIR, exist_ok=True)
 os.makedirs(UPLOAD_BACKGROUNDS_DIR, exist_ok=True)
-os.makedirs(BACKUP_DIR, exist_ok=True)
+os.makedirs(UPLOADS_BACKUP_DIR, exist_ok=True)
 
 
 # ---------------------------------------------------------------------------
@@ -265,11 +265,10 @@ SETTINGS_REGISTRY = [
     # 日志
     ('LOG_LEVEL', 'INFO', 'select', '日志输出等级', '控制日志输出级别，可选：DEBUG（调试）, INFO（信息）, WARNING（警告）, ERROR（错误）, CRITICAL（严重）', '日志'),
 
-    # 数据库备份
-    ('BACKUP_SCHEDULED_TIME', '03:00', 'time', '自动备份时间', '每天自动备份的时间（HH:MM 格式）', '数据库备份'),
-    ('MAX_BACKUPS', 30, 'int', '最大备份保留数', '超出后自动删除最旧的备份，0 表示不限制', '数据库备份'),
-    ('BACKUP_TIMEOUT', 3600, 'int', '备份超时（秒）', '备份执行超时时间，防止备份过程卡住', '数据库备份'),
-    ('BACKUP_CHECKPOINT', True, 'bool', '备份前执行 CHECKPOINT', '将 WAL 合并到主文件，减小数据库体积', '数据库备份'),
+    # 数据备份
+    ('BACKUP_SCHEDULED_TIME', '03:00', 'time', '自动备份时间', '每天自动备份的时间（HH:MM 格式）', '数据备份'),
+    ('MAX_BACKUPS', 30, 'int', '最大备份保留数', '超出后自动删除最旧的备份，0 表示不限制', '数据备份'),
+    ('BACKUP_TIMEOUT', 3600, 'int', '备份超时（秒）', '备份执行超时时间，防止备份过程卡住', '数据备份'),
 
 # Sitemap
     ('SITEMAP_REFRESH_TIME', '03:00', 'time', 'Sitemap 刷新时间', '站点地图每天自动刷新的时间（HH:MM 格式）', 'Sitemap'),

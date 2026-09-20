@@ -1,4 +1,4 @@
-"""数据库备份路由：备份页面、启动备份、进度查询、历史列表、恢复。"""
+"""数据备份路由：备份页面、启动备份、进度查询、历史列表、下载、删除。"""
 
 import os
 import sys
@@ -11,7 +11,7 @@ from flask import jsonify, send_file
 from core.auth import admin_required, get_current_user
 from core.helpers import render_page
 from core.db import get_db
-from config import DB_PATH, BACKUP_DIR, APP_ROOT
+from config import DB_PATH, UPLOAD_DIR, UPLOADS_BACKUP_DIR, APP_ROOT
 from routes.admin import admin_bp
 from core.system.logger import log
 from core.shared.process_utils import make_env
@@ -20,16 +20,30 @@ from core.shared.process_utils import make_env
 @admin_bp.route('/admin/db-backup')
 @admin_required
 def db_backup_page():
-    """数据库备份管理页面。"""
+    """数据备份管理页面。"""
     from config import get_config_value
 
     conn = get_db()
     try:
-        # 数据库文件大小
+        # 数据量统计
         db_size = 0
         try:
             if os.path.exists(DB_PATH):
                 db_size = os.path.getsize(DB_PATH)
+        except Exception:
+            pass
+
+        # /uploads/ 目录总大小
+        uploads_size = 0
+        try:
+            for dirpath, dirnames, filenames in os.walk(UPLOAD_DIR):
+                for f in filenames:
+                    try:
+                        fp = os.path.join(dirpath, f)
+                        if os.path.isfile(fp):
+                            uploads_size += os.path.getsize(fp)
+                    except Exception:
+                        pass
         except Exception:
             pass
 
@@ -46,6 +60,7 @@ def db_backup_page():
     return render_page(
         'admin/admin_db_backup.html',
         db_size=db_size,
+        uploads_size=uploads_size,
         backups=backups,
         max_backups=get_config_value('MAX_BACKUPS', 30),
     )
@@ -54,7 +69,7 @@ def db_backup_page():
 @admin_bp.route('/admin/api/db-backup/start', methods=['POST'])
 @admin_required
 def api_db_backup_start():
-    """启动手动数据库备份（异步执行）。"""
+    """启动手动数据备份（异步执行）。"""
     user = get_current_user()
 
     from services.backup import BackupManager
@@ -139,7 +154,7 @@ def api_db_backup_download(backup_id):
             backup_path,
             as_attachment=True,
             download_name=backup_name,
-            mimetype='application/octet-stream',
+            mimetype='application/zip',
         )
     except Exception as e:
         log('ERROR', 'BackupManager', f'下载备份失败: {e}')
@@ -154,7 +169,6 @@ def api_db_backup_delete(backup_id):
     """删除指定备份（文件 + 记录）。"""
     user = get_current_user()
 
-    from config import BACKUP_DIR
     conn = get_db()
     try:
         row = conn.execute(
@@ -186,18 +200,11 @@ def api_db_backup_delete(backup_id):
 @admin_bp.route('/admin/api/db-backup/<int:backup_id>/restore', methods=['POST'])
 @admin_required
 def api_db_backup_restore(backup_id):
-    """一键恢复数据库备份（在线恢复，无需重启服务器）。
-
-    流程：
-    1. 验证备份文件存在且有效
-    2. 自动创建当前数据库的安全备份
-    3. 使用 SQLite 在线备份 API 恢复数据
-    """
+    """恢复备份：将 zip 备份解压到 /uploads/ 目录。"""
     user = get_current_user()
 
     conn = get_db()
     try:
-        # 1. 查询备份记录
         row = conn.execute(
             "SELECT * FROM db_backups WHERE id = ?", (backup_id,)
         ).fetchone()
@@ -213,56 +220,31 @@ def api_db_backup_restore(backup_id):
         if backup.get('status') != 'success':
             return jsonify({'success': False, 'message': '只能恢复成功的备份'}), 400
 
-        # 2. 自动创建当前数据库的安全备份（在线备份 API，不受文件锁影响）
-        safety_name = f"pre_restore_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
-        safety_path = os.path.join(BACKUP_DIR, safety_name)
-        os.makedirs(BACKUP_DIR, exist_ok=True)
+        if not backup_path.endswith('.zip'):
+            return jsonify({'success': False, 'message': '备份格式不支持恢复'}), 400
 
+        # 解压 zip 到项目根目录（zip 内相对路径以 uploads/ 开头）
+        import zipfile
         try:
-            conn.backup_to(safety_path)
-            log('INFO', 'Backup', f'创建恢复前安全备份: {safety_name}')
+            with zipfile.ZipFile(backup_path, 'r') as zf:
+                zf.extractall(APP_ROOT)
         except Exception as e:
-            log('ERROR', 'Backup', f'创建安全备份失败: {e}')
-            return jsonify({'success': False, 'message': f'创建安全备份失败: {e}'}), 500
+            log('ERROR', 'Backup', f'备份解压失败: {e}')
+            return jsonify({'success': False, 'message': f'解压失败: {e}'}), 500
 
-        # 记录安全备份到数据库
+        # 重置数据库连接（防止文件被锁）
         try:
-            now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            conn.execute(
-                "INSERT INTO db_backups (backup_name, backup_path, backup_type, status, size_bytes, started_at, finished_at) "
-                "VALUES (?, ?, 'manual', 'success', ?, ?, ?)",
-                (safety_name, safety_path, os.path.getsize(safety_path), now_str, now_str),
-            )
-            conn.commit()
-        except Exception:
-            pass  # 非关键，安全备份文件已存在
-
-        # 3. 使用 SQLite 在线备份 API 恢复（备份文件 → 当前数据库）
-        try:
-            import sqlite3
-            src = sqlite3.connect(f'file:{backup_path.replace(chr(92), "/")}?mode=ro', uri=True)
-            dest = sqlite3.connect(DB_PATH)
-            try:
-                src.backup(dest)
-            finally:
-                src.close()
-                dest.close()
-
-            # 重置全局连接，确保后续请求使用新数据并保持 WAL 模式
             from core.db.connection import reset_connection
             reset_connection()
+        except Exception:
+            pass
 
-            log('INFO', 'Backup', f'数据库已从备份恢复: {backup.get("backup_name")}',
-                backup_id=backup_id, safety_backup=safety_name)
-
-            return jsonify({
-                'success': True,
-                'message': '数据库已成功恢复，无需重启服务器',
-                'safety_backup': safety_name,
-            })
-        except Exception as e:
-            log('ERROR', 'Backup', f'数据库恢复失败: {e}')
-            return jsonify({'success': False, 'message': f'恢复失败: {e}'}), 500
+        log('INFO', 'Backup', f'数据已从备份恢复',
+            backup_id=backup_id, backup_name=backup.get('backup_name'))
+        return jsonify({
+            'success': True,
+            'message': '数据已从备份恢复，页面即将刷新',
+        })
     finally:
         conn.close()
 
@@ -270,84 +252,9 @@ def api_db_backup_restore(backup_id):
 @admin_bp.route('/admin/api/db-backup/<int:backup_id>/restart-restore', methods=['POST'])
 @admin_required
 def api_db_backup_restart_restore(backup_id):
-    """一键恢复数据库备份（关闭服务器 → 替换数据库 → 启动服务器）。
-
-    流程：
-    1. 验证备份文件存在且有效
-    2. 自动创建当前数据库的安全备份
-    3. 生成恢复脚本参数并启动子进程
-    4. 返回响应，服务器即将关闭
+    """备用恢复流程：通过子进程停止服务器 → 解压备份 → 重启。
+    
+    注：zip 备份的恢复通过在线解压即可，此接口保留做备用。
     """
-    user = get_current_user()
-
-    conn = get_db()
-    try:
-        # 1. 查询备份记录
-        row = conn.execute(
-            "SELECT * FROM db_backups WHERE id = ?", (backup_id,)
-        ).fetchone()
-        if not row:
-            return jsonify({'success': False, 'message': '备份记录不存在'}), 404
-
-        backup = dict(row)
-        backup_path = backup.get('backup_path')
-
-        if not backup_path or not os.path.exists(backup_path):
-            return jsonify({'success': False, 'message': '备份文件不存在'}), 404
-
-        if backup.get('status') != 'success':
-            return jsonify({'success': False, 'message': '只能恢复成功的备份'}), 400
-
-        # 2. 自动创建当前数据库的安全备份
-        safety_name = f"pre_restore_{datetime.now().strftime('%Y%m%d_%H%M%S')}.db"
-        safety_path = os.path.join(BACKUP_DIR, safety_name)
-        os.makedirs(BACKUP_DIR, exist_ok=True)
-
-        try:
-            conn.backup_to(safety_path)
-            log('INFO', 'Backup', f'创建恢复前安全备份: {safety_name}')
-        except Exception as e:
-            log('ERROR', 'Backup', f'创建安全备份失败: {e}')
-            return jsonify({'success': False, 'message': f'创建安全备份失败: {e}'}), 500
-
-        # 3. 启动恢复脚本
-        python_exe = sys.executable
-        restore_script = os.path.join(APP_ROOT, 'scripts', 'restore_db.py')
-
-        if not os.path.isfile(restore_script):
-            log('ERROR', 'Backup', f'恢复脚本不存在: {restore_script}')
-            return jsonify({'success': False, 'message': '恢复脚本不存在'}), 500
-
-        try:
-            # 写入恢复标志文件（供恢复脚本读取）
-            flag_file = os.path.join(BACKUP_DIR, '.restore_flag')
-            flag_data = {
-                'backup_path': backup_path,
-                'safety_path': safety_path,
-                'triggered_by': user['username'],
-                'timestamp': datetime.now().isoformat(),
-            }
-            with open(flag_file, 'w') as f:
-                json.dump(flag_data, f)
-
-            # 启动恢复脚本，传入备份路径（统一环境变量：UTF-8 输出，避免 Windows 编码问题）
-            subprocess.Popen(
-                [python_exe, restore_script, backup_path],
-                cwd=APP_ROOT,
-                close_fds=True,
-                env=make_env(),
-            )
-            log('INFO', 'Backup', f'数据库恢复脚本已启动',
-                backup_id=backup_id, safety_backup=safety_name)
-
-            return jsonify({
-                'success': True,
-                'message': '数据库正在恢复，服务器将自动重启，请稍后刷新页面...',
-                'safety_backup': safety_name,
-                'restarting': True,
-            })
-        except Exception as e:
-            log('ERROR', 'Backup', f'启动恢复脚本失败: {e}')
-            return jsonify({'success': False, 'message': f'启动恢复脚本失败: {e}'}), 500
-    finally:
-        conn.close()
+    # 直接调用在线恢复
+    return api_db_backup_restore(backup_id)

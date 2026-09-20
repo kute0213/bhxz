@@ -8,8 +8,8 @@
                 <a href="{{ url_for('admin.admin_page') }}" class="text-gold-400 hover:text-gold-300 text-sm mb-2 inline-block">
                     <i data-lucide="arrow-left" class="w-4 h-4 inline mr-1"></i>返回管理中心
                 </a>
-                <h1 class="text-xl sm:text-2xl font-bold">数据库优化与备份</h1>
-                <p class="text-cream/60 text-sm mt-1">自动优化数据库、清理过期数据、定时备份</p>
+                <h1 class="text-xl sm:text-2xl font-bold">数据备份</h1>
+                <p class="text-cream/60 text-sm mt-1">定时压缩备份 /uploads/ 目录，极限压缩为 zip</p>
             </div>
 
             <!-- 数据库状态卡片 -->
@@ -28,11 +28,11 @@
                 <div class="pixel-card rounded-xl p-5">
                     <div class="flex items-center gap-3 mb-2">
                         <div class="w-10 h-10 bg-blue-400/20 rounded-lg flex items-center justify-center">
-                            <i data-lucide="clock" class="w-5 h-5 text-blue-400"></i>
+                            <i data-lucide="folder" class="w-5 h-5 text-blue-400"></i>
                         </div>
                         <div>
-                            <div class="text-xs text-cream/50">定时备份</div>
-                            <div class="text-xl font-bold">每天 03:00</div>
+                            <div class="text-xs text-cream/50">/uploads/ 数据量</div>
+                            <div id="uploads-size" class="text-xl font-bold">{{ '%.2f MB'|format(uploads_size / 1024 / 1024) if uploads_size else 'N/A' }}</div>
                         </div>
                     </div>
                 </div>
@@ -57,8 +57,8 @@
                 </h2>
                 <p class="text-cream/60 text-sm mb-4">
                     点击按钮后将执行以下操作：<br>
-                    1. 执行 CHECKPOINT，合并 WAL 文件到主数据库（减小文件大小）<br>
-                    2. 完整备份数据库文件到 <code class="bg-forest-900/50 px-1.5 py-0.5 rounded text-xs">backups/db/</code> 目录<br>
+                    1. 扫描 /uploads/ 目录下的所有文件<br>
+                    2. 极限压缩打包为 zip 文件到 <code class="bg-forest-900/50 px-1.5 py-0.5 rounded text-xs">backups/uploads/</code> 目录<br>
                     3. 自动清理超出保留数量的旧备份（当前保留上限：{{ max_backups }} 份）
                 </p>
 
@@ -73,7 +73,7 @@
 
                 <button id="btn-start-backup" class="px-6 py-3 bg-gold-500 hover:bg-gold-400 text-forest-900 font-bold rounded-xl transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]">
                     <i data-lucide="rocket" class="w-5 h-5 inline mr-2"></i>
-                    立即优化并备份
+                    立即压缩备份
                 </button>
             </div>
 
@@ -311,7 +311,7 @@
                             setTimeout(() => {
                                 progressSection.classList.add('hidden');
                                 btnStart.disabled = false;
-                                btnStart.innerHTML = '<i data-lucide="rocket" class="w-5 h-5 inline mr-2"></i>立即优化并备份';
+                                btnStart.innerHTML = '<i data-lucide="rocket" class="w-5 h-5 inline mr-2"></i>立即压缩备份';
                                 if (window.lucide) lucide.createIcons();
                                 refreshList();
                             }, 1500);
@@ -443,14 +443,14 @@
                             pollTimer = setInterval(pollProgress, 1000);
                         } else {
                             btnStart.disabled = false;
-                            btnStart.innerHTML = '<i data-lucide="rocket" class="w-5 h-5 inline mr-2"></i>立即优化并备份';
+                            btnStart.innerHTML = '<i data-lucide="rocket" class="w-5 h-5 inline mr-2"></i>立即压缩备份';
                             if (window.lucide) lucide.createIcons();
                             Toast.error(data.message || '启动失败');
                         }
                     })
                     .catch(() => {
                         btnStart.disabled = false;
-                        btnStart.innerHTML = '<i data-lucide="rocket" class="w-5 h-5 inline mr-2"></i>立即优化并备份';
+                        btnStart.innerHTML = '<i data-lucide="rocket" class="w-5 h-5 inline mr-2"></i>立即压缩备份';
                         if (window.lucide) lucide.createIcons();
                         Toast.error('网络错误，请重试');
                     });
