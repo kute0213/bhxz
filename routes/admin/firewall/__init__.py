@@ -4,6 +4,7 @@ from flask import redirect, url_for, flash, request, jsonify
 
 from core.auth import admin_required, get_current_user
 from core.helpers import render_page
+from core.firewall.spam import SPAM_LIMITS
 from core.firewall import (
     ban_ip, unban_ip, get_bans, get_whitelist,
     whitelist_add, whitelist_remove,
@@ -121,6 +122,21 @@ def admin_firewall_settings_page():
         # 发布内容注入检测
         content_injection_enabled=get_config_value('CONTENT_INJECTION_BAN_ENABLED', True),
         content_injection_duration=get_config_value('CONTENT_INJECTION_BAN_DURATION_MINUTES', 30),
+        # 发布频率限制（从 SPAM_LIMITS 读取默认值）
+        spam_limit_building=get_config_value('SPAM_LIMIT_BUILDING', SPAM_LIMITS.get('building', (2, 120))[0]),
+        spam_limit_building_window=get_config_value('SPAM_LIMIT_BUILDING_WINDOW', SPAM_LIMITS.get('building', (2, 120))[1]),
+        spam_limit_building_comment=get_config_value('SPAM_LIMIT_BUILDING_COMMENT', SPAM_LIMITS.get('building_comment', (5, 60))[0]),
+        spam_limit_building_comment_window=get_config_value('SPAM_LIMIT_BUILDING_COMMENT_WINDOW', SPAM_LIMITS.get('building_comment', (5, 60))[1]),
+        spam_limit_discussion_topic=get_config_value('SPAM_LIMIT_DISCUSSION_TOPIC', SPAM_LIMITS.get('discussion_topic', (2, 60))[0]),
+        spam_limit_discussion_topic_window=get_config_value('SPAM_LIMIT_DISCUSSION_TOPIC_WINDOW', SPAM_LIMITS.get('discussion_topic', (2, 60))[1]),
+        spam_limit_discussion_reply=get_config_value('SPAM_LIMIT_DISCUSSION_REPLY', SPAM_LIMITS.get('discussion_reply', (5, 60))[0]),
+        spam_limit_discussion_reply_window=get_config_value('SPAM_LIMIT_DISCUSSION_REPLY_WINDOW', SPAM_LIMITS.get('discussion_reply', (5, 60))[1]),
+        spam_limit_guide=get_config_value('SPAM_LIMIT_GUIDE', SPAM_LIMITS.get('guide', (2, 120))[0]),
+        spam_limit_guide_window=get_config_value('SPAM_LIMIT_GUIDE_WINDOW', SPAM_LIMITS.get('guide', (2, 120))[1]),
+        spam_limit_background=get_config_value('SPAM_LIMIT_BACKGROUND', SPAM_LIMITS.get('background', (6, 60))[0]),
+        spam_limit_background_window=get_config_value('SPAM_LIMIT_BACKGROUND_WINDOW', SPAM_LIMITS.get('background', (6, 60))[1]),
+        spam_limit_music=get_config_value('SPAM_LIMIT_MUSIC', SPAM_LIMITS.get('music', (3, 600))[0]),
+        spam_limit_music_window=get_config_value('SPAM_LIMIT_MUSIC_WINDOW', SPAM_LIMITS.get('music', (3, 600))[1]),
     )
 
 
@@ -160,6 +176,14 @@ FIREWALL_CONFIG_KEYS = {
     # 发布内容注入检测
     'CONTENT_INJECTION_BAN_ENABLED',
     'CONTENT_INJECTION_BAN_DURATION_MINUTES',
+    # 发布频率限制
+    'SPAM_LIMIT_BUILDING', 'SPAM_LIMIT_BUILDING_WINDOW',
+    'SPAM_LIMIT_BUILDING_COMMENT', 'SPAM_LIMIT_BUILDING_COMMENT_WINDOW',
+    'SPAM_LIMIT_DISCUSSION_TOPIC', 'SPAM_LIMIT_DISCUSSION_TOPIC_WINDOW',
+    'SPAM_LIMIT_DISCUSSION_REPLY', 'SPAM_LIMIT_DISCUSSION_REPLY_WINDOW',
+    'SPAM_LIMIT_GUIDE', 'SPAM_LIMIT_GUIDE_WINDOW',
+    'SPAM_LIMIT_BACKGROUND', 'SPAM_LIMIT_BACKGROUND_WINDOW',
+    'SPAM_LIMIT_MUSIC', 'SPAM_LIMIT_MUSIC_WINDOW',
 }
 
 # ===========================================================================
@@ -224,6 +248,13 @@ def admin_firewall_settings_save():
         'AUTO_BAN_DURATION_MINUTES', 'SUSPICIOUS_BLOCK_DURATION_MINUTES',
         'DDOS_GUARD_BAN_MINUTES', 'DDOS_GUARD_PERMANENT_AFTER',
         'DDOS_GUARD_OFFENSE_WINDOW_HOURS',
+        'SPAM_LIMIT_BUILDING', 'SPAM_LIMIT_BUILDING_WINDOW',
+        'SPAM_LIMIT_BUILDING_COMMENT', 'SPAM_LIMIT_BUILDING_COMMENT_WINDOW',
+        'SPAM_LIMIT_DISCUSSION_TOPIC', 'SPAM_LIMIT_DISCUSSION_TOPIC_WINDOW',
+        'SPAM_LIMIT_DISCUSSION_REPLY', 'SPAM_LIMIT_DISCUSSION_REPLY_WINDOW',
+        'SPAM_LIMIT_GUIDE', 'SPAM_LIMIT_GUIDE_WINDOW',
+        'SPAM_LIMIT_BACKGROUND', 'SPAM_LIMIT_BACKGROUND_WINDOW',
+        'SPAM_LIMIT_MUSIC', 'SPAM_LIMIT_MUSIC_WINDOW',
     }
     for item in items:
         key = item.get('key')

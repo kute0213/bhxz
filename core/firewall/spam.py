@@ -24,10 +24,36 @@ SPAM_LIMITS = {
     'background':         (6, 60),    # 60秒内最多 6 个背景
     'broadcast':          (1, 30),    # 30秒内最多 1 条广播
     'public_file':        (3, 60),    # 60秒内最多 3 个公共文件
+    'building':           (2, 120),   # 120秒内最多 2 个公共建筑
+    'building_comment':   (5, 60),    # 60秒内最多 5 条建筑评论
 }
 
 # 连续违规达到此次数后自动封禁账号
 AUTO_BAN_AFTER = 3
+
+
+def get_spam_limit(content_type):
+    """获取指定内容类型的频率限制，优先从系统设置读取。"""
+    config_map = {
+        'building': ('SPAM_LIMIT_BUILDING', 'SPAM_LIMIT_BUILDING_WINDOW'),
+        'building_comment': ('SPAM_LIMIT_BUILDING_COMMENT', 'SPAM_LIMIT_BUILDING_COMMENT_WINDOW'),
+        'discussion_topic': ('SPAM_LIMIT_DISCUSSION_TOPIC', 'SPAM_LIMIT_DISCUSSION_TOPIC_WINDOW'),
+        'discussion_reply': ('SPAM_LIMIT_DISCUSSION_REPLY', 'SPAM_LIMIT_DISCUSSION_REPLY_WINDOW'),
+        'guide': ('SPAM_LIMIT_GUIDE', 'SPAM_LIMIT_GUIDE_WINDOW'),
+        'background': ('SPAM_LIMIT_BACKGROUND', 'SPAM_LIMIT_BACKGROUND_WINDOW'),
+        'music': ('SPAM_LIMIT_MUSIC', 'SPAM_LIMIT_MUSIC_WINDOW'),
+    }
+    if content_type in config_map:
+        try:
+            from config import get_config_value
+            count_key, window_key = config_map[content_type]
+            default = SPAM_LIMITS.get(content_type, (3, 60))
+            count = get_config_value(count_key, default[0])
+            window = get_config_value(window_key, default[1])
+            return int(count), int(window)
+        except Exception:
+            pass
+    return SPAM_LIMITS.get(content_type)
 
 
 class SpamDetector:
@@ -50,7 +76,7 @@ class SpamDetector:
             True = 判定为刷屏（应阻止发布）
             False = 正常，允许发布
         """
-        limit = SPAM_LIMITS.get(content_type)
+        limit = get_spam_limit(content_type)
         if limit is None:
             return False  # 未知类型不限制
 
@@ -112,7 +138,7 @@ class SpamDetector:
 
         用于外部模块确认发布成功后补充记录。
         """
-        limit = SPAM_LIMITS.get(content_type)
+        limit = get_spam_limit(content_type)
         if limit is None:
             return
         _, window_seconds = limit
@@ -133,7 +159,7 @@ class SpamDetector:
             for uid, user_records in self._records.items():
                 dead_types = []
                 for ctype, records in user_records.items():
-                    limit = SPAM_LIMITS.get(ctype)
+                    limit = get_spam_limit(ctype)
                     if limit is None:
                         dead_types.append(ctype)
                         continue

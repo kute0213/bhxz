@@ -333,6 +333,84 @@
               </div>
             </div>
 
+            <!-- 发布频率限制 -->
+            <div>
+              <h3 class="text-base font-semibold text-cream/80 border-b border-forest-700/30 pb-2 mb-3">发布频率限制</h3>
+              <p class="text-xs text-cream/50 mb-3">各内容类型在检测窗口内的最大发布次数，超限将触发自动封禁</p>
+              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div class="p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
+                  <label class="block text-xs text-cream/70 mb-1 font-medium">公共建筑</label>
+                  <div class="flex items-center gap-2">
+                    <span class="text-xs text-cream/50">限</span>
+                    <input type="number" id="cfg-SPAM_LIMIT_BUILDING" value="{{ spam_limit_building }}" class="input-field w-16 px-2 py-1.5 rounded text-center text-sm">
+                    <span class="text-xs text-cream/50">条 /</span>
+                    <input type="number" id="cfg-SPAM_LIMIT_BUILDING_WINDOW" value="{{ spam_limit_building_window }}" class="input-field w-16 px-2 py-1.5 rounded text-center text-sm">
+                    <span class="text-xs text-cream/50">秒</span>
+                  </div>
+                </div>
+                <div class="p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
+                  <label class="block text-xs text-cream/70 mb-1 font-medium">建筑评论</label>
+                  <div class="flex items-center gap-2">
+                    <span class="text-xs text-cream/50">限</span>
+                    <input type="number" id="cfg-SPAM_LIMIT_BUILDING_COMMENT" value="{{ spam_limit_building_comment }}" class="input-field w-16 px-2 py-1.5 rounded text-center text-sm">
+                    <span class="text-xs text-cream/50">条 /</span>
+                    <input type="number" id="cfg-SPAM_LIMIT_BUILDING_COMMENT_WINDOW" value="{{ spam_limit_building_comment_window }}" class="input-field w-16 px-2 py-1.5 rounded text-center text-sm">
+                    <span class="text-xs text-cream/50">秒</span>
+                  </div>
+                </div>
+                <div class="p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
+                  <label class="block text-xs text-cream/70 mb-1 font-medium">讨论话题</label>
+                  <div class="flex items-center gap-2">
+                    <span class="text-xs text-cream/50">限</span>
+                    <input type="number" id="cfg-SPAM_LIMIT_DISCUSSION_TOPIC" value="{{ spam_limit_discussion_topic }}" class="input-field w-16 px-2 py-1.5 rounded text-center text-sm">
+                    <span class="text-xs text-cream/50">条 /</span>
+                    <input type="number" id="cfg-SPAM_LIMIT_DISCUSSION_TOPIC_WINDOW" value="{{ spam_limit_discussion_topic_window }}" class="input-field w-16 px-2 py-1.5 rounded text-center text-sm">
+                    <span class="text-xs text-cream/50">秒</span>
+                  </div>
+                </div>
+                <div class="p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
+                  <label class="block text-xs text-cream/70 mb-1 font-medium">讨论回复</label>
+                  <div class="flex items-center gap-2">
+                    <span class="text-xs text-cream/50">限</span>
+                    <input type="number" id="cfg-SPAM_LIMIT_DISCUSSION_REPLY" value="{{ spam_limit_discussion_reply }}" class="input-field w-16 px-2 py-1.5 rounded text-center text-sm">
+                    <span class="text-xs text-cream/50">条 /</span>
+                    <input type="number" id="cfg-SPAM_LIMIT_DISCUSSION_REPLY_WINDOW" value="{{ spam_limit_discussion_reply_window }}" class="input-field w-16 px-2 py-1.5 rounded text-center text-sm">
+                    <span class="text-xs text-cream/50">秒</span>
+                  </div>
+                </div>
+                <div class="p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
+                  <label class="block text-xs text-cream/70 mb-1 font-medium">服务器指南</label>
+                  <div class="flex items-center gap-2">
+                    <span class="text-xs text-cream/50">限</span>
+                    <input type="number" id="cfg-SPAM_LIMIT_GUIDE" value="{{ spam_limit_guide }}" class="input-field w-16 px-2 py-1.5 rounded text-center text-sm">
+                    <span class="text-xs text-cream/50">条 /</span>
+                    <input type="number" id="cfg-SPAM_LIMIT_GUIDE_WINDOW" value="{{ spam_limit_guide_window }}" class="input-field w-16 px-2 py-1.5 rounded text-center text-sm">
+                    <span class="text-xs text-cream/50">秒</span>
+                  </div>
+                </div>
+                <div class="p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
+                  <label class="block text-xs text-cream/70 mb-1 font-medium">背景图片</label>
+                  <div class="flex items-center gap-2">
+                    <span class="text-xs text-cream/50">限</span>
+                    <input type="number" id="cfg-SPAM_LIMIT_BACKGROUND" value="{{ spam_limit_background }}" class="input-field w-16 px-2 py-1.5 rounded text-center text-sm">
+                    <span class="text-xs text-cream/50">条 /</span>
+                    <input type="number" id="cfg-SPAM_LIMIT_BACKGROUND_WINDOW" value="{{ spam_limit_background_window }}" class="input-field w-16 px-2 py-1.5 rounded text-center text-sm">
+                    <span class="text-xs text-cream/50">秒</span>
+                  </div>
+                </div>
+                <div class="p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
+                  <label class="block text-xs text-cream/70 mb-1 font-medium">大喇叭音频</label>
+                  <div class="flex items-center gap-2">
+                    <span class="text-xs text-cream/50">限</span>
+                    <input type="number" id="cfg-SPAM_LIMIT_MUSIC" value="{{ spam_limit_music }}" class="input-field w-16 px-2 py-1.5 rounded text-center text-sm">
+                    <span class="text-xs text-cream/50">条 /</span>
+                    <input type="number" id="cfg-SPAM_LIMIT_MUSIC_WINDOW" value="{{ spam_limit_music_window }}" class="input-field w-16 px-2 py-1.5 rounded text-center text-sm">
+                    <span class="text-xs text-cream/50">秒</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <button type="button" class="btn-primary px-6 py-2 rounded-lg text-sm inline-flex items-center gap-2" onclick="saveFirewallSettings()">
               <i data-lucide="save" class="w-4 h-4"></i>
               保存设置

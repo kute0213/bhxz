@@ -51,7 +51,7 @@
     </div>
 </section>
 {% endblock %}
-{% block extra_js %}
+{% block extra_script %}
 <script>
 (function () {
     function init() {
@@ -59,10 +59,11 @@
         var btn = document.getElementById('show-captcha-btn');
         if (!form || !btn || typeof CaptchaModal === 'undefined') return;
 
-        btn.addEventListener('click', function () {
+        btn.addEventListener('click', function (e) {
+            e.preventDefault();
             CaptchaModal.show('请完成图形验证码后提交', function (captchaId, code) {
-                document.getElementById('captcha-id-hidden').value = captchaId;
-                document.getElementById('captcha-hidden').value = code;
+                form.querySelector('[name="captcha_id"]').value = captchaId;
+                form.querySelector('[name="captcha"]').value = code;
                 form.submit();
             });
         });

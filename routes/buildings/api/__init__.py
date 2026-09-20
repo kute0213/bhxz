@@ -7,6 +7,7 @@ from flask import request, jsonify
 from core.auth import login_required, get_current_user
 from core.db import get_db
 from core.shared.ip import get_client_ip
+from core.shared.captcha import captcha_service
 from routes.buildings import buildings_bp
 
 
@@ -31,6 +32,12 @@ def add_comment(building_id):
     )
     if inj_result['blocked']:
         return jsonify({'success': False, 'message': inj_result['message']})
+
+    # 验证图形验证码
+    captcha_input = (request.form.get('captcha') or '').strip()
+    captcha_id = (request.form.get('captcha_id') or '').strip()
+    if not captcha_service.verify(captcha_id, captcha_input):
+        return jsonify({'success': False, 'message': '验证码错误或已过期'})
 
     if check_spam(user_id=user['id'], content_type='building_comment', content=content):
         return jsonify({'success': False, 'message': '发布过于频繁，请稍后再试'})

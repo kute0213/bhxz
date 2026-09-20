@@ -75,10 +75,12 @@
             </h2>
 
             {% if user %}
-            <form id="comment-form" class="mb-6" onsubmit="return submitComment(event)">
+            <form id="comment-form" class="mb-6">
+                <input type="hidden" name="captcha_id" id="comment-captcha-id" value="">
+                <input type="hidden" name="captcha" id="comment-captcha" value="">
                 <textarea id="comment-input" rows="3" class="input-field w-full px-4 py-3 rounded-lg mb-3" placeholder="发表你的看法..." maxlength="500" required></textarea>
                 <div class="flex justify-end">
-                    <button type="submit" class="btn-primary px-5 py-2 rounded-lg text-sm">发表评论</button>
+                    <button type="button" id="comment-submit-btn" class="btn-primary px-5 py-2 rounded-lg text-sm">发表评论</button>
                 </div>
             </form>
             {% else %}
@@ -148,37 +150,52 @@ function fallbackCopy(text) {
     document.body.removeChild(ta);
 }
 
-// ---- 评论 ----
-function submitComment(e) {
-    e.preventDefault();
-    var content = document.getElementById('comment-input').value.trim();
-    if (!content) { alert('评论内容不能为空'); return false; }
-    var btn = e.target.querySelector('button[type="submit"]');
-    btn.disabled = true; btn.textContent = '发布中...';
-    var formData = new FormData();
-    formData.append('content', content);
-    fetch('/buildings/{{ building.id }}/comment', { method: 'POST', body: formData })
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-        if (data.success) {
-            var list = document.getElementById('comments-list');
-            var empty = list.querySelector('.text-center.py-8');
-            if (empty) empty.remove();
-            var div = document.createElement('div');
-            div.className = 'comment-item p-4 bg-black/[0.03] rounded-xl';
-            div.innerHTML =
-                '<div class="flex items-center justify-between mb-2">' +
-                '<div class="flex items-center gap-2"><span class="text-sm font-medium text-cream/80">' + data.comment.username + '</span>' +
-                '<span class="text-xs text-cream/40">' + data.comment.created_at.slice(0, 16) + '</span></div></div>' +
-                '<p class="text-sm text-cream/70 whitespace-pre-wrap">' + escapeHtml(data.comment.content) + '</p>';
-            list.insertBefore(div, list.firstChild);
-            document.getElementById('comment-input').value = '';
-            location.reload();  // 简单处理：刷新更新评论数
-        } else { alert(data.message); }
-    }).catch(function() { alert('评论失败，请重试'); })
-    .finally(function() { btn.disabled = false; btn.textContent = '发表评论'; });
-    return false;
-}
+// ---- 评论（验证码 + 提交） ----
+(function () {
+    var btn = document.getElementById('comment-submit-btn');
+    var form = document.getElementById('comment-form');
+    if (!btn || !form || typeof CaptchaModal === 'undefined') return;
+
+    function doSubmitComment(captchaId, code) {
+        document.getElementById('comment-captcha-id').value = captchaId;
+        document.getElementById('comment-captcha').value = code;
+
+        var content = document.getElementById('comment-input').value.trim();
+        if (!content) { alert('评论内容不能为空'); return; }
+        btn.disabled = true; btn.textContent = '发布中...';
+        var formData = new FormData();
+        formData.append('content', content);
+        formData.append('captcha_id', captchaId);
+        formData.append('captcha', code);
+        fetch('/buildings/{{ building.id }}/comment', { method: 'POST', body: formData })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (data.success) {
+                var list = document.getElementById('comments-list');
+                var empty = list.querySelector('.text-center.py-8');
+                if (empty) empty.remove();
+                var div = document.createElement('div');
+                div.className = 'comment-item p-4 bg-black/[0.03] rounded-xl';
+                div.innerHTML =
+                    '<div class="flex items-center justify-between mb-2">' +
+                    '<div class="flex items-center gap-2"><span class="text-sm font-medium text-cream/80">' + data.comment.username + '</span>' +
+                    '<span class="text-xs text-cream/40">' + data.comment.created_at.slice(0, 16) + '</span></div></div>' +
+                    '<p class="text-sm text-cream/70 whitespace-pre-wrap">' + escapeHtml(data.comment.content) + '</p>';
+                list.insertBefore(div, list.firstChild);
+                document.getElementById('comment-input').value = '';
+                location.reload();
+            } else { alert(data.message); }
+        }).catch(function() { alert('评论失败，请重试'); })
+        .finally(function() { btn.disabled = false; btn.textContent = '发表评论'; });
+    }
+
+    btn.addEventListener('click', function (e) {
+        e.preventDefault();
+        var content = document.getElementById('comment-input').value.trim();
+        if (!content) { alert('评论内容不能为空'); return; }
+        CaptchaModal.show('请完成图形验证码后发表评论', doSubmitComment);
+    });
+})();
 
 function deleteComment(commentId) {
     if (!confirm('确定删除此评论？')) return;
