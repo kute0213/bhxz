@@ -42,9 +42,14 @@ def csrf_protect():
     if request.method not in ('POST', 'PUT', 'DELETE', 'PATCH'):
         return
 
-    # 跳过 API 路由（JSON 接口，不依赖表单 CSRF）
+    # 跳过 API 路由与 Admin JSON API 路由（JSON 接口，不依赖表单 CSRF）
     path = request.path
     if path.startswith('/api/'):
+        return
+
+    # 跳过 Content-Type: application/json 的 POST 请求
+    # 浏览器无法通过简单 HTML 表单伪造跨域 JSON POST，天然防 CSRF
+    if request.content_type and 'application/json' in request.content_type:
         return
 
     # 获取 token：优先表单字段，其次自定义请求头

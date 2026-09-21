@@ -29,6 +29,7 @@ from config import (
     DDOS_GUARD_ENABLED, DDOS_GUARD_INTENSITY,
     DDOS_GUARD_BAN_MINUTES, DDOS_GUARD_PERMANENT_AFTER,
     DDOS_GUARD_OFFENSE_WINDOW_HOURS,
+    IPV6_BLOCK_ENABLED,
     get_config_value,
 )
 from routes.admin import admin_bp
@@ -85,6 +86,21 @@ def admin_firewall():
 
 
 # ===========================================================================
+# 防火墙日志页面
+# ===========================================================================
+
+@admin_bp.route('/admin/firewall/logs')
+@admin_required
+def admin_firewall_logs_page():
+    """防火墙日志页面，自动筛选 Firewall 相关日志。"""
+    return render_page(
+        'admin/admin_firewall.html',
+        page='logs',
+        current_ip=get_client_ip(),
+    )
+
+
+# ===========================================================================
 # 设置页面
 # ===========================================================================
 
@@ -97,6 +113,7 @@ def admin_firewall_settings_page():
     return render_page(
         'admin/admin_firewall.html',
         page='settings',
+        FIREWALL_CONFIG_KEYS=FIREWALL_CONFIG_KEYS,
         warnings=warnings, current_ip=current_ip,
         auto_ban_enabled=get_config_value('AUTO_BAN_ENABLED', AUTO_BAN_ENABLED),
         auto_ban_duration_minutes=get_config_value('AUTO_BAN_DURATION_MINUTES', AUTO_BAN_DURATION_MINUTES),
@@ -122,6 +139,8 @@ def admin_firewall_settings_page():
         # 发布内容注入检测
         content_injection_enabled=get_config_value('CONTENT_INJECTION_BAN_ENABLED', True),
         content_injection_duration=get_config_value('CONTENT_INJECTION_BAN_DURATION_MINUTES', 30),
+        # IPv6 拦截
+        ipv6_block_enabled=get_config_value('IPV6_BLOCK_ENABLED', IPV6_BLOCK_ENABLED),
         # 发布频率限制（从 SPAM_LIMITS 读取默认值）
         spam_limit_building=get_config_value('SPAM_LIMIT_BUILDING', SPAM_LIMITS.get('building', (2, 120))[0]),
         spam_limit_building_window=get_config_value('SPAM_LIMIT_BUILDING_WINDOW', SPAM_LIMITS.get('building', (2, 120))[1]),
@@ -173,6 +192,8 @@ FIREWALL_CONFIG_KEYS = {
     'DDOS_GUARD_ENABLED', 'DDOS_GUARD_INTENSITY',
     'DDOS_GUARD_BAN_MINUTES', 'DDOS_GUARD_PERMANENT_AFTER',
     'DDOS_GUARD_OFFENSE_WINDOW_HOURS',
+    # IPv6 拦截
+    'IPV6_BLOCK_ENABLED',
     # 发布内容注入检测
     'CONTENT_INJECTION_BAN_ENABLED',
     'CONTENT_INJECTION_BAN_DURATION_MINUTES',
@@ -243,6 +264,7 @@ def admin_firewall_settings_save():
         'SUSPICIOUS_BLOCK_COMMAND_INJECTION_ENABLED',
         'SUSPICIOUS_BLOCK_SENSITIVE_PROBE_ENABLED',
         'SUSPICIOUS_BLOCK_MALICIOUS_UA_ENABLED', 'DDOS_GUARD_ENABLED',
+        'IPV6_BLOCK_ENABLED',
     }
     int_keys = {
         'AUTO_BAN_DURATION_MINUTES', 'SUSPICIOUS_BLOCK_DURATION_MINUTES',

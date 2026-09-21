@@ -109,6 +109,9 @@ LOGIN_LOCKOUT_TIME = 1800
 # IP 封禁白名单（逗号分隔），白名单内的 IP 不会被封禁（手动封禁与自动封禁均跳过）
 FIREWALL_WHITELIST = [ip.strip() for ip in os.environ.get('FIREWALL_WHITELIST', '112.82.136.172').split(',') if ip.strip()]
 
+# IPv6 访问拦截开关：开启后所有 IPv6 连接（除 ::1 本地回环外）直接断开
+IPV6_BLOCK_ENABLED = os.environ.get('IPV6_BLOCK_ENABLED', '0').lower() in ('1', 'true', 'yes', 'on')
+
 # 自动 IP 封禁总开关：开启后，触发限流的可疑操作将自动封禁对应 IP
 AUTO_BAN_ENABLED = os.environ.get('AUTO_BAN_ENABLED', '1').lower() in ('1', 'true', 'yes', 'on')
 

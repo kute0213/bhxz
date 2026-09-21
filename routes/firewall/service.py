@@ -131,7 +131,7 @@ def whitelist_add(ip_address):
     except Exception as exc:
         return False, f'添加白名单失败: {exc}'
     invalidate_whitelist_cache()
-    log('INFO', 'Firewall', '白名单添加', ip=ip)
+    log('DEBUG', 'Firewall', '白名单添加', ip=ip)
     return True, f'已将 {ip} 加入白名单'
 
 
@@ -151,7 +151,7 @@ def whitelist_remove(ip_address):
     except Exception as exc:
         return False, f'移除白名单失败: {exc}'
     invalidate_whitelist_cache()
-    log('INFO', 'Firewall', '白名单移除', ip=ip)
+    log('DEBUG', 'Firewall', '白名单移除', ip=ip)
     return True, f'已将 {ip} 移出白名单'
 
 
@@ -221,7 +221,7 @@ def ban_ip(ip_address, reason, banned_by=SYSTEM_BANNER_ID, duration_minutes=None
     invalidate_ip_cache()
     duration_text = '永久' if expires_at is None else f'{duration_minutes} 分钟'
     log(
-        'INFO', 'Firewall', 'IP 封禁创建',
+        'DEBUG', 'Firewall', 'IP 封禁创建',
         ip=ip, banned_by=banned_by, duration=duration_text,
     )
 
@@ -255,7 +255,7 @@ def unban_ip(ban_id):
     except Exception as exc:
         return False, f'解除封禁失败: {exc}', ''
     invalidate_ip_cache()
-    log('INFO', 'Firewall', 'IP 封禁解除', ban_id=ban_id, ip=ip_address)
+    log('DEBUG', 'Firewall', 'IP 封禁解除', ban_id=ban_id, ip=ip_address)
     return True, f'已解除 {ip_address} 的封禁', ip_address
 
 
@@ -277,7 +277,7 @@ def unban_by_ip(ip_address):
     except Exception as exc:
         return False, f'解除封禁失败: {exc}'
     invalidate_ip_cache()
-    log('INFO', 'Firewall', 'IP 封禁解除（按 IP）', ip=ip)
+    log('DEBUG', 'Firewall', 'IP 封禁解除（按 IP）', ip=ip)
     return True, f'已解除 {ip} 的封禁'
 
 
@@ -467,7 +467,7 @@ def unban_account(ban_id):
     except Exception as exc:
         return False, f'解除账号封禁失败: {exc}', 0
     invalidate_account_cache()
-    log('INFO', 'Firewall', '账号封禁解除', ban_id=ban_id, user_id=user_id)
+    log('DEBUG', 'Firewall', '账号封禁解除', ban_id=ban_id, user_id=user_id)
     return True, f'已解除用户 {user_id} 的封禁', user_id
 
 
@@ -488,7 +488,7 @@ def unban_account_by_user(user_id):
     except Exception as exc:
         return False, f'解除账号封禁失败: {exc}'
     invalidate_account_cache()
-    log('INFO', 'Firewall', '账号封禁解除（按用户）', user_id=user_id)
+    log('DEBUG', 'Firewall', '账号封禁解除（按用户）', user_id=user_id)
     return True, f'已解除用户 {user_id} 的封禁'
 
 
@@ -785,7 +785,7 @@ def auto_ban(ip_address, action, reason=''):
 
     ip = (ip_address or '').strip()
     if is_whitelisted(ip):
-        log('INFO', 'Firewall', '自动封禁跳过白名单 IP', ip=ip, action=action)
+        log('DEBUG', 'Firewall', '自动封禁跳过白名单 IP', ip=ip, action=action)
         return False, '该 IP 在防火墙白名单中，跳过自动封禁'
 
     if not validate_ip(ip):
@@ -890,7 +890,7 @@ def ban_suspicious_ip(ip_address, attack_type, matched=''):
 
     ip = (ip_address or '').strip()
     if is_whitelisted(ip):
-        log('INFO', 'Firewall', '可疑访问拦截跳过白名单 IP', ip=ip, attack=attack_type)
+        log('DEBUG', 'Firewall', '可疑访问拦截跳过白名单 IP', ip=ip, attack=attack_type)
         return False, '该 IP 在防火墙白名单中，跳过自动封禁'
 
     if not validate_ip(ip):
@@ -1098,7 +1098,7 @@ def whitelist_account(user_id, note=''):
     if not user_id or user_id <= 0:
         return False, '无效的用户 ID'
     if whitelist_account_db(user_id, note):
-        log('INFO', 'Firewall', '账号白名单添加', user_id=user_id)
+        log('DEBUG', 'Firewall', '账号白名单添加', user_id=user_id)
         return True, f'已将用户 {user_id} 加入白名单'
     return False, '添加账号白名单失败（可能已存在）'
 
@@ -1108,7 +1108,7 @@ def unwhitelist_account(user_id):
     if not user_id or user_id <= 0:
         return False, '无效的用户 ID'
     unwhitelist_account_db(user_id)
-    log('INFO', 'Firewall', '账号白名单移除', user_id=user_id)
+    log('DEBUG', 'Firewall', '账号白名单移除', user_id=user_id)
     return True, f'已将用户 {user_id} 移出白名单'
 
 

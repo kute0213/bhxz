@@ -20,6 +20,22 @@ from cheroot.server import HTTPConnection
 from core.system.logger import log
 
 
+def _check_ipv6_block(ip, drop_callback):
+    """检查 IPv6 连接是否被拦截，是则执行断开回调函数。
+
+    Args:
+        ip: 客户端 IP 地址
+        drop_callback: 断开连接的回调函数，接收 IP 参数
+    """
+    try:
+        from config import get_config_value, IPV6_BLOCK_ENABLED
+        if get_config_value('IPV6_BLOCK_ENABLED', IPV6_BLOCK_ENABLED):
+            log('DEBUG', 'Firewall: IPv6 连接拦截断开', ip=ip)
+            drop_callback(ip)
+    except Exception:
+        pass
+
+
 class BanFilterConnection(HTTPConnection):
     """黑名单连接过滤器：命中黑名单的 IP 在请求解析前直接断开 TCP 连接。
 
@@ -60,6 +76,11 @@ class BanFilterConnection(HTTPConnection):
         if firewall.is_banned(ip):
             self._drop_banned(ip)
             return False
+
+        # IPv6 拦截：检查是否为 IPv6 连接且开启了拦截
+        if ip and ':' in ip and ip != '::1':
+            _check_ipv6_block(ip, lambda ip_addr: self._drop_banned(ip_addr))
+
         return super().communicate()
 
     def _peer_ip(self):
@@ -73,7 +94,7 @@ class BanFilterConnection(HTTPConnection):
         """直接关闭黑名单连接，不返回 HTTP 响应。"""
         self.linger = False
         self.close()
-        log('Security', '防火墙: 黑名单连接强制断开', ip=ip)
+        log('DEBUG', 'Firewall: 黑名单连接强制断开', ip=ip)
 
 
 class FirewallGateway(Gateway_10):

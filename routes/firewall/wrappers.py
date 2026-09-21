@@ -14,6 +14,7 @@
 import weakref
 
 from routes.firewall.database import push_ban_context
+from routes.firewall.connection_filter import _check_ipv6_block
 
 
 class FirewallWSGIWrapper:
@@ -46,6 +47,11 @@ class FirewallWSGIWrapper:
         if ip:
             if ip in ('127.0.0.1', '::1', 'localhost'):
                 return self._app(environ, start_response)
+
+            # IPv6 拦截：检查是否为 IPv6 连接且开启了拦截
+            if ip and ':' in ip and ip != '::1':
+                from routes.firewall.connection_filter import _check_ipv6_block
+                _check_ipv6_block(ip, lambda ip_addr: self._close_connection(environ))
 
             # 1) 黑名单拦截：直接断开连接，不返回任何 HTTP 响应
             if self._fw.is_banned(ip):

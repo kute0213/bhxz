@@ -1,6 +1,25 @@
 # 更新日志
 
-## \[Unreleased]
+## [Unreleased]
+
+### 新增
+
+* **IPv6 防火墙拦截模块**：防火墙设置页面新增「IPv6 拦截」开关，开启后所有 IPv6 连接（除 ::1 本地回环）直接被断开，拦截点覆盖连接层（Cheroot BanFilterConnection）、WSGI 层（FirewallWSGIWrapper）、中间件层（Flask before_request），三层兜底确保 IPv6 无法访问
+
+### 修复
+
+* **防火墙设置无法保存**：① AJAX 请求中新增 `X-CSRF-Token` 头，通过 CSRF 校验；② 将 `FIREWALL_CONFIG_KEYS` 传入模板上下文，修复前端获取空配置键列表导致无法保存的问题
+* **管理员 403 无权限（CSRF 校验失败）**：`core/csrf.py` 新增 Content-Type: application/json 豁免，JSON POST 请求无需 CSRF Token（浏览器无法通过 HTML 表单伪造跨域 JSON POST，天然防 CSRF），解决所有管理后台 JSON API 路由的 403 问题
+
+### 调整
+
+* **防火墙日志改为 DEBUG 级别**：封禁创建/解除、白名单添加/移除等防火墙操作日志从 INFO 降为 DEBUG，减少 INFO 日志噪音
+* **删除服务器启动成功提示日志**：移除 app.py 中的 `log('INFO', 'App', '所有服务已加载完成，服务器已启动')` 冗余日志
+* **优化模块加载顺序**：按 6 层架构（基础设施→监控→路由→中间件→视图→服务）组织初始化流程，添加分层注释；删除 app.py 中不必要的启动打印
+
+### 新增
+
+* **防火墙日志筛选页面**：防火墙管理页面新增「日志」Tab，自动筛选 Firewall 相关日志，支持等级筛选、清空、自动滚动、3 秒轮询刷新
 
 ### 安全
 

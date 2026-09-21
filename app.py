@@ -68,11 +68,7 @@ app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(seconds=config.SESSION_LIFE
 # ---------------------------------------------------------------------------
 
 if not _is_child:
-    # 启动前立即输出，确保 Windows 用户能看到进程已启动
-    print(f'[App] BHXZ 服务器启动中...', flush=True)
-    print(f'[App] 工作目录: {_APP_ROOT}', flush=True)
-    print(f'[App] Python: {sys.executable}', flush=True)
-    print(f'[App] 平台: {sys.platform}', flush=True)
+    # 应用初始化：数据库 → 蓝图 → 中间件 → 后台服务
     try:
         init_app(app, _APP_ROOT)
     except Exception as e:
@@ -81,8 +77,6 @@ if not _is_child:
         traceback.print_exc(file=sys.stderr)
         sys.stderr.flush()
         raise
-    from core.system.logger import log
-    log('INFO', 'App', '所有服务已加载完成，服务器已启动')
 
 
 # ---------------------------------------------------------------------------

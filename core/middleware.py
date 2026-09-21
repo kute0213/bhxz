@@ -140,6 +140,12 @@ def register_hooks(app, try_serve_public):
         """
         from routes.firewall import is_banned
         ip = get_client_ip()
+        # IPv6 拦截检查
+        if ip and ':' in ip and ip != '::1':
+            from config import get_config_value, IPV6_BLOCK_ENABLED
+            if get_config_value('IPV6_BLOCK_ENABLED', IPV6_BLOCK_ENABLED):
+                log('DEBUG', 'Firewall: IPv6 连接拦截挂断(werkzeug)', ip=ip)
+                return '', 403, {'Connection': 'close'}
         banned, _reason = is_banned(ip)
         if banned:
             return '', 403, {'Connection': 'close'}
