@@ -11,21 +11,21 @@ from services.attachment_service import clean_attachment_json
 
 
 def _clean_user_attachments(conn, user_id):
-    """清理用户相关的所有附件（board_replies 中的附件）。"""
+    """清理用户相关的所有附件（discussion_replies 中的附件）。"""
     replies = conn.execute(
-        "SELECT attachment FROM board_replies WHERE user_id = ?", (user_id,)
+        "SELECT attachment FROM discussion_replies WHERE user_id = ?", (user_id,)
     ).fetchall()
     for r in replies:
         if r['attachment']:
             clean_attachment_json(r['attachment'])
 
     topic_rows = conn.execute(
-        "SELECT id FROM board_topics WHERE user_id = ?", (user_id,)
+        "SELECT id FROM discussion_topics WHERE user_id = ?", (user_id,)
     ).fetchall()
     for tr in topic_rows:
         tid = tr['id']
         reply_rows = conn.execute(
-            "SELECT attachment FROM board_replies WHERE topic_id = ?", (tid,)
+            "SELECT attachment FROM discussion_replies WHERE topic_id = ?", (tid,)
         ).fetchall()
         for rr in reply_rows:
             if rr['attachment']:
@@ -181,21 +181,21 @@ def delete_account(user_id, username, confirm_username, ip_address):
         media_keys = _get_user_media_keys(conn, user_id)
         _clean_user_attachments(conn, user_id)
 
-        conn.execute("DELETE FROM poll_votes WHERE user_id = ?", (user_id,))
+        # 清理讨论区数据
         topic_rows = conn.execute(
-            "SELECT id FROM board_topics WHERE user_id = ?", (user_id,)
+            "SELECT id FROM discussion_topics WHERE user_id = ?", (user_id,)
         ).fetchall()
         for tr in topic_rows:
             tid = tr['id']
             reply_rows = conn.execute(
-                "SELECT attachment FROM board_replies WHERE topic_id = ?", (tid,)
+                "SELECT attachment FROM discussion_replies WHERE topic_id = ?", (tid,)
             ).fetchall()
             for rr in reply_rows:
                 if rr['attachment']:
                     clean_attachment_json(rr['attachment'])
-            conn.execute("DELETE FROM board_replies WHERE topic_id = ?", (tid,))
-        conn.execute("DELETE FROM board_topics WHERE user_id = ?", (user_id,))
-        conn.execute("DELETE FROM board_replies WHERE user_id = ?", (user_id,))
+            conn.execute("DELETE FROM discussion_replies WHERE topic_id = ?", (tid,))
+        conn.execute("DELETE FROM discussion_topics WHERE user_id = ?", (user_id,))
+        conn.execute("DELETE FROM discussion_replies WHERE user_id = ?", (user_id,))
         conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
         conn.commit()
         _clean_user_media(media_keys, user_id)

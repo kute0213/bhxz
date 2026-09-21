@@ -16,15 +16,15 @@ def admin_delete_user(admin_user, target_user_id, ip_address):
         media_keys = _get_user_media_keys(conn, target_user_id)
         _clean_user_attachments(conn, target_user_id)
 
-        conn.execute("DELETE FROM poll_votes WHERE user_id = ?", (target_user_id,))
-        conn.execute("DELETE FROM board_replies WHERE user_id = ?", (target_user_id,))
+        # 清理讨论区数据
         topic_rows = conn.execute(
-            "SELECT id FROM board_topics WHERE user_id = ?", (target_user_id,)
+            "SELECT id FROM discussion_topics WHERE user_id = ?", (target_user_id,)
         ).fetchall()
         for tr in topic_rows:
             tid = tr['id']
-            conn.execute("DELETE FROM board_replies WHERE topic_id = ?", (tid,))
-        conn.execute("DELETE FROM board_topics WHERE user_id = ?", (target_user_id,))
+            conn.execute("DELETE FROM discussion_replies WHERE topic_id = ?", (tid,))
+        conn.execute("DELETE FROM discussion_topics WHERE user_id = ?", (target_user_id,))
+        conn.execute("DELETE FROM discussion_replies WHERE user_id = ?", (target_user_id,))
         conn.execute("DELETE FROM users WHERE id = ?", (target_user_id,))
         conn.commit()
         _clean_user_media(media_keys, target_user_id)

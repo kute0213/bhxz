@@ -776,6 +776,8 @@ workspace/
 
 ## 最近更新
 
+* **修复管理员删除用户失败 + 清理废弃代码**：修复管理后台删除用户时因引用已删除的 `poll_votes`、`board_topics`、`board_replies` 表导致数据库操作失败的问题，改为级联清理 `discussion_topics`/`discussion_replies`（当前使用的讨论区表）；同步修复用户注销功能的相同问题，修复 `_clean_user_attachments` 函数引用废弃表的问题；优化 `routes/admin/mod_intros/__init__.py` 中三处嵌套 try-except 屎山代码为单层。
+
 * **防火墙迁移至路由层 + 公共建筑去审核 + robots.txt 安全增强**：防火墙模块从 `core/firewall/` 整体迁移至 `routes/firewall/`（路由层，更合理的分层），所有导入引用同步更新；公共建筑**发布即公开**，彻底移除管理员审核流程（删除 approve/reject 路由、模板按钮、仪表盘统计），管理员 403 问题一并修复；全站验证码统一使用 `core.shared.captcha.captcha_service` 单例；robots.txt 路由升级为函数式生成，根据策略自动附加 Crawl‑delay（5 秒）与敏感路径 Disallow 规则，配合 DDoS 防护的 `/robots.txt` 白名单，防止合法爬虫被防火墙误封；更新所有过期注释引用。
 
 * **修复公共建筑验证码与防火墙增强**：修复公共建筑发布页验证码提交无反应（脚本块 `extra_js`→`extra_script` 匹配+阻止默认提交）；发布页「验证并提交」按钮触发图形验证码弹窗，通过验证后自动提交表单；建筑评论新增图形验证码验证，提交前弹出验证码弹窗；防火墙设置页新增「发布频率限制」配置区域（公共建筑/建筑评论/话题/回复/指南/背景/音乐等 7 种内容类型均可独立配置次数与检测窗口），settings API 支持所有频率限制项热保存；`core/firewall/spam.py` 新增 `get_spam_limit()` 函数优先读取系统设置动态配置。

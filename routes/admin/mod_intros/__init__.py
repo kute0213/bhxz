@@ -50,18 +50,18 @@ def add_mod_intro():
     if title and content:
         conn = get_db()
         try:
-            try:
-                now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-                conn.execute(
-                    "INSERT INTO mod_intros (icon, title, content, link, created_at) VALUES (?, ?, ?, ?, ?)",
-                    (icon, title, content, link, now)
-                )
-                conn.commit()
-            except Exception:
-                conn.rollback()
+            now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            conn.execute(
+                "INSERT INTO mod_intros (icon, title, content, link, created_at) VALUES (?, ?, ?, ?, ?)",
+                (icon, title, content, link, now)
+            )
+            conn.commit()
+            flash('模组介绍已添加', 'success')
+        except Exception:
+            conn.rollback()
+            flash('添加失败', 'error')
         finally:
             conn.close()
-        flash('模组介绍已添加', 'success')
 
     return redirect(url_for('admin.manage_mod_intros'))
 
@@ -79,17 +79,17 @@ def edit_mod_intro(intro_id):
     if title and content:
         conn = get_db()
         try:
-            try:
-                conn.execute(
-                    "UPDATE mod_intros SET icon = ?, title = ?, content = ?, link = ? WHERE id = ?",
-                    (icon, title, content, link, intro_id)
-                )
-                conn.commit()
-            except Exception:
-                conn.rollback()
+            conn.execute(
+                "UPDATE mod_intros SET icon = ?, title = ?, content = ?, link = ? WHERE id = ?",
+                (icon, title, content, link, intro_id)
+            )
+            conn.commit()
+            flash('模组介绍已更新', 'success')
+        except Exception:
+            conn.rollback()
+            flash('更新失败', 'error')
         finally:
             conn.close()
-        flash('模组介绍已更新', 'success')
 
     return redirect(url_for('admin.manage_mod_intros'))
 
@@ -101,13 +101,13 @@ def delete_mod_intro(intro_id):
 
     conn = get_db()
     try:
-        try:
-            conn.execute("DELETE FROM mod_intros WHERE id = ?", (intro_id,))
-            conn.commit()
-        except Exception:
-            conn.rollback()
+        conn.execute("DELETE FROM mod_intros WHERE id = ?", (intro_id,))
+        conn.commit()
+        flash('模组介绍已删除', 'success')
+    except Exception:
+        conn.rollback()
+        flash('删除失败', 'error')
     finally:
         conn.close()
-    flash('模组介绍已删除', 'success')
 
     return redirect(url_for('admin.manage_mod_intros'))
