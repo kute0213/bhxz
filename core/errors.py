@@ -7,8 +7,6 @@
 
 from flask import render_template
 
-from core.auth import get_current_user
-
 # 各错误码默认配置：(标题, 原因, 建议, 图标)
 _ERROR_PAGES = {
     400: ('Bad Request', '请求格式不正确。', '请检查请求内容后重试。', 'alert-circle'),
@@ -26,19 +24,18 @@ _ERROR_PAGES = {
 
 
 def render_error_page(code, title, reason, advice, icon='alert-circle'):
-    """渲染统一错误页（错误号 / 原因 / 建议），自动注入当前用户。
+    """渲染统一错误页（错误号 / 原因 / 建议），使用独立精简模板（无导航/背景/登录检查）。
 
     用法:
         render_error_page(403, 'Forbidden', '该 IP 已被封禁', '如有疑问请联系管理员。', 'shield-alert')
     """
     return render_template(
-        'error.html',
+        'error_simple.html',
         code=code,
         title=title,
         reason=reason,
         advice=advice,
         icon=icon,
-        user=get_current_user(),
     )
 
 

@@ -6,7 +6,7 @@
 from flask import request, jsonify
 
 from core.auth import admin_required, get_current_user
-from utils.helpers import render_page
+from core.helpers import render_page
 from routes.admin import admin_bp
 from services.game_accounts.registration_service import (
     get_pending_applications, get_all_applications,
@@ -21,14 +21,14 @@ from services.game_server_ban import (
     reject_application as reject_ban_application,
     pardon_player,
 )
-from utils.shared.validation import validate_mc_username, validate_ban_reason
+from core.shared.validation import validate_mc_username, validate_ban_reason
 
 
 @admin_bp.route('/admin/game-accounts')
 @admin_required
 def admin_game_accounts():
     """账号注册申请管理页面。"""
-    return render_page('admin/admin_game_accounts.html')
+    return render_page('admin/game_accounts.html')
 
 
 # ---------------------------------------------------------------------------
@@ -120,7 +120,7 @@ def api_unban(mc_username):
 @admin_required
 def admin_game_bans():
     """游戏服务器封禁审批页面。"""
-    return render_page('admin/admin_game_bans.html')
+    return render_page('admin/game_bans.html')
 
 
 @admin_bp.route('/admin/api/game-bans')

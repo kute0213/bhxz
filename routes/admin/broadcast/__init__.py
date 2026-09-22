@@ -9,7 +9,7 @@ from datetime import datetime
 from flask import request, jsonify
 
 from core.auth import admin_required, get_current_user
-from utils.helpers import render_page
+from core.helpers import render_page
 from core.db import get_db
 from services.mail import email_service, broadcast_message
 from services.mail.sanitize import sanitize_email_html, html_to_plain_text
@@ -20,7 +20,7 @@ from routes.admin import admin_bp
 @admin_required
 def admin_broadcast():
     """广播邮件页面。"""
-    return render_page('admin/admin_broadcast.html')
+    return render_page('admin/broadcast.html')
 
 
 @admin_bp.route('/admin/broadcast/send', methods=['POST'])

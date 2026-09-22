@@ -6,14 +6,14 @@
 from flask import request, redirect, url_for, flash
 
 from core.auth import admin_required, get_current_user
-from utils.helpers import render_page
+from core.helpers import render_page
 from core.db import get_db
 from routes.admin import admin_bp
 from services.discussion import (
     delete_topic, toggle_pin, toggle_lock,
     create_category, delete_category, get_categories_with_counts,
 )
-from utils.shared.ip import get_client_ip
+from core.shared.ip import get_client_ip
 
 
 @admin_bp.route('/admin/discussion')
@@ -37,7 +37,7 @@ def admin_discussion():
     finally:
         conn.close()
 
-    return render_page('admin/admin_discussion.html', topics=topics, cat_dict=cat_dict)
+    return render_page('admin/discussion.html', topics=topics, cat_dict=cat_dict)
 
 
 @admin_bp.route('/admin/discussion/<int:topic_id>/delete', methods=['POST'])
@@ -90,4 +90,4 @@ def admin_categories():
             flash(message, 'success' if success else 'error')
 
     categories = get_categories_with_counts()
-    return render_page('admin/admin_discussion_categories.html', categories=categories)
+    return render_page('admin/discussion_categories.html', categories=categories)

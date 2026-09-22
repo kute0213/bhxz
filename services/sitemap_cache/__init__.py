@@ -14,7 +14,7 @@ import threading
 from config import get_config_value, UPLOAD_SITEMAP_DIR
 from core.db import get_db
 from core.system.logger import log
-from utils.shared.scheduler import register_task, unregister_task
+from core.shared.scheduler import register_task, unregister_task
 
 
 class SitemapCache:

@@ -4,9 +4,9 @@ from flask import abort, request, redirect, url_for, flash
 from datetime import datetime
 
 from core.auth import get_current_user, login_required
-from utils.helpers import render_page
+from core.helpers import render_page
 from core.db import get_db
-from utils.shared.captcha import captcha_service
+from core.shared.captcha import captcha_service
 from routes.guides import guides_bp
 
 
@@ -89,7 +89,7 @@ def guide_create():
 
     if request.method == 'POST':
         # 检查待审核内容上限
-        from utils.helpers import check_pending_limit
+        from core.helpers import check_pending_limit
         allowed, msg = check_pending_limit(user)
         if not allowed:
             flash(msg, 'error')

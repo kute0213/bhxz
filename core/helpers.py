@@ -8,10 +8,10 @@ def render_page(template, **kwargs):
     """渲染页面模板，自动注入当前用户。
 
     用法:
-        render_page('settings.html', title='设置')
+        render_page('settings/index.html', title='设置')
     等价于:
         user = get_current_user()
-        return render_template('settings.html', user=user, title='设置')
+        return render_template('settings/index.html', user=user, title='设置')
     """
     if 'user' not in kwargs:
         kwargs['user'] = get_current_user()

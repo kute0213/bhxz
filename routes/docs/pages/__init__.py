@@ -2,7 +2,7 @@
 
 import os
 from flask import jsonify, abort
-from utils.helpers import render_page
+from core.helpers import render_page
 from routes.docs import docs_bp
 
 # docs/ 目录位于项目根目录下
@@ -15,7 +15,7 @@ DOCS_DIR = os.path.join(
 @docs_bp.route('/docs')
 def docs_index():
     """文档首页"""
-    return render_page('docs.html')
+    return render_page('site/docs.html')
 
 
 @docs_bp.route('/docs/api/list')

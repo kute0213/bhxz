@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from flask import redirect, url_for, flash, request
 
 from core.auth import admin_required, get_current_user
-from utils.helpers import render_page
+from core.helpers import render_page
 from core.db import get_db
 from routes.admin import admin_bp
 
@@ -34,7 +34,7 @@ def admin_guide_bans():
     finally:
         conn.close()
 
-    return render_page('admin/admin_guide_bans.html', bans=bans)
+    return render_page('admin/guide_bans.html', bans=bans)
 
 
 @admin_bp.route('/admin/guide-bans/create', methods=['POST'])

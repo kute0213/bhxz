@@ -5,7 +5,7 @@
 
 import os
 from flask import send_from_directory
-from utils.helpers import render_page
+from core.helpers import render_page
 from core.db import get_db
 from config import get_config_value, APP_ROOT
 from routes.main import main_bp
@@ -54,4 +54,4 @@ def favicon_ico():
 @main_bp.route('/server-status')
 def server_status():
     """服务器状态页面：展示在线玩家列表、人数等实时信息。"""
-    return render_page('server_status.html')
+    return render_page('site/server_status.html')

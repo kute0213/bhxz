@@ -1,9 +1,9 @@
 """验证码 API 路由。"""
 
 from flask import Blueprint, jsonify, request
-from utils.shared.captcha import captcha_service
+from core.shared.captcha import captcha_service
 from core.system.logger import log
-from utils.shared.ip import get_client_ip
+from core.shared.ip import get_client_ip
 
 captcha_bp = Blueprint('captcha', __name__)
 

@@ -21,9 +21,10 @@ from datetime import datetime
 
 from config import (
     UPLOAD_DIR,
-    UPLOADS_BACKUP_DIR,
     BACKUP_FILENAME_FORMAT,
     get_config_value,
+    get_backup_dir,
+    get_uploads_backup_dir,
 )
 from core.system.logger import log
 
@@ -52,6 +53,68 @@ class BackupManager:
         self._backup_lock = threading.Lock()   # 防止同时执行多个备份
         self._last_backup = None               # 最近一次备份信息
         self._current_progress = None          # 当前备份进度 (0-100)
+        self._migrate_old_backups()
+
+    def _migrate_old_backups(self):
+        """将旧备份目录（<项目根>/backups）中的内容迁移到当前解析的备份目录。
+
+        仅当：旧目录存在内容、当前目录与旧目录不同、且当前目录尚空时执行。
+        迁移后同步更新 db_backups 表中的 backup_path，保证既有下载/删除仍可用。
+        """
+        from config import APP_ROOT
+        old_dir = os.path.normpath(os.path.join(APP_ROOT, 'backups'))
+        new_dir = get_backup_dir()
+        if os.path.normpath(old_dir) == os.path.normpath(new_dir):
+            return
+        old_uploads = os.path.join(old_dir, 'uploads')
+        new_uploads = get_uploads_backup_dir()
+        # 无旧内容可迁移
+        if not os.path.isdir(old_uploads):
+            return
+        has_content = any(os.scandir(old_uploads))
+        if not has_content:
+            return
+        # 新目录已有内容时避免覆盖，跳过迁移
+        if os.path.isdir(new_uploads) and any(os.scandir(new_uploads)):
+            return
+        try:
+            os.makedirs(new_uploads, exist_ok=True)
+            import shutil
+            moved = 0
+            for entry in list(os.scandir(old_uploads)):
+                src = entry.path
+                dst = os.path.join(new_uploads, entry.name)
+                shutil.move(src, dst)
+                moved += 1
+            log('INFO', 'BackupManager', f'旧备份已迁移: {old_uploads} -> {new_uploads}（{moved} 项）')
+            # 更新备份记录中的绝对路径
+            self._rewrite_backup_paths(old_uploads, new_uploads)
+        except Exception as e:
+            log('ERROR', 'BackupManager', f'旧备份迁移失败: {e}')
+
+    def _rewrite_backup_paths(self, old_uploads, new_uploads):
+        """把 db_backups.backup_path 中指向旧目录的前缀改写为新目录。"""
+        try:
+            from core.db import get_db
+            conn = get_db()
+            try:
+                rows = conn.execute("SELECT id, backup_path FROM db_backups").fetchall()
+                for r in rows:
+                    row_id = r['id']
+                    path = r['backup_path']
+                    if not path:
+                        continue
+                    norm = os.path.normpath(path)
+                    old_prefix = old_uploads.rstrip(os.sep)
+                    if norm == old_prefix or norm.startswith(old_prefix + os.sep):
+                        rel = os.path.relpath(norm, old_prefix)
+                        new_path = os.path.join(new_uploads, rel)
+                        conn.execute("UPDATE db_backups SET backup_path = ? WHERE id = ?", (new_path, row_id))
+                conn.commit()
+            finally:
+                conn.close()
+        except Exception as e:
+            log('ERROR', 'BackupManager', f'更新备份记录路径失败: {e}')
 
     # ------------------------------------------------------------------
     # 公共 API
@@ -113,7 +176,7 @@ class BackupManager:
         from core.db import get_db
         now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         backup_name = datetime.now().strftime(BACKUP_FILENAME_FORMAT)
-        backup_path = os.path.join(UPLOADS_BACKUP_DIR, backup_name)
+        backup_path = os.path.join(get_uploads_backup_dir(), backup_name)
 
         conn = get_db()
         try:
@@ -163,10 +226,10 @@ class BackupManager:
         try:
             # 阶段 1: 准备
             self._report_progress(5, '准备备份...', progress_callback)
-            os.makedirs(UPLOADS_BACKUP_DIR, exist_ok=True)
+            os.makedirs(get_uploads_backup_dir(), exist_ok=True)
 
             backup_name = datetime.now().strftime(BACKUP_FILENAME_FORMAT)
-            backup_path = os.path.join(UPLOADS_BACKUP_DIR, backup_name)
+            backup_path = os.path.join(get_uploads_backup_dir(), backup_name)
 
             # 更新记录中的路径
             self._update_backup_record(backup_id, backup_name=backup_name, backup_path=backup_path)

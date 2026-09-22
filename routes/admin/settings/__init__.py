@@ -7,7 +7,7 @@ import re
 from flask import request, jsonify
 
 from core.auth import admin_required
-from utils.helpers import render_page
+from core.helpers import render_page
 from routes.admin import admin_bp
 from config import SETTINGS_REGISTRY, get_config_value
 from services.settings_manager import settings_manager
@@ -40,7 +40,7 @@ def _parse_select_options(description: str) -> list:
 @admin_required
 def admin_settings_page():
     """系统设置页面。"""
-    return render_page('admin/admin_settings.html')
+    return render_page('admin/settings.html')
 
 
 @admin_bp.route('/admin/api/settings')

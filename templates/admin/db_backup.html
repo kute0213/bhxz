@@ -49,6 +49,33 @@
                 </div>
             </div>
 
+            <!-- 备份目录设置 -->
+            <div class="pixel-card rounded-xl p-6 mb-8">
+                <h2 class="text-lg font-bold mb-4 flex items-center gap-2">
+                    <i data-lucide="folder-sync" class="w-5 h-5 text-gold-400"></i>
+                    备份目录设置
+                </h2>
+                <p class="text-cream/60 text-sm mb-4">
+                    备份文件存放根目录，支持<strong>绝对路径</strong>或<strong>相对路径</strong>（相对路径基于网站根目录解析，默认 <code class="bg-forest-900/50 px-1.5 py-0.5 rounded text-xs">../bhxz_backups</code>）。更改后新备份将写入新目录。
+                </p>
+                <div class="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                    <div class="flex-1 w-full">
+                        <label class="text-xs text-cream/50 block mb-1">当前生效目录</label>
+                        <input type="text" id="backup-dir-input" value="{{ backup_dir }}" readonly
+                               class="w-full bg-forest-900/40 border border-cream/10 rounded-lg px-3 py-2 text-sm text-cream/70 font-mono">
+                    </div>
+                    <div class="flex-1 w-full">
+                        <label class="text-xs text-cream/50 block mb-1">备份路径设置值</label>
+                        <input type="text" id="backup-dir-setting" value="{{ backup_dir_setting }}"
+                               placeholder="例：../bhxz_backups 或 /data/bhzx_backups"
+                               class="w-full bg-transparent border border-cream/20 rounded-lg px-3 py-2 text-sm text-cream focus:border-gold-400/50 focus:outline-none">
+                    </div>
+                    <button id="btn-save-backup-dir" class="px-5 py-2 bg-gold-500 hover:bg-gold-400 text-forest-900 font-bold rounded-xl transition-all duration-200">
+                        <i data-lucide="save" class="w-4 h-4 inline mr-1"></i>保存路径
+                    </button>
+                </div>
+            </div>
+
             <!-- 操作区 -->
             <div class="pixel-card rounded-xl p-6 mb-8">
                 <h2 class="text-lg font-bold mb-4 flex items-center gap-2">
@@ -58,7 +85,7 @@
                 <p class="text-cream/60 text-sm mb-4">
                     点击按钮后将执行以下操作：<br>
                     1. 扫描 /uploads/ 目录下的所有文件<br>
-                    2. 极限压缩打包为 zip 文件到 <code class="bg-forest-900/50 px-1.5 py-0.5 rounded text-xs">backups/uploads/</code> 目录<br>
+                    2. 极限压缩打包为 zip 文件到 <code class="bg-forest-900/50 px-1.5 py-0.5 rounded text-xs">备份目录/uploads/</code><br>
                     3. 自动清理超出保留数量的旧备份（当前保留上限：{{ max_backups }} 份）
                 </p>
 
@@ -125,9 +152,6 @@
                             {% if b.status == 'success' %}
                             <button class="btn-download-backup p-1.5 text-gold-400 hover:text-gold-500 transition-colors" title="下载此备份" data-backup-id="{{ b.id }}">
                                 <i data-lucide="download" class="w-4 h-4"></i>
-                            </button>
-                            <button class="btn-restore-backup p-1.5 text-blue-400 hover:text-blue-300 transition-colors" title="恢复此备份" data-backup-id="{{ b.id }}">
-                                <i data-lucide="rotate-ccw" class="w-4 h-4"></i>
                             </button>
                             {% endif %}
                             <button class="btn-delete-backup p-1.5 text-cream/40 hover:text-red-400 transition-colors" title="删除此备份">
@@ -221,10 +245,7 @@
                             </span>
                             ${isSuccess ? `<a class="btn-download-backup p-1.5 text-gold-400 hover:text-gold-500 transition-colors" title="下载此备份" data-backup-id="${backupId}" href="/admin/api/db-backup/${backupId}/download" download>
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                            </a>
-                            <button class="btn-restore-backup p-1.5 text-blue-400 hover:text-blue-300 transition-colors" title="恢复此备份" data-backup-id="${backupId}">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
-                            </button>` : ''}
+                            </a>` : ''}
                             <button class="btn-delete-backup p-1.5 text-cream/40 hover:text-red-400 transition-colors" title="删除此备份" data-backup-id="${backupId}">
                                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path><line x1="10" y1="11" x2="10" y2="17"></line><line x1="14" y1="11" x2="14" y2="17"></line></svg>
                             </button>
@@ -235,10 +256,6 @@
                 // 绑定删除按钮事件
                 backupList.querySelectorAll('.btn-delete-backup').forEach(function (btn) {
                     btn.addEventListener('click', handleDeleteBackup);
-                });
-                // 绑定恢复按钮事件
-                backupList.querySelectorAll('.btn-restore-backup').forEach(function (btn) {
-                    btn.addEventListener('click', handleRestoreBackup);
                 });
             }
 
@@ -320,111 +337,6 @@
                     .catch(() => {});
             }
 
-            function handleRestoreBackup(e) {
-                const btn = e.currentTarget;
-                const backupId = btn.dataset.backupId;
-                const row = btn.closest('[data-backup-id]');
-
-                CustomModal.confirm('确定要从该备份恢复数据库吗？\n\n⚠️ 服务器将自动关闭并重启，页面将暂时断开连接。\n\n当前所有数据将被备份覆盖，此操作不可逆！\n\n恢复前会自动创建当前数据库的安全备份。', {
-                    trigger: btn,
-                    callback: function (confirmed) {
-                        if (!confirmed) return;
-                        performRestoreBackup(btn, backupId, row);
-                    }
-                });
-            }
-
-            function performRestoreBackup(btn, backupId, row) {
-                btn.disabled = true;
-                btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4 animate-spin"><line x1="12" y1="2" x2="12" y2="6"></line><line x1="12" y1="18" x2="12" y2="22"></line><line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line><line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line><line x1="2" y1="12" x2="6" y2="12"></line><line x1="18" y1="12" x2="22" y2="12"></line><line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line><line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line></svg>';
-
-                fetch('/admin/api/db-backup/' + backupId + '/restart-restore', { method: 'POST' })
-                    .then(r => r.json())
-                    .then(data => {
-                        if (data.success) {
-                            // 显示恢复中状态
-                            showRestoreInProgress(data.safety_backup);
-                        } else {
-                            Toast.error(data.message || '恢复失败');
-                            btn.disabled = false;
-                            btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>';
-                        }
-                    })
-                    .catch(function () {
-                        Toast.error('网络错误，请重试');
-                        btn.disabled = false;
-                        btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-4 h-4"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>';
-                    });
-            }
-
-            function showRestoreInProgress(safetyBackup) {
-                // 显示恢复中的覆盖层
-                var overlay = document.createElement('div');
-                overlay.className = 'fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm';
-                overlay.id = 'restore-overlay';
-                overlay.innerHTML = `
-                    <div class="pixel-card rounded-2xl p-8 max-w-md text-center">
-                        <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-blue-500/20 flex items-center justify-center">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="w-8 h-8 text-blue-400 animate-spin"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
-                        </div>
-                        <h3 class="text-lg font-bold mb-2">数据库正在恢复...</h3>
-                        <p class="text-cream/60 text-sm mb-1">服务器将自动关闭并重启</p>
-                        <p class="text-cream/40 text-xs mb-4">安全备份: ${safetyBackup || '已创建'}</p>
-                        <div class="w-full bg-forest-900/50 rounded-full h-2 mb-4 overflow-hidden">
-                            <div class="h-full bg-blue-400 rounded-full animate-pulse" style="width: 60%"></div>
-                        </div>
-                        <p class="text-cream/40 text-xs" id="restore-countdown">等待服务器关闭...</p>
-                    </div>
-                `;
-                document.body.appendChild(overlay);
-
-                // 轮询检测服务器是否已重启
-                var attempts = 0;
-                var maxAttempts = 60;
-                var countdown = document.getElementById('restore-countdown');
-                var pollTimer = setInterval(function() {
-                    attempts++;
-                    if (countdown) {
-                        countdown.textContent = '等待服务器重启 (' + attempts + '/' + maxAttempts + ')';
-                    }
-                    fetch('/admin/db-backup', { method: 'HEAD', cache: 'no-store' })
-                        .then(function() {
-                            clearInterval(pollTimer);
-                            // 服务器已恢复
-                            if (countdown) {
-                                countdown.textContent = '服务器已重启，正在刷新...';
-                            }
-                            var bar = overlay.querySelector('.animate-pulse');
-                            if (bar) {
-                                bar.style.width = '100%';
-                                bar.className = 'h-full bg-green-400 rounded-full';
-                            }
-                            setTimeout(function() {
-                                window.location.reload();
-                            }, 1500);
-                        })
-                        .catch(function() {
-                            // 服务器尚未恢复，继续等待
-                            if (attempts >= maxAttempts) {
-                                clearInterval(pollTimer);
-                                if (countdown) {
-                                    countdown.textContent = '服务器恢复超时，请手动刷新页面';
-                                }
-                                overlay.innerHTML = overlay.innerHTML.replace(
-                                    '等待服务器关闭...',
-                                    '服务器恢复超时，请手动刷新页面'
-                                );
-                                // 添加手动刷新按钮
-                                var btn = document.createElement('button');
-                                btn.className = 'mt-4 px-4 py-2 bg-gold-500 hover:bg-gold-400 text-forest-900 font-bold rounded-lg text-sm';
-                                btn.textContent = '手动刷新页面';
-                                btn.onclick = function() { window.location.reload(); };
-                                overlay.querySelector('.pixel-card').appendChild(btn);
-                            }
-                        });
-                }, 3000);
-            }
-
             btnStart.addEventListener('click', function () {
                 if (btnStart.disabled) return;
 
@@ -456,10 +368,45 @@
                     });
             });
 
-            // 绑定初始渲染的恢复按钮
-            backupList.querySelectorAll('.btn-restore-backup').forEach(function (btn) {
-                btn.addEventListener('click', handleRestoreBackup);
-            });
+            // 保存备份路径设置
+            const btnSaveBackupDir = document.getElementById('btn-save-backup-dir');
+            const backupDirSetting = document.getElementById('backup-dir-setting');
+            if (btnSaveBackupDir) {
+                btnSaveBackupDir.addEventListener('click', function () {
+                    const value = (backupDirSetting.value || '').trim();
+                    if (!value) {
+                        Toast.error('请输入备份路径');
+                        return;
+                    }
+                    btnSaveBackupDir.disabled = true;
+                    btnSaveBackupDir.innerHTML = '<i data-lucide="loader" class="w-4 h-4 inline mr-1 animate-spin"></i>保存中...';
+                    if (window.lucide) lucide.createIcons();
+
+                    fetch('/admin/api/settings/save', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ items: [{ key: 'BACKUP_DIR', value: value }] })
+                    })
+                        .then(r => r.json())
+                        .then(data => {
+                            if (data.success) {
+                                Toast.success('备份目录已更新，新备份将写入新目录');
+                                setTimeout(function () { window.location.reload(); }, 1200);
+                            } else {
+                                Toast.error((data.errors && data.errors[0] && data.errors[0].message) || data.message || '保存失败');
+                                btnSaveBackupDir.disabled = false;
+                                btnSaveBackupDir.innerHTML = '<i data-lucide="save" class="w-4 h-4 inline mr-1"></i>保存路径';
+                                if (window.lucide) lucide.createIcons();
+                            }
+                        })
+                        .catch(function () {
+                            Toast.error('网络错误，请重试');
+                            btnSaveBackupDir.disabled = false;
+                            btnSaveBackupDir.innerHTML = '<i data-lucide="save" class="w-4 h-4 inline mr-1"></i>保存路径';
+                            if (window.lucide) lucide.createIcons();
+                        });
+                });
+            }
 
             btnRefreshList.addEventListener('click', refreshList);
         })();

@@ -5,7 +5,7 @@ from datetime import datetime
 from flask import redirect, url_for, flash
 
 from core.auth import admin_required
-from utils.helpers import render_page
+from core.helpers import render_page
 from core.db import get_db
 from routes.admin import admin_bp
 
@@ -48,7 +48,7 @@ def admin_buildings():
     finally:
         conn.close()
 
-    return render_page('admin/admin_buildings.html', buildings=buildings, reports=[dict(r) for r in reports])
+    return render_page('admin/buildings.html', buildings=buildings, reports=[dict(r) for r in reports])
 
 
 @admin_bp.route('/admin/buildings/<int:building_id>/approve', methods=['POST'])

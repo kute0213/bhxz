@@ -17,7 +17,7 @@ from services.user import (
     register, login, forgot_password, check_username_available,
 )
 from core.system.logger import log
-from utils.shared.ip import get_client_ip
+from core.shared.ip import get_client_ip
 from routes.main import main_bp
 
 
@@ -73,7 +73,7 @@ def register_view():
         )
         if not success:
             return render_template(
-                'register.html', error=result,
+                'auth/register.html', error=result,
                 email_verify_enabled=email_verify_enabled,
                 group_code_verified=group_code_verified,
                 show_back_to_login=show_back_to_login,
@@ -90,7 +90,7 @@ def register_view():
         return redirect(url_for('main.home'))
 
     return render_template(
-        'register.html',
+        'auth/register.html',
         email_verify_enabled=email_verify_enabled,
         group_code_verified=group_code_verified,
         show_back_to_login=show_back_to_login,
@@ -144,7 +144,7 @@ def login_view():
         if not success:
             failed_attempts = _record_login_failure()
             return render_template(
-                'login.html', error=result,
+                'auth/login.html', error=result,
                 submitted_username=request.form.get('username', '').strip(),
                 submitted_next=request.form.get('next', ''),
                 captcha_required=failed_attempts >= LOGIN_CAPTCHA_THRESHOLD,
@@ -165,7 +165,7 @@ def login_view():
     user = get_current_user()
     if user:
         return redirect(url_for('main.home'))
-    return render_template('login.html', captcha_required=captcha_required)
+    return render_template('auth/login.html', captcha_required=captcha_required)
 
 
 @main_bp.route('/logout')
@@ -201,7 +201,7 @@ def forgot_password_view():
             ip_address=get_client_ip(),
         )
         if not success:
-            return render_template('forgot_password.html', error=message)
+            return render_template('auth/forgot_password.html', error=message)
         return redirect(url_for('main.login', reset=1))
 
-    return render_template('forgot_password.html')
+    return render_template('auth/forgot_password.html')

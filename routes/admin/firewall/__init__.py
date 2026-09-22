@@ -3,7 +3,7 @@
 from flask import redirect, url_for, flash, request, jsonify
 
 from core.auth import admin_required, get_current_user
-from utils.helpers import render_page
+from core.helpers import render_page
 from routes.firewall.spam import SPAM_LIMITS
 from routes.firewall import (
     ban_ip, unban_ip, get_bans, get_whitelist,
@@ -15,7 +15,7 @@ from routes.firewall import (
     ban_ip_manual, ban_account_manual,  # 手动封禁（自动推送 context）
     get_combined_bans,                 # 合并封禁列表
 )
-from utils.shared.ip import get_client_ip
+from core.shared.ip import get_client_ip
 from config import (
     AUTO_BAN_ENABLED, AUTO_BAN_DURATION_MINUTES,
     AUTO_BAN_LOGIN_ENABLED, AUTO_BAN_REGISTER_ENABLED,
@@ -77,7 +77,7 @@ def admin_firewall():
     whitelist = get_whitelist()
     account_whitelist = get_account_whitelist()
     return render_page(
-        'admin/admin_firewall.html',
+        'admin/firewall.html',
         page='main',
         bans=bans, bans_total=total,
         current_ip=current_ip, whitelist=whitelist,
@@ -94,7 +94,7 @@ def admin_firewall():
 def admin_firewall_logs_page():
     """防火墙日志页面，自动筛选 Firewall 相关日志。"""
     return render_page(
-        'admin/admin_firewall.html',
+        'admin/firewall.html',
         page='logs',
         current_ip=get_client_ip(),
     )
@@ -111,7 +111,7 @@ def admin_firewall_settings_page():
     warnings = get_all_warnings()
     current_ip = get_client_ip()
     return render_page(
-        'admin/admin_firewall.html',
+        'admin/firewall.html',
         page='settings',
         FIREWALL_CONFIG_KEYS=FIREWALL_CONFIG_KEYS,
         warnings=warnings, current_ip=current_ip,
@@ -168,7 +168,7 @@ def admin_firewall_settings_page():
 def admin_firewall_ban_page():
     """手动添加封禁页面（IP + 账号）。"""
     return render_page(
-        'admin/admin_firewall.html',
+        'admin/firewall.html',
         page='ban',
         current_ip=get_client_ip(),
     )
@@ -443,7 +443,7 @@ def admin_firewall_whitelist_page():
         enriched.append(entry)
 
     return render_page(
-        'admin/admin_firewall.html',
+        'admin/firewall.html',
         page='whitelist',
         whitelist=whitelist,
         account_whitelist=enriched,

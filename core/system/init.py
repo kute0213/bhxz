@@ -13,7 +13,7 @@ import os
 import sys
 
 from core.system.logger import log
-from utils.template_context import register_template_context
+from core.template_context import register_template_context
 
 
 def register_hooks(app, try_serve_public):
@@ -25,7 +25,7 @@ def register_hooks(app, try_serve_public):
 
 def start_background_services():
     """启动所有后台服务。"""
-    from utils.shared.scheduler import start_task_scheduler
+    from core.shared.scheduler import start_task_scheduler
     from services.backup import BackupScheduler
     from services.mail import email_service
     from services.sitemap_cache import sitemap_cache

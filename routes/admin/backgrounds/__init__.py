@@ -3,10 +3,10 @@
 from flask import jsonify, abort
 
 from core.auth import admin_required, get_current_user
-from utils.helpers import render_page
+from core.helpers import render_page
 from routes.admin import admin_bp
 from services import background_service
-from utils.shared.ip import get_client_ip
+from core.shared.ip import get_client_ip
 
 
 @admin_bp.route('/admin/backgrounds')
@@ -18,7 +18,7 @@ def admin_backgrounds_page():
     rejected_bgs = background_service.get_backgrounds(status=2)
 
     return render_page(
-        'admin/admin_backgrounds.html',
+        'admin/backgrounds.html',
         pending_bgs=pending_bgs,
         approved_bgs=approved_bgs,
         rejected_bgs=rejected_bgs,

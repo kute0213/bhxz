@@ -1,7 +1,7 @@
 """管理后台页面路由：仪表盘。"""
 
 from core.auth import admin_required
-from utils.helpers import render_page
+from core.helpers import render_page
 from core.db import get_db
 from routes.admin import admin_bp
 
@@ -29,4 +29,4 @@ def admin_page():
     finally:
         conn.close()
 
-    return render_page('admin/admin.html', stats=stats)
+    return render_page('admin/dashboard.html', stats=stats)

@@ -15,7 +15,7 @@ from datetime import datetime, timedelta
 
 from core.db import get_db
 from core.system.logger import log
-from utils.shared.scheduler import register_task
+from core.shared.scheduler import register_task
 from services.background_service import remove_background_files
 
 # 被驳回内容的保留时长（小时），超时自动删除

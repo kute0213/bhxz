@@ -20,11 +20,11 @@ from flask import (
 )
 
 from core.auth import login_required, get_current_user
-from utils.helpers import render_page
+from core.helpers import render_page
 from config import UPLOAD_MUSIC_DIR
 from routes.main import main_bp
 import services.music as music_service
-from utils.shared.ip import get_client_ip
+from core.shared.ip import get_client_ip
 
 
 @main_bp.route('/music')
@@ -35,7 +35,7 @@ def music_page():
     public_musics = music_service.attach_durations(music_service.get_public_musics(keyword))
     favorite_ids = music_service.get_favorite_ids(user['id']) if user else set()
     return render_page(
-        'music/list.html',
+        'music/index.html',
         public_musics=public_musics,
         keyword=keyword,
         favorite_ids=favorite_ids,

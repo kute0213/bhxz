@@ -141,9 +141,9 @@ def do_something(user_id, value, ip_address):
 2. 在 `routes/` 中创建薄层路由，调用服务函数
 3. 在 `scripts/tests/` 中编写测试覆盖
 
-## 工具函数层规范（utils/）
+## 核心工具函数规范（core/ 内置）
 
-通用工具函数集中存放于 `utils/` 目录，不含任何业务逻辑：
+项目根目录**不新增独立 `utils/` 文件夹**。通用工具函数一律收敛到 `core/` 下（属基础设施层），不含任何业务逻辑：
 
 | 文件 | 职责 |
 |------|------|
@@ -165,6 +165,54 @@ def do_something(user_id, value, ip_address):
 * 用户操作始终使用 `services/user/` 子模块
 
 * 讨论区操作始终使用 `services/discussion/` 子模块
+
+## Jinja2 模板命名规范
+
+模板统一存放于 `templates/`，遵循「**功能目录 + 语义化页面名**」规则。命名务必清晰、简洁、符合 Flask/Jinja2 通用约定，避免模板找不到导致的 500。
+
+### 1. 目录划分
+
+按功能域（蓝图）划分子目录，目录名**小写**，多词用连字符（-）：
+
+| 目录 | 存放内容 |
+|------|----------|
+| `templates/` 根 | 全站通用：`base.html`（布局）、`index.html`（首页）、`error_simple.html`（精简错误页） |
+| `templates/auth/` | 登录、注册、找回密码 |
+| `templates/settings/` | 用户个人设置 |
+| `templates/admin/` | 管理后台所有页面 |
+| `templates/buildings/`、`guides/`、`music/`、`discussion/`、`backgrounds/`、`game_accounts/` | 对应功能模块页面 |
+| `templates/site/` | 站点级信息页（站点文档、服务器状态） |
+| `templates/macros/` | 可复用 Jinja2 宏（`data_table`、`modal` 等） |
+| `templates/emails/` | 邮件 HTML 模板（独立 Jinja2 loader，`templates/emails/base.html` 为其专用布局） |
+
+### 2. 页面类型后缀
+
+每个模板文件名以**语义化小写单词**表达页面类型：
+
+* `index.html` — 功能域入口 / 列表页（如 `discussion/index.html`、`admin/index.html`）
+* `detail.html` — 详情页（如 `guides/detail.html`）
+* `create.html` — 新建表单页（如 `buildings/create.html`）
+* `form.html` — 新增/编辑共用表单页（如 `guides/form.html`）
+* `apply.html` — 申请页（如 `game_accounts/apply.html`）
+* `upload.html` — 上传页（如 `backgrounds/upload.html`）
+* 其余按语义命名：`dashboard.html`、`login.html`、`register.html`、`favorites.html`、`my.html`
+
+### 3. 禁止冗余前缀
+
+目录名已表达功能，文件名**不得重复**功能名。管理后台位于 `templates/admin/`，其下文件名直接是 `users.html`、`settings.html`，**禁止**写成 `admin/admin_users.html` 这类双重前缀。
+
+### 4. 引用方式
+
+带渲染一律使用相对 `templates/` 的路径字符串：
+
+```python
+render_page('admin/users.html', users=users)   # ✅
+render_page('discussion/index.html')           # ✅
+admin_page('admin/settings.html')              # ✅
+render_page('admin/admin_users.html')          # ❌ 双重前缀
+```
+
+链路 `routes → services → core` 之外，错误页由 `core/errors.py` 统一渲染 `error_simple.html`；邮件模板由 `services/mail/templates/` 独立渲染，均不受此规范影响。
 
 ## 测试规范
 

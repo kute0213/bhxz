@@ -8,10 +8,10 @@ from io import BytesIO
 from flask import request, jsonify, send_file, abort
 
 from core.auth import get_current_user, login_required
-from utils.helpers import render_page
+from core.helpers import render_page
 from routes.backgrounds import backgrounds_bp
 from services import background_service
-from utils.shared.ip import get_client_ip
+from core.shared.ip import get_client_ip
 
 
 @backgrounds_bp.route('/backgrounds')
@@ -25,7 +25,7 @@ def background_list_page():
     if user:
         my_bgs = background_service.get_backgrounds(user_id=user['id'])
     return render_page(
-        'backgrounds/list.html',
+        'backgrounds/index.html',
         active_bgs=active_bgs,
         my_bgs=my_bgs,
     )

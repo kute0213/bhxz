@@ -6,9 +6,9 @@ from flask import abort, request, redirect, url_for, flash
 
 from core.auth import get_current_user, login_required
 from core.db import get_db
-from utils.helpers import render_page
-from utils.shared.captcha import captcha_service
-from utils.shared.ip import get_client_ip
+from core.helpers import render_page
+from core.shared.captcha import captcha_service
+from core.shared.ip import get_client_ip
 from routes.buildings import buildings_bp
 
 
@@ -56,7 +56,7 @@ def building_create():
 
     if request.method == 'POST':
         # 检查待审核内容上限
-        from utils.helpers import check_pending_limit
+        from core.helpers import check_pending_limit
         allowed, msg = check_pending_limit(user)
         if not allowed:
             flash(msg, 'error')

@@ -5,7 +5,7 @@ import re
 import string
 import time
 import threading
-from utils.shared.scheduler import register_task
+from core.shared.scheduler import register_task
 from ..service import email_service
 from ..templates import verification_code as build_code_html
 

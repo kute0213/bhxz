@@ -58,11 +58,39 @@ REGISTER_VERIFY_CODE = 'binhai_xz'
 # 数据库备份配置
 # ---------------------------------------------------------------------------
 
-# 备份文件存放目录（zip 压缩包存储目录）
-BACKUP_DIR = os.path.join(APP_ROOT, 'backups')
+# 备份根目录默认值：支持绝对路径或相对路径（相对路径基于项目根目录 APP_ROOT 解析）。
+# 默认 ../bhxz_backups 表示「项目根目录的上一级」下的 bhxz_backups 文件夹。
+# 运行时可通过管理后台「系统设置」或「数据备份」面板热修改（配置键 BACKUP_DIR）。
+BACKUP_DIR_DEFAULT = os.path.normpath(os.path.join(APP_ROOT, '..', 'bhxz_backups'))
 
-# /uploads/ 全量数据备份目录
+# 备份文件存放目录（zip 压缩包存储目录）。此常量仅作为启动期默认值与导入兼容，
+# 实际使用请调用 get_backup_dir() / get_uploads_backup_dir() 以支持运行时热重载。
+BACKUP_DIR = os.environ.get('BACKUP_DIR') or BACKUP_DIR_DEFAULT
+
+# /uploads/ 全量数据备份目录（备份根目录下的 uploads 子目录）
 UPLOADS_BACKUP_DIR = os.path.join(BACKUP_DIR, 'uploads')
+
+
+def get_backup_dir() -> str:
+    """解析备份根目录（支持绝对/相对路径，运行时热重载）。
+
+    - 绝对路径：直接使用
+    - 相对路径：基于项目根目录 APP_ROOT 解析
+    - 未配置时回退到默认值 ../bhxz_backups
+    """
+    val = get_config_value('BACKUP_DIR', BACKUP_DIR_DEFAULT)
+    val = str(val or '').strip()
+    if not val:
+        val = BACKUP_DIR_DEFAULT
+    p = os.path.expanduser(val)
+    if not os.path.isabs(p):
+        p = os.path.join(APP_ROOT, p)
+    return os.path.normpath(p)
+
+
+def get_uploads_backup_dir() -> str:
+    """解析 /uploads/ 全量数据备份目录（备份根目录下的 uploads 子目录）。"""
+    return os.path.join(get_backup_dir(), 'uploads')
 
 # 备份文件名格式（使用 strftime 占位符，将被替换为当前时间）
 # 例: backup_%Y%m%d_%H%M%S.zip -> backup_20240115_030000.zip
@@ -237,6 +265,8 @@ os.makedirs(UPLOAD_SITEMAP_DIR, exist_ok=True)
 os.makedirs(UPLOAD_MUSIC_DIR, exist_ok=True)
 os.makedirs(UPLOAD_BACKGROUNDS_DIR, exist_ok=True)
 os.makedirs(UPLOADS_BACKUP_DIR, exist_ok=True)
+# 注：自定义备份目录（相对/绝对）在运行时由 services/backup/manager 首次使用时创建，
+# 不在导入期调用 get_config_value（其定义位于本文件末尾，避免导入期 NameError）。
 
 
 # ---------------------------------------------------------------------------
@@ -276,6 +306,7 @@ SETTINGS_REGISTRY = [
     ('LOG_LEVEL', 'INFO', 'select', '日志输出等级', '控制日志输出级别，可选：DEBUG（调试）, INFO（信息）, WARNING（警告）, ERROR（错误）, CRITICAL（严重）', '日志'),
 
     # 数据备份
+    ('BACKUP_DIR', '../bhxz_backups', 'str', '备份目录', '备份文件存放根目录，支持绝对路径或相对路径（相对路径基于网站根目录解析）。默认 ../bhxz_backups。更改后新备份将写入新目录。', '数据备份'),
     ('BACKUP_SCHEDULED_TIME', '03:00', 'time', '自动备份时间', '每天自动备份的时间（HH:MM 格式）', '数据备份'),
     ('MAX_BACKUPS', 30, 'int', '最大备份保留数', '超出后自动删除最旧的备份，0 表示不限制', '数据备份'),
     ('BACKUP_TIMEOUT', 3600, 'int', '备份超时（秒）', '备份执行超时时间，防止备份过程卡住', '数据备份'),

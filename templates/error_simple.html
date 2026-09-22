@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ code }} {{ title }} - 滨海小镇</title>
+    <!-- Lucide 图标库 -->
+    <script src="{{ url_for('static', filename='lib/lucide/lucide.min.js', v='1') }}"></script>
+    <style>
+        /* ============================================
+           精简错误页样式 - 滨海小镇
+           ============================================ */
+
+        /* 颜色变量系统 */
+        :root {
+            --bg-primary: #f8fafc;
+            --bg-card: rgba(255, 255, 255, 0.78);
+            --bg-card-hover: rgba(255, 255, 255, 0.94);
+            --text-primary: #1a2230;
+            --text-secondary: rgba(26, 34, 48, 0.8);
+            --text-muted: rgba(26, 34, 48, 0.52);
+            --accent-blue: #0284c7;
+            --border-card: rgba(15, 23, 42, 0.1);
+            --shadow-card: 0 8px 32px rgba(15, 23, 42, 0.08), 0 2px 8px rgba(15, 23, 42, 0.06);
+            --shadow-elevated: 0 16px 48px rgba(15, 23, 42, 0.12), 0 4px 16px rgba(15, 23, 42, 0.08);
+            --radius-card: 16px;
+            --transition-fast: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            --transition-bounce: 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+            color: var(--text-primary);
+            background: var(--bg-primary);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow-x: hidden;
+        }
+
+        /* 背景噪点纹理 */
+        body::before {
+            content: ''; position: fixed; inset: 0; z-index: -1;
+            pointer-events: none;
+            opacity: 0.015;
+            background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+            background-repeat: repeat;
+            background-size: 200px 200px;
+        }
+
+        .error-wrap {
+            width: 100%;
+            max-width: 480px;
+            padding: 24px;
+            animation: page-in 0.45s cubic-bezier(0.4,0,0.2,1) both;
+        }
+
+        /* 磨砂玻璃卡片 */
+        .pixel-card {
+            background: var(--bg-card);
+            backdrop-filter: blur(20px) saturate(110%);
+            -webkit-backdrop-filter: blur(20px) saturate(110%);
+            border: 1px solid var(--border-card);
+            border-radius: var(--radius-card);
+            box-shadow: var(--shadow-card);
+            transition: transform var(--transition-bounce), box-shadow var(--transition-bounce), background var(--transition-normal, 0.35s ease);
+            overflow: visible;
+            position: relative;
+        }
+
+        .pixel-card::before {
+            content: '';
+            position: absolute; inset: 0; border-radius: inherit;
+            background: radial-gradient(ellipse at 20% 15%, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0.005) 30%, transparent 60%);
+            pointer-events: none; z-index: 0; mix-blend-mode: screen;
+        }
+
+        .pixel-card::after {
+            content: '';
+            position: absolute; inset: 0; border-radius: inherit; padding: 1px;
+            background: linear-gradient(135deg, rgba(54,240,208,0.18) 0%, rgba(53,185,255,0.03) 28%, transparent 52%, rgba(112,104,255,0.04) 76%, rgba(53,185,255,0.14) 100%);
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+            mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            mask-composite: exclude;
+            pointer-events: none; z-index: 1;
+        }
+
+        .pixel-card > * { position: relative; z-index: 2; }
+
+        .pixel-card:hover {
+            background: var(--bg-card-hover);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-elevated);
+        }
+
+        /* 错误码图标 */
+        .icon-circle {
+            width: 96px; height: 96px;
+            margin: 0 auto 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .icon-circle.error-4xx {
+            background: rgba(217, 119, 6, 0.1);
+        }
+        .icon-circle.error-5xx {
+            background: rgba(225, 29, 72, 0.1);
+        }
+        .icon-circle i {
+            width: 48px; height: 48px;
+        }
+        .icon-circle.error-4xx i { color: #d97706; opacity: 0.7; }
+        .icon-circle.error-5xx i { color: #fb7185; opacity: 0.7; }
+
+        /* 错误码数字 */
+        .error-code {
+            font-size: 4rem;
+            font-weight: 900;
+            text-align: center;
+            margin-bottom: 8px;
+        }
+        .error-code.code-4xx { color: #d97706; }
+        .error-code.code-5xx { color: #fb7185; }
+
+        /* 错误标题 */
+        .error-title {
+            font-size: 1.5rem;
+            font-weight: 700;
+            text-align: center;
+            color: var(--text-primary);
+            margin-bottom: 24px;
+        }
+
+        /* 原因/建议卡片 */
+        .detail-card {
+            border-radius: var(--radius-card);
+            padding: 20px;
+            margin-bottom: 32px;
+            text-align: left;
+        }
+        .detail-row {
+            display: flex;
+            gap: 12px;
+            font-size: 0.875rem;
+            line-height: 1.6;
+        }
+        .detail-row:not(:last-child) {
+            margin-bottom: 12px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid var(--border-card);
+        }
+        .detail-label {
+            font-weight: 700;
+            color: #d97706;
+            width: 64px;
+            flex-shrink: 0;
+        }
+        .detail-value {
+            color: var(--text-secondary);
+        }
+
+        /* 按钮 */
+        .btn-home {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 24px;
+            background: linear-gradient(135deg, rgba(255,255,255,0.82), rgba(248,250,254,0.72));
+            backdrop-filter: blur(22px) saturate(120%);
+            -webkit-backdrop-filter: blur(22px) saturate(120%);
+            border: 1px solid rgba(2,132,199,0.28);
+            border-radius: 12px;
+            color: #0f172a;
+            font-weight: 600;
+            font-size: 0.95rem;
+            text-decoration: none;
+            transition: transform var(--transition-fast), background var(--transition-fast), box-shadow var(--transition-fast), border-color var(--transition-fast);
+            box-shadow: 0 8px 24px rgba(15,23,42,0.10), inset 0 1px 0 rgba(255,255,255,0.7);
+            cursor: pointer;
+        }
+        .btn-home:hover {
+            background: linear-gradient(135deg, rgba(255,255,255,0.96), rgba(248,250,254,0.9));
+            border-color: rgba(2,132,199,0.48);
+            color: #0369a1;
+            transform: translateY(-1px);
+            box-shadow: 0 12px 30px rgba(15,23,42,0.14), 0 0 22px rgba(2,132,199,0.12), inset 0 1px 0 rgba(255,255,255,0.85);
+        }
+        .btn-home:active { transform: translateY(0); }
+        .btn-home i { width: 20px; height: 20px; }
+
+        /* 入场动画 */
+        @keyframes page-in {
+            from { opacity: 0; transform: translateY(12px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* 响应式 */
+        @media (max-width: 480px) {
+            .error-wrap { padding: 16px; }
+            .error-code { font-size: 3rem; }
+            .error-title { font-size: 1.25rem; }
+            .icon-circle { width: 72px; height: 72px; margin-bottom: 24px; }
+            .icon-circle i { width: 36px; height: 36px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="error-wrap">
+        <div class="pixel-card" style="padding:40px 32px;text-align:center;">
+            <div class="icon-circle {% if code >= 500 %}error-5xx{% else %}error-4xx{% endif %}">
+                <i data-lucide="{{ icon }}"></i>
+            </div>
+
+            <div class="error-code {% if code >= 500 %}code-5xx{% else %}code-4xx{% endif %}">{{ code }}</div>
+            <p class="error-title">{{ title }}</p>
+
+            <div class="detail-card pixel-card">
+                <div class="detail-row">
+                    <span class="detail-label">原因</span>
+                    <span class="detail-value">{{ reason }}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">建议</span>
+                    <span class="detail-value">{{ advice }}</span>
+                </div>
+            </div>
+
+            <a href="{{ url_for('main.home') }}" class="btn-home">
+                <i data-lucide="home"></i>返回首页
+            </a>
+        </div>
+    </div>
+
+    <script>
+        // 初始化 Lucide 图标
+        lucide.createIcons();
+    </script>
+</body>
+</html>

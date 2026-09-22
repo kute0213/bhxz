@@ -5,7 +5,7 @@
 
 from flask import request, redirect, url_for, session, flash
 from core.auth import login_required, get_current_user
-from utils.helpers import render_page
+from core.helpers import render_page
 from services.mail import normalize_email
 from services.user import (
     change_username as svc_change_username,
@@ -13,7 +13,7 @@ from services.user import (
     change_email as svc_change_email,
     delete_account as svc_delete_account,
 )
-from utils.shared.ip import get_client_ip
+from core.shared.ip import get_client_ip
 from routes.main import main_bp
 
 
@@ -24,7 +24,7 @@ from routes.main import main_bp
 @main_bp.route('/settings', methods=['GET', 'POST'])
 @login_required
 def settings():
-    return render_page('settings.html', tab=request.args.get('tab', 'username'))
+    return render_page('settings/index.html', tab=request.args.get('tab', 'username'))
 
 
 @main_bp.route('/settings/username', methods=['POST'])

@@ -72,18 +72,22 @@ python scripts/build/package.py
 ```
 /workspace
 ├── app.py / config.py / requirements.txt   # 入口、配置、依赖
-├── core/         # 基础设施层（auth/server/web/system/db/shared）
-│   ├── auth/                 #   认证装饰器、密码哈希
-│   │   └── __init__.py
-│   ├── server/               #   WSGI 服务器与优雅关闭
-│   │   └── __init__.py
-│   ├── web/                  #   Web 层：中间件、CSRF、错误页
-│   │   ├── __init__.py, middleware.py, csrf.py, errors.py
-│   ├── system/               #   系统层：日志、启动检查、应用初始化
-│   │   ├── __init__.py, logger.py, startup_checks.py, init.py
-│   ├── shared/               #   共享工具
-│   │   └── scheduler/        #   统一任务注册表（task / executors / registry）
+├── core/         # 基础设施层（DB/认证/中间件/错误页/共享工具）——不含业务逻辑
 │   ├── db/                   #   数据库连接与 schema
+│   │   └── connection.py, schema.py
+│   ├── system/               #   系统层：日志、启动检查、应用初始化
+│   │   └── init.py, logger.py, startup_checks.py
+│   ├── shared/               #   共享工具（无业务逻辑，原 utils 收敛于此）
+│   │   ├── ip.py, captcha.py, ratelimit.py, validation.py
+│   │   ├── process_utils.py, security_scanner.py
+│   │   └── scheduler/        #   统一任务注册表（task / executors / registry）
+│   ├── auth.py               #   认证装饰器、密码哈希
+│   ├── csrf.py               #   CSRF 防护
+│   ├── middleware.py         #   请求中间件（安全标头、攻击扫描）
+│   ├── server.py             #   WSGI 服务器与优雅关闭
+│   ├── helpers.py            #   页面渲染辅助（render_page / admin_page）
+│   ├── template_context.py   #   全局模板上下文注入
+│   └── errors.py             #   统一精简错误页渲染（error_simple）
 │   ├── firewall/             #   高性能防火墙（DuckDB 引擎 + 连接级阻断 + DDoS 防护）
 │   │   ├── __init__.py       #   全局单例 + 统一 API
 │   │   ├── database.py       #   DuckDB 引擎
@@ -123,28 +127,30 @@ python scripts/build/package.py
 │   ├── main/           # 主站（登录/注册/设置/音乐）
 │   ├── public/         # 公开文件服务
 │   └── sitemap/        # Sitemap & robots.txt（自动添加 Crawl-delay 防防火墙误判）
-├── templates/    # Jinja2 模板
-│   ├── admin/          # 管理后台页面
-│   ├── backgrounds/    # 背景图片页面
-│   ├── discussion/     # 讨论区页面
-│   ├── emails/         # 邮件模板
-│   ├── game_accounts/  # 游戏账号页面
-│   ├── guides/         # 服务器指南页面
-│   ├── buildings/      # 公共建筑（列表/详情/发布）
-│   ├── macros/         # 通用模板宏（模态框/编辑/进度条/音乐）
-│   ├── music/          # 大喇叭音频页面
+├── templates/    # Jinja2 模板（命名规范见 docs/DEVELOPMENT.md）
+│   ├── admin/          # 管理后台页面（如 users.html、settings.html，无 admin_ 前缀）
+│   ├── auth/           # 登录 / 注册 / 找回密码
+│   ├── settings/       # 用户个人设置
+│   ├── site/           # 站点级信息页（站点文档、服务器状态）
+│   ├── backgrounds/    # 背景图片页面（index / upload）
+│   ├── discussion/     # 讨论区页面（index / create / detail）
+│   ├── emails/         # 邮件模板（独立 Jinja2 loader）
+│   ├── game_accounts/  # 游戏账号页面（apply / ban_apply）
+│   ├── guides/         # 服务器指南页面（index / detail / form）
+│   ├── buildings/      # 公共建筑（index / create / detail）
+│   ├── music/          # 大喇叭音频页面（index / my / favorites / upload）
+│   ├── macros/         # 通用模板宏（模态框/编辑器/进度条/音乐）
 │   ├── static/         # 静态资源（CSS/JS/本地化第三方库，随模板目录存放）
-│   └── ...             # 基础页面（首页/登录/注册/设置/404/403）
-├── utils/        # 共享工具函数（IP/限流/验证/验证码/安全扫描/模板辅助/子进程）
+│   └── ...             # 根级通用页面（base.html 布局、index.html 首页、error_simple.html 精简错误页）
 ├── docs/         # 项目文档
-├── scripts/      # 数据库迁移（migrate_db/、restore_db/）与测试（tests/）
+├── scripts/      # 数据库迁移（migrate_db/）与测试（tests/）
 ├── uploads/      # 运行期上传数据
 │   ├── attachments/    # 留言板/讨论区附件
 │   ├── backgrounds/    # 全站背景图片
 │   ├── community/      # 社区资源
 │   ├── music/          # 大喇叭音频（每个音频一个 ID 目录，含 m3u8、ts 分片与唱片 MP3）
 │   └── db/             # 数据库文件（site.db + firewall.duckdb）
-├── backups/      # 数据备份
+├── backups/      # 数据备份（默认 ../bhxz_backups，支持自定义路径与运行时热改）
 │   └── uploads/        # /uploads/ 全量 zip 极限压缩备份
 └── ssl/          # HTTPS 证书（可选）
 ```
@@ -179,7 +185,7 @@ python scripts/build/package.py
 
 * 系统日志（实时查看，SSE 推送，支持等级过滤、自动滚动；按时间顺序从上到下展示，与控制台一致）
 
-* 数据备份（手动/自动，极限压缩 zip，进度条，一键解压恢复）
+* 数据备份（手动/自动，极限压缩 zip，进度条；备份目录支持设置绝对/相对路径，默认 `../bhxz_backups`）
 
 * 公开文件管理
 
@@ -363,6 +369,7 @@ python scripts/build/package.py
 | `FFPROBE_BIN`                 | 探测音频时长（转码进度百分比）用的 ffprobe                 | 优先 `scripts/ffmpeg/ffprobe(.exe)`，否则系统 PATH |
 | `FFMPEG_THREADS`              | ffmpeg 音频转码线程数                            | `0`（自动按 CPU 核数）                             |
 | `MAX_CONTENT_LENGTH`          | 最大上传大小                                    | 100 MB                                      |
+| `BACKUP_DIR`                  | 备份根目录（支持绝对/相对路径，运行时可在后台热改）            | `../bhxz_backups`（项目上一级）                   |
 | `SECRET_KEY`                  | Session 密钥                                | `mc_server_site_random_secret_key_2024`     |
 | `REGISTER_VERIFY_CODE`        | 注册验证码                                     | `binhai_xz`                                 |
 | `BACKUP_SCHEDULED_TIME`       | 每日自动备份时间                                  | `03:00`                                     |
@@ -568,7 +575,7 @@ export ENABLE_SSL=1 && python app.py
 项目严格遵循 **MVC 式分层架构**，各层职责互不重叠：
 
 ```
-app.py ──→ routes/ ──→ services/ ──→ utils/ + core/
+app.py ──→ routes/ ──→ services/ ──→ core/
   │            │            │            │
   │         HTTP 层     业务逻辑层    基础设施层
   │            │            │            │
@@ -595,8 +602,7 @@ app.py ──→ routes/ ──→ services/ ──→ utils/ + core/
 | ------ | ----------- | ----------------------------------------------- | --------------------------------- |
 | **入口** | `app.py`    | Flask 实例、蓝图注册、WSGI 服务器                          | 不得包含业务逻辑                          |
 | **路由** | `routes/`   | HTTP 请求解析、参数校验、Session 管理、响应构造                  | 不得包含 SQL、事务、业务逻辑                  |
-| **工具** | `utils/`   | 无业务逻辑的纯工具（验证码、IP、限流、安全扫描、调度器、错误页、模板上下文、页面渲染） | 不含业务逻辑、不导入 services |
-| **核心** | `core/`     | 数据库连接、认证装饰器、中间件、CSRF 防护、服务器入口                                    | 不得包含业务逻辑，不得导入 services |
+| **核心** | `core/`     | 数据库连接、认证装饰器、中间件、CSRF、服务器入口、共享工具（验证码/IP/限流/安全扫描/调度器/错误页/模板上下文/页面渲染） | 不得包含业务逻辑，不导入 services |
 
 ### 目录结构
 
@@ -606,22 +612,21 @@ workspace/
 ├── config.py                 # 全局配置
 ├── requirements.txt          # Python 依赖
 ├── update.py                 # 一键更新脚本
-├── utils/                    # 工具/辅助模块
-│   ├── shared/               #   通用工具
-│   │   ├── ip.py, captcha.py, ratelimit.py, validation.py
-│   │   ├── process_utils.py, security_scanner.py
-│   │   └── scheduler/        #   统一任务注册表（task / executors / registry）
-│   ├── helpers.py            #   页面渲染辅助函数
-│   ├── template_context.py   #   全局模板上下文注入
-│   └── errors.py             #   统一错误页渲染
-├── core/                     # 核心基础设施层（胶水层）
+├── core/                     # 核心基础设施层（含共享工具，不含业务逻辑）
 │   ├── db/                   #   数据库连接与 schema
 │   ├── system/               #   系统层：日志、启动检查、应用初始化
 │   │   ├── init.py, logger.py, startup_checks.py
+│   ├── shared/               #   共享工具（原 utils 收敛于此）
+│   │   ├── ip.py, captcha.py, ratelimit.py, validation.py
+│   │   ├── process_utils.py, security_scanner.py
+│   │   └── scheduler/        #   统一任务注册表（task / executors / registry）
 │   ├── auth.py               #   认证装饰器、密码哈希
 │   ├── csrf.py               #   CSRF 防护
 │   ├── middleware.py          #   请求中间件（安全标头、攻击扫描）
-│   └── server.py             #   WSGI 服务器与优雅关闭
+│   ├── server.py             #   WSGI 服务器与优雅关闭
+│   ├── helpers.py            #   页面渲染辅助（render_page / admin_page）
+│   ├── template_context.py   #   全局模板上下文注入
+│   └── errors.py             #   统一错误页渲染（error_simple）
 ├── services/                 # 业务逻辑层（纯 Python，不依赖 Flask）
 │   ├── backup/               #   数据备份（/uploads/ 全量 zip 极限压缩）
 │   ├── discussion/           #   讨论区（帖子/回复/分类）
@@ -649,17 +654,21 @@ workspace/
 │   ├── guides/               #   服务器指南（页面+API）
 │   ├── public/               #   公开文件服务
 │   └── sitemap/              #   站点地图 & robots.txt
-├── templates/                # Jinja2 模板
-│   ├── admin/                #   管理后台页面
-│   ├── backgrounds/          #   背景图片页面
-│   ├── discussion/           #   讨论区页面
-│   ├── emails/               #   邮件模板
-│   ├── game_accounts/        #   游戏账号页面
-│   ├── guides/               #   服务器指南页面
+├── templates/                # Jinja2 模板（命名规范见 docs/DEVELOPMENT.md）
+│   ├── admin/                #   管理后台页面（无 admin_ 前缀）
+│   ├── auth/                 #   登录 / 注册 / 找回密码
+│   ├── settings/             #   用户个人设置
+│   ├── site/                 #   站点级信息页（站点文档、服务器状态）
+│   ├── backgrounds/          #   背景图片页面（index / upload）
+│   ├── discussion/           #   讨论区页面（index / create / detail）
+│   ├── emails/               #   邮件模板（独立 loader）
+│   ├── game_accounts/        #   游戏账号页面（apply / ban_apply）
+│   ├── guides/               #   服务器指南页面（index / detail / form）
+│   ├── buildings/            #   公共建筑（index / create / detail）
+│   ├── music/                #   大喇叭音频页面（index / my / favorites / upload）
 │   ├── macros/               #   通用模板宏（模态框/编辑器/进度条/音乐）
-│   ├── music/                #   大喇叭音频页面
 │   ├── static/               #   静态资源（CSS/JS/本地化第三方库，构建生成 lib/）
-│   └── ...                   #   基础页面
+│   └── ...                   #   根级：base.html / index.html / error_simple.html
 ├── docs/                     # 项目文档
 └── scripts/
     ├── build/                #   构建脚本
@@ -683,7 +692,7 @@ workspace/
 | 组件      | 异步方式                               |
 | ------- | ---------------------------------- |
 | 日志写入器   | 队列 + 后台线程批量写入                      |
-| 统一任务注册表 | 单 tick 线程每秒检测 + 共享线程池派发（`utils/shared/scheduler/`，全站定时任务共用，防火墙除外） |
+| 统一任务注册表 | 单 tick 线程每秒检测 + 共享线程池派发（`core/shared/scheduler/`，全站定时任务共用，防火墙除外） |
 | IP 地理信息 | 后台线程异步更新缓存                         |
 | CPU 监控  | 后台线程定期采样（2 秒）                      |
 
@@ -721,7 +730,7 @@ workspace/
 
 1. 扫描 `/uploads/` 目录下所有文件 → 极限压缩打包为 zip（ZIP_DEFLATED, level 9）→ 校验 zip 完整性 → 清理旧备份
 
-管理后台支持手动触发，显示实时进度条；支持一键解压恢复。
+管理后台可手动触发，显示实时进度条；备份目录（`BACKUP_DIR`）支持在「系统设置」或「数据备份」面板设置**绝对路径或相对路径**（相对路径基于网站根目录解析，默认 `../bhxz_backups`），更改后新备份将写入新目录，旧备份自动迁移。已取消一键解压恢复功能，历史备份仅作留存与下载。
 
 ### 一键更新脚本
 

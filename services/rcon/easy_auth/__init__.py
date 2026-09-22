@@ -14,7 +14,7 @@
 from typing import Tuple
 
 from services.rcon.client import execute_command
-from utils.shared.validation import sanitize_rcon_username, sanitize_rcon_password
+from core.shared.validation import sanitize_rcon_username, sanitize_rcon_password
 
 
 def _exec(command: str) -> str:

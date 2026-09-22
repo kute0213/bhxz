@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from typing import List, Optional
 
 from core.system.logger import log
-from utils.shared.scheduler import register_task, unregister_task
+from core.shared.scheduler import register_task, unregister_task
 from services.rcon.client import execute_command
 
 

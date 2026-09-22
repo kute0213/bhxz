@@ -6,8 +6,8 @@ from flask import request, jsonify
 
 from core.auth import login_required, get_current_user
 from core.db import get_db
-from utils.shared.ip import get_client_ip
-from utils.shared.captcha import captcha_service
+from core.shared.ip import get_client_ip
+from core.shared.captcha import captcha_service
 from routes.buildings import buildings_bp
 
 

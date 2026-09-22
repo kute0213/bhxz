@@ -6,11 +6,11 @@
 from flask import request, redirect, url_for, flash, abort
 
 from core.auth import login_required, get_current_user
-from utils.helpers import render_page
+from core.helpers import render_page
 from core.db import get_db
 from routes.discussion import discussion_bp
 from config import get_config_value
-from utils.shared.ip import get_client_ip
+from core.shared.ip import get_client_ip
 from services.discussion import (
     get_categories, get_category_dict, get_topics_page, get_topic_detail,
     create_topic, edit_topic,
@@ -29,7 +29,7 @@ def list_view():
     current_category_name = cat_dict.get(category_id, '') if category_id else ''
 
     return render_page(
-        'discussion/list.html', topics=topics,
+        'discussion/index.html', topics=topics,
         categories=categories, category_id=category_id,
         current_category_name=current_category_name,
         page=page, total_pages=total_pages, total=total,

@@ -9,20 +9,17 @@ from datetime import datetime
 from flask import jsonify, send_file
 
 from core.auth import admin_required, get_current_user
-from utils.helpers import render_page
+from core.helpers import render_page
 from core.db import get_db
-from config import DB_PATH, UPLOAD_DIR, UPLOADS_BACKUP_DIR, APP_ROOT
+from config import DB_PATH, UPLOAD_DIR, get_config_value, get_backup_dir
 from routes.admin import admin_bp
 from core.system.logger import log
-from utils.shared.process_utils import make_env
 
 
 @admin_bp.route('/admin/db-backup')
 @admin_required
 def db_backup_page():
     """数据备份管理页面。"""
-    from config import get_config_value
-
     conn = get_db()
     try:
         # 数据量统计
@@ -58,11 +55,13 @@ def db_backup_page():
         conn.close()
 
     return render_page(
-        'admin/admin_db_backup.html',
+        'admin/db_backup.html',
         db_size=db_size,
         uploads_size=uploads_size,
         backups=backups,
         max_backups=get_config_value('MAX_BACKUPS', 30),
+        backup_dir=get_backup_dir(),
+        backup_dir_setting=get_config_value('BACKUP_DIR', '../bhxz_backups'),
     )
 
 
@@ -195,66 +194,3 @@ def api_db_backup_delete(backup_id):
         conn.close()
 
     return jsonify({'success': True, 'message': '备份已删除'})
-
-
-@admin_bp.route('/admin/api/db-backup/<int:backup_id>/restore', methods=['POST'])
-@admin_required
-def api_db_backup_restore(backup_id):
-    """恢复备份：将 zip 备份解压到 /uploads/ 目录。"""
-    user = get_current_user()
-
-    conn = get_db()
-    try:
-        row = conn.execute(
-            "SELECT * FROM db_backups WHERE id = ?", (backup_id,)
-        ).fetchone()
-        if not row:
-            return jsonify({'success': False, 'message': '备份记录不存在'}), 404
-
-        backup = dict(row)
-        backup_path = backup.get('backup_path')
-
-        if not backup_path or not os.path.exists(backup_path):
-            return jsonify({'success': False, 'message': '备份文件不存在'}), 404
-
-        if backup.get('status') != 'success':
-            return jsonify({'success': False, 'message': '只能恢复成功的备份'}), 400
-
-        if not backup_path.endswith('.zip'):
-            return jsonify({'success': False, 'message': '备份格式不支持恢复'}), 400
-
-        # 解压 zip 到项目根目录（zip 内相对路径以 uploads/ 开头）
-        import zipfile
-        try:
-            with zipfile.ZipFile(backup_path, 'r') as zf:
-                zf.extractall(APP_ROOT)
-        except Exception as e:
-            log('ERROR', 'Backup', f'备份解压失败: {e}')
-            return jsonify({'success': False, 'message': f'解压失败: {e}'}), 500
-
-        # 重置数据库连接（防止文件被锁）
-        try:
-            from core.db.connection import reset_connection
-            reset_connection()
-        except Exception:
-            pass
-
-        log('INFO', 'Backup', f'数据已从备份恢复',
-            backup_id=backup_id, backup_name=backup.get('backup_name'))
-        return jsonify({
-            'success': True,
-            'message': '数据已从备份恢复，页面即将刷新',
-        })
-    finally:
-        conn.close()
-
-
-@admin_bp.route('/admin/api/db-backup/<int:backup_id>/restart-restore', methods=['POST'])
-@admin_required
-def api_db_backup_restart_restore(backup_id):
-    """备用恢复流程：通过子进程停止服务器 → 解压备份 → 重启。
-    
-    注：zip 备份的恢复通过在线解压即可，此接口保留做备用。
-    """
-    # 直接调用在线恢复
-    return api_db_backup_restore(backup_id)
