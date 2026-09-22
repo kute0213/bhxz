@@ -151,13 +151,14 @@ def find_best_mirror():
 
     if not available:
         log('所有镜像源均不可用！', RED)
-        return None
+        return []
 
     best = available[0]
     log(f'最佳源: {best[1]} ({best[0]}ms)', GREEN)
     if len(available) > 1:
         log(f'备用源: {", ".join(a[1] for a in available[1:4])} ({", ".join(f"{a[0]}ms" for a in available[1:4])})', YELLOW)
-    return best[2]
+    # 返回全部可用镜像列表（按延迟升序），供下载失败时回退
+    return available
 
 
 def get_git_head():
@@ -287,24 +288,25 @@ def update_via_git(skip_confirm=False):
     return True
 
 
-def update_via_download(base_url, skip_confirm=False):
-    """通过下载 zip 压缩包更新（非 git 仓库时使用）。"""
-    archive_url = f'{base_url}{GITHUB_REPO}/archive/refs/heads/{GITHUB_BRANCH}.zip'
+def _try_download_zip(archive_url, zip_path):
+    """尝试下载 ZIP 压缩包并校验内容合法性。
 
-    if not skip_confirm:
-        print()
-        confirm = input('当前不是 git 仓库，将通过下载覆盖方式更新。确认？(Y/n): ').strip().lower()
-        if confirm == 'n':
-            log('已取消更新', YELLOW)
-            return True
-
-    log('正在从 GitHub 下载最新代码...', CYAN)
-    tmp_dir = tempfile.mkdtemp(prefix='bhxz_update_')
-    zip_path = os.path.join(tmp_dir, 'update.zip')
+    校验项：HTTP 状态码 200、Content-Type 为 zip/octet-stream/binary、
+    文件非空、ZIP 魔数为 PK。返回 (success: bool, error_msg: str)。
+    """
+    try:
+        resp = urlopen_with_timeout(archive_url, timeout=120)
+    except Exception as e:
+        return False, f'连接失败: {e}'
 
     try:
-        # 下载
-        resp = urlopen_with_timeout(archive_url, timeout=120)
+        code = resp.getcode()
+        if code != 200:
+            return False, f'HTTP {code}'
+        ctype = resp.headers.get('Content-Type', '')
+        if ctype and not any(t in ctype.lower() for t in ('zip', 'octet-stream', 'binary')):
+            return False, f'非 ZIP 响应 (Content-Type: {ctype})'
+
         total_size = int(resp.headers.get('Content-Length', 0))
         downloaded = 0
         chunk_size = 8192
@@ -317,17 +319,79 @@ def update_via_download(base_url, skip_confirm=False):
                 f.write(chunk)
                 downloaded += len(chunk)
                 if total_size > 0:
-                    pct = int(downloaded * 100 / total_size)
+                    pct = min(100, int(downloaded * 100 / total_size))
                     bar = '█' * (pct // 4) + '░' * (25 - pct // 4)
                     print(f'\r  下载中: |{bar}| {pct}% ({downloaded // 1024}KB / {total_size // 1024}KB)', end='')
                 else:
                     print(f'\r  下载中: {downloaded // 1024}KB', end='')
                 sys.stdout.flush()
-        resp.close()
         print()
+    finally:
+        resp.close()
 
-        if not os.path.isfile(zip_path) or os.path.getsize(zip_path) == 0:
-            raise Exception('下载文件为空')
+    if not os.path.isfile(zip_path) or os.path.getsize(zip_path) == 0:
+        return False, '下载文件为空'
+
+    # 校验 ZIP 魔数（前 4 字节应为 PK\x03\x04 或空档案 PK\x05\x06）
+    with open(zip_path, 'rb') as f:
+        magic = f.read(4)
+    if magic[:2] != b'PK':
+        return False, f'文件不是有效 ZIP（前4字节: {magic!r}，镜像可能返回了错误页）'
+
+    return True, ''
+
+
+def update_via_download(mirrors, skip_confirm=False):
+    """通过下载 zip 压缩包更新（非 git 仓库时使用）。
+
+    mirrors: 镜像列表 [(ms, name, base_url), ...]，按延迟升序排列。
+    逐个镜像尝试下载，失败自动回退到下一个，全部失败才返回 False。
+    """
+    if not skip_confirm:
+        print()
+        confirm = input('当前不是 git 仓库，将通过下载覆盖方式更新。确认？(Y/n): ').strip().lower()
+        if confirm == 'n':
+            log('已取消更新', YELLOW)
+            return True
+
+    if not mirrors:
+        log('无可用镜像源', RED)
+        return False
+
+    log('正在从 GitHub 下载最新代码...', CYAN)
+    tmp_dir = tempfile.mkdtemp(prefix='bhxz_update_')
+    zip_path = os.path.join(tmp_dir, 'update.zip')
+
+    try:
+        # 逐个镜像尝试下载
+        success = False
+        for i, (ms, name, base_url) in enumerate(mirrors):
+            archive_url = f'{base_url}{GITHUB_REPO}/archive/refs/heads/{GITHUB_BRANCH}.zip'
+            log(f'尝试镜像 [{i+1}/{len(mirrors)}]: {name} ({ms}ms)', CYAN)
+
+            ok, err = _try_download_zip(archive_url, zip_path)
+            if not ok:
+                log(f'  下载失败: {err}', YELLOW)
+                continue
+
+            # 完整性校验：zipfile 能否正常打开 + CRC 校验
+            try:
+                with zipfile.ZipFile(zip_path, 'r') as zf:
+                    bad_file = zf.testzip()
+                if bad_file is not None:
+                    log(f'  ZIP 完整性校验失败: {bad_file}', YELLOW)
+                    continue
+            except zipfile.BadZipFile as e:
+                log(f'  ZIP 损坏: {e}', YELLOW)
+                continue
+
+            success = True
+            log(f'  下载成功，使用镜像: {name}', GREEN)
+            break
+
+        if not success:
+            log('所有镜像源下载均失败，请检查网络后重试', RED)
+            return False
 
         # 解压
         log('正在解压...', CYAN)
@@ -383,11 +447,12 @@ def run_update():
     # 解析参数
     skip_confirm = '--yes' in sys.argv or '-y' in sys.argv
 
-    # 检测最佳源
-    base_url = find_best_mirror()
-    if not base_url:
+    # 检测最佳源（返回全部可用镜像列表，按延迟升序）
+    mirrors = find_best_mirror()
+    if not mirrors:
         log('无法连接到 GitHub，请检查网络后重试', RED)
         return False
+    base_url = mirrors[0][2]
 
     # 判断是否为 git 仓库
     has_git = os.path.isdir(os.path.join(PROJECT_ROOT, '.git'))
@@ -407,9 +472,9 @@ def run_update():
         except Exception as e:
             log(f'git 更新失败: {e}', YELLOW)
             log('降级到 ZIP 下载方式...', YELLOW)
-            success = update_via_download(base_url, skip_confirm=True)
+            success = update_via_download(mirrors, skip_confirm=True)
     else:
-        success = update_via_download(base_url, skip_confirm)
+        success = update_via_download(mirrors, skip_confirm)
 
     if not success:
         log('更新失败！请检查后重试', RED)

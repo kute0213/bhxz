@@ -13,6 +13,7 @@
 ### 修复
 
 * **管理后台建筑页 500**：`admin/buildings.html` 拒绝弹窗误用 `{{ modal_shell(...) }}`（把内容当参数传入）导致 `No caller defined`，改为标准 `{% call modal_shell(...) %}...{% endcall %}` 用法，页面正常渲染
+* **一键更新 ZIP 下载失败（File is not a zip file）**：`update.py` 原只使用单一镜像源下载且不校验内容，镜像返回 HTML 错误页时直接解压即报 `BadZipFile`。重构 `_try_download_zip()`：下载后校验 HTTP 状态码、`Content-Type`、ZIP 魔数（`PK\x03\x04`）及 `ZipFile.testzip()` CRC 完整性；`update_via_download()` 改为接收全部可用镜像列表，逐个尝试，失败自动回退到下一个镜像，全部失败才报错。修复进度条 `total_size=0` 时的除零隐患（用 `min(100, ...)` 钳制）
 
 ### 新增
 
