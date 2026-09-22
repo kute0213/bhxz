@@ -107,7 +107,6 @@ python scripts/build/package.py
 │   ├── attachment_service/  #   附件上传/清理
 │   ├── background_service/  #   背景图片业务（WebP 转换 + 响应式变体）
 │   ├── cleanup_service/     #   被驳回内容自动清理
-│   ├── easy_auth_db/        #   EasyAuth 数据库直连验证
 │   ├── settings_manager/    #   系统设置管理
 │   └── sitemap_cache/       #   Sitemap 缓存服务
 ├── routes/       # HTTP 路由层（Flask Blueprint）
@@ -186,7 +185,7 @@ python scripts/build/package.py
 
 * 广播邮件（富文本所见即所得编辑器 + 白名单 HTML 清洗，安全防 XSS）
 
-* 手动更新脚本（`scripts/update.py` — 跨平台，从 GitHub 拉取最新代码，支持本地修改暂存与恢复）
+* 一键更新脚本（`update.py` — 跨平台，从 GitHub 拉取最新代码，支持本地修改暂存与恢复，自动检测最优镜像源）
 
 * 游戏账号管理（注册申请审批、封禁列表管理）
 
@@ -588,7 +587,6 @@ app.py ──→ routes/ ──→ services/ ──→ core/
                       cleanup_service/（被驳回内容自动清理）
                       settings_manager/（系统设置管理）
                       sitemap_cache/（Sitemap 缓存）
-                      easy_auth_db/（EasyAuth 数据库直连）
                       monitoring/（系统性能监控）
                       logging/（日志自动清理）
 ```
@@ -640,7 +638,6 @@ workspace/
 │   ├── attachment_service/   #   附件上传/清理
 │   ├── background_service/   #   背景图片业务（WebP 转换 + 响应式变体）
 │   ├── cleanup_service/      #   被驳回内容自动清理（统一定时调度）
-│   ├── easy_auth_db/         #   EasyAuth 数据库直连验证
 │   ├── settings_manager/     #   系统设置管理
 │   ├── sitemap_cache/        #   Sitemap 缓存服务
 ├── routes/                   # HTTP 路由层
@@ -729,15 +726,16 @@ workspace/
 
 管理后台支持手动触发，显示实时进度条；支持一键解压恢复。
 
-### 手动更新脚本
+### 一键更新脚本
 
-项目提供了手动更新脚本 [`scripts/update.py`](scripts/update.py)，通过 Git 从 GitHub 拉取最新代码：
+项目根目录下提供了一键更新脚本 [`update.py`](update.py)，自动检测最优 GitHub 镜像源，从 GitHub 拉取最新代码：
 
-1. 运行 `python scripts/update.py`
-2. 脚本自动检测 git 环境和远程更新
-3. 显示更新内容预览（最近提交记录），确认后执行
-4. 支持本地修改暂存（`git stash`），更新后自动恢复
-5. 更新完成后提示手动重启服务器
+1. 运行 `python update.py`（或 `python update.py --yes` 跳过确认）
+2. 脚本自动并发检测 15 个 GitHub 镜像源，选择延迟最低的
+3. 检测 git 环境和远程更新，显示更新内容预览
+4. 确认后执行更新（支持本地修改暂存，更新后自动恢复）
+5. 自动安装/更新 Python 依赖
+6. **更新完成后提示手动重启服务器，不会自动启动**
 
 > 如果遇到依赖变化，更新后执行 `pip install -r requirements.txt`。
 

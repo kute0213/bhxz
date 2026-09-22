@@ -1,4 +1,4 @@
-"""管理员后台公共建筑管理：查看、管理删除、处理举报。"""
+"""管理员后台公共建筑管理：查看、审核、管理删除、处理举报。"""
 
 from datetime import datetime
 
@@ -13,7 +13,7 @@ from routes.admin import admin_bp
 @admin_bp.route('/admin/buildings')
 @admin_required
 def admin_buildings():
-    """管理后台：公共建筑列表（含被举报）。"""
+    """管理后台：公共建筑列表（含审核和举报）。"""
     conn = get_db()
     try:
         rows = conn.execute(
@@ -21,7 +21,7 @@ def admin_buildings():
             SELECT b.*, u.username as author_name
             FROM public_buildings b
             LEFT JOIN users u ON b.author_id = u.id
-            ORDER BY b.id DESC
+            ORDER BY b.status = 'pending' DESC, b.id DESC
             """
         ).fetchall()
         buildings = [dict(r) for r in rows]
@@ -49,6 +49,61 @@ def admin_buildings():
         conn.close()
 
     return render_page('admin/admin_buildings.html', buildings=buildings, reports=[dict(r) for r in reports])
+
+
+@admin_bp.route('/admin/buildings/<int:building_id>/approve', methods=['POST'])
+@admin_required
+def admin_building_approve(building_id):
+    """管理后台：通过建筑审核。"""
+    conn = get_db()
+    try:
+        now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        conn.execute(
+            """
+            UPDATE public_buildings
+            SET status = 'approved', published_at = ?, rejected_reason = '', updated_at = ?
+            WHERE id = ? AND status = 'pending'
+            """,
+            (now, now, building_id),
+        )
+        conn.commit()
+        flash('建筑已通过审核', 'success')
+    except Exception:
+        conn.rollback()
+        flash('操作失败', 'error')
+    finally:
+        conn.close()
+
+    return redirect(url_for('admin.admin_buildings'))
+
+
+@admin_bp.route('/admin/buildings/<int:building_id>/reject', methods=['POST'])
+@admin_required
+def admin_building_reject(building_id):
+    """管理后台：拒绝建筑审核。"""
+    from flask import request
+    reason = (request.form.get('reason') or '').strip()
+
+    conn = get_db()
+    try:
+        now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        conn.execute(
+            """
+            UPDATE public_buildings
+            SET status = 'rejected', rejected_reason = ?, updated_at = ?
+            WHERE id = ? AND status = 'pending'
+            """,
+            (reason, now, building_id),
+        )
+        conn.commit()
+        flash('建筑已拒绝', 'success')
+    except Exception:
+        conn.rollback()
+        flash('操作失败', 'error')
+    finally:
+        conn.close()
+
+    return redirect(url_for('admin.admin_buildings'))
 
 
 @admin_bp.route('/admin/buildings/<int:building_id>/delete', methods=['POST'])

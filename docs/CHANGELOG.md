@@ -4,6 +4,13 @@
 
 ### 新增
 
+* **用户待审核内容数量限制**：新增 `MAX_PENDING_CONTENT` 配置项（默认 5），用户在建筑/指南/音频/背景上的待审核内容总数达到上限后无法继续发布。管理员豁免。可在管理后台 → 系统设置 → 内容审核中调整
+* **公共建筑审核流程回归**：用户发布建筑后进入待审核状态（`status=pending`），管理后台建筑管理页新增「待审核」状态标签、通过/拒绝按钮（可填拒绝原因），列表按待审核优先排序；公开列表仅展示已审核通过的建筑，作者可在「我的建筑」中查看全部状态
+* **一键更新脚本 rewrite**：根目录 [`update.py`](update.py) 完全重写——全平台兼容 Python 脚本，并发检测 15 个 GitHub 镜像源并自动选用延迟最低的，支持 `--yes` 静默模式，支持 git 仓库更新（含本地修改暂存/恢复）与非 git 环境 ZIP 下载覆盖两种模式，`git stash` 暂存本地修改，更新后自动安装依赖；**不会自动启动服务器**，仅提示手动重启
+* **删除废弃 `services/easy_auth_db/` 模块**：密码直连验证模块已废弃，删除整个目录及 `services/rcon/easy_auth/` 中的引用，改密统一走 RCON 命令；同步删除关联文档 `docs/easyauth_bind_account_doc.md`
+
+### 修复
+
 * **IPv6 防火墙拦截模块**：防火墙设置页面新增「IPv6 拦截」开关，开启后所有 IPv6 连接（除 ::1 本地回环）直接被断开，拦截点覆盖连接层（Cheroot BanFilterConnection）、WSGI 层（FirewallWSGIWrapper）、中间件层（Flask before_request），三层兜底确保 IPv6 无法访问
 
 ### 修复

@@ -14,11 +14,12 @@ from routes.buildings import buildings_bp
 
 @buildings_bp.route('/buildings')
 def building_list():
-    """公共建筑列表（?my=1 展示当前用户的；默认展示全部）。"""
+    """公共建筑列表（?my=1 展示当前用户的；默认展示已审核通过的）。"""
     user = get_current_user()
     conn = get_db()
     try:
         if user and request.args.get('my'):
+            # 我的建筑：显示所有状态
             rows = conn.execute(
                 """
                 SELECT b.*, u.username as author_name
@@ -30,11 +31,13 @@ def building_list():
                 (user['id'],),
             ).fetchall()
         else:
+            # 公开列表：只显示已审核通过的
             rows = conn.execute(
                 """
                 SELECT b.*, u.username as author_name
                 FROM public_buildings b
                 LEFT JOIN users u ON b.author_id = u.id
+                WHERE b.status = 'approved'
                 ORDER BY b.published_at DESC, b.title ASC
                 """
             ).fetchall()
@@ -48,10 +51,17 @@ def building_list():
 @buildings_bp.route('/buildings/create', methods=['GET', 'POST'])
 @login_required
 def building_create():
-    """成员发布新公共建筑（发布即公开）。"""
+    """成员发布新公共建筑（需要审核）。"""
     user = get_current_user()
 
     if request.method == 'POST':
+        # 检查待审核内容上限
+        from core.helpers import check_pending_limit
+        allowed, msg = check_pending_limit(user)
+        if not allowed:
+            flash(msg, 'error')
+            return render_page('buildings/create.html', building=None)
+
         title = (request.form.get('title') or '').strip()
         warp_name = (request.form.get('warp_name') or '').strip()
         description = (request.form.get('description') or '').strip()
@@ -94,14 +104,14 @@ def building_create():
                 """
                 INSERT INTO public_buildings
                 (title, warp_name, description, usage_info, notes, author_id,
-                 status, published_at, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, 'approved', ?, ?, ?)
+                 status, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)
                 """,
-                (title, warp_name, description, usage_info, notes, user['id'], now, now, now),
+                (title, warp_name, description, usage_info, notes, user['id'], now, now),
             )
             conn.commit()
             record_activity(user_id=user['id'], content_type='building', content=title)
-            flash('公共建筑已发布', 'success')
+            flash('公共建筑已提交，等待管理员审核', 'success')
             return redirect(url_for('buildings.building_list', my=1))
         except Exception as e:
             conn.rollback()
@@ -150,6 +160,10 @@ def building_detail(building_id):
             abort(404)
 
         building = dict(row)
+
+        # 非审核通过且非作者本人，禁止查看
+        if building['status'] != 'approved' and (not user or building['author_id'] != user['id']):
+            abort(404)
 
         # 统计评论数
         c = conn.execute(

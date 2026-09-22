@@ -107,16 +107,7 @@ def change_password(username: str, new_password: str) -> Tuple[bool, str]:
     if not safe_user:
         return False, 'MC 用户名包含非法字符'
 
-    # 1. 数据库直连改密（优先）
-    try:
-        from services.easy_auth_db import change_password as db_change
-        db_ok, db_msg = db_change(safe_user, new_password)
-        if db_ok:
-            return True, db_msg
-    except Exception:
-        pass
-
-    # 2. RCON 命令改密（降级）
+    # RCON 命令改密
     cmd = _build_command('/auth update', username, new_password)
     if not cmd:
         return False, 'MC 用户名包含非法字符'
