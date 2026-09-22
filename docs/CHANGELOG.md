@@ -16,6 +16,7 @@
 * **管理后台建筑页 500**：`admin/buildings.html` 拒绝弹窗误用 `{{ modal_shell(...) }}`（把内容当参数传入）导致 `No caller defined`，改为标准 `{% call modal_shell(...) %}...{% endcall %}` 用法，页面正常渲染
 * **管理员操作 403（CSRF 根因修复）**：`admin/buildings.html`（5 个 POST 表单）和 `admin/firewall.html`（8 个 POST 表单）在所有 `<form method="POST">` 中添加 `{{ csrf_field() }}`，解决原生表单提交因缺少 CSRF Token 被 `core/csrf.py` 拦截返回 403 的问题；`fetch()`/JSON 请求不受影响（base.js 自动注入 `X-CSRF-Token` 头或 Content-Type: application/json 豁免）
 * **一键更新 ZIP 下载失败（File is not a zip file）**：`update.py` 原只使用单一镜像源下载且不校验内容，镜像返回 HTML 错误页时直接解压即报 `BadZipFile`。重构 `_try_download_zip()`：下载后校验 HTTP 状态码、`Content-Type`、ZIP 魔数（`PK\x03\x04`）及 `ZipFile.testzip()` CRC 完整性；`update_via_download()` 改为接收全部可用镜像列表，逐个尝试，失败自动回退到下一个镜像，全部失败才报错。修复进度条 `total_size=0` 时的除零隐患（用 `min(100, ...)` 钳制）
+* **一键更新彻底升级（多 URL 格式 + 全镜像回退）**：`update.py` 的归档下载逻辑全面增强——每个镜像尝试 2 种 URL 格式（标准 `archive/refs/heads/{branch}.zip` + GitHub 官方归档端点 `codeload.github.com/{repo}/zip/refs/heads/{branch}`），代理镜像的 codeload URL 通过替换域名前缀构造；全部可用镜像依次尝试，不再因前 2 个镜像失败就中止；新增分支回退（`main` → `master`）；取消 Content-Type 严格校验（部分代理对 ZIP 返回 `text/html`），改以 ZIP 魔数 `PK` 为准；解压后目录检测兼容有/无外层 `bhxz-{branch}/` 文件夹两种情况
 
 ### 新增
 

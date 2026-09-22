@@ -288,11 +288,36 @@ def update_via_git(skip_confirm=False):
     return True
 
 
+def _build_archive_urls(base_url, repo, branch):
+    """为一个镜像构造所有可能的归档下载 URL 列表。
+
+    不同镜像对归档 URL 格式的支持不同，全部尝试一遍。
+    codeload.github.com 是 GitHub 官方归档下载端点，通过代理成功率最高。
+    """
+    urls = []
+    # 格式 1：标准 archive URL（github.com 直连 + 部分代理支持）
+    urls.append(f'{base_url}{repo}/archive/refs/heads/{branch}.zip')
+
+    if base_url == 'https://github.com/':
+        # 官方直连：直接使用 codeload 端点
+        urls.append(f'https://codeload.github.com/{repo}/zip/refs/heads/{branch}')
+    else:
+        # 代理镜像：base_url 形如 'https://gh-proxy.net/https://github.com/'
+        # 提取代理域名前缀（第一个 https:// 到第二个 https:// 之间的部分）
+        parts = base_url.split('https://', 2)
+        if len(parts) >= 3:
+            proxy_domain = parts[1]  # e.g. 'gh-proxy.net/'
+            # 格式 2：通过代理访问 codeload.github.com 归档端点
+            urls.append(f'https://{proxy_domain}https://codeload.github.com/{repo}/zip/refs/heads/{branch}')
+    return urls
+
+
 def _try_download_zip(archive_url, zip_path):
     """尝试下载 ZIP 压缩包并校验内容合法性。
 
-    校验项：HTTP 状态码 200、Content-Type 为 zip/octet-stream/binary、
-    文件非空、ZIP 魔数为 PK。返回 (success: bool, error_msg: str)。
+    校验项：HTTP 状态码 200、文件非空、ZIP 魔数为 PK。
+    Content-Type 不严格校验（部分代理对 zip 返回 text/html），以魔数为准。
+    返回 (success: bool, error_msg: str)。
     """
     try:
         resp = urlopen_with_timeout(archive_url, timeout=120)
@@ -303,9 +328,6 @@ def _try_download_zip(archive_url, zip_path):
         code = resp.getcode()
         if code != 200:
             return False, f'HTTP {code}'
-        ctype = resp.headers.get('Content-Type', '')
-        if ctype and not any(t in ctype.lower() for t in ('zip', 'octet-stream', 'binary')):
-            return False, f'非 ZIP 响应 (Content-Type: {ctype})'
 
         total_size = int(resp.headers.get('Content-Length', 0))
         downloaded = 0
@@ -336,7 +358,10 @@ def _try_download_zip(archive_url, zip_path):
     with open(zip_path, 'rb') as f:
         magic = f.read(4)
     if magic[:2] != b'PK':
-        return False, f'文件不是有效 ZIP（前4字节: {magic!r}，镜像可能返回了错误页）'
+        # 可能是 HTML 错误页，读取前 100 字节用于调试
+        with open(zip_path, 'rb') as f:
+            preview = f.read(100)
+        return False, f'非 ZIP 内容（前4字节: {magic!r}，镜像返回错误页）'
 
     return True, ''
 
@@ -345,7 +370,8 @@ def update_via_download(mirrors, skip_confirm=False):
     """通过下载 zip 压缩包更新（非 git 仓库时使用）。
 
     mirrors: 镜像列表 [(ms, name, base_url), ...]，按延迟升序排列。
-    逐个镜像尝试下载，失败自动回退到下一个，全部失败才返回 False。
+    对每个镜像尝试多种归档 URL 格式（archive / codeload），全部失败再换下一个镜像。
+    所有镜像都失败才返回 False。
     """
     if not skip_confirm:
         print()
@@ -362,35 +388,50 @@ def update_via_download(mirrors, skip_confirm=False):
     tmp_dir = tempfile.mkdtemp(prefix='bhxz_update_')
     zip_path = os.path.join(tmp_dir, 'update.zip')
 
+    # 分支回退列表：先尝试配置的分支，再尝试常见分支名
+    branches = [GITHUB_BRANCH]
+    for b in ('main', 'master'):
+        if b not in branches:
+            branches.append(b)
+
     try:
-        # 逐个镜像尝试下载
+        # 逐个镜像 × 逐个分支 × 逐个 URL 格式 尝试
         success = False
         for i, (ms, name, base_url) in enumerate(mirrors):
-            archive_url = f'{base_url}{GITHUB_REPO}/archive/refs/heads/{GITHUB_BRANCH}.zip'
             log(f'尝试镜像 [{i+1}/{len(mirrors)}]: {name} ({ms}ms)', CYAN)
 
-            ok, err = _try_download_zip(archive_url, zip_path)
-            if not ok:
-                log(f'  下载失败: {err}', YELLOW)
-                continue
+            mirror_ok = False
+            for branch in branches:
+                urls = _build_archive_urls(base_url, GITHUB_REPO, branch)
+                for j, url in enumerate(urls):
+                    ok, err = _try_download_zip(url, zip_path)
+                    if not ok:
+                        log(f'  [{branch} / 格式{j+1}] 失败: {err}', YELLOW)
+                        continue
 
-            # 完整性校验：zipfile 能否正常打开 + CRC 校验
-            try:
-                with zipfile.ZipFile(zip_path, 'r') as zf:
-                    bad_file = zf.testzip()
-                if bad_file is not None:
-                    log(f'  ZIP 完整性校验失败: {bad_file}', YELLOW)
-                    continue
-            except zipfile.BadZipFile as e:
-                log(f'  ZIP 损坏: {e}', YELLOW)
-                continue
+                    # 完整性校验：zipfile 能否正常打开 + CRC 校验
+                    try:
+                        with zipfile.ZipFile(zip_path, 'r') as zf:
+                            bad_file = zf.testzip()
+                        if bad_file is not None:
+                            log(f'  [{branch} / 格式{j+1}] ZIP 完整性校验失败: {bad_file}', YELLOW)
+                            continue
+                    except zipfile.BadZipFile as e:
+                        log(f'  [{branch} / 格式{j+1}] ZIP 损坏: {e}', YELLOW)
+                        continue
 
-            success = True
-            log(f'  下载成功，使用镜像: {name}', GREEN)
-            break
+                    mirror_ok = True
+                    success = True
+                    log(f'  下载成功，使用镜像: {name} (分支: {branch})', GREEN)
+                    break
+                if mirror_ok:
+                    break
+
+            if success:
+                break
 
         if not success:
-            log('所有镜像源下载均失败，请检查网络后重试', RED)
+            log('所有镜像源与 URL 格式均失败，请检查网络后重试', RED)
             return False
 
         # 解压
@@ -400,11 +441,16 @@ def update_via_download(mirrors, skip_confirm=False):
         with zipfile.ZipFile(zip_path, 'r') as zf:
             zf.extractall(extract_dir)
 
-        # zip 内容在 "bhxz-main/" 目录下
+        # zip 内容在 "bhxz-{branch}/" 目录下（分支名可能不同）
         src_dirs = [d for d in os.listdir(extract_dir) if d.startswith('bhxz-')]
         if not src_dirs:
-            raise Exception('解压后未找到项目目录')
-        src_dir = os.path.join(extract_dir, src_dirs[0])
+            # 部分镜像解压后直接是项目根目录，没有外层文件夹
+            if 'app.py' in os.listdir(extract_dir):
+                src_dir = extract_dir
+            else:
+                raise Exception('解压后未找到项目目录')
+        else:
+            src_dir = os.path.join(extract_dir, src_dirs[0])
 
         # 排除文件列表
         exclude = {
