@@ -14,10 +14,12 @@
 ### 修复
 
 * **管理后台建筑页 500**：`admin/buildings.html` 拒绝弹窗误用 `{{ modal_shell(...) }}`（把内容当参数传入）导致 `No caller defined`，改为标准 `{% call modal_shell(...) %}...{% endcall %}` 用法，页面正常渲染
+* **管理员操作 403（CSRF 根因修复）**：`admin/buildings.html`（5 个 POST 表单）和 `admin/firewall.html`（8 个 POST 表单）在所有 `<form method="POST">` 中添加 `{{ csrf_field() }}`，解决原生表单提交因缺少 CSRF Token 被 `core/csrf.py` 拦截返回 403 的问题；`fetch()`/JSON 请求不受影响（base.js 自动注入 `X-CSRF-Token` 头或 Content-Type: application/json 豁免）
 * **一键更新 ZIP 下载失败（File is not a zip file）**：`update.py` 原只使用单一镜像源下载且不校验内容，镜像返回 HTML 错误页时直接解压即报 `BadZipFile`。重构 `_try_download_zip()`：下载后校验 HTTP 状态码、`Content-Type`、ZIP 魔数（`PK\x03\x04`）及 `ZipFile.testzip()` CRC 完整性；`update_via_download()` 改为接收全部可用镜像列表，逐个尝试，失败自动回退到下一个镜像，全部失败才报错。修复进度条 `total_size=0` 时的除零隐患（用 `min(100, ...)` 钳制）
 
 ### 新增
 
+* **统一表单控件宏（`macros/forms.html`）**：创建 `input_field`、`textarea_field`、`select_field` 三个 Jinja2 宏，使用全站统一的 `.input-field` CSS 类，支持 label、icon、help_text、required 等参数，统一输入框视觉风格（白色磨砂玻璃背景 + 蓝色聚焦光环）
 * **公共建筑审核流程回归**：用户发布建筑后进入待审核状态（`status=pending`），管理后台建筑管理页新增「待审核」状态标签、通过/拒绝按钮（可填拒绝原因），列表按待审核优先排序；公开列表仅展示已审核通过的建筑，作者可在「我的建筑」中查看全部状态
 * **一键更新脚本 rewrite**：根目录 [`update.py`](update.py) 完全重写——全平台兼容 Python 脚本，并发检测 15 个 GitHub 镜像源并自动选用延迟最低的，支持 `--yes` 静默模式，支持 git 仓库更新（含本地修改暂存/恢复）与非 git 环境 ZIP 下载覆盖两种模式，`git stash` 暂存本地修改，更新后自动安装依赖；**不会自动启动服务器**，仅提示手动重启
 * **删除废弃 `services/easy_auth_db/` 模块**：密码直连验证模块已废弃，删除整个目录及 `services/rcon/easy_auth/` 中的引用，改密统一走 RCON 命令；同步删除关联文档 `docs/easyauth_bind_account_doc.md`

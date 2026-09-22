@@ -119,18 +119,10 @@
         position: absolute; left: 14px; top: 50%; width: 17px; height: 17px;
         color: var(--text-muted); transform: translateY(-50%); pointer-events: none;
     }
-    .auth-shell .auth-input {
-        width: 100%; height: 46px; padding: 0 44px 0 43px; color: var(--text-primary);
-        outline: none; border: 1px solid var(--border-card); border-radius: 12px;
-        background: rgba(255,255,255,0.82); box-shadow: inset 0 1px 2px rgba(15,23,42,0.05);
-        transition: border-color .2s, box-shadow .2s, background .2s;
+    .auth-shell .input-field {
+        width: 100%; height: 46px; padding: 0 44px 0 43px;
     }
-    .auth-shell .auth-input::placeholder { color: var(--text-muted); }
-    .auth-shell .auth-input:hover { border-color: rgba(2,132,199,0.3); }
-    .auth-shell .auth-input:focus {
-        border-color: rgba(2,132,199,0.55); background: rgba(255,255,255,0.96);
-        box-shadow: 0 0 0 3px rgba(2,132,199,0.12);
-    }
+    .auth-shell .input-field::placeholder { color: var(--text-muted); }
     .auth-password-toggle {
         position: absolute; inset: 0 0 0 auto; width: 43px;
         display: grid; place-items: center; color: var(--text-muted);
@@ -264,14 +256,14 @@
                     <label for="login-username">用户名</label>
                     <div class="auth-control">
                         <i data-lucide="user-round"></i>
-                        <input type="text" id="login-username" name="username" required autocomplete="username" value="{{ submitted_username|default('', true) }}" class="auth-input" placeholder="请输入用户名">
+                        <input type="text" id="login-username" name="username" required autocomplete="username" value="{{ submitted_username|default('', true) }}" class="input-field" placeholder="请输入用户名">
                     </div>
                 </div>
                 <div class="auth-field">
                     <label for="login-password">密码</label>
                     <div class="auth-control">
                         <i data-lucide="lock-keyhole"></i>
-                        <input type="password" id="login-password" name="password" required autocomplete="current-password" class="auth-input" placeholder="请输入密码">
+                        <input type="password" id="login-password" name="password" required autocomplete="current-password" class="input-field" placeholder="请输入密码">
                         <button type="button" id="toggle-password" class="auth-password-toggle" title="显示密码" aria-label="显示密码" aria-pressed="false">
                             <i data-lucide="eye" class="w-4 h-4"></i>
                         </button>
@@ -289,7 +281,7 @@
                     <span class="auth-captcha-title">安全验证</span>
                     <p class="auth-captcha-note">登录失败次数较多，请完成验证后继续。</p>
                     <div class="auth-captcha-row">
-                        <input type="text" name="captcha" required autocomplete="off" autocapitalize="characters" spellcheck="false" minlength="4" maxlength="4" class="auth-input auth-captcha-input" placeholder="4 位验证码" aria-label="输入四位验证码，不区分大小写">
+                        <input type="text" name="captcha" required autocomplete="off" autocapitalize="characters" spellcheck="false" minlength="4" maxlength="4" class="input-field" placeholder="4 位验证码" aria-label="输入四位验证码，不区分大小写">
                         <input type="hidden" name="captcha_id" id="captcha-id" value="">
                         <img id="captcha-img" src="" alt="验证码加载中" class="auth-captcha-image" title="点击刷新验证码">
                         <button type="button" onclick="loadCaptcha()" class="auth-captcha-refresh" title="刷新验证码" aria-label="刷新验证码">

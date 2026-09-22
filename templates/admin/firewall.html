@@ -111,10 +111,12 @@
                   <button onclick="showBanDetail({{ ban.id }}, '{{ ban.ban_type }}')" class="text-blue-400 hover:text-blue-300 text-xs px-2 py-1 rounded bg-blue-500/10 border border-blue-500/20">详情</button>
                   {% if ban.ban_type == 'ip' %}
                   <form method="POST" action="{{ url_for('admin.admin_firewall_delete', ban_id=ban.id) }}" class="inline" onsubmit="return confirm('解除 {{ ban.identifier }}？');">
+                    {{ csrf_field() }}
                     <button type="submit" class="text-green-400 hover:text-green-300 text-xs px-2 py-1 rounded bg-green-500/10 border border-green-500/20">解封</button>
                   </form>
                   {% else %}
                   <form method="POST" action="{{ url_for('admin.admin_firewall_unban_account', ban_id=ban.id) }}" class="inline" onsubmit="return confirm('解封 {{ ban.username or ban.identifier }}？');">
+                    {{ csrf_field() }}
                     <button type="submit" class="text-green-400 hover:text-green-300 text-xs px-2 py-1 rounded bg-green-500/10 border border-green-500/20">解封</button>
                   </form>
                   {% endif %}
@@ -155,6 +157,7 @@
         </h2>
         <p class="text-xs text-red-400 mb-4">当前 IP：<code class="font-mono">{{ current_ip }}</code></p>
         <form method="POST" action="{{ url_for('admin.admin_firewall_ban_ip') }}">
+          {{ csrf_field() }}
           <div class="space-y-3">
             <div>
               <label class="block text-sm text-cream/70 mb-1">IP 地址</label>
@@ -180,6 +183,7 @@
           封禁账号
         </h2>
         <form method="POST" action="{{ url_for('admin.admin_firewall_ban_account') }}">
+          {{ csrf_field() }}
           <div class="space-y-3">
             <div>
               <label class="block text-sm text-cream/70 mb-1">用户 ID</label>
@@ -616,6 +620,7 @@
             IP 白名单
           </h2>
           <form method="POST" action="{{ url_for('admin.admin_firewall_whitelist_add') }}" class="flex gap-2 mb-4">
+            {{ csrf_field() }}
             <input type="text" name="ip_address" class="input-field flex-1 px-4 py-2 rounded-lg font-mono text-sm" placeholder="输入 IP 地址" required>
             <button type="submit" class="btn-primary px-4 py-2 rounded-lg text-sm whitespace-nowrap">添加</button>
           </form>
@@ -634,6 +639,7 @@
                   <td class="px-3 py-2 font-mono text-xs text-cream/80"><code>{{ ip }}</code></td>
                   <td class="px-3 py-2 text-right">
                     <form method="POST" action="{{ url_for('admin.admin_firewall_whitelist_remove') }}" class="inline" onsubmit="return confirm('移出白名单 {{ ip }}？');">
+                      {{ csrf_field() }}
                       <input type="hidden" name="ip_address" value="{{ ip }}">
                       <button type="submit" class="text-red-400 hover:text-red-300 text-xs px-2 py-1 rounded bg-red-500/10 border border-red-500/20">移除</button>
                     </form>
@@ -657,6 +663,7 @@
             账号白名单
           </h2>
           <form method="POST" action="{{ url_for('admin.admin_firewall_whitelist_account_add') }}" class="flex gap-2 mb-4">
+            {{ csrf_field() }}
             <input type="number" name="user_id" class="input-field flex-1 px-4 py-2 rounded-lg text-sm" placeholder="用户 ID" required>
             <input type="text" name="note" class="input-field w-32 px-4 py-2 rounded-lg text-sm" placeholder="备注">
             <button type="submit" class="btn-primary px-4 py-2 rounded-lg text-sm whitespace-nowrap">添加</button>
@@ -679,6 +686,7 @@
                   <td class="px-3 py-2 text-cream/40 text-xs">{{ entry.created_at[:16] }}</td>
                   <td class="px-3 py-2 text-right">
                     <form method="POST" action="{{ url_for('admin.admin_firewall_whitelist_account_remove') }}" class="inline" onsubmit="return confirm('将 {{ entry.username }} 移出白名单？');">
+                      {{ csrf_field() }}
                       <input type="hidden" name="user_id" value="{{ entry.user_id }}">
                       <button type="submit" class="text-red-400 hover:text-red-300 text-xs px-2 py-1 rounded bg-red-500/10 border border-red-500/20">移除</button>
                     </form>

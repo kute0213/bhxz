@@ -1,0 +1,149 @@
+{# ============================================================================
+   统一表单控件模板（磨砂玻璃风格）
+   
+   提供以下宏：
+     1. input_field()    — 标准文本/数字/密码/隐藏/文件等输入
+     2. textarea_field() — 多行文本输入
+     3. select_field()   — 下拉选择
+     4. form_actions()   — 表单操作按钮组（提交+取消）
+   
+   所有控件使用全局统一的 `.input-field` CSS 类（白色磨砂玻璃背景、
+   深色文字、蓝色聚焦光环），与全站设计语言一致。
+   
+   用法示例：
+     {% from 'macros/forms.html' import input_field, textarea_field, select_field %}
+     
+     {{ input_field('username', label='用户名', placeholder='输入用户名', icon='user') }}
+     {{ input_field('password', type='password', label='密码') }}
+     {{ textarea_field('content', label='内容', rows=5) }}
+     {{ select_field('category', options=[(1, '分类A'), (2, '分类B')], label='分类') }}
+   ============================================================================ #}
+
+
+{## 1. 文本/密码/数字等标准输入框
+ #
+ # 参数：
+ #   name        — name 属性（必填）
+ #   type        — input type（默认 'text'，可选 password/email/number/hidden/file/time/date）
+ #   value       — 默认值（默认 ''）
+ #   label       — 标签文字（默认 None = 不显示标签）
+ #   placeholder — placeholder 文字（默认 ''）
+ #   required    — 是否必填（默认 false）
+ #   disabled    — 是否禁用（默认 false）
+ #   readonly    — 是否只读（默认 false）
+ #   min         — 最小值（number 类型时生效）
+ #   max         — 最大值
+ #   step        — 步进值
+ #   class       — 附加 CSS 类（默认 ''）
+ #   icon        — lucide 图标名称（默认 None = 不显示图标）
+ #   help_text   — 帮助提示文字（默认 None）
+ #   accept      — file 类型的接受格式
+ #   extra_attrs — 额外 HTML 属性字典（如 {'autocomplete': 'off', 'data-foo': 'bar'}）
+ ##}
+{% macro input_field(name, type='text', value='', label=None, placeholder='',
+                      required=False, disabled=False, readonly=False,
+                      min=None, max=None, step=None,
+                      class='', icon=None, help_text=None, accept=None,
+                      extra_attrs=None) -%}
+{% set input_id = name | replace('.', '_') | replace('[', '_') | replace(']', '') %}
+<div class="form-group space-y-1.5">
+    {% if label %}
+    <label for="{{ input_id }}" class="block text-sm font-medium text-cream/80">
+        {{ label }}{% if required %}<span class="text-red-400 ml-0.5">*</span>{% endif %}
+    </label>
+    {% endif %}
+    <div class="relative">
+        {% if icon %}
+        <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-cream/40">
+            <i data-lucide="{{ icon }}" class="w-4 h-4"></i>
+        </div>
+        {% endif %}
+        <input type="{{ type }}" id="{{ input_id }}" name="{{ name }}"
+               value="{{ value }}" placeholder="{{ placeholder }}"
+               class="input-field w-full px-4 py-2.5 rounded-lg text-sm
+                      {% if icon %}pl-10{% endif %}
+                      {% if type == 'number' %}font-mono{% endif %}
+                      {% if class %}{{ class }}{% endif %}"
+               {% if required %}required{% endif %}
+               {% if disabled %}disabled{% endif %}
+               {% if readonly %}readonly{% endif %}
+               {% if min is not none %}min="{{ min }}"{% endif %}
+               {% if max is not none %}max="{{ max }}"{% endif %}
+               {% if step is not none %}step="{{ step }}"{% endif %}
+               {% if accept %}accept="{{ accept }}"{% endif %}
+               {% if extra_attrs %}{% for k, v in extra_attrs.items() %}{{ k }}="{{ v }}" {% endfor %}{% endif %}>
+    </div>
+    {% if help_text %}
+    <p class="text-xs text-cream/40 mt-1">{{ help_text }}</p>
+    {% endif %}
+</div>
+{%- endmacro %}
+
+
+{## 2. 多行文本输入框（textarea）
+ #
+ # 参数同 input_field，额外：
+ #   rows  — 行数（默认 4）
+ #   maxlength — 最大字符数
+ ##}
+{% macro textarea_field(name, value='', label=None, placeholder='',
+                         required=False, disabled=False, readonly=False,
+                         rows=4, maxlength=None,
+                         class='', help_text=None, extra_attrs=None) -%}
+{% set input_id = name | replace('.', '_') | replace('[', '_') | replace(']', '') %}
+<div class="form-group space-y-1.5">
+    {% if label %}
+    <label for="{{ input_id }}" class="block text-sm font-medium text-cream/80">
+        {{ label }}{% if required %}<span class="text-red-400 ml-0.5">*</span>{% endif %}
+    </label>
+    {% endif %}
+    <textarea id="{{ input_id }}" name="{{ name }}"
+              placeholder="{{ placeholder }}"
+              rows="{{ rows }}"
+              class="input-field w-full px-4 py-2.5 rounded-lg text-sm {% if class %}{{ class }}{% endif %}"
+              {% if required %}required{% endif %}
+              {% if disabled %}disabled{% endif %}
+              {% if readonly %}readonly{% endif %}
+              {% if maxlength is not none %}maxlength="{{ maxlength }}"{% endif %}
+              {% if extra_attrs %}{% for k, v in extra_attrs.items() %}{{ k }}="{{ v }}" {% endfor %}{% endif %}>{{ value }}</textarea>
+    {% if help_text %}
+    <p class="text-xs text-cream/40 mt-1">{{ help_text }}</p>
+    </p>
+    {% endif %}
+</div>
+{%- endmacro %}
+
+
+{## 3. 下拉选择框（select）
+ #
+ # 参数：
+ #   name     — name 属性（必填）
+ #   options  — 选项列表 [(value, label), ...]（必填）
+ #   selected — 选中值（默认 ''）
+ #   label    — 标签文字（默认 None）
+ #   required — 是否必填
+ #   disabled — 是否禁用
+ #   prompt   — 占位提示选项文字（默认 None = 不显示）
+ #   class    — 附加 CSS 类
+ ##}
+{% macro select_field(name, options, selected='', label=None,
+                       required=False, disabled=False,
+                       prompt=None, class='') -%}
+{% set input_id = name | replace('.', '_') | replace('[', '_') | replace(']', '') %}
+<div class="form-group space-y-1.5">
+    {% if label %}
+    <label for="{{ input_id }}" class="block text-sm font-medium text-cream/80">
+        {{ label }}{% if required %}<span class="text-red-400 ml-0.5">*</span>{% endif %}
+    </label>
+    {% endif %}
+    <select id="{{ input_id }}" name="{{ name }}"
+            class="input-field w-full px-4 py-2.5 rounded-lg text-sm {% if class %}{{ class }}{% endif %}"
+            {% if required %}required{% endif %}
+            {% if disabled %}disabled{% endif %}>
+        {% if prompt %}<option value="">{{ prompt }}</option>{% endif %}
+        {% for value, text in options %}
+        <option value="{{ value }}" {% if selected == value %}selected{% endif %}>{{ text }}</option>
+        {% endfor %}
+    </select>
+</div>
+{%- endmacro %}

@@ -127,22 +127,22 @@
                             return '<option value="' + o[0] + '">' + o[1] + '</option>';
                         }).join('');
                         inputHtml = `
-                            <select class="px-3 py-2 bg-forest-900/60 border border-cream/20 rounded-lg text-sm focus:outline-none focus:border-gold-400 transition-colors w-full sm:w-48">
+                            <select class="input-field w-full sm:w-48">
                                 ${opts}
                             </select>
                         `;
                     } else if (item.type === 'time') {
                         inputHtml = `
-                            <input type="time" class="px-3 py-2 bg-forest-900/60 border border-cream/20 rounded-lg text-sm focus:outline-none focus:border-gold-400 transition-colors w-full sm:w-32">
+                            <input type="time" class="input-field w-full sm:w-32">
                         `;
                     } else if (item.type === 'password') {
                         inputHtml = `
-                            <input type="password" placeholder="留空不修改" class="px-3 py-2 bg-forest-900/60 border border-cream/20 rounded-lg text-sm focus:outline-none focus:border-gold-400 transition-colors w-full sm:w-48">
+                            <input type="password" placeholder="留空不修改" class="input-field w-full sm:w-48">
                         `;
                     } else {
                         const typeAttr = item.type === 'int' ? 'type="number" step="1"' : (item.type === 'float' ? 'type="number" step="0.01"' : 'type="text"');
                         inputHtml = `
-                            <input ${typeAttr} class="px-3 py-2 bg-forest-900/60 border border-cream/20 rounded-lg text-sm focus:outline-none focus:border-gold-400 transition-colors w-full sm:w-48">
+                            <input ${typeAttr} class="input-field w-full sm:w-48">
                         `;
                     }
 
