@@ -6,11 +6,11 @@
 from flask import redirect, url_for, flash, request
 
 from core.auth import admin_required, get_current_user
-from core.helpers import render_page
+from utils.helpers import render_page
 from routes.admin import admin_bp
 import services.music as music_service
 from services.mail import email_service, music_review_result as build_result_html
-from core.shared.ip import get_client_ip
+from utils.shared.ip import get_client_ip
 
 
 def _notify_author_music_result(music_id, approved):

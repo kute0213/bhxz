@@ -14,7 +14,6 @@
 import weakref
 
 from routes.firewall.database import push_ban_context
-from routes.firewall.connection_filter import _check_ipv6_block
 
 
 class FirewallWSGIWrapper:
@@ -48,22 +47,17 @@ class FirewallWSGIWrapper:
             if ip in ('127.0.0.1', '::1', 'localhost'):
                 return self._app(environ, start_response)
 
-            # IPv6 拦截：检查是否为 IPv6 连接且开启了拦截
-            if ip and ':' in ip and ip != '::1':
-                from routes.firewall.connection_filter import _check_ipv6_block
-                _check_ipv6_block(ip, lambda ip_addr: self._close_connection(environ))
-
-            # 1) 黑名单拦截：直接断开连接，不返回任何 HTTP 响应
+            # 黑名单拦截：直接断开连接，不返回任何 HTTP 响应
             if self._fw.is_banned(ip):
                 self._close_connection(environ)
                 return self._empty_response(start_response)
 
-            # 2) 登记活跃连接
+            # 登记活跃连接
             conn = environ.get('cheroot.connection')
             if conn is not None:
                 self._track_connection(conn)
 
-            # 3) DDoS 计数 — 先推送请求上下文，供 ban_ip 自动记录封禁详情
+            # DDoS 计数 — 先推送请求上下文，供 ban_ip 自动记录封禁详情
             from config import get_config_value
             enabled = get_config_value('DDOS_GUARD_ENABLED', True)
             intensity = str(
@@ -83,42 +77,11 @@ class FirewallWSGIWrapper:
         return self._app(environ, start_response)
 
     def _close_connection(self, environ):
-        """尝试在 WSGI 层关闭底层连接，避免 HTTP 响应产生。
-
-        优先关闭 Cheroot 连接对象（连接级关闭，最彻底）；
-        无 Cheroot 时尝试关闭 werkzeug 的原始 socket。
-        """
-        # 方案 A：通过 cheroot.connection 关闭
+        """通过 Cheroot 连接对象关闭底层连接，避免 HTTP 响应产生。"""
         conn = environ.get('cheroot.connection')
         if conn is not None:
-            try:
-                conn.linger = False
-                conn.close()
-                return
-            except Exception:
-                pass
-
-        # 方案 B：werkzeug 环境，尝试关闭原始 socket
-        try:
-            sock = environ.get('werkzeug.socket')
-            if sock is not None:
-                sock.shutdown(2)  # SHUT_RDWR
-                sock.close()
-                return
-        except Exception:
-            pass
-
-        # 方案 C：通过 wsgi.input 的 raw 流拿到 socket（run_simple 下有用）
-        try:
-            wsgi_input = environ.get('wsgi.input')
-            if wsgi_input is not None:
-                raw = getattr(wsgi_input, 'raw', None) or getattr(wsgi_input, '_sock', None)
-                if raw is not None:
-                    raw.shutdown(2)
-                    raw.close()
-                    return
-        except Exception:
-            pass
+            conn.linger = False
+            conn.close()
 
     @staticmethod
     def _empty_response(start_response):
@@ -135,7 +98,4 @@ class FirewallWSGIWrapper:
         fw = self._fw
         if not hasattr(fw, '_conns') or fw._conns is None:
             fw._conns = {}
-        try:
-            fw._conns[id(conn)] = weakref.ref(conn)
-        except Exception:
-            pass
+        fw._conns[id(conn)] = weakref.ref(conn)

@@ -6,11 +6,11 @@
 from flask import redirect, url_for, flash
 
 from core.auth import admin_required, get_current_user
-from core.helpers import render_page
+from utils.helpers import render_page
 from core.db import get_db
 from routes.admin import admin_bp
 from services.user import admin_delete_user as _svc_delete_user, admin_toggle_admin as _svc_toggle_admin
-from core.shared.ip import get_client_ip
+from utils.shared.ip import get_client_ip
 
 
 @admin_bp.route('/admin/users')

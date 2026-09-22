@@ -7,7 +7,7 @@ from flask import request, jsonify
 
 from core.auth import login_required, get_current_user
 from core.db import get_db
-from core.shared.captcha import captcha_service
+from utils.shared.captcha import captcha_service
 from services.mail import email_service, guide_review_pending as build_pending_html
 from routes.guides import guides_bp
 

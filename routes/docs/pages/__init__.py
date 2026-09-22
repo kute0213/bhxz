@@ -2,7 +2,7 @@
 
 import os
 from flask import jsonify, abort
-from core.helpers import render_page
+from utils.helpers import render_page
 from routes.docs import docs_bp
 
 # docs/ 目录位于项目根目录下

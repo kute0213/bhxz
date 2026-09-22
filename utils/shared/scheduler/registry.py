@@ -17,7 +17,7 @@ import threading
 import time
 
 from core.system.logger import log
-from core.shared.scheduler.executors import TaskExecutor
+from utils.shared.scheduler.executors import TaskExecutor
 
 
 class TaskRegistry:

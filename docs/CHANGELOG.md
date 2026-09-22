@@ -8,6 +8,15 @@
 * **公共建筑审核流程回归**：用户发布建筑后进入待审核状态（`status=pending`），管理后台建筑管理页新增「待审核」状态标签、通过/拒绝按钮（可填拒绝原因），列表按待审核优先排序；公开列表仅展示已审核通过的建筑，作者可在「我的建筑」中查看全部状态
 * **一键更新脚本 rewrite**：根目录 [`update.py`](update.py) 完全重写——全平台兼容 Python 脚本，并发检测 15 个 GitHub 镜像源并自动选用延迟最低的，支持 `--yes` 静默模式，支持 git 仓库更新（含本地修改暂存/恢复）与非 git 环境 ZIP 下载覆盖两种模式，`git stash` 暂存本地修改，更新后自动安装依赖；**不会自动启动服务器**，仅提示手动重启
 * **删除废弃 `services/easy_auth_db/` 模块**：密码直连验证模块已废弃，删除整个目录及 `services/rcon/easy_auth/` 中的引用，改密统一走 RCON 命令；同步删除关联文档 `docs/easyauth_bind_account_doc.md`
+* **精简 `core/` 文件夹**：将 `core/shared/`、`core/helpers.py`、`core/template_context.py`、`core/errors.py` 移入新建的 `utils/` 目录，`core/` 仅保留 `db/`、`auth.py`、`csrf.py`、`middleware.py`、`server.py`、`system/` 核心胶水层
+* **FFmpeg 音频智能压缩**：新增 `_probe_bitrate()` 探测输入音频码率，低于目标值（AAC 128k / MP3 192k）时保持原码率，高于目标值时压缩到目标值，避免质量损失与无谓压缩
+
+### 删除
+
+* **IPv6 拦截冗余兜底**：删除 WSGI 层（`routes/firewall/wrappers.py`）与中间件层（`core/middleware.py`）的 IPv6 拦截，仅保留连接层（`connection_filter.py`）一处拦截
+* **`_close_connection` 多方案降级**：删除方案 B（werkzeug socket）/ 方案 C（wsgi.input raw），仅保留方案 A（cheroot connection 关闭）
+* **`_track_connection` 空异常吞没**：删除 `except Exception: pass`
+* **废弃 `core/shared/`、`core/helpers.py`、`core/template_context.py`、`core/errors.py`**：已迁移至 `utils/`
 
 ### 修复
 

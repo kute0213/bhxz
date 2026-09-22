@@ -3,10 +3,10 @@
 from flask import jsonify, abort
 
 from core.auth import admin_required, get_current_user
-from core.helpers import render_page
+from utils.helpers import render_page
 from routes.admin import admin_bp
 from services import background_service
-from core.shared.ip import get_client_ip
+from utils.shared.ip import get_client_ip
 
 
 @admin_bp.route('/admin/backgrounds')

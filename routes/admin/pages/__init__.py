@@ -1,7 +1,7 @@
 """管理后台页面路由：仪表盘。"""
 
 from core.auth import admin_required
-from core.helpers import render_page
+from utils.helpers import render_page
 from core.db import get_db
 from routes.admin import admin_bp
 

@@ -21,7 +21,7 @@ import threading
 from typing import Tuple
 
 from core.system.logger import log
-from core.shared.scheduler import register_task
+from utils.shared.scheduler import register_task
 
 # 延迟导入 Pillow，避免不必要的依赖检查
 _pil_available = None

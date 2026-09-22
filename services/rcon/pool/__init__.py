@@ -19,7 +19,7 @@ from typing import Optional, Tuple
 from mcrcon import MCRcon
 
 from config import get_config_value
-from core.shared.scheduler import register_task, unregister_task
+from utils.shared.scheduler import register_task, unregister_task
 
 
 class RCONConnectionPool:

@@ -9,10 +9,10 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from core.shared.scheduler import register_task, unregister_task
-from core.shared.scheduler.executors import TaskExecutor
-from core.shared.scheduler.registry import TaskRegistry
-from core.shared.scheduler.task import ScheduledTask, compute_backoff, parse_clock_time
+from utils.shared.scheduler import register_task, unregister_task
+from utils.shared.scheduler.executors import TaskExecutor
+from utils.shared.scheduler.registry import TaskRegistry
+from utils.shared.scheduler.task import ScheduledTask, compute_backoff, parse_clock_time
 
 
 # ---------------------------------------------------------------------------

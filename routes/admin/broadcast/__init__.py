@@ -9,7 +9,7 @@ from datetime import datetime
 from flask import request, jsonify
 
 from core.auth import admin_required, get_current_user
-from core.helpers import render_page
+from utils.helpers import render_page
 from core.db import get_db
 from services.mail import email_service, broadcast_message
 from services.mail.sanitize import sanitize_email_html, html_to_plain_text

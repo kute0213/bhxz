@@ -23,7 +23,7 @@ from config import (
     AUDIO_MAX_BYTES,
 )
 from core.system.logger import log
-from core.shared.process_utils import make_env, decode_output
+from utils.shared.process_utils import make_env, decode_output
 from services.music.constants import (
     HLS_SEGMENT_SECONDS,
     STATUS_PENDING,
@@ -79,20 +79,56 @@ def _probe_duration(src_path):
     return None
 
 
-def _build_transcode_cmd(src_path, playlist_path, seg_pattern, mp3_path, progress_file):
-    """构造 ffmpeg 转码命令：一次运行同时生成 HLS（m3u8+ts）与 MP3（唱片）。"""
+def _probe_bitrate(src_path):
+    """用 ffprobe 探测音频流码率（bps），失败返回 None。
+
+    如果输入源本身的码率低于目标码率，转码时应保持原码率而非有损压缩。
+    """
+    try:
+        proc = subprocess.run(
+            [FFPROBE_BIN, '-v', 'error', '-select_streams', 'a:0',
+             '-show_entries', 'stream=bit_rate',
+             '-of', 'default=noprint_wrappers=1:nokey=1', src_path],
+            capture_output=True, timeout=60, env=make_env(),
+        )
+        if proc.returncode == 0:
+            val = (decode_output(proc.stdout) or '').strip()
+            try:
+                return int(val) if val and val != 'N/A' else None
+            except (ValueError, TypeError):
+                return None
+    except Exception:
+        pass
+    return None
+
+
+def _build_transcode_cmd(src_path, playlist_path, seg_pattern, mp3_path, progress_file,
+                         aac_bitrate=None, mp3_bitrate=None):
+    """构造 ffmpeg 转码命令。
+
+    aac_bitrate / mp3_bitrate：输入音频本身的码率（bps）。
+    如果输入码率低于目标码率，则使用输入码率（避免有损压缩放大质量损失）；
+    如果输入码率高于或无法检测，则使用预设的目标码率。
+    目标码率：AAC→128k、MP3→192k。
+    """
+    AAC_TARGET = 128000   # 128 kbps
+    MP3_TARGET = 192000   # 192 kbps
+
+    aac_out = '128k' if aac_bitrate is None else f'{min(aac_bitrate, AAC_TARGET) // 1000}k'
+    mp3_out = '192k' if mp3_bitrate is None else f'{min(mp3_bitrate, MP3_TARGET) // 1000}k'
+
     cmd = [
         FFMPEG_BIN, '-y', '-loglevel', 'error', '-nostats',
         '-threads', str(FFMPEG_THREADS),
         '-i', src_path,
-        # 输出1：HLS 流（统一 AAC 128k，供大喇叭在线播放）
-        '-map', '0:a', '-c:a', 'aac', '-b:a', '128k', '-ac', '2',
+        # 输出1：HLS 流（AAC）
+        '-map', '0:a', '-c:a', 'aac', '-b:a', aac_out, '-ac', '2',
         '-hls_time', str(HLS_SEGMENT_SECONDS),
         '-hls_list_size', '0',
         '-hls_segment_filename', seg_pattern,
         '-f', 'hls', playlist_path,
         # 输出2：MP3（唱片文件）
-        '-map', '0:a', '-c:a', 'libmp3lame', '-b:a', '192k', '-ac', '2',
+        '-map', '0:a', '-c:a', 'libmp3lame', '-b:a', mp3_out, '-ac', '2',
         '-id3v2_version', '3', mp3_path,
         '-progress', progress_file,
     ]
@@ -345,7 +381,12 @@ def _run_upload_task(task_id, user_id, username, title, is_public,
         mp3_path = os.path.join(work_dir, 'index.mp3')
         progress_file = os.path.join(work_dir, 'progress.log')
         err_log = os.path.join(work_dir, 'transcode.err')
-        cmd = _build_transcode_cmd(src_path, playlist_path, seg_pattern, mp3_path, progress_file)
+        # 探测输入音频码率，低于目标码率时保持原码率不压缩
+        bitrate = _probe_bitrate(src_path)
+        cmd = _build_transcode_cmd(
+            src_path, playlist_path, seg_pattern, mp3_path, progress_file,
+            aac_bitrate=bitrate, mp3_bitrate=bitrate,
+        )
 
         with _upload_tasks_lock:
             duration = _upload_tasks.get(task_id, {}).get('duration')

@@ -13,7 +13,7 @@
   - 防火墙（routes/firewall）不使用本模块，保持独立实现
 
 用法：
-    from core.shared.scheduler import (
+    from utils.shared.scheduler import (
         register_task, unregister_task, start_task_scheduler, stop_task_scheduler,
     )
 
@@ -22,9 +22,9 @@
     unregister_task('my-task')
 """
 
-from core.shared.scheduler.executors import TaskExecutor
-from core.shared.scheduler.registry import TaskRegistry
-from core.shared.scheduler.task import ScheduledTask
+from utils.shared.scheduler.executors import TaskExecutor
+from utils.shared.scheduler.registry import TaskRegistry
+from utils.shared.scheduler.task import ScheduledTask
 
 # 全局单例：全站共享一个 tick 线程与执行线程池
 registry = TaskRegistry()

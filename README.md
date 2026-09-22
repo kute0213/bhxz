@@ -568,7 +568,7 @@ export ENABLE_SSL=1 && python app.py
 项目严格遵循 **MVC 式分层架构**，各层职责互不重叠：
 
 ```
-app.py ──→ routes/ ──→ services/ ──→ core/
+app.py ──→ routes/ ──→ services/ ──→ utils/ + core/
   │            │            │            │
   │         HTTP 层     业务逻辑层    基础设施层
   │            │            │            │
@@ -595,8 +595,8 @@ app.py ──→ routes/ ──→ services/ ──→ core/
 | ------ | ----------- | ----------------------------------------------- | --------------------------------- |
 | **入口** | `app.py`    | Flask 实例、蓝图注册、WSGI 服务器                          | 不得包含业务逻辑                          |
 | **路由** | `routes/`   | HTTP 请求解析、参数校验、Session 管理、响应构造                  | 不得包含 SQL、事务、业务逻辑                  |
-| **服务** | `services/` | 纯业务逻辑，Flask 无关，返回 `(success, data_or_error)` 元组 | 不得导入 Flask、不得直接操作 request/session |
-| **核心** | `core/`     | 数据库连接、认证装饰器、中间件、Web 工具、系统工具、防火墙                | 不得包含业务逻辑，不得导入 services            |
+| **工具** | `utils/`   | 无业务逻辑的纯工具（验证码、IP、限流、安全扫描、调度器、错误页、模板上下文、页面渲染） | 不含业务逻辑、不导入 services |
+| **核心** | `core/`     | 数据库连接、认证装饰器、中间件、CSRF 防护、服务器入口                                    | 不得包含业务逻辑，不得导入 services |
 
 ### 目录结构
 
@@ -605,26 +605,23 @@ workspace/
 ├── app.py                    # Flask 入口 + WSGI 服务器
 ├── config.py                 # 全局配置
 ├── requirements.txt          # Python 依赖
-├── core/                     # 基础设施层
-│   ├── auth/                 #   认证装饰器、密码哈希
-│   │   └── __init__.py
-│   ├── server/               #   WSGI 服务器与优雅关闭
-│   │   └── __init__.py
-│   ├── web/                  #   Web 层：中间件、CSRF、错误页
-│   │   ├── __init__.py, middleware.py, csrf.py, errors.py
-│   ├── system/               #   系统层：日志、启动检查、应用初始化
-│   │   ├── __init__.py, logger.py, startup_checks.py, init.py
-│   ├── shared/               #   共享工具
+├── update.py                 # 一键更新脚本
+├── utils/                    # 工具/辅助模块
+│   ├── shared/               #   通用工具
+│   │   ├── ip.py, captcha.py, ratelimit.py, validation.py
+│   │   ├── process_utils.py, security_scanner.py
 │   │   └── scheduler/        #   统一任务注册表（task / executors / registry）
+│   ├── helpers.py            #   页面渲染辅助函数
+│   ├── template_context.py   #   全局模板上下文注入
+│   └── errors.py             #   统一错误页渲染
+├── core/                     # 核心基础设施层（胶水层）
 │   ├── db/                   #   数据库连接与 schema
-│   ├── firewall/             #   高性能防火墙（DuckDB 引擎 + 连接级阻断 + DDoS 防护）
-│   │   ├── __init__.py       #   全局单例 + 统一 API
-│   │   ├── database.py       #   DuckDB 引擎
-│   │   ├── service.py        #   封禁/白名单/警告/自动封禁
-│   │   ├── connection_filter.py  # 连接级黑名单拦截 + 强制断开
-│   │   ├── ddos.py           #   DDoS 检测（防误判）
-│   │   ├── monitor.py        #   后台监控
-│   │   └── wrappers.py       #   WSGI 门禁
+│   ├── system/               #   系统层：日志、启动检查、应用初始化
+│   │   ├── init.py, logger.py, startup_checks.py
+│   ├── auth.py               #   认证装饰器、密码哈希
+│   ├── csrf.py               #   CSRF 防护
+│   ├── middleware.py          #   请求中间件（安全标头、攻击扫描）
+│   └── server.py             #   WSGI 服务器与优雅关闭
 ├── services/                 # 业务逻辑层（纯 Python，不依赖 Flask）
 │   ├── backup/               #   数据备份（/uploads/ 全量 zip 极限压缩）
 │   ├── discussion/           #   讨论区（帖子/回复/分类）
@@ -686,7 +683,7 @@ workspace/
 | 组件      | 异步方式                               |
 | ------- | ---------------------------------- |
 | 日志写入器   | 队列 + 后台线程批量写入                      |
-| 统一任务注册表 | 单 tick 线程每秒检测 + 共享线程池派发（`core/shared/scheduler/`，全站定时任务共用，防火墙除外） |
+| 统一任务注册表 | 单 tick 线程每秒检测 + 共享线程池派发（`utils/shared/scheduler/`，全站定时任务共用，防火墙除外） |
 | IP 地理信息 | 后台线程异步更新缓存                         |
 | CPU 监控  | 后台线程定期采样（2 秒）                      |
 
@@ -810,7 +807,7 @@ workspace/
 
 * **背景图片按屏幕比例最适配取图**：保存时自动记录图片自然宽高比（`backgrounds.ratio`，不再强制裁剪 16:9）；客户端在页面解析到背景元素后立即预加载（不等动画与其他脚本），自动携带屏幕宽高比与物理像素长边请求图片；服务端将所选档位中心裁剪到该比例后返回（结果缓存）。横屏/竖屏均获得与屏幕比例完全匹配且像素充足的图片，移动端清晰度大幅提升。
 
-* **统一定时调度算法**：新增 `core/shared/scheduler/` 统一定时调度（固定间隔含失败退避 / 每日时间点、优雅停止），已接入被驳回内容自动清理、每日备份、玩家列表追踪、验证码清理、连接池清理、站点地图刷新，行为与原逻辑一致。
+* **统一定时调度算法**：新增 `utils/shared/scheduler/` 统一定时调度（固定间隔含失败退避 / 每日时间点、优雅停止），已接入被驳回内容自动清理、每日备份、玩家列表追踪、验证码清理、连接池清理、站点地图刷新，行为与原逻辑一致。
 
 * **导航栏动画流畅度优化**：下拉 caret 与滚动收缩动画补上 `will-change: transform` 合成层提示，动画更流畅，视觉效果与时长完全不变。
 
@@ -887,7 +884,7 @@ workspace/
 
 * **一键更新重写**：重写 `services/updater/core.py` 更新逻辑，实现跨平台独立重启脚本（Windows 批处理 / Linux Shell），通过 `tasklist` 检测旧进程退出后启动新进程，解决 Windows 环境下更新后服务器无法正常重启的问题。修复前端日志重复显示问题，调整重启检测时机避免误判。
 
-- **启动健康检查取代更新脚本**：移除更新脚本功能，新增 `core/system/startup_checks.py`，每次启动固定运行服务器健康检查——数据库完整性、文件结构、配置完整性、uploads 目录结构检查，自动尝试修复且不删除任何文件。`core/system/init.py` 集成该检查，在数据库初始化前执行。
+- **启动健康检查**：新增 `core/system/startup_checks.py`，每次启动固定运行服务器健康检查——数据库完整性、文件结构、配置完整性、uploads 目录结构检查，自动尝试修复且不删除任何文件。`core/system/init.py` 集成该检查，在数据库初始化前执行。
 
 - **错误页面修复**：修复 403/404 错误页面未传递 `user` 上下文变量，导致登录用户显示"请登录"的问题。
 

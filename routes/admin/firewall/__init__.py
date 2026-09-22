@@ -3,7 +3,7 @@
 from flask import redirect, url_for, flash, request, jsonify
 
 from core.auth import admin_required, get_current_user
-from core.helpers import render_page
+from utils.helpers import render_page
 from routes.firewall.spam import SPAM_LIMITS
 from routes.firewall import (
     ban_ip, unban_ip, get_bans, get_whitelist,
@@ -15,7 +15,7 @@ from routes.firewall import (
     ban_ip_manual, ban_account_manual,  # 手动封禁（自动推送 context）
     get_combined_bans,                 # 合并封禁列表
 )
-from core.shared.ip import get_client_ip
+from utils.shared.ip import get_client_ip
 from config import (
     AUTO_BAN_ENABLED, AUTO_BAN_DURATION_MINUTES,
     AUTO_BAN_LOGIN_ENABLED, AUTO_BAN_REGISTER_ENABLED,

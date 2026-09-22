@@ -44,7 +44,7 @@ def validate_password(password: str) -> str | None:
     包含弱密码检查（常见易猜密码、序列密码、重复字符密码）。
     兼容旧数据：已有弱密码不受影响，仅在修改密码时应用新规则。
     """
-    from core.shared.validation import validate_password_strength
+    from utils.shared.validation import validate_password_strength
     valid, err = validate_password_strength(password)
     return None if valid else err
 

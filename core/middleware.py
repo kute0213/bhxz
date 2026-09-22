@@ -7,7 +7,7 @@ from flask import request, session
 from werkzeug.exceptions import HTTPException
 
 from core.system.logger import log
-from core.shared.ip import get_client_ip
+from utils.shared.ip import get_client_ip
 
 # 跳过公共文件服务的路径前缀（这些路径由 Flask 蓝图处理）
 ROUTE_PREFIXES = (
@@ -134,18 +134,11 @@ def register_hooks(app, try_serve_public):
         """IP 封禁兜底检查：被封 IP 直接断开，不产生页面。
 
         WSGI 门禁（FirewallWSGIWrapper）已拦截绝大多数被封 IP 的请求；
-        此钩子仅作为跨平台兜底（例如 Flask 开发服务器的 werkzeug 环境中，
-        WSGI 层关闭 socket 后仍可能由 werkzeug 的内部机制触发 before_request），
+        此钩子仅在 werkzeug 开发服务器等无 WSGI 门禁的环境下生效，
         不渲染页面、不查询额外数据，直接返回空 403 断开连接。
         """
         from routes.firewall import is_banned
         ip = get_client_ip()
-        # IPv6 拦截检查
-        if ip and ':' in ip and ip != '::1':
-            from config import get_config_value, IPV6_BLOCK_ENABLED
-            if get_config_value('IPV6_BLOCK_ENABLED', IPV6_BLOCK_ENABLED):
-                log('DEBUG', 'Firewall: IPv6 连接拦截挂断(werkzeug)', ip=ip)
-                return '', 403, {'Connection': 'close'}
         banned, _reason = is_banned(ip)
         if banned:
             return '', 403, {'Connection': 'close'}
@@ -164,9 +157,9 @@ def register_hooks(app, try_serve_public):
         if request.path.startswith('/static/'):
             return None
 
-        from core.shared.security_scanner import scan_request
+        from utils.shared.security_scanner import scan_request
         from routes.firewall import ban_suspicious_ip
-        from core.errors import render_error_page
+        from utils.errors import render_error_page
         attack_type, matched = scan_request(
             path=request.path,
             query_string=request.query_string.decode('utf-8', 'ignore'),

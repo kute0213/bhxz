@@ -17,7 +17,7 @@ from services.user import (
     register, login, forgot_password, check_username_available,
 )
 from core.system.logger import log
-from core.shared.ip import get_client_ip
+from utils.shared.ip import get_client_ip
 from routes.main import main_bp
 
 
