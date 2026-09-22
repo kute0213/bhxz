@@ -447,34 +447,14 @@ def run_update():
     # 解析参数
     skip_confirm = '--yes' in sys.argv or '-y' in sys.argv
 
-    # 检测最佳源（返回全部可用镜像列表，按延迟升序）
+    # 检测可用镜像（返回全部可用镜像列表，按延迟升序）
     mirrors = find_best_mirror()
     if not mirrors:
         log('无法连接到 GitHub，请检查网络后重试', RED)
         return False
-    base_url = mirrors[0][2]
 
-    # 判断是否为 git 仓库
-    has_git = os.path.isdir(os.path.join(PROJECT_ROOT, '.git'))
-    if has_git:
-        has_git_cmd = run_cmd('git --version', capture=True)[0] == 0
-        if not has_git_cmd:
-            has_git = False
-
-    # 执行更新
-    success = False
-    if has_git:
-        try:
-            # 设置远程仓库 URL（使用最佳源）
-            mirror_url = f'{base_url}{GITHUB_REPO}.git'
-            run_cmd(f'git remote set-url origin {mirror_url}', timeout=10)
-            success = update_via_git(skip_confirm)
-        except Exception as e:
-            log(f'git 更新失败: {e}', YELLOW)
-            log('降级到 ZIP 下载方式...', YELLOW)
-            success = update_via_download(mirrors, skip_confirm=True)
-    else:
-        success = update_via_download(mirrors, skip_confirm)
+    # 统一使用 ZIP 下载方式（即使有 Git 也更稳定）
+    success = update_via_download(mirrors, skip_confirm)
 
     if not success:
         log('更新失败！请检查后重试', RED)
