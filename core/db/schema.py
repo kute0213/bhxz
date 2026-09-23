@@ -1,8 +1,11 @@
 """数据库 schema 初始化 —— 建表、迁移、默认数据。"""
 
 import hashlib
+import sys
+import sqlite3
 from datetime import datetime
 
+from config import DB_PATH as _get_db_path
 from core.db.connection import get_db
 from core.system.logger import log
 
@@ -11,9 +14,20 @@ def init_db():
     """初始化数据库结构和默认数据。"""
     try:
         conn = get_db()
+    except sqlite3.OperationalError as e:
+        msg = str(e)
+        if '锁定' in msg or 'locked' in msg.lower():
+            print(f'[FATAL] 数据库被锁定: {msg}', file=sys.stderr)
+            print('[提示] 请打开任务管理器，结束所有 python.exe 进程后重试。', file=sys.stderr)
+        else:
+            print(f'[FATAL] 数据库连接失败: {msg}', file=sys.stderr)
+            print(f'[提示] 数据库路径: {_get_db_path}', file=sys.stderr)
+            print('[提示] 如果反复出现，请手动删除 uploads/db/ 下的 site.db-wal 和 site.db-shm 文件。', file=sys.stderr)
+        sys.stderr.flush()
+        raise
     except Exception as e:
-        print(f'[FATAL] init_db: 获取数据库连接失败: {e}', file=__import__('sys').stderr)
-        __import__('sys').stderr.flush()
+        print(f'[FATAL] init_db: 获取数据库连接失败: {e}', file=sys.stderr)
+        sys.stderr.flush()
         raise
 
     cursor = conn.cursor()

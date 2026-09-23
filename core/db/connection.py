@@ -31,49 +31,44 @@ def _migrate_legacy_db():
         log('INFO', 'DB', f'已迁移旧版数据库到 {DB_PATH}')
 
 
+def _cleanup_stale_wal_files():
+    """连接前清理残留的 WAL/SHM 文件。
+
+    上次进程崩溃或被强制结束后，-wal/-shm 文件可能残留并被 OS 锁定。
+    在连接数据库之前清理，避免 WAL 模式初始化时 disk I/O error。
+    """
+    for suffix in ('-wal', '-shm'):
+        stale = DB_PATH + suffix
+        if not os.path.isfile(stale):
+            continue
+        try:
+            os.remove(stale)
+        except PermissionError:
+            raise sqlite3.OperationalError(
+                f'数据库锁定：{stale} 被其他进程占用。\n'
+                f'请先关闭其他正在运行的实例（任务管理器结束 python.exe），然后重试。'
+            )
+        except Exception as e:
+            log('WARNING', 'DB', f'清理残留 {stale} 失败: {e}')
+
+
 def _create_connection():
     """创建并配置 SQLite 连接。"""
     _migrate_legacy_db()
-    # 确保数据库所在目录存在（Windows 下目录不存在会报 disk I/O error）
+    # 确保数据库所在目录存在
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
         os.makedirs(db_dir, exist_ok=True)
+    # 连接前清理残留 WAL/SHM 文件
+    _cleanup_stale_wal_files()
     conn = sqlite3.connect(
         DB_PATH,
         timeout=30,
         check_same_thread=False,
-        isolation_level=None,  # 自动提交模式：与旧行为一致，写入即时生效
+        isolation_level=None,  # 自动提交模式
     )
-    # 行对象：支持 keys() 与 ['列名'] 访问
     conn.row_factory = sqlite3.Row
-    # WAL 模式：读写并发、崩溃恢复、性能更优
-    # 某些情况下 WAL 会失败（残留 wal/shm 文件损坏、FAT32/网络盘不支持），
-    # 此时清理残留文件后重试，仍然失败则降级到 TRUNCATE 模式保证可用性
-    try:
-        conn.execute('PRAGMA journal_mode=WAL')
-    except sqlite3.OperationalError:
-        # 清理残留的 WAL/SHM 文件后重试
-        conn.close()
-        for suffix in ('-wal', '-shm'):
-            stale = DB_PATH + suffix
-            if os.path.isfile(stale):
-                try:
-                    os.remove(stale)
-                except Exception as e:
-                    log('WARNING', 'DB', f'清理残留 {stale} 失败: {e}')
-        conn = sqlite3.connect(
-            DB_PATH,
-            timeout=30,
-            check_same_thread=False,
-            isolation_level=None,
-        )
-        conn.row_factory = sqlite3.Row
-        try:
-            conn.execute('PRAGMA journal_mode=WAL')
-            log('INFO', 'DB', 'WAL 模式恢复成功（清理残留文件后）')
-        except sqlite3.OperationalError as e:
-            log('WARNING', 'DB', f'WAL 模式不可用，降级到 TRUNCATE: {e}')
-            conn.execute('PRAGMA journal_mode=TRUNCATE')
+    conn.execute('PRAGMA journal_mode=WAL')
     conn.execute('PRAGMA synchronous=NORMAL')
     conn.execute('PRAGMA foreign_keys=ON')
     conn.execute('PRAGMA busy_timeout=30000')
