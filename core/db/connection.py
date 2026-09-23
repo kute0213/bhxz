@@ -34,6 +34,10 @@ def _migrate_legacy_db():
 def _create_connection():
     """创建并配置 SQLite 连接。"""
     _migrate_legacy_db()
+    # 确保数据库所在目录存在（Windows 下目录不存在会报 disk I/O error）
+    db_dir = os.path.dirname(DB_PATH)
+    if db_dir:
+        os.makedirs(db_dir, exist_ok=True)
     conn = sqlite3.connect(
         DB_PATH,
         timeout=30,
@@ -43,7 +47,33 @@ def _create_connection():
     # 行对象：支持 keys() 与 ['列名'] 访问
     conn.row_factory = sqlite3.Row
     # WAL 模式：读写并发、崩溃恢复、性能更优
-    conn.execute('PRAGMA journal_mode=WAL')
+    # 某些情况下 WAL 会失败（残留 wal/shm 文件损坏、FAT32/网络盘不支持），
+    # 此时清理残留文件后重试，仍然失败则降级到 TRUNCATE 模式保证可用性
+    try:
+        conn.execute('PRAGMA journal_mode=WAL')
+    except sqlite3.OperationalError:
+        # 清理残留的 WAL/SHM 文件后重试
+        conn.close()
+        for suffix in ('-wal', '-shm'):
+            stale = DB_PATH + suffix
+            if os.path.isfile(stale):
+                try:
+                    os.remove(stale)
+                except Exception as e:
+                    log('WARNING', 'DB', f'清理残留 {stale} 失败: {e}')
+        conn = sqlite3.connect(
+            DB_PATH,
+            timeout=30,
+            check_same_thread=False,
+            isolation_level=None,
+        )
+        conn.row_factory = sqlite3.Row
+        try:
+            conn.execute('PRAGMA journal_mode=WAL')
+            log('INFO', 'DB', 'WAL 模式恢复成功（清理残留文件后）')
+        except sqlite3.OperationalError as e:
+            log('WARNING', 'DB', f'WAL 模式不可用，降级到 TRUNCATE: {e}')
+            conn.execute('PRAGMA journal_mode=TRUNCATE')
     conn.execute('PRAGMA synchronous=NORMAL')
     conn.execute('PRAGMA foreign_keys=ON')
     conn.execute('PRAGMA busy_timeout=30000')
