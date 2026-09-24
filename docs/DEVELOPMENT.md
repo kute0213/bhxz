@@ -214,6 +214,30 @@ render_page('admin/admin_users.html')          # ❌ 双重前缀
 
 链路 `routes → services → core` 之外，错误页由 `core/errors.py` 统一渲染 `error_simple.html`；邮件模板由 `services/mail/templates/` 独立渲染，均不受此规范影响。
 
+### 5. 宏导入方式（`import` 而非 `include`）
+
+使用 `templates/macros/` 下的宏时，**必须**用 `{% from ... import ... %}` 显式导入，**禁止**用 `{% include %}`。`include` 只渲染模板文件，不会把宏注入当前命名空间，调用时会抛 `UndefinedError: 'xxx' is undefined` 导致 500。
+
+导入语句统一放在 `{% extends %}` 之后、第一个 `{% block %}` 之前：
+
+```jinja
+{# ✅ 正确 #}
+{% extends "base.html" %}
+{% from 'macros/modal.html' import modal_shell, modal_close_script %}
+{% block content %}
+  {% call modal_shell('report-modal', size='sm', title='举报') %}...{% endcall %}
+{% endblock %}
+
+{# ❌ 错误：include 不会导入宏，modal_shell 未定义 → 500 #}
+{% extends "base.html" %}
+{% include 'macros/modal.html' %}
+{% block content %}
+  {% call modal_shell('report-modal', size='sm', title='举报') %}...{% endcall %}
+{% endblock %}
+```
+
+> 真实事故：`templates/buildings/detail.html` 用 `{% include 'macros/modal.html' %}` 引入弹窗宏，访问 `/buildings/<id>` 时 `modal_shell is undefined` 直接 500。
+
 ## 测试规范
 
 测试文件位于 `scripts/tests/`，运行：

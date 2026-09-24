@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from 'macros/modal.html' import modal_shell %}
 {% block title %}防火墙管理{% endblock %}
 {% block content %}
 <section class="page-container py-12">
@@ -707,7 +708,6 @@
   </div>
 </section>
 
-{% from 'macros/modal.html' import modal_shell %}
 {% call modal_shell('ban-detail-modal', size='lg', title='封禁详情',
                      icon='info', icon_color='blue', close_on_overlay='false') %}
     <div class="modal-body" id="detail-body">

@@ -780,6 +780,8 @@ workspace/
 
 ## 最近更新
 
+* **修复 `/buildings/<id>` 页面 500（`modal_shell is undefined`）+ 规范 Jinja2 宏导入**：`templates/buildings/detail.html` 原先用 `{% include 'macros/modal.html' %}` 引入弹窗宏，而 `include` 只渲染模板文件、**不会把宏注入当前命名空间**，导致访问公共建筑详情页时 `modal_shell is undefined` 直接 500。改用 `{% from 'macros/modal.html' import modal_shell, modal_close_script %}` 显式导入，并统一放在 `{% extends %}` 之后、第一个 `{% block %}` 之前；同步修正 `admin/guides.html`、`admin/firewall.html`、`admin/broadcast.html`、`admin/guide_form.html`、`auth/register.html`、`guides/form.html`、`discussion/create.html` 的宏导入位置，并修正 `admin/buildings.html` 拒绝弹窗把标题误传为 `size` 参数的问题。开发准则（`docs/DEVELOPMENT.md`）新增「宏导入方式（`import` 而非 `include`）」章节，并已用脚本对全站模板做语法编译 + 宏调用/导入一致性校验（0 处未导入）。
+
 * **修复管理员删除用户失败 + 清理废弃代码**：修复管理后台删除用户时因引用已删除的 `poll_votes`、`board_topics`、`board_replies` 表导致数据库操作失败的问题，改为级联清理 `discussion_topics`/`discussion_replies`（当前使用的讨论区表）；同步修复用户注销功能的相同问题，修复 `_clean_user_attachments` 函数引用废弃表的问题；优化 `routes/admin/mod_intros/__init__.py` 中三处嵌套 try-except 屎山代码为单层。
 
 * **防火墙迁移至路由层 + 公共建筑去审核 + robots.txt 安全增强**：防火墙模块从 `core/firewall/` 整体迁移至 `routes/firewall/`（路由层，更合理的分层），所有导入引用同步更新；公共建筑**发布即公开**，彻底移除管理员审核流程（删除 approve/reject 路由、模板按钮、仪表盘统计），管理员 403 问题一并修复；全站验证码统一使用 `core.shared.captcha.captcha_service` 单例；robots.txt 路由升级为函数式生成，根据策略自动附加 Crawl‑delay（5 秒）与敏感路径 Disallow 规则，配合 DDoS 防护的 `/robots.txt` 白名单，防止合法爬虫被防火墙误封；更新所有过期注释引用。

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from 'macros/modal.html' import modal_shell %}
 {% block title %}注册{% endblock %}
 {% block content %}
     <section class="page-container flex items-center justify-center py-12" id="register-form-section" style="display:{% if group_code_verified %}flex{% else %}none{% endif %};">
@@ -95,7 +96,6 @@
 {% endblock %}
 
 {% block page_modals %}
-{% from 'macros/modal.html' import modal_shell %}
 
 <!-- 群内验证码弹窗（每次打开注册页都需要输入） -->
 {% set modal_display = 'none' if group_code_verified else 'flex' %}

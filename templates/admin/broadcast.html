@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from 'macros/modal.html' import modal_shell %}
 {% block title %}广播邮件{% endblock %}
 
 {% block content %}
@@ -119,7 +120,6 @@
 {% endblock %}
 
 {% block page_modals %}
-    {% from 'macros/modal.html' import modal_shell %}
 {% call modal_shell('confirm-modal', size='sm', title='确认发送广播',
                      icon='alert-triangle', icon_color='red', close_on_overlay='false') %}
     <div class="modal-body">

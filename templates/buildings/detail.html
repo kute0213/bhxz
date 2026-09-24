@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from 'macros/modal.html' import modal_shell, modal_close_script %}
 {% block title %}{{ building.title }} - 公共建筑{% endblock %}
 {% block content %}
 <section class="page-container py-12">
@@ -111,8 +112,6 @@
     </div>
 </section>
 
-{% include 'macros/modal.html' %}
-
 {% call modal_shell('report-modal', size='sm', title='举报公共建筑', icon='flag', icon_color='red', close_on_overlay='false') %}
     <div class="modal-body">
         <p class="text-sm text-[var(--text-secondary)] mb-3">请说明举报 <b class="text-[var(--accent-blue)]">{{ building.title }}</b> 的原因：</p>
@@ -124,7 +123,6 @@
     </div>
 {% endcall %}
 
-{% from 'macros/modal.html' import modal_close_script %}
 {{ modal_close_script() }}
 {% endblock %}
 {% block extra_js %}

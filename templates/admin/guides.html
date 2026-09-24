@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from 'macros/modal.html' import modal_shell %}
 {% block title %}指南管理{% endblock %}
 {% block extra_style %}
 <style>
@@ -158,7 +159,6 @@ function rejectFromPreview() {
 {% endblock %}
 
 {% block page_modals %}
-{% from 'macros/modal.html' import modal_shell %}
 
 <!-- 拒绝弹窗 -->
 {% call modal_shell('reject-modal', size='sm', title='拒绝指南',
