@@ -306,24 +306,16 @@ def start_upload(user_id, username, title, is_public, upload_file, ip_address, t
     if ext not in MUSIC_ALLOWED_EXTENSIONS:
         return False, f'不支持的音频格式，仅支持：{"、".join(sorted(MUSIC_ALLOWED_EXTENSIONS))}'
 
-    # 音频魔数校验
-    _AUDIO_MAGIC = {
-        'mp3': [b'ID3', b'\xff\xfb', b'\xff\xf3'],
-        'wav': [b'RIFF'],
-        'ogg': [b'OggS'],
-        'flac': [b'fLaC'],
-        'm4a': None,
-        'mp4': None,
-    }
-    header = upload_file.read(8)
-    upload_file.seek(0)
-    expected_magics = _AUDIO_MAGIC.get(ext)
-    if expected_magics is not None:
-        if not any(header.startswith(m) for m in expected_magics):
-            return False, f'文件类型校验失败：{filename} 的文件头魔数与扩展名不匹配'
-    elif ext in ('mp4', 'm4a'):
-        if len(header) < 8 or header[4:8] != b'ftyp':
-            return False, f'文件类型校验失败：{filename} 的文件头魔数与扩展名不匹配'
+    # 音频安全校验（扩展名白名单 + 危险类型拦截 + 文件头魔数）
+    from routes.firewall.file_guard import check_upload, KIND_AUDIO
+    ok, message = check_upload(
+        upload_file, KIND_AUDIO,
+        max_bytes=AUDIO_MAX_BYTES,
+        allowed_extensions=MUSIC_ALLOWED_EXTENSIONS,
+        source='music',
+    )
+    if not ok:
+        return False, message
 
     task_id = uuid.uuid4().hex
     work_dir = os.path.join(UPLOAD_MUSIC_DIR, f'.tmp_{task_id}')

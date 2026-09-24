@@ -10,42 +10,47 @@ from core.helpers import render_page
 from core.shared.captcha import captcha_service
 from core.shared.ip import get_client_ip
 from routes.buildings import buildings_bp
+from services import buildings as buildings_service
 
 
 @buildings_bp.route('/buildings')
 def building_list():
-    """公共建筑列表（?my=1 展示当前用户的；默认展示已审核通过的）。"""
-    user = get_current_user()
-    conn = get_db()
-    try:
-        if user and request.args.get('my'):
-            # 我的建筑：显示所有状态
-            rows = conn.execute(
-                """
-                SELECT b.*, u.username as author_name
-                FROM public_buildings b
-                LEFT JOIN users u ON b.author_id = u.id
-                WHERE b.author_id = ?
-                ORDER BY b.updated_at DESC
-                """,
-                (user['id'],),
-            ).fetchall()
-        else:
-            # 公开列表：只显示已审核通过的
-            rows = conn.execute(
-                """
-                SELECT b.*, u.username as author_name
-                FROM public_buildings b
-                LEFT JOIN users u ON b.author_id = u.id
-                WHERE b.status = 'approved'
-                ORDER BY b.published_at DESC, b.title ASC
-                """
-            ).fetchall()
-        buildings = [dict(r) for r in rows]
-    finally:
-        conn.close()
+    """公共建筑列表。
 
-    return render_page('buildings/index.html', buildings=buildings, my_mode=bool(user and request.args.get('my')))
+    支持 ?my=1（我的建筑，显示全部状态）、?q=关键词（匹配标题与标签）、
+    ?tag=标签（精确筛选）。默认按收藏数倒序排列，每次加载 10 条，
+    前端点击「加载更多」通过 /api/buildings 继续获取。
+    """
+    user = get_current_user()
+    my_mode = bool(user and request.args.get('my'))
+    query = (request.args.get('q') or '').strip()
+    active_tag = (request.args.get('tag') or '').strip()
+
+    items, has_more = buildings_service.list_buildings(
+        search=query,
+        tag=active_tag,
+        page=1,
+        page_size=buildings_service.PAGE_SIZE,
+        author_id=user['id'] if user else None,
+        my_mode=my_mode,
+    )
+
+    favorite_ids = set()
+    if user:
+        favorite_ids = buildings_service.get_favorite_ids(
+            user['id'], [b['id'] for b in items]
+        )
+
+    return render_page(
+        'buildings/index.html',
+        buildings=items,
+        has_more=has_more,
+        my_mode=my_mode,
+        search_query=query,
+        active_tag=active_tag,
+        all_tags=buildings_service.get_all_tags(),
+        favorite_ids=favorite_ids,
+    )
 
 
 @buildings_bp.route('/buildings/create', methods=['GET', 'POST'])
@@ -67,6 +72,7 @@ def building_create():
         description = (request.form.get('description') or '').strip()
         usage_info = (request.form.get('usage_info') or '').strip()
         notes = (request.form.get('notes') or '').strip()
+        tags = buildings_service.normalize_tags(request.form.get('tags'))
 
         if not title or not warp_name or not description:
             flash('标题、领地名和介绍不能为空', 'error')
@@ -76,7 +82,7 @@ def building_create():
         from routes.firewall.content_filter import check_content_injection
         inj_result = check_content_injection(
             user_id=user['id'],
-            content=f'{title}\n{warp_name}\n{description}\n{usage_info}\n{notes}',
+            content=f'{title}\n{warp_name}\n{description}\n{usage_info}\n{notes}\n{tags}',
             content_type='building',
             ip_address=get_client_ip(),
             username=user['username'],
@@ -103,11 +109,11 @@ def building_create():
             conn.execute(
                 """
                 INSERT INTO public_buildings
-                (title, warp_name, description, usage_info, notes, author_id,
+                (title, warp_name, description, usage_info, notes, tags, author_id,
                  status, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
                 """,
-                (title, warp_name, description, usage_info, notes, user['id'], now, now),
+                (title, warp_name, description, usage_info, notes, tags, user['id'], now, now),
             )
             conn.commit()
             record_activity(user_id=user['id'], content_type='building', content=title)
@@ -129,32 +135,15 @@ def building_detail(building_id):
     conn = get_db()
     author_reported = False
     try:
-        if user:
-            row = conn.execute(
-                """
-                SELECT b.*, u.username as author_name
-                FROM public_buildings b
-                LEFT JOIN users u ON b.author_id = u.id
-                WHERE b.id = ?
-                """,
-                (building_id,),
-            ).fetchone()
-            # 检查当前用户是否已举报过此建筑
-            r = conn.execute(
-                "SELECT 1 FROM building_reports WHERE building_id = ? AND reporter_id = ? LIMIT 1",
-                (building_id, user['id']),
-            ).fetchone()
-            author_reported = r is not None
-        else:
-            row = conn.execute(
-                """
-                SELECT b.*, u.username as author_name
-                FROM public_buildings b
-                LEFT JOIN users u ON b.author_id = u.id
-                WHERE b.id = ?
-                """,
-                (building_id,),
-            ).fetchone()
+        row = conn.execute(
+            """
+            SELECT b.*, u.username as author_name
+            FROM public_buildings b
+            LEFT JOIN users u ON b.author_id = u.id
+            WHERE b.id = ?
+            """,
+            (building_id,),
+        ).fetchone()
 
         if not row:
             abort(404)
@@ -164,6 +153,30 @@ def building_detail(building_id):
         # 非审核通过且非作者本人，禁止查看
         if building['status'] != 'approved' and (not user or building['author_id'] != user['id']):
             abort(404)
+
+        # 收藏数
+        fav = conn.execute(
+            "SELECT COUNT(*) AS c FROM building_favorites WHERE building_id = ?",
+            (building_id,),
+        ).fetchone()
+        building['favorite_count'] = fav['c'] if fav else 0
+
+        # 当前用户是否已收藏
+        building['is_favorited'] = False
+        if user:
+            r = conn.execute(
+                "SELECT 1 FROM building_favorites WHERE building_id = ? AND user_id = ? LIMIT 1",
+                (building_id, user['id']),
+            ).fetchone()
+            building['is_favorited'] = r is not None
+
+        # 检查当前用户是否已举报过此建筑
+        if user:
+            r = conn.execute(
+                "SELECT 1 FROM building_reports WHERE building_id = ? AND reporter_id = ? LIMIT 1",
+                (building_id, user['id']),
+            ).fetchone()
+            author_reported = r is not None
 
         # 统计评论数
         c = conn.execute(

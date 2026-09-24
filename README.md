@@ -117,7 +117,7 @@ python scripts/build/package.py
 │   ├── admin/          # 管理后台（用户/备份/设置/日志/更新/游戏账号/指南/音乐/讨论等）
 │   ├── api/            # 公开 API（性能/统计/验证码/邮箱）
 │   ├── backgrounds/    # 背景图片页面
-│   ├── buildings/      # 公共建筑（页面+API，发布即公开，无需审核）
+│   ├── buildings/      # 公共建筑（页面+API，搜索/标签/收藏，发布需审核）
 │   ├── community/      # 社区留言板
 │   ├── discussion/     # 讨论区（页面+API）
 │   ├── docs/           # 文档页面
@@ -203,6 +203,12 @@ python scripts/build/package.py
 
 * DDoS 攻击防护（高性能防火墙模块 `routes/firewall/`）：独立 DuckDB 数据库存储封禁/白名单/警告/攻击日志，连接级阻断在请求解析前直接强制断开黑名单 TCP 连接（自定义 Cheroot BanFilterConnection），不返回任何 HTTP 响应，客户端收到连接重置/EOF。按检测强度统计单位时间窗口内每个 IP 的请求数（低/中/高三档，检测窗口 10 秒），**防误判机制**：静态资源（`.css/.js/.ico`）、媒体文件（`.mp3/.ts/.m3u8/.webp`）、公共路径（`/static/`、`/music/<id>.mp3`、`/robots.txt`、`/sitemap.xml`）不计入请求计数，音频下载不会误判为 DDoS。超阈值自动封禁来源 IP（首次限时封禁；屡教不改升级永久封禁）。后台监控线程同步黑名单镜像、强制关闭已建立的空闲连接（先注销连接管理器再关闭，线程安全），定时清理过期数据与 VACUUM。检测强度、封禁时长、永久封禁触发次数等可在线热更新，白名单 IP 不受影响。robots.txt 自动添加 Crawl‑delay 与敏感路径 Disallow 规则，防止合法爬虫被误封
 
+* **API 调用限流（`routes/firewall/api_guard.py`）**：所有 API 请求（`/api/` 前缀、带 `X-Requested-With: XMLHttpRequest` 或 `Accept: application/json`）按来源 IP 限流，**默认每分钟 60 次**；超限返回 429 JSON（含 `Retry-After`），计数存于内存缓存，刷新后随滚动窗口恢复；白名单 IP 与本地回环不受限。搜索、列表「加载更多」等前端 API 调用均纳入计数
+
+* **上传文件防火墙（`routes/firewall/file_guard.py`）**：统一校验附件 / 音频 / 图片上传——危险扩展名（html/svg/js/php/exe 等）直接拒绝；按上传场景限定扩展名白名单；校验文件头魔数，防止「改名伪装」（如 .html 改名 .png）；纯文本文件做内容嗅探拦截脚本标记。未知类型跳过魔数校验以尽可能不误判，被拦截的上传写入防火墙日志。已接入讨论/帖子附件、大喇叭音频、背景图片三条上传链路
+
+* **防火墙数据库单写入线程**：所有写操作经队列提交给唯一写入线程顺序执行，相邻写操作合并为事务批量提交，彻底避免多线程并发写入 DuckDB 导致的锁表；封禁 / 白名单 / 账号封禁等高频查询走内存缓存（定期同步），查询性能显著提升
+
 ### 服务器指南
 
 * 卡片式列表页，支持置顶与按标题自动排序
@@ -215,7 +221,9 @@ python scripts/build/package.py
 
 ### 公共建筑
 
-* 公共建筑列表页面，用户可发布自己的建筑（标题、领地名、介绍、使用方式、注意事项），**发布即公开，无需管理员审核**
+* 公共建筑列表页面，用户可发布自己的建筑（标题、领地名、介绍、使用方式、注意事项），**发布后进入待审核状态，管理员审核通过才公开**
+* **搜索与标签**：支持按标题与标签模糊搜索，标签可多选管理，列表默认**按收藏数量排序**
+* **收藏**：登录用户可收藏/取消收藏建筑，收藏数参与排序
 * 一键复制传送指令 `/res tp 领地名`
 * 评论功能：登录用户可发表评论，作者/管理员可删除评论
 * 举报功能：用户可举报违规建筑，管理员在后台可查看举报并删除建筑
@@ -223,7 +231,8 @@ python scripts/build/package.py
 
 ### 讨论区
 
-* 分类筛选、置顶优先、分页加载
+* 分类筛选、置顶优先
+* **列表每次加载 10 条**，点击「加载更多」通过 API 无刷新追加
 
 * 回复实时刷新（默认 5 秒）
 
@@ -298,6 +307,8 @@ python scripts/build/package.py
 ### 全站背景图片
 
 * 上传图片自动转为 WebP 格式（保持自然宽高比，保存时写入数据库 `ratio` 列；LANCZOS 缩放），自动生成 768/1280/1920 三档响应式变体
+
+* **缺失档位按需生成**：历史背景（开启响应式变体前上传）或变体生成失败时，请求的档位文件若不存在，服务端自动从主图按长边缩放生成并缓存为 WebP（不放大、原子写入、并发只生成一次），保证任意记录都能拿到与设备匹配的尺寸，不再一律回退主图
 
 * **按屏幕比例最适配取图**：页面解析到背景元素后立即预加载（不等动画与其他脚本），自动获取屏幕宽高比与物理像素长边，携带 `size` + `ratio` 参数请求图片；服务端将所选档位中心裁剪到该比例后返回（结果缓存），横屏/竖屏均拿到与屏幕完全匹配且像素充足的图片，避免多余像素传输
 
@@ -450,11 +461,38 @@ export ENABLE_SSL=1 && python app.py
 | ------ | ---------------------------------------------------- | ---------------- |
 | GET    | `/admin/game-accounts`                               | 游戏账号管理页面         |
 | GET    | `/admin/api/game-accounts/applications`              | 获取注册申请列表         |
+| GET    | `/admin/api/game-accounts/applications/list`         | 分页获取注册申请（每次 10 条，可选 `status` 筛选） |
 | POST   | `/admin/api/game-accounts/applications/<id>/approve` | 批准申请（自动 RCON 注册） |
 | POST   | `/admin/api/game-accounts/applications/<id>/reject`  | 驳回申请             |
 | GET    | `/admin/api/game-accounts/bans`                      | 获取封禁列表           |
 | POST   | `/admin/api/game-accounts/bans`                      | 封禁账号申请资格         |
 | DELETE | `/admin/api/game-accounts/bans/<username>`           | 解除封禁             |
+
+### 管理后台列表 API（管理员，分页）
+
+管理后台「用户 / 指南 / 音乐列表 / 讨论管理 / 背景图片 / 游戏账号申请」列表均为每次加载 10 条 + 点击「加载更多」无刷新追加，页面路由仅渲染第 1 页。
+
+| 方法 | 路径                                          | 说明                          |
+| -- | ------------------------------------------- | --------------------------- |
+| GET | `/admin/users/api/list`                     | 用户分页列表（`page`）              |
+| GET | `/admin/guides/api/list`                    | 指南分页列表（`page`）              |
+| GET | `/admin/music/api/list`                     | 音频分页列表（`type=all\|pending`，`page`） |
+| GET | `/admin/discussion/api/list`                | 帖子分页列表（`page`）              |
+| GET | `/admin/api/backgrounds`                    | 背景图片分页列表（`page`，可选 `status` 筛选） |
+| GET | `/admin/api/game-accounts/applications/list` | 注册申请分页列表（`status=pending\|approved\|rejected\|all`，`page`） |
+
+### 公共建筑 API（搜索 / 标签 / 收藏）
+
+公共建筑列表经 `GET /api/buildings` 无刷新搜索与分页加载（每次 10 条），搜索关键词同时匹配标题与标签；列表默认按收藏数量排序。所有接口均纳入 API 防火墙计数。
+
+| 方法   | 路径                                  | 说明                              |
+| ---- | ----------------------------------- | ------------------------------- |
+| GET  | `/api/buildings`                    | 搜索/分页列表（`q` 关键词、`tag` 标签、`page` 页码、`my=1` 我的建筑） |
+| POST | `/buildings/<id>/favorite`          | 收藏 / 取消收藏（需登录）                  |
+| POST | `/buildings/<id>/tags`              | 编辑标签（作者本人或管理员）                  |
+| POST | `/buildings/<id>/comment`           | 发表评论（需验证码）                      |
+| POST | `/buildings/comment/<id>/delete`    | 删除评论（作者/建筑作者/管理员）               |
+| POST | `/buildings/<id>/report`            | 举报建筑                            |
 
 ### 社区 AJAX 端点
 

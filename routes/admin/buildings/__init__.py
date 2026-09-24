@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from flask import redirect, url_for, flash
+from flask import jsonify, request
 
 from core.auth import admin_required
 from core.helpers import render_page
@@ -54,11 +54,11 @@ def admin_buildings():
 @admin_bp.route('/admin/buildings/<int:building_id>/approve', methods=['POST'])
 @admin_required
 def admin_building_approve(building_id):
-    """管理后台：通过建筑审核。"""
+    """管理后台：通过建筑审核（JSON API，前端无刷新）。"""
     conn = get_db()
     try:
         now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        conn.execute(
+        cur = conn.execute(
             """
             UPDATE public_buildings
             SET status = 'approved', published_at = ?, rejected_reason = '', updated_at = ?
@@ -67,27 +67,27 @@ def admin_building_approve(building_id):
             (now, now, building_id),
         )
         conn.commit()
-        flash('建筑已通过审核', 'success')
+        if cur.rowcount == 0:
+            return jsonify({'success': False, 'message': '建筑不存在或已处理'}), 404
+        return jsonify({'success': True, 'message': '建筑已通过审核', 'status': 'approved'})
     except Exception:
         conn.rollback()
-        flash('操作失败', 'error')
+        return jsonify({'success': False, 'message': '操作失败'}), 500
     finally:
         conn.close()
-
-    return redirect(url_for('admin.admin_buildings'))
 
 
 @admin_bp.route('/admin/buildings/<int:building_id>/reject', methods=['POST'])
 @admin_required
 def admin_building_reject(building_id):
-    """管理后台：拒绝建筑审核。"""
-    from flask import request
-    reason = (request.form.get('reason') or '').strip()
+    """管理后台：拒绝建筑审核（JSON API，前端无刷新）。"""
+    data = request.get_json(silent=True) or {}
+    reason = (data.get('reason') or request.form.get('reason') or '').strip()[:200]
 
     conn = get_db()
     try:
         now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        conn.execute(
+        cur = conn.execute(
             """
             UPDATE public_buildings
             SET status = 'rejected', rejected_reason = ?, updated_at = ?
@@ -96,53 +96,53 @@ def admin_building_reject(building_id):
             (reason, now, building_id),
         )
         conn.commit()
-        flash('建筑已拒绝', 'success')
+        if cur.rowcount == 0:
+            return jsonify({'success': False, 'message': '建筑不存在或已处理'}), 404
+        return jsonify({'success': True, 'message': '建筑已拒绝', 'status': 'rejected'})
     except Exception:
         conn.rollback()
-        flash('操作失败', 'error')
+        return jsonify({'success': False, 'message': '操作失败'}), 500
     finally:
         conn.close()
-
-    return redirect(url_for('admin.admin_buildings'))
 
 
 @admin_bp.route('/admin/buildings/<int:building_id>/delete', methods=['POST'])
 @admin_required
 def admin_building_delete(building_id):
-    """删除公共建筑及关联评论/举报。"""
+    """删除公共建筑及关联评论/举报（JSON API，前端无刷新）。"""
     conn = get_db()
     try:
         conn.execute("DELETE FROM building_comments WHERE building_id = ?", (building_id,))
         conn.execute("DELETE FROM building_reports WHERE building_id = ?", (building_id,))
-        conn.execute("DELETE FROM public_buildings WHERE id = ?", (building_id,))
+        cur = conn.execute("DELETE FROM public_buildings WHERE id = ?", (building_id,))
         conn.commit()
-        flash('建筑已删除', 'success')
+        if cur.rowcount == 0:
+            return jsonify({'success': False, 'message': '建筑不存在'}), 404
+        return jsonify({'success': True, 'message': '建筑已删除'})
     except Exception:
         conn.rollback()
-        flash('删除失败', 'error')
+        return jsonify({'success': False, 'message': '删除失败'}), 500
     finally:
         conn.close()
-
-    return redirect(url_for('admin.admin_buildings'))
 
 
 @admin_bp.route('/admin/buildings/report/<int:report_id>/dismiss', methods=['POST'])
 @admin_required
 def admin_building_report_dismiss(report_id):
-    """驳回举报（标记为已处理但不删除建筑）。"""
+    """驳回举报（标记为已处理但不删除建筑）（JSON API，前端无刷新）。"""
     conn = get_db()
     try:
         now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        conn.execute(
+        cur = conn.execute(
             "UPDATE building_reports SET status = 'dismissed', resolved_at = ? WHERE id = ?",
             (now, report_id),
         )
         conn.commit()
-        flash('举报已驳回', 'success')
+        if cur.rowcount == 0:
+            return jsonify({'success': False, 'message': '举报不存在或已处理'}), 404
+        return jsonify({'success': True, 'message': '举报已驳回'})
     except Exception:
         conn.rollback()
-        flash('操作失败', 'error')
+        return jsonify({'success': False, 'message': '操作失败'}), 500
     finally:
         conn.close()
-
-    return redirect(url_for('admin.admin_buildings'))

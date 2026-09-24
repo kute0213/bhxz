@@ -52,6 +52,9 @@ _crop_cache = {}
 _crop_cache_lock = threading.Lock()
 _CROP_CACHE_MAX = 32
 
+# 按需生成响应式变体的互斥锁（避免并发重复生成同一档位）
+_variant_lock = threading.Lock()
+
 # 上传任务进度
 _upload_tasks = {}
 _upload_tasks_lock = threading.Lock()
@@ -69,6 +72,17 @@ def _validate_image(upload):
     ext = (upload.filename.rsplit('.', 1)[-1] if '.' in upload.filename else '').lower()
     if ext not in ALLOWED_EXTENSIONS:
         raise ValueError('不支持的图片格式，支持：png、jpg、jpeg、gif、webp、bmp、tiff')
+
+    # 防火墙文件守卫：拒绝危险扩展名 + 校验文件头魔数（防改名伪装）
+    from routes.firewall.file_guard import check_upload, KIND_IMAGE
+    ok, message = check_upload(
+        upload, KIND_IMAGE,
+        max_bytes=USER_IMAGE_MAX_BYTES,
+        allowed_extensions=ALLOWED_EXTENSIONS,
+        source='background',
+    )
+    if not ok:
+        raise ValueError(message)
 
     raw = upload.stream.read(USER_IMAGE_MAX_BYTES + 1)
     if not raw:
@@ -344,6 +358,31 @@ def get_backgrounds(status=None, user_id=None):
         return [dict(r) for r in rows]
 
 
+ADMIN_PAGE_SIZE = 10
+
+
+def get_backgrounds_page(status=None, page=1, page_size=ADMIN_PAGE_SIZE):
+    """分页获取背景图片列表，返回 (items, total)。"""
+    if page < 1:
+        page = 1
+    with get_db() as conn:
+        conditions = []
+        params = []
+        if status is not None:
+            conditions.append('status = ?')
+            params.append(status)
+        where = ' AND '.join(conditions) if conditions else '1=1'
+
+        total = conn.execute(
+            f"SELECT COUNT(*) AS c FROM backgrounds WHERE {where}", params
+        ).fetchone()['c']
+        rows = conn.execute(
+            f"SELECT * FROM backgrounds WHERE {where} ORDER BY id DESC LIMIT ? OFFSET ?",
+            params + [page_size, (page - 1) * page_size],
+        ).fetchall()
+        return [dict(r) for r in rows], total
+
+
 def get_active_backgrounds():
     """获取所有已通过且标记为活跃的背景图片（按上传时间排序，最新在前）。"""
     with get_db() as conn:
@@ -361,11 +400,70 @@ def get_background(bg_id):
         return dict(row) if row else None
 
 
-def resolve_background_path(bg, size=None):
-    """按请求尺寸解析本地背景图片路径（不存在时回退主图）。
+def _variant_path(main_path, size):
+    """由主图路径推导指定档位变体文件路径（命名规则：<主名>_<size>.webp）。"""
+    return os.path.join(
+        os.path.dirname(main_path),
+        f'{os.path.splitext(os.path.basename(main_path))[0]}_{size}.webp',
+    )
 
-    规则：size 为空时返回主图；否则在响应式变体中取与目标最接近
-    且不小于目标的档位；该档位文件缺失时逐级回退到主图。
+
+def _ensure_variant(main_path, size):
+    """确保指定档位变体存在；缺失时按需从主图生成并落盘。
+
+    历史背景（开启响应式变体前上传）或变体生成失败时，磁盘上只有 1920px 主图，
+    直接回退主图会导致「拿不到合适尺寸」的图片。此处按需把主图缩放到目标档位
+    （长边 ≤ size，不放大）并缓存为 WebP，使任意记录都能自动获取与屏幕匹配的档位。
+    生成失败或主图本就不大于目标档位时安全回退主图。
+    """
+    variant_path = _variant_path(main_path, size)
+    if os.path.isfile(variant_path):
+        return variant_path
+
+    with _variant_lock:
+        # 双重检查：并发请求下只生成一次
+        if os.path.isfile(variant_path):
+            return variant_path
+        try:
+            with open(main_path, 'rb') as file:
+                raw = file.read()
+            image = Image.open(BytesIO(raw))
+            image = ImageOps.exif_transpose(image)
+            image.load()
+            w, h = image.size
+            long_edge = max(w, h)
+            if long_edge <= size:
+                # 主图本身不大于目标档位，无需额外生成
+                return main_path
+            scale = size / long_edge
+            new_size = (max(1, int(w * scale)), max(1, int(h * scale)))
+            image = image.resize(new_size, Image.Resampling.LANCZOS)
+            if image.mode not in ('RGB', 'RGBA'):
+                image = image.convert('RGBA' if 'transparency' in image.info else 'RGB')
+            output = BytesIO()
+            image.save(output, format='WEBP', quality=85, method=6)
+            data = output.getvalue()
+            if not data:
+                return main_path
+            # 原子写入：先写临时文件再替换，避免读到半成品
+            tmp_path = variant_path + '.tmp'
+            with open(tmp_path, 'wb') as file:
+                file.write(data)
+            os.replace(tmp_path, variant_path)
+            log('INFO', 'Background', '按需生成背景变体',
+                variant=os.path.basename(variant_path), size=size)
+            return variant_path
+        except Exception as exc:
+            log('WARNING', 'Background', f'按需生成 {size}px 变体失败: {exc}')
+            return main_path
+
+
+def resolve_background_path(bg, size=None):
+    """按请求尺寸解析本地背景图片路径（缺失档位自动按需生成）。
+
+    规则：size 为空时返回主图；否则在响应式变体中取不小于目标的最小档位；
+    该档位文件缺失时按需从主图生成（见 _ensure_variant），
+    生成不可用时才回退主图。
     """
     main_path = bg['file_path'] if bg else None
     if not main_path or not os.path.isfile(main_path):
@@ -374,7 +472,7 @@ def resolve_background_path(bg, size=None):
     if size is None:
         return main_path
 
-    # 选取不小于目标宽度的最小档位
+    # 选取不小于目标长边的最小档位
     chosen = None
     for s in sorted(RESPONSIVE_SIZES):
         if s >= size:
@@ -386,13 +484,7 @@ def resolve_background_path(bg, size=None):
     if chosen == PRIMARY_SIZE:
         return main_path
 
-    variant_path = os.path.join(
-        os.path.dirname(main_path),
-        f'{os.path.splitext(os.path.basename(main_path))[0]}_{chosen}.webp',
-    )
-    if os.path.isfile(variant_path):
-        return variant_path
-    return main_path
+    return _ensure_variant(main_path, chosen)
 
 
 def _crop_to_ratio(data, ratio):

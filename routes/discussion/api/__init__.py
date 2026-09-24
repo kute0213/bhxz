@@ -17,6 +17,7 @@ from services.discussion import (
     delete_topic as svc_delete_topic,
     get_replies_page, get_new_replies,
 )
+from services.discussion.topics import PAGE_SIZE, get_topics_page
 
 
 @discussion_bp.route('/discussion/<int:topic_id>/reply', methods=['POST'])
@@ -99,6 +100,31 @@ def delete_topic(topic_id):
     )
     return _respond(message, 'success' if success else 'error',
                     redirect_to=url_for('discussion.list'))
+
+
+@discussion_bp.route('/discussion/api/topics')
+def api_topics():
+    """帖子列表 API（分页，每次 10 条）。
+
+    参数：
+        page      页码，从 1 开始
+        category  分类 ID（可选）
+    """
+    try:
+        page = max(1, int(request.args.get('page', 1)))
+    except (TypeError, ValueError):
+        page = 1
+    category_id = request.args.get('category', type=int)
+
+    topics, total, total_pages = get_topics_page(category_id, page)
+    return jsonify({
+        'success': True,
+        'topics': topics,
+        'page': page,
+        'page_size': PAGE_SIZE,
+        'total': total,
+        'has_more': page < total_pages,
+    })
 
 
 @discussion_bp.route('/discussion/<int:topic_id>/api/replies')

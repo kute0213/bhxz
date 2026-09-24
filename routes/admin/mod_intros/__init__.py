@@ -1,8 +1,11 @@
-"""模组介绍管理路由：列表、增、改、删。"""
+"""模组介绍管理路由：列表、增、改、删。
+
+增/改/删统一返回 JSON，前端无刷新。
+"""
 
 import datetime
 
-from flask import redirect, url_for, flash, abort, request
+from flask import request, jsonify, abort
 
 from core.auth import admin_required, get_current_user
 from core.helpers import render_page
@@ -18,6 +21,17 @@ def _normalize_link(raw: str) -> str:
     if not link.startswith(('http://', 'https://')):
         link = 'https://' + link
     return link
+
+
+def _payload():
+    """读取请求体（兼容 JSON 与表单）。"""
+    data = request.get_json(silent=True) or {}
+    return {
+        'icon': (data.get('icon') or request.form.get('icon') or 'box').strip(),
+        'title': (data.get('title') or request.form.get('title') or '').strip(),
+        'content': (data.get('content') or request.form.get('content') or '').strip(),
+        'link': _normalize_link(data.get('link') or request.form.get('link') or ''),
+    }
 
 
 @admin_bp.route('/admin/mod-intros')
@@ -40,74 +54,76 @@ def manage_mod_intros():
 @admin_bp.route('/admin/mod-intros/add', methods=['POST'])
 @admin_required
 def add_mod_intro():
-    user = get_current_user()
+    """新增模组介绍（JSON API，前端无刷新）。"""
+    fields = _payload()
+    if not fields['title'] or not fields['content']:
+        return jsonify({'success': False, 'message': '标题与内容不能为空'}), 400
 
-    icon = request.form.get('icon', 'box').strip()
-    title = request.form.get('title', '').strip()
-    content = request.form.get('content', '').strip()
-    link = _normalize_link(request.form.get('link', ''))
-
-    if title and content:
-        conn = get_db()
-        try:
-            now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            conn.execute(
-                "INSERT INTO mod_intros (icon, title, content, link, created_at) VALUES (?, ?, ?, ?, ?)",
-                (icon, title, content, link, now)
-            )
-            conn.commit()
-            flash('模组介绍已添加', 'success')
-        except Exception:
-            conn.rollback()
-            flash('添加失败', 'error')
-        finally:
-            conn.close()
-
-    return redirect(url_for('admin.manage_mod_intros'))
+    conn = get_db()
+    try:
+        now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        cur = conn.execute(
+            "INSERT INTO mod_intros (icon, title, content, link, created_at) VALUES (?, ?, ?, ?, ?)",
+            (fields['icon'], fields['title'], fields['content'], fields['link'], now)
+        )
+        conn.commit()
+        return jsonify({
+            'success': True,
+            'message': '模组介绍已添加',
+            'intro': {
+                'id': cur.lastrowid,
+                'icon': fields['icon'],
+                'title': fields['title'],
+                'content': fields['content'],
+                'link': fields['link'],
+                'created_at': now,
+            },
+        })
+    except Exception:
+        conn.rollback()
+        return jsonify({'success': False, 'message': '添加失败'}), 500
+    finally:
+        conn.close()
 
 
 @admin_bp.route('/admin/mod-intros/<int:intro_id>/edit', methods=['POST'])
 @admin_required
 def edit_mod_intro(intro_id):
-    user = get_current_user()
+    """更新模组介绍（JSON API，前端无刷新）。"""
+    fields = _payload()
+    if not fields['title'] or not fields['content']:
+        return jsonify({'success': False, 'message': '标题与内容不能为空'}), 400
 
-    icon = request.form.get('icon', 'box').strip()
-    title = request.form.get('title', '').strip()
-    content = request.form.get('content', '').strip()
-    link = _normalize_link(request.form.get('link', ''))
-
-    if title and content:
-        conn = get_db()
-        try:
-            conn.execute(
-                "UPDATE mod_intros SET icon = ?, title = ?, content = ?, link = ? WHERE id = ?",
-                (icon, title, content, link, intro_id)
-            )
-            conn.commit()
-            flash('模组介绍已更新', 'success')
-        except Exception:
-            conn.rollback()
-            flash('更新失败', 'error')
-        finally:
-            conn.close()
-
-    return redirect(url_for('admin.manage_mod_intros'))
+    conn = get_db()
+    try:
+        cur = conn.execute(
+            "UPDATE mod_intros SET icon = ?, title = ?, content = ?, link = ? WHERE id = ?",
+            (fields['icon'], fields['title'], fields['content'], fields['link'], intro_id)
+        )
+        conn.commit()
+        if cur.rowcount == 0:
+            return jsonify({'success': False, 'message': '模组介绍不存在'}), 404
+        return jsonify({'success': True, 'message': '模组介绍已更新', 'intro': fields})
+    except Exception:
+        conn.rollback()
+        return jsonify({'success': False, 'message': '更新失败'}), 500
+    finally:
+        conn.close()
 
 
 @admin_bp.route('/admin/mod-intros/<int:intro_id>/delete', methods=['POST'])
 @admin_required
 def delete_mod_intro(intro_id):
-    user = get_current_user()
-
+    """删除模组介绍（JSON API，前端无刷新）。"""
     conn = get_db()
     try:
-        conn.execute("DELETE FROM mod_intros WHERE id = ?", (intro_id,))
+        cur = conn.execute("DELETE FROM mod_intros WHERE id = ?", (intro_id,))
         conn.commit()
-        flash('模组介绍已删除', 'success')
+        if cur.rowcount == 0:
+            return jsonify({'success': False, 'message': '模组介绍不存在'}), 404
+        return jsonify({'success': True, 'message': '模组介绍已删除'})
     except Exception:
         conn.rollback()
-        flash('删除失败', 'error')
+        return jsonify({'success': False, 'message': '删除失败'}), 500
     finally:
         conn.close()
-
-    return redirect(url_for('admin.manage_mod_intros'))

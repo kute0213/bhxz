@@ -12,7 +12,7 @@
         <!-- 建筑主体 -->
         <div class="pixel-card rounded-xl p-6 sm:p-8 mb-8">
             <div class="flex items-start justify-between gap-4 mb-4">
-                <div>
+                <div class="min-w-0">
                     <h1 class="text-2xl sm:text-3xl font-bold mb-2">{{ building.title }}</h1>
                     <div class="flex items-center gap-3 text-sm text-cream/60 flex-wrap">
                         <span class="flex items-center gap-1"><i data-lucide="user" class="w-4 h-4"></i>{{ building.author_name or '未知' }}</span>
@@ -20,12 +20,30 @@
                         <span class="flex items-center gap-1"><i data-lucide="eye" class="w-4 h-4"></i>{{ building.view_count or 0 }} 次浏览</span>
                         <span class="flex items-center gap-1"><i data-lucide="message-circle" class="w-4 h-4"></i>{{ building.comment_count }} 条评论</span>
                     </div>
+                    <div class="flex flex-wrap items-center gap-1.5 mt-3" id="building-tags-display">
+                        {% for t in (building.tags or '').split(',') if t %}
+                        <span class="inline-block px-2 py-0.5 rounded-full text-xs bg-[var(--accent-blue)]/10 text-[var(--accent-blue)] border border-[var(--accent-blue)]/20">#{{ t }}</span>
+                        {% endfor %}
+                        {% if user and (user.id == building.author_id or user.is_admin) %}
+                        <button type="button" id="edit-tags-btn" class="inline-flex items-center gap-1 text-xs text-cream/50 hover:text-gold-400 transition-colors px-2 py-0.5 rounded-full border border-dashed border-cream/20" title="编辑标签">
+                            <i data-lucide="tag" class="w-3 h-3"></i>编辑标签
+                        </button>
+                        {% endif %}
+                    </div>
                 </div>
-                {% if user and user.id != building.author_id %}
-                <button type="button" id="report-btn" class="flex-shrink-0 text-cream/40 hover:text-red-400 transition-colors p-2" title="举报此建筑">
-                    <i data-lucide="flag" class="w-5 h-5"></i>
-                </button>
-                {% endif %}
+                <div class="flex items-center gap-1 flex-shrink-0">
+                    <button type="button" id="building-fav-btn"
+                            class="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm border transition-colors {% if building.is_favorited %}border-amber-400/50 text-amber-300{% else %}border-cream/20 text-cream/70 hover:border-amber-400/50 hover:text-amber-300{% endif %}{% if not user %} opacity-60{% endif %}"
+                            title="{% if building.is_favorited %}取消收藏{% else %}收藏{% endif %}">
+                        <i data-lucide="heart" class="w-4 h-4{% if building.is_favorited %} fill-amber-400{% endif %}"></i>
+                        <span id="building-fav-count">{{ building.favorite_count or 0 }}</span>
+                    </button>
+                    {% if user and user.id != building.author_id %}
+                    <button type="button" id="report-btn" class="flex-shrink-0 text-cream/40 hover:text-red-400 transition-colors p-2" title="举报此建筑">
+                        <i data-lucide="flag" class="w-5 h-5"></i>
+                    </button>
+                    {% endif %}
+                </div>
             </div>
 
             <!-- 传送信息 -->
@@ -123,10 +141,30 @@
     </div>
 {% endcall %}
 
+{% call modal_shell('edit-tags-modal', size='sm', title='编辑标签', icon='tag', icon_color='blue', close_on_overlay='false') %}
+    <div class="modal-body">
+        <p class="text-sm text-[var(--text-secondary)] mb-3">用逗号分隔，最多 10 个，每个不超过 12 字。</p>
+        <input type="text" id="edit-tags-input" maxlength="150" class="input-field w-full px-4 py-3 rounded-lg"
+               value="{{ building.tags or '' }}" placeholder="例如: 城堡, 红石, 打卡点">
+    </div>
+    <div class="modal-footer">
+        <button type="button" class="btn-secondary" onclick="closeModal('edit-tags-modal')">取消</button>
+        <button type="button" class="btn-primary" id="edit-tags-save">保存</button>
+    </div>
+{% endcall %}
+
 {{ modal_close_script() }}
 {% endblock %}
-{% block extra_js %}
+{% block extra_script %}
 <script>
+var BUILDING_ID = {{ building.id }};
+var BUILDING_IS_LOGGED_IN = {{ 'true' if user else 'false' }};
+
+function bToast(msg, type) {
+    if (typeof Toast !== 'undefined' && Toast.show) { Toast.show(msg, type || 'success'); }
+    else { alert(msg); }
+}
+
 // ---- 一键复制传送指令 ----
 function copyTeleport() {
     var cmd = document.getElementById('tp-command').textContent.trim();
@@ -148,24 +186,98 @@ function fallbackCopy(text) {
     document.body.removeChild(ta);
 }
 
-// ---- 评论（验证码 + 提交） ----
+// ---- 收藏 / 取消收藏（无刷新） ----
+(function () {
+    var btn = document.getElementById('building-fav-btn');
+    if (!btn) return;
+    var countEl = document.getElementById('building-fav-count');
+    btn.addEventListener('click', function () {
+        if (!BUILDING_IS_LOGGED_IN) { bToast('请先登录后再收藏', 'error'); return; }
+        if (btn.dataset.busy === '1') return;
+        btn.dataset.busy = '1';
+        fetch('/buildings/' + BUILDING_ID + '/favorite', {
+            method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (!data.success) { bToast(data.message || '操作失败', 'error'); return; }
+            countEl.textContent = data.favorite_count;
+            var icon = btn.querySelector('svg') || btn.querySelector('i');
+            if (data.is_favorited) {
+                btn.classList.remove('border-cream/20', 'text-cream/70');
+                btn.classList.add('border-amber-400/50', 'text-amber-300');
+                btn.title = '取消收藏';
+                if (icon) icon.classList.add('fill-amber-400');
+            } else {
+                btn.classList.add('border-cream/20', 'text-cream/70');
+                btn.classList.remove('border-amber-400/50', 'text-amber-300');
+                btn.title = '收藏';
+                if (icon) icon.classList.remove('fill-amber-400');
+            }
+            bToast(data.message);
+        })
+        .catch(function () { bToast('操作失败，请重试', 'error'); })
+        .finally(function () { btn.dataset.busy = '0'; });
+    });
+})();
+
+// ---- 编辑标签（无刷新） ----
+(function () {
+    var openBtn = document.getElementById('edit-tags-btn');
+    var saveBtn = document.getElementById('edit-tags-save');
+    if (openBtn) openBtn.addEventListener('click', function () { openModal('edit-tags-modal'); });
+    if (!saveBtn) return;
+    saveBtn.addEventListener('click', function () {
+        var raw = document.getElementById('edit-tags-input').value;
+        saveBtn.disabled = true;
+        var formData = new FormData();
+        formData.append('tags', raw);
+        fetch('/buildings/' + BUILDING_ID + '/tags', {
+            method: 'POST', body: formData, headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (!data.success) { bToast(data.message || '保存失败', 'error'); return; }
+            closeModal('edit-tags-modal');
+            renderTags(data.tags);
+            bToast(data.message || '标签已保存');
+        })
+        .catch(function () { bToast('保存失败，请重试', 'error'); })
+        .finally(function () { saveBtn.disabled = false; });
+    });
+
+    function renderTags(tags) {
+        var wrap = document.getElementById('building-tags-display');
+        if (!wrap) return;
+        wrap.querySelectorAll('.tag-pill').forEach(function (n) { n.remove(); });
+        var editBtn = document.getElementById('edit-tags-btn');
+        (tags ? tags.split(',') : []).forEach(function (t) {
+            if (!t.trim()) return;
+            var span = document.createElement('span');
+            span.className = 'tag-pill inline-block px-2 py-0.5 rounded-full text-xs bg-[var(--accent-blue)]/10 text-[var(--accent-blue)] border border-[var(--accent-blue)]/20';
+            span.textContent = '#' + t.trim();
+            wrap.insertBefore(span, editBtn || null);
+        });
+    }
+})();
+
+// ---- 评论（验证码 + 提交，无刷新） ----
 (function () {
     var btn = document.getElementById('comment-submit-btn');
     var form = document.getElementById('comment-form');
     if (!btn || !form || typeof CaptchaModal === 'undefined') return;
 
     function doSubmitComment(captchaId, code) {
-        document.getElementById('comment-captcha-id').value = captchaId;
-        document.getElementById('comment-captcha').value = code;
-
         var content = document.getElementById('comment-input').value.trim();
-        if (!content) { alert('评论内容不能为空'); return; }
+        if (!content) { bToast('评论内容不能为空', 'error'); return; }
         btn.disabled = true; btn.textContent = '发布中...';
         var formData = new FormData();
         formData.append('content', content);
         formData.append('captcha_id', captchaId);
         formData.append('captcha', code);
-        fetch('/buildings/{{ building.id }}/comment', { method: 'POST', body: formData })
+        fetch('/buildings/' + BUILDING_ID + '/comment', {
+            method: 'POST', body: formData, headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
         .then(function(r) { return r.json(); })
         .then(function(data) {
             if (data.success) {
@@ -173,40 +285,42 @@ function fallbackCopy(text) {
                 var empty = list.querySelector('.text-center.py-8');
                 if (empty) empty.remove();
                 var div = document.createElement('div');
-                div.className = 'comment-item p-4 bg-black/[0.03] rounded-xl';
+                div.className = 'comment-item p-4 bg-black/[0.03] rounded-xl search-fade-in';
+                div.dataset.commentId = data.comment.id;
                 div.innerHTML =
                     '<div class="flex items-center justify-between mb-2">' +
-                    '<div class="flex items-center gap-2"><span class="text-sm font-medium text-cream/80">' + data.comment.username + '</span>' +
+                    '<div class="flex items-center gap-2"><span class="text-sm font-medium text-cream/80">' + escapeHtml(data.comment.username) + '</span>' +
                     '<span class="text-xs text-cream/40">' + data.comment.created_at.slice(0, 16) + '</span></div></div>' +
                     '<p class="text-sm text-cream/70 whitespace-pre-wrap">' + escapeHtml(data.comment.content) + '</p>';
                 list.insertBefore(div, list.firstChild);
                 document.getElementById('comment-input').value = '';
-                location.reload();
-            } else { alert(data.message); }
-        }).catch(function() { alert('评论失败，请重试'); })
+                bToast('评论已发布');
+            } else { bToast(data.message, 'error'); }
+        }).catch(function() { bToast('评论失败，请重试', 'error'); })
         .finally(function() { btn.disabled = false; btn.textContent = '发表评论'; });
     }
 
     btn.addEventListener('click', function (e) {
         e.preventDefault();
         var content = document.getElementById('comment-input').value.trim();
-        if (!content) { alert('评论内容不能为空'); return; }
+        if (!content) { bToast('评论内容不能为空', 'error'); return; }
         CaptchaModal.show('请完成图形验证码后发表评论', doSubmitComment);
     });
 })();
 
 function deleteComment(commentId) {
     if (!confirm('确定删除此评论？')) return;
-    var formData = new FormData();
-    fetch('/buildings/comment/' + commentId + '/delete', { method: 'POST', body: formData })
+    fetch('/buildings/comment/' + commentId + '/delete', {
+        method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
     .then(function(r) { return r.json(); })
     .then(function(data) {
         if (data.success) {
             var el = document.querySelector('.comment-item[data-comment-id="' + commentId + '"]');
             if (el) el.remove();
-            location.reload();
-        } else { alert(data.message); }
-    }).catch(function() { alert('删除失败'); });
+            bToast('评论已删除');
+        } else { bToast(data.message, 'error'); }
+    }).catch(function() { bToast('删除失败', 'error'); });
 }
 
 // ---- 举报 ----
@@ -215,15 +329,17 @@ document.getElementById('report-btn') && document.getElementById('report-btn').a
 });
 function submitReport() {
     var reason = document.getElementById('report-reason').value.trim();
-    if (!reason) { alert('请填写举报原因'); return; }
+    if (!reason) { bToast('请填写举报原因', 'error'); return; }
     var formData = new FormData();
     formData.append('reason', reason);
-    fetch('/buildings/{{ building.id }}/report', { method: 'POST', body: formData })
+    fetch('/buildings/' + BUILDING_ID + '/report', {
+        method: 'POST', body: formData, headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    })
     .then(function(r) { return r.json(); })
     .then(function(data) {
-        alert(data.message);
+        bToast(data.message, data.success ? 'success' : 'error');
         if (data.success) { closeModal('report-modal'); document.getElementById('report-reason').value = ''; }
-    }).catch(function() { alert('举报失败'); });
+    }).catch(function() { bToast('举报失败', 'error'); });
 }
 
 function escapeHtml(text) {

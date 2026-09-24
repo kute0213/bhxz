@@ -8,7 +8,7 @@
     <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         {{ page_header(
             title='大喇叭音频管理',
-            subtitle='共 ' ~ (musics|length) ~ ' 个音频，' ~ (pending_musics|length) ~ ' 个待审核',
+            subtitle='共 ' ~ musics_total ~ ' 个音频，' ~ pending_total ~ ' 个待审核',
             back_url=url_for('admin.admin_page'),
             back_text='返回管理中心',
             actions=[(url_for('main.music_page'), 'music', '前往大喇叭音频板块', 'btn-secondary')]
@@ -19,12 +19,11 @@
             {{ section_title(
                 title='待审核公开申请',
                 icon='clock',
-                extra='<span class="px-2 py-0.5 rounded-full text-xs font-bold bg-yellow-500/20 text-yellow-300 border border-yellow-500/30">' ~ (pending_musics|length) ~ '</span>' if pending_musics else ''
+                extra='<span data-pending-count class="px-2 py-0.5 rounded-full text-xs font-bold bg-yellow-500/20 text-yellow-300 border border-yellow-500/30">' ~ pending_total ~ '</span>'
             ) }}
-            {% if pending_musics %}
-            <div class="space-y-3">
+            <div data-pending-list class="space-y-3{% if not pending_musics %} hidden{% endif %}">
                 {% for m in pending_musics %}
-                <div class="pixel-card music-card rounded-xl p-4">
+                <div class="pixel-card music-card rounded-xl p-4" data-music-pending="{{ m.id }}">
                     <div class="flex flex-wrap items-center gap-3">
                         <div class="w-10 h-10 bg-yellow-500/20 rounded-lg flex items-center justify-center flex-shrink-0">
                             <i data-lucide="music" class="w-5 h-5 text-yellow-400"></i>
@@ -42,74 +41,263 @@
                             {{ music_copy_link_button(request.host_url.rstrip('/') ~ '/music/' ~ m.id ~ '.m3u8') }}
                             {{ music_mp3_link_button(m.id) }}
                             {{ music_duration_button(m.duration_seconds) }}
-                            <form method="POST" action="{{ url_for('admin.admin_music_review', music_id=m.id) }}" class="inline">
-                                {{ csrf_field() }}
-                                <input type="hidden" name="action" value="approve">
-                                <button type="submit" class="px-3 py-2 rounded-lg text-xs border border-green-500/30 text-green-300 hover:bg-green-500/10 transition-colors flex items-center gap-1.5">
-                                    <i data-lucide="check" class="w-3.5 h-3.5"></i>通过
-                                </button>
-                            </form>
-                            <form method="POST" action="{{ url_for('admin.admin_music_review', music_id=m.id) }}" class="inline"
-                                  onsubmit="return confirm('确定驳回此公开申请吗？驳回后音频将自动转为私有，用户可重新申请公开或删除。')">
-                                {{ csrf_field() }}
-                                <input type="hidden" name="action" value="reject">
-                                <button type="submit" class="px-3 py-2 rounded-lg text-xs border border-red-500/30 text-red-300 hover:bg-red-500/10 transition-colors flex items-center gap-1.5">
-                                    <i data-lucide="x" class="w-3.5 h-3.5"></i>驳回
-                                </button>
-                            </form>
+                            <button type="button"
+                                    class="admin-action px-3 py-2 rounded-lg text-xs border border-green-500/30 text-green-300 hover:bg-green-500/10 transition-colors flex items-center gap-1.5"
+                                    data-action-url="{{ url_for('admin.admin_music_review', music_id=m.id) }}"
+                                    data-action-payload='{"action":"approve"}'
+                                    data-action-remove="[data-music-pending='{{ m.id }}']"
+                                    data-action-success="已通过审核">
+                                <i data-lucide="check" class="w-3.5 h-3.5"></i>通过
+                            </button>
+                            <button type="button"
+                                    class="admin-action px-3 py-2 rounded-lg text-xs border border-red-500/30 text-red-300 hover:bg-red-500/10 transition-colors flex items-center gap-1.5"
+                                    data-action-url="{{ url_for('admin.admin_music_review', music_id=m.id) }}"
+                                    data-action-payload='{"action":"reject"}'
+                                    data-action-confirm="确定驳回此公开申请吗？驳回后音频将自动转为私有，用户可重新申请公开或删除。"
+                                    data-action-remove="[data-music-pending='{{ m.id }}']"
+                                    data-action-success="已驳回">
+                                <i data-lucide="x" class="w-3.5 h-3.5"></i>驳回
+                            </button>
                         </div>
                     </div>
                     <div class="mt-3">{{ music_audio_player(m.id) }}</div>
                 </div>
                 {% endfor %}
             </div>
-            {% else %}
-            {{ empty_state('暂无待审核的公开申请', 'check-circle') }}
-            {% endif %}
+            <div data-pending-empty{% if pending_musics %} class="hidden"{% endif %}>
+                {{ empty_state('暂无待审核的公开申请', 'check-circle') }}
+            </div>
+            <div class="mt-4 text-center">
+                <button type="button" data-pending-more class="btn-secondary px-5 py-2 rounded-lg text-xs{% if pending_musics|length >= pending_total %} hidden{% endif %}">加载更多</button>
+            </div>
         </div>
 
         <!-- 全部音频 -->
-        {% if musics %}
-        {% call data_table(headers=[('ID', 'left'), ('音频名称', 'left'), ('上传者', 'left'), ('标签', 'left'), ('状态', 'center'), ('上传时间', 'left'), ('操作', 'right')]) %}
-            {% for m in musics %}
-            <tr class="border-b border-forest-700/30 hover:bg-forest-800/30">
-                <td class="px-4 py-3 text-cream/60">{{ m.id }}</td>
-                <td class="px-4 py-3">
-                    <div class="text-cream/90">{{ m.title[:40] }}{% if m.title|length > 40 %}...{% endif %}</div>
-                    <div class="text-xs text-cream/50 mt-0.5">{{ request.host_url.rstrip('/') }}/music/{{ m.id }}.m3u8</div>
-                </td>
-                <td class="px-4 py-3 text-cream/70">{{ m.username or '未知' }}</td>
-                <td class="px-4 py-3">
-                    <div class="tags-display flex flex-wrap gap-1 max-w-56">{{ music_tags_list(m.tags) }}</div>
-                </td>
-                <td class="px-4 py-3 text-center">{{ music_status_badge(m.status) }}</td>
-                <td class="px-4 py-3 text-cream/60">{{ m.created_at[:10] }}</td>
-                <td class="px-4 py-3">
-                    <div class="flex items-center justify-end gap-2">
-                        <button type="button"
-                                class="edit-tags-btn px-2 py-1 rounded text-xs border border-cream/20 text-cream/70 hover:text-cream hover:border-cream/40 transition-colors flex items-center gap-1"
-                                data-id="{{ m.id }}" data-tags="{{ m.tags or '' }}" title="编辑标签">
-                            <i data-lucide="tags" class="w-3 h-3"></i>标签
-                        </button>
-                        <form method="POST" action="{{ url_for('admin.admin_music_delete', music_id=m.id) }}" class="inline"
-                              onsubmit="return confirm('确定要下架（删除）此音频吗？将同步删除数据库记录和音频文件，无法恢复。')">
-                            {{ csrf_field() }}
-                            <button type="submit" class="px-2 py-1 rounded text-xs border border-red-500/30 text-red-300 hover:bg-red-500/10 transition-colors flex items-center gap-1" title="下架（删除）">
+        <div data-music-table{% if not musics %} class="hidden"{% endif %}>
+            {% call data_table(headers=[('ID', 'left'), ('音频名称', 'left'), ('上传者', 'left'), ('标签', 'left'), ('状态', 'center'), ('上传时间', 'left'), ('操作', 'right')]) %}
+                {% for m in musics %}
+                <tr class="border-b border-forest-700/30 hover:bg-forest-800/30" data-music-row="{{ m.id }}">
+                    <td class="px-4 py-3 text-cream/60">{{ m.id }}</td>
+                    <td class="px-4 py-3">
+                        <div class="text-cream/90">{{ m.title[:40] }}{% if m.title|length > 40 %}...{% endif %}</div>
+                        <div class="text-xs text-cream/50 mt-0.5">{{ request.host_url.rstrip('/') }}/music/{{ m.id }}.m3u8</div>
+                    </td>
+                    <td class="px-4 py-3 text-cream/70">{{ m.username or '未知' }}</td>
+                    <td class="px-4 py-3">
+                        <div class="tags-display flex flex-wrap gap-1 max-w-56">{{ music_tags_list(m.tags) }}</div>
+                    </td>
+                    <td class="px-4 py-3 text-center" data-status-cell="{{ m.id }}">{{ music_status_badge(m.status) }}</td>
+                    <td class="px-4 py-3 text-cream/60">{{ m.created_at[:10] }}</td>
+                    <td class="px-4 py-3">
+                        <div class="flex items-center justify-end gap-2">
+                            <button type="button"
+                                    class="edit-tags-btn px-2 py-1 rounded text-xs border border-cream/20 text-cream/70 hover:text-cream hover:border-cream/40 transition-colors flex items-center gap-1"
+                                    data-id="{{ m.id }}" data-tags="{{ m.tags or '' }}" title="编辑标签">
+                                <i data-lucide="tags" class="w-3 h-3"></i>标签
+                            </button>
+                            <button type="button"
+                                    class="admin-action px-2 py-1 rounded text-xs border border-red-500/30 text-red-300 hover:bg-red-500/10 transition-colors flex items-center gap-1" title="下架（删除）"
+                                    data-action-url="{{ url_for('admin.admin_music_delete', music_id=m.id) }}"
+                                    data-action-confirm="确定要下架（删除）此音频吗？将同步删除数据库记录和音频文件，无法恢复。"
+                                    data-action-remove="tr"
+                                    data-action-success="音频已下架">
                                 <i data-lucide="trash-2" class="w-3 h-3"></i>下架
                             </button>
-                        </form>
-                    </div>
-                </td>
-            </tr>
-            {% endfor %}
-        {% endcall %}
-        {% else %}
-        {{ empty_state('暂无音频', 'music') }}
-        {% endif %}
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            {% endcall %}
+        </div>
+        <div data-music-empty{% if musics %} class="hidden"{% endif %}>
+            {{ empty_state('暂无音频', 'music') }}
+        </div>
+        <div class="mt-4 text-center">
+            <button type="button" data-music-more class="btn-secondary px-5 py-2 rounded-lg text-xs{% if musics|length >= musics_total %} hidden{% endif %}">加载更多</button>
+        </div>
     </div>
 </section>
 {% endblock %}
 
 {% block extra_script %}
 {{ music_player_assets() }}
+<script>
+// 音频管理：每次加载 10 条，点击「加载更多」走 API 追加（无刷新）
+(function () {
+    var CFG = {
+        apiUrl: "{{ url_for('admin.admin_music_api_list') }}",
+        playerUrl: "{{ url_for('main.serve_music_playlist', music_id=0) }}",
+        host: "{{ request.host_url.rstrip('/') }}",
+        pageSize: {{ page_size }}
+    };
+    var state = { pending: 1, all: 1 };
+
+    function esc(t) { var d = document.createElement('div'); d.textContent = t == null ? '' : String(t); return d.innerHTML; }
+    function refreshIcons() { if (typeof lucide !== 'undefined' && lucide.createIcons) { try { lucide.createIcons(); } catch (_) {} } }
+    function initPlayers() { if (typeof window.BhxzMusicPlayerInit === 'function') { try { window.BhxzMusicPlayerInit(); } catch (_) {} } }
+
+    function tagsHtml(m) {
+        var arr = m.tags_list || (m.tags || '').split(',').map(function (t) { return t.trim(); }).filter(Boolean);
+        if (!arr || !arr.length) return '';
+        return '<div class="flex flex-wrap items-center gap-1.5 mt-1.5">' + arr.map(function (t) {
+            return '<span class="inline-block px-2 py-0.5 rounded-full text-xs bg-gold-400/10 text-gold-300/90 border border-gold-400/20">#' + esc(t) + '</span>';
+        }).join('') + '</div>';
+    }
+
+    function inRowTagsHtml(m) {
+        var arr = m.tags_list || (m.tags || '').split(',').map(function (t) { return t.trim(); }).filter(Boolean);
+        if (!arr || !arr.length) return '';
+        return arr.map(function (t) {
+            return '<span class="inline-block px-2 py-0.5 rounded-full text-xs bg-gold-400/10 text-gold-300/90 border border-gold-400/20">#' + esc(t) + '</span>';
+        }).join('');
+    }
+
+    function playerHtml(id) {
+        return '<div class="music-player" data-src="' + CFG.playerUrl.replace('/0.m3u8', '/' + id + '.m3u8') + '" data-id="' + id + '">' +
+            '<button type="button" class="mp-play" aria-label="播放">' +
+                '<i data-lucide="play" class="mp-play-icon"></i><i data-lucide="pause" class="mp-pause-icon"></i></button>' +
+            '<div class="mp-main"><div class="mp-time"><span class="mp-current">0:00</span><span class="mp-duration">0:00</span></div>' +
+                '<div class="mp-progress" role="slider" aria-label="播放进度"><span class="mp-buffered"></span><span class="mp-fill"></span><span class="mp-thumb"></span></div></div>' +
+            '<div class="mp-controls"><div class="mp-speed"><button type="button" class="mp-btn mp-speed-btn" title="播放速度">1x</button><div class="mp-speed-menu"></div></div>' +
+                '<div class="mp-volume"><button type="button" class="mp-btn mp-vol-btn" title="音量"><i data-lucide="volume-2" class="mp-vol-icon-on"></i><i data-lucide="volume-x" class="mp-vol-icon-off"></i></button>' +
+                '<input type="range" class="mp-vol-slider" min="0" max="1" step="0.05" value="1" aria-label="音量"></div></div></div>';
+    }
+
+    function linkBtn(mod, cls, text, title) {
+        return '<button type="button" class="copy-link-btn px-3 py-2 rounded-lg text-xs border border-cream/20 text-cream/70 hover:text-cream hover:border-cream/40 transition-colors flex items-center gap-1.5" ' +
+            'data-url="' + CFG.host + '/music/' + mod.id + '.' + cls + '" title="' + title + '">' + text + '</button>';
+    }
+
+    function pendingCardHtml(m) {
+        var dur = m.duration_seconds
+            ? '<button type="button" class="copy-duration-btn px-3 py-2 rounded-lg text-xs border border-cream/20 text-cream/70 hover:text-cream hover:border-cream/40 transition-colors flex items-center gap-1.5" data-seconds="' + m.duration_seconds + '" title="复制音频总时长（秒）"><i data-lucide="timer" class="w-3.5 h-3.5"></i>时长 ' + m.duration_seconds + 's</button>'
+            : '';
+        var actions =
+            '<button type="button" class="admin-action px-3 py-2 rounded-lg text-xs border border-green-500/30 text-green-300 hover:bg-green-500/10 transition-colors flex items-center gap-1.5" ' +
+                'data-action-url="/admin/music/' + m.id + '/review" data-action-payload=\'{"action":"approve"}\' data-action-remove="[data-music-pending=\'' + m.id + '\']" data-action-success="已通过审核">' +
+                '<i data-lucide="check" class="w-3.5 h-3.5"></i>通过</button>' +
+            '<button type="button" class="admin-action px-3 py-2 rounded-lg text-xs border border-red-500/30 text-red-300 hover:bg-red-500/10 transition-colors flex items-center gap-1.5" ' +
+                'data-action-url="/admin/music/' + m.id + '/review" data-action-payload=\'{"action":"reject"}\' data-action-confirm="确定驳回此公开申请吗？驳回后音频将自动转为私有，用户可重新申请公开或删除。" data-action-remove="[data-music-pending=\'' + m.id + '\']" data-action-success="已驳回">' +
+                '<i data-lucide="x" class="w-3.5 h-3.5"></i>驳回</button>';
+
+        return '<div class="pixel-card music-card rounded-xl p-4" data-music-pending="' + m.id + '">' +
+            '<div class="flex flex-wrap items-center gap-3">' +
+                '<div class="w-10 h-10 bg-yellow-500/20 rounded-lg flex items-center justify-center flex-shrink-0"><i data-lucide="music" class="w-5 h-5 text-yellow-400"></i></div>' +
+                '<div class="flex-1 min-w-0">' +
+                    '<div class="font-bold text-cream truncate">' + esc(m.title) + '</div>' +
+                    '<div class="text-xs text-cream/50 mt-1 flex items-center gap-3">' +
+                        '<span class="flex items-center gap-1"><i data-lucide="user" class="w-3 h-3"></i>' + esc(m.username || '未知') + '</span>' +
+                        '<span>ID ' + m.id + '</span>' +
+                        '<span>' + esc((m.created_at || '').slice(0, 10)) + '</span></div>' +
+                    '<div class="tags-display">' + tagsHtml(m) + '</div></div>' +
+                '<div class="music-card-actions">' +
+                    linkBtn(m, 'm3u8', '<i data-lucide="copy" class="w-3.5 h-3.5"></i>复制广播m3u链接', '复制广播 m3u 链接（游戏内大喇叭在线播放用）') +
+                    linkBtn(m, 'mp3', '<i data-lucide="disc" class="w-3.5 h-3.5"></i>唱片 MP3', '复制唱片 MP3 链接（游戏内电脑下载后可烧录成唱片）') +
+                    dur + actions + '</div></div>' +
+            '<div class="mt-3">' + playerHtml(m.id) + '</div></div>';
+    }
+
+    function statusBadge(status) {
+        if (status === 2) return '<span class="inline-block px-2 py-0.5 rounded text-xs font-bold bg-green-500/20 text-green-300 border border-green-500/30">已公开</span>';
+        if (status === 1) return '<span class="inline-block px-2 py-0.5 rounded text-xs font-bold bg-yellow-500/20 text-yellow-300 border border-yellow-500/30">待审核</span>';
+        return '<span class="inline-block px-2 py-0.5 rounded text-xs font-bold bg-cream/10 text-cream/60 border border-cream/20">私有</span>';
+    }
+
+    function rowHtml(m) {
+        var title = m.title || '';
+        var shown = title.length > 40 ? title.slice(0, 40) + '...' : title;
+        return '<tr class="border-b border-forest-700/30 hover:bg-forest-800/30" data-music-row="' + m.id + '">' +
+            '<td class="px-4 py-3 text-cream/60">' + m.id + '</td>' +
+            '<td class="px-4 py-3"><div class="text-cream/90">' + esc(shown) + '</div>' +
+                '<div class="text-xs text-cream/50 mt-0.5">' + CFG.host + '/music/' + m.id + '.m3u8</div></td>' +
+            '<td class="px-4 py-3 text-cream/70">' + esc(m.username || '未知') + '</td>' +
+            '<td class="px-4 py-3"><div class="tags-display flex flex-wrap gap-1 max-w-56">' + inRowTagsHtml(m) + '</div></td>' +
+            '<td class="px-4 py-3 text-center" data-status-cell="' + m.id + '">' + statusBadge(m.status) + '</td>' +
+            '<td class="px-4 py-3 text-cream/60">' + esc((m.created_at || '').slice(0, 10)) + '</td>' +
+            '<td class="px-4 py-3"><div class="flex items-center justify-end gap-2">' +
+                '<button type="button" class="edit-tags-btn px-2 py-1 rounded text-xs border border-cream/20 text-cream/70 hover:text-cream hover:border-cream/40 transition-colors flex items-center gap-1" data-id="' + m.id + '" data-tags="' + esc(m.tags || '') + '" title="编辑标签"><i data-lucide="tags" class="w-3 h-3"></i>标签</button>' +
+                '<button type="button" class="admin-action px-2 py-1 rounded text-xs border border-red-500/30 text-red-300 hover:bg-red-500/10 transition-colors flex items-center gap-1" title="下架（删除）" data-action-url="/admin/music/' + m.id + '/delete" data-action-confirm="确定要下架（删除）此音频吗？将同步删除数据库记录和音频文件，无法恢复。" data-action-remove="tr" data-action-success="音频已下架"><i data-lucide="trash-2" class="w-3 h-3"></i>下架</button>' +
+                '</div></td></tr>';
+    }
+
+    function fetchPage(type, page) {
+        return fetch(CFG.apiUrl + '?type=' + type + '&page=' + page, {
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+        }).then(function (r) { return r.json(); });
+    }
+
+    function bindLoadMore(btn, type) {
+        if (!btn) return;
+        var render = type === 'pending' ? pendingCardHtml : rowHtml;
+        var container = type === 'pending'
+            ? document.querySelector('[data-pending-list]')
+            : document.querySelector('[data-music-table] tbody');
+        var emptyEl = document.querySelector(type === 'pending' ? '[data-pending-empty]' : '[data-music-empty]');
+        btn.addEventListener('click', function () {
+            if (btn.disabled) return;
+            btn.disabled = true;
+            var origText = btn.textContent;
+            btn.textContent = '加载中…';
+            fetchPage(type, state[type] + 1)
+                .then(function (data) {
+                    if (!data || !data.success) { Toast.error((data && data.message) || '加载失败'); return; }
+                    var items = data.musics || [];
+                    if (items.length && container) {
+                        container.insertAdjacentHTML('beforeend', items.map(render).join(''));
+                    }
+                    state[type] = data.page;
+                    btn.classList.toggle('hidden', !data.has_more);
+                    if (emptyEl) emptyEl.classList.toggle('hidden', true);
+                    refreshIcons();
+                    initPlayers();
+                })
+                .catch(function () { Toast.error('加载失败，请重试'); })
+                .finally(function () { btn.disabled = false; btn.textContent = origText; });
+        });
+    }
+
+    bindLoadMore(document.querySelector('[data-pending-more]'), 'pending');
+    bindLoadMore(document.querySelector('[data-music-more]'), 'all');
+
+    // 复制播放 / 唱片链接（事件委托，兼容动态加载的按钮）
+    document.addEventListener('click', function (e) {
+        var btn = e.target && e.target.closest ? e.target.closest('.copy-link-btn') : null;
+        if (!btn) return;
+        var url = btn.getAttribute('data-url') || '';
+        function done(ok) { if (typeof Toast !== 'undefined') { ok ? Toast.success('链接已复制') : Toast.error('复制失败，请手动复制'); } }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(url).then(function () { done(true); }, function () { done(false); });
+        } else {
+            var ta = document.createElement('textarea');
+            ta.value = url; ta.style.position = 'fixed'; ta.style.opacity = '0';
+            document.body.appendChild(ta); ta.select();
+            try { done(document.execCommand('copy')); } catch (_) { done(false); }
+            document.body.removeChild(ta);
+        }
+    });
+})();
+
+// 审核通过/驳回后，同步更新「全部音频」表格中对应行的状态徽章，并刷新待审核计数
+document.addEventListener('admin:action', function (e) {
+    var el = e.detail.el;
+    var m = /\/admin\/music\/(\d+)\/review/.exec(e.detail.url || '');
+    if (!m) return;
+    var musicId = m[1];
+    var action = 'approve';
+    try { action = (JSON.parse(el.getAttribute('data-action-payload') || '{}').action) || 'approve'; } catch (_) {}
+    var cell = document.querySelector('[data-status-cell="' + musicId + '"]');
+    if (cell) {
+        cell.innerHTML = action === 'approve'
+            ? '<span class="inline-block px-2 py-0.5 rounded text-xs font-bold bg-green-500/20 text-green-300 border border-green-500/30">已公开</span>'
+            : '<span class="inline-block px-2 py-0.5 rounded text-xs font-bold bg-cream/10 text-cream/60 border border-cream/20">私有</span>';
+    }
+    var countEl = document.querySelector('[data-pending-count]');
+    if (countEl) {
+        countEl.textContent = Math.max(0, (parseInt(countEl.textContent, 10) || 0) - 1);
+    }
+    var listEl = document.querySelector('[data-pending-list]');
+    var emptyEl = document.querySelector('[data-pending-empty]');
+    if (listEl && emptyEl) emptyEl.classList.toggle('hidden', listEl.children.length > 0);
+});
+</script>
 {% endblock %}

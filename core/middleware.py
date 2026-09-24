@@ -181,6 +181,37 @@ def register_hooks(app, try_serve_public):
         return None
 
     @app.before_request
+    def api_firewall_hook():
+        """API 防火墙：接口调用频率限制（默认每 IP 每分钟 60 次）。
+
+        计数由防火墙内存缓存维护，超限时直接返回 429 JSON（不进入业务逻辑）。
+        白名单 IP 与本地回环不受限制；非 API 请求不做任何处理。
+        """
+        from routes.firewall.api_guard import guard_api_request
+        resp = guard_api_request()
+        if resp is not None:
+            return resp
+        return None
+
+    @app.before_request
+    def api_limit_reset_hook():
+        """页面刷新清空 API 限流：普通页面请求（非 API）重置该 IP 的 API 计数。
+
+        满足「到达限制后防火墙封禁 API，但刷新后即可继续调用」的行为要求。
+        """
+        from routes.firewall.api_guard import is_api_request, reset_api_limit
+        if is_api_request(request):
+            return None
+        # 仅对浏览器页面导航（Accept 含 text/html）重置，避免爬虫/接口误触发
+        accept = request.headers.get('Accept', '') or ''
+        if 'text/html' not in accept:
+            return None
+        ip = get_client_ip()
+        if ip:
+            reset_api_limit(ip)
+        return None
+
+    @app.before_request
     def csrf_check_hook():
         """全站 CSRF 防护（除 /api/* 外所有 POST/PUT/DELETE/PATCH 请求）。"""
         from core.csrf import csrf_protect

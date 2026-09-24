@@ -42,6 +42,12 @@
                 <textarea name="notes" rows="3" class="input-field w-full px-4 py-3 rounded-lg" placeholder="其他人参观时需要注意的事项"></textarea>
             </div>
 
+            <div>
+                <label class="block text-sm font-medium mb-2 text-cream/80">标签 <span class="text-cream/40">（可选）</span></label>
+                <input type="text" name="tags" maxlength="150" class="input-field w-full px-4 py-3 rounded-lg" placeholder="例如: 城堡, 红石, 打卡点">
+                <p class="mt-1 text-xs text-cream/50">用逗号分隔，最多 10 个，每个不超过 12 字；搜索时会匹配标题与标签</p>
+            </div>
+
             <div class="pt-4 border-t border-forest-700/30">
                 <button type="button" id="show-captcha-btn" class="btn-primary w-full py-3 rounded-lg font-bold">
                     <i data-lucide="shield-check" class="w-5 h-5 inline-block mr-1"></i>验证并提交

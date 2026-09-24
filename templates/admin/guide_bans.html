@@ -19,8 +19,7 @@
         <!-- 创建封禁 -->
         <div class="pixel-card rounded-xl p-6 mb-8">
             <h2 class="text-lg font-bold mb-4">新建封禁</h2>
-            <form action="{{ url_for('admin.admin_guide_ban_create') }}" method="POST" class="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end">
-                {{ csrf_field() }}
+            <form id="guide-ban-form" data-action-url="{{ url_for('admin.admin_guide_ban_create') }}" class="grid grid-cols-1 sm:grid-cols-4 gap-4 items-end">
                 <div>
                     <label class="block text-sm text-cream/70 mb-1">封禁类型</label>
                     <select name="target_type" class="w-full px-4 py-2 rounded-lg bg-forest-900/60 border border-forest-700/50 text-cream focus:border-gold-400/50 focus:outline-none">
@@ -61,7 +60,7 @@
                             <th class="text-right px-4 py-3 font-medium">操作</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody id="guide-ban-tbody">
                         {% for ban in bans %}
                         <tr class="border-b border-forest-700/30 hover:bg-forest-800/20 transition-colors">
                             <td class="px-4 py-3 text-cream/40">{{ ban.id }}</td>
@@ -77,14 +76,16 @@
                             <td class="px-4 py-3 text-cream/60">{{ ban.banned_by_name or '未知' }}</td>
                             <td class="px-4 py-3 text-cream/60">{{ ban.expires_at[:16] if ban.expires_at else '永久' }}</td>
                             <td class="px-4 py-3 text-right">
-                                <form action="{{ url_for('admin.admin_guide_ban_delete', ban_id=ban.id) }}" method="POST" class="inline" onsubmit="return confirm('确定解除此封禁？');">
-                                    {{ csrf_field() }}
-                                    <button type="submit" class="text-green-400 hover:text-green-300 text-xs px-2 py-1 rounded bg-green-500/10 border border-green-500/20">解除</button>
-                                </form>
+                                <button type="button"
+                                        class="admin-action text-green-400 hover:text-green-300 text-xs px-2 py-1 rounded bg-green-500/10 border border-green-500/20"
+                                        data-action-url="{{ url_for('admin.admin_guide_ban_delete', ban_id=ban.id) }}"
+                                        data-action-confirm="确定解除此封禁？"
+                                        data-action-remove="tr"
+                                        data-action-success="封禁已解除">解除</button>
                             </td>
                         </tr>
                         {% else %}
-                        <tr>
+                        <tr data-empty-row>
                             <td colspan="7" class="px-4 py-8 text-center text-cream/40">暂无封禁记录</td>
                         </tr>
                         {% endfor %}
@@ -94,4 +95,93 @@
         </div>
     </div>
 </section>
+{% endblock %}
+{% block extra_script %}
+<script>
+// 新建封禁：JSON 提交，成功后插入表格行（无需刷新页面）
+(function () {
+    var form = document.getElementById('guide-ban-form');
+    if (!form) return;
+    var url = form.getAttribute('data-action-url');
+    var btn = form.querySelector('button[type="submit"]');
+
+    function cell(text, cls) {
+        var td = document.createElement('td');
+        td.className = cls || 'px-4 py-3 text-cream/60';
+        td.textContent = text;
+        return td;
+    }
+
+    form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var payload = {
+            target_type: form.querySelector('[name="target_type"]').value,
+            target_value: form.querySelector('[name="target_value"]').value.trim(),
+            duration_days: form.querySelector('[name="duration_days"]').value.trim(),
+            reason: form.querySelector('[name="reason"]').value.trim()
+        };
+        if (!payload.target_value) return;
+        btn.disabled = true;
+        fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            body: JSON.stringify(payload)
+        })
+        .then(function (r) { return r.json().catch(function () { return {}; }); })
+        .then(function (data) {
+            btn.disabled = false;
+            if (!data || !data.success) {
+                if (typeof Toast !== 'undefined') Toast.error((data && data.message) || '创建失败');
+                return;
+            }
+            if (typeof Toast !== 'undefined') Toast.success(data.message || '封禁已创建');
+            var ban = data.ban;
+            if (ban) {
+                var tbody = document.getElementById('guide-ban-tbody');
+                var emptyRow = tbody.querySelector('[data-empty-row]');
+                if (emptyRow) emptyRow.remove();
+                var tr = document.createElement('tr');
+                tr.className = 'border-b border-forest-700/30 hover:bg-forest-800/20 transition-colors';
+                tr.appendChild(cell(ban.id, 'px-4 py-3 text-cream/40'));
+
+                var typeTd = document.createElement('td');
+                typeTd.className = 'px-4 py-3';
+                var badge = document.createElement('span');
+                badge.className = ban.is_user
+                    ? 'text-xs px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-300 border border-blue-500/20'
+                    : 'text-xs px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-300 border border-purple-500/20';
+                badge.textContent = ban.is_user ? '用户' : 'IP';
+                typeTd.appendChild(badge);
+                tr.appendChild(typeTd);
+
+                var targetTd = cell(ban.target, 'px-4 py-3 text-cream/80 font-mono text-xs');
+                tr.appendChild(targetTd);
+                tr.appendChild(cell(ban.reason || '-'));
+                tr.appendChild(cell(ban.operator || '未知'));
+                tr.appendChild(cell(ban.expires_at ? ban.expires_at.slice(0, 16) : '永久'));
+
+                var actTd = document.createElement('td');
+                actTd.className = 'px-4 py-3 text-right';
+                var del = document.createElement('button');
+                del.type = 'button';
+                del.className = 'admin-action text-green-400 hover:text-green-300 text-xs px-2 py-1 rounded bg-green-500/10 border border-green-500/20';
+                del.setAttribute('data-action-url', '/admin/guide-bans/' + ban.id + '/delete');
+                del.setAttribute('data-action-confirm', '确定解除此封禁？');
+                del.setAttribute('data-action-remove', 'tr');
+                del.setAttribute('data-action-success', '封禁已解除');
+                del.textContent = '解除';
+                actTd.appendChild(del);
+                tr.appendChild(actTd);
+
+                tbody.insertBefore(tr, tbody.firstChild);
+            }
+            form.reset();
+        })
+        .catch(function () {
+            btn.disabled = false;
+            if (typeof Toast !== 'undefined') Toast.error('网络异常，创建失败');
+        });
+    });
+})();
+</script>
 {% endblock %}

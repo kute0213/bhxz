@@ -14,8 +14,8 @@
 
         
 
-        <form method="POST" class="space-y-6">
-            {{ csrf_field() }}
+        <form id="guide-form" class="space-y-6"
+              data-action-url="{{ url_for('admin.admin_guide_edit', guide_id=guide.id) if guide else url_for('admin.admin_guide_create') }}">
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                     <label class="block text-sm text-cream/70 mb-1">标题</label>
@@ -65,4 +65,47 @@
 
 <script src="{{ url_for('static', filename='lib/marked/marked.min.js', v='1') }}"></script>
 <script src="{{ url_for('static', filename='js/pages/markdown-editor.js', v='1') }}"></script>
+<script>
+// 指南创建/编辑：JSON 提交，无需刷新页面
+(function () {
+    var form = document.getElementById('guide-form');
+    if (!form) return;
+    form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var btn = form.querySelector('button[type="submit"]');
+        var payload = {
+            title: form.querySelector('[name="title"]').value.trim(),
+            summary: form.querySelector('[name="summary"]').value.trim(),
+            content: form.querySelector('[name="content"]').value.trim(),
+            cover_image: form.querySelector('[name="cover_image"]').value.trim(),
+            status: form.querySelector('[name="status"]').value,
+            is_pinned: form.querySelector('[name="is_pinned"]').value
+        };
+        if (!payload.title || !payload.content) {
+            if (typeof Toast !== 'undefined') Toast.error('标题和内容不能为空');
+            return;
+        }
+        btn.disabled = true;
+        fetch(form.getAttribute('data-action-url'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            body: JSON.stringify(payload)
+        })
+        .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { return { ok: r.ok, data: d }; }); })
+        .then(function (res) {
+            btn.disabled = false;
+            if (!res.ok || !res.data.success) {
+                if (typeof Toast !== 'undefined') Toast.error((res.data && res.data.message) || '保存失败');
+                return;
+            }
+            if (typeof Toast !== 'undefined') Toast.success(res.data.message || '保存成功');
+            setTimeout(function () { location.href = res.data.redirect || '/admin/guides'; }, 500);
+        })
+        .catch(function () {
+            btn.disabled = false;
+            if (typeof Toast !== 'undefined') Toast.error('网络异常，保存失败');
+        });
+    });
+})();
+</script>
 {% endblock %}

@@ -28,6 +28,8 @@ from routes.firewall.database import (
     record_ban_detail,     # 自动记录封禁详情
     push_ban_context,      # 从 WSGI/DDOS 层传递上下文
     get_ban_detail,        # 查询封禁详情
+    submit_write,          # 单写入线程：即发即忘写
+    execute_write,         # 单写入线程：同步写
     # 账号白名单
     get_account_whitelist_db,
     is_account_whitelisted_db,
@@ -123,11 +125,10 @@ def whitelist_add(ip_address):
     if is_whitelisted(ip):
         return False, '该 IP 已在白名单中'
     try:
-        with get_db() as conn:
-            conn.execute(
-                "INSERT INTO firewall_whitelist (ip_address) VALUES (?)",
-                (ip,),
-            )
+        execute_write(
+            "INSERT INTO firewall_whitelist (ip_address) VALUES (?)",
+            (ip,),
+        )
     except Exception as exc:
         return False, f'添加白名单失败: {exc}'
     invalidate_whitelist_cache()
@@ -143,11 +144,10 @@ def whitelist_remove(ip_address):
     """
     ip = (ip_address or '').strip()
     try:
-        with get_db() as conn:
-            conn.execute(
-                "DELETE FROM firewall_whitelist WHERE ip_address = ?",
-                (ip,),
-            )
+        execute_write(
+            "DELETE FROM firewall_whitelist WHERE ip_address = ?",
+            (ip,),
+        )
     except Exception as exc:
         return False, f'移除白名单失败: {exc}'
     invalidate_whitelist_cache()
@@ -196,24 +196,23 @@ def ban_ip(ip_address, reason, banned_by=SYSTEM_BANNER_ID, duration_minutes=None
             return False, '封禁时长无效'
 
     try:
-        with get_db() as conn:
-            now = _now_str()
-            existing = conn.execute(
-                "SELECT id FROM firewall_bans WHERE ip_address = ? "
-                "AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)",
-                (ip,),
-            ).fetchone()
-            if existing:
-                return False, '该 IP 已在封禁列表中'
-
-            result = conn.execute(
-                "INSERT INTO firewall_bans (ip_address, reason, banned_by, created_at, expires_at) "
-                "VALUES (?, ?, ?, ?, ?) RETURNING id",
-                (ip, reason, banned_by, now, expires_at),
-            )
-            new_id = result.fetchone()[0]
-            # 注册过期时间
-            push_expiry(expires_at, 'ip', new_id)
+        now = _now_str()
+        # 原子写入：仅当不存在有效封禁时插入（单写入线程串行执行，避免并发重复）
+        row = execute_write(
+            "INSERT INTO firewall_bans (ip_address, reason, banned_by, created_at, expires_at) "
+            "SELECT ?, ?, ?, ?, ? "
+            "WHERE NOT EXISTS ("
+            "  SELECT 1 FROM firewall_bans WHERE ip_address = ? "
+            "  AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)"
+            ") RETURNING id",
+            (ip, reason, banned_by, now, expires_at, ip),
+            fetch='one',
+        )
+        if not row:
+            return False, '该 IP 已在封禁列表中'
+        new_id = row[0]
+        # 注册过期时间
+        push_expiry(expires_at, 'ip', new_id)
     except Exception as exc:
         log('ERROR', 'Firewall', f'创建封禁失败: {exc}', ip=ip)
         return False, '创建封禁失败'
@@ -243,15 +242,14 @@ def unban_ip(ban_id):
     """
     ip_address = ''
     try:
-        with get_db() as conn:
-            row = conn.execute(
-                "SELECT ip_address FROM firewall_bans WHERE id = ?",
-                (ban_id,),
-            ).fetchone()
-            if not row:
-                return False, '封禁记录不存在', ''
-            ip_address = row[0]
-            conn.execute("DELETE FROM firewall_bans WHERE id = ?", (ban_id,))
+        row = execute_write(
+            "DELETE FROM firewall_bans WHERE id = ? RETURNING ip_address",
+            (ban_id,),
+            fetch='one',
+        )
+        if not row:
+            return False, '封禁记录不存在', ''
+        ip_address = row[0]
     except Exception as exc:
         return False, f'解除封禁失败: {exc}', ''
     invalidate_ip_cache()
@@ -269,11 +267,7 @@ def unban_by_ip(ip_address):
     if not ip:
         return False, 'IP 地址不能为空'
     try:
-        with get_db() as conn:
-            conn.execute(
-                "DELETE FROM firewall_bans WHERE ip_address = ?",
-                (ip,),
-            )
+        execute_write("DELETE FROM firewall_bans WHERE ip_address = ?", (ip,))
     except Exception as exc:
         return False, f'解除封禁失败: {exc}'
     invalidate_ip_cache()
@@ -362,11 +356,10 @@ def get_banned_ips():
 def cleanup_expired():
     """清理已过期的临时 IP 封禁（由监控线程定期调用，此处保留供手动调用）。"""
     try:
-        with get_db() as conn:
-            conn.execute(
-                "DELETE FROM firewall_bans "
-                "WHERE expires_at IS NOT NULL AND expires_at <= CURRENT_TIMESTAMP"
-            )
+        execute_write(
+            "DELETE FROM firewall_bans "
+            "WHERE expires_at IS NOT NULL AND expires_at <= CURRENT_TIMESTAMP"
+        )
     except Exception as exc:
         log('WARNING', 'Firewall', f'清理过期 IP 封禁失败: {exc}')
 
@@ -403,25 +396,24 @@ def ban_account(user_id, reason, banned_by=SYSTEM_BANNER_ID, duration_minutes=No
             return False, '封禁时长无效'
 
     try:
-        with get_db() as conn:
-            now = _now_str()
-            existing = conn.execute(
-                "SELECT id FROM firewall_account_bans WHERE user_id = ? "
-                "AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)",
-                (user_id,),
-            ).fetchone()
-            if existing:
-                return False, '该账号已在封禁列表中'
-
-            result = conn.execute(
-                "INSERT INTO firewall_account_bans "
-                "(user_id, reason, banned_by, created_at, expires_at) "
-                "VALUES (?, ?, ?, ?, ?) RETURNING id",
-                (user_id, reason, banned_by, now, expires_at),
-            )
-            new_id = result.fetchone()[0]
-            # 注册过期时间
-            push_expiry(expires_at, 'account', new_id)
+        now = _now_str()
+        # 原子写入：仅当不存在有效封禁时插入（单写入线程串行执行）
+        row = execute_write(
+            "INSERT INTO firewall_account_bans "
+            "(user_id, reason, banned_by, created_at, expires_at) "
+            "SELECT ?, ?, ?, ?, ? "
+            "WHERE NOT EXISTS ("
+            "  SELECT 1 FROM firewall_account_bans WHERE user_id = ? "
+            "  AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)"
+            ") RETURNING id",
+            (user_id, reason, banned_by, now, expires_at, user_id),
+            fetch='one',
+        )
+        if not row:
+            return False, '该账号已在封禁列表中'
+        new_id = row[0]
+        # 注册过期时间
+        push_expiry(expires_at, 'account', new_id)
     except Exception as exc:
         log('ERROR', 'Firewall', f'创建账号封禁失败: {exc}', user_id=user_id)
         return False, '创建账号封禁失败'
@@ -452,18 +444,14 @@ def unban_account(ban_id):
     """
     user_id = 0
     try:
-        with get_db() as conn:
-            row = conn.execute(
-                "SELECT user_id FROM firewall_account_bans WHERE id = ?",
-                (ban_id,),
-            ).fetchone()
-            if not row:
-                return False, '封禁记录不存在', 0
-            user_id = row[0]
-            conn.execute(
-                "DELETE FROM firewall_account_bans WHERE id = ?",
-                (ban_id,),
-            )
+        row = execute_write(
+            "DELETE FROM firewall_account_bans WHERE id = ? RETURNING user_id",
+            (ban_id,),
+            fetch='one',
+        )
+        if not row:
+            return False, '封禁记录不存在', 0
+        user_id = row[0]
     except Exception as exc:
         return False, f'解除账号封禁失败: {exc}', 0
     invalidate_account_cache()
@@ -480,11 +468,10 @@ def unban_account_by_user(user_id):
     if not user_id:
         return False, '用户 ID 不能为空'
     try:
-        with get_db() as conn:
-            conn.execute(
-                "DELETE FROM firewall_account_bans WHERE user_id = ?",
-                (user_id,),
-            )
+        execute_write(
+            "DELETE FROM firewall_account_bans WHERE user_id = ?",
+            (user_id,),
+        )
     except Exception as exc:
         return False, f'解除账号封禁失败: {exc}'
     invalidate_account_cache()
@@ -639,13 +626,12 @@ def record_spam(user_id, content_type, content_preview='', action='flag'):
         action: 采取的动作（flag / ban）
     """
     try:
-        with get_db() as conn:
-            conn.execute(
-                "INSERT INTO firewall_spam_log "
-                "(user_id, content_type, content_preview, action, created_at) "
-                "VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)",
-                (user_id, content_type, content_preview, action),
-            )
+        submit_write(
+            "INSERT INTO firewall_spam_log "
+            "(user_id, content_type, content_preview, action, created_at) "
+            "VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)",
+            (user_id, content_type, content_preview, action),
+        )
     except Exception as exc:
         log('WARNING', 'Firewall', f'记录刷屏日志失败: {exc}', user_id=user_id)
 
@@ -738,14 +724,13 @@ def clear_spam_log(user_id=None):
         user_id: 如果提供，只清除该用户的记录；否则清除全部
     """
     try:
-        with get_db() as conn:
-            if user_id:
-                conn.execute(
-                    "DELETE FROM firewall_spam_log WHERE user_id = ?",
-                    (user_id,),
-                )
-            else:
-                conn.execute("DELETE FROM firewall_spam_log")
+        if user_id:
+            execute_write(
+                "DELETE FROM firewall_spam_log WHERE user_id = ?",
+                (user_id,),
+            )
+        else:
+            execute_write("DELETE FROM firewall_spam_log")
     except Exception:
         pass
 
@@ -957,12 +942,11 @@ def add_warning(ip_address, warning_text):
     if not ip:
         return 0
     try:
-        with get_db() as conn:
-            conn.execute(
-                "INSERT INTO firewall_warnings (ip_address, warning, created_at) "
-                "VALUES (?, ?, CURRENT_TIMESTAMP)",
-                (ip, warning_text),
-            )
+        execute_write(
+            "INSERT INTO firewall_warnings (ip_address, warning, created_at) "
+            "VALUES (?, ?, CURRENT_TIMESTAMP)",
+            (ip, warning_text),
+        )
         return get_warning_count(ip, hours=24)
     except Exception as exc:
         log('WARNING', 'Firewall', f'添加警告记录失败: {exc}', ip=ip)
@@ -1069,11 +1053,10 @@ def clear_warnings(ip_address):
     if not ip:
         return
     try:
-        with get_db() as conn:
-            conn.execute(
-                "DELETE FROM firewall_warnings WHERE ip_address = ?",
-                (ip,),
-            )
+        execute_write(
+            "DELETE FROM firewall_warnings WHERE ip_address = ?",
+            (ip,),
+        )
     except Exception:
         pass
 

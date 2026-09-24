@@ -23,7 +23,7 @@
             </h2>
             <div class="space-y-3">
                 {% for r in reports %}
-                <div class="p-4 bg-amber-500/5 rounded-xl border border-amber-500/10">
+                <div class="p-4 bg-amber-500/5 rounded-xl border border-amber-500/10" data-report-card="{{ r.id }}">
                     <div class="flex items-start justify-between gap-4">
                         <div class="min-w-0 flex-1">
                             <div class="flex items-center gap-2 mb-1">
@@ -34,11 +34,11 @@
                             <p class="text-sm text-cream/70">{{ r.reason }}</p>
                         </div>
                         <div class="flex items-center gap-2 flex-shrink-0">
-                            <form method="POST" action="{{ url_for('admin.admin_building_report_dismiss', report_id=r.id) }}" style="display:inline">
-                                {{ csrf_field() }}
-                                <input type="hidden" name="_method" value="POST">
-                                <button type="submit" class="btn-secondary px-3 py-1.5 rounded-lg text-xs">驳回</button>
-                            </form>
+                            <button type="button"
+                                    class="admin-action btn-secondary px-3 py-1.5 rounded-lg text-xs"
+                                    data-action-url="{{ url_for('admin.admin_building_report_dismiss', report_id=r.id) }}"
+                                    data-action-remove="[data-report-card='{{ r.id }}']"
+                                    data-action-success="举报已驳回">驳回</button>
                         </div>
                     </div>
                 </div>
@@ -64,7 +64,7 @@
                     </thead>
                     <tbody>
                         {% for b in buildings %}
-                        <tr class="border-b border-forest-700/20 hover:bg-forest-800/20 transition-colors">
+                        <tr class="border-b border-forest-700/20 hover:bg-forest-800/20 transition-colors" data-building-row="{{ b.id }}">
                             <td class="px-4 py-3 text-cream/60">{{ b.id }}</td>
                             <td class="px-4 py-3">
                                 <a href="{{ url_for('buildings.building_detail', building_id=b.id) }}" class="text-cream/80 hover:text-gold-400 font-medium" target="_blank">{{ b.title }}</a>
@@ -73,7 +73,7 @@
                                 <code class="text-xs text-[var(--accent-blue)] bg-[var(--accent-blue)]/10 px-1.5 py-0.5 rounded">/res tp {{ b.warp_name }}</code>
                             </td>
                             <td class="px-4 py-3 text-cream/60">{{ b.author_name or '未知' }}</td>
-                            <td class="px-4 py-3">
+                            <td class="px-4 py-3" data-building-status="{{ b.id }}">
                                 {% if b.status == 'approved' %}
                                 <span class="text-xs px-2 py-0.5 rounded-full bg-green-500/10 text-green-400">已通过</span>
                                 {% elif b.status == 'pending' %}
@@ -92,22 +92,22 @@
                                 {% endif %}
                             </td>
                             <td class="px-4 py-3">
-                                <div class="flex items-center gap-2 flex-wrap">
+                                <div class="flex items-center gap-2 flex-wrap" data-building-actions="{{ b.id }}">
                                     {% if b.status == 'pending' %}
-                                    <form method="POST" action="{{ url_for('admin.admin_building_approve', building_id=b.id) }}" style="display:inline">
-                                        {{ csrf_field() }}
-                                        <button type="submit" class="text-xs px-2 py-1 rounded bg-green-500/10 text-green-400 border border-green-500/20 hover:bg-green-500/20">通过</button>
-                                    </form>
-                                    <form method="POST" action="{{ url_for('admin.admin_building_reject', building_id=b.id) }}" style="display:inline" onsubmit="return confirm('确定拒绝「{{ b.title }}」？')">
-                                        {{ csrf_field() }}
-                                        <input type="hidden" name="reason" value="">
-                                        <button type="button" onclick="showRejectModal({{ b.id }}, '{{ b.title|e }}')" class="text-xs px-2 py-1 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 hover:bg-amber-500/20">拒绝</button>
-                                    </form>
+                                    <button type="button"
+                                            class="admin-action text-xs px-2 py-1 rounded bg-green-500/10 text-green-400 border border-green-500/20 hover:bg-green-500/20"
+                                            data-action-url="{{ url_for('admin.admin_building_approve', building_id=b.id) }}"
+                                            data-action-success="建筑已通过审核">通过</button>
+                                    <button type="button"
+                                            class="text-xs px-2 py-1 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 hover:bg-amber-500/20"
+                                            onclick="showRejectModal({{ b.id }}, '{{ b.title|e }}')">拒绝</button>
                                     {% endif %}
-                                    <form method="POST" action="{{ url_for('admin.admin_building_delete', building_id=b.id) }}" style="display:inline" onsubmit="return confirm('确定删除「{{ b.title }}」？此操作不可恢复。')">
-                                        {{ csrf_field() }}
-                                        <button type="submit" class="text-xs px-2 py-1 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20">删除</button>
-                                    </form>
+                                    <button type="button"
+                                            class="admin-action text-xs px-2 py-1 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20 hover:bg-rose-500/20"
+                                            data-action-url="{{ url_for('admin.admin_building_delete', building_id=b.id) }}"
+                                            data-action-confirm="确定删除「{{ b.title|e }}」？此操作不可恢复。"
+                                            data-action-remove="tr"
+                                            data-action-success="建筑已删除">删除</button>
                                 </div>
                             </td>
                         </tr>
@@ -126,26 +126,54 @@
 {% call modal_shell('rejectReasonModal', size='sm', title='拒绝建筑', icon='x-circle', icon_color='red', close_on_overlay='false') %}
 <div>
     <p class="text-sm text-cream/60 mb-4" id="rejectBuildingTitle"></p>
-    <form id="rejectForm" method="POST" action="">
-        {{ csrf_field() }}
-        <div class="mb-4">
-            <label class="block text-sm font-medium text-cream/80 mb-1.5">拒绝原因（可选）</label>
-            <textarea name="reason" rows="3" class="w-full px-3 py-2 rounded-lg bg-forest-800 border border-forest-700 text-cream text-sm placeholder-cream/30 focus:outline-none focus:border-gold-500/50" placeholder="输入拒绝原因..."></textarea>
-        </div>
-        <div class="flex justify-end gap-3">
-            <button type="button" onclick="closeModal('rejectReasonModal')" class="btn-secondary px-4 py-2 rounded-lg text-sm">取消</button>
-            <button type="submit" class="btn-primary px-4 py-2 rounded-lg text-sm">确认拒绝</button>
-        </div>
-    </form>
+    <div class="mb-4">
+        <label class="block text-sm font-medium text-cream/80 mb-1.5">拒绝原因（可选）</label>
+        <textarea id="rejectReasonInput" rows="3" class="input-field w-full px-4 py-3 rounded-lg resize-none" placeholder="输入拒绝原因..."></textarea>
+    </div>
+    <div class="flex justify-end gap-3">
+        <button type="button" onclick="closeModal('rejectReasonModal')" class="btn-secondary px-4 py-2 rounded-lg text-sm">取消</button>
+        <button type="button" id="rejectConfirmBtn"
+                class="admin-action btn-primary px-4 py-2 rounded-lg text-sm"
+                data-action-url="" data-action-success="建筑已拒绝">确认拒绝</button>
+    </div>
 </div>
 {% endcall %}
 
 <script>
 function showRejectModal(buildingId, buildingTitle) {
     document.getElementById('rejectBuildingTitle').textContent = '确定拒绝建筑「' + buildingTitle + '」？';
-    document.getElementById('rejectForm').action = '{{ url_for("admin.admin_building_reject", building_id=0) }}'.replace('0', buildingId);
+    document.getElementById('rejectReasonInput').value = '';
+    document.getElementById('rejectConfirmBtn').setAttribute('data-action-url', '/admin/buildings/' + buildingId + '/reject');
     openModal('rejectReasonModal');
 }
+
+// 捕获阶段先写入拒绝原因，再交由通用 admin-action 处理器提交
+document.getElementById('rejectConfirmBtn').addEventListener('click', function () {
+    var reason = document.getElementById('rejectReasonInput').value || '';
+    this.setAttribute('data-action-payload', JSON.stringify({ reason: reason }));
+}, true);
+
+// 审核结果局部更新（无需刷新页面）
+document.addEventListener('admin:action', function (e) {
+    var m = /\/admin\/buildings\/(\d+)\/(approve|reject)/.exec(e.detail.url || '');
+    if (!m) return;
+    var id = m[1], action = m[2];
+    if (action === 'reject') closeModal('rejectReasonModal');
+
+    var cell = document.querySelector('[data-building-status="' + id + '"]');
+    if (cell) {
+        cell.innerHTML = action === 'approve'
+            ? '<span class="text-xs px-2 py-0.5 rounded-full bg-green-500/10 text-green-400">已通过</span>'
+            : '<span class="text-xs px-2 py-0.5 rounded-full bg-red-500/10 text-red-400">已拒绝</span>';
+    }
+    var actions = document.querySelector('[data-building-actions="' + id + '"]');
+    if (actions) {
+        var approveBtn = actions.querySelector('[data-action-url$="/approve"]');
+        var rejectBtn = actions.querySelector('[onclick^="showRejectModal"]');
+        if (approveBtn) approveBtn.remove();
+        if (rejectBtn) rejectBtn.remove();
+    }
+});
 </script>
 {{ modal_close_script() }}
 

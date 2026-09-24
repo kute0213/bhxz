@@ -7,15 +7,16 @@
     <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         {{ page_header(
             title='用户管理',
-            subtitle='共 ' ~ (users_list|length) ~ ' 位用户',
+            subtitle='共 ' ~ total ~ ' 位用户',
             back_url=url_for('admin.admin_page'),
             back_text='返回管理中心'
         ) }}
 
-        {% if users_list %}
+        {% if total %}
+        <div data-users-table>
         {% call data_table(headers=[('ID', 'left'), ('用户名', 'left'), ('角色', 'left'), ('注册时间', 'left'), ('操作', 'right')]) %}
             {% for u in users_list %}
-            <tr class="border-b border-forest-700/30 hover:bg-forest-800/30">
+            <tr class="border-b border-forest-700/30 hover:bg-forest-800/30" data-user-row="{{ u.id }}">
                 <td class="px-4 py-3 text-cream/80">{{ u.id }}</td>
                 <td class="px-4 py-3">
                     <div class="flex items-center gap-2">
@@ -27,7 +28,7 @@
                         <span class="text-cream/90 break-all">{{ u.username }}</span>
                     </div>
                 </td>
-                <td class="px-4 py-3">
+                <td class="px-4 py-3" data-user-role="{{ u.id }}">
                     {% if u.is_admin %}
                     <span class="inline-block px-2 py-1 bg-gold-400/20 text-gold-400 rounded text-xs font-medium">管理员</span>
                     {% else %}
@@ -38,16 +39,18 @@
                 <td class="px-4 py-3">
                     {% if u.id != user.id %}
                     <div class="flex flex-wrap items-center justify-end gap-2">
-                        <form method="POST" action="{{ url_for('admin.admin_toggle_admin', user_id=u.id) }}" onsubmit="return confirm('确定{% if u.is_admin %}取消{% else %}设置{% endif %}该用户的管理员权限吗？')">
-                            {{ csrf_field() }}
-                            <button type="submit" class="text-gold-400 hover:text-gold-300 text-xs px-2 py-1 rounded hover:bg-gold-400/10 transition-colors">
-                                {% if u.is_admin %}取消管理员{% else %}设为管理员{% endif %}
-                            </button>
-                        </form>
-                        <form method="POST" action="{{ url_for('admin.admin_delete_user', user_id=u.id) }}" onsubmit="return confirm('确定删除该用户吗？此操作不可恢复。')">
-                            {{ csrf_field() }}
-                            <button type="submit" class="text-red-400 hover:text-red-300 text-xs px-2 py-1 rounded hover:bg-red-400/10 transition-colors">删除</button>
-                        </form>
+                        <button type="button"
+                                class="admin-action text-gold-400 hover:text-gold-300 text-xs px-2 py-1 rounded hover:bg-gold-400/10 transition-colors"
+                                data-action-url="{{ url_for('admin.admin_toggle_admin', user_id=u.id) }}"
+                                data-user-role-toggle="{{ u.id }}"
+                                data-is-admin="{{ 1 if u.is_admin else 0 }}"
+                                data-action-confirm="确定{% if u.is_admin %}取消{% else %}设置{% endif %}该用户的管理员权限吗？">{% if u.is_admin %}取消管理员{% else %}设为管理员{% endif %}</button>
+                        <button type="button"
+                                class="admin-action text-red-400 hover:text-red-300 text-xs px-2 py-1 rounded hover:bg-red-400/10 transition-colors"
+                                data-action-url="{{ url_for('admin.admin_delete_user', user_id=u.id) }}"
+                                data-action-confirm="确定删除该用户吗？此操作不可恢复。"
+                                data-action-remove="tr"
+                                data-action-success="用户已删除">删除</button>
                     </div>
                     {% else %}
                     <span class="text-cream/40 text-xs">当前用户</span>
@@ -56,9 +59,120 @@
             </tr>
             {% endfor %}
         {% endcall %}
+        </div>
+        <div class="mt-6 text-center">
+            <button type="button" id="users-load-more"
+                    class="btn-secondary px-6 py-2.5 rounded-lg text-sm inline-flex items-center gap-2{% if not has_more %} hidden{% endif %}">
+                <i data-lucide="chevron-down" class="w-4 h-4"></i>加载更多
+            </button>
+            <p id="users-load-end" class="text-xs text-cream/40 mt-2{% if has_more %} hidden{% endif %}">没有更多了</p>
+        </div>
         {% else %}
         {{ empty_state('暂无用户', 'users') }}
         {% endif %}
     </div>
 </section>
+{% endblock %}
+
+{% block extra_script %}
+<script>
+// 切换管理员权限后局部更新角色徽章与按钮（无需刷新页面）
+document.addEventListener('admin:action', function (e) {
+    var el = e.detail.el;
+    var id = el.getAttribute('data-user-role-toggle');
+    if (!id) return;
+    var isAdmin = el.getAttribute('data-is-admin') === '1';
+    var next = !isAdmin;
+    el.setAttribute('data-is-admin', next ? '1' : '0');
+    el.textContent = next ? '取消管理员' : '设为管理员';
+    el.setAttribute('data-action-confirm', next ? '确定取消该用户的管理员权限吗？' : '确定设置该用户的管理员权限吗？');
+
+    var cell = document.querySelector('[data-user-role="' + id + '"]');
+    if (cell) {
+        cell.innerHTML = next
+            ? '<span class="inline-block px-2 py-1 bg-gold-400/20 text-gold-400 rounded text-xs font-medium">管理员</span>'
+            : '<span class="inline-block px-2 py-1 bg-forest-700/50 text-cream/60 rounded text-xs">普通用户</span>';
+    }
+});
+
+// 用户列表：每次 10 条，点击加载更多（API，无刷新）
+(function () {
+    var btn = document.getElementById('users-load-more');
+    var loadEnd = document.getElementById('users-load-end');
+    if (!btn) return;
+
+    var API_URL = "{{ url_for('admin.admin_users_api') }}";
+    var CURRENT_USER_ID = {{ user.id }};
+    var state = { page: 1, loading: false };
+
+    function esc(t) { var d = document.createElement('div'); d.textContent = t == null ? '' : String(t); return d.innerHTML; }
+    function refreshIcons() { if (typeof lucide !== 'undefined' && lucide.createIcons) { try { lucide.createIcons(); } catch (_) {} } }
+    function tbody() { var t = document.querySelector('[data-users-table] tbody'); return t; }
+
+    function rowHtml(u) {
+        var avatar = u.avatar_key
+            ? '<img src="/media/avatar/' + u.id + '" alt="' + esc(u.username) + '的头像" class="w-7 h-7 rounded-full object-cover border border-gold-400/30">'
+            : '<div class="w-7 h-7 bg-gold-400/20 rounded-full flex items-center justify-center text-xs font-bold text-gold-400">' + esc((u.username || '').charAt(0)) + '</div>';
+        var roleBadge = u.is_admin
+            ? '<span class="inline-block px-2 py-1 bg-gold-400/20 text-gold-400 rounded text-xs font-medium">管理员</span>'
+            : '<span class="inline-block px-2 py-1 bg-forest-700/50 text-cream/60 rounded text-xs">普通用户</span>';
+
+        var actions;
+        if (u.id === CURRENT_USER_ID) {
+            actions = '<span class="text-cream/40 text-xs">当前用户</span>';
+        } else {
+            var isAdminVal = u.is_admin ? '1' : '0';
+            var toggleText = u.is_admin ? '取消管理员' : '设为管理员';
+            var confirmText = u.is_admin ? '确定取消该用户的管理员权限吗？' : '确定设置该用户的管理员权限吗？';
+            actions =
+                '<div class="flex flex-wrap items-center justify-end gap-2">' +
+                '<button type="button" class="admin-action text-gold-400 hover:text-gold-300 text-xs px-2 py-1 rounded hover:bg-gold-400/10 transition-colors" ' +
+                'data-action-url="/admin/users/' + u.id + '/toggle-admin" data-user-role-toggle="' + u.id + '" data-is-admin="' + isAdminVal + '" ' +
+                'data-action-confirm="' + confirmText + '">' + toggleText + '</button>' +
+                '<button type="button" class="admin-action text-red-400 hover:text-red-300 text-xs px-2 py-1 rounded hover:bg-red-400/10 transition-colors" ' +
+                'data-action-url="/admin/users/' + u.id + '/delete" data-action-confirm="确定删除该用户吗？此操作不可恢复。" ' +
+                'data-action-remove="tr" data-action-success="用户已删除">删除</button>' +
+                '</div>';
+        }
+
+        return '<tr class="border-b border-forest-700/30 hover:bg-forest-800/30" data-user-row="' + u.id + '">' +
+            '<td class="px-4 py-3 text-cream/80">' + u.id + '</td>' +
+            '<td class="px-4 py-3"><div class="flex items-center gap-2">' + avatar +
+            '<span class="text-cream/90 break-all">' + esc(u.username) + '</span></div></td>' +
+            '<td class="px-4 py-3" data-user-role="' + u.id + '">' + roleBadge + '</td>' +
+            '<td class="px-4 py-3 text-cream/60">' + esc(u.created_at) + '</td>' +
+            '<td class="px-4 py-3">' + actions + '</td></tr>';
+    }
+
+    function setLoading(v) {
+        state.loading = v;
+        btn.innerHTML = v
+            ? '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i>加载中…'
+            : '<i data-lucide="chevron-down" class="w-4 h-4"></i>加载更多';
+        refreshIcons();
+    }
+
+    btn.addEventListener('click', function () {
+        if (state.loading) return;
+        setLoading(true);
+
+        fetch(API_URL + '?page=' + (state.page + 1), {
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (!data || !data.success) { if (typeof Toast !== 'undefined') Toast.error((data && data.message) || '加载失败'); return; }
+            var body = tbody();
+            var html = (data.users || []).map(rowHtml).join('');
+            if (html && body) body.insertAdjacentHTML('beforeend', html);
+            state.page = data.page;
+            btn.classList.toggle('hidden', !data.has_more);
+            loadEnd.classList.toggle('hidden', !!data.has_more);
+            refreshIcons();
+        })
+        .catch(function () { if (typeof Toast !== 'undefined') Toast.error('加载失败，请重试'); })
+        .finally(function () { setLoading(false); });
+    });
+})();
+</script>
 {% endblock %}

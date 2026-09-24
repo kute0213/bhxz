@@ -38,27 +38,22 @@
                     <i data-lucide="music" class="w-5 h-5 text-gold-400"></i>
                     公开音频（游戏内大喇叭）
                 </h2>
-                <form method="GET" action="{{ url_for('main.music_page') }}" class="flex items-center gap-2">
-                    <div class="relative search-input-wrap">
-                        <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-cream/40 search-icon"></i>
-                        <input type="text" name="q" value="{{ keyword }}" maxlength="60" placeholder="搜索音频名称或标签…"
+                <form method="GET" action="{{ url_for('main.music_page') }}" class="flex items-center gap-2" id="music-search-form" onsubmit="return false;">
+                    <div class="site-search-wrap relative" id="music-search-wrap">
+                        <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-cream/40 search-icon cursor-pointer"></i>
+                        <input type="text" name="q" id="music-search-input" value="{{ keyword }}" maxlength="60" placeholder="搜索音频名称或标签…"
                                class="input-field pl-9 py-2 rounded-lg text-sm search-input">
                     </div>
                     <button type="submit" class="btn-secondary px-4 py-2 rounded-lg text-sm flex items-center gap-1.5">
                         <i data-lucide="search" class="w-4 h-4"></i>搜索
                     </button>
-                    {% if keyword %}
-                    <a href="{{ url_for('main.music_page') }}" class="px-3 py-2 rounded-lg text-xs text-cream/50 hover:text-cream transition-colors">清除</a>
-                    {% endif %}
                 </form>
             </div>
-            {% if keyword %}
-            <p class="text-sm text-cream/60 mb-3">搜索「{{ keyword }}」找到 {{ public_musics|length }} 条结果</p>
-            {% endif %}
-            {% if public_musics %}
-            <div class="space-y-3">
+            <p class="text-sm text-cream/60 mb-3 hidden" id="music-result-hint"></p>
+
+            <div class="space-y-3" id="music-list">
                 {% for m in public_musics %}
-                <div class="pixel-card music-card rounded-xl p-4">
+                <div class="pixel-card music-card rounded-xl p-4 search-fade-in" data-id="{{ m.id }}">
                     <div class="flex flex-wrap items-center gap-3">
                         <div class="w-10 h-10 bg-gold-400/20 rounded-lg flex items-center justify-center flex-shrink-0">
                             <i data-lucide="music" class="w-5 h-5 text-gold-400"></i>
@@ -86,12 +81,19 @@
                 </div>
                 {% endfor %}
             </div>
-            {% else %}
-            <div class="pixel-card rounded-xl p-12 text-center">
+
+            <div class="pixel-card rounded-xl p-12 text-center{% if public_musics %} hidden{% endif %}" id="music-empty">
                 <i data-lucide="music" class="w-12 h-12 mx-auto text-cream/20 mb-4"></i>
-                <p class="text-cream/50">{% if keyword %}没有找到匹配「{{ keyword }}」的公开音频{% else %}暂无公开音频{% endif %}</p>
+                <p class="text-cream/50" id="music-empty-text">{% if keyword %}没有找到匹配「{{ keyword }}」的公开音频{% else %}暂无公开音频{% endif %}</p>
             </div>
-            {% endif %}
+
+            <div class="mt-6 text-center">
+                <button type="button" id="music-load-more"
+                        class="btn-secondary px-6 py-2.5 rounded-lg text-sm inline-flex items-center gap-2{% if not has_more %} hidden{% endif %}">
+                    <i data-lucide="chevron-down" class="w-4 h-4"></i>加载更多
+                </button>
+                <p id="music-load-end" class="text-xs text-cream/40 mt-2{% if has_more %} hidden{% endif %}">没有更多了</p>
+            </div>
         </div>
     </div>
 </section>
@@ -99,40 +101,163 @@
 
 {% block extra_script %}
 {{ music_player_assets() }}
+<script src="{{ url_for('static', filename='js/core/search.js', v='2') }}"></script>
 <script>
 (function () {
-    // 搜索图标点击聚焦输入框
-    var searchIcon = document.querySelector('.search-icon');
-    var searchInput = document.querySelector('.search-input');
-    if (searchIcon && searchInput) {
-        searchIcon.addEventListener('click', function () {
-            searchInput.focus();
+    var CFG = {
+        apiUrl: "{{ url_for('main.api_music_list') }}",
+        playerUrl: "{{ url_for('main.serve_music_playlist', music_id=0) }}",
+        host: "{{ request.host_url.rstrip('/') }}",
+        isLoggedIn: {{ 'true' if user else 'false' }}
+    };
+
+    var list = document.getElementById('music-list');
+    var emptyBox = document.getElementById('music-empty');
+    var emptyText = document.getElementById('music-empty-text');
+    var loadMoreBtn = document.getElementById('music-load-more');
+    var loadEnd = document.getElementById('music-load-end');
+    var resultHint = document.getElementById('music-result-hint');
+    var state = { page: 1, query: "{{ keyword }}", loading: false };
+
+    function esc(t) { var d = document.createElement('div'); d.textContent = t == null ? '' : String(t); return d.innerHTML; }
+    function refreshIcons() { if (typeof lucide !== 'undefined' && lucide.createIcons) { try { lucide.createIcons(); } catch (_) {} } }
+
+    function tagsHtml(tags) {
+        var arr = (tags || '').split(',').map(function (t) { return t.trim(); }).filter(Boolean);
+        if (!arr.length) return '';
+        return '<div class="flex flex-wrap items-center gap-1.5 mt-1.5">' + arr.map(function (t) {
+            return '<span class="inline-block px-2 py-0.5 rounded-full text-xs bg-gold-400/10 text-gold-300/90 border border-gold-400/20">#' + esc(t) + '</span>';
+        }).join('') + '</div>';
+    }
+
+    function playerHtml(id) {
+        return '<div class="music-player" data-src="' + CFG.playerUrl.replace('/0.m3u8', '/' + id + '.m3u8') + '" data-id="' + id + '">' +
+            '<button type="button" class="mp-play" aria-label="播放">' +
+                '<i data-lucide="play" class="mp-play-icon"></i><i data-lucide="pause" class="mp-pause-icon"></i></button>' +
+            '<div class="mp-main"><div class="mp-time"><span class="mp-current">0:00</span><span class="mp-duration">0:00</span></div>' +
+                '<div class="mp-progress" role="slider" aria-label="播放进度"><span class="mp-buffered"></span><span class="mp-fill"></span><span class="mp-thumb"></span></div></div>' +
+            '<div class="mp-controls"><div class="mp-speed"><button type="button" class="mp-btn mp-speed-btn" title="播放速度">1x</button><div class="mp-speed-menu"></div></div>' +
+                '<div class="mp-volume"><button type="button" class="mp-btn mp-vol-btn" title="音量"><i data-lucide="volume-2" class="mp-vol-icon-on"></i><i data-lucide="volume-x" class="mp-vol-icon-off"></i></button>' +
+                '<input type="range" class="mp-vol-slider" min="0" max="1" step="0.05" value="1" aria-label="音量"></div></div></div>';
+    }
+
+    function cardHtml(m) {
+        var fav = m.is_favorited;
+        var favBtn = '<button type="button" class="favorite-btn px-3 py-2 rounded-lg text-xs border transition-colors flex items-center gap-1.5 ' +
+            (fav ? 'border-amber-400/50 text-amber-300' : 'border-cream/20 text-cream/70 hover:border-amber-400/50 hover:text-amber-300') +
+            '" data-id="' + m.id + '" data-state="' + (fav ? '1' : '0') + '"' + (CFG.isLoggedIn ? '' : ' data-requires-login="1"') +
+            ' title="' + (fav ? '取消收藏' : '收藏') + '"><i data-lucide="heart" class="w-3.5 h-3.5' + (fav ? ' fill-amber-400' : '') + '"></i>' +
+            '<span class="fav-text">' + (fav ? '已收藏' : '收藏') + '</span></button>';
+
+        var linkCls = 'copy-link-btn px-3 py-2 rounded-lg text-xs border border-cream/20 text-cream/70 hover:text-cream hover:border-cream/40 transition-colors flex items-center gap-1.5';
+        var copyBtn = '<button type="button" class="' + linkCls + '" data-url="' + CFG.host + '/music/' + m.id + '.m3u8" title="复制广播 m3u 链接（游戏内大喇叭在线播放用）"><i data-lucide="copy" class="w-3.5 h-3.5"></i>复制广播m3u链接</button>';
+        var mp3Btn = '<button type="button" class="' + linkCls + '" data-url="' + CFG.host + '/music/' + m.id + '.mp3" title="复制唱片 MP3 链接（游戏内电脑下载后可烧录成唱片）"><i data-lucide="disc" class="w-3.5 h-3.5"></i>唱片 MP3</button>';
+        var durBtn = m.duration_seconds ? ('<button type="button" class="copy-duration-btn px-3 py-2 rounded-lg text-xs border border-cream/20 text-cream/70 hover:text-cream hover:border-cream/40 transition-colors flex items-center gap-1.5" data-seconds="' + m.duration_seconds + '" title="复制音频总时长（秒）"><i data-lucide="timer" class="w-3.5 h-3.5"></i>时长 ' + m.duration_seconds + 's</button>') : '';
+
+        return '<div class="pixel-card music-card rounded-xl p-4 search-fade-in" data-id="' + m.id + '">' +
+            '<div class="flex flex-wrap items-center gap-3">' +
+                '<div class="w-10 h-10 bg-gold-400/20 rounded-lg flex items-center justify-center flex-shrink-0"><i data-lucide="music" class="w-5 h-5 text-gold-400"></i></div>' +
+                '<div class="flex-1 min-w-0">' +
+                    '<div class="font-bold text-cream truncate">' + esc(m.title) + '</div>' +
+                    '<div class="text-xs text-cream/50 mt-1 flex items-center gap-3">' +
+                        '<span class="flex items-center gap-1"><i data-lucide="user" class="w-3 h-3"></i>' + esc(m.username) + '</span>' +
+                        '<span>' + esc((m.created_at || '').slice(0, 10)) + '</span></div>' + tagsHtml(m.tags) + '</div>' +
+                '<div class="music-card-actions">' + favBtn + copyBtn + mp3Btn + durBtn + '</div></div>' +
+            '<div class="mt-3">' + playerHtml(m.id) + '</div></div>';
+    }
+
+    function initPlayers() { if (typeof window.BhxzMusicPlayerInit === 'function') { try { window.BhxzMusicPlayerInit(); } catch (_) {} } }
+
+    function render(items, append) {
+        if (!append) list.innerHTML = '';
+        if (items.length) list.insertAdjacentHTML('beforeend', items.map(cardHtml).join(''));
+        var hasAny = list.children.length > 0;
+        emptyBox.classList.toggle('hidden', hasAny);
+        refreshIcons();
+        initPlayers();
+    }
+
+    function setLoading(v) {
+        state.loading = v;
+        loadMoreBtn.innerHTML = v
+            ? '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i>加载中…'
+            : '<i data-lucide="chevron-down" class="w-4 h-4"></i>加载更多';
+        refreshIcons();
+    }
+
+    function applyResult(data, append) {
+        render(data.musics || [], append);
+        var total = list.children.length;
+        if (state.query) {
+            resultHint.classList.remove('hidden');
+            resultHint.textContent = '搜索「' + state.query + '」找到 ' + total + ' 条结果';
+        } else {
+            resultHint.classList.add('hidden');
+        }
+        emptyText.textContent = state.query ? ('没有找到匹配「' + state.query + '」的公开音频') : '暂无公开音频';
+        loadMoreBtn.classList.toggle('hidden', !data.has_more);
+        loadEnd.classList.toggle('hidden', !!data.has_more);
+    }
+
+    function fetchPage(page, append) {
+        if (state.loading) return;
+        setLoading(true);
+        var params = new URLSearchParams();
+        params.set('q', state.query || '');
+        params.set('page', page);
+        fetch(CFG.apiUrl + '?' + params.toString(), { headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (!data.success) { Toast && Toast.error(data.message || '加载失败'); return; }
+            state.page = page;
+            applyResult(data, append);
+        })
+        .catch(function () { Toast && Toast.error('加载失败，请重试'); })
+        .finally(function () { setLoading(false); });
+    }
+
+    // 无刷新搜索（点击放大置顶 + 输入即搜）
+    if (window.SiteSearch) {
+        SiteSearch.attach({
+            input: document.getElementById('music-search-input'),
+            form: document.getElementById('music-search-form'),
+            pinEl: document.getElementById('music-search-wrap'),
+            endpoint: CFG.apiUrl,
+            onLoading: function () { setLoading(true); },
+            onResults: function (data) {
+                setLoading(false);
+                if (!data || !data.success) return;
+                state.query = document.getElementById('music-search-input').value.trim();
+                state.page = 1;
+                applyResult(data, false);
+            },
+            onError: function () { setLoading(false); Toast && Toast.error('搜索失败，请重试'); }
         });
     }
 
-    // 复制播放链接
-    document.querySelectorAll('.copy-link-btn').forEach(function (btn) {
-        btn.addEventListener('click', function () {
-            var url = btn.getAttribute('data-url') || '';
-            function done(ok) {
-                if (typeof Toast !== 'undefined') {
-                    if (ok) Toast.success('播放链接已复制'); else Toast.error('复制失败，请手动复制');
-                }
-            }
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(url).then(function () { done(true); }, function () { done(false); });
-            } else {
-                var ta = document.createElement('textarea');
-                ta.value = url;
-                ta.style.position = 'fixed';
-                ta.style.opacity = '0';
-                document.body.appendChild(ta);
-                ta.select();
-                try { done(document.execCommand('copy')); } catch (_) { done(false); }
-                document.body.removeChild(ta);
-            }
-        });
+    loadMoreBtn.addEventListener('click', function () { fetchPage(state.page + 1, true); });
+
+    // 复制链接（事件委托，兼容动态渲染）
+    list.addEventListener('click', function (e) {
+        var btn = e.target.closest ? e.target.closest('.copy-link-btn') : null;
+        if (!btn) return;
+        var url = btn.getAttribute('data-url') || '';
+        function done(ok) { if (typeof Toast !== 'undefined') { ok ? Toast.success('播放链接已复制') : Toast.error('复制失败，请手动复制'); } }
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(url).then(function () { done(true); }, function () { done(false); });
+        } else {
+            var ta = document.createElement('textarea');
+            ta.value = url; ta.style.position = 'fixed'; ta.style.opacity = '0';
+            document.body.appendChild(ta); ta.select();
+            try { done(document.execCommand('copy')); } catch (_) { done(false); }
+            document.body.removeChild(ta);
+        }
     });
+
+    // 搜索图标点击聚焦
+    var icon = document.querySelector('#music-search-wrap .search-icon');
+    var searchInput = document.getElementById('music-search-input');
+    if (icon && searchInput) icon.addEventListener('click', function () { searchInput.focus(); });
 })();
 </script>
 {% endblock %}

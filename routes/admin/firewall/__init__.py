@@ -35,6 +35,14 @@ from config import (
 from routes.admin import admin_bp
 
 
+def _payload():
+    """读取 JSON（或表单兜底）请求体。"""
+    data = request.get_json(silent=True)
+    if isinstance(data, dict):
+        return data
+    return request.form.to_dict()
+
+
 def _resolve_account_usernames(account_bans):
     """为账号封禁列表补充用户名。"""
     from core.db import get_db
@@ -313,36 +321,33 @@ def admin_firewall_settings_save():
 @admin_bp.route('/admin/firewall/ban-ip', methods=['POST'])
 @admin_required
 def admin_firewall_ban_ip():
-    """手动封禁 IP。"""
+    """手动封禁 IP（JSON API，前端无刷新）。"""
     user = get_current_user()
-    ip_address = (request.form.get('ip_address') or '').strip()
-    reason = (request.form.get('reason') or '').strip()
-    duration_days = (request.form.get('duration_days') or '').strip()
+    data = _payload()
+    ip_address = (data.get('ip_address') or '').strip()
+    reason = (data.get('reason') or '').strip()
+    duration_days = str(data.get('duration_days') or '').strip()
     if not ip_address:
-        flash('IP 地址不能为空', 'error')
-        return redirect(url_for('admin.admin_firewall'))
+        return jsonify({'success': False, 'message': 'IP 地址不能为空'}), 400
     duration_minutes = None
     if duration_days:
         try:
             duration_minutes = float(duration_days) * 1440
         except (ValueError, TypeError):
-            flash('封禁时长无效', 'error')
-            return redirect(url_for('admin.admin_firewall'))
+            return jsonify({'success': False, 'message': '封禁时长无效'}), 400
     success, message = ban_ip(
         ip_address=ip_address, reason=reason,
         banned_by=user['id'], duration_minutes=duration_minutes,
     )
-    flash(message, 'success' if success else 'error')
-    return redirect(url_for('admin.admin_firewall'))
+    return jsonify({'success': success, 'message': message}), (200 if success else 400)
 
 
 @admin_bp.route('/admin/firewall/<int:ban_id>/delete', methods=['POST'])
 @admin_required
 def admin_firewall_delete(ban_id):
-    """解除 IP 封禁。"""
+    """解除 IP 封禁（JSON API，前端无刷新）。"""
     success, message, _ = unban_ip(ban_id=ban_id)
-    flash(message, 'success' if success else 'error')
-    return redirect(url_for('admin.admin_firewall'))
+    return jsonify({'success': success, 'message': message}), (200 if success else 404)
 
 
 # ---- 账号封禁操作 ----
@@ -350,41 +355,37 @@ def admin_firewall_delete(ban_id):
 @admin_bp.route('/admin/firewall/ban-account', methods=['POST'])
 @admin_required
 def admin_firewall_ban_account():
-    """手动封禁账号。"""
+    """手动封禁账号（JSON API，前端无刷新）。"""
     user = get_current_user()
-    user_id = (request.form.get('user_id') or '').strip()
-    reason = (request.form.get('reason') or '').strip()
-    duration_minutes = (request.form.get('duration_minutes') or '').strip()
+    data = _payload()
+    user_id = str(data.get('user_id') or '').strip()
+    reason = (data.get('reason') or '').strip()
+    duration_minutes = str(data.get('duration_minutes') or '').strip()
     if not user_id:
-        flash('用户 ID 不能为空', 'error')
-        return redirect(url_for('admin.admin_firewall'))
+        return jsonify({'success': False, 'message': '用户 ID 不能为空'}), 400
     try:
         uid = int(user_id)
     except (ValueError, TypeError):
-        flash('用户 ID 必须为数字', 'error')
-        return redirect(url_for('admin.admin_firewall'))
+        return jsonify({'success': False, 'message': '用户 ID 必须为数字'}), 400
     dur = None
     if duration_minutes:
         try:
             dur = int(duration_minutes)
         except (ValueError, TypeError):
-            flash('封禁时长无效', 'error')
-            return redirect(url_for('admin.admin_firewall'))
+            return jsonify({'success': False, 'message': '封禁时长无效'}), 400
     success, message = ban_account(
         user_id=uid, reason=reason or '管理员封禁',
         banned_by=user['id'], duration_minutes=dur,
     )
-    flash(message, 'success' if success else 'error')
-    return redirect(url_for('admin.admin_firewall'))
+    return jsonify({'success': success, 'message': message}), (200 if success else 400)
 
 
 @admin_bp.route('/admin/firewall/unban-account/<int:ban_id>', methods=['POST'])
 @admin_required
 def admin_firewall_unban_account(ban_id):
-    """解除账号封禁。"""
+    """解除账号封禁（JSON API，前端无刷新）。"""
     success, message, _ = unban_account(ban_id)
-    flash(message, 'success' if success else 'error')
-    return redirect(url_for('admin.admin_firewall'))
+    return jsonify({'success': success, 'message': message}), (200 if success else 404)
 
 
 # ---- 白名单操作 ----
@@ -392,27 +393,25 @@ def admin_firewall_unban_account(ban_id):
 @admin_bp.route('/admin/firewall/whitelist/add', methods=['POST'])
 @admin_required
 def admin_firewall_whitelist_add():
-    """添加 IP 白名单。"""
-    ip_address = (request.form.get('ip_address') or '').strip()
+    """添加 IP 白名单（JSON API，前端无刷新）。"""
+    data = _payload()
+    ip_address = (data.get('ip_address') or '').strip()
     if not ip_address:
-        flash('IP 地址不能为空', 'error')
-        return redirect(url_for('admin.admin_firewall'))
+        return jsonify({'success': False, 'message': 'IP 地址不能为空'}), 400
     success, message = whitelist_add(ip_address)
-    flash(message, 'success' if success else 'error')
-    return redirect(url_for('admin.admin_firewall'))
+    return jsonify({'success': success, 'message': message, 'ip_address': ip_address}), (200 if success else 400)
 
 
 @admin_bp.route('/admin/firewall/whitelist/remove', methods=['POST'])
 @admin_required
 def admin_firewall_whitelist_remove():
-    """移除 IP 白名单。"""
-    ip_address = (request.form.get('ip_address') or '').strip()
+    """移除 IP 白名单（JSON API，前端无刷新）。"""
+    data = _payload()
+    ip_address = (data.get('ip_address') or '').strip()
     if not ip_address:
-        flash('IP 地址不能为空', 'error')
-        return redirect(url_for('admin.admin_firewall'))
+        return jsonify({'success': False, 'message': 'IP 地址不能为空'}), 400
     success, message = whitelist_remove(ip_address)
-    flash(message, 'success' if success else 'error')
-    return redirect(url_for('admin.admin_firewall'))
+    return jsonify({'success': success, 'message': message}), (200 if success else 400)
 
 
 # ===========================================================================
@@ -453,38 +452,34 @@ def admin_firewall_whitelist_page():
 @admin_bp.route('/admin/firewall/whitelist/account/add', methods=['POST'])
 @admin_required
 def admin_firewall_whitelist_account_add():
-    """添加账号白名单。"""
-    user_id = (request.form.get('user_id') or '').strip()
-    note = (request.form.get('note') or '').strip()
+    """添加账号白名单（JSON API，前端无刷新）。"""
+    data = _payload()
+    user_id = str(data.get('user_id') or '').strip()
+    note = (data.get('note') or '').strip()
     if not user_id:
-        flash('用户 ID 不能为空', 'error')
-        return redirect(url_for('admin.admin_firewall_whitelist_page'))
+        return jsonify({'success': False, 'message': '用户 ID 不能为空'}), 400
     try:
         uid = int(user_id)
     except (ValueError, TypeError):
-        flash('用户 ID 必须为数字', 'error')
-        return redirect(url_for('admin.admin_firewall_whitelist_page'))
+        return jsonify({'success': False, 'message': '用户 ID 必须为数字'}), 400
     success, message = whitelist_account(uid, note)
-    flash(message, 'success' if success else 'error')
-    return redirect(url_for('admin.admin_firewall_whitelist_page'))
+    return jsonify({'success': success, 'message': message, 'user_id': uid, 'note': note}), (200 if success else 400)
 
 
 @admin_bp.route('/admin/firewall/whitelist/account/remove', methods=['POST'])
 @admin_required
 def admin_firewall_whitelist_account_remove():
-    """移除账号白名单。"""
-    user_id = (request.form.get('user_id') or '').strip()
+    """移除账号白名单（JSON API，前端无刷新）。"""
+    data = _payload()
+    user_id = str(data.get('user_id') or '').strip()
     if not user_id:
-        flash('用户 ID 不能为空', 'error')
-        return redirect(url_for('admin.admin_firewall_whitelist_page'))
+        return jsonify({'success': False, 'message': '用户 ID 不能为空'}), 400
     try:
         uid = int(user_id)
     except (ValueError, TypeError):
-        flash('用户 ID 必须为数字', 'error')
-        return redirect(url_for('admin.admin_firewall_whitelist_page'))
+        return jsonify({'success': False, 'message': '用户 ID 必须为数字'}), 400
     success, message = unwhitelist_account(uid)
-    flash(message, 'success' if success else 'error')
-    return redirect(url_for('admin.admin_firewall_whitelist_page'))
+    return jsonify({'success': success, 'message': message}), (200 if success else 400)
 
 
 # ===========================================================================

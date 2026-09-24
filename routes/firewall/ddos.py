@@ -19,7 +19,7 @@ from routes.firewall.service import (
     is_whitelisted,
     SYSTEM_BANNER_ID,
 )
-from routes.firewall.database import get_db, push_ban_context
+from routes.firewall.database import push_ban_context
 from core.system.logger import log
 
 # DDoS 检测强度预设：单位检测窗口（秒）内允许的最大请求数
@@ -179,13 +179,13 @@ class DDoSDetector:
         if success:
             # 记录 DDoS 封禁日志
             try:
-                with get_db() as conn:
-                    conn.execute(
-                        "INSERT INTO firewall_ddos_log "
-                        "(ip_address, action, threshold, count) "
-                        "VALUES (?, ?, ?, ?)",
-                        (ip, 'banned', threshold, offense_count),
-                    )
+                from routes.firewall.database import submit_write
+                submit_write(
+                    "INSERT INTO firewall_ddos_log "
+                    "(ip_address, action, threshold, count) "
+                    "VALUES (?, ?, ?, ?)",
+                    (ip, 'banned', threshold, offense_count),
+                )
             except Exception:
                 pass
             log('Security', 'DDoS 防护：自动封禁',

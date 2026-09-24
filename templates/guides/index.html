@@ -80,7 +80,7 @@
         {% endif %}
 
         {% if guides %}
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+        <div id="guide-list" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
             {% for guide in guides %}
             <div class="guide-card block p-6">
                 <div class="guide-card-top-bar"></div>
@@ -116,8 +116,15 @@
             </div>
             {% endfor %}
         </div>
+        <div class="text-center py-16 hidden" id="guide-empty">
+            <div class="pixel-card rounded-xl p-8 sm:p-12 max-w-lg mx-auto">
+                <i data-lucide="book-open" class="w-12 h-12 text-cream/30 mx-auto mb-4"></i>
+                <p class="text-cream/60 text-lg mb-2">暂无服务器指南</p>
+                <p class="text-cream/40 text-sm">管理员或成员可以添加新指南</p>
+            </div>
+        </div>
         {% else %}
-        <div class="text-center py-16">
+        <div class="text-center py-16" id="guide-empty">
             <div class="pixel-card rounded-xl p-8 sm:p-12 max-w-lg mx-auto">
                 <i data-lucide="book-open" class="w-12 h-12 text-cream/30 mx-auto mb-4"></i>
                 <p class="text-cream/60 text-lg mb-2">暂无服务器指南</p>
@@ -125,8 +132,103 @@
             </div>
         </div>
         {% endif %}
+
+        <div class="mt-8 text-center">
+            <button type="button" id="guide-load-more"
+                    class="btn-secondary px-6 py-2.5 rounded-lg text-sm inline-flex items-center gap-2{% if not has_more %} hidden{% endif %}">
+                <i data-lucide="chevron-down" class="w-4 h-4"></i>加载更多
+            </button>
+            <p id="guide-load-end" class="text-xs text-cream/40 mt-2{% if has_more %} hidden{% endif %}">没有更多了</p>
+        </div>
     </div>
 </section>
+{% endblock %}
 
+{% block extra_script %}
+<script>
+// 指南列表：每次 10 条，点击加载更多（API，无刷新）
+(function () {
+    var list = document.getElementById('guide-list');
+    var emptyBox = document.getElementById('guide-empty');
+    var btn = document.getElementById('guide-load-more');
+    var loadEnd = document.getElementById('guide-load-end');
+    if (!btn) return;
 
+    var state = { page: 1, loading: false, myMode: {{ 'true' if my_mode else 'false' }} };
+
+    function esc(t) { var d = document.createElement('div'); d.textContent = t == null ? '' : String(t); return d.innerHTML; }
+    function refreshIcons() { if (typeof lucide !== 'undefined' && lucide.createIcons) { try { lucide.createIcons(); } catch (_) {} } }
+    function detailUrl(id) { return '/guides/' + id; }
+
+    function cardHtml(g) {
+        var status = '';
+        if (state.myMode) {
+            var cls = g.status === 'pending' ? 'guide-status-pending' : (g.status === 'approved' ? 'guide-status-approved' : 'guide-status-rejected');
+            var label = g.status === 'pending' ? '待审核' : (g.status === 'approved' ? '已通过' : '已拒绝');
+            status = '<span class="guide-status-badge ' + cls + '">' + label + '</span>';
+        }
+        var pin = g.is_pinned ? '<span class="inline-flex items-center gap-1 text-xs text-gold-400"><i data-lucide="pin" class="w-3 h-3"></i>置顶</span>' : '';
+        var date = ((g.published_at || g.created_at || '') + '').slice(0, 10);
+        var summary = g.summary || (((g.content || '').slice(0, 120)) + '...');
+        var mine = '';
+        if (state.myMode) {
+            mine = '<div class="mt-3 pt-3 border-t border-forest-700/30 flex items-center gap-2">' +
+                '<a href="/guides/' + g.id + '/edit" class="text-gold-400 hover:text-gold-300 text-xs px-2 py-1 rounded bg-gold-400/10 border border-gold-400/20">修改</a>' +
+                (g.status === 'rejected' && g.rejected_reason ? '<span class="text-xs text-red-300">原因：' + esc(g.rejected_reason) + '</span>' : '') +
+                '</div>';
+        }
+        return '<div class="guide-card block p-6"><div class="guide-card-top-bar"></div><div class="relative z-10">' +
+            '<div class="flex items-center gap-2 mb-3">' + pin + status + '</div>' +
+            '<a href="' + detailUrl(g.id) + '" class="hover:no-underline">' +
+            '<h3 class="text-lg font-bold mb-2 text-cream">' + esc(g.title) + '</h3>' +
+            '<p class="text-cream/60 text-sm leading-relaxed mb-4 line-clamp-3">' + esc(summary) + '</p></a>' +
+            '<div class="flex items-center justify-between text-xs text-cream/40">' +
+            '<span class="flex items-center gap-1"><i data-lucide="user" class="w-3 h-3"></i>' + esc(g.author_name || '未知') + '</span>' +
+            '<span class="flex items-center gap-1"><i data-lucide="calendar" class="w-3 h-3"></i>' + esc(date) + '</span></div>' +
+            mine + '</div></div>';
+    }
+
+    function setLoading(v) {
+        state.loading = v;
+        btn.innerHTML = v
+            ? '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i>加载中…'
+            : '<i data-lucide="chevron-down" class="w-4 h-4"></i>加载更多';
+        refreshIcons();
+    }
+
+    function initListBox() {
+        if (!list) {
+            list = document.createElement('div');
+            list.id = 'guide-list';
+            list.className = 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6';
+            emptyBox.parentNode.insertBefore(list, emptyBox);
+        }
+    }
+
+    btn.addEventListener('click', function () {
+        if (state.loading) return;
+        setLoading(true);
+        var params = new URLSearchParams();
+        params.set('page', state.page + 1);
+        if (state.myMode) params.set('my', '1');
+        fetch('{{ url_for("guides.api_guides_list") }}?' + params.toString(), {
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (!data || !data.success) { if (typeof Toast !== 'undefined') Toast.error((data && data.message) || '加载失败'); return; }
+            initListBox();
+            var html = (data.guides || []).map(cardHtml).join('');
+            if (html) list.insertAdjacentHTML('beforeend', html);
+            state.page = data.page;
+            if (emptyBox) emptyBox.classList.toggle('hidden', list.children.length > 0);
+            btn.classList.toggle('hidden', !data.has_more);
+            loadEnd.classList.toggle('hidden', !!data.has_more);
+            refreshIcons();
+        })
+        .catch(function () { if (typeof Toast !== 'undefined') Toast.error('加载失败，请重试'); })
+        .finally(function () { setLoading(false); });
+    });
+})();
+</script>
 {% endblock %}

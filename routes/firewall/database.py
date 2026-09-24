@@ -8,6 +8,7 @@
 """
 
 import os
+import queue
 import threading
 import time
 from datetime import datetime
@@ -24,6 +25,175 @@ DB_PATH = os.path.join(DB_DIR, 'firewall.duckdb')
 
 _conn = None
 _conn_lock = threading.Lock()
+
+# ---------------------------------------------------------------------------
+# 单写入线程 + 写队列 —— 所有 DuckDB 写入统一由一个线程按顺序执行
+#
+# 设计目标（防锁 + 高性能）：
+#   - 绝不允许多线程同时写入 DuckDB（DuckDB 单连接不支持并发写）
+#   - 所有写操作进入 FIFO 队列，由唯一写入线程顺序执行
+#   - 相邻的「即发即忘」写操作合并为一个事务批量提交，减少 I/O 次数
+#   - 需要返回结果的写操作（如 INSERT ... RETURNING id）同步等待写入完成
+# ---------------------------------------------------------------------------
+
+_write_queue = queue.Queue()
+_writer_thread = None
+_writer_started = False
+_writer_start_lock = threading.Lock()
+
+# 批量提交上限：单次事务最多合并的写操作数
+_WRITE_BATCH_MAX = 64
+# 写入线程空闲等待时间（秒）：超时后强制刷新未提交的批量写
+_WRITE_FLUSH_TIMEOUT = 0.5
+
+
+def _start_writer():
+    """惰性启动唯一写入线程（线程安全，仅启动一次）。"""
+    global _writer_thread, _writer_started
+    if _writer_started:
+        return
+    with _writer_start_lock:
+        if _writer_started:
+            return
+        _writer_started = True
+        _writer_thread = threading.Thread(
+            target=_writer_loop, name='fw-writer', daemon=True,
+        )
+        _writer_thread.start()
+        log('INFO', 'FirewallDB', '防火墙单写入线程已启动')
+
+
+def _execute_batch(batch):
+    """在连接锁保护下执行一批写操作（一个事务）并提交。"""
+    conn = get_db()
+    try:
+        with conn:
+            for sql, params in batch:
+                if params is None:
+                    conn.execute(sql)
+                else:
+                    conn.execute(sql, params)
+    except Exception as exc:
+        log('WARNING', 'FirewallDB', f'批量写入失败: {exc}')
+        raise
+
+
+def _writer_loop():
+    """唯一写入线程主循环：按顺序执行写队列，合并批量提交。"""
+    pending = []  # [(sql, params), ...]
+
+    def flush():
+        if pending:
+            batch = list(pending)
+            pending.clear()
+            _execute_batch(batch)
+
+    while True:
+        try:
+            item = _write_queue.get(timeout=_WRITE_FLUSH_TIMEOUT)
+        except queue.Empty:
+            # 空闲：刷新未提交的批量写
+            try:
+                flush()
+            except Exception:
+                pending.clear()
+            continue
+
+        if item is None:  # 退出哨兵
+            try:
+                flush()
+            except Exception:
+                pass
+            return
+
+        sql, params, event, holder, fetch = item
+        if event is not None:
+            # 同步写：先提交已有批量，再单独执行并提交，最后通知等待者
+            try:
+                flush()
+            except Exception:
+                pass
+            try:
+                conn = get_db()
+                with conn:
+                    result = conn.execute(sql, params) if params is not None else conn.execute(sql)
+                    if fetch == 'one':
+                        holder['result'] = result.fetchone()
+                    elif fetch == 'all':
+                        holder['result'] = result.fetchall()
+            except Exception as exc:
+                holder['error'] = exc
+            finally:
+                event.set()
+        else:
+            # 即发即忘：加入批量
+            pending.append((sql, params))
+            if len(pending) >= _WRITE_BATCH_MAX:
+                try:
+                    flush()
+                except Exception:
+                    pending.clear()
+
+
+def submit_write(sql, params=None):
+    """提交一个「即发即忘」写操作（异步，不等待结果）。
+
+    写操作由唯一写入线程按顺序执行，与相邻写操作合并提交。
+    """
+    _start_writer()
+    _write_queue.put((sql, params, None, None, None))
+
+
+def execute_write(sql, params=None, fetch=None, timeout=5.0):
+    """提交一个写操作并同步等待其完成（用于需要返回值的写）。
+
+    Args:
+        sql: SQL 语句
+        params: 参数（tuple/list/dict）
+        fetch: None（不需要结果）/ 'one' / 'all'
+        timeout: 最长等待秒数
+
+    Returns:
+        fetch 为 'one' 时返回单行（tuple），'all' 返回全部行；否则返回 True。
+        失败时返回 None（并记录日志）。
+    """
+    _start_writer()
+    event = threading.Event()
+    holder = {}
+    _write_queue.put((sql, params, event, holder, fetch))
+    if not event.wait(timeout):
+        log('WARNING', 'FirewallDB', '写入等待超时', sql=sql[:60])
+        return None
+    if holder.get('error') is not None:
+        log('WARNING', 'FirewallDB', f'写入失败: {holder["error"]}', sql=sql[:60])
+        return None
+    if fetch in ('one', 'all'):
+        return holder.get('result')
+    return True
+
+
+def flush_writes(timeout=5.0):
+    """刷新写队列（等待所有已入队的写操作落盘），用于关闭前收尾。"""
+    if not _writer_started:
+        return
+    done = threading.Event()
+    _write_queue.put(('SELECT 1', None, done, {}, None))
+    done.wait(timeout)
+
+
+def stop_writer():
+    """停止写入线程（尽力刷新后退出）。"""
+    global _writer_started, _writer_thread
+    if not _writer_started:
+        return
+    try:
+        flush_writes()
+    except Exception:
+        pass
+    _write_queue.put(None)
+    _writer_started = False
+    _writer_thread = None
+
 
 # ---------------------------------------------------------------------------
 # 内存缓存 —— 所有防火墙热路径查询走此缓存，避免每秒查 DuckDB
@@ -572,39 +742,38 @@ def record_ban_detail(
         detail_kwargs['additional_info'] = ''
 
     try:
-        with get_db() as conn:
-            conn.execute(
-                "INSERT INTO firewall_ban_details "
-                "(ban_id, ban_type, ip_address, reason, banned_by, "
-                " created_at, expires_at, "
-                " user_agent, request_path, request_method, referer, "
-                " attack_type, matched_text, action_source, "
-                " request_headers, query_string, request_body_preview, "
-                " action_ip, action_username, additional_info) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (
-                    detail_kwargs['ban_id'],
-                    detail_kwargs['ban_type'],
-                    detail_kwargs['ip_address'],
-                    detail_kwargs['reason'],
-                    detail_kwargs['banned_by'],
-                    detail_kwargs['created_at'],
-                    detail_kwargs['expires_at'],
-                    detail_kwargs['user_agent'],
-                    detail_kwargs['request_path'],
-                    detail_kwargs['request_method'],
-                    detail_kwargs['referer'],
-                    detail_kwargs['attack_type'],
-                    detail_kwargs['matched_text'],
-                    detail_kwargs['action_source'],
-                    detail_kwargs['request_headers'],
-                    detail_kwargs['query_string'],
-                    detail_kwargs['request_body_preview'],
-                    detail_kwargs['action_ip'],
-                    detail_kwargs['action_username'],
-                    detail_kwargs['additional_info'],
-                ),
-            )
+        submit_write(
+            "INSERT INTO firewall_ban_details "
+            "(ban_id, ban_type, ip_address, reason, banned_by, "
+            " created_at, expires_at, "
+            " user_agent, request_path, request_method, referer, "
+            " attack_type, matched_text, action_source, "
+            " request_headers, query_string, request_body_preview, "
+            " action_ip, action_username, additional_info) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                detail_kwargs['ban_id'],
+                detail_kwargs['ban_type'],
+                detail_kwargs['ip_address'],
+                detail_kwargs['reason'],
+                detail_kwargs['banned_by'],
+                detail_kwargs['created_at'],
+                detail_kwargs['expires_at'],
+                detail_kwargs['user_agent'],
+                detail_kwargs['request_path'],
+                detail_kwargs['request_method'],
+                detail_kwargs['referer'],
+                detail_kwargs['attack_type'],
+                detail_kwargs['matched_text'],
+                detail_kwargs['action_source'],
+                detail_kwargs['request_headers'],
+                detail_kwargs['query_string'],
+                detail_kwargs['request_body_preview'],
+                detail_kwargs['action_ip'],
+                detail_kwargs['action_username'],
+                detail_kwargs['additional_info'],
+            ),
+        )
     except Exception as exc:
         log('WARNING', 'FirewallDB', f'记录封禁详情失败: {exc}', ban_id=ban_id)
 
@@ -690,29 +859,18 @@ def is_account_whitelisted_db(user_id):
 
 def whitelist_account_db(user_id, note=''):
     """添加账号白名单。"""
-    try:
-        with get_db() as conn:
-            conn.execute(
-                "INSERT INTO firewall_account_whitelist (user_id, note) VALUES (?, ?)",
-                (user_id, note),
-            )
-            return True
-        return True
-    except Exception:
-        return False
+    return execute_write(
+        "INSERT INTO firewall_account_whitelist (user_id, note) VALUES (?, ?)",
+        (user_id, note),
+    ) is not None
 
 
 def unwhitelist_account_db(user_id):
     """移除账号白名单。"""
-    try:
-        with get_db() as conn:
-            conn.execute(
-                "DELETE FROM firewall_account_whitelist WHERE user_id = ?",
-                (user_id,),
-            )
-        return True
-    except Exception:
-        return False
+    return execute_write(
+        "DELETE FROM firewall_account_whitelist WHERE user_id = ?",
+        (user_id,),
+    ) is not None
 
 
 # ---------------------------------------------------------------------------
@@ -730,13 +888,12 @@ def record_content_injection(user_id, content_type, injection_type, content_prev
         int: 用户在该时间窗口内的总注入警告次数
     """
     try:
-        with get_db() as conn:
-            conn.execute(
-                "INSERT INTO firewall_content_injections "
-                "(user_id, content_type, injection_type, content_preview, ip_address, matched_pattern, created_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)",
-                (user_id, content_type, injection_type, content_preview[:200], ip_address, matched_pattern),
-            )
+        execute_write(
+            "INSERT INTO firewall_content_injections "
+            "(user_id, content_type, injection_type, content_preview, ip_address, matched_pattern, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)",
+            (user_id, content_type, injection_type, content_preview[:200], ip_address, matched_pattern),
+        )
     except Exception as exc:
         log('WARNING', 'FirewallDB', f'记录内容注入警告失败: {exc}', user_id=user_id)
     return get_user_injection_count(user_id, INJECTION_WARNING_WINDOW_HOURS)

@@ -1,4 +1,4 @@
-"""公共建筑 API 路由：评论、删除评论、举报。"""
+"""公共建筑 API 路由：搜索/列表、收藏、标签、评论、举报。"""
 
 from datetime import datetime
 
@@ -9,6 +9,92 @@ from core.db import get_db
 from core.shared.ip import get_client_ip
 from core.shared.captcha import captcha_service
 from routes.buildings import buildings_bp
+from services import buildings as buildings_service
+
+
+@buildings_bp.route('/api/buildings')
+def api_buildings_list():
+    """公共建筑搜索/分页列表（JSON，供前端无刷新搜索与「加载更多」）。
+
+    参数：
+      q    关键词（匹配标题与标签）
+      tag  精确标签筛选
+      page 页码（从 1 开始，默认 1）
+      my   为 1 时返回当前用户的建筑（需登录）
+    """
+    user = get_current_user()
+    my_mode = bool(user and request.args.get('my'))
+    query = (request.args.get('q') or '').strip()[:100]
+    tag = (request.args.get('tag') or '').strip()[:32]
+    page = request.args.get('page', type=int) or 1
+
+    items, has_more = buildings_service.list_buildings(
+        search=query,
+        tag=tag,
+        page=page,
+        page_size=buildings_service.PAGE_SIZE,
+        author_id=user['id'] if user else None,
+        my_mode=my_mode,
+    )
+
+    favorite_ids = set()
+    if user:
+        favorite_ids = buildings_service.get_favorite_ids(
+            user['id'], [b['id'] for b in items]
+        )
+
+    for b in items:
+        b['is_favorited'] = b['id'] in favorite_ids
+
+    return jsonify({
+        'success': True,
+        'buildings': items,
+        'has_more': has_more,
+        'page': page,
+        'next_page': page + 1,
+        'my_mode': my_mode,
+    })
+
+
+@buildings_bp.route('/buildings/<int:building_id>/favorite', methods=['POST'])
+@login_required
+def toggle_building_favorite(building_id):
+    """收藏 / 取消收藏公共建筑（JSON）。"""
+    user = get_current_user()
+    success, message, is_favorited, favorite_count = buildings_service.toggle_favorite(
+        user_id=user['id'], building_id=building_id,
+    )
+    return jsonify({
+        'success': success,
+        'message': message,
+        'is_favorited': is_favorited,
+        'favorite_count': favorite_count,
+    })
+
+
+@buildings_bp.route('/buildings/<int:building_id>/tags', methods=['POST'])
+@login_required
+def edit_building_tags(building_id):
+    """编辑建筑标签（作者本人或管理员，JSON）。"""
+    user = get_current_user()
+    raw_tags = request.form.get('tags') or ''
+
+    # 标签同样做内容注入检测，避免通过标签绕过内容防护
+    from routes.firewall.content_filter import check_content_injection
+    inj = check_content_injection(
+        user_id=user['id'], content=raw_tags, content_type='building_tags',
+        ip_address=get_client_ip(), username=user['username'],
+    )
+    if inj['blocked']:
+        return jsonify({'success': False, 'message': inj['message']})
+
+    success, message, tags = buildings_service.set_tags(
+        building_id=building_id,
+        user_id=user['id'],
+        is_admin=bool(user.get('is_admin')),
+        raw_tags=raw_tags,
+    )
+    return jsonify({'success': success, 'message': message, 'tags': tags})
 
 
 @buildings_bp.route('/buildings/<int:building_id>/comment', methods=['POST'])

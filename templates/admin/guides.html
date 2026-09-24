@@ -60,9 +60,9 @@
                             <th class="text-right px-4 py-3 font-medium">操作</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody data-guides-tbody>
                         {% for guide in guides %}
-                        <tr class="border-b border-forest-700/30 hover:bg-forest-800/20 transition-colors">
+                        <tr class="border-b border-forest-700/30 hover:bg-forest-800/20 transition-colors" data-guide-row="{{ guide.id }}">
                             <td class="px-4 py-3 text-cream/40">{{ guide.id }}</td>
                             <td class="px-4 py-3">
                                 <a href="{{ url_for('guides.guide_detail', guide_id=guide.id) }}" target="_blank" class="text-gold-400 hover:underline font-medium">{{ guide.title }}</a>
@@ -71,7 +71,7 @@
                                 {% endif %}
                             </td>
                             <td class="px-4 py-3 text-cream/70">{{ guide.author_name or '未知' }}</td>
-                            <td class="px-4 py-3">
+                            <td class="px-4 py-3" data-guide-status="{{ guide.id }}">
                                 <span class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full
                                     {% if guide.status == 'pending' %}status-pending
                                     {% elif guide.status == 'approved' %}status-approved
@@ -85,17 +85,19 @@
                                 <div class="flex items-center justify-end gap-2">
                                     {% if guide.status == 'pending' %}
                                     <button type="button" class="text-green-400 hover:text-green-300 text-xs px-2 py-1 rounded bg-green-500/10 border border-green-500/20" data-guide-id="{{ guide.id }}" onclick="showPreviewModal(this)">预览</button>
-                                    <form action="{{ url_for('admin.admin_guide_approve', guide_id=guide.id) }}" method="POST" class="inline">
-                                        {{ csrf_field() }}
-                                        <button type="submit" class="text-green-400 hover:text-green-300 text-xs px-2 py-1 rounded bg-green-500/10 border border-green-500/20">通过</button>
-                                    </form>
+                                    <button type="button"
+                                            class="admin-action text-green-400 hover:text-green-300 text-xs px-2 py-1 rounded bg-green-500/10 border border-green-500/20"
+                                            data-action-url="{{ url_for('admin.admin_guide_approve', guide_id=guide.id) }}"
+                                            data-action-success="指南已通过审核">通过</button>
                                     <button type="button" class="text-red-400 hover:text-red-300 text-xs px-2 py-1 rounded bg-red-500/10 border border-red-500/20" onclick="showRejectModal({{ guide.id }})">拒绝</button>
                                     {% endif %}
                                     <a href="{{ url_for('admin.admin_guide_edit', guide_id=guide.id) }}" class="text-gold-400 hover:text-gold-300 text-xs px-2 py-1 rounded bg-gold-400/10 border border-gold-400/20">编辑</a>
-                                    <form action="{{ url_for('admin.admin_guide_delete', guide_id=guide.id) }}" method="POST" class="inline" onsubmit="return confirm('确定删除此指南？');">
-                                        {{ csrf_field() }}
-                                        <button type="submit" class="text-red-400 hover:text-red-300 text-xs px-2 py-1 rounded bg-red-500/10 border border-red-500/20">删除</button>
-                                    </form>
+                                    <button type="button"
+                                            class="admin-action text-red-400 hover:text-red-300 text-xs px-2 py-1 rounded bg-red-500/10 border border-red-500/20"
+                                            data-action-url="{{ url_for('admin.admin_guide_delete', guide_id=guide.id) }}"
+                                            data-action-confirm="确定删除此指南？"
+                                            data-action-remove="tr"
+                                            data-action-success="指南已删除">删除</button>
                                 </div>
                             </td>
                         </tr>
@@ -107,6 +109,14 @@
                     </tbody>
                 </table>
             </div>
+        </div>
+
+        <div class="mt-6 text-center">
+            <button type="button" id="guides-load-more"
+                    class="btn-secondary px-6 py-2.5 rounded-lg text-sm inline-flex items-center gap-2{% if not has_more %} hidden{% endif %}">
+                <i data-lucide="chevron-down" class="w-4 h-4"></i>加载更多
+            </button>
+            <p id="guides-load-end" class="text-xs text-cream/40 mt-2{% if has_more %} hidden{% endif %}">没有更多了</p>
         </div>
     </div>
 </section>
@@ -124,8 +134,8 @@ var guidePreviewData = {
 var _previewGuideId = null;
 
 function showRejectModal(id) {
-    const form = document.getElementById('reject-form');
-    form.action = '/admin/guides/' + id + '/reject';
+    document.getElementById('reject-reason-input').value = '';
+    document.getElementById('rejectConfirmBtn').setAttribute('data-action-url', '/admin/guides/' + id + '/reject');
     openModal('reject-modal');
 }
 function hideRejectModal() {
@@ -143,7 +153,7 @@ function showPreviewModal(btn) {
     document.getElementById('preview-content').innerHTML = data.content
         ? DOMPurify.sanitize(marked.parse(data.content))
         : '<p class="text-[var(--text-tertiary)] text-center py-8">暂无内容</p>';
-    document.getElementById('preview-approve-form').action = '/admin/guides/' + _previewGuideId + '/approve';
+    document.getElementById('previewApproveBtn').setAttribute('data-action-url', '/admin/guides/' + _previewGuideId + '/approve');
     openModal('preview-modal');
 }
 function hidePreviewModal() {
@@ -152,9 +162,37 @@ function hidePreviewModal() {
 }
 function rejectFromPreview() {
     if (_previewGuideId === null) return;
+    var id = _previewGuideId;
     hidePreviewModal();
-    showRejectModal(_previewGuideId);
+    showRejectModal(id);
 }
+
+// 捕获阶段先写入拒绝原因，再交由通用 admin-action 处理器提交
+document.getElementById('rejectConfirmBtn').addEventListener('click', function () {
+    this.setAttribute('data-action-payload', JSON.stringify({ reason: document.getElementById('reject-reason-input').value || '' }));
+}, true);
+
+// 审核结果局部更新（无需刷新页面）
+document.addEventListener('admin:action', function (e) {
+    var m = /\/admin\/guides\/(\d+)\/(approve|reject)/.exec(e.detail.url || '');
+    if (!m) return;
+    var id = m[1], action = m[2];
+    if (action === 'reject') closeModal('reject-modal');
+    if (action === 'approve') closeModal('preview-modal');
+
+    var cell = document.querySelector('[data-guide-status="' + id + '"]');
+    if (cell) {
+        cell.innerHTML = action === 'approve'
+            ? '<span class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full status-approved">已通过</span>'
+            : '<span class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full status-rejected">已拒绝</span>';
+    }
+    var row = document.querySelector('[data-guide-row="' + id + '"]');
+    if (row) {
+        [row.querySelector('[data-guide-id]'),
+         row.querySelector('[data-action-url$="/approve"]'),
+         row.querySelector('[onclick^="showRejectModal"]')].forEach(function (b) { if (b) b.remove(); });
+    }
+});
 </script>
 {% endblock %}
 
@@ -164,16 +202,13 @@ function rejectFromPreview() {
 {% call modal_shell('reject-modal', size='sm', title='拒绝指南',
                      icon='x-circle', icon_color='red', close_on_overlay='false') %}
     <div class="modal-body">
-        <form id="reject-form" method="POST">
-            {{ csrf_field() }}
-            <label class="block text-sm text-[var(--text-secondary)] mb-1.5">拒绝原因（可选）</label>
-            <input type="text" name="reason" class="input-field w-full px-4 py-3 rounded-lg"
-                   placeholder="请输入拒绝原因">
-        </form>
+        <label class="block text-sm text-[var(--text-secondary)] mb-1.5">拒绝原因（可选）</label>
+        <input type="text" id="reject-reason-input" name="reason" class="input-field w-full px-4 py-3 rounded-lg"
+               placeholder="请输入拒绝原因">
     </div>
     <div class="modal-footer">
         <button type="button" class="btn-secondary" onclick="closeModal('reject-modal')">取消</button>
-        <button type="submit" form="reject-form" class="btn-primary" style="background:var(--accent-red, #be123c);border-color:var(--accent-red, #be123c);">确认拒绝</button>
+        <button type="button" id="rejectConfirmBtn" class="admin-action btn-primary" style="background:var(--accent-red, #be123c);border-color:var(--accent-red, #be123c);">确认拒绝</button>
     </div>
 {% endcall %}
 
@@ -186,11 +221,91 @@ function rejectFromPreview() {
     </div>
     <div class="modal-footer">
         <button type="button" class="btn-secondary" onclick="closeModal('preview-modal')">关闭</button>
-        <form id="preview-approve-form" method="POST" class="inline">
-            {{ csrf_field() }}
-            <button type="submit" class="btn-primary" style="background:var(--accent-green, #059669);border-color:var(--accent-green, #059669);">通过审核</button>
-        </form>
+        <button type="button" id="previewApproveBtn" class="admin-action btn-primary" data-action-success="指南已通过审核" style="background:var(--accent-green, #059669);border-color:var(--accent-green, #059669);">通过审核</button>
         <button type="button" class="btn-primary" style="background:var(--accent-red, #be123c);border-color:var(--accent-red, #be123c);" onclick="rejectFromPreview()">拒绝</button>
     </div>
 {% endcall %}
+{% endblock %}
+
+{% block extra_script %}
+<script>
+// 指南列表：每次 10 条，点击加载更多（API，无刷新）
+(function () {
+    var btn = document.getElementById('guides-load-more');
+    var loadEnd = document.getElementById('guides-load-end');
+    var body = document.querySelector('[data-guides-tbody]');
+    if (!btn || !body) return;
+
+    var API_URL = "{{ url_for('admin.admin_guides_api') }}";
+    var state = { page: 1, loading: false };
+
+    var CLS_MAP = { pending: 'status-pending', approved: 'status-approved', rejected: 'status-rejected' };
+    var LABEL_MAP = { pending: '待审核', approved: '已通过', rejected: '已拒绝' };
+
+    function esc(t) { var d = document.createElement('div'); d.textContent = t == null ? '' : String(t); return d.innerHTML; }
+    function refreshIcons() { if (typeof lucide !== 'undefined' && lucide.createIcons) { try { lucide.createIcons(); } catch (_) {} } }
+
+    function rowHtml(g) {
+        var status = g.status;
+        var cls = CLS_MAP[status] || 'status-rejected';
+        var label = LABEL_MAP[status] || '已拒绝';
+        var reason = g.rejected_reason
+            ? '<div class="text-xs text-red-300 mt-1">原因：' + esc(g.rejected_reason) + '</div>' : '';
+
+        var pendingActions = '';
+        if (status === 'pending') {
+            // 待审核指南补充预览数据，使动态加载的行也能预览
+            guidePreviewData[g.id] = { title: g.title || '', content: g.content || '' };
+            pendingActions =
+                '<button type="button" class="text-green-400 hover:text-green-300 text-xs px-2 py-1 rounded bg-green-500/10 border border-green-500/20" data-guide-id="' + g.id + '" onclick="showPreviewModal(this)">预览</button>' +
+                '<button type="button" class="admin-action text-green-400 hover:text-green-300 text-xs px-2 py-1 rounded bg-green-500/10 border border-green-500/20" data-action-url="/admin/guides/' + g.id + '/approve" data-action-success="指南已通过审核">通过</button>' +
+                '<button type="button" class="text-red-400 hover:text-red-300 text-xs px-2 py-1 rounded bg-red-500/10 border border-red-500/20" onclick="showRejectModal(' + g.id + ')">拒绝</button>';
+        }
+
+        var actions =
+            '<div class="flex items-center justify-end gap-2">' + pendingActions +
+            '<a href="/admin/guides/' + g.id + '/edit" class="text-gold-400 hover:text-gold-300 text-xs px-2 py-1 rounded bg-gold-400/10 border border-gold-400/20">编辑</a>' +
+            '<button type="button" class="admin-action text-red-400 hover:text-red-300 text-xs px-2 py-1 rounded bg-red-500/10 border border-red-500/20" data-action-url="/admin/guides/' + g.id + '/delete" data-action-confirm="确定删除此指南？" data-action-remove="tr" data-action-success="指南已删除">删除</button>' +
+            '</div>';
+
+        return '<tr class="border-b border-forest-700/30 hover:bg-forest-800/20 transition-colors" data-guide-row="' + g.id + '">' +
+            '<td class="px-4 py-3 text-cream/40">' + g.id + '</td>' +
+            '<td class="px-4 py-3"><a href="/guides/' + g.id + '" target="_blank" class="text-gold-400 hover:underline font-medium">' + esc(g.title) + '</a>' + reason + '</td>' +
+            '<td class="px-4 py-3 text-cream/70">' + esc(g.author_name || '未知') + '</td>' +
+            '<td class="px-4 py-3" data-guide-status="' + g.id + '"><span class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full ' + cls + '">' + label + '</span></td>' +
+            '<td class="px-4 py-3 text-cream/70">' + (g.is_pinned ? '是' : '否') + '</td>' +
+            '<td class="px-4 py-3 text-cream/50">' + esc((g.updated_at || '').slice(0, 16)) + '</td>' +
+            '<td class="px-4 py-3 text-right">' + actions + '</td></tr>';
+    }
+
+    function setLoading(v) {
+        state.loading = v;
+        btn.innerHTML = v
+            ? '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i>加载中…'
+            : '<i data-lucide="chevron-down" class="w-4 h-4"></i>加载更多';
+        refreshIcons();
+    }
+
+    btn.addEventListener('click', function () {
+        if (state.loading) return;
+        setLoading(true);
+
+        fetch(API_URL + '?page=' + (state.page + 1), {
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (!data || !data.success) { if (typeof Toast !== 'undefined') Toast.error((data && data.message) || '加载失败'); return; }
+            var html = (data.guides || []).map(rowHtml).join('');
+            if (html) body.insertAdjacentHTML('beforeend', html);
+            state.page = data.page;
+            btn.classList.toggle('hidden', !data.has_more);
+            loadEnd.classList.toggle('hidden', !!data.has_more);
+            refreshIcons();
+        })
+        .catch(function () { if (typeof Toast !== 'undefined') Toast.error('加载失败，请重试'); })
+        .finally(function () { setLoading(false); });
+    });
+})();
+</script>
 {% endblock %}

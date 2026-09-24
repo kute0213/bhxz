@@ -207,6 +207,19 @@ DDOS_GUARD_PERMANENT_AFTER = int(os.environ.get('DDOS_GUARD_PERMANENT_AFTER', '3
 DDOS_GUARD_OFFENSE_WINDOW_HOURS = int(os.environ.get('DDOS_GUARD_OFFENSE_WINDOW_HOURS', '24'))
 
 # ---------------------------------------------------------------------------
+# API 防火墙（接口调用频率限制）
+# ---------------------------------------------------------------------------
+
+# API 限流总开关：开启后所有 API/AJAX 请求按 IP 计数，超过阈值即封禁 API
+API_RATE_LIMIT_ENABLED = os.environ.get('API_RATE_LIMIT_ENABLED', '1').lower() in ('1', 'true', 'yes', 'on')
+
+# API 调用上限（每个窗口内允许的调用次数），默认每分钟 60 次
+API_RATE_LIMIT_PER_MINUTE = int(os.environ.get('API_RATE_LIMIT_PER_MINUTE', '60'))
+
+# API 限流窗口长度（秒），默认 60 秒
+API_RATE_LIMIT_WINDOW_SECONDS = int(os.environ.get('API_RATE_LIMIT_WINDOW_SECONDS', '60'))
+
+# ---------------------------------------------------------------------------
 # 邮件 SMTP 配置
 # ---------------------------------------------------------------------------
 
@@ -353,6 +366,11 @@ SETTINGS_REGISTRY = [
     ('DDOS_GUARD_BAN_MINUTES', 30, 'int', '首次封禁时长（分钟）', '首次检测到 DDoS 行为的限时封禁时长，到期自动解除；0 表示直接永久封禁', 'DDoS 防护'),
     ('DDOS_GUARD_PERMANENT_AFTER', 3, 'int', '永久封禁触发次数', '在违规记录时间窗口内多次触发 DDoS 达到该次数后，自动升级为永久封禁（屡教不改）', 'DDoS 防护'),
     ('DDOS_GUARD_OFFENSE_WINDOW_HOURS', 24, 'int', '违规记录时间窗口（小时）', '超过该时间没有再次触发 DDoS，违规次数重新累计', 'DDoS 防护'),
+
+    # API 防火墙（接口调用频率限制，计数由防火墙内存缓存维护）
+    ('API_RATE_LIMIT_ENABLED', True, 'bool', 'API 调用限流（总开关）', '开启后所有 API/AJAX 请求按 IP 计数，窗口内超过阈值即封禁该 IP 的 API 调用（返回 429）；用户刷新页面后即可继续调用', 'API 防火墙'),
+    ('API_RATE_LIMIT_PER_MINUTE', 60, 'int', 'API 每分钟调用上限', '每个限流窗口内单个 IP 允许的 API 调用次数，默认 60 次', 'API 防火墙'),
+    ('API_RATE_LIMIT_WINDOW_SECONDS', 60, 'int', 'API 限流窗口（秒）', 'API 调用计数的统计窗口长度，默认 60 秒；窗口结束自动解除封禁', 'API 防火墙'),
 
     # 邮件 SMTP
     ('EMAIL_ENABLED', False, 'bool', '启用邮件功能', '总开关，关闭后所有邮件通知和邮箱验证码均不发送', '邮件配置'),

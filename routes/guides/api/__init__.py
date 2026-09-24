@@ -103,6 +103,76 @@ def _ensure_unique_slug(conn, base_slug, exclude_id=None):
     return slug
 
 
+PAGE_SIZE = 10
+
+
+@guides_bp.route('/api/guides/list', methods=['GET'])
+def api_guides_list():
+    """指南列表 API（分页，每次 10 条）。
+
+    参数：
+        page  页码，从 1 开始
+        my    1 表示仅当前用户提交的指南（需登录）
+        q     关键字，匹配标题与摘要
+    """
+    user = get_current_user()
+    try:
+        page = max(1, int(request.args.get('page', 1)))
+    except (TypeError, ValueError):
+        page = 1
+
+    my_mode = bool(user and request.args.get('my') == '1')
+    keyword = (request.args.get('q') or '').strip()[:60]
+
+    where = []
+    params = []
+    if my_mode:
+        where.append("g.author_id = ?")
+        params.append(user['id'])
+    else:
+        where.append("g.status = 'approved'")
+    if keyword:
+        where.append("(g.title LIKE ? OR g.summary LIKE ?)")
+        like = f'%{keyword}%'
+        params.extend([like, like])
+
+    where_sql = ('WHERE ' + ' AND '.join(where)) if where else ''
+    order_sql = "ORDER BY g.updated_at DESC" if my_mode else "ORDER BY g.is_pinned DESC, g.title ASC"
+
+    conn = get_db()
+    try:
+        total = conn.execute(
+            f"SELECT COUNT(*) AS c FROM server_guides g {where_sql}", params
+        ).fetchone()['c']
+        rows = conn.execute(
+            f"""
+            SELECT g.id, g.title, g.summary, g.content, g.status, g.is_pinned,
+                   g.created_at, g.updated_at, g.published_at, g.rejected_reason,
+                   u.username AS author_name
+            FROM server_guides g
+            LEFT JOIN users u ON g.author_id = u.id
+            {where_sql}
+            {order_sql}
+            LIMIT ? OFFSET ?
+            """,
+            params + [PAGE_SIZE, (page - 1) * PAGE_SIZE],
+        ).fetchall()
+        guides = [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+    return jsonify({
+        'success': True,
+        'guides': guides,
+        'page': page,
+        'page_size': PAGE_SIZE,
+        'total': total,
+        'has_more': page * PAGE_SIZE < total,
+        'my_mode': my_mode,
+        'keyword': keyword,
+    })
+
+
 @guides_bp.route('/api/guides/my', methods=['GET'])
 @login_required
 def my_guides():

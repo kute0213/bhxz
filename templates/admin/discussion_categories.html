@@ -16,9 +16,8 @@
         <!-- 新建分类 -->
         <div class="pixel-card rounded-xl p-6 mb-6">
             <h3 class="text-base font-bold mb-4">新建分类</h3>
-            <form method="POST" class="flex items-end gap-3">
-                {{ csrf_field() }}
-                <input type="hidden" name="action" value="create">
+            <form id="category-create-form" class="flex items-end gap-3"
+                  data-action-url="{{ url_for('admin.admin_category_create') }}">
                 <div class="flex-1">
                     <label class="block text-xs text-cream/60 mb-1">名称</label>
                     <input type="text" name="name" required maxlength="50" class="input-field w-full px-3 py-2 rounded-lg text-sm" placeholder="如：游戏讨论">
@@ -45,7 +44,7 @@
                             <th class="text-right px-4 py-3 text-cream/60 font-medium">操作</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody id="category-table-body">
                         {% for cat in categories %}
                         <tr class="border-b border-forest-700/30 hover:bg-forest-800/30">
                             <td class="px-4 py-3 text-cream/60">{{ cat.id }}</td>
@@ -53,15 +52,15 @@
                             <td class="px-4 py-3 text-cream/60">{{ cat.slug }}</td>
                             <td class="px-4 py-3 text-center text-cream/60">{{ cat.topic_count }}</td>
                             <td class="px-4 py-3 text-right">
-                                <form method="POST" class="inline" onsubmit="return confirm('确定要删除此分类吗？')">
-                                    {{ csrf_field() }}
-                                    <input type="hidden" name="action" value="delete">
-                                    <input type="hidden" name="category_id" value="{{ cat.id }}">
-                                    <button type="submit" class="px-2 py-1 rounded text-xs border border-red-500/30 text-red-300 hover:bg-red-500/10 transition-colors"
-                                            {% if cat.topic_count > 0 %}disabled title="该分类下有帖子，无法删除"{% endif %}>
-                                        <i data-lucide="trash-2" class="w-3 h-3"></i>
-                                    </button>
-                                </form>
+                                <button type="button"
+                                        class="admin-action px-2 py-1 rounded text-xs border border-red-500/30 text-red-300 hover:bg-red-500/10 transition-colors"
+                                        data-action-url="{{ url_for('admin.admin_category_delete', cat_id=cat.id) }}"
+                                        data-action-confirm="确定要删除此分类吗？"
+                                        data-action-remove="tr"
+                                        data-action-success="分类已删除"
+                                        {% if cat.topic_count > 0 %}disabled title="该分类下有帖子，无法删除"{% endif %}>
+                                    <i data-lucide="trash-2" class="w-3 h-3"></i>
+                                </button>
                             </td>
                         </tr>
                         {% endfor %}
@@ -70,11 +69,87 @@
             </div>
         </div>
         {% else %}
-        <div class="pixel-card rounded-xl p-12 text-center">
+        <div class="pixel-card rounded-xl p-12 text-center" id="category-empty-state">
             <i data-lucide="tags" class="w-12 h-12 mx-auto text-cream/20 mb-4"></i>
             <p class="text-cream/50">暂无分类</p>
         </div>
         {% endif %}
     </div>
 </section>
+{% endblock %}
+{% block extra_script %}
+<script>
+// 新建分类：JSON 提交，成功后插入表格行（无需刷新页面）
+(function () {
+    var form = document.getElementById('category-create-form');
+    if (!form) return;
+    var url = form.getAttribute('data-action-url');
+    var nameInput = form.querySelector('[name="name"]');
+    var slugInput = form.querySelector('[name="slug"]');
+    var btn = form.querySelector('button[type="submit"]');
+
+    function ensureTable() {
+        var tbody = document.getElementById('category-table-body');
+        if (tbody) return tbody;
+        // 原本「暂无分类」：动态创建表格骨架
+        var empty = document.getElementById('category-empty-state');
+        var card = document.createElement('div');
+        card.className = 'pixel-card rounded-xl overflow-hidden';
+        card.innerHTML =
+            '<div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="border-b border-forest-700/50">' +
+            '<th class="text-left px-4 py-3 text-cream/60 font-medium">ID</th>' +
+            '<th class="text-left px-4 py-3 text-cream/60 font-medium">名称</th>' +
+            '<th class="text-left px-4 py-3 text-cream/60 font-medium">别名</th>' +
+            '<th class="text-center px-4 py-3 text-cream/60 font-medium">帖子数</th>' +
+            '<th class="text-right px-4 py-3 text-cream/60 font-medium">操作</th>' +
+            '</tr></thead><tbody id="category-table-body"></tbody></table></div>';
+        if (empty) { empty.remove(); }
+        form.closest('.pixel-card').insertAdjacentElement('afterend', card);
+        return document.getElementById('category-table-body');
+    }
+
+    form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var payload = { name: nameInput.value.trim(), slug: slugInput.value.trim() };
+        if (!payload.name || !payload.slug) return;
+        btn.disabled = true;
+        fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            body: JSON.stringify(payload)
+        })
+        .then(function (r) { return r.json().catch(function () { return {}; }); })
+        .then(function (data) {
+            btn.disabled = false;
+            if (!data || !data.success) {
+                if (typeof Toast !== 'undefined') Toast.error((data && data.message) || '创建失败');
+                return;
+            }
+            if (typeof Toast !== 'undefined') Toast.success(data.message || '分类已创建');
+            var cat = data.category;
+            if (cat) {
+                var tbody = ensureTable();
+                var tr = document.createElement('tr');
+                tr.className = 'border-b border-forest-700/30 hover:bg-forest-800/30';
+                tr.innerHTML =
+                    '<td class="px-4 py-3 text-cream/60">' + cat.id + '</td>' +
+                    '<td class="px-4 py-3 text-cream/90 font-medium"></td>' +
+                    '<td class="px-4 py-3 text-cream/60"></td>' +
+                    '<td class="px-4 py-3 text-center text-cream/60">0</td>' +
+                    '<td class="px-4 py-3 text-right"><button type="button" class="admin-action px-2 py-1 rounded text-xs border border-red-500/30 text-red-300 hover:bg-red-500/10 transition-colors" data-action-url="/admin/discussion/categories/' + cat.id + '/delete" data-action-confirm="确定要删除此分类吗？" data-action-remove="tr" data-action-success="分类已删除"><i data-lucide="trash-2" class="w-3 h-3"></i></button></td>';
+                tr.children[1].textContent = cat.name;
+                tr.children[2].textContent = cat.slug;
+                tbody.appendChild(tr);
+                if (typeof lucide !== 'undefined' && lucide.createIcons) { try { lucide.createIcons({ root: tr }); } catch (_) {} }
+            }
+            nameInput.value = '';
+            slugInput.value = '';
+        })
+        .catch(function () {
+            btn.disabled = false;
+            if (typeof Toast !== 'undefined') Toast.error('网络异常，创建失败');
+        });
+    });
+})();
+</script>
 {% endblock %}

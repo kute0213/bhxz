@@ -1014,6 +1014,102 @@ document.addEventListener('click', function (e) {
     });
 })();
 
+// 管理中心无刷新操作（通用）
+// 用法：给任意按钮/链接加 .admin-action，并设置以下 data-* 属性：
+//   data-action-url      请求地址（必填）
+//   data-action-method   请求方法，默认 POST
+//   data-action-confirm  执行前确认提示（可选）
+//   data-action-success  成功提示（可选，默认使用后端返回的 message）
+//   data-action-payload  请求体（JSON 字符串，可选；不填则发送空请求）
+//   data-action-remove   成功后移除的元素选择器（从按钮向上查找，可选，如 "tr"）
+//   data-action-reload   成功后是否刷新页面（"1" 刷新，默认 0）
+// 成功后会在 document 派发 admin:action 事件，detail = {el, data, url, method}，
+// 页面可监听该事件做局部 DOM 更新（无需刷新页面）。
+(function initAdminActions() {
+    function parseError(res, data) {
+        if (res.status === 429) return (data && data.message) || '操作过于频繁，请稍后重试';
+        if (res.status === 403) return (data && data.message) || '没有权限执行该操作';
+        return (data && data.message) || ('操作失败（' + res.status + '）');
+    }
+
+    function run(el) {
+        var url = el.getAttribute('data-action-url');
+        if (!url) return;
+
+        var method = (el.getAttribute('data-action-method') || 'POST').toUpperCase();
+        var payload = el.getAttribute('data-action-payload');
+        var removeSel = el.getAttribute('data-action-remove');
+        var reload = el.getAttribute('data-action-reload') === '1';
+        var successMsg = el.getAttribute('data-action-success');
+
+        var opts = {
+            method: method,
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+        };
+        // 统一以 JSON 提交：既满足「API 使用 JSON 格式」，也使请求免于表单 CSRF 校验
+        // （application/json 的跨域 POST 无法由简单表单伪造）。
+        if (method !== 'GET' && method !== 'HEAD') {
+            opts.headers['Content-Type'] = 'application/json';
+            opts.body = payload || '{}';
+        }
+
+        el.disabled = true;
+        el.classList.add('is-loading');
+
+        fetch(url, opts)
+            .then(function (res) {
+                return res.json().catch(function () { return {}; }).then(function (data) {
+                    return { res: res, data: data };
+                });
+            })
+            .then(function (r) {
+                var data = r.data || {};
+                if (!r.res.ok || data.success === false) {
+                    if (typeof Toast !== 'undefined') Toast.error(parseError(r.res, data));
+                    return;
+                }
+                if (typeof Toast !== 'undefined') Toast.success(data.message || successMsg || '操作成功');
+
+                if (removeSel) {
+                    var node = el.closest(removeSel);
+                    if (node) {
+                        node.style.transition = 'opacity .25s ease';
+                        node.style.opacity = '0';
+                        setTimeout(function () { node.remove(); }, 250);
+                    }
+                }
+                document.dispatchEvent(new CustomEvent('admin:action', {
+                    detail: { el: el, data: data, url: url, method: method }
+                }));
+                if (reload) setTimeout(function () { location.reload(); }, 400);
+            })
+            .catch(function () {
+                if (typeof Toast !== 'undefined') Toast.error('网络异常，操作失败');
+            })
+            .finally(function () {
+                el.disabled = false;
+                el.classList.remove('is-loading');
+            });
+    }
+
+    document.addEventListener('click', function (e) {
+        var el = e.target && e.target.closest ? e.target.closest('.admin-action') : null;
+        if (!el || el.disabled) return;
+        e.preventDefault();
+        e.stopPropagation();
+
+        var confirmMsg = el.getAttribute('data-action-confirm');
+        if (confirmMsg) {
+            CustomModal.confirm(confirmMsg, {
+                trigger: el,
+                callback: function (ok) { if (ok) run(el); }
+            });
+        } else {
+            run(el);
+        }
+    });
+})();
+
 // 大喇叭音频标签编辑
 (function () {
     function renderTags(container, tags) {

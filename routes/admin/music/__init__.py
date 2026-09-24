@@ -3,7 +3,7 @@
 薄层：仅负责 HTTP 请求解析/响应构造，业务逻辑委托给 services。
 """
 
-from flask import redirect, url_for, flash, request
+from flask import jsonify, request
 
 from core.auth import admin_required, get_current_user
 from core.helpers import render_page
@@ -47,51 +47,88 @@ def _notify_author_music_result(music_id, approved):
 @admin_bp.route('/admin/music')
 @admin_required
 def admin_music_list():
-    """管理员查看所有音频 + 待审核队列。"""
-    pending_musics = music_service.attach_durations(music_service.get_pending_musics())
-    musics = music_service.attach_durations(music_service.get_all_musics())
+    """管理员查看所有音频 + 待审核队列（每次 10 条，加载更多走 API）。"""
+    pending_musics, pending_total = music_service.get_musics_page(
+        status=music_service.STATUS_PENDING, page=1, page_size=music_service.PAGE_SIZE)
+    music_service.attach_durations(pending_musics)
+
+    musics, musics_total = music_service.get_musics_page(
+        page=1, page_size=music_service.PAGE_SIZE)
+    music_service.attach_durations(musics)
+
     return render_page(
         'admin/music.html',
         pending_musics=pending_musics,
+        pending_total=pending_total,
         musics=musics,
+        musics_total=musics_total,
+        page_size=music_service.PAGE_SIZE,
     )
+
+
+@admin_bp.route('/admin/music/api/list')
+@admin_required
+def admin_music_api_list():
+    """音频列表 JSON API（分页，每次 10 条）。
+
+    参数：
+        type  all=全部音频（默认） pending=待审核队列
+        page  页码，从 1 开始
+    """
+    try:
+        page = max(1, int(request.args.get('page', 1)))
+    except (TypeError, ValueError):
+        page = 1
+
+    list_type = (request.args.get('type') or 'all').strip()
+    if list_type not in ('all', 'pending'):
+        return jsonify({'success': False, 'message': '无效的列表类型'}), 400
+
+    status = music_service.STATUS_PENDING if list_type == 'pending' else None
+    page_size = music_service.PAGE_SIZE
+    items, total = music_service.get_musics_page(
+        status=status, page=page, page_size=page_size)
+    music_service.attach_durations(items)
+    for m in items:
+        m['tags_list'] = music_service.tags_to_list(m.get('tags'))
+
+    return jsonify({
+        'success': True,
+        'type': list_type,
+        'musics': items,
+        'page': page,
+        'page_size': page_size,
+        'total': total,
+        'has_more': page * page_size < total,
+    })
 
 
 @admin_bp.route('/admin/music/<int:music_id>/review', methods=['POST'])
 @admin_required
 def admin_music_review(music_id):
-    """管理员审核公开申请：通过 / 驳回。"""
+    """管理员审核公开申请：通过 / 驳回（JSON API，前端无刷新）。"""
     user = get_current_user()
 
-    action = request.form.get('action', '')
-    if action == 'approve':
-        success, message = music_service.review_music(
-            music_id, approve=True,
-            reviewer_username=user['username'],
-            ip_address=get_client_ip(),
-        )
-        if success:
-            _notify_author_music_result(music_id, approved=True)
-    elif action == 'reject':
-        success, message = music_service.review_music(
-            music_id, approve=False,
-            reviewer_username=user['username'],
-            ip_address=get_client_ip(),
-        )
-        if success:
-            _notify_author_music_result(music_id, approved=False)
-    else:
-        flash('无效的操作', 'error')
-        return redirect(url_for('admin.admin_music_list'))
+    data = request.get_json(silent=True) or {}
+    action = (data.get('action') or request.form.get('action') or '').strip()
+    if action not in ('approve', 'reject'):
+        return jsonify({'success': False, 'message': '无效的操作'}), 400
 
-    flash(message, 'success' if success else 'error')
-    return redirect(url_for('admin.admin_music_list'))
+    approve = action == 'approve'
+    success, message = music_service.review_music(
+        music_id, approve=approve,
+        reviewer_username=user['username'],
+        ip_address=get_client_ip(),
+    )
+    if success:
+        _notify_author_music_result(music_id, approved=approve)
+    return jsonify({'success': success, 'message': message})
 
 
 @admin_bp.route('/admin/music/<int:music_id>/delete', methods=['POST'])
 @admin_required
 def admin_music_delete(music_id):
-    """管理员下架（删除）音频。"""
+    """管理员下架（删除）音频（JSON API，前端无刷新）。"""
     user = get_current_user()
 
     success, message = music_service.delete_music(
@@ -100,5 +137,4 @@ def admin_music_delete(music_id):
         is_admin=True,
         ip_address=get_client_ip(),
     )
-    flash(message, 'success' if success else 'error')
-    return redirect(url_for('admin.admin_music_list'))
+    return jsonify({'success': success, 'message': message})

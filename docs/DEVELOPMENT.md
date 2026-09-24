@@ -166,6 +166,34 @@ def do_something(user_id, value, ip_address):
 
 * 讨论区操作始终使用 `services/discussion/` 子模块
 
+## 上传与列表交互规范
+
+### 1. 文件上传必须过防火墙文件守卫
+
+所有用户上传（附件 / 音频 / 图片）必须调用 `routes/firewall/file_guard.py` 的 `check_upload()` 做安全校验，不要在各处自行实现扩展名 / 魔数判断：
+
+```python
+from routes.firewall.file_guard import check_upload, KIND_ATTACHMENT
+ok, message = check_upload(upload, KIND_ATTACHMENT, max_bytes=ATTACHMENT_MAX_BYTES, source='attachment')
+if not ok:
+    return False, message
+```
+
+`KIND_IMAGE` / `KIND_AUDIO` / `KIND_ATTACHMENT` 三档默认白名单见 `ALLOWED_BY_KIND`；危险扩展名一律拒绝，未知类型跳过魔数校验以降低误判。
+
+### 2. 列表一律「每次 10 条 + 加载更多」，走 JSON API 无刷新追加
+
+新增任何列表页时：
+
+* 服务端只渲染**首屏 10 条**，并把 `total` / `has_more` 传给模板；
+* 另建分页 API（返回 `{success, items, page, page_size, total, has_more}`），前端「加载更多」按钮 `fetch` 后 `insertAdjacentHTML('beforeend', ...)` 追加，不整页跳转；
+* 追加的行必须复用首屏相同的结构与属性（如管理端的 `.admin-action` 及其 `data-*`），以便已存在的事件委托自动生效；HTML 一律用 `esc()` 转义，追加后调用 `lucide.createIcons()`；
+* API 请求带 `X-Requested-With: XMLHttpRequest`，自动纳入 API 防火墙限流。
+
+### 3. 管理中心操作一律 JSON API + 无刷新
+
+审核 / 删除 / 权限切换等管理操作统一返回 JSON，前端用 `.admin-action` 组件（`document` 级事件委托）触发，操作后局部更新页面，不整页 `location.reload()`。
+
 ## Jinja2 模板命名规范
 
 模板统一存放于 `templates/`，遵循「**功能目录 + 语义化页面名**」规则。命名务必清晰、简洁、符合 Flask/Jinja2 通用约定，避免模板找不到导致的 500。

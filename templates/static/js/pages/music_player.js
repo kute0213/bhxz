@@ -279,4 +279,7 @@
     } else {
         init();
     }
+
+    // 暴露初始化入口：动态插入的播放器（如「加载更多」「无刷新搜索」）可手动初始化。
+    window.BhxzMusicPlayerInit = init;
 })();

@@ -8,6 +8,9 @@ from typing import List, Optional, Tuple
 
 from core.db import get_db
 
+# 列表分页大小：每次加载 10 条，前端点击「加载更多」再取下一页
+PAGE_SIZE = 10
+
 
 # ---------------------------------------------------------------------------
 # 注册申请
@@ -93,6 +96,47 @@ def get_all_applications() -> List[dict]:
                ORDER BY r.created_at DESC""",
         ).fetchall()
         return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def get_applications_page(status=None, page=1, page_size=PAGE_SIZE) -> Tuple[List[dict], int]:
+    """分页获取注册申请记录（可选按状态筛选）。
+
+    Args:
+        status: None 或 'all' 表示全部；否则为 'pending'/'approved'/'rejected'。
+        page: 页码，从 1 开始。
+
+    Returns:
+        (items, total)
+    """
+    page = max(1, int(page or 1))
+    page_size = max(1, min(int(page_size or PAGE_SIZE), 50))
+    where = ''
+    params: Tuple = ()
+    if status and status != 'all':
+        where = ' WHERE r.status = ?'
+        params = (status,)
+
+    conn = get_db()
+    try:
+        total = conn.execute(
+            f"SELECT COUNT(*) AS c FROM game_account_registrations r{where}",
+            params,
+        ).fetchone()['c']
+        rows = conn.execute(
+            f"""SELECT r.id, r.user_id, r.mc_username, r.status,
+                       r.created_at, r.reviewed_at, r.reject_reason,
+                       u.username AS applicant, ru.username AS reviewer
+               FROM game_account_registrations r
+               JOIN users u ON r.user_id = u.id
+               LEFT JOIN users ru ON r.reviewed_by = ru.id
+               {where}
+               ORDER BY r.created_at DESC
+               LIMIT ? OFFSET ?""",
+            (*params, page_size, (page - 1) * page_size),
+        ).fetchall()
+        return [dict(r) for r in rows], total
     finally:
         conn.close()
 

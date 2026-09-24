@@ -410,6 +410,8 @@
     {{ modal_captcha() }}
 
     <script src="{{ url_for('static', filename='js/core/base.js', v='23') }}"></script>
+    {# 全站统一搜索组件：点击放大置顶 + 输入即 API 搜索（无刷新） #}
+    <script src="{{ url_for('static', filename='js/core/search.js', v='2') }}"></script>
 
     {# 统一弹窗控制器 #}
     {% from 'macros/modal.html' import modal_close_script %}

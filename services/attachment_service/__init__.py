@@ -6,63 +6,26 @@ import secrets
 
 from werkzeug.utils import secure_filename
 
-from config import UPLOAD_ATTACHMENTS_DIR, ATTACHMENT_MAX_BYTES
-
-# 已知文件类型的魔数签名（前 8 字节）
-# MP4/M4A 的 box size 可变（前 4 字节），统一用 bytes 4-7 为 "ftyp" 判断
-_MAGIC_SIGNATURES = {
-    'png': [b'\x89PNG\r\n\x1a\n'],
-    'jpg': [b'\xff\xd8\xff'],
-    'jpeg': [b'\xff\xd8\xff'],
-    'gif': [b'GIF8'],
-    'webp': [b'RIFF'],
-    'pdf': [b'%PDF'],
-    'zip': [b'PK\x03\x04'],
-    'rar': [b'Rar!\x1a\x07'],
-    '7z': [b'7z\xbc\xaf\x27\x1c'],
-    'mp4': None,  # 特殊处理：检测 bytes 4-7 是否为 "ftyp"
-    'm4a': None,  # 同上
-    'mp3': [b'ID3', b'\xff\xfb', b'\xff\xf3'],
-}
-
-
-def _check_file_magic(file_obj, filename):
-    """校验文件头魔数是否与扩展名匹配，未知类型跳过检查。
-
-    读取前 8 字节，若扩展名为已知类型但魔数不匹配则抛出 ValueError。
-    MP4/M4A 特殊处理：检测 bytes 4-7 是否为 "ftyp"。
-    """
-    header = file_obj.read(8)
-    file_obj.seek(0)
-
-    ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
-    expected = _MAGIC_SIGNATURES.get(ext)
-    if expected is None:
-        return  # 无法识别的扩展名，跳过检查
-
-    # MP4/M4A 特殊处理
-    if ext in ('mp4', 'm4a'):
-        if len(header) < 8 or header[4:8] != b'ftyp':
-            raise ValueError(f'文件类型校验失败：{filename} 的文件头魔数与扩展名不匹配')
-        return
-
-    if not any(header.startswith(m) for m in expected):
-        raise ValueError(f'文件类型校验失败：{filename} 的文件头魔数与扩展名不匹配')
+from config import UPLOAD_ATTACHMENTS_DIR, ATTACHMENT_MAX_BYTES, ALLOWED_EXTENSIONS
+from routes.firewall.file_guard import check_upload, KIND_ATTACHMENT
 
 
 def save_attachments(files):
-    """保存上传的附件文件，返回安全文件名列表。"""
+    """保存上传的附件文件，返回安全文件名列表。
+
+    安全校验统一交由防火墙文件守卫（扩展名白名单 + 危险类型拦截 + 文件头魔数）。
+    """
     names = []
     for file in files:
         if file and file.filename:
-            # 检查文件大小
-            file.seek(0, os.SEEK_END)
-            size = file.tell()
-            file.seek(0)
-            if size > ATTACHMENT_MAX_BYTES:
-                raise ValueError(f'附件大小不能超过 {ATTACHMENT_MAX_BYTES // (1024*1024)}MB')
-            # 魔数校验
-            _check_file_magic(file, file.filename)
+            ok, message = check_upload(
+                file, KIND_ATTACHMENT,
+                max_bytes=ATTACHMENT_MAX_BYTES,
+                allowed_extensions=ALLOWED_EXTENSIONS,
+                source='attachment',
+            )
+            if not ok:
+                raise ValueError(message)
             safe_prefix = secrets.token_hex(8)
             clean_name = secure_filename(file.filename) or 'file'
             safe_name = safe_prefix + '_' + clean_name

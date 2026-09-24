@@ -29,17 +29,53 @@ from core.shared.ip import get_client_ip
 
 @main_bp.route('/music')
 def music_page():
-    """大喇叭音频板块：公开音频列表（支持按名称或标签搜索）。"""
+    """大喇叭音频板块：公开音频列表（支持按名称或标签搜索，每次加载 10 条）。
+
+    前端搜索与「加载更多」通过 /api/music 无刷新获取；此处仅渲染首页数据。
+    """
     user = get_current_user()
     keyword = request.args.get('q', '').strip()
-    public_musics = music_service.attach_durations(music_service.get_public_musics(keyword))
+    public_musics, has_more = music_service.get_public_musics_page(
+        keyword, page=1, page_size=music_service.PAGE_SIZE,
+    )
+    music_service.attach_durations(public_musics)
     favorite_ids = music_service.get_favorite_ids(user['id']) if user else set()
     return render_page(
         'music/index.html',
         public_musics=public_musics,
+        has_more=has_more,
         keyword=keyword,
         favorite_ids=favorite_ids,
     )
+
+
+@main_bp.route('/api/music')
+def api_music_list():
+    """公开音频搜索/分页列表（JSON，供前端无刷新搜索与「加载更多」）。
+
+    参数：q 关键词（匹配名称或标签）、page 页码（从 1 开始）。
+    """
+    user = get_current_user()
+    keyword = (request.args.get('q') or '').strip()[:60]
+    page = request.args.get('page', type=int) or 1
+
+    items, has_more = music_service.get_public_musics_page(
+        keyword, page=page, page_size=music_service.PAGE_SIZE,
+    )
+    music_service.attach_durations(items)
+
+    favorite_ids = music_service.get_favorite_ids(user['id']) if user else set()
+    for m in items:
+        m['is_favorited'] = m['id'] in favorite_ids
+        m['tags_list'] = music_service.tags_to_list(m.get('tags'))
+
+    return jsonify({
+        'success': True,
+        'musics': items,
+        'has_more': has_more,
+        'page': page,
+        'next_page': page + 1,
+    })
 
 
 @main_bp.route('/music/my')

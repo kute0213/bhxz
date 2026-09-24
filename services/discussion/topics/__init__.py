@@ -8,7 +8,7 @@ from core.system.logger import log
 from services.attachment_service import save_attachments, clean_attachment_json, parse_attachment_json
 from services.discussion.categories import get_category_dict
 
-PAGE_SIZE = 20
+PAGE_SIZE = 10
 
 
 def get_topic_count(category_id=None):
@@ -67,6 +67,29 @@ def get_topics_page(category_id, page):
         conn.close()
 
     return topics, total, total_pages
+
+
+def get_admin_topics_page(page=1, page_size=PAGE_SIZE):
+    """分页获取帖子列表（管理后台，按 ID 倒序）。返回 (items, total)。"""
+    page = max(1, int(page or 1))
+    page_size = max(1, min(int(page_size or PAGE_SIZE), 50))
+    conn = get_db()
+    try:
+        total = conn.execute(
+            "SELECT COUNT(*) AS c FROM discussion_topics"
+        ).fetchone()['c']
+        rows = conn.execute(
+            """SELECT t.*, u.username,
+                      (SELECT COUNT(*) FROM discussion_replies r WHERE r.topic_id = t.id) AS reply_count
+               FROM discussion_topics t
+               JOIN users u ON t.user_id = u.id
+               ORDER BY t.id DESC
+               LIMIT ? OFFSET ?""",
+            (page_size, (page - 1) * page_size)
+        ).fetchall()
+        return [dict(r) for r in rows], total
+    finally:
+        conn.close()
 
 
 def get_topic_detail(topic_id):

@@ -33,6 +33,7 @@ def list_view():
         categories=categories, category_id=category_id,
         current_category_name=current_category_name,
         page=page, total_pages=total_pages, total=total,
+        has_more=page < total_pages,
     )
 
 

@@ -15,34 +15,44 @@ def guide_list():
     """公开指南列表页（默认展示已审核通过的；?my=1 展示当前用户的）。"""
     from flask import request
     user = get_current_user()
+    my_mode = bool(user and request.args.get('my'))
+    page_size = 10
+
     conn = get_db()
     try:
-        if user and request.args.get('my'):
-            rows = conn.execute(
-                """
-                SELECT g.*, u.username as author_name
-                FROM server_guides g
-                LEFT JOIN users u ON g.author_id = u.id
-                WHERE g.author_id = ?
-                ORDER BY g.updated_at DESC
-                """,
-                (user['id'],),
-            ).fetchall()
+        if my_mode:
+            where_sql = "WHERE g.author_id = ?"
+            params = [user['id']]
+            order_sql = "ORDER BY g.updated_at DESC"
         else:
-            rows = conn.execute(
-                """
-                SELECT g.*, u.username as author_name
-                FROM server_guides g
-                LEFT JOIN users u ON g.author_id = u.id
-                WHERE g.status = 'approved'
-                ORDER BY g.is_pinned DESC, g.title ASC
-                """
-            ).fetchall()
+            where_sql = "WHERE g.status = 'approved'"
+            params = []
+            order_sql = "ORDER BY g.is_pinned DESC, g.title ASC"
+
+        total = conn.execute(
+            f"SELECT COUNT(*) AS c FROM server_guides g {where_sql}", params
+        ).fetchone()['c']
+        rows = conn.execute(
+            f"""
+            SELECT g.*, u.username as author_name
+            FROM server_guides g
+            LEFT JOIN users u ON g.author_id = u.id
+            {where_sql}
+            {order_sql}
+            LIMIT ? OFFSET 0
+            """,
+            params + [page_size],
+        ).fetchall()
         guides = [dict(r) for r in rows]
     finally:
         conn.close()
 
-    return render_page('guides/index.html', guides=guides, my_mode=bool(user and request.args.get('my')))
+    return render_page(
+        'guides/index.html',
+        guides=guides,
+        my_mode=my_mode,
+        has_more=total > len(guides),
+    )
 
 
 @guides_bp.route('/guides/<int:guide_id>')

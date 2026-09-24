@@ -265,6 +265,7 @@ def init_db():
                 description TEXT NOT NULL,
                 usage_info TEXT DEFAULT '',
                 notes TEXT DEFAULT '',
+                tags TEXT DEFAULT '',
                 author_id INTEGER NOT NULL,
                 status TEXT NOT NULL DEFAULT 'pending',
                 view_count INTEGER DEFAULT 0,
@@ -295,6 +296,16 @@ def init_db():
                 status TEXT NOT NULL DEFAULT 'pending',
                 created_at TEXT NOT NULL,
                 resolved_at TEXT DEFAULT NULL
+            )
+        '''),
+        # 建筑收藏表（用户与建筑多对多，用于收藏功能与按收藏数排序）
+        ('building_favorites', '''
+            CREATE TABLE IF NOT EXISTS building_favorites (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                building_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                created_at TEXT NOT NULL,
+                UNIQUE(building_id, user_id)
             )
         '''),
     ]
@@ -341,6 +352,20 @@ def init_db():
     add_column_if_not_exists('music', 'status', 'INTEGER DEFAULT 0')
     # 大喇叭音频：标签列（逗号分隔，供搜索匹配与卡片展示）
     add_column_if_not_exists('music', 'tags', "TEXT DEFAULT ''")
+    # 公共建筑：标签列（逗号分隔，供搜索匹配与卡片展示）
+    add_column_if_not_exists('public_buildings', 'tags', "TEXT DEFAULT ''")
+    # 公共建筑：收藏表索引（按建筑/用户统计收藏数）
+    try:
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_building_fav_building "
+            "ON building_favorites (building_id)"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_building_fav_user "
+            "ON building_favorites (user_id)"
+        )
+    except Exception as e:
+        log('ERROR', 'DB', f'创建 building_favorites 索引失败: {e}')
     # 迁移前先检查 is_public 列是否存在（新库没有此列，跳过迁移）
     try:
         cursor.execute("SELECT is_public FROM music LIMIT 0")

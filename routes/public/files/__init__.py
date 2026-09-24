@@ -14,7 +14,7 @@ r"""公开文件/目录服务。
 import os
 import mimetypes
 from datetime import datetime
-from flask import send_file, abort, request, redirect, url_for, flash
+from flask import send_file, abort, request, jsonify
 
 from config import APP_ROOT
 from core.auth import login_required, get_current_user
@@ -283,52 +283,78 @@ def admin_public_files_page():
     return render_page('admin/public_files.html', paths=paths)
 
 
+def _payload():
+    """读取 JSON（或表单兜底）请求体。"""
+    data = request.get_json(silent=True)
+    if isinstance(data, dict):
+        return data
+    return request.form.to_dict()
+
+
 @public_bp.route('/admin/public-files/add', methods=['POST'])
 @login_required
 def admin_public_files_add():
+    """管理后台：添加公开路径（JSON API，前端无刷新）。"""
     user = get_current_user()
     if not user or not user['is_admin']:
         abort(403)
 
-    url_path = request.form.get('url_path', '').strip()
-    local_path = request.form.get('local_path', '').strip()
-    is_directory = request.form.get('is_directory') == 'on' or request.form.get('is_directory') == '1'
+    data = _payload()
+    url_path = (data.get('url_path') or '').strip()
+    local_path = (data.get('local_path') or '').strip()
+    is_directory = str(data.get('is_directory') or '') in ('1', 'true', 'on', 'True')
+
+    if not url_path:
+        return jsonify({'success': False, 'message': '公开 URL 路径不能为空'}), 400
+    if not local_path:
+        return jsonify({'success': False, 'message': '本地路径不能为空'}), 400
 
     if not url_path.startswith('/'):
         url_path = '/' + url_path
-
     if url_path != '/':
         url_path = url_path.rstrip('/')
 
     safe, err = _is_path_safe(local_path, is_directory)
     if not safe:
-        flash(err, 'error')
-        return redirect(url_for('public.admin_public_files_page'))
+        return jsonify({'success': False, 'message': err}), 400
 
+    warning = ''
     abs_path = _resolve_local_path(local_path)
     if abs_path and not os.path.exists(abs_path):
-        flash(f'注意：本地路径 {local_path} 当前不存在，但配置已保存', 'warning')
+        warning = f'注意：本地路径 {local_path} 当前不存在，但配置已保存'
 
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     conn = get_db()
     try:
-        conn.execute(
+        cur = conn.execute(
             "INSERT INTO public_paths (url_path, local_path, is_directory, is_active, created_at) VALUES (?, ?, ?, 1, ?)",
-            (url_path, local_path.replace('\\', '/'), 1 if is_directory else 0, datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
+            (url_path, local_path.replace('\\', '/'), 1 if is_directory else 0, now)
         )
         conn.commit()
-        flash('公开路径已添加', 'success')
+        return jsonify({
+            'success': True,
+            'message': warning or '公开路径已添加',
+            'warning': warning,
+            'path': {
+                'id': cur.lastrowid,
+                'url_path': url_path,
+                'local_path': local_path.replace('\\', '/'),
+                'is_directory': is_directory,
+                'is_active': True,
+                'created_at': now,
+            },
+        })
     except Exception as e:
         conn.rollback()
-        flash(f'添加失败：{e}', 'error')
+        return jsonify({'success': False, 'message': f'添加失败：{e}'}), 500
     finally:
         conn.close()
-
-    return redirect(url_for('public.admin_public_files_page'))
 
 
 @public_bp.route('/admin/public-files/toggle/<int:pid>', methods=['POST'])
 @login_required
 def admin_public_files_toggle(pid):
+    """管理后台：启用/停用公开路径（JSON API，前端无刷新）。"""
     user = get_current_user()
     if not user or not user['is_admin']:
         abort(403)
@@ -337,24 +363,26 @@ def admin_public_files_toggle(pid):
     try:
         row = conn.execute("SELECT is_active FROM public_paths WHERE id = ?", (pid,)).fetchone()
         if not row:
-            flash('路径不存在', 'error')
-        else:
-            new_status = 0 if row['is_active'] else 1
-            conn.execute("UPDATE public_paths SET is_active = ? WHERE id = ?", (new_status, pid))
-            conn.commit()
-            flash('状态已更新', 'success')
+            return jsonify({'success': False, 'message': '路径不存在'}), 404
+        new_status = 0 if row['is_active'] else 1
+        conn.execute("UPDATE public_paths SET is_active = ? WHERE id = ?", (new_status, pid))
+        conn.commit()
+        return jsonify({
+            'success': True,
+            'message': '状态已更新',
+            'is_active': bool(new_status),
+        })
     except Exception as e:
         conn.rollback()
-        flash(f'更新失败：{e}', 'error')
+        return jsonify({'success': False, 'message': f'更新失败：{e}'}), 500
     finally:
         conn.close()
-
-    return redirect(url_for('public.admin_public_files_page'))
 
 
 @public_bp.route('/admin/public-files/delete/<int:pid>', methods=['POST'])
 @login_required
 def admin_public_files_delete(pid):
+    """管理后台：删除公开路径（JSON API，前端无刷新）。"""
     user = get_current_user()
     if not user or not user['is_admin']:
         abort(403)
@@ -363,11 +391,9 @@ def admin_public_files_delete(pid):
     try:
         conn.execute("DELETE FROM public_paths WHERE id = ?", (pid,))
         conn.commit()
-        flash('公开路径已删除', 'success')
+        return jsonify({'success': True, 'message': '公开路径已删除'})
     except Exception as e:
         conn.rollback()
-        flash(f'删除失败：{e}', 'error')
+        return jsonify({'success': False, 'message': f'删除失败：{e}'}), 500
     finally:
         conn.close()
-
-    return redirect(url_for('public.admin_public_files_page'))

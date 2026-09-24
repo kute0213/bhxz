@@ -34,64 +34,383 @@
     );
     border-radius: 24px 24px 0 0; z-index: 1; pointer-events: none;
 }
+/* 标签筛选胶囊 */
+.tag-chip {
+    display: inline-flex; align-items: center; gap: 0.35rem;
+    padding: 0.3rem 0.8rem; border-radius: 999px;
+    font-size: 0.8rem; line-height: 1.2;
+    color: var(--text-secondary); background: rgba(15,23,42,0.04);
+    border: 1px solid var(--border-card); cursor: pointer;
+    transition: all var(--transition-fast);
+}
+.tag-chip:hover { border-color: var(--border-accent); color: var(--accent-blue); }
+.tag-chip.active {
+    background: var(--accent-blue-dim); border-color: var(--border-accent);
+    color: var(--accent-blue); font-weight: 600;
+}
+.tag-chip .tag-count { font-size: 0.7rem; opacity: 0.6; }
+/* 建筑卡片上的标签 */
+.building-tag {
+    display: inline-block; padding: 0.1rem 0.5rem; border-radius: 999px;
+    font-size: 0.7rem; background: rgba(2,132,199,0.1);
+    color: var(--accent-blue); border: 1px solid rgba(2,132,199,0.18);
+}
+/* 收藏按钮 */
+.building-fav-btn {
+    display: inline-flex; align-items: center; gap: 0.25rem;
+    padding: 0.3rem 0.55rem; border-radius: 999px; font-size: 0.72rem;
+    color: var(--text-muted); background: rgba(15,23,42,0.04);
+    border: 1px solid var(--border-card); cursor: pointer;
+    transition: all var(--transition-fast); flex-shrink: 0;
+}
+.building-fav-btn:hover { border-color: rgba(217,119,6,0.5); color: var(--accent-amber); }
+.building-fav-btn.is-fav { color: var(--accent-amber); border-color: rgba(217,119,6,0.5); background: rgba(217,119,6,0.08); }
+.building-fav-btn.is-fav svg { fill: currentColor; }
+.building-fav-btn.pop { animation: favPop 0.36s cubic-bezier(0.34, 1.56, 0.64, 1); }
+@keyframes favPop { 0% { transform: scale(1); } 45% { transform: scale(1.18); } 100% { transform: scale(1); } }
 </style>
 {% endblock %}
 {% block content %}
 <section class="page-container py-12">
     <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="text-center mb-10 sm:mb-12">
+        <div class="text-center mb-8">
             <h1 class="text-2xl sm:text-3xl font-bold mb-3">{{ '我的建筑' if my_mode else '公共建筑' }}</h1>
             <p class="text-cream/60 text-sm sm:text-base">{{ '我发布的公共建筑' if my_mode else '分享你在滨海小镇的杰作，使用 /res tp 领地名 一键前往参观' }}</p>
         </div>
 
-        {% if user %}
-        <div class="mb-8 flex flex-wrap items-center gap-3 justify-center">
-            {% if my_mode %}
-            <a href="{{ url_for('buildings.building_list') }}" class="btn-secondary px-4 py-2 rounded-lg text-sm inline-flex items-center gap-2">
-                <i data-lucide="building-2" class="w-4 h-4"></i>全部建筑
-            </a>
-            {% else %}
-            <a href="{{ url_for('buildings.building_list') }}?my=1" class="btn-secondary px-4 py-2 rounded-lg text-sm inline-flex items-center gap-2">
-                <i data-lucide="file-text" class="w-4 h-4"></i>我的建筑
-            </a>
-            {% endif %}
-            <a href="{{ url_for('buildings.building_create') }}" class="btn-primary px-4 py-2 rounded-lg text-sm inline-flex items-center gap-2">
-                <i data-lucide="plus" class="w-4 h-4"></i>发布建筑
-            </a>
+        <div class="mb-6 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+            <form id="building-search-form"
+                  class="flex-1 min-w-0"
+                  action="{{ url_for('buildings.building_list') }}"
+                  method="GET" autocomplete="off" onsubmit="return false;">
+                <div class="site-search-wrap relative" id="building-search-wrap">
+                    <i data-lucide="search" class="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-cream/40 search-icon cursor-pointer"></i>
+                    <input id="building-search-input" name="q" type="text" maxlength="60"
+                           value="{{ search_query }}"
+                           placeholder="搜索建筑标题或标签…"
+                           class="input-field search-input w-full pl-10 py-2.5 rounded-xl text-sm">
+                </div>
+            </form>
+            <div class="flex items-center gap-2 flex-shrink-0">
+                {% if user and my_mode %}
+                <a href="{{ url_for('buildings.building_list') }}" class="btn-secondary px-4 py-2.5 rounded-lg text-sm inline-flex items-center gap-2">
+                    <i data-lucide="building-2" class="w-4 h-4"></i>全部建筑
+                </a>
+                {% elif user %}
+                <a href="{{ url_for('buildings.building_list') }}?my=1" class="btn-secondary px-4 py-2.5 rounded-lg text-sm inline-flex items-center gap-2">
+                    <i data-lucide="file-text" class="w-4 h-4"></i>我的建筑
+                </a>
+                {% endif %}
+                <a href="{{ url_for('buildings.building_create') }}" class="btn-primary px-4 py-2.5 rounded-lg text-sm inline-flex items-center gap-2">
+                    <i data-lucide="plus" class="w-4 h-4"></i>发布建筑
+                </a>
+            </div>
+        </div>
+
+        {% if not my_mode and all_tags %}
+        <div class="mb-6 flex flex-wrap items-center gap-2" id="building-tags">
+            <span class="text-xs text-cream/50 mr-1 flex items-center gap-1"><i data-lucide="tag" class="w-3.5 h-3.5"></i>标签</span>
+            <button type="button" class="tag-chip{% if not active_tag %} active{% endif %}" data-tag="">全部</button>
+            {% for t in all_tags %}
+            <button type="button" class="tag-chip{% if active_tag == t.name %} active{% endif %}" data-tag="{{ t.name }}">
+                #{{ t.name }}<span class="tag-count">{{ t.count }}</span>
+            </button>
+            {% endfor %}
         </div>
         {% endif %}
 
-        {% if buildings %}
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+        <p class="text-sm text-cream/50 mb-4 hidden" id="building-result-hint"></p>
+
+        <div id="buildings-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
             {% for b in buildings %}
-            <div class="building-card block p-6">
+            <div class="building-card block p-6 search-fade-in" data-id="{{ b.id }}">
                 <div class="building-card-top-bar"></div>
                 <div class="relative z-10">
+                    <div class="flex items-start justify-between gap-2 mb-1.5">
+                        <a href="{{ url_for('buildings.building_detail', building_id=b.id) }}" class="flex-1 min-w-0 hover:no-underline">
+                            <h3 class="text-lg font-bold text-cream truncate">{{ b.title }}</h3>
+                        </a>
+                        <button type="button" class="building-fav-btn{% if b.id in favorite_ids %} is-fav{% endif %}"
+                                data-fav-id="{{ b.id }}" title="{{ '取消收藏' if b.id in favorite_ids else '收藏' }}">
+                            <i data-lucide="heart" class="w-3.5 h-3.5"></i>
+                            <span class="fav-count">{{ b.favorite_count or 0 }}</span>
+                        </button>
+                    </div>
+                    <div class="inline-flex items-center gap-1 text-xs text-[var(--accent-blue)] bg-[var(--accent-blue)]/10 px-2 py-0.5 rounded-full mb-2">
+                        <i data-lucide="map-pin" class="w-3 h-3"></i>
+                        <span class="font-mono">/res tp {{ b.warp_name }}</span>
+                    </div>
+                    {% if b.tags %}
+                    <div class="flex flex-wrap gap-1.5 mb-2">
+                        {% for t in b.tags.split(',') if t %}
+                        <span class="building-tag">#{{ t }}</span>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
                     <a href="{{ url_for('buildings.building_detail', building_id=b.id) }}" class="hover:no-underline">
-                        <h3 class="text-lg font-bold mb-1 text-cream">{{ b.title }}</h3>
-                        <div class="inline-flex items-center gap-1 text-xs text-[var(--accent-blue)] bg-[var(--accent-blue)]/10 px-2 py-0.5 rounded-full mb-3">
-                            <i data-lucide="map-pin" class="w-3 h-3"></i>
-                            <span class="font-mono">/res tp {{ b.warp_name }}</span>
-                        </div>
                         <p class="text-cream/60 text-sm leading-relaxed mb-4 line-clamp-3">{{ b.description[:150] }}{{ '...' if b.description|length > 150 else '' }}</p>
                     </a>
                     <div class="flex items-center justify-between text-xs text-cream/40">
                         <span class="flex items-center gap-1"><i data-lucide="user" class="w-3 h-3"></i>{{ b.author_name or '未知' }}</span>
-                        <span class="flex items-center gap-1"><i data-lucide="eye" class="w-3 h-3"></i>{{ b.view_count or 0 }}</span>
+                        <span class="flex items-center gap-3">
+                            <span class="flex items-center gap-1"><i data-lucide="heart" class="w-3 h-3"></i>{{ b.favorite_count or 0 }}</span>
+                            <span class="flex items-center gap-1"><i data-lucide="eye" class="w-3 h-3"></i>{{ b.view_count or 0 }}</span>
+                        </span>
                     </div>
                 </div>
             </div>
             {% endfor %}
         </div>
-        {% else %}
-        <div class="text-center py-16">
+
+        <div id="buildings-empty" class="text-center py-16{% if buildings %} hidden{% endif %}">
             <div class="pixel-card rounded-xl p-8 sm:p-12 max-w-lg mx-auto">
                 <i data-lucide="building-2" class="w-12 h-12 text-cream/30 mx-auto mb-4"></i>
-                <p class="text-cream/60 text-lg mb-2">暂无公共建筑</p>
-                <p class="text-cream/40 text-sm">快来发布你的第一个建筑吧</p>
+                <p class="text-cream/60 text-lg mb-2" id="buildings-empty-title">暂无公共建筑</p>
+                <p class="text-cream/40 text-sm" id="buildings-empty-hint">快来发布你的第一个建筑吧</p>
             </div>
         </div>
-        {% endif %}
+
+        <div class="mt-8 text-center">
+            <button type="button" id="load-more-btn"
+                    class="btn-secondary px-6 py-2.5 rounded-lg text-sm inline-flex items-center gap-2{% if not has_more %} hidden{% endif %}">
+                <i data-lucide="chevron-down" class="w-4 h-4"></i>加载更多
+            </button>
+            <p id="load-more-end" class="text-xs text-cream/40 mt-2{% if has_more %} hidden{% endif %}">没有更多了</p>
+        </div>
     </div>
 </section>
+{% endblock %}
+
+{% block extra_script %}
+<script>
+(function () {
+    var CFG = {
+        apiUrl: "{{ url_for('buildings.api_buildings_list') }}",
+        detailBase: "{{ url_for('buildings.building_list') }}/",
+        favUrl: "{{ url_for('buildings.toggle_building_favorite', building_id=0) }}",
+        myMode: {{ 'true' if my_mode else 'false' }},
+        isLoggedIn: {{ 'true' if user else 'false' }}
+    };
+
+    var grid = document.getElementById('buildings-grid');
+    var emptyBox = document.getElementById('buildings-empty');
+    var emptyTitle = document.getElementById('buildings-empty-title');
+    var emptyHint = document.getElementById('buildings-empty-hint');
+    var loadMoreBtn = document.getElementById('load-more-btn');
+    var loadMoreEnd = document.getElementById('load-more-end');
+    var resultHint = document.getElementById('building-result-hint');
+
+    var state = { page: 1, query: "{{ search_query }}", tag: "{{ active_tag }}", loading: false };
+
+    function escapeHtml(text) {
+        var d = document.createElement('div');
+        d.textContent = text == null ? '' : String(text);
+        return d.innerHTML;
+    }
+
+    function refreshIcons() {
+        if (typeof lucide !== 'undefined' && lucide.createIcons) {
+            try { lucide.createIcons(); } catch (_) {}
+        }
+    }
+
+    function favButton(b) {
+        var fav = b.is_favorited ? ' is-fav' : '';
+        return '<button type="button" class="building-fav-btn' + fav + '" data-fav-id="' + b.id + '" title="' +
+            (b.is_favorited ? '取消收藏' : '收藏') + '">' +
+            '<i data-lucide="heart" class="w-3.5 h-3.5"></i>' +
+            '<span class="fav-count">' + (b.favorite_count || 0) + '</span></button>';
+    }
+
+    function tagsHtml(tags) {
+        if (!tags) return '';
+        var parts = String(tags).split(',').filter(function (t) { return t.trim(); });
+        if (!parts.length) return '';
+        return '<div class="flex flex-wrap gap-1.5 mb-2">' + parts.map(function (t) {
+            return '<span class="building-tag">#' + escapeHtml(t.trim()) + '</span>';
+        }).join('') + '</div>';
+    }
+
+    function cardHtml(b) {
+        var desc = b.description || '';
+        var shortDesc = desc.length > 150 ? desc.slice(0, 150) + '...' : desc;
+        var detail = CFG.detailBase + b.id;
+        return '<div class="building-card block p-6 search-fade-in" data-id="' + b.id + '">' +
+            '<div class="building-card-top-bar"></div>' +
+            '<div class="relative z-10">' +
+                '<div class="flex items-start justify-between gap-2 mb-1.5">' +
+                    '<a href="' + detail + '" class="flex-1 min-w-0 hover:no-underline">' +
+                        '<h3 class="text-lg font-bold text-cream truncate">' + escapeHtml(b.title) + '</h3></a>' +
+                    favButton(b) +
+                '</div>' +
+                '<div class="inline-flex items-center gap-1 text-xs text-[var(--accent-blue)] bg-[var(--accent-blue)]/10 px-2 py-0.5 rounded-full mb-2">' +
+                    '<i data-lucide="map-pin" class="w-3 h-3"></i>' +
+                    '<span class="font-mono">/res tp ' + escapeHtml(b.warp_name) + '</span></div>' +
+                tagsHtml(b.tags) +
+                '<a href="' + detail + '" class="hover:no-underline">' +
+                    '<p class="text-cream/60 text-sm leading-relaxed mb-4 line-clamp-3">' + escapeHtml(shortDesc) + '</p></a>' +
+                '<div class="flex items-center justify-between text-xs text-cream/40">' +
+                    '<span class="flex items-center gap-1"><i data-lucide="user" class="w-3 h-3"></i>' + escapeHtml(b.author_name || '未知') + '</span>' +
+                    '<span class="flex items-center gap-3">' +
+                        '<span class="flex items-center gap-1"><i data-lucide="heart" class="w-3 h-3"></i>' + (b.favorite_count || 0) + '</span>' +
+                        '<span class="flex items-center gap-1"><i data-lucide="eye" class="w-3 h-3"></i>' + (b.view_count || 0) + '</span>' +
+                    '</span>' +
+                '</div>' +
+            '</div></div>';
+    }
+
+    function render(items, append) {
+        if (!append) grid.innerHTML = '';
+        if (items.length) {
+            grid.insertAdjacentHTML('beforeend', items.map(cardHtml).join(''));
+        }
+        var hasAny = grid.children.length > 0;
+        emptyBox.classList.toggle('hidden', hasAny);
+        refreshIcons();
+    }
+
+    function updateHint(total) {
+        if (state.query) {
+            resultHint.classList.remove('hidden');
+            resultHint.textContent = '搜索「' + state.query + '」找到 ' + total + ' 条结果';
+        } else {
+            resultHint.classList.add('hidden');
+        }
+        if (state.tag) {
+            emptyTitle.textContent = '没有匹配该标签的建筑';
+            emptyHint.textContent = '试试切换其他标签';
+        } else {
+            emptyTitle.textContent = '暂无公共建筑';
+            emptyHint.textContent = '快来发布你的第一个建筑吧';
+        }
+    }
+
+    function setLoading(loading) {
+        state.loading = loading;
+        if (loading) {
+            loadMoreBtn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i>加载中…';
+        } else {
+            loadMoreBtn.innerHTML = '<i data-lucide="chevron-down" class="w-4 h-4"></i>加载更多';
+        }
+        refreshIcons();
+    }
+
+    function fetchPage(page, append) {
+        if (state.loading) return;
+        setLoading(true);
+        var params = new URLSearchParams();
+        params.set('q', state.query || '');
+        params.set('page', page);
+        if (state.tag) params.set('tag', state.tag);
+        if (CFG.myMode) params.set('my', '1');
+
+        fetch(CFG.apiUrl + '?' + params.toString(), {
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (!data.success) { Toast && Toast.error(data.message || '加载失败'); return; }
+            state.page = page;
+            render(data.buildings || [], append);
+            updateHint(grid.children.length);
+            loadMoreBtn.classList.toggle('hidden', !data.has_more);
+            loadMoreEnd.classList.toggle('hidden', !!data.has_more);
+        })
+        .catch(function () { Toast && Toast.error('加载失败，请重试'); })
+        .finally(function () { setLoading(false); });
+    }
+
+    // 搜索组件：点击放大置顶 + 输入即 API 搜索（无刷新）
+    if (window.SiteSearch) {
+        SiteSearch.attach({
+            input: document.getElementById('building-search-input'),
+            form: document.getElementById('building-search-form'),
+            pinEl: document.getElementById('building-search-wrap'),
+            endpoint: CFG.apiUrl,
+            params: function () {
+                var p = {};
+                if (state.tag) p.tag = state.tag;
+                if (CFG.myMode) p.my = 1;
+                return p;
+            },
+            onLoading: function () { setLoading(true); },
+            onResults: function (data) {
+                setLoading(false);
+                if (!data || !data.success) return;
+                state.query = (data.buildings && data.buildings.length === 0 && !document.getElementById('building-search-input').value.trim())
+                    ? '' : document.getElementById('building-search-input').value.trim();
+                state.page = 1;
+                render(data.buildings || [], false);
+                updateHint(grid.children.length);
+                loadMoreBtn.classList.toggle('hidden', !data.has_more);
+                loadMoreEnd.classList.toggle('hidden', !!data.has_more);
+            },
+            onError: function () { setLoading(false); Toast && Toast.error('搜索失败，请重试'); },
+            onSubmit: function (q) { state.query = (q || '').trim(); fetchPage(1, false); }
+        });
+    }
+
+    // 标签筛选
+    var tagsWrap = document.getElementById('building-tags');
+    if (tagsWrap) {
+        tagsWrap.addEventListener('click', function (e) {
+            var chip = e.target.closest('.tag-chip');
+            if (!chip) return;
+            var tag = chip.getAttribute('data-tag') || '';
+            state.tag = tag;
+            state.query = document.getElementById('building-search-input').value.trim();
+            tagsWrap.querySelectorAll('.tag-chip').forEach(function (c) {
+                c.classList.toggle('active', c === chip);
+            });
+            var p = new URLSearchParams();
+            if (state.query) p.set('q', state.query);
+            if (tag) p.set('tag', tag);
+            history.replaceState(null, '', location.pathname + (p.toString() ? '?' + p.toString() : ''));
+            fetchPage(1, false);
+        });
+    }
+
+    // 加载更多
+    loadMoreBtn.addEventListener('click', function () { fetchPage(state.page + 1, true); });
+
+    // 收藏切换（事件委托）
+    grid.addEventListener('click', function (e) {
+        var btn = e.target.closest('.building-fav-btn');
+        if (!btn) return;
+        e.preventDefault();
+        if (!CFG.isLoggedIn) {
+            if (typeof Toast !== 'undefined') Toast.error('请先登录后再收藏');
+            return;
+        }
+        var id = btn.getAttribute('data-fav-id');
+        btn.disabled = true;
+        fetch(CFG.favUrl.replace('/0/', '/' + id + '/'), {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (!data.success) { Toast && Toast.error(data.message || '操作失败'); return; }
+                btn.classList.toggle('is-fav', data.is_favorited);
+                btn.title = data.is_favorited ? '取消收藏' : '收藏';
+                var cnt = btn.querySelector('.fav-count');
+                if (cnt) cnt.textContent = data.favorite_count;
+                btn.classList.remove('pop');
+                void btn.offsetWidth;
+                btn.classList.add('pop');
+                Toast && Toast.success(data.message);
+            })
+            .catch(function () { Toast && Toast.error('操作失败，请重试'); })
+            .finally(function () { btn.disabled = false; });
+    });
+
+    // 搜索图标点击 → 聚焦输入框
+    var icon = document.querySelector('#building-search-wrap .search-icon');
+    if (icon) icon.style.cursor = 'pointer';
+    var searchInput = document.getElementById('building-search-input');
+    if (icon && searchInput) {
+        icon.addEventListener('click', function () { searchInput.focus(); });
+    }
+})();
+</script>
 {% endblock %}

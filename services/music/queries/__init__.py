@@ -10,6 +10,9 @@ from core.db import get_db
 from config import UPLOAD_MUSIC_DIR
 from services.music.constants import STATUS_PUBLIC, STATUS_PENDING
 
+# 列表分页大小：每次加载 10 条，前端点击「加载更多」再取下一页
+PAGE_SIZE = 10
+
 
 def parse_tags(raw):
     """解析/清洗标签：逗号/顿号/空格分隔，去重、去空白、限长（≤10 个，每个 ≤12 字）。
@@ -68,6 +71,36 @@ def get_public_musics(keyword=''):
         conn.close()
 
 
+def get_public_musics_page(keyword='', page=1, page_size=PAGE_SIZE):
+    """分页获取已通过审核的公开音频，支持按名称或标签模糊搜索。
+
+    Returns:
+        (items, has_more)：items 为音频 dict 列表，has_more 表示是否还有下一页。
+    """
+    page = max(1, int(page or 1))
+    page_size = max(1, min(int(page_size or PAGE_SIZE), 50))
+    offset = (page - 1) * page_size
+
+    sql = ("SELECT id, user_id, username, title, tags, status, created_at "
+           "FROM music WHERE status = ?")
+    params = [STATUS_PUBLIC]
+    kw = (keyword or '').strip()
+    if kw:
+        sql += " AND (title LIKE ? OR tags LIKE ?)"
+        params.extend([f'%{kw}%', f'%{kw}%'])
+    sql += " ORDER BY id DESC LIMIT ? OFFSET ?"
+
+    conn = get_db()
+    try:
+        rows = conn.execute(sql, (*params, page_size + 1, offset)).fetchall()
+    finally:
+        conn.close()
+
+    items = [dict(r) for r in rows]
+    has_more = len(items) > page_size
+    return items[:page_size], has_more
+
+
 def get_user_musics(user_id):
     """获取指定用户上传的音频。"""
     conn = get_db()
@@ -105,6 +138,31 @@ def get_all_musics():
             "FROM music ORDER BY id DESC"
         ).fetchall()
         return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def get_musics_page(status=None, page=1, page_size=PAGE_SIZE):
+    """分页获取音频列表（管理员后台），status 为空时返回全部。
+
+    Returns:
+        (items, total)：items 为当前页音频 dict 列表，total 为符合条件的总数。
+    """
+    page = max(1, int(page or 1))
+    page_size = max(1, min(int(page_size or PAGE_SIZE), 50))
+    where = ' WHERE status = ?' if status is not None else ''
+    params = (status,) if status is not None else ()
+    conn = get_db()
+    try:
+        total = conn.execute(
+            f"SELECT COUNT(*) AS c FROM music{where}", params
+        ).fetchone()['c']
+        rows = conn.execute(
+            "SELECT id, user_id, username, title, tags, status, created_at "
+            f"FROM music{where} ORDER BY id DESC LIMIT ? OFFSET ?",
+            (*params, page_size, (page - 1) * page_size),
+        ).fetchall()
+        return [dict(r) for r in rows], total
     finally:
         conn.close()
 

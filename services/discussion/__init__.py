@@ -13,6 +13,7 @@ from services.discussion.categories import (
 from services.discussion.topics import (
     get_topic_count,
     get_topics_page,
+    get_admin_topics_page,
     get_topic_detail,
     create_topic,
     edit_topic,
@@ -30,7 +31,7 @@ from services.discussion.replies import (
 __all__ = [
     'get_categories', 'get_category_dict', 'create_category', 'delete_category',
     'get_categories_with_counts',
-    'get_topic_count', 'get_topics_page', 'get_topic_detail', 'create_topic',
+    'get_topic_count', 'get_topics_page', 'get_admin_topics_page', 'get_topic_detail', 'create_topic',
     'edit_topic', 'delete_topic', 'toggle_pin', 'toggle_lock',
     'reply_to_topic', 'delete_reply', 'get_replies_page', 'get_new_replies',
 ]

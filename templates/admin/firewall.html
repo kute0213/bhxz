@@ -111,15 +111,19 @@
                 <td class="px-4 py-3 text-right space-x-1">
                   <button onclick="showBanDetail({{ ban.id }}, '{{ ban.ban_type }}')" class="text-blue-400 hover:text-blue-300 text-xs px-2 py-1 rounded bg-blue-500/10 border border-blue-500/20">详情</button>
                   {% if ban.ban_type == 'ip' %}
-                  <form method="POST" action="{{ url_for('admin.admin_firewall_delete', ban_id=ban.id) }}" class="inline" onsubmit="return confirm('解除 {{ ban.identifier }}？');">
-                    {{ csrf_field() }}
-                    <button type="submit" class="text-green-400 hover:text-green-300 text-xs px-2 py-1 rounded bg-green-500/10 border border-green-500/20">解封</button>
-                  </form>
+                  <button type="button"
+                          class="admin-action text-green-400 hover:text-green-300 text-xs px-2 py-1 rounded bg-green-500/10 border border-green-500/20"
+                          data-action-url="{{ url_for('admin.admin_firewall_delete', ban_id=ban.id) }}"
+                          data-action-confirm="解除 {{ ban.identifier }}？"
+                          data-action-remove="tr"
+                          data-action-success="已解封">解封</button>
                   {% else %}
-                  <form method="POST" action="{{ url_for('admin.admin_firewall_unban_account', ban_id=ban.id) }}" class="inline" onsubmit="return confirm('解封 {{ ban.username or ban.identifier }}？');">
-                    {{ csrf_field() }}
-                    <button type="submit" class="text-green-400 hover:text-green-300 text-xs px-2 py-1 rounded bg-green-500/10 border border-green-500/20">解封</button>
-                  </form>
+                  <button type="button"
+                          class="admin-action text-green-400 hover:text-green-300 text-xs px-2 py-1 rounded bg-green-500/10 border border-green-500/20"
+                          data-action-url="{{ url_for('admin.admin_firewall_unban_account', ban_id=ban.id) }}"
+                          data-action-confirm="解封 {{ ban.username or ban.identifier }}？"
+                          data-action-remove="tr"
+                          data-action-success="已解封">解封</button>
                   {% endif %}
                 </td>
               </tr>
@@ -157,8 +161,7 @@
           封禁 IP
         </h2>
         <p class="text-xs text-red-400 mb-4">当前 IP：<code class="font-mono">{{ current_ip }}</code></p>
-        <form method="POST" action="{{ url_for('admin.admin_firewall_ban_ip') }}">
-          {{ csrf_field() }}
+        <form id="firewall-ban-ip-form" data-action-url="{{ url_for('admin.admin_firewall_ban_ip') }}">
           <div class="space-y-3">
             <div>
               <label class="block text-sm text-cream/70 mb-1">IP 地址</label>
@@ -183,8 +186,7 @@
           <i data-lucide="user-x" class="w-5 h-5 text-gold-400"></i>
           封禁账号
         </h2>
-        <form method="POST" action="{{ url_for('admin.admin_firewall_ban_account') }}">
-          {{ csrf_field() }}
+        <form id="firewall-ban-account-form" data-action-url="{{ url_for('admin.admin_firewall_ban_account') }}">
           <div class="space-y-3">
             <div>
               <label class="block text-sm text-cream/70 mb-1">用户 ID</label>
@@ -620,8 +622,7 @@
             <i data-lucide="shield" class="w-5 h-5 text-gold-400"></i>
             IP 白名单
           </h2>
-          <form method="POST" action="{{ url_for('admin.admin_firewall_whitelist_add') }}" class="flex gap-2 mb-4">
-            {{ csrf_field() }}
+          <form id="whitelist-ip-add-form" data-action-url="{{ url_for('admin.admin_firewall_whitelist_add') }}" class="flex gap-2 mb-4">
             <input type="text" name="ip_address" class="input-field flex-1 px-4 py-2 rounded-lg font-mono text-sm" placeholder="输入 IP 地址" required>
             <button type="submit" class="btn-primary px-4 py-2 rounded-lg text-sm whitespace-nowrap">添加</button>
           </form>
@@ -633,22 +634,24 @@
                   <th class="text-right px-3 py-2 font-medium">操作</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody id="whitelist-ip-body">
                 {% for ip in whitelist %}
                 {% if ip not in ('127.0.0.1','::1','localhost') %}
-                <tr class="border-b border-forest-700/30 hover:bg-blue-500/5">
+                <tr data-whitelist-ip="{{ ip }}" class="border-b border-forest-700/30 hover:bg-blue-500/5">
                   <td class="px-3 py-2 font-mono text-xs text-cream/80"><code>{{ ip }}</code></td>
                   <td class="px-3 py-2 text-right">
-                    <form method="POST" action="{{ url_for('admin.admin_firewall_whitelist_remove') }}" class="inline" onsubmit="return confirm('移出白名单 {{ ip }}？');">
-                      {{ csrf_field() }}
-                      <input type="hidden" name="ip_address" value="{{ ip }}">
-                      <button type="submit" class="text-red-400 hover:text-red-300 text-xs px-2 py-1 rounded bg-red-500/10 border border-red-500/20">移除</button>
-                    </form>
+                    <button type="button"
+                            class="admin-action text-red-400 hover:text-red-300 text-xs px-2 py-1 rounded bg-red-500/10 border border-red-500/20"
+                            data-action-url="{{ url_for('admin.admin_firewall_whitelist_remove') }}"
+                            data-action-payload='{"ip_address": {{ ip|tojson }}}'
+                            data-action-confirm="移出白名单 {{ ip }}？"
+                            data-action-remove="tr"
+                            data-action-success="已移出白名单">移除</button>
                   </td>
                 </tr>
                 {% endif %}
                 {% else %}
-                <tr><td colspan="2" class="px-3 py-8 text-center text-cream/40">暂无 IP 白名单</td></tr>
+                <tr id="whitelist-ip-empty"><td colspan="2" class="px-3 py-8 text-center text-cream/40">暂无 IP 白名单</td></tr>
                 {% endfor %}
               </tbody>
             </table>
@@ -663,8 +666,7 @@
             <i data-lucide="user-check" class="w-5 h-5 text-gold-400"></i>
             账号白名单
           </h2>
-          <form method="POST" action="{{ url_for('admin.admin_firewall_whitelist_account_add') }}" class="flex gap-2 mb-4">
-            {{ csrf_field() }}
+          <form id="whitelist-account-add-form" data-action-url="{{ url_for('admin.admin_firewall_whitelist_account_add') }}" class="flex gap-2 mb-4">
             <input type="number" name="user_id" class="input-field flex-1 px-4 py-2 rounded-lg text-sm" placeholder="用户 ID" required>
             <input type="text" name="note" class="input-field w-32 px-4 py-2 rounded-lg text-sm" placeholder="备注">
             <button type="submit" class="btn-primary px-4 py-2 rounded-lg text-sm whitespace-nowrap">添加</button>
@@ -679,22 +681,24 @@
                   <th class="text-right px-3 py-2 font-medium">操作</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody id="whitelist-account-body">
                 {% for entry in account_whitelist %}
-                <tr class="border-b border-forest-700/30 hover:bg-blue-500/5">
+                <tr data-whitelist-account="{{ entry.user_id }}" class="border-b border-forest-700/30 hover:bg-blue-500/5">
                   <td class="px-3 py-2 text-cream/80 text-xs">{{ entry.username }}<span class="text-cream/40 ml-1">#{{ entry.user_id }}</span></td>
                   <td class="px-3 py-2 text-cream/60 text-xs">{{ entry.note or '-' }}</td>
                   <td class="px-3 py-2 text-cream/40 text-xs">{{ entry.created_at[:16] }}</td>
                   <td class="px-3 py-2 text-right">
-                    <form method="POST" action="{{ url_for('admin.admin_firewall_whitelist_account_remove') }}" class="inline" onsubmit="return confirm('将 {{ entry.username }} 移出白名单？');">
-                      {{ csrf_field() }}
-                      <input type="hidden" name="user_id" value="{{ entry.user_id }}">
-                      <button type="submit" class="text-red-400 hover:text-red-300 text-xs px-2 py-1 rounded bg-red-500/10 border border-red-500/20">移除</button>
-                    </form>
+                    <button type="button"
+                            class="admin-action text-red-400 hover:text-red-300 text-xs px-2 py-1 rounded bg-red-500/10 border border-red-500/20"
+                            data-action-url="{{ url_for('admin.admin_firewall_whitelist_account_remove') }}"
+                            data-action-payload='{"user_id": {{ entry.user_id }}}'
+                            data-action-confirm="将 {{ entry.username }} 移出白名单？"
+                            data-action-remove="tr"
+                            data-action-success="已移出白名单">移除</button>
                   </td>
                 </tr>
                 {% else %}
-                <tr><td colspan="4" class="px-3 py-8 text-center text-cream/40">暂无账号白名单</td></tr>
+                <tr id="whitelist-account-empty"><td colspan="4" class="px-3 py-8 text-center text-cream/40">暂无账号白名单</td></tr>
                 {% endfor %}
               </tbody>
             </table>
@@ -892,13 +896,14 @@ function loadMoreBans() {
         var actionsHtml =
           '<button onclick="showBanDetail(' + item.id + ', \'' + item.ban_type + '\')" class="text-blue-400 hover:text-blue-300 text-xs px-2 py-1 rounded bg-blue-500/10 border border-blue-500/20">详情</button>';
 
-        if (item.ban_type === 'ip') {
-          actionsHtml += '<form method="POST" action="/admin/firewall/' + item.id + '/delete" class="inline" onsubmit="return confirm(\'解除 ' + escapeHtml(item.identifier) + '？\');">' +
-            '<button type="submit" class="text-green-400 hover:text-green-300 text-xs px-2 py-1 rounded bg-green-500/10 border border-green-500/20">解封</button></form>';
-        } else {
-          actionsHtml += '<form method="POST" action="/admin/firewall/unban-account/' + item.id + '" class="inline" onsubmit="return confirm(\'解封 ' + escapeHtml(item.username || item.identifier) + '？\');">' +
-            '<button type="submit" class="text-green-400 hover:text-green-300 text-xs px-2 py-1 rounded bg-green-500/10 border border-green-500/20">解封</button></form>';
-        }
+        var unbanUrl = item.ban_type === 'ip'
+          ? '/admin/firewall/' + item.id + '/delete'
+          : '/admin/firewall/unban-account/' + item.id;
+        var unbanTarget = item.ban_type === 'ip' ? item.identifier : (item.username || item.identifier);
+        actionsHtml += '<button type="button" class="admin-action text-green-400 hover:text-green-300 text-xs px-2 py-1 rounded bg-green-500/10 border border-green-500/20"' +
+          ' data-action-url="' + unbanUrl + '"' +
+          ' data-action-confirm="解封 ' + escapeHtml(unbanTarget) + '？"' +
+          ' data-action-remove="tr" data-action-success="已解封">解封</button>';
 
         var tr = document.createElement('tr');
         tr.className = 'ban-row border-b border-forest-700/30 hover:bg-blue-500/5 transition-colors';
@@ -947,5 +952,114 @@ function trunc(str, max) {
   if (typeof str !== 'string') str = String(str || '');
   return str.length > max ? str.slice(0, max) + '...' : str;
 }
+
+/* ---- 手动封禁 / 白名单：JSON 提交，无需刷新页面 ---- */
+(function () {
+  function postJson(url, payload, btn) {
+    if (btn) btn.disabled = true;
+    return fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+      body: JSON.stringify(payload)
+    })
+    .then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { return { ok: r.ok, data: d }; }); })
+    .then(function (res) {
+      if (btn) btn.disabled = false;
+      if (!res.ok || !res.data.success) {
+        if (typeof Toast !== 'undefined') Toast.error((res.data && res.data.message) || '操作失败');
+        return null;
+      }
+      if (typeof Toast !== 'undefined') Toast.success(res.data.message || '操作成功');
+      return res.data;
+    })
+    .catch(function () {
+      if (btn) btn.disabled = false;
+      if (typeof Toast !== 'undefined') Toast.error('网络异常，操作失败');
+      return null;
+    });
+  }
+
+  var banIpForm = document.getElementById('firewall-ban-ip-form');
+  if (banIpForm) {
+    banIpForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var payload = {
+        ip_address: banIpForm.querySelector('[name="ip_address"]').value.trim(),
+        reason: banIpForm.querySelector('[name="reason"]').value.trim(),
+        duration_days: banIpForm.querySelector('[name="duration_days"]').value.trim()
+      };
+      if (!payload.ip_address) return;
+      postJson(banIpForm.getAttribute('data-action-url'), payload, banIpForm.querySelector('button[type="submit"]'))
+        .then(function (d) { if (d) banIpForm.reset(); });
+    });
+  }
+
+  var banAccountForm = document.getElementById('firewall-ban-account-form');
+  if (banAccountForm) {
+    banAccountForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var payload = {
+        user_id: banAccountForm.querySelector('[name="user_id"]').value.trim(),
+        reason: banAccountForm.querySelector('[name="reason"]').value.trim(),
+        duration_minutes: banAccountForm.querySelector('[name="duration_minutes"]').value.trim()
+      };
+      if (!payload.user_id) return;
+      postJson(banAccountForm.getAttribute('data-action-url'), payload, banAccountForm.querySelector('button[type="submit"]'))
+        .then(function (d) { if (d) banAccountForm.reset(); });
+    });
+  }
+
+  var wlIpForm = document.getElementById('whitelist-ip-add-form');
+  if (wlIpForm) {
+    wlIpForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var input = wlIpForm.querySelector('[name="ip_address"]');
+      var ip = input.value.trim();
+      if (!ip) return;
+      postJson(wlIpForm.getAttribute('data-action-url'), { ip_address: ip }, wlIpForm.querySelector('button[type="submit"]'))
+        .then(function (d) {
+          if (!d) return;
+          var empty = document.getElementById('whitelist-ip-empty');
+          if (empty) empty.remove();
+          var tbody = document.getElementById('whitelist-ip-body');
+          var tr = document.createElement('tr');
+          tr.className = 'border-b border-forest-700/30 hover:bg-blue-500/5';
+          tr.setAttribute('data-whitelist-ip', ip);
+          tr.innerHTML =
+            '<td class="px-3 py-2 font-mono text-xs text-cream/80"><code>' + escapeHtml(ip) + '</code></td>' +
+            '<td class="px-3 py-2 text-right"><button type="button" class="admin-action text-red-400 hover:text-red-300 text-xs px-2 py-1 rounded bg-red-500/10 border border-red-500/20" data-action-url="' + wlIpForm.getAttribute('data-action-url').replace(/\/add$/, '/remove') + '" data-action-payload=\'{"ip_address": ' + JSON.stringify(ip) + '}\' data-action-confirm="移出白名单 ' + escapeHtml(ip) + '？" data-action-remove="tr" data-action-success="已移出白名单">移除</button></td>';
+          if (tbody) tbody.appendChild(tr);
+          wlIpForm.reset();
+        });
+    });
+  }
+
+  var wlAccForm = document.getElementById('whitelist-account-add-form');
+  if (wlAccForm) {
+    wlAccForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+      var uid = wlAccForm.querySelector('[name="user_id"]').value.trim();
+      var note = wlAccForm.querySelector('[name="note"]').value.trim();
+      if (!uid) return;
+      postJson(wlAccForm.getAttribute('data-action-url'), { user_id: uid, note: note }, wlAccForm.querySelector('button[type="submit"]'))
+        .then(function (d) {
+          if (!d) return;
+          var empty = document.getElementById('whitelist-account-empty');
+          if (empty) empty.remove();
+          var tbody = document.getElementById('whitelist-account-body');
+          var tr = document.createElement('tr');
+          tr.className = 'border-b border-forest-700/30 hover:bg-blue-500/5';
+          tr.setAttribute('data-whitelist-account', d.user_id);
+          tr.innerHTML =
+            '<td class="px-3 py-2 text-cream/80 text-xs">用户' + escapeHtml(String(d.user_id)) + '<span class="text-cream/40 ml-1">#' + escapeHtml(String(d.user_id)) + '</span></td>' +
+            '<td class="px-3 py-2 text-cream/60 text-xs">' + escapeHtml(note || '-') + '</td>' +
+            '<td class="px-3 py-2 text-cream/40 text-xs">' + new Date().toISOString().slice(0, 16).replace('T', ' ') + '</td>' +
+            '<td class="px-3 py-2 text-right"><button type="button" class="admin-action text-red-400 hover:text-red-300 text-xs px-2 py-1 rounded bg-red-500/10 border border-red-500/20" data-action-url="' + wlAccForm.getAttribute('data-action-url').replace(/\/add$/, '/remove') + '" data-action-payload=\'{"user_id": ' + d.user_id + '}\' data-action-confirm="将用户 ' + escapeHtml(String(d.user_id)) + ' 移出白名单？" data-action-remove="tr" data-action-success="已移出白名单">移除</button></td>';
+          if (tbody) tbody.appendChild(tr);
+          wlAccForm.reset();
+        });
+    });
+  }
+})();
 </script>
 {% endblock %}

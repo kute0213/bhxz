@@ -9,10 +9,11 @@ from core.auth import admin_required, get_current_user
 from core.helpers import render_page
 from routes.admin import admin_bp
 from services.game_accounts.registration_service import (
-    get_pending_applications, get_all_applications,
+    get_pending_applications, get_all_applications, get_applications_page,
     approve_application, reject_application,
     ban_account, unban_account, get_banned_accounts,
 )
+from services.game_accounts.registration_service import PAGE_SIZE as APPLICATION_PAGE_SIZE
 from services.game_server_ban import (
     get_pending_applications as get_pending_ban_applications,
     get_all_applications as get_all_ban_applications,
@@ -27,8 +28,15 @@ from core.shared.validation import validate_mc_username, validate_ban_reason
 @admin_bp.route('/admin/game-accounts')
 @admin_required
 def admin_game_accounts():
-    """账号注册申请管理页面。"""
-    return render_page('admin/game_accounts.html')
+    """账号注册申请管理页面（每次 10 条，加载更多走 API）。"""
+    pending_apps, pending_total = get_applications_page(status='pending', page=1)
+    history_apps, history_total = get_applications_page(page=1)
+    return render_page(
+        'admin/game_accounts.html',
+        pending_apps=pending_apps, pending_total=pending_total,
+        history_apps=history_apps, history_total=history_total,
+        page_size=APPLICATION_PAGE_SIZE,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -45,6 +53,36 @@ def api_get_applications():
         'success': True,
         'pending': pending,
         'all': all_apps,
+    })
+
+
+@admin_bp.route('/admin/api/game-accounts/applications/list')
+@admin_required
+def api_applications_list():
+    """注册申请分页列表（JSON，每次 10 条）。
+
+    参数：
+        status  pending=待审批 approved=已通过 rejected=已拒绝 all=全部（默认）
+        page    页码，从 1 开始
+    """
+    status = (request.args.get('status') or 'all').strip()
+    if status not in ('all', 'pending', 'approved', 'rejected'):
+        return jsonify({'success': False, 'message': '无效的状态'}), 400
+    try:
+        page = max(1, int(request.args.get('page', 1)))
+    except (TypeError, ValueError):
+        page = 1
+
+    items, total = get_applications_page(
+        status=status, page=page, page_size=APPLICATION_PAGE_SIZE)
+    return jsonify({
+        'success': True,
+        'applications': items,
+        'status': status,
+        'page': page,
+        'page_size': APPLICATION_PAGE_SIZE,
+        'total': total,
+        'has_more': page * APPLICATION_PAGE_SIZE < total,
     })
 
 
