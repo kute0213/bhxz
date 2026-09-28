@@ -20,9 +20,13 @@ import os
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-# 定位 templates/emails/ 目录（当前文件位于 services/mail/templates/__init__.py）
-_BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-_EMAIL_TEMPLATES_DIR = os.path.join(_BASE_DIR, 'templates', 'emails')
+# 定位 templates/emails/ 目录（当前文件位于 services/mail/templates/__init__.py，
+# 需向上 4 层到达项目根目录：templates → mail → services → 项目根）
+_MODULE_DIR = os.path.dirname(os.path.abspath(__file__))        # services/mail/templates
+_MAIL_DIR = os.path.dirname(_MODULE_DIR)                        # services/mail
+_SERVICES_DIR = os.path.dirname(_MAIL_DIR)                      # services
+_PROJECT_ROOT = os.path.dirname(_SERVICES_DIR)                  # 项目根目录
+_EMAIL_TEMPLATES_DIR = os.path.join(_PROJECT_ROOT, 'templates', 'emails')
 
 # 独立 Jinja2 环境（不依赖 Flask app context，供后台线程安全使用）
 _jinja_env = Environment(

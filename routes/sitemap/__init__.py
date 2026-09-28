@@ -26,8 +26,27 @@ _CRAWL_DELAY = "Crawl-delay: 5\n"
 
 
 def _robots_base_url() -> str:
-    """robots.txt 中 Sitemap 引用地址：优先站点域名配置，其次取当前请求根地址。"""
+    """robots.txt 中 Sitemap 引用地址。
+
+    优先使用与当前访问域名匹配的已配置站点域名（含 SITEMAP_DOMAINS），
+    未匹配时回退到当前请求域名，最后回退到站点域名配置。
+    确保 `Sitemap:` 始终指向当前访问域名下的 /sitemap.xml。
+    """
+    host = request.host.split(':')[0].strip().lower()
+
+    # 1) 与已配置站点域名精确匹配
+    matched = sitemap_cache.base_url_for_host(host)
+    if matched:
+        return matched
+
     site_url = get_config_value('SITE_URL', '').strip().rstrip('/')
+
+    # 2) 未匹配到配置域名时，直接反映当前访问域名（跳过本机地址）
+    if host and host not in ('localhost', '127.0.0.1', '::1'):
+        scheme = 'https' if (site_url.startswith('https://') or request.is_secure) else request.scheme
+        return f'{scheme}://{host}'
+
+    # 3) 兜底：站点域名配置 / 当前请求根地址
     if site_url:
         return site_url
     return request.url_root.rstrip('/')

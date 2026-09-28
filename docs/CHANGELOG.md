@@ -10,6 +10,10 @@
 
 ### 修复
 
+* **robots.txt 的 Sitemap 指向错误域名**：`/robots.txt` 的 `Sitemap:` 原先固定取站点配置域名（如 `https://bhxz.tw.kg/sitemap.xml`），导致从 `https://binhai.cloud/robots.txt` 访问时地址不一致。改为优先匹配与当前 `Host` 相同的已配置域名（`SITE_URL` / `SITEMAP_DOMAINS`），未匹配时直接反映当前访问域名，兜底才回退站点配置；`services/sitemap_cache` 新增 `base_url_for_host()`
+* **邮件发送模板找不到（`TemplateNotFound: verification_code.html`）**：`services/mail/templates/__init__.py` 计算邮件模板目录时向上只回退了 3 层，得到不存在的 `services/templates/emails`；修正为 4 层，正确定位项目根下的 `templates/emails`
+* **服务器指南编辑提交 500（`NameError: get_client_ip`）**：`routes/guides/pages/__init__.py` 使用了 `get_client_ip()` 却未导入，已补充 `from core.shared.ip import get_client_ip`；并全站静态排查同类「使用未导入」问题
+
 * **回复附件显示 0B / 发布后附件消失**：根因是文件选择器在同步累计文件时先写 `input.files` 再清空 `input.value`，导致提交时附件为空。`FilePicker.sync()` 改为**先清空 `input.value` 再经 `DataTransfer` 回填**，附件不再丢失；回复附件展示统一走服务端返回的文件名列表，不再出现错误的 0B 大小
 
 ### 调整

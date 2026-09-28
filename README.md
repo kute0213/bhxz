@@ -819,6 +819,8 @@ workspace/
 
 ## 最近更新
 
+* **修复 robots.txt 的 Sitemap 域名错误 + 邮件模板路径 + 指南编辑 500**：`/robots.txt` 的 `Sitemap:` 原先写死站点配置域名（`https://bhxz.tw.kg/sitemap.xml`），访问 `https://binhai.cloud/robots.txt` 时地址不一致。`routes/sitemap/__init__.py` 新增 `_robots_base_url()`：优先匹配与当前 `Host` 一致的已配置域名（`SITE_URL` / `SITEMAP_DOMAINS`），未匹配则直接反映当前访问域名，确保 Sitemap 始终指向当前域名下的 `/sitemap.xml`（`services/sitemap_cache` 同步新增 `base_url_for_host()`）。修复邮件发送 `TemplateNotFound: 'verification_code.html'`——`services/mail/templates/__init__.py` 的模板目录层级少算一级，指向了不存在的 `services/templates/emails`，已修正为项目根 `templates/emails`。修复 `/guides/<id>/edit` 提交 500（`NameError: get_client_ip`）——`routes/guides/pages/__init__.py` 漏导入 `get_client_ip`，已补上并全站排查同类漏导入。
+
 * **评论与发布全面 API 化 + 上传进度统一**：删除评论确认改为网页内弹窗（`CustomModal.confirm`，替代原生 `confirm`）；**发布评论不再需要图形验证码**；公共建筑发布/评论、讨论发帖/回复等发布操作统一走无刷新 `AjaxForm`（自动携带身份与 CSRF）；新增统一上传组件 [`uploader.js`](templates/static/js/core/uploader.js)（`FilePicker` / `UploadProgress` / `AjaxForm`）与 [`macros/upload.html`](templates/macros/upload.html)，修复「回复附件显示 0B / 发布后附件消失」（`input.value` 清空顺序错误导致附件丢失），所有文件上传均带进度条。
 
 * **修复 `/buildings/<id>` 页面 500（`modal_shell is undefined`）+ 规范 Jinja2 宏导入**：`templates/buildings/detail.html` 原先用 `{% include 'macros/modal.html' %}` 引入弹窗宏，而 `include` 只渲染模板文件、**不会把宏注入当前命名空间**，导致访问公共建筑详情页时 `modal_shell is undefined` 直接 500。改用 `{% from 'macros/modal.html' import modal_shell, modal_close_script %}` 显式导入，并统一放在 `{% extends %}` 之后、第一个 `{% block %}` 之前；同步修正 `admin/guides.html`、`admin/firewall.html`、`admin/broadcast.html`、`admin/guide_form.html`、`auth/register.html`、`guides/form.html`、`discussion/create.html` 的宏导入位置，并修正 `admin/buildings.html` 拒绝弹窗把标题误传为 `size` 参数的问题。开发准则（`docs/DEVELOPMENT.md`）新增「宏导入方式（`import` 而非 `include`）」章节，并已用脚本对全站模板做语法编译 + 宏调用/导入一致性校验（0 处未导入）。

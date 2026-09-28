@@ -82,6 +82,20 @@ class SitemapCache:
             pass
         return ''
 
+    def base_url_for_host(self, host: str) -> str:
+        """返回与 Host 匹配的已配置站点域名（含协议），未匹配时返回空字符串。
+
+        用于 robots.txt 等场景：确保 Sitemap 地址与访问域名一致。
+        """
+        host = (host or '').split(':')[0].strip().lower()
+        if not host:
+            return ''
+        for base in _collect_domains():
+            domain = base.split('://', 1)[-1].split('/')[0].split(':')[0].lower()
+            if domain == host:
+                return base
+        return ''
+
     def get_xml_for_domain(self, domain: str) -> str:
         """根据域名获取对应的 sitemap XML。
 

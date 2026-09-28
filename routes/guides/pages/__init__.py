@@ -7,13 +7,13 @@ from core.auth import get_current_user, login_required
 from core.helpers import render_page
 from core.db import get_db
 from core.shared.captcha import captcha_service
+from core.shared.ip import get_client_ip
 from routes.guides import guides_bp
 
 
 @guides_bp.route('/guides')
 def guide_list():
     """公开指南列表页（默认展示已审核通过的；?my=1 展示当前用户的）。"""
-    from flask import request
     user = get_current_user()
     my_mode = bool(user and request.args.get('my'))
     page_size = 10
