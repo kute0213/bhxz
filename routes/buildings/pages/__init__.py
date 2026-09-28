@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from flask import abort, request, redirect, url_for, flash
+from flask import abort, request, redirect, url_for, flash, jsonify
 
 from core.auth import get_current_user, login_required
 from core.db import get_db
@@ -10,6 +10,7 @@ from core.helpers import render_page
 from core.shared.captcha import captcha_service
 from core.shared.ip import get_client_ip
 from routes.buildings import buildings_bp
+from routes.community.helpers import _respond, _is_ajax
 from services import buildings as buildings_service
 
 
@@ -60,12 +61,18 @@ def building_create():
     user = get_current_user()
 
     if request.method == 'POST':
+        # 错误统一响应：AJAX 返回 JSON，普通表单 flash + 重新渲染
+        def fail(msg):
+            if _is_ajax():
+                return jsonify({'success': False, 'message': msg})
+            flash(msg, 'error')
+            return render_page('buildings/create.html', building=None)
+
         # 检查待审核内容上限
         from core.helpers import check_pending_limit
         allowed, msg = check_pending_limit(user)
         if not allowed:
-            flash(msg, 'error')
-            return render_page('buildings/create.html', building=None)
+            return fail(msg)
 
         title = (request.form.get('title') or '').strip()
         warp_name = (request.form.get('warp_name') or '').strip()
@@ -75,8 +82,7 @@ def building_create():
         tags = buildings_service.normalize_tags(request.form.get('tags'))
 
         if not title or not warp_name or not description:
-            flash('标题、领地名和介绍不能为空', 'error')
-            return render_page('buildings/create.html', building=None)
+            return fail('标题、领地名和介绍不能为空')
 
         # 内容注入检测
         from routes.firewall.content_filter import check_content_injection
@@ -88,20 +94,17 @@ def building_create():
             username=user['username'],
         )
         if inj_result['blocked']:
-            flash(inj_result['message'], 'error')
-            return render_page('buildings/create.html', building=None)
+            return fail(inj_result['message'])
 
         # 验证图形验证码
         captcha_input = (request.form.get('captcha') or '').strip()
         captcha_id = (request.form.get('captcha_id') or '').strip()
         if not captcha_service.verify(captcha_id, captcha_input):
-            flash('验证码错误或已过期', 'error')
-            return render_page('buildings/create.html', building=None)
+            return fail('验证码错误或已过期')
 
         from routes.firewall.spam import check_spam, record_activity
         if check_spam(user_id=user['id'], content_type='building', content=title):
-            flash('发布过于频繁，请稍后再试', 'error')
-            return render_page('buildings/create.html', building=None)
+            return fail('发布过于频繁，请稍后再试')
 
         conn = get_db()
         try:
@@ -117,11 +120,11 @@ def building_create():
             )
             conn.commit()
             record_activity(user_id=user['id'], content_type='building', content=title)
-            flash('公共建筑已提交，等待管理员审核', 'success')
-            return redirect(url_for('buildings.building_list', my=1))
+            return _respond('公共建筑已提交，等待管理员审核', 'success',
+                            redirect_to=url_for('buildings.building_list', my=1))
         except Exception as e:
             conn.rollback()
-            flash(f'提交失败: {e}', 'error')
+            return fail(f'提交失败: {e}')
         finally:
             conn.close()
 

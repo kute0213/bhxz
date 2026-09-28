@@ -3,12 +3,13 @@
 薄层：仅负责 HTTP 请求解析/响应构造，业务逻辑委托给 services。
 """
 
-from flask import request, redirect, url_for, flash, abort
+from flask import request, redirect, url_for, flash, abort, jsonify
 
 from core.auth import login_required, get_current_user
 from core.helpers import render_page
 from core.db import get_db
 from routes.discussion import discussion_bp
+from routes.community.helpers import _respond, _is_ajax
 from config import get_config_value
 from core.shared.ip import get_client_ip
 from services.discussion import (
@@ -55,9 +56,13 @@ def create():
             username=user['username'],
         )
         if inj_result['blocked']:
+            if _is_ajax():
+                return jsonify({'success': False, 'message': inj_result['message']})
             flash(inj_result['message'], 'error')
             return redirect(url_for('discussion.list'))
         if check_spam(user_id=user['id'], content_type='discussion_topic', content=title):
+            if _is_ajax():
+                return jsonify({'success': False, 'message': '发布过于频繁，请稍后再试'})
             flash('发布过于频繁，请稍后再试', 'error')
             return redirect(url_for('discussion.list'))
         success, message = create_topic(
@@ -72,7 +77,9 @@ def create():
         )
         if success:
             record_activity(user_id=user['id'], content_type='discussion_topic', content=title)
-            return redirect(url_for('discussion.list'))
+            return _respond('发布成功', 'success', redirect_to=url_for('discussion.list'))
+        if _is_ajax():
+            return jsonify({'success': False, 'message': message})
         flash(message, 'error')
         return render_page('discussion/create.html', categories=categories,
                            title=request.form.get('title', ''),

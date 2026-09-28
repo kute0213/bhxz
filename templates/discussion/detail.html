@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "macros/upload.html" import file_attach_field %}
 {% block title %}{{ topic.title }}{% endblock %}
 {% block content %}
 <section class="page-container py-12">
@@ -136,16 +137,9 @@
                               placeholder="输入回复内容（支持 Markdown）"></textarea>
                 </div>
                 <div>
-                    <label class="block text-sm font-medium mb-2 text-cream/80">附件</label>
-                    <div class="flex items-center gap-3">
-                        <button type="button" id="reply-attach-btn" class="btn-secondary px-3 py-1.5 rounded-lg text-xs flex items-center gap-1">
-                            <i data-lucide="paperclip" class="w-3.5 h-3.5"></i>
-                            选择附件
-                        </button>
-                        <span class="text-xs text-cream/40">可选</span>
-                    </div>
-                    <input type="file" id="reply-attach-input" name="attachments" multiple class="hidden">
-                    <div id="reply-attach-list" class="mt-2 space-y-1.5"></div>
+                    {{ file_attach_field('reply-attach-input', name='attachments', label='附件',
+                                         button_text='选择附件', hint='可选',
+                                         progress_id='reply-attach-progress') }}
                 </div>
                 <button type="submit" class="btn-primary px-5 py-2.5 rounded-lg text-sm font-bold">
                     发布回复
@@ -231,61 +225,9 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // ============================================================
-// 回复附件管理
+// 回复附件由统一组件 FilePicker 接管（templates/macros/upload.html）
+// 详见 static/js/core/uploader.js：选择/预览/删除 + 提交前保留文件
 // ============================================================
-document.addEventListener('DOMContentLoaded', function() {
-    var attachInput = document.getElementById('reply-attach-input');
-    var attachList = document.getElementById('reply-attach-list');
-    var attachBtn = document.getElementById('reply-attach-btn');
-    if (!attachInput) return;
-
-    var fileArray = [];
-
-    function formatSize(bytes) {
-        if (bytes < 1024) return bytes + ' B';
-        if (bytes < 1048576) return (bytes / 1024).toFixed(1) + ' KB';
-        return (bytes / 1048576).toFixed(1) + ' MB';
-    }
-
-    function renderAttachments() {
-        var dt = new DataTransfer();
-        fileArray.forEach(function(f) { dt.items.add(f); });
-        attachInput.files = dt.files;
-        if (fileArray.length === 0) { attachList.innerHTML = ''; return; }
-        var html = '';
-        fileArray.forEach(function(f, idx) {
-            html +=
-                '<div class="flex items-center justify-between px-3 py-2 rounded-lg bg-forest-900/40 border border-forest-700/50">' +
-                '  <div class="flex items-center gap-2 min-w-0">' +
-                '    <i data-lucide="file" class="w-3.5 h-3.5 text-cream/40 flex-shrink-0"></i>' +
-                '    <span class="text-xs text-cream/80 truncate">' + f.name + '</span>' +
-                '    <span class="text-xs text-cream/40 flex-shrink-0">(' + formatSize(f.size) + ')</span>' +
-                '  </div>' +
-                '  <button type="button" data-index="' + idx + '" class="remove-attach text-red-300/50 hover:text-red-300 transition-colors p-0.5 flex-shrink-0">' +
-                '    <i data-lucide="x" class="w-3.5 h-3.5"></i>' +
-                '  </button>' +
-                '</div>';
-        });
-        attachList.innerHTML = html;
-        if (window.lucide) lucide.createIcons();
-        attachList.querySelectorAll('.remove-attach').forEach(function(btn) {
-            btn.addEventListener('click', function() {
-                fileArray.splice(parseInt(this.getAttribute('data-index')), 1);
-                renderAttachments();
-            });
-        });
-    }
-
-    attachBtn.addEventListener('click', function() { attachInput.click(); });
-    attachInput.addEventListener('change', function() {
-        Array.from(this.files).forEach(function(f) {
-            var exists = fileArray.some(function(ef) { return ef.name === f.name && ef.size === f.size; });
-            if (!exists) fileArray.push(f);
-        });
-        renderAttachments();
-        this.value = '';
-    });
-});
 
 // ============================================================
 // 回复分段加载 & 实时刷新
@@ -521,11 +463,30 @@ document.addEventListener('DOMContentLoaded', function() {
         loadReplies(page);
     });
 
-    // 回复表单提交后，清空内容并刷新
+    // 回复表单：无刷新提交（统一 AjaxForm，含上传进度 + 身份/CSRF 自动处理）
     var replyForm = document.getElementById('reply-form');
-    if (replyForm) {
-        replyForm.addEventListener('submit', function() {
-            // 表单提交后页面会刷新，无需额外操作
+    if (replyForm && typeof AjaxForm !== 'undefined') {
+        AjaxForm.attach(replyForm, {
+            button: replyForm.querySelector('button[type="submit"]'),
+            progressContainer: document.getElementById('reply-attach-progress'),
+            busyText: '发布中...',
+            onSuccess: function (data) {
+                if (data.reply) {
+                    loadedIds.add(data.reply.id);
+                    if (data.reply.id > CONFIG.lastReplyId) CONFIG.lastReplyId = data.reply.id;
+                    var temp = document.createElement('div');
+                    temp.innerHTML = renderReplyHTML(data.reply);
+                    while (temp.firstChild) {
+                        container.insertBefore(temp.firstChild, container.firstChild);
+                    }
+                    if (window.lucide) lucide.createIcons();
+                    var current = parseInt(replyCountEl.textContent) || 0;
+                    replyCountEl.textContent = current + 1;
+                    emptyState.classList.add('hidden');
+                }
+                var ta = replyForm.querySelector('textarea[name="content"]');
+                if (ta) ta.value = '';
+            }
         });
     }
 

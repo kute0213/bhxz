@@ -59,18 +59,35 @@
 {% endblock %}
 {% block extra_script %}
 <script>
+// 无刷新提交：图形验证码 + AjaxForm（统一 API 提交，含身份/CSRF 处理）
 (function () {
     function init() {
         var form = document.getElementById('post-form');
         var btn = document.getElementById('show-captcha-btn');
-        if (!form || !btn || typeof CaptchaModal === 'undefined') return;
+        if (!form || !btn || typeof CaptchaModal === 'undefined' || typeof AjaxForm === 'undefined') return;
+
+        var handle = AjaxForm.attach(form, {
+            button: btn,
+            busyText: '提交中...',
+            validate: function () {
+                var required = ['title', 'warp_name', 'description'];
+                for (var i = 0; i < required.length; i++) {
+                    var el = form.querySelector('[name="' + required[i] + '"]');
+                    if (el && !el.value.trim()) {
+                        if (typeof Toast !== 'undefined') Toast.error('请填写必填项');
+                        return false;
+                    }
+                }
+                return true;
+            }
+        });
 
         btn.addEventListener('click', function (e) {
             e.preventDefault();
             CaptchaModal.show('请完成图形验证码后提交', function (captchaId, code) {
                 form.querySelector('[name="captcha_id"]').value = captchaId;
                 form.querySelector('[name="captcha"]').value = code;
-                form.submit();
+                handle.submit();
             });
         });
     }

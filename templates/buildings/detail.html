@@ -95,8 +95,6 @@
 
             {% if user %}
             <form id="comment-form" class="mb-6">
-                <input type="hidden" name="captcha_id" id="comment-captcha-id" value="">
-                <input type="hidden" name="captcha" id="comment-captcha" value="">
                 <textarea id="comment-input" rows="3" class="input-field w-full px-4 py-3 rounded-lg mb-3" placeholder="发表你的看法..." maxlength="500" required></textarea>
                 <div class="flex justify-end">
                     <button type="button" id="comment-submit-btn" class="btn-primary px-5 py-2 rounded-lg text-sm">发表评论</button>
@@ -117,7 +115,7 @@
                             <span class="text-xs text-cream/40">{{ c.created_at[:16] }}</span>
                         </div>
                         {% if user and (user.id == c.user_id or user.id == building.author_id or user.is_admin) %}
-                        <button onclick="deleteComment({{ c.id }})" class="text-xs text-red-400/60 hover:text-red-400 transition-colors">删除</button>
+                        <button type="button" class="comment-delete-btn text-xs text-red-400/60 hover:text-red-400 transition-colors" data-comment-id="{{ c.id }}">删除</button>
                         {% endif %}
                     </div>
                     <p class="text-sm text-cream/70 whitespace-pre-wrap">{{ c.content }}</p>
@@ -158,7 +156,10 @@
 {% block extra_script %}
 <script>
 var BUILDING_ID = {{ building.id }};
+var BUILDING_AUTHOR_ID = {{ building.author_id }};
 var BUILDING_IS_LOGGED_IN = {{ 'true' if user else 'false' }};
+var CURRENT_USER_ID = {{ user.id if user else 'null' }};
+var CURRENT_USER_IS_ADMIN = {{ 'true' if user and user.is_admin else 'false' }};
 
 function bToast(msg, type) {
     if (typeof Toast !== 'undefined' && Toast.show) { Toast.show(msg, type || 'success'); }
@@ -261,67 +262,88 @@ function fallbackCopy(text) {
     }
 })();
 
-// ---- 评论（验证码 + 提交，无刷新） ----
+// ---- 评论（API 无刷新发布，无需图形验证码） ----
 (function () {
     var btn = document.getElementById('comment-submit-btn');
     var form = document.getElementById('comment-form');
-    if (!btn || !form || typeof CaptchaModal === 'undefined') return;
+    if (!btn || !form) return;
 
-    function doSubmitComment(captchaId, code) {
-        var content = document.getElementById('comment-input').value.trim();
-        if (!content) { bToast('评论内容不能为空', 'error'); return; }
-        btn.disabled = true; btn.textContent = '发布中...';
-        var formData = new FormData();
-        formData.append('content', content);
-        formData.append('captcha_id', captchaId);
-        formData.append('captcha', code);
-        fetch('/buildings/' + BUILDING_ID + '/comment', {
-            method: 'POST', body: formData, headers: { 'X-Requested-With': 'XMLHttpRequest' }
-        })
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-            if (data.success) {
-                var list = document.getElementById('comments-list');
-                var empty = list.querySelector('.text-center.py-8');
-                if (empty) empty.remove();
-                var div = document.createElement('div');
-                div.className = 'comment-item p-4 bg-black/[0.03] rounded-xl search-fade-in';
-                div.dataset.commentId = data.comment.id;
-                div.innerHTML =
-                    '<div class="flex items-center justify-between mb-2">' +
-                    '<div class="flex items-center gap-2"><span class="text-sm font-medium text-cream/80">' + escapeHtml(data.comment.username) + '</span>' +
-                    '<span class="text-xs text-cream/40">' + data.comment.created_at.slice(0, 16) + '</span></div></div>' +
-                    '<p class="text-sm text-cream/70 whitespace-pre-wrap">' + escapeHtml(data.comment.content) + '</p>';
-                list.insertBefore(div, list.firstChild);
-                document.getElementById('comment-input').value = '';
-                bToast('评论已发布');
-            } else { bToast(data.message, 'error'); }
-        }).catch(function() { bToast('评论失败，请重试', 'error'); })
-        .finally(function() { btn.disabled = false; btn.textContent = '发表评论'; });
+    function buildCommentNode(comment) {
+        var canDelete = CURRENT_USER_ID && (
+            CURRENT_USER_ID === comment.user_id ||
+            CURRENT_USER_ID === BUILDING_AUTHOR_ID ||
+            CURRENT_USER_IS_ADMIN
+        );
+        var div = document.createElement('div');
+        div.className = 'comment-item p-4 bg-black/[0.03] rounded-xl search-fade-in';
+        div.dataset.commentId = comment.id;
+        div.innerHTML =
+            '<div class="flex items-center justify-between mb-2">' +
+            '  <div class="flex items-center gap-2">' +
+            '    <span class="text-sm font-medium text-cream/80">' + escapeHtml(comment.username) + '</span>' +
+            '    <span class="text-xs text-cream/40">' + (comment.created_at || '').slice(0, 16) + '</span>' +
+            '  </div>' +
+            (canDelete ? '<button type="button" class="comment-delete-btn text-xs text-red-400/60 hover:text-red-400 transition-colors" data-comment-id="' + comment.id + '">删除</button>' : '') +
+            '</div>' +
+            '<p class="text-sm text-cream/70 whitespace-pre-wrap">' + escapeHtml(comment.content) + '</p>';
+        return div;
     }
 
     btn.addEventListener('click', function (e) {
         e.preventDefault();
         var content = document.getElementById('comment-input').value.trim();
         if (!content) { bToast('评论内容不能为空', 'error'); return; }
-        CaptchaModal.show('请完成图形验证码后发表评论', doSubmitComment);
+        btn.disabled = true;
+        var original = btn.textContent;
+        btn.textContent = '发布中...';
+        var formData = new FormData();
+        formData.append('content', content);
+        fetch('/buildings/' + BUILDING_ID + '/comment', {
+            method: 'POST', body: formData, headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (!data.success) { bToast(data.message || '发布失败', 'error'); return; }
+            var list = document.getElementById('comments-list');
+            var empty = list.querySelector('.text-center.py-8');
+            if (empty) empty.remove();
+            list.insertBefore(buildCommentNode(data.comment), list.firstChild);
+            document.getElementById('comment-input').value = '';
+            bToast(data.message || '评论已发布');
+        })
+        .catch(function () { bToast('评论失败，请重试', 'error'); })
+        .finally(function () { btn.disabled = false; btn.textContent = original; });
     });
 })();
 
-function deleteComment(commentId) {
-    if (!confirm('确定删除此评论？')) return;
-    fetch('/buildings/comment/' + commentId + '/delete', {
-        method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }
-    })
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-        if (data.success) {
-            var el = document.querySelector('.comment-item[data-comment-id="' + commentId + '"]');
-            if (el) el.remove();
-            bToast('评论已删除');
-        } else { bToast(data.message, 'error'); }
-    }).catch(function() { bToast('删除失败', 'error'); });
-}
+// ---- 删除评论（网页内弹窗确认，API 无刷新） ----
+document.getElementById('comments-list') && document.getElementById('comments-list').addEventListener('click', function (e) {
+    var btn = e.target.closest('.comment-delete-btn');
+    if (!btn) return;
+    var commentId = btn.getAttribute('data-comment-id');
+    CustomModal.confirm('确定删除此评论？', {
+        title: '删除评论',
+        trigger: btn,
+        callback: function (ok) {
+            if (!ok) return;
+            fetch('/buildings/comment/' + commentId + '/delete', {
+                method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (!data.success) { bToast(data.message, 'error'); return; }
+                var el = document.querySelector('.comment-item[data-comment-id="' + commentId + '"]');
+                if (el) {
+                    el.style.transition = 'opacity 0.25s';
+                    el.style.opacity = '0';
+                    setTimeout(function () { el.remove(); }, 250);
+                }
+                bToast('评论已删除');
+            })
+            .catch(function () { bToast('删除失败', 'error'); });
+        }
+    });
+});
 
 // ---- 举报 ----
 document.getElementById('report-btn') && document.getElementById('report-btn').addEventListener('click', function() {

@@ -10,9 +10,13 @@ from services.attachment_service import save_attachments, clean_attachment_json,
 
 
 def reply_to_topic(user_id, username, topic_id, content, attachment_files, ip_address):
-    """回复帖子。返回 (success, message)。"""
+    """回复帖子。返回 (success, message, reply)。
+
+    reply 为新建回复的 dict（含 id/content/attachment/created_at/username/avatar_key），
+    供前端无刷新插入列表；失败时为 None。
+    """
     if not content or len(content) > 10000:
-        return False, '内容长度应为 1-10000 字符'
+        return False, '内容长度应为 1-10000 字符', None
 
     conn = get_db()
     attachment_names = []
@@ -21,31 +25,45 @@ def reply_to_topic(user_id, username, topic_id, content, attachment_files, ip_ad
             "SELECT id, is_locked FROM discussion_topics WHERE id = ?", (topic_id,)
         ).fetchone()
         if not topic:
-            return False, '帖子不存在'
+            return False, '帖子不存在', None
         if topic['is_locked']:
-            return False, '帖子已锁定，无法回复'
+            return False, '帖子已锁定，无法回复', None
+        avatar_row = conn.execute(
+            "SELECT avatar_key FROM users WHERE id = ?", (user_id,)
+        ).fetchone()
+        avatar_key = avatar_row['avatar_key'] if avatar_row else None
     finally:
         conn.close()
 
     try:
         attachment_names = save_attachments(attachment_files)
     except ValueError as e:
-        return False, str(e)
+        return False, str(e), None
 
     conn = get_db()
     try:
         attachment_json = json.dumps(attachment_names) if attachment_names else None
 
         now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        conn.execute(
+        cursor = conn.execute(
             "INSERT INTO discussion_replies (topic_id, user_id, content, attachment, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
             (topic_id, user_id, content, attachment_json, now, now)
         )
+        reply_id = cursor.lastrowid
         conn.execute("UPDATE discussion_topics SET updated_at = ? WHERE id = ?", (now, topic_id))
         conn.commit()
         log('Discussion', '回复帖子', user_id=user_id, username=username,
             topic_id=topic_id, ip=ip_address)
-        return True, '回复成功'
+        reply = {
+            'id': reply_id,
+            'content': content,
+            'attachment': attachment_names,
+            'created_at': now,
+            'user_id': user_id,
+            'username': username,
+            'avatar_key': avatar_key,
+        }
+        return True, '回复成功', reply
     except Exception:
         try:
             conn.rollback()
@@ -54,7 +72,7 @@ def reply_to_topic(user_id, username, topic_id, content, attachment_files, ip_ad
         clean_attachments(attachment_names)
         log('Discussion', '回复帖子失败', user_id=user_id, username=username,
             topic_id=topic_id, ip=ip_address)
-        return False, '回复失败，请稍后重试'
+        return False, '回复失败，请稍后重试', None
     finally:
         conn.close()
 

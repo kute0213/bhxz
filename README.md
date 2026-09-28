@@ -45,7 +45,7 @@ python scripts/build/build_static.py
 * **JetBrains Mono** — 编程字体
 
 > 所有中文字体使用系统字体栈（各平台预装），**零下载、零延迟**。
-> 一键更新时会自动运行构建脚本，无需手动操作。
+> 静态资源（含 Tailwind 构建产物 `templates/static/css/tailwind.css`）已预构建并随代码提交，一键更新无需额外构建步骤。
 
 ### 打包发布 zip
 
@@ -191,7 +191,7 @@ python scripts/build/package.py
 
 * 广播邮件（富文本所见即所得编辑器 + 白名单 HTML 清洗，安全防 XSS）
 
-* 一键更新脚本（`update.py` — 跨平台，从 GitHub 拉取最新代码，支持本地修改暂存与恢复，自动检测最优镜像源）
+* 一键更新脚本（`update.py` — 纯 Python 跨平台，只走下载覆盖，多线程同时测速镜像源（2 秒超时，整个测速 ≤ 2 秒），无需确认启动即更新，保留运行期数据）
 
 * 游戏账号管理（注册申请审批、封禁列表管理）
 
@@ -772,15 +772,16 @@ workspace/
 
 ### 一键更新脚本
 
-项目根目录下提供了一键更新脚本 [`update.py`](update.py)，自动检测最优 GitHub 镜像源，从 GitHub 拉取最新代码：
+项目根目录下提供了一键更新脚本 [`update.py`](update.py)，纯 Python 全平台兼容，**只走下载覆盖**（不依赖 git），启动即更新、无需确认：
 
-1. 运行 `python update.py`（或 `python update.py --yes` 跳过确认）
-2. 脚本自动并发检测 15 个 GitHub 镜像源，选择延迟最低的
-3. 检测 git 环境和远程更新，显示更新内容预览
-4. 确认后执行更新（支持本地修改暂存，更新后自动恢复）
+1. 运行 `python update.py`（可选 `--branch dev` 指定分支，默认 `main`，失败自动回退 `master`）
+2. 脚本**多线程同时测速**全部镜像源（24 个：官方直连 / codeload / 前缀型代理 / 主机替换型镜像），单个镜像 2 秒超时，**整个测速环节最多 2 秒**；优先选取能返回合法 ZIP 且速度最快的镜像
+3. 自动下载最新源码 ZIP（含 PK 魔数与 CRC 完整性校验，可识别镜像返回的 HTML 错误页），逐个镜像 × 逐个分支回退重试
+4. 解压后**合并覆盖**项目代码，保留 `uploads/`、`db`、`backups`、`.env`、`ssl/`、`node_modules` 等运行期数据与本地文件
 5. 自动安装/更新 Python 依赖
 6. **更新完成后提示手动重启服务器，不会自动启动**
 
+> 镜像路径按各源格式正确拼接：前缀型代理为 `<代理前缀>https://github.com/<repo>/archive/refs/heads/<branch>.zip`，主机替换型为 `https://<镜像域名>/<repo>/archive/refs/heads/<branch>.zip`。
 > 如果遇到依赖变化，更新后执行 `pip install -r requirements.txt`。
 
 ### 安全要点
@@ -817,6 +818,8 @@ workspace/
 详见 [docs/CHANGELOG.md](docs/CHANGELOG.md)。
 
 ## 最近更新
+
+* **评论与发布全面 API 化 + 上传进度统一**：删除评论确认改为网页内弹窗（`CustomModal.confirm`，替代原生 `confirm`）；**发布评论不再需要图形验证码**；公共建筑发布/评论、讨论发帖/回复等发布操作统一走无刷新 `AjaxForm`（自动携带身份与 CSRF）；新增统一上传组件 [`uploader.js`](templates/static/js/core/uploader.js)（`FilePicker` / `UploadProgress` / `AjaxForm`）与 [`macros/upload.html`](templates/macros/upload.html)，修复「回复附件显示 0B / 发布后附件消失」（`input.value` 清空顺序错误导致附件丢失），所有文件上传均带进度条。
 
 * **修复 `/buildings/<id>` 页面 500（`modal_shell is undefined`）+ 规范 Jinja2 宏导入**：`templates/buildings/detail.html` 原先用 `{% include 'macros/modal.html' %}` 引入弹窗宏，而 `include` 只渲染模板文件、**不会把宏注入当前命名空间**，导致访问公共建筑详情页时 `modal_shell is undefined` 直接 500。改用 `{% from 'macros/modal.html' import modal_shell, modal_close_script %}` 显式导入，并统一放在 `{% extends %}` 之后、第一个 `{% block %}` 之前；同步修正 `admin/guides.html`、`admin/firewall.html`、`admin/broadcast.html`、`admin/guide_form.html`、`auth/register.html`、`guides/form.html`、`discussion/create.html` 的宏导入位置，并修正 `admin/buildings.html` 拒绝弹窗把标题误传为 `size` 参数的问题。开发准则（`docs/DEVELOPMENT.md`）新增「宏导入方式（`import` 而非 `include`）」章节，并已用脚本对全站模板做语法编译 + 宏调用/导入一致性校验（0 处未导入）。
 
