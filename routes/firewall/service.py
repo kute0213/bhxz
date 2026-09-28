@@ -36,7 +36,7 @@ from routes.firewall.database import (
     whitelist_account_db,
     unwhitelist_account_db,
 )
-from core.system.logger import log
+from core.system.logger import log_firewall
 
 # 系统自动封禁操作人的标记 ID（users 表中不存在该用户，显示为「系统」）
 SYSTEM_BANNER_ID = 0
@@ -132,7 +132,7 @@ def whitelist_add(ip_address):
     except Exception as exc:
         return False, f'添加白名单失败: {exc}'
     invalidate_whitelist_cache()
-    log('DEBUG', 'Firewall', '白名单添加', ip=ip)
+    log_firewall('DEBUG', 'Firewall', '白名单添加', ip=ip)
     return True, f'已将 {ip} 加入白名单'
 
 
@@ -151,7 +151,7 @@ def whitelist_remove(ip_address):
     except Exception as exc:
         return False, f'移除白名单失败: {exc}'
     invalidate_whitelist_cache()
-    log('DEBUG', 'Firewall', '白名单移除', ip=ip)
+    log_firewall('DEBUG', 'Firewall', '白名单移除', ip=ip)
     return True, f'已将 {ip} 移出白名单'
 
 
@@ -214,12 +214,12 @@ def ban_ip(ip_address, reason, banned_by=SYSTEM_BANNER_ID, duration_minutes=None
         # 注册过期时间
         push_expiry(expires_at, 'ip', new_id)
     except Exception as exc:
-        log('ERROR', 'Firewall', f'创建封禁失败: {exc}', ip=ip)
+        log_firewall('ERROR', 'Firewall', f'创建封禁失败: {exc}', ip=ip)
         return False, '创建封禁失败'
 
     invalidate_ip_cache()
     duration_text = '永久' if expires_at is None else f'{duration_minutes} 分钟'
-    log(
+    log_firewall(
         'DEBUG', 'Firewall', 'IP 封禁创建',
         ip=ip, banned_by=banned_by, duration=duration_text,
     )
@@ -253,7 +253,7 @@ def unban_ip(ban_id):
     except Exception as exc:
         return False, f'解除封禁失败: {exc}', ''
     invalidate_ip_cache()
-    log('DEBUG', 'Firewall', 'IP 封禁解除', ban_id=ban_id, ip=ip_address)
+    log_firewall('DEBUG', 'Firewall', 'IP 封禁解除', ban_id=ban_id, ip=ip_address)
     return True, f'已解除 {ip_address} 的封禁', ip_address
 
 
@@ -271,7 +271,7 @@ def unban_by_ip(ip_address):
     except Exception as exc:
         return False, f'解除封禁失败: {exc}'
     invalidate_ip_cache()
-    log('DEBUG', 'Firewall', 'IP 封禁解除（按 IP）', ip=ip)
+    log_firewall('DEBUG', 'Firewall', 'IP 封禁解除（按 IP）', ip=ip)
     return True, f'已解除 {ip} 的封禁'
 
 
@@ -315,7 +315,7 @@ def get_bans():
                 for r in rows
             ]
     except Exception as exc:
-        log('WARNING', 'Firewall', f'查询封禁列表失败: {exc}')
+        log_firewall('WARNING', 'Firewall', f'查询封禁列表失败: {exc}')
         return []
 
 
@@ -361,7 +361,7 @@ def cleanup_expired():
             "WHERE expires_at IS NOT NULL AND expires_at <= CURRENT_TIMESTAMP"
         )
     except Exception as exc:
-        log('WARNING', 'Firewall', f'清理过期 IP 封禁失败: {exc}')
+        log_firewall('WARNING', 'Firewall', f'清理过期 IP 封禁失败: {exc}')
 
 
 # ---------------------------------------------------------------------------
@@ -415,12 +415,12 @@ def ban_account(user_id, reason, banned_by=SYSTEM_BANNER_ID, duration_minutes=No
         # 注册过期时间
         push_expiry(expires_at, 'account', new_id)
     except Exception as exc:
-        log('ERROR', 'Firewall', f'创建账号封禁失败: {exc}', user_id=user_id)
+        log_firewall('ERROR', 'Firewall', f'创建账号封禁失败: {exc}', user_id=user_id)
         return False, '创建账号封禁失败'
 
     invalidate_account_cache()
     duration_text = '永久' if expires_at is None else f'{duration_minutes} 分钟'
-    log(
+    log_firewall(
         'INFO', 'Firewall', '账号封禁创建',
         user_id=user_id, banned_by=banned_by, duration=duration_text,
     )
@@ -455,7 +455,7 @@ def unban_account(ban_id):
     except Exception as exc:
         return False, f'解除账号封禁失败: {exc}', 0
     invalidate_account_cache()
-    log('DEBUG', 'Firewall', '账号封禁解除', ban_id=ban_id, user_id=user_id)
+    log_firewall('DEBUG', 'Firewall', '账号封禁解除', ban_id=ban_id, user_id=user_id)
     return True, f'已解除用户 {user_id} 的封禁', user_id
 
 
@@ -475,7 +475,7 @@ def unban_account_by_user(user_id):
     except Exception as exc:
         return False, f'解除账号封禁失败: {exc}'
     invalidate_account_cache()
-    log('DEBUG', 'Firewall', '账号封禁解除（按用户）', user_id=user_id)
+    log_firewall('DEBUG', 'Firewall', '账号封禁解除（按用户）', user_id=user_id)
     return True, f'已解除用户 {user_id} 的封禁'
 
 
@@ -512,7 +512,7 @@ def get_account_bans():
                 for r in rows
             ]
     except Exception as exc:
-        log('WARNING', 'Firewall', f'查询账号封禁列表失败: {exc}')
+        log_firewall('WARNING', 'Firewall', f'查询账号封禁列表失败: {exc}')
         return []
 
 
@@ -607,7 +607,7 @@ def get_combined_bans(offset=0, limit=10):
         page = combined[offset:offset + limit]
         return page, total
     except Exception as exc:
-        log('WARNING', 'Firewall', f'查询合并封禁列表失败: {exc}')
+        log_firewall('WARNING', 'Firewall', f'查询合并封禁列表失败: {exc}')
         return [], 0
 
 
@@ -633,7 +633,7 @@ def record_spam(user_id, content_type, content_preview='', action='flag'):
             (user_id, content_type, content_preview, action),
         )
     except Exception as exc:
-        log('WARNING', 'Firewall', f'记录刷屏日志失败: {exc}', user_id=user_id)
+        log_firewall('WARNING', 'Firewall', f'记录刷屏日志失败: {exc}', user_id=user_id)
 
 
 def get_spam_log(hours=24):
@@ -688,7 +688,7 @@ def get_spam_log(hours=24):
                     for r in rows
                 ]
     except Exception as exc:
-        log('WARNING', 'Firewall', f'查询刷屏日志失败: {exc}')
+        log_firewall('WARNING', 'Firewall', f'查询刷屏日志失败: {exc}')
         return []
 
 
@@ -770,7 +770,7 @@ def auto_ban(ip_address, action, reason=''):
 
     ip = (ip_address or '').strip()
     if is_whitelisted(ip):
-        log('DEBUG', 'Firewall', '自动封禁跳过白名单 IP', ip=ip, action=action)
+        log_firewall('DEBUG', 'Firewall', '自动封禁跳过白名单 IP', ip=ip, action=action)
         return False, '该 IP 在防火墙白名单中，跳过自动封禁'
 
     if not validate_ip(ip):
@@ -822,7 +822,7 @@ def auto_ban(ip_address, action, reason=''):
         duration_minutes=duration_minutes if duration_minutes > 0 else None,
     )
     if success:
-        log(
+        log_firewall(
             'Security', '自动封禁生效', ip=ip, action=action,
             duration_minutes=duration_minutes or '永久',
         )
@@ -875,7 +875,7 @@ def ban_suspicious_ip(ip_address, attack_type, matched=''):
 
     ip = (ip_address or '').strip()
     if is_whitelisted(ip):
-        log('DEBUG', 'Firewall', '可疑访问拦截跳过白名单 IP', ip=ip, attack=attack_type)
+        log_firewall('DEBUG', 'Firewall', '可疑访问拦截跳过白名单 IP', ip=ip, attack=attack_type)
         return False, '该 IP 在防火墙白名单中，跳过自动封禁'
 
     if not validate_ip(ip):
@@ -913,7 +913,7 @@ def ban_suspicious_ip(ip_address, attack_type, matched=''):
         duration_minutes=duration_minutes if duration_minutes > 0 else None,
     )
     if success:
-        log(
+        log_firewall(
             'Security', '可疑访问自动封禁生效', ip=ip, attack=attack_type,
             duration_minutes=duration_minutes or '永久',
         )
@@ -949,7 +949,7 @@ def add_warning(ip_address, warning_text):
         )
         return get_warning_count(ip, hours=24)
     except Exception as exc:
-        log('WARNING', 'Firewall', f'添加警告记录失败: {exc}', ip=ip)
+        log_firewall('WARNING', 'Firewall', f'添加警告记录失败: {exc}', ip=ip)
         return 0
 
 
@@ -982,7 +982,7 @@ def get_warnings(ip_address, hours=24):
                 for r in rows
             ]
     except Exception as exc:
-        log('WARNING', 'Firewall', f'查询警告记录失败: {exc}', ip=ip)
+        log_firewall('WARNING', 'Firewall', f'查询警告记录失败: {exc}', ip=ip)
         return []
 
 
@@ -1039,7 +1039,7 @@ def get_all_warnings(hours=24):
                 for r in rows
             ]
     except Exception as exc:
-        log('WARNING', 'Firewall', f'查询全部警告记录失败: {exc}')
+        log_firewall('WARNING', 'Firewall', f'查询全部警告记录失败: {exc}')
         return []
 
 
@@ -1081,7 +1081,7 @@ def whitelist_account(user_id, note=''):
     if not user_id or user_id <= 0:
         return False, '无效的用户 ID'
     if whitelist_account_db(user_id, note):
-        log('DEBUG', 'Firewall', '账号白名单添加', user_id=user_id)
+        log_firewall('DEBUG', 'Firewall', '账号白名单添加', user_id=user_id)
         return True, f'已将用户 {user_id} 加入白名单'
     return False, '添加账号白名单失败（可能已存在）'
 
@@ -1091,7 +1091,7 @@ def unwhitelist_account(user_id):
     if not user_id or user_id <= 0:
         return False, '无效的用户 ID'
     unwhitelist_account_db(user_id)
-    log('DEBUG', 'Firewall', '账号白名单移除', user_id=user_id)
+    log_firewall('DEBUG', 'Firewall', '账号白名单移除', user_id=user_id)
     return True, f'已将用户 {user_id} 移出白名单'
 
 

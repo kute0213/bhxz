@@ -18,7 +18,7 @@
 被拒绝的上传会写入防火墙日志，便于管理员审计。
 """
 
-from core.system.logger import log
+from core.system.logger import log_firewall
 
 # 上传场景
 KIND_IMAGE = 'image'
@@ -188,5 +188,5 @@ def check_upload(upload, kind, *, max_bytes=None, allowed_extensions=None, sourc
 
 def _reject(kind, source, filename, reason):
     """记录一次被拒绝的上传（写入防火墙/系统日志）。"""
-    log('WARNING', 'FileGuard',
+    log_firewall('WARNING', 'FileGuard',
         f'上传文件被拦截 kind={kind} file={filename} reason={reason} source={source or "-"}')

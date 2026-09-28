@@ -19,7 +19,7 @@
 import re
 from routes.firewall.database import record_content_injection, get_user_injection_count, INJECTION_WARNING_LIMIT
 from routes.firewall.service import ban_account, is_account_whitelisted
-from core.system.logger import log
+from core.system.logger import log_firewall
 from config import get_config_value
 
 # ---------------------------------------------------------------------------
@@ -147,7 +147,7 @@ def check_content_injection(user_id, content, content_type='', ip_address='', us
     )
 
     # 记录日志
-    log('WARNING', 'ContentFilter',
+    log_firewall('WARNING', 'ContentFilter',
         f'内容注入拦截: user={user_id} type={primary["type"]} '
         f'warnings={total_warnings}/{INJECTION_WARNING_LIMIT}',
         user_id=user_id, content_type=content_type)
@@ -161,7 +161,7 @@ def check_content_injection(user_id, content, content_type='', ip_address='', us
             banned_by=0,
             duration_minutes=duration,
         )
-        log('INFO', 'ContentFilter',
+        log_firewall('INFO', 'ContentFilter',
             f'账号自动封禁: user={user_id} 注入次数={total_warnings} 时长={duration}分钟',
             user_id=user_id)
 

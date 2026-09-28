@@ -69,9 +69,9 @@ def init_app(app, app_root):
     # 第 2 层：监控 — 日志等级 & 健康检查
     # ============================================================
 
-    # 数据库就绪后刷新日志等级缓存（从 settings 表读取）
-    from core.system.logger import refresh_log_level
-    refresh_log_level()
+    # 数据库就绪后刷新日志设置缓存（等级 + 控制台开关，从 settings 表读取）
+    from core.system.logger import refresh_log_settings
+    refresh_log_settings()
 
     # 每次启动执行服务器健康检查（自动修复，不删文件）
     from core.system.startup_checks import run_startup_checks

@@ -317,6 +317,7 @@ QQ_GROUP_URL = (
 SETTINGS_REGISTRY = [
     # 日志
     ('LOG_LEVEL', 'INFO', 'select', '日志输出等级', '控制日志输出级别，可选：DEBUG（调试）, INFO（信息）, WARNING（警告）, ERROR（错误）, CRITICAL（严重）', '日志'),
+    ('LOG_CONSOLE_ENABLED', True, 'bool', '打印日志到终端', '开启后日志会同步打印到控制台；关闭后仅在日志文件与后台日志页可见（防火墙日志始终不打印到终端）', '日志'),
 
     # 数据备份
     ('BACKUP_DIR', '../bhxz_backups', 'str', '备份目录', '备份文件存放根目录，支持绝对路径或相对路径（相对路径基于网站根目录解析）。默认 ../bhxz_backups。更改后新备份将写入新目录。', '数据备份'),

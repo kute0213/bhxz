@@ -20,7 +20,7 @@ from routes.firewall.service import (
     SYSTEM_BANNER_ID,
 )
 from routes.firewall.database import push_ban_context
-from core.system.logger import log
+from core.system.logger import log_firewall
 
 # DDoS 检测强度预设：单位检测窗口（秒）内允许的最大请求数
 DDOS_INTENSITY_PRESETS = {
@@ -188,7 +188,7 @@ class DDoSDetector:
                 )
             except Exception:
                 pass
-            log('Security', 'DDoS 防护：自动封禁',
+            log_firewall('Security', 'DDoS 防护：自动封禁',
                 ip=ip, threshold=threshold, window=DDOS_WINDOW_SECONDS,
                 permanent=permanent, offense_count=offense_count)
 

@@ -17,7 +17,7 @@
 from cheroot.wsgi import Gateway_10, Server as CherootWSGIServer
 from cheroot.server import HTTPConnection
 
-from core.system.logger import log
+from core.system.logger import log_firewall
 
 
 def _check_ipv6_block(ip, drop_callback):
@@ -30,7 +30,7 @@ def _check_ipv6_block(ip, drop_callback):
     try:
         from config import get_config_value, IPV6_BLOCK_ENABLED
         if get_config_value('IPV6_BLOCK_ENABLED', IPV6_BLOCK_ENABLED):
-            log('DEBUG', 'Firewall: IPv6 连接拦截断开', ip=ip)
+            log_firewall('DEBUG', 'Firewall: IPv6 连接拦截断开', ip=ip)
             drop_callback(ip)
     except Exception:
         pass
@@ -94,7 +94,7 @@ class BanFilterConnection(HTTPConnection):
         """直接关闭黑名单连接，不返回 HTTP 响应。"""
         self.linger = False
         self.close()
-        log('DEBUG', 'Firewall: 黑名单连接强制断开', ip=ip)
+        log_firewall('DEBUG', 'Firewall: 黑名单连接强制断开', ip=ip)
 
 
 class FirewallGateway(Gateway_10):

@@ -17,7 +17,7 @@
 import threading
 import time
 
-from core.system.logger import log
+from core.system.logger import log_firewall
 
 # ---- 执行间隔（秒） ----
 SYNC_INTERVAL = 1.0        # 缓存同步
@@ -44,7 +44,7 @@ class FirewallMonitor:
             target=self._tick_loop, name='fw-tick', daemon=True
         )
         self._thread.start()
-        log('INFO', 'Firewall', '防火墙后台监控已启动 (1s tick)')
+        log_firewall('INFO', 'Firewall', '防火墙后台监控已启动 (1s tick)')
 
     def stop(self):
         self._stop.set()
@@ -54,7 +54,7 @@ class FirewallMonitor:
             except Exception:
                 pass
             self._thread = None
-        log('INFO', 'Firewall', '防火墙后台监控已停止')
+        log_firewall('INFO', 'Firewall', '防火墙后台监控已停止')
 
     def _tick_loop(self):
         """1 秒 tick 循环 —— 所有定时任务在此集中调度。"""
@@ -84,7 +84,7 @@ class FirewallMonitor:
                     from routes.firewall.database import sync_all_to_cache
                     sync_all_to_cache()
                 except Exception as exc:
-                    log('WARNING', 'fw-tick', f'缓存同步异常: {exc}')
+                    log_firewall('WARNING', 'fw-tick', f'缓存同步异常: {exc}')
                 last_sync = now
 
             # ---- [1s] 清理过期封禁（IP + 账号，使用过期堆） ----
@@ -92,7 +92,7 @@ class FirewallMonitor:
                 try:
                     self._cleanup_expired_bans()
                 except Exception as exc:
-                    log('WARNING', 'fw-tick', f'清理过期封禁异常: {exc}')
+                    log_firewall('WARNING', 'fw-tick', f'清理过期封禁异常: {exc}')
                 last_cleanup = now
 
             # ---- [120s] 清理 DDoS 计数 ----
@@ -100,7 +100,7 @@ class FirewallMonitor:
                 try:
                     self._prune_ddos()
                 except Exception as exc:
-                    log('WARNING', 'fw-tick', f'DDoS 清理异常: {exc}')
+                    log_firewall('WARNING', 'fw-tick', f'DDoS 清理异常: {exc}')
                 last_ddos_prune = now
 
             # ---- [120s] 清理自动封禁违规记录 ----
@@ -109,7 +109,7 @@ class FirewallMonitor:
                     from routes.firewall.service import prune_auto_ban_offenses
                     prune_auto_ban_offenses()
                 except Exception as exc:
-                    log('WARNING', 'fw-tick', f'自动封禁违规记录清理异常: {exc}')
+                    log_firewall('WARNING', 'fw-tick', f'自动封禁违规记录清理异常: {exc}')
                 last_auto_ban_prune = now
 
             # ---- [120s] 清理刷屏记录 ----
@@ -118,7 +118,7 @@ class FirewallMonitor:
                     from routes.firewall.spam import prune_spam
                     prune_spam()
                 except Exception as exc:
-                    log('WARNING', 'fw-tick', f'刷屏记录清理异常: {exc}')
+                    log_firewall('WARNING', 'fw-tick', f'刷屏记录清理异常: {exc}')
                 last_spam_prune = now
 
             # ---- [3600s] VACUUM ----
@@ -127,7 +127,7 @@ class FirewallMonitor:
                     from routes.firewall.database import vacuum
                     vacuum()
                 except Exception as exc:
-                    log('WARNING', 'fw-tick', f'VACUUM 异常: {exc}')
+                    log_firewall('WARNING', 'fw-tick', f'VACUUM 异常: {exc}')
                 last_vacuum = now
 
             tick_count += 1
@@ -141,7 +141,6 @@ class FirewallMonitor:
     def _cleanup_expired_bans(self):
         """使用过期堆逐个清理已过期的封禁（一次 tick 最多处理 10 条）。"""
         from routes.firewall.database import pop_expired, get_db, invalidate_cache
-        from core.system.logger import log
 
         expired = pop_expired()
         if not expired:
@@ -172,7 +171,7 @@ class FirewallMonitor:
 
         if deleted_ip or deleted_account:
             invalidate_cache()
-            log('INFO', 'Firewall', f'过期封禁清理: IP={deleted_ip}, 账号={deleted_account}')
+            log_firewall('INFO', 'Firewall', f'过期封禁清理: IP={deleted_ip}, 账号={deleted_account}')
 
     # ------------------------------------------------------------------
     # DDoS 计数清理

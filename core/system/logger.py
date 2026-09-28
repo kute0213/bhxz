@@ -74,18 +74,60 @@ def refresh_log_level():
         pass  # 数据库未就绪时保持默认值
 
 
+def refresh_console_enabled():
+    """从数据库刷新控制台打印开关（数据库就绪或设置更新后调用）。"""
+    try:
+        cfg = get_config_value('LOG_CONSOLE_ENABLED', True)
+        if isinstance(cfg, str):
+            cfg = cfg.strip().lower() in ('1', 'true', 'yes', 'on')
+        set_console_enabled(bool(cfg))
+    except Exception:
+        pass  # 数据库未就绪时保持默认值
+
+
+def refresh_log_settings():
+    """一次性刷新全部日志相关设置（等级 + 控制台开关）。"""
+    refresh_log_level()
+    refresh_console_enabled()
+
+
+# ---------------------------------------------------------------------------
+# 控制台输出开关
+# ---------------------------------------------------------------------------
+
+# 全局开关：是否将日志打印到控制台。无论开关状态如何，日志始终写入日志文件
+# 并进入内存缓冲（供管理后台实时查看）。
+_console_enabled = True
+
+
+def set_console_enabled(enabled: bool) -> None:
+    """设置是否全局打印日志到控制台（不影响文件与内存缓冲）。"""
+    global _console_enabled
+    _console_enabled = bool(enabled)
+
+
+def is_console_enabled() -> bool:
+    """返回当前控制台打印开关状态。"""
+    return _console_enabled
+
+
 # ---------------------------------------------------------------------------
 # 核心日志函数
 # ---------------------------------------------------------------------------
 
-def log(level: str, event: str, detail: str = '', **kwargs):
+def log(level: str, event: str, detail: str = '', *, console: bool = True, **kwargs):
     """统一日志输出。
 
     参数:
         level:  日志等级，如 'DEBUG' / 'INFO' / 'WARNING' / 'ERROR' / 'CRITICAL'
         event:  事件标签，如 'DB' / 'Auth' / 'App' / 'Backup'
         detail: 简要描述（可选）
+        console: 是否允许本次输出到控制台。默认 True；
+                 设为 False（如防火墙高频日志）时仍会写入日志文件与内存缓冲。
+                 实际是否打印还会同时受全局开关 set_console_enabled() 控制。
         **kwargs: 附加键值对，自动拼接到日志行末尾
+
+    日志始终写入日志文件；控制台打印可按调用或全局关闭。
     """
     # 等级过滤
     if _get_level_number(level) < _get_current_min_level():
@@ -102,10 +144,11 @@ def log(level: str, event: str, detail: str = '', **kwargs):
         parts.append(f'{k}={v}')
     line = ' '.join(parts)
 
-    # 1. 输出到控制台
-    print(line, flush=True)
+    # 1. 输出到控制台（受本次调用与全局开关共同控制）
+    if console and _console_enabled:
+        print(line, flush=True)
 
-    # 2. 写入日志文件
+    # 2. 写入日志文件（始终执行）
     _write_file(line)
 
     # 3. 存入内存环形缓冲
@@ -227,6 +270,15 @@ def unregister_monitor_client(queue) -> None:
             _log_monitor_clients.remove(queue)
         except ValueError:
             pass
+
+
+def log_firewall(level: str, event: str, detail: str = '', **kwargs):
+    """防火墙专用日志入口：走统一日志函数，但不打印到控制台。
+
+    防火墙日志（刷屏、DDoS、IP 拦截等）高频且不面向终端运维，
+    统一只写入日志文件与内存缓冲，避免污染全局终端输出。
+    """
+    log(level, event, detail, console=False, **kwargs)
 
 
 # ===========================================================================

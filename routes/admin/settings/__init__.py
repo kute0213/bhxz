@@ -151,6 +151,10 @@ def api_save_settings():
     # 失效缓存
     settings_manager.invalidate_cache()
 
+    # 日志相关设置热重载（等级 + 控制台打印开关）
+    from core.system.logger import refresh_log_settings
+    refresh_log_settings()
+
     return jsonify({
         'success': len(errors) == 0,
         'saved': saved,

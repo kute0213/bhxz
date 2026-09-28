@@ -15,7 +15,7 @@ from datetime import datetime
 
 import duckdb
 
-from core.system.logger import log
+from core.system.logger import log_firewall
 
 DB_DIR = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
@@ -60,7 +60,7 @@ def _start_writer():
             target=_writer_loop, name='fw-writer', daemon=True,
         )
         _writer_thread.start()
-        log('INFO', 'FirewallDB', '防火墙单写入线程已启动')
+        log_firewall('INFO', 'FirewallDB', '防火墙单写入线程已启动')
 
 
 def _execute_batch(batch):
@@ -74,7 +74,7 @@ def _execute_batch(batch):
                 else:
                     conn.execute(sql, params)
     except Exception as exc:
-        log('WARNING', 'FirewallDB', f'批量写入失败: {exc}')
+        log_firewall('WARNING', 'FirewallDB', f'批量写入失败: {exc}')
         raise
 
 
@@ -162,10 +162,10 @@ def execute_write(sql, params=None, fetch=None, timeout=5.0):
     holder = {}
     _write_queue.put((sql, params, event, holder, fetch))
     if not event.wait(timeout):
-        log('WARNING', 'FirewallDB', '写入等待超时', sql=sql[:60])
+        log_firewall('WARNING', 'FirewallDB', '写入等待超时', sql=sql[:60])
         return None
     if holder.get('error') is not None:
-        log('WARNING', 'FirewallDB', f'写入失败: {holder["error"]}', sql=sql[:60])
+        log_firewall('WARNING', 'FirewallDB', f'写入失败: {holder["error"]}', sql=sql[:60])
         return None
     if fetch in ('one', 'all'):
         return holder.get('result')
@@ -250,7 +250,7 @@ def sync_ip_bans_to_cache():
             _cache['banned_ips'] = banned
             _cache['banned_ips_ts'] = time.monotonic()
     except Exception as exc:
-        log('WARNING', 'FirewallDB', f'同步 IP 封禁缓存失败: {exc}')
+        log_firewall('WARNING', 'FirewallDB', f'同步 IP 封禁缓存失败: {exc}')
 
 
 def sync_account_bans_to_cache():
@@ -268,7 +268,7 @@ def sync_account_bans_to_cache():
             _cache['banned_accounts'] = banned
             _cache['banned_accounts_ts'] = time.monotonic()
     except Exception as exc:
-        log('WARNING', 'FirewallDB', f'同步账号封禁缓存失败: {exc}')
+        log_firewall('WARNING', 'FirewallDB', f'同步账号封禁缓存失败: {exc}')
 
 
 def sync_whitelist_to_cache():
@@ -288,7 +288,7 @@ def sync_whitelist_to_cache():
             _cache['whitelist'] = whitelist
             _cache['whitelist_ts'] = time.monotonic()
     except Exception as exc:
-        log('WARNING', 'FirewallDB', f'同步白名单缓存失败: {exc}')
+        log_firewall('WARNING', 'FirewallDB', f'同步白名单缓存失败: {exc}')
 
 
 def sync_all_to_cache():
@@ -518,8 +518,8 @@ def get_db():
                         try:
                             _conn.execute(stmt + ';')
                         except Exception as e:
-                            log('WARNING', 'FirewallDB', f'建表警告: {e}')
-                log('INFO', 'FirewallDB', '防火墙数据库初始化完成', path=DB_PATH)
+                            log_firewall('WARNING', 'FirewallDB', f'建表警告: {e}')
+                log_firewall('INFO', 'FirewallDB', '防火墙数据库初始化完成', path=DB_PATH)
     return _DuckDBConnection(_conn, _conn_lock)
 
 
@@ -542,7 +542,7 @@ def vacuum():
             conn.execute("VACUUM;")
         return True
     except Exception as exc:
-        log('WARNING', 'FirewallDB', f'VACUUM 失败: {exc}')
+        log_firewall('WARNING', 'FirewallDB', f'VACUUM 失败: {exc}')
         return False
 
 
@@ -613,9 +613,9 @@ def load_expiry_heap():
         with _expiry_heap_lock:
             _expiry_heap = heap
             heapq.heapify(_expiry_heap)
-        log('INFO', 'FirewallDB', f'过期堆已重建，共 {len(heap)} 条目')
+        log_firewall('INFO', 'FirewallDB', f'过期堆已重建，共 {len(heap)} 条目')
     except Exception as exc:
-        log('WARNING', 'FirewallDB', f'重建过期堆失败: {exc}')
+        log_firewall('WARNING', 'FirewallDB', f'重建过期堆失败: {exc}')
 
 
 def remove_from_expiry_heap(ban_type: str, ban_id: int):
@@ -775,7 +775,7 @@ def record_ban_detail(
             ),
         )
     except Exception as exc:
-        log('WARNING', 'FirewallDB', f'记录封禁详情失败: {exc}', ban_id=ban_id)
+        log_firewall('WARNING', 'FirewallDB', f'记录封禁详情失败: {exc}', ban_id=ban_id)
 
 
 def get_ban_detail(ban_id):
@@ -818,7 +818,7 @@ def get_ban_detail(ban_id):
                 'additional_info': row[20],
             }
     except Exception as exc:
-        log('WARNING', 'FirewallDB', f'查询封禁详情失败: {exc}', ban_id=ban_id)
+        log_firewall('WARNING', 'FirewallDB', f'查询封禁详情失败: {exc}', ban_id=ban_id)
         return None
 
 
@@ -840,7 +840,7 @@ def get_account_whitelist_db():
                 for r in rows
             ]
     except Exception as exc:
-        log('WARNING', 'FirewallDB', f'查询账号白名单失败: {exc}')
+        log_firewall('WARNING', 'FirewallDB', f'查询账号白名单失败: {exc}')
         return []
 
 
@@ -895,7 +895,7 @@ def record_content_injection(user_id, content_type, injection_type, content_prev
             (user_id, content_type, injection_type, content_preview[:200], ip_address, matched_pattern),
         )
     except Exception as exc:
-        log('WARNING', 'FirewallDB', f'记录内容注入警告失败: {exc}', user_id=user_id)
+        log_firewall('WARNING', 'FirewallDB', f'记录内容注入警告失败: {exc}', user_id=user_id)
     return get_user_injection_count(user_id, INJECTION_WARNING_WINDOW_HOURS)
 
 
