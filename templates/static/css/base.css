@@ -427,21 +427,17 @@ body::after {
 .search-icon { cursor: pointer; transition: color var(--transition-fast); }
 .search-icon:hover { color: var(--text-secondary); }
 
-/* 置顶放大态：由 JS 切换 .is-pinned（配合 FLIP 位移动画，过渡更和谐） */
+/* 置顶放大态：几何位置由 JS 用 FLIP 计算并过渡（left/top/width），
+   避免使用 transform: scale 造成文字变形「穿模」 */
 .site-search-wrap {
-    transition: box-shadow 0.3s cubic-bezier(0.22, 1, 0.36, 1);
-    will-change: transform;
+    transition: left 0.34s cubic-bezier(0.22, 1, 0.36, 1),
+                top 0.34s cubic-bezier(0.22, 1, 0.36, 1),
+                width 0.34s cubic-bezier(0.22, 1, 0.36, 1),
+                opacity 0.18s ease,
+                box-shadow 0.3s ease;
+    will-change: left, top, width;
 }
-.site-search-wrap.is-pinned {
-    position: fixed;
-    top: 14px;
-    left: 50%;
-    transform: translateX(-50%);
-    width: min(680px, calc(100vw - 28px));
-    margin: 0;
-    z-index: 1200;
-    transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1);
-}
+.site-search-wrap.is-pinned { z-index: 1200; }
 .site-search-wrap.is-pinned .search-input,
 .site-search-wrap.is-pinned .input-field {
     width: 100% !important;
@@ -451,7 +447,21 @@ body::after {
     border-radius: 16px !important;
     background: rgba(255, 255, 255, 0.97);
     box-shadow: 0 18px 50px rgba(15, 23, 42, 0.26), 0 0 0 1px rgba(2, 132, 199, 0.22);
-    transition: box-shadow 0.3s ease, background 0.3s ease;
+}
+/* 输入框的内边距/字号/圆角平滑变化，防止动画过程中文字突兀或溢出 */
+.site-search-wrap .search-input,
+.site-search-wrap .input-field {
+    transition: padding 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+                font-size 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+                border-radius 0.3s ease,
+                background 0.3s ease,
+                box-shadow 0.3s ease;
+}
+/* 收起：淡出 + 轻微缩小 */
+.site-search-wrap.is-closing {
+    opacity: 0;
+    transform: scale(0.985);
+    transition: opacity 0.18s ease, transform 0.18s ease;
 }
 .site-search-backdrop {
     position: fixed;
@@ -499,6 +509,9 @@ body::after {
 @media (prefers-reduced-motion: reduce) {
     .site-search-wrap,
     .site-search-wrap.is-pinned,
+    .site-search-wrap.is-closing,
+    .site-search-wrap .search-input,
+    .site-search-wrap .input-field,
     .site-search-backdrop { transition: none !important; }
     .search-fade-in { animation: none; }
 }
