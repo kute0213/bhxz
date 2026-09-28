@@ -137,6 +137,52 @@ def list_buildings(search=None, tag=None, page=1, page_size=PAGE_SIZE,
     return items[:page_size], has_more
 
 
+def list_favorite_buildings(user_id, search=None, page=1, page_size=PAGE_SIZE):
+    """分页查询当前用户收藏的建筑（按收藏时间倒序）。
+
+    Args:
+        user_id: 用户 ID
+        search: 关键词（匹配标题与标签）
+        page: 页码（从 1 开始）
+        page_size: 每页条数
+
+    Returns:
+        (items, has_more)：items 为建筑 dict 列表（含 fav_created_at），
+        has_more 表示是否还有下一页。
+    """
+    page = max(1, int(page or 1))
+    page_size = max(1, min(int(page_size or PAGE_SIZE), 50))
+    offset = (page - 1) * page_size
+
+    conditions = ['f.user_id = ?', "b.status = 'approved'"]
+    params = [user_id]
+    if search:
+        like = f'%{search.strip()}%'
+        conditions.append('(b.title LIKE ? OR b.tags LIKE ?)')
+        params.extend([like, like])
+
+    where = ' AND '.join(conditions)
+    with get_db() as conn:
+        rows = conn.execute(
+            f"""
+            SELECT b.*, u.username AS author_name, f.created_at AS fav_created_at,
+                   (SELECT COUNT(*) FROM building_favorites ff
+                    WHERE ff.building_id = b.id) AS favorite_count
+            FROM building_favorites f
+            JOIN public_buildings b ON b.id = f.building_id
+            LEFT JOIN users u ON b.author_id = u.id
+            WHERE {where}
+            ORDER BY f.created_at DESC, b.id DESC
+            LIMIT ? OFFSET ?
+            """,
+            (*params, page_size + 1, offset),
+        ).fetchall()
+
+    items = [dict(r) for r in rows]
+    has_more = len(items) > page_size
+    return items[:page_size], has_more
+
+
 def get_building(building_id):
     """获取单个建筑（含作者名与收藏数）。"""
     with get_db() as conn:

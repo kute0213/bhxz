@@ -20,27 +20,37 @@ def api_buildings_list():
       tag  精确标签筛选
       page 页码（从 1 开始，默认 1）
       my   为 1 时返回当前用户的建筑（需登录）
+      fav  为 1 时返回当前用户收藏的建筑（需登录）
     """
     user = get_current_user()
     my_mode = bool(user and request.args.get('my'))
+    fav_mode = bool(user and request.args.get('fav'))
     query = (request.args.get('q') or '').strip()[:100]
     tag = (request.args.get('tag') or '').strip()[:32]
     page = request.args.get('page', type=int) or 1
 
-    items, has_more = buildings_service.list_buildings(
-        search=query,
-        tag=tag,
-        page=page,
-        page_size=buildings_service.PAGE_SIZE,
-        author_id=user['id'] if user else None,
-        my_mode=my_mode,
-    )
-
-    favorite_ids = set()
-    if user:
-        favorite_ids = buildings_service.get_favorite_ids(
-            user['id'], [b['id'] for b in items]
+    if fav_mode:
+        items, has_more = buildings_service.list_favorite_buildings(
+            user_id=user['id'],
+            search=query,
+            page=page,
+            page_size=buildings_service.PAGE_SIZE,
         )
+        favorite_ids = {b['id'] for b in items}
+    else:
+        items, has_more = buildings_service.list_buildings(
+            search=query,
+            tag=tag,
+            page=page,
+            page_size=buildings_service.PAGE_SIZE,
+            author_id=user['id'] if user else None,
+            my_mode=my_mode,
+        )
+        favorite_ids = set()
+        if user:
+            favorite_ids = buildings_service.get_favorite_ids(
+                user['id'], [b['id'] for b in items]
+            )
 
     for b in items:
         b['is_favorited'] = b['id'] in favorite_ids
@@ -52,6 +62,7 @@ def api_buildings_list():
         'page': page,
         'next_page': page + 1,
         'my_mode': my_mode,
+        'fav_mode': fav_mode,
     })
 
 

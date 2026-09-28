@@ -18,26 +18,41 @@ from services import buildings as buildings_service
 def building_list():
     """公共建筑列表。
 
-    支持 ?my=1（我的建筑，显示全部状态）、?q=关键词（匹配标题与标签）、
-    ?tag=标签（精确筛选）。默认按收藏数倒序排列，每次加载 10 条，
-    前端点击「加载更多」通过 /api/buildings 继续获取。
+    支持 ?my=1（我的建筑，显示全部状态）、?fav=1（我的收藏，需登录）、
+    ?q=关键词（匹配标题与标签）、?tag=标签（精确筛选）。默认按收藏数倒序
+    排列，每次加载 10 条，前端点击「加载更多」通过 /api/buildings 继续获取。
     """
     user = get_current_user()
     my_mode = bool(user and request.args.get('my'))
+    fav_mode = bool(request.args.get('fav'))
+
+    if fav_mode and not user:
+        return redirect(url_for('main.login', next=request.full_path))
+
     query = (request.args.get('q') or '').strip()
     active_tag = (request.args.get('tag') or '').strip()
 
-    items, has_more = buildings_service.list_buildings(
-        search=query,
-        tag=active_tag,
-        page=1,
-        page_size=buildings_service.PAGE_SIZE,
-        author_id=user['id'] if user else None,
-        my_mode=my_mode,
-    )
+    if fav_mode:
+        items, has_more = buildings_service.list_favorite_buildings(
+            user_id=user['id'],
+            search=query,
+            page=1,
+            page_size=buildings_service.PAGE_SIZE,
+        )
+    else:
+        items, has_more = buildings_service.list_buildings(
+            search=query,
+            tag=active_tag,
+            page=1,
+            page_size=buildings_service.PAGE_SIZE,
+            author_id=user['id'] if user else None,
+            my_mode=my_mode,
+        )
 
     favorite_ids = set()
-    if user:
+    if fav_mode:
+        favorite_ids = {b['id'] for b in items}
+    elif user:
         favorite_ids = buildings_service.get_favorite_ids(
             user['id'], [b['id'] for b in items]
         )
@@ -47,6 +62,7 @@ def building_list():
         buildings=items,
         has_more=has_more,
         my_mode=my_mode,
+        fav_mode=fav_mode,
         search_query=query,
         active_tag=active_tag,
         all_tags=buildings_service.get_all_tags(),

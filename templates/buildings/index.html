@@ -74,8 +74,12 @@
 <section class="page-container py-12">
     <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="text-center mb-8">
-            <h1 class="text-2xl sm:text-3xl font-bold mb-3">{{ '我的建筑' if my_mode else '公共建筑' }}</h1>
-            <p class="text-cream/60 text-sm sm:text-base">{{ '我发布的公共建筑' if my_mode else '分享你在滨海小镇的杰作，使用 /res tp 领地名 一键前往参观' }}</p>
+            <h1 class="text-2xl sm:text-3xl font-bold mb-3">{{ '我的收藏' if fav_mode else ('我的建筑' if my_mode else '公共建筑') }}</h1>
+            <p class="text-cream/60 text-sm sm:text-base">
+                {% if fav_mode %}你收藏的公共建筑，按收藏时间倒序展示
+                {% elif my_mode %}我发布的公共建筑
+                {% else %}分享你在滨海小镇的杰作，使用 /res tp 领地名 一键前往参观{% endif %}
+            </p>
         </div>
 
         <div class="mb-6 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
@@ -91,15 +95,30 @@
                            class="input-field search-input w-full pl-10 py-2.5 rounded-xl text-sm">
                 </div>
             </form>
-            <div class="flex items-center gap-2 flex-shrink-0">
-                {% if user and my_mode %}
-                <a href="{{ url_for('buildings.building_list') }}" class="btn-secondary px-4 py-2.5 rounded-lg text-sm inline-flex items-center gap-2">
-                    <i data-lucide="building-2" class="w-4 h-4"></i>全部建筑
-                </a>
-                {% elif user %}
-                <a href="{{ url_for('buildings.building_list') }}?my=1" class="btn-secondary px-4 py-2.5 rounded-lg text-sm inline-flex items-center gap-2">
-                    <i data-lucide="file-text" class="w-4 h-4"></i>我的建筑
-                </a>
+            <div class="flex items-center gap-2 flex-shrink-0 flex-wrap">
+                {% if user %}
+                    {% if fav_mode %}
+                    <a href="{{ url_for('buildings.building_list') }}" class="btn-secondary px-4 py-2.5 rounded-lg text-sm inline-flex items-center gap-2">
+                        <i data-lucide="building-2" class="w-4 h-4"></i>全部建筑
+                    </a>
+                    <a href="{{ url_for('buildings.building_list') }}?my=1" class="btn-secondary px-4 py-2.5 rounded-lg text-sm inline-flex items-center gap-2">
+                        <i data-lucide="file-text" class="w-4 h-4"></i>我的建筑
+                    </a>
+                    {% elif my_mode %}
+                    <a href="{{ url_for('buildings.building_list') }}" class="btn-secondary px-4 py-2.5 rounded-lg text-sm inline-flex items-center gap-2">
+                        <i data-lucide="building-2" class="w-4 h-4"></i>全部建筑
+                    </a>
+                    <a href="{{ url_for('buildings.building_list') }}?fav=1" class="btn-secondary px-4 py-2.5 rounded-lg text-sm inline-flex items-center gap-2">
+                        <i data-lucide="heart" class="w-4 h-4"></i>我的收藏
+                    </a>
+                    {% else %}
+                    <a href="{{ url_for('buildings.building_list') }}?my=1" class="btn-secondary px-4 py-2.5 rounded-lg text-sm inline-flex items-center gap-2">
+                        <i data-lucide="file-text" class="w-4 h-4"></i>我的建筑
+                    </a>
+                    <a href="{{ url_for('buildings.building_list') }}?fav=1" class="btn-secondary px-4 py-2.5 rounded-lg text-sm inline-flex items-center gap-2">
+                        <i data-lucide="heart" class="w-4 h-4"></i>我的收藏
+                    </a>
+                    {% endif %}
                 {% endif %}
                 <a href="{{ url_for('buildings.building_create') }}" class="btn-primary px-4 py-2.5 rounded-lg text-sm inline-flex items-center gap-2">
                     <i data-lucide="plus" class="w-4 h-4"></i>发布建筑
@@ -107,7 +126,7 @@
             </div>
         </div>
 
-        {% if not my_mode and all_tags %}
+        {% if not my_mode and not fav_mode and all_tags %}
         <div class="mb-6 flex flex-wrap items-center gap-2" id="building-tags">
             <span class="text-xs text-cream/50 mr-1 flex items-center gap-1"><i data-lucide="tag" class="w-3.5 h-3.5"></i>标签</span>
             <button type="button" class="tag-chip{% if not active_tag %} active{% endif %}" data-tag="">全部</button>
@@ -165,8 +184,8 @@
         <div id="buildings-empty" class="text-center py-16{% if buildings %} hidden{% endif %}">
             <div class="pixel-card rounded-xl p-8 sm:p-12 max-w-lg mx-auto">
                 <i data-lucide="building-2" class="w-12 h-12 text-cream/30 mx-auto mb-4"></i>
-                <p class="text-cream/60 text-lg mb-2" id="buildings-empty-title">暂无公共建筑</p>
-                <p class="text-cream/40 text-sm" id="buildings-empty-hint">快来发布你的第一个建筑吧</p>
+                <p class="text-cream/60 text-lg mb-2" id="buildings-empty-title">{{ '还没有收藏任何建筑' if fav_mode else '暂无公共建筑' }}</p>
+                <p class="text-cream/40 text-sm" id="buildings-empty-hint">{{ '去公共建筑页收藏你喜欢的作品吧' if fav_mode else '快来发布你的第一个建筑吧' }}</p>
             </div>
         </div>
 
@@ -189,6 +208,7 @@
         detailBase: "{{ url_for('buildings.building_list') }}/",
         favUrl: "{{ url_for('buildings.toggle_building_favorite', building_id=0) }}",
         myMode: {{ 'true' if my_mode else 'false' }},
+        favMode: {{ 'true' if fav_mode else 'false' }},
         isLoggedIn: {{ 'true' if user else 'false' }}
     };
 
@@ -279,6 +299,9 @@
         if (state.tag) {
             emptyTitle.textContent = '没有匹配该标签的建筑';
             emptyHint.textContent = '试试切换其他标签';
+        } else if (CFG.favMode) {
+            emptyTitle.textContent = '还没有收藏任何建筑';
+            emptyHint.textContent = '去公共建筑页收藏你喜欢的作品吧';
         } else {
             emptyTitle.textContent = '暂无公共建筑';
             emptyHint.textContent = '快来发布你的第一个建筑吧';
@@ -302,7 +325,8 @@
         params.set('q', state.query || '');
         params.set('page', page);
         if (state.tag) params.set('tag', state.tag);
-        if (CFG.myMode) params.set('my', '1');
+        if (CFG.favMode) params.set('fav', '1');
+        else if (CFG.myMode) params.set('my', '1');
 
         fetch(CFG.apiUrl + '?' + params.toString(), {
             headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
@@ -330,7 +354,8 @@
             params: function () {
                 var p = {};
                 if (state.tag) p.tag = state.tag;
-                if (CFG.myMode) p.my = 1;
+                if (CFG.favMode) p.fav = 1;
+                else if (CFG.myMode) p.my = 1;
                 return p;
             },
             onLoading: function () { setLoading(true); },
@@ -395,9 +420,25 @@
                 btn.title = data.is_favorited ? '取消收藏' : '收藏';
                 var cnt = btn.querySelector('.fav-count');
                 if (cnt) cnt.textContent = data.favorite_count;
-                btn.classList.remove('pop');
-                void btn.offsetWidth;
-                btn.classList.add('pop');
+                // 收藏页中取消收藏后移除该卡片
+                if (CFG.favMode && !data.is_favorited) {
+                    var card = btn.closest('.building-card');
+                    if (card) {
+                        card.style.transition = 'opacity 0.25s ease, transform 0.25s ease';
+                        card.style.opacity = '0';
+                        card.style.transform = 'scale(0.96)';
+                        setTimeout(function () {
+                            card.remove();
+                            var hasAny = grid.children.length > 0;
+                            emptyBox.classList.toggle('hidden', hasAny);
+                            if (!hasAny) updateHint(0);
+                        }, 250);
+                    }
+                } else {
+                    btn.classList.remove('pop');
+                    void btn.offsetWidth;
+                    btn.classList.add('pop');
+                }
                 Toast && Toast.success(data.message);
             })
             .catch(function () { Toast && Toast.error('操作失败，请重试'); })
