@@ -1,69 +1,137 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-滨海小镇 - 一键更新脚本（跨平台）
+"""滨海小镇 - 一键更新脚本（跨平台 · 纯下载覆盖）。
 
-放置于项目根目录，双击或 `python update.py` 即可使用。
-自动检测最佳 GitHub 源，一键拉取最新代码。
-不会自动重启服务器，更新完成后需手动重启。
+设计要点：
+  - **纯 Python 全平台兼容**：仅依赖标准库（urllib / zipfile / threading），
+    Windows / macOS / Linux 双击或 `python update.py` 均可直接运行。
+  - **只走下载覆盖**：不使用 git，直接把 GitHub 最新源码 ZIP 解压后覆盖到项目，
+    保留数据库、上传文件、备份、`.env` 等运行期数据。
+  - **多线程同时测速**：所有镜像同时发起探测，单个镜像 2 秒超时，
+    整个测速环节最大 2 秒（用屏障同步起跑 + 统一截止时间收敛）。
+  - **镜像路径正确拼接**：每个镜像声明自己的 URL 模板（前缀型代理 / 主机替换型 /
+    官方直连），统一用 `{repo}` / `{branch}` 占位符拼接，杜绝路径拼错。
+  - **无需确认**：启动即开始，不做任何交互式询问。
 
 用法:
-    python update.py          # 普通模式
-    python update.py --yes    # 静默模式，跳过确认
+    python update.py                 # 直接更新（无确认）
+    python update.py --branch dev    # 指定分支（默认 main，失败自动回退 master）
 """
 
 import os
 import sys
-import json
 import time
 import shutil
-import signal
 import zipfile
 import tempfile
 import threading
 import subprocess
 import urllib.request
-import urllib.error
-from pathlib import Path
+import urllib.parse
 from datetime import datetime
 
 # ── 配置 ──────────────────────────────────────────────────────────────
 PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 GITHUB_REPO = 'kute0213/bhxz'
-GITHUB_BRANCH = 'main'
-GITHUB_API = f'https://api.github.com/repos/{GITHUB_REPO}/branches/{GITHUB_BRANCH}'
-GITHUB_ARCHIVE = f'https://github.com/{GITHUB_REPO}/archive/refs/heads/{GITHUB_BRANCH}.zip'
-
-# 镜像源列表（按优先级排列）
-MIRRORS = [
-    ('github.com', 'https://github.com/'),
-    ('ghp.ci', 'https://ghp.ci/https://github.com/'),
-    ('ghproxy.net', 'https://ghproxy.net/https://github.com/'),
-    ('mirror.ghproxy.com', 'https://mirror.ghproxy.com/https://github.com/'),
-    ('ghfast.top', 'https://ghfast.top/https://github.com/'),
-    ('github.moeyy.xyz', 'https://github.moeyy.xyz/https://github.com/'),
-    ('slink.ltd', 'https://slink.ltd/https://github.com/'),
-    ('gh.ddlc.top', 'https://gh.ddlc.top/https://github.com/'),
-    ('gh.h233.eu.org', 'https://gh.h233.eu.org/https://github.com/'),
-    ('ghproxy.1888866.xyz', 'https://ghproxy.1888866.xyz/https://github.com/'),
-    ('hub.gitmirror.com', 'https://hub.gitmirror.com/https://github.com/'),
-    ('gh-proxy.net', 'https://gh-proxy.net/https://github.com/'),
-    ('github.boki.moe', 'https://github.boki.moe/https://github.com/'),
-    ('gh.llkk.cc', 'https://gh.llkk.cc/https://github.com/'),
-    ('kkgithub.com', 'https://kkgithub.com/https://github.com/'),
-]
+DEFAULT_BRANCH = 'main'
+FALLBACK_BRANCHES = ['main', 'master']
 REQUIREMENTS_FILE = os.path.join(PROJECT_ROOT, 'requirements.txt')
 
-# ── 颜色（Windows 兼容） ──────────────────────────────────────────────
-if sys.platform == 'win32':
-    # Windows 10+ 支持 ANSI，但旧版 cmd 不支持
-    try:
-        import ctypes
-        kernel32 = ctypes.windll.kernel32
-        kernel32.SetConsoleMode(kernel32.GetStdHandle(-11), 7)
-    except Exception:
-        pass
+USER_AGENT = 'Mozilla/5.0 (compatible; BHXZ-Updater/2.0)'
 
+# 测速：单个镜像探测超时 & 整个测速阶段总预算（秒）
+MIRROR_TIMEOUT = 2.0
+SPEEDTEST_BUDGET = 2.0
+# 探测时读取的字节数（用于计算下载速度，避免拉取整个压缩包）
+PROBE_BYTES = 128 * 1024
+# 正式下载时的单次 socket 超时（大文件较宽松）
+DOWNLOAD_TIMEOUT = 120
+
+# 覆盖时保留的根级内容（运行期数据 / 本地配置，绝不覆盖）
+EXCLUDE_ROOT = {
+    'db', 'backups', 'uploads', 'ssl', 'logs',
+    '.env', '.env.local', '.git',
+    '.venv', 'venv', 'env', 'node_modules', '.trae',
+    'release', '__pycache__', '.pytest_cache',
+}
+# 覆盖时跳过的不需要的文件 / 目录名（任意层级）
+SKIP_NAMES = {'__pycache__', '.pytest_cache', '.DS_Store', 'Thumbs.db'}
+SKIP_SUFFIX = ('.pyc', '.pyo', '.zip', '.db', '.db-wal', '.db-shm', '.duckdb')
+
+# ── 镜像源（URL 模板） ────────────────────────────────────────────────
+# 官方归档地址：github.com 会 302 到 codeload.github.com
+_GH_ARCHIVE = 'https://github.com/{repo}/archive/refs/heads/{branch}.zip'
+_GH_CODELOAD = 'https://codeload.github.com/{repo}/zip/refs/heads/{branch}'
+
+# 前缀型代理：在其后拼接完整 GitHub 归档地址
+_PREFIX_PROXIES = [
+    'https://ghproxy.net/',
+    'https://ghfast.top/',
+    'https://gh-proxy.com/',
+    'https://ghproxy.cc/',
+    'https://mirror.ghproxy.com/',
+    'https://github.moeyy.xyz/',
+    'https://gh.llkk.cc/',
+    'https://gh.ddlc.top/',
+    'https://hub.gitmirror.com/',
+    'https://ghproxy.1888866.xyz/',
+    'https://slink.ltd/',
+    'https://ghps.cc/',
+    'https://gh-proxy.net/',
+    'https://github.boki.moe/',
+    'https://gh.h233.eu.org/',
+    'https://ghproxy.imciel.com/',
+    'https://gh.jasonzeng.dev/',
+    'https://gh-proxy.ygxz.in/',
+    'https://gh.xxooo.cf/',
+    'https://ghproxy.cfd/',
+]
+
+# 主机替换型镜像：直接替换 github.com 主机
+_HOST_MIRRORS = [
+    'https://kkgithub.com/',
+    'https://hub.nuaa.cf/',
+]
+
+
+def build_mirrors():
+    """构造镜像列表 [(显示名, URL 模板), ...]。
+
+    模板统一使用 `{repo}` / `{branch}` 占位符，路径拼接规则：
+      - 官方直连：`https://github.com/<repo>/archive/refs/heads/<branch>.zip`
+      - 前缀代理：`<代理前缀>https://github.com/<repo>/archive/refs/heads/<branch>.zip`
+      - 主机替换：`https://<镜像域名>/<repo>/archive/refs/heads/<branch>.zip`
+    """
+    mirrors = [('GitHub 官方', _GH_ARCHIVE), ('GitHub codeload', _GH_CODELOAD)]
+    for prefix in _PREFIX_PROXIES:
+        name = prefix.rstrip('/').replace('https://', '')
+        mirrors.append((name, prefix + _GH_ARCHIVE))
+    for host in _HOST_MIRRORS:
+        name = host.rstrip('/').replace('https://', '')
+        mirrors.append((name, host + '{repo}/archive/refs/heads/{branch}.zip'))
+    return mirrors
+
+
+def build_url(template, branch):
+    """按模板拼接下载 URL（正确转义 repo / branch）。"""
+    return template.format(
+        repo=GITHUB_REPO,
+        branch=urllib.parse.quote(branch, safe=''),
+    )
+
+
+# ── 终端颜色（Windows 兼容） ──────────────────────────────────────────
+def _enable_ansi():
+    if sys.platform == 'win32':
+        try:
+            import ctypes
+            kernel32 = ctypes.windll.kernel32
+            kernel32.SetConsoleMode(kernel32.GetStdHandle(-11), 7)
+        except Exception:
+            pass
+
+
+_enable_ansi()
 GREEN = '\033[0;32m'
 YELLOW = '\033[1;33m'
 CYAN = '\033[0;36m'
@@ -71,256 +139,109 @@ RED = '\033[0;31m'
 NC = '\033[0m'
 
 
-# ── 工具函数 ─────────────────────────────────────────────────────────
-
 def log(msg, color=NC):
-    """带颜色和时间的日志输出。"""
-    now = datetime.now().strftime('%H:%M:%S')
-    text = f'[{now}] {msg}'
-    if color and sys.platform != 'win32':
-        text = f'{color}{text}{NC}'
-    print(text)
+    """带时间戳的日志输出。"""
+    ts = datetime.now().strftime('%H:%M:%S')
+    line = f'[{ts}] {msg}'
+    if color and sys.stdout.isatty():
+        line = f'{color}{line}{NC}'
+    print(line)
     sys.stdout.flush()
 
 
-def run_cmd(cmd, cwd=None, timeout=60, capture=False):
-    """执行系统命令。
-
-    Returns:
-        capture=False: returncode
-        capture=True: (returncode, stdout)
-    """
-    cwd = cwd or PROJECT_ROOT
+# ── 多线程测速 ────────────────────────────────────────────────────────
+def _probe(index, mirror, barrier, results, branch):
+    """探测单个镜像：下载速度 + 内容合法性（是否 PK 开头的 ZIP）。"""
     try:
-        p = subprocess.Popen(
-            cmd if isinstance(cmd, list) else cmd,
-            cwd=cwd, shell=isinstance(cmd, str),
-            stdout=subprocess.PIPE if capture else None,
-            stderr=subprocess.STDOUT if capture else None,
-            encoding='utf-8', errors='replace',
-        )
-        if capture:
-            out, _ = p.communicate(timeout=timeout)
-            return p.returncode, (out or '').strip()
-        p.wait(timeout=timeout)
-        return p.returncode
-    except subprocess.TimeoutExpired:
-        return -1
+        barrier.wait(timeout=SPEEDTEST_BUDGET)
     except Exception:
-        return -1
+        return
 
-
-def urlopen_with_timeout(url, timeout=15):
-    """带超时的 URL 打开。"""
-    req = urllib.request.Request(url, headers={
-        'User-Agent': 'Mozilla/5.0 (compatible; BHXZ-Updater/1.0)',
-    })
-    return urllib.request.urlopen(req, timeout=timeout)
-
-
-def check_proxy(mirror_name, mirror_url, results, index):
-    """并发检测镜像是否可用，记录延迟（毫秒）。"""
-    test_url = f'{mirror_url}{GITHUB_REPO}'
+    name, template = mirror
+    url = build_url(template, branch)
     try:
-        start = time.time()
-        resp = urlopen_with_timeout(test_url, timeout=8)
-        elapsed = int((time.time() - start) * 1000)
-        results[index] = (elapsed, mirror_name, mirror_url)
-        resp.close()
+        start = time.monotonic()
+        req = urllib.request.Request(url, headers={
+            'User-Agent': USER_AGENT,
+            'Range': f'bytes=0-{PROBE_BYTES - 1}',
+        })
+        resp = urllib.request.urlopen(req, timeout=MIRROR_TIMEOUT)
+        try:
+            data = resp.read(PROBE_BYTES)
+        finally:
+            resp.close()
+        elapsed = max(time.monotonic() - start, 1e-6)
+        if not data:
+            results[index] = None
+            return
+        results[index] = {
+            'name': name,
+            'template': template,               # 保留模板，便于切换分支时重建 URL
+            'url': url,
+            'bytes': len(data),
+            'elapsed': elapsed,
+            'speed': len(data) / elapsed,       # bytes/s
+            'is_zip': data[:2] == b'PK',        # 是否为合法 ZIP 内容
+        }
     except Exception:
         results[index] = None
 
 
-def find_best_mirror():
-    """并发检测所有镜像，返回延迟最低的可用源。"""
-    log('正在检测 GitHub 镜像源连通性...', CYAN)
-    results = [None] * len(MIRRORS)
-    threads = []
+def speedtest(branch):
+    """并发探测全部镜像，返回按速度降序排列的可用镜像列表。
 
-    for i, (name, url) in enumerate(MIRRORS):
-        t = threading.Thread(target=check_proxy, args=(name, url, results, i))
+    整个测速环节被限制在 SPEEDTEST_BUDGET 秒内：所有线程经屏障同时起跑，
+    主线程按统一截止时间 join，超时线程（守护线程）直接放弃。
+    """
+    mirrors = build_mirrors()
+    log(f'正在同时测速 {len(mirrors)} 个镜像源（超时 {SPEEDTEST_BUDGET:.0f} 秒）...', CYAN)
+
+    barrier = threading.Barrier(len(mirrors))
+    results = [None] * len(mirrors)
+    threads = []
+    start = time.monotonic()
+
+    for i, mirror in enumerate(mirrors):
+        t = threading.Thread(
+            target=_probe,
+            args=(i, mirror, barrier, results, branch),
+            daemon=True,
+        )
         t.start()
         threads.append(t)
 
+    deadline = start + SPEEDTEST_BUDGET
     for t in threads:
-        t.join(timeout=10)
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        t.join(remaining)
 
-    # 过滤可用镜像，按延迟排序
-    available = [r for r in results if r is not None]
-    available.sort(key=lambda x: x[0])
-
-    if not available:
-        log('所有镜像源均不可用！', RED)
-        return []
-
-    best = available[0]
-    log(f'最佳源: {best[1]} ({best[0]}ms)', GREEN)
-    if len(available) > 1:
-        log(f'备用源: {", ".join(a[1] for a in available[1:4])} ({", ".join(f"{a[0]}ms" for a in available[1:4])})', YELLOW)
-    # 返回全部可用镜像列表（按延迟升序），供下载失败时回退
+    used = time.monotonic() - start
+    available = [r for r in results if r]
+    # 能返回合法 ZIP 的优先，其次按速度降序
+    available.sort(key=lambda r: (r['is_zip'], r['speed']), reverse=True)
+    log(f'测速完成，用时 {used:.2f} 秒，可用镜像 {len(available)} 个', GREEN if available else RED)
     return available
 
 
-def get_git_head():
-    """获取当前 git HEAD。"""
-    code, out = run_cmd('git rev-parse HEAD', capture=True)
-    if code != 0:
-        return None
-    return out.strip()
-
-
-def get_git_remote_head():
-    """获取远程最新 HEAD。"""
-    code, out = run_cmd(f'git ls-remote origin HEAD', capture=True, timeout=30)
-    if code != 0:
-        return None
-    return out.split()[0] if out else None
-
-
-def has_git_changes():
-    """检查是否有未提交修改。"""
-    code = run_cmd('git diff --quiet HEAD')
-    return code != 0
-
-
-def has_stashed_changes():
-    """检查是否有暂存修改。"""
-    code, out = run_cmd('git stash list', capture=True)
-    return bool(out.strip())
-
-
-def get_recent_commits(count=20):
-    """获取 recent commits 的简短日志。"""
-    code, out = run_cmd(f'git log --oneline -{count} origin/main', capture=True)
-    if code != 0:
-        return []
-    return [line for line in out.split('\n') if line.strip()]
-
-
-def install_requirements():
-    """安装/更新 Python 依赖。"""
-    if not os.path.isfile(REQUIREMENTS_FILE):
-        return
-    log('正在检查 Python 依赖...', CYAN)
-    code = run_cmd(
-        f'"{sys.executable}" -m pip install -r "{REQUIREMENTS_FILE}" --quiet',
-        timeout=120,
-    )
-    if code == 0:
-        log('依赖检查完成', GREEN)
+# ── 下载与解压 ────────────────────────────────────────────────────────
+def _print_progress(got, total, speed):
+    done = int(got * 20 / total) if total > 0 else 0
+    bar = '█' * done + '░' * (20 - done)
+    if total > 0:
+        text = f'  {bar} {got * 100 // total:3d}%  {got // 1024}KB/{total // 1024}KB  {speed / 1024:.0f}KB/s'
     else:
-        log('依赖安装可能有警告（不影响核心功能）', YELLOW)
+        text = f'  {bar}  {got // 1024}KB  {speed / 1024:.0f}KB/s'
+    sys.stdout.write('\r' + text)
+    sys.stdout.flush()
 
 
-def update_via_git(skip_confirm=False):
-    """通过 git 从 GitHub 更新。"""
-    log(f'项目目录: {PROJECT_ROOT}')
-    log(f'仓库: {GITHUB_REPO}')
-
-    before_hash = get_git_head()
-    log(f'当前版本: {before_hash[:8] if before_hash else "未知"}', YELLOW)
-
-    # 1. 暂存本地修改
-    stashed = False
-    if has_git_changes():
-        log('检测到本地未提交修改:', YELLOW)
-        code, out = run_cmd('git status --short', capture=True)
-        for line in out.split('\n')[:20]:
-            if line.strip():
-                print(f'  {line}')
-        log('将暂存这些修改，更新后恢复', YELLOW)
-        run_cmd('git stash --include-untracked', timeout=30)
-        stashed = True
-
-    # 2. 获取远程更新
-    log('正在获取远程更新...', CYAN)
-    code = run_cmd('git fetch --all --tags --force', timeout=60)
-    if code != 0:
-        log('git fetch 失败，请检查网络连接', RED)
-        if stashed:
-            run_cmd('git stash pop')
-        return False
-
-    # 3. 检查是否有更新
-    after_hash = get_git_head()  # fetch 不会改变 HEAD
-    remote_hash = get_git_remote_head()
-    if remote_hash and remote_hash == before_hash:
-        log('当前已是最新版本，无需更新', GREEN)
-        if stashed:
-            run_cmd('git stash pop')
-        return True
-
-    # 4. 预览提交
-    log('更新内容预览:', CYAN)
-    log(f'最新版本: {remote_hash[:8] if remote_hash else "未知"}', GREEN)
-    print()
-    if before_hash:
-        code, out = run_cmd(f'git log --oneline {before_hash}..origin/main', capture=True)
-        if out:
-            for line in out.split('\n')[:30]:
-                print(f'  {line}')
-            print()
-
-    # 5. 确认
-    if not skip_confirm:
-        print()
-        confirm = input('确认应用以上更新？(Y/n): ').strip().lower()
-        if confirm == 'n':
-            log('已取消更新', YELLOW)
-            if stashed:
-                run_cmd('git stash pop')
-            return True
-
-    # 6. 应用更新
-    log('正在应用更新...', CYAN)
-    code = run_cmd('git reset --hard origin/main', timeout=30)
-    if code != 0:
-        log('更新失败！', RED)
-        return False
-
-    log('代码已更新到最新版本', GREEN)
-
-    # 7. 恢复暂存
-    if stashed:
-        log('正在恢复本地暂存的修改...', YELLOW)
-        run_cmd('git stash pop')
-
-    return True
-
-
-def _build_archive_urls(base_url, repo, branch):
-    """为一个镜像构造所有可能的归档下载 URL 列表。
-
-    不同镜像对归档 URL 格式的支持不同，全部尝试一遍。
-    codeload.github.com 是 GitHub 官方归档下载端点，通过代理成功率最高。
-    """
-    urls = []
-    # 格式 1：标准 archive URL（github.com 直连 + 部分代理支持）
-    urls.append(f'{base_url}{repo}/archive/refs/heads/{branch}.zip')
-
-    if base_url == 'https://github.com/':
-        # 官方直连：直接使用 codeload 端点
-        urls.append(f'https://codeload.github.com/{repo}/zip/refs/heads/{branch}')
-    else:
-        # 代理镜像：base_url 形如 'https://gh-proxy.net/https://github.com/'
-        # 提取代理域名前缀（第一个 https:// 到第二个 https:// 之间的部分）
-        parts = base_url.split('https://', 2)
-        if len(parts) >= 3:
-            proxy_domain = parts[1]  # e.g. 'gh-proxy.net/'
-            # 格式 2：通过代理访问 codeload.github.com 归档端点
-            urls.append(f'https://{proxy_domain}https://codeload.github.com/{repo}/zip/refs/heads/{branch}')
-    return urls
-
-
-def _try_download_zip(archive_url, zip_path):
-    """尝试下载 ZIP 压缩包并校验内容合法性。
-
-    校验项：HTTP 状态码 200、文件非空、ZIP 魔数为 PK。
-    Content-Type 不严格校验（部分代理对 zip 返回 text/html），以魔数为准。
-    返回 (success: bool, error_msg: str)。
-    """
+def download_zip(url, dest):
+    """下载 ZIP 并做基础校验，返回 (success, error_msg)。"""
     try:
-        resp = urlopen_with_timeout(archive_url, timeout=120)
+        req = urllib.request.Request(url, headers={'User-Agent': USER_AGENT})
+        resp = urllib.request.urlopen(req, timeout=DOWNLOAD_TIMEOUT)
     except Exception as e:
         return False, f'连接失败: {e}'
 
@@ -328,210 +249,231 @@ def _try_download_zip(archive_url, zip_path):
         code = resp.getcode()
         if code != 200:
             return False, f'HTTP {code}'
-
-        total_size = int(resp.headers.get('Content-Length', 0))
-        downloaded = 0
-        chunk_size = 8192
-
-        with open(zip_path, 'wb') as f:
+        total = int(resp.headers.get('Content-Length') or 0)
+        got = 0
+        started = time.monotonic()
+        with open(dest, 'wb') as f:
             while True:
-                chunk = resp.read(chunk_size)
+                chunk = resp.read(65536)
                 if not chunk:
                     break
                 f.write(chunk)
-                downloaded += len(chunk)
-                if total_size > 0:
-                    pct = min(100, int(downloaded * 100 / total_size))
-                    bar = '█' * (pct // 4) + '░' * (25 - pct // 4)
-                    print(f'\r  下载中: |{bar}| {pct}% ({downloaded // 1024}KB / {total_size // 1024}KB)', end='')
-                else:
-                    print(f'\r  下载中: {downloaded // 1024}KB', end='')
-                sys.stdout.flush()
-        print()
+                got += len(chunk)
+                elapsed = max(time.monotonic() - started, 1e-6)
+                _print_progress(got, total, got / elapsed)
+        sys.stdout.write('\n')
+        sys.stdout.flush()
+    except Exception as e:
+        sys.stdout.write('\n')
+        return False, f'下载中断: {e}'
     finally:
         resp.close()
 
-    if not os.path.isfile(zip_path) or os.path.getsize(zip_path) == 0:
-        return False, '下载文件为空'
+    if got == 0:
+        return False, '下载内容为空'
 
-    # 校验 ZIP 魔数（前 4 字节应为 PK\x03\x04 或空档案 PK\x05\x06）
-    with open(zip_path, 'rb') as f:
-        magic = f.read(4)
-    if magic[:2] != b'PK':
-        # 可能是 HTML 错误页，读取前 100 字节用于调试
-        with open(zip_path, 'rb') as f:
-            preview = f.read(100)
-        return False, f'非 ZIP 内容（前4字节: {magic!r}，镜像返回错误页）'
+    # ZIP 魔数校验：镜像返回 HTML 错误页时在此拦截
+    with open(dest, 'rb') as f:
+        if f.read(2) != b'PK':
+            return False, '返回内容非 ZIP（镜像可能返回错误页）'
+
+    # 压缩包完整性校验（CRC）
+    try:
+        with zipfile.ZipFile(dest, 'r') as zf:
+            bad = zf.testzip()
+        if bad is not None:
+            return False, f'压缩包损坏: {bad}'
+    except zipfile.BadZipFile as e:
+        return False, f'压缩包无法解析: {e}'
 
     return True, ''
 
 
-def update_via_download(mirrors, skip_confirm=False):
-    """通过下载 zip 压缩包更新（非 git 仓库时使用）。
+def _find_source_dir(extract_dir):
+    """定位解压后的项目根目录（兼容有无外层 `bhxz-<branch>/` 两种结构）。"""
+    for entry in os.listdir(extract_dir):
+        full = os.path.join(extract_dir, entry)
+        if os.path.isdir(full) and os.path.isfile(os.path.join(full, 'app.py')):
+            return full
+    if os.path.isfile(os.path.join(extract_dir, 'app.py')):
+        return extract_dir
+    return None
 
-    mirrors: 镜像列表 [(ms, name, base_url), ...]，按延迟升序排列。
-    对每个镜像尝试多种归档 URL 格式（archive / codeload），全部失败再换下一个镜像。
-    所有镜像都失败才返回 False。
+
+def _skip(name):
+    """判断是否跳过该文件 / 目录名。"""
+    if name in SKIP_NAMES:
+        return True
+    if name.lower().endswith(SKIP_SUFFIX):
+        return True
+    return False
+
+
+def _merge_copy(src, dst):
+    """把 src 目录内容合并覆盖到 dst：同名覆盖，目标多余文件保留。
+
+    采用「合并」而非「删除后重建」，可保留 node_modules、ffmpeg 等运行期产物。
     """
-    if not skip_confirm:
-        print()
-        confirm = input('当前不是 git 仓库，将通过下载覆盖方式更新。确认？(Y/n): ').strip().lower()
-        if confirm == 'n':
-            log('已取消更新', YELLOW)
-            return True
+    if not os.path.isdir(dst):
+        os.makedirs(dst, exist_ok=True)
+    for entry in os.listdir(src):
+        if _skip(entry):
+            continue
+        s = os.path.join(src, entry)
+        d = os.path.join(dst, entry)
+        if os.path.isdir(s):
+            if os.path.exists(d) and not os.path.isdir(d):
+                os.remove(d)
+            _merge_copy(s, d)
+        else:
+            if os.path.isdir(d):
+                shutil.rmtree(d, ignore_errors=True)
+            shutil.copy2(s, d)
 
-    if not mirrors:
-        log('无可用镜像源', RED)
-        return False
 
-    log('正在从 GitHub 下载最新代码...', CYAN)
-    tmp_dir = tempfile.mkdtemp(prefix='bhxz_update_')
-    zip_path = os.path.join(tmp_dir, 'update.zip')
+def apply_update(src_dir):
+    """把新代码合并覆盖到项目目录（保留运行期数据）。"""
+    log('正在覆盖项目文件...', CYAN)
+    count = 0
+    for entry in os.listdir(src_dir):
+        if entry in EXCLUDE_ROOT or _skip(entry):
+            continue
+        s = os.path.join(src_dir, entry)
+        d = os.path.join(PROJECT_ROOT, entry)
+        if os.path.isdir(s):
+            _merge_copy(s, d)
+        else:
+            shutil.copy2(s, d)
+        count += 1
+    log(f'覆盖完成，共处理 {count} 项', GREEN)
 
-    # 分支回退列表：先尝试配置的分支，再尝试常见分支名
-    branches = [GITHUB_BRANCH]
-    for b in ('main', 'master'):
+
+# ── 依赖安装 ──────────────────────────────────────────────────────────
+def install_requirements():
+    """安装 / 更新 Python 依赖。"""
+    if not os.path.isfile(REQUIREMENTS_FILE):
+        return
+    log('正在检查 Python 依赖...', CYAN)
+    try:
+        code = subprocess.call(
+            [sys.executable, '-m', 'pip', 'install', '-r', REQUIREMENTS_FILE, '--quiet'],
+            cwd=PROJECT_ROOT,
+        )
+    except Exception:
+        code = -1
+    if code == 0:
+        log('依赖检查完成', GREEN)
+    else:
+        log('依赖安装存在警告（通常不影响运行）', YELLOW)
+
+
+# ── 主流程 ────────────────────────────────────────────────────────────
+def parse_args(argv):
+    """解析参数：--branch <名称> / --yes（兼容旧用法，均无需确认）。"""
+    branch = DEFAULT_BRANCH
+    for i, arg in enumerate(argv):
+        if arg in ('--branch', '-b') and i + 1 < len(argv):
+            branch = argv[i + 1]
+        elif arg.startswith('--branch='):
+            branch = arg.split('=', 1)[1]
+    branches = [branch]
+    for b in FALLBACK_BRANCHES:
         if b not in branches:
             branches.append(b)
+    return branches
 
+
+def update_via_download(ranked, branches):
+    """从测速结果下载并覆盖（逐个镜像 × 逐个分支尝试）。"""
+    if not ranked:
+        log('无可用镜像源，更新终止', RED)
+        return False
+
+    log(f'首选镜像: {ranked[0]["name"]} '
+        f'({ranked[0]["speed"] / 1024:.0f}KB/s)', GREEN)
+    if len(ranked) > 1:
+        backups = ', '.join(r['name'] for r in ranked[1:4])
+        log(f'备用镜像: {backups}', YELLOW)
+
+    tmp_dir = tempfile.mkdtemp(prefix='bhxz_update_')
+    zip_path = os.path.join(tmp_dir, 'update.zip')
     try:
-        # 逐个镜像 × 逐个分支 × 逐个 URL 格式 尝试
-        success = False
-        for i, (ms, name, base_url) in enumerate(mirrors):
-            log(f'尝试镜像 [{i+1}/{len(mirrors)}]: {name} ({ms}ms)', CYAN)
-
-            mirror_ok = False
+        for i, item in enumerate(ranked):
             for branch in branches:
-                urls = _build_archive_urls(base_url, GITHUB_REPO, branch)
-                for j, url in enumerate(urls):
-                    ok, err = _try_download_zip(url, zip_path)
-                    if not ok:
-                        log(f'  [{branch} / 格式{j+1}] 失败: {err}', YELLOW)
-                        continue
+                url = build_url(item['template'], branch)
+                log(f'尝试下载 [{i + 1}/{len(ranked)}] {item["name"]}（分支 {branch}）', CYAN)
+                ok, err = download_zip(url, zip_path)
+                if not ok:
+                    log(f'  失败: {err}', YELLOW)
+                    continue
 
-                    # 完整性校验：zipfile 能否正常打开 + CRC 校验
-                    try:
-                        with zipfile.ZipFile(zip_path, 'r') as zf:
-                            bad_file = zf.testzip()
-                        if bad_file is not None:
-                            log(f'  [{branch} / 格式{j+1}] ZIP 完整性校验失败: {bad_file}', YELLOW)
-                            continue
-                    except zipfile.BadZipFile as e:
-                        log(f'  [{branch} / 格式{j+1}] ZIP 损坏: {e}', YELLOW)
-                        continue
+                extract_dir = os.path.join(tmp_dir, 'extracted')
+                if os.path.isdir(extract_dir):
+                    shutil.rmtree(extract_dir, ignore_errors=True)
+                os.makedirs(extract_dir, exist_ok=True)
+                with zipfile.ZipFile(zip_path, 'r') as zf:
+                    zf.extractall(extract_dir)
 
-                    mirror_ok = True
-                    success = True
-                    log(f'  下载成功，使用镜像: {name} (分支: {branch})', GREEN)
-                    break
-                if mirror_ok:
-                    break
+                src_dir = _find_source_dir(extract_dir)
+                if not src_dir:
+                    log('  解压后未找到项目目录，重试其他镜像', YELLOW)
+                    continue
 
-            if success:
-                break
+                apply_update(src_dir)
+                return True
 
-        if not success:
-            log('所有镜像源与 URL 格式均失败，请检查网络后重试', RED)
-            return False
-
-        # 解压
-        log('正在解压...', CYAN)
-        extract_dir = os.path.join(tmp_dir, 'extracted')
-        os.makedirs(extract_dir, exist_ok=True)
-        with zipfile.ZipFile(zip_path, 'r') as zf:
-            zf.extractall(extract_dir)
-
-        # zip 内容在 "bhxz-{branch}/" 目录下（分支名可能不同）
-        src_dirs = [d for d in os.listdir(extract_dir) if d.startswith('bhxz-')]
-        if not src_dirs:
-            # 部分镜像解压后直接是项目根目录，没有外层文件夹
-            if 'app.py' in os.listdir(extract_dir):
-                src_dir = extract_dir
-            else:
-                raise Exception('解压后未找到项目目录')
-        else:
-            src_dir = os.path.join(extract_dir, src_dirs[0])
-
-        # 排除文件列表
-        exclude = {
-            'db', 'backups', 'uploads', 'ssl', '.env',
-            '.git', '__pycache__', '*.pyc', '.DS_Store',
-        }
-
-        # 复制文件
-        log('正在覆盖文件...', CYAN)
-        for item in os.listdir(src_dir):
-            if item in exclude:
-                continue
-            src_path = os.path.join(src_dir, item)
-            dst_path = os.path.join(PROJECT_ROOT, item)
-            if os.path.isdir(src_path):
-                if os.path.exists(dst_path):
-                    shutil.rmtree(dst_path, ignore_errors=True)
-                shutil.copytree(src_path, dst_path, ignore=shutil.ignore_patterns('__pycache__', '*.pyc'))
-            else:
-                shutil.copy2(src_path, dst_path)
-
-        log('代码文件已覆盖完成', GREEN)
-        return True
-
+        log('所有镜像与分支均下载失败，请检查网络后重试', RED)
+        return False
     except Exception as e:
-        log(f'下载更新失败: {e}', RED)
+        log(f'更新失败: {e}', RED)
         return False
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
-def run_update():
-    """执行更新主流程。"""
+def main():
     print()
     log('╔══════════════════════════════════════════════╗', CYAN)
-    log('║     滨海小镇 - 一键更新脚本                   ║', CYAN)
+    log('║     滨海小镇 - 一键更新（纯下载覆盖）         ║', CYAN)
     log('╚══════════════════════════════════════════════╝', CYAN)
+    log(f'项目目录: {PROJECT_ROOT}')
+    log(f'仓库: {GITHUB_REPO}')
     print()
 
-    # 解析参数
-    skip_confirm = '--yes' in sys.argv or '-y' in sys.argv
+    branches = parse_args(sys.argv[1:])
 
-    # 检测可用镜像（返回全部可用镜像列表，按延迟升序）
-    mirrors = find_best_mirror()
-    if not mirrors:
-        log('无法连接到 GitHub，请检查网络后重试', RED)
+    # 1. 多线程同时测速（整个环节 ≤ 2 秒）
+    ranked = speedtest(branches[0])
+    if not ranked:
+        log('无法连接到任何镜像源，请检查网络后重试', RED)
         return False
 
-    # 统一使用 ZIP 下载方式（即使有 Git 也更稳定）
-    success = update_via_download(mirrors, skip_confirm)
-
-    if not success:
-        log('更新失败！请检查后重试', RED)
+    # 2. 下载并覆盖
+    if not update_via_download(ranked, branches):
         return False
 
-    # 安装依赖
+    # 3. 安装依赖
     print()
     install_requirements()
 
-    # 完成
     print()
     log('╔══════════════════════════════════════════════╗', GREEN)
     log('║     更新完成！                               ║', GREEN)
     log('╚══════════════════════════════════════════════╝', GREEN)
     log('提示: 请手动重启服务器使新代码生效', YELLOW)
-    log('提示: 如果遇到依赖变化，请执行: pip install -r requirements.txt', YELLOW)
     print()
-
     return True
 
 
 if __name__ == '__main__':
     try:
-        success = run_update()
-        sys.exit(0 if success else 1)
+        sys.exit(0 if main() else 1)
     except KeyboardInterrupt:
         print()
         log('已取消更新', YELLOW)
         sys.exit(0)
-    except Exception as e:
-        log(f'更新失败: {e}', RED)
+    except Exception as exc:
+        log(f'更新失败: {exc}', RED)
         import traceback
         traceback.print_exc()
         sys.exit(1)
