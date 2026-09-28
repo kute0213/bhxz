@@ -31,14 +31,22 @@ class PlayerList:
 
 
 # 正则：There are 2 of a max of 520 players online: kute_mc, kute_bot
+# 使用 search + DOTALL，容忍应答前后缀（如换行、服务器前缀），提高解析健壮性
 _LIST_PATTERN = re.compile(
     r'There are (\d+) of a max of (\d+) players online:?\s*(.*)',
-    re.IGNORECASE,
+    re.IGNORECASE | re.DOTALL,
 )
+
+# Minecraft 传统颜色代码（§0-§f、§k-§r 等），应答中可能夹杂导致正则失配
+_COLOR_CODE_RE = re.compile(r'\u00a7.')
 
 
 def parse_player_list(raw: str) -> PlayerList:
     """解析 /list 命令的应答文本。
+
+    兼容以下差异，避免「实际有玩家但列表始终为空」：
+    - 应答前后带有换行、服务器前缀或 Minecraft 颜色代码（§x）
+    - 无玩家在线时的格式：There are 0 of a max of 520 players online:
 
     Args:
         raw: /list 命令的原始应答
@@ -46,16 +54,18 @@ def parse_player_list(raw: str) -> PlayerList:
     Returns:
         解析后的 PlayerList
     """
-    result = PlayerList(raw=raw.strip(), updated_at=time.time())
+    text = (raw or '').strip()
+    result = PlayerList(raw=text, updated_at=time.time())
 
-    if not raw:
+    if not text:
         result.error = 'RCON 无应答'
         return result
 
-    m = _LIST_PATTERN.match(raw)
+    # 去除颜色代码后再匹配，避免 § 干扰玩家名与关键字段
+    normalized = _COLOR_CODE_RE.sub('', text)
+
+    m = _LIST_PATTERN.search(normalized)
     if not m:
-        # 可能无玩家在线时的格式：There are 0 of a max of 520 players online:
-        # 或应答格式不匹配
         result.error = '无法解析玩家列表'
         return result
 
