@@ -290,7 +290,7 @@ os.makedirs(UPLOADS_BACKUP_DIR, exist_ok=True)
 DISCUSSION_REFRESH_INTERVAL = 5
 
 # 讨论区回复每页加载数量
-REPLIES_PER_PAGE = 10
+REPLIES_PER_PAGE = 5
 
 # ---------------------------------------------------------------------------
 # 外部链接配置
@@ -386,7 +386,7 @@ SETTINGS_REGISTRY = [
 
     # 讨论区
     ('DISCUSSION_REFRESH_INTERVAL', 5, 'int', '回复实时刷新间隔（秒）', '讨论区回复列表自动刷新频率，仅后台可修改', '讨论区配置'),
-    ('REPLIES_PER_PAGE', 10, 'int', '回复每页加载数量', '讨论区回复列表每次加载的回复数量', '讨论区配置'),
+    ('REPLIES_PER_PAGE', 5, 'int', '回复每页加载数量', '讨论区回复列表每次加载的回复数量', '讨论区配置'),
 
     # 一键更新
     ('BUILD_STATIC_ON_UPDATE', False, 'bool', '更新时构建静态资源', '开启后每次更新都会重新下载外部 CDN 资源（Monaco、hls.js 等），关闭则仅同步代码', '一键更新'),

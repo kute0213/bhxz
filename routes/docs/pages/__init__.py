@@ -5,9 +5,9 @@ from flask import jsonify, abort
 from core.helpers import render_page
 from routes.docs import docs_bp
 
-# docs/ 目录位于项目根目录下
+# docs/ 目录位于项目根目录下（routes/docs/pages/__init__.py 往上 4 层）
 DOCS_DIR = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))),
     'docs'
 )
 

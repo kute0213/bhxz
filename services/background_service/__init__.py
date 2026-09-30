@@ -358,7 +358,7 @@ def get_backgrounds(status=None, user_id=None):
         return [dict(r) for r in rows]
 
 
-ADMIN_PAGE_SIZE = 10
+ADMIN_PAGE_SIZE = 5
 
 
 def get_backgrounds_page(status=None, page=1, page_size=ADMIN_PAGE_SIZE):

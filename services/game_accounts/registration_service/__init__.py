@@ -9,7 +9,7 @@ from typing import List, Optional, Tuple
 from core.db import get_db
 
 # 列表分页大小：每次加载 10 条，前端点击「加载更多」再取下一页
-PAGE_SIZE = 10
+PAGE_SIZE = 5
 
 
 # ---------------------------------------------------------------------------

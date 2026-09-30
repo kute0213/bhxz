@@ -196,62 +196,62 @@
 
             <!-- 导航链接 -->
             <div class="space-y-1 flex-1">
-                <div class="text-xs text-cream/40 font-medium uppercase tracking-wider px-4 mb-2">导航</div>
-                <a href="{{ url_for('main.home') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors">
+                <div class="text-xs text-cream/40 font-medium uppercase tracking-wider px-4 mb-2">主页</div>
+                <a href="{{ url_for('main.home') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors{% if request.endpoint == 'main.home' %} active{% endif %}">
                     <i data-lucide="home" class="w-5 h-5"></i>
-                    <span>首页</span>
+                    <span>主页</span>
+                </a>
+
+                <div class="text-xs text-cream/40 font-medium uppercase tracking-wider px-4 mb-2 mt-6">服务器</div>
+                <a href="{{ url_for('main.server_status') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors{% if request.endpoint == 'main.server_status' %} active{% endif %}">
+                    <i data-lucide="activity" class="w-5 h-5"></i>
+                    <span>服务器状态</span>
                 </a>
                 <a href="{{ url_for('guides.guide_list') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors{% if request.endpoint and request.endpoint.startswith('guides.') %} active{% endif %}">
                     <i data-lucide="book-open" class="w-5 h-5"></i>
                     <span>服务器指南</span>
                 </a>
-                <a href="{{ url_for('docs.docs_index') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors{% if request.endpoint == 'docs.docs_index' %} active{% endif %}">
-                    <i data-lucide="file-text" class="w-5 h-5"></i>
-                    <span>文档中心</span>
-                </a>
-                <a href="{{ url_for('discussion.list') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors">
-                    <i data-lucide="message-square" class="w-5 h-5"></i>
-                    <span>讨论</span>
-                </a>
-                <a href="{{ url_for('main.server_status') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors">
-                    <i data-lucide="activity" class="w-5 h-5"></i>
-                    <span>服务器状态</span>
-                </a>
-
-                <div class="text-xs text-cream/40 font-medium uppercase tracking-wider px-4 mb-2 mt-6">服务器互动</div>
                 <a href="{{ url_for('buildings.building_list') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors{% if request.endpoint and request.endpoint.startswith('buildings.') %} active{% endif %}">
                     <i data-lucide="building-2" class="w-5 h-5"></i>
                     <span>公共建筑</span>
+                </a>
+
+                <div class="text-xs text-cream/40 font-medium uppercase tracking-wider px-4 mb-2 mt-6">社区</div>
+                <a href="{{ url_for('discussion.list') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors{% if request.endpoint and request.endpoint.startswith('discussion.') %} active{% endif %}">
+                    <i data-lucide="message-square" class="w-5 h-5"></i>
+                    <span>讨论</span>
+                </a>
+                <a href="{{ url_for('main.music_page') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors{% if request.endpoint and request.endpoint.startswith('main.music') %} active{% endif %}">
+                    <i data-lucide="music" class="w-5 h-5"></i>
+                    <span>大喇叭音频</span>
+                </a>
+                <a href="{{ url_for('backgrounds.background_list_page') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors{% if request.endpoint and request.endpoint.startswith('backgrounds.') %} active{% endif %}">
+                    <i data-lucide="image" class="w-5 h-5"></i>
+                    <span>官网背景图片</span>
+                </a>
+
+                <div class="text-xs text-cream/40 font-medium uppercase tracking-wider px-4 mb-2 mt-6">我的</div>
+                <a href="{{ url_for('main.settings') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors{% if request.endpoint == 'main.settings' %} active{% endif %}">
+                    <i data-lucide="settings" class="w-5 h-5"></i>
+                    <span>账户设置</span>
+                </a>
+                {% if user %}
+                <a href="{{ url_for('account_apply.ban_apply_page') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors{% if request.endpoint == 'account_apply.ban_apply_page' %} active{% endif %}">
+                    <i data-lucide="shield-x" class="w-5 h-5"></i>
+                    <span>申请封禁玩家</span>
                 </a>
                 <a href="{{ url_for('account_apply.apply_page') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors{% if request.endpoint == 'account_apply.apply_page' %} active{% endif %}">
                     <i data-lucide="user-plus" class="w-5 h-5"></i>
                     <span>申请服务器账号</span>
                 </a>
-                <a href="{{ url_for('account_apply.ban_apply_page') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors{% if request.endpoint == 'account_apply.ban_apply_page' %} active{% endif %}">
-                    <i data-lucide="shield-x" class="w-5 h-5"></i>
-                    <span>申请封禁玩家</span>
-                </a>
-                <a href="{{ url_for('main.music_page') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors">
-                    <i data-lucide="music" class="w-5 h-5"></i>
-                    <span>大喇叭音频</span>
-                </a>
-                <a href="{{ url_for('backgrounds.background_list_page') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors">
-                    <i data-lucide="image" class="w-5 h-5"></i>
-                    <span>背景图片</span>
-                </a>
+                {% endif %}
 
-                {% if user %}
-                <div class="text-xs text-cream/40 font-medium uppercase tracking-wider px-4 mb-2 mt-6">账户</div>
-                <a href="{{ url_for('main.settings') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors">
-                    <i data-lucide="settings" class="w-5 h-5"></i>
-                    <span>账户设置</span>
-                </a>
-                {% if user.is_admin %}
+                {% if user and user.is_admin %}
+                <div class="text-xs text-cream/40 font-medium uppercase tracking-wider px-4 mb-2 mt-6">管理</div>
                 <a href="{{ url_for('admin.admin_page') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors">
                     <i data-lucide="settings-2" class="w-5 h-5"></i>
                     <span>管理中心</span>
                 </a>
-                {% endif %}
                 {% endif %}
             </div>
 
@@ -289,57 +289,51 @@
                     <span class="text-lg sm:text-xl font-bold text-gold-400 hidden xs:inline">滨海小镇</span>
                 </a>
 
-                <!-- 桌面端主导航：首页直达，导航 / 互动 / 账号为悬停下拉 -->
+                <!-- 桌面端主导航：主页直达 + 服务器 / 社区 / 我的 下拉 -->
                 <div class="desktop-nav" aria-label="主导航">
                     <a href="{{ url_for('main.home') }}" class="desktop-nav-link{% if request.endpoint == 'main.home' %} active{% endif %}">
-                        <i data-lucide="home"></i><span>首页</span>
+                        <i data-lucide="home"></i><span>主页</span>
                     </a>
+
                     <div class="desktop-nav-item">
                         <button type="button" class="desktop-nav-toggle" aria-haspopup="true">
-                            <i data-lucide="menu"></i><span>导航</span>
+                            <i data-lucide="server"></i><span>服务器</span>
                             <i data-lucide="chevron-down" class="nav-caret"></i>
                         </button>
                         <div class="desktop-nav-dropdown" role="menu">
-                            <a href="{{ url_for('guides.guide_list') }}" class="desktop-nav-dropdown-link{% if request.endpoint and request.endpoint.startswith('guides.') %} active{% endif %}" role="menuitem">
-                                <i data-lucide="book-open"></i><span>服务器指南</span>
-                            </a>
-                            <a href="{{ url_for('docs.docs_index') }}" class="desktop-nav-dropdown-link{% if request.endpoint == 'docs.docs_index' %} active{% endif %}" role="menuitem">
-                                <i data-lucide="file-text"></i><span>文档中心</span>
-                            </a>
-                            <a href="{{ url_for('discussion.list') }}" class="desktop-nav-dropdown-link{% if request.endpoint and request.endpoint.startswith('discussion.') %} active{% endif %}" role="menuitem">
-                                <i data-lucide="message-square"></i><span>讨论</span>
-                            </a>
                             <a href="{{ url_for('main.server_status') }}" class="desktop-nav-dropdown-link{% if request.endpoint == 'main.server_status' %} active{% endif %}" role="menuitem">
                                 <i data-lucide="activity"></i><span>服务器状态</span>
                             </a>
-                        </div>
-                    </div>
-                    <div class="desktop-nav-item">
-                        <button type="button" class="desktop-nav-toggle" aria-haspopup="true">
-                            <i data-lucide="users"></i><span>服务器互动</span>
-                            <i data-lucide="chevron-down" class="nav-caret"></i>
-                        </button>
-                        <div class="desktop-nav-dropdown" role="menu">
+                            <a href="{{ url_for('guides.guide_list') }}" class="desktop-nav-dropdown-link{% if request.endpoint and request.endpoint.startswith('guides.') %} active{% endif %}" role="menuitem">
+                                <i data-lucide="book-open"></i><span>服务器指南</span>
+                            </a>
                             <a href="{{ url_for('buildings.building_list') }}" class="desktop-nav-dropdown-link{% if request.endpoint and request.endpoint.startswith('buildings.') %} active{% endif %}" role="menuitem">
                                 <i data-lucide="building-2"></i><span>公共建筑</span>
                             </a>
-                            <a href="{{ url_for('account_apply.apply_page') }}" class="desktop-nav-dropdown-link{% if request.endpoint == 'account_apply.apply_page' %} active{% endif %}" role="menuitem">
-                                <i data-lucide="user-plus"></i><span>申请服务器账号</span>
-                            </a>
-                            <a href="{{ url_for('account_apply.ban_apply_page') }}" class="desktop-nav-dropdown-link{% if request.endpoint == 'account_apply.ban_apply_page' %} active{% endif %}" role="menuitem">
-                                <i data-lucide="shield-x"></i><span>申请封禁玩家</span>
+                        </div>
+                    </div>
+
+                    <div class="desktop-nav-item">
+                        <button type="button" class="desktop-nav-toggle" aria-haspopup="true">
+                            <i data-lucide="users"></i><span>社区</span>
+                            <i data-lucide="chevron-down" class="nav-caret"></i>
+                        </button>
+                        <div class="desktop-nav-dropdown" role="menu">
+                            <a href="{{ url_for('discussion.list') }}" class="desktop-nav-dropdown-link{% if request.endpoint and request.endpoint.startswith('discussion.') %} active{% endif %}" role="menuitem">
+                                <i data-lucide="message-square"></i><span>讨论</span>
                             </a>
                             <a href="{{ url_for('main.music_page') }}" class="desktop-nav-dropdown-link{% if request.endpoint and request.endpoint.startswith('main.music') %} active{% endif %}" role="menuitem">
                                 <i data-lucide="music"></i><span>大喇叭音频</span>
                             </a>
                             <a href="{{ url_for('backgrounds.background_list_page') }}" class="desktop-nav-dropdown-link{% if request.endpoint and request.endpoint.startswith('backgrounds.') %} active{% endif %}" role="menuitem">
-                                <i data-lucide="image"></i><span>背景图片</span>
+                                <i data-lucide="image"></i><span>官网背景图片</span>
                             </a>
                         </div>
                     </div>
+
                     <div class="desktop-nav-item">
                         <button type="button" class="desktop-nav-toggle" aria-haspopup="true">
-                            <i data-lucide="user"></i><span>账号</span>
+                            <i data-lucide="user"></i><span>我的</span>
                             <i data-lucide="chevron-down" class="nav-caret"></i>
                         </button>
                         <div class="desktop-nav-dropdown" role="menu">
@@ -347,7 +341,14 @@
                             <a href="{{ url_for('main.settings') }}" class="desktop-nav-dropdown-link{% if request.endpoint == 'main.settings' %} active{% endif %}" role="menuitem">
                                 <i data-lucide="settings"></i><span>账户设置</span>
                             </a>
+                            <a href="{{ url_for('account_apply.ban_apply_page') }}" class="desktop-nav-dropdown-link{% if request.endpoint == 'account_apply.ban_apply_page' %} active{% endif %}" role="menuitem">
+                                <i data-lucide="shield-x"></i><span>申请封禁玩家</span>
+                            </a>
+                            <a href="{{ url_for('account_apply.apply_page') }}" class="desktop-nav-dropdown-link{% if request.endpoint == 'account_apply.apply_page' %} active{% endif %}" role="menuitem">
+                                <i data-lucide="user-plus"></i><span>申请服务器账号</span>
+                            </a>
                             {% if user.is_admin %}
+                            <div class="desktop-nav-dropdown-divider" role="separator"></div>
                             <a href="{{ url_for('admin.admin_page') }}" class="desktop-nav-dropdown-link{% if request.endpoint and request.endpoint.startswith('admin.') %} active{% endif %}" role="menuitem">
                                 <i data-lucide="settings-2"></i><span>管理中心</span>
                             </a>
@@ -357,6 +358,13 @@
                                 <i data-lucide="log-out"></i><span>退出登录</span>
                             </a>
                             {% else %}
+                            <a href="{{ url_for('account_apply.ban_apply_page') }}" class="desktop-nav-dropdown-link" role="menuitem">
+                                <i data-lucide="shield-x"></i><span>申请封禁玩家</span>
+                            </a>
+                            <a href="{{ url_for('account_apply.apply_page') }}" class="desktop-nav-dropdown-link" role="menuitem">
+                                <i data-lucide="user-plus"></i><span>申请服务器账号</span>
+                            </a>
+                            <div class="desktop-nav-dropdown-divider" role="separator"></div>
                             <a href="{{ url_for('main.login') }}" class="desktop-nav-dropdown-link{% if request.endpoint == 'main.login' %} active{% endif %}" role="menuitem">
                                 <i data-lucide="log-in"></i><span>登录</span>
                             </a>

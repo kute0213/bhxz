@@ -103,7 +103,7 @@ def _ensure_unique_slug(conn, base_slug, exclude_id=None):
     return slug
 
 
-PAGE_SIZE = 10
+PAGE_SIZE = 5
 
 
 @guides_bp.route('/api/guides/list', methods=['GET'])

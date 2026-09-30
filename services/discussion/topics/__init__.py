@@ -8,7 +8,7 @@ from core.system.logger import log
 from services.attachment_service import save_attachments, clean_attachment_json, parse_attachment_json
 from services.discussion.categories import get_category_dict
 
-PAGE_SIZE = 10
+PAGE_SIZE = 5
 
 
 def get_topic_count(category_id=None):
