@@ -117,7 +117,7 @@ def delete_reply(reply_id, user_id, is_admin, ip_address):
 
 def get_replies_page(topic_id, page):
     """分页获取回复。"""
-    per_page = 5  # 强制每页 5 条，API 无法覆盖
+    per_page = get_config_value('REPLIES_PER_PAGE', 5)
     if page < 1:
         page = 1
 

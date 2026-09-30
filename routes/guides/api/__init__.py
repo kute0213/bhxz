@@ -103,7 +103,8 @@ def _ensure_unique_slug(conn, base_slug, exclude_id=None):
     return slug
 
 
-PAGE_SIZE = 5
+from config import get_config_value
+PAGE_SIZE = get_config_value('PUBLIC_PAGE_SIZE', 5)
 
 
 @guides_bp.route('/api/guides/list', methods=['GET'])

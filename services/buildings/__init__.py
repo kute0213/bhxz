@@ -9,7 +9,8 @@ from datetime import datetime
 from core.db import get_db
 
 # 列表分页大小：每次加载 10 条，前端点击「加载更多」再取下一页
-PAGE_SIZE = 5
+from config import get_config_value
+PAGE_SIZE = get_config_value('PUBLIC_PAGE_SIZE', 5)
 
 # 标签限制：最多 10 个，每个不超过 12 字
 MAX_TAGS = 10
