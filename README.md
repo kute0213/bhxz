@@ -111,6 +111,7 @@ python scripts/build/package.py
 │   ├── attachment_service/  #   附件上传/清理
 │   ├── background_service/  #   背景图片业务（WebP 转换 + 响应式变体）
 │   ├── cleanup_service/     #   被驳回内容自动清理
+│   ├── search/              #   全站搜索（跨建筑/指南/音频/讨论聚合）
 │   ├── settings_manager/    #   系统设置管理
 │   └── sitemap_cache/       #   Sitemap 缓存服务
 ├── routes/       # HTTP 路由层（Flask Blueprint）
@@ -126,6 +127,7 @@ python scripts/build/package.py
 │   ├── guides/         # 服务器指南（页面+API）
 │   ├── main/           # 主站（登录/注册/设置/音乐）
 │   ├── public/         # 公开文件服务
+│   ├── search/         # 全站搜索（独立搜索页 + 聚合搜索 API）
 │   └── sitemap/        # Sitemap & robots.txt（自动添加 Crawl-delay 防防火墙误判）
 ├── templates/    # Jinja2 模板（命名规范见 docs/DEVELOPMENT.md）
 │   ├── admin/          # 管理后台页面（如 users.html、settings.html，无 admin_ 前缀）
@@ -139,6 +141,7 @@ python scripts/build/package.py
 │   ├── guides/         # 服务器指南页面（index / detail / form）
 │   ├── buildings/      # 公共建筑（index / create / detail）
 │   ├── music/          # 大喇叭音频页面（index / my / favorites / upload）
+│   ├── search/         # 全站搜索页（index）
 │   ├── macros/         # 通用模板宏（模态框/编辑器/进度条/音乐）
 │   ├── static/         # 静态资源（CSS/JS/本地化第三方库，随模板目录存放）
 │   └── ...             # 根级通用页面（base.html 布局、index.html 首页、error_simple.html 精简错误页）
@@ -209,9 +212,19 @@ python scripts/build/package.py
 
 * **防火墙数据库单写入线程**：所有写操作经队列提交给唯一写入线程顺序执行，相邻写操作合并为事务批量提交，彻底避免多线程并发写入 DuckDB 导致的锁表；封禁 / 白名单 / 账号封禁等高频查询走内存缓存（定期同步），查询性能显著提升
 
+### 全站搜索
+
+* **独立搜索页 `/search`**：全站统一搜索入口。页面上的「搜索框」与导航栏搜索按钮均为跳转入口，点击后打开独立搜索页，页内顶部提供「返回」按钮，点击即回到上一页
+* **跨模块聚合**：一次搜索同时覆盖**公共建筑 / 服务器指南 / 大喇叭音频 / 讨论帖子**四类内容，按分类分组展示并显示各类命中数量
+* **分类筛选**：顶部标签可切换「全部 / 公共建筑 / 服务器指南 / 大喇叭音频 / 讨论」，URL 参数 `?type=` 指定初始分类（如 `/search?type=guides` 直接进入「服务器指南」分类）
+* **输入即搜**：输入关键词后自动防抖搜索（`/api/search`），无刷新渲染结果，支持清空与空态提示
+* 每一类结果条数由系统设置 `SEARCH_PER_PAGE` 控制，接口不接受前端传入的数量参数
+
 ### 服务器指南
 
 * 卡片式列表页，支持置顶与按标题自动排序
+
+* **指南搜索**：指南列表页顶部提供搜索入口（点击打开全站搜索页并定位到「服务器指南」分类）；列表 API `/api/guides/list` 与列表页均支持 `q` 关键词参数，按标题与摘要模糊匹配
 
 * Markdown 详情页（标题锚点、代码一键复制）
 
@@ -222,7 +235,7 @@ python scripts/build/package.py
 ### 公共建筑
 
 * 公共建筑列表页面，用户可发布自己的建筑（标题、领地名、介绍、使用方式、注意事项），**发布后进入待审核状态，管理员审核通过才公开**
-* **搜索与标签**：支持按标题与标签模糊搜索，标签可多选管理，列表默认**按收藏数量排序**
+* **搜索与标签**：列表页顶部搜索框点击后跳转全站搜索页（定位「公共建筑」分类）；建筑列表 API `/api/buildings` 支持按标题与标签模糊搜索，标签可多选管理，列表默认**按收藏数量排序**
 * **收藏**：登录用户可收藏/取消收藏建筑，收藏数参与排序
 * 一键复制传送指令 `/res tp 领地名`
 * 评论功能：登录用户可发表评论，作者/管理员可删除评论
@@ -232,7 +245,7 @@ python scripts/build/package.py
 ### 讨论区
 
 * 分类筛选、置顶优先
-* **列表每次加载 10 条**，点击「加载更多」通过 API 无刷新追加
+* **列表分页**：每次加载条数由系统设置 `DISCUSSION_TOPICS_PER_PAGE` 控制（默认 5），点击「加载更多」通过 API 无刷新追加
 
 * 回复实时刷新（默认 5 秒）
 
@@ -252,7 +265,7 @@ python scripts/build/package.py
 
 * **审核结果邮件通知**：管理员通过/驳回公开申请后，自动向上传者邮箱发送磨砂玻璃风格的审核结果邮件（通过 / 未通过状态卡），邮件未启用或上传者无邮箱时自动跳过
 
-* **公开音频名称 / 标签搜索**：公开音频列表支持按名称或标签模糊搜索（`/music?q=关键词`，同时匹配 `title` 与 `tags` 列），无结果时给出空态提示
+* **公开音频名称 / 标签搜索**：公开音频列表顶部搜索框点击后跳转全站搜索页（定位「大喇叭音频」分类）；音频列表 API 亦支持 `q` 关键词（同时匹配 `title` 与 `tags` 列）
 
 * **音频收藏**：公开音频列表 / 我的音频均提供「收藏」按钮，可收藏**别人上传的公开音频**，收藏后可在「我的收藏」页（`/music/my/favorites`）统一查看与播放；同一用户对同一音频仅一条收藏，重复点击即取消；删除音频时自动级联清理收藏记录
 
@@ -352,7 +365,9 @@ python scripts/build/package.py
 
 * **DDoS 防护**：总开关、检测强度（low=宽松 300 次/10 秒 / medium=中等 150 次/10 秒 / high=严格 80 次/10 秒）、首次封禁时长（分钟，0 为直接永久封禁）、永久封禁触发次数（违规记录时间窗口内多次触发自动升级永久封禁）、违规记录时间窗口（小时）
 
-* **讨论区配置**：回复实时刷新间隔、每页加载数量
+* **讨论区配置**：回复实时刷新间隔
+
+* **列表分页**：公共建筑 / 大喇叭音频 / 服务器指南 / 讨论帖子 / 讨论回复 / 后台背景图片 / 后台账号申请 / 全站搜索 各列表每次加载条数（1–100，默认 5）。**分页大小仅可在此处或 `config.py` 修改，用户调用接口传入的参数一律被忽略**
 
 * **外部链接**：卫星地图地址、QQ 群链接
 
@@ -386,7 +401,14 @@ python scripts/build/package.py
 | `BACKUP_SCHEDULED_TIME`       | 每日自动备份时间                                  | `03:00`                                     |
 | `MAX_BACKUPS`                 | 最大保留备份份数                                  | `30`                                        |
 | `DISCUSSION_REFRESH_INTERVAL` | 讨论区回复刷新间隔                                 | `5s`                                        |
-| `REPLIES_PER_PAGE`            | 讨论区回复每页数量                                 | `10`                                        |
+| `BUILDINGS_PER_PAGE`          | 公共建筑列表每页数量（1–100，接口传参无效）                 | `5`                                         |
+| `MUSIC_PER_PAGE`              | 大喇叭音频列表每页数量（1–100，接口传参无效）                | `5`                                         |
+| `GUIDES_PER_PAGE`             | 服务器指南列表每页数量（1–100，接口传参无效）                | `5`                                         |
+| `DISCUSSION_TOPICS_PER_PAGE`  | 讨论帖子列表每页数量（1–100，接口传参无效）                 | `5`                                         |
+| `REPLIES_PER_PAGE`            | 讨论区回复每页数量（1–100，接口传参无效）                  | `5`                                         |
+| `BACKGROUNDS_PER_PAGE`        | 后台背景图片列表每页数量（1–100，接口传参无效）               | `5`                                         |
+| `GAME_ACCOUNTS_PER_PAGE`      | 后台游戏账号申请列表每页数量（1–100，接口传参无效）             | `5`                                         |
+| `SEARCH_PER_PAGE`             | 全站搜索每类结果条数（1–100，接口传参无效）                 | `5`                                         |
 | `LOG_LEVEL`                   | 日志输出等级（DEBUG/INFO/WARNING/ERROR/CRITICAL） | `INFO`                                      |
 | `FAVICON_ICON`                | 网站图标（可选 compass/mountain/star/heart）      | `compass`                                   |
 | `MAP_URL`                     | 卫星地图地址                                    | `https://map.bhxz.tw.kg`                    |
@@ -461,7 +483,7 @@ export ENABLE_SSL=1 && python app.py
 | ------ | ---------------------------------------------------- | ---------------- |
 | GET    | `/admin/game-accounts`                               | 游戏账号管理页面         |
 | GET    | `/admin/api/game-accounts/applications`              | 获取注册申请列表         |
-| GET    | `/admin/api/game-accounts/applications/list`         | 分页获取注册申请（每次 10 条，可选 `status` 筛选） |
+| GET    | `/admin/api/game-accounts/applications/list`         | 分页获取注册申请（每页条数由 `GAME_ACCOUNTS_PER_PAGE` 控制，可选 `status` 筛选） |
 | POST   | `/admin/api/game-accounts/applications/<id>/approve` | 批准申请（自动 RCON 注册） |
 | POST   | `/admin/api/game-accounts/applications/<id>/reject`  | 驳回申请             |
 | GET    | `/admin/api/game-accounts/bans`                      | 获取封禁列表           |
@@ -470,7 +492,7 @@ export ENABLE_SSL=1 && python app.py
 
 ### 管理后台列表 API（管理员，分页）
 
-管理后台「用户 / 指南 / 音乐列表 / 讨论管理 / 背景图片 / 游戏账号申请」列表均为每次加载 10 条 + 点击「加载更多」无刷新追加，页面路由仅渲染第 1 页。
+管理后台「用户 / 指南 / 音乐列表 / 讨论管理 / 背景图片 / 游戏账号申请」列表均为点击「加载更多」无刷新追加，页面路由仅渲染第 1 页；每页条数由系统设置「列表分页」分类下的对应配置项控制，接口不接受前端传入的数量参数。
 
 | 方法 | 路径                                          | 说明                          |
 | -- | ------------------------------------------- | --------------------------- |
@@ -483,7 +505,7 @@ export ENABLE_SSL=1 && python app.py
 
 ### 公共建筑 API（搜索 / 标签 / 收藏）
 
-公共建筑列表经 `GET /api/buildings` 无刷新搜索与分页加载（每次 10 条），搜索关键词同时匹配标题与标签；列表默认按收藏数量排序。所有接口均纳入 API 防火墙计数。
+公共建筑列表经 `GET /api/buildings` 无刷新搜索与分页加载（每页条数由 `BUILDINGS_PER_PAGE` 控制，接口不接受前端传入的数量参数），搜索关键词同时匹配标题与标签；列表默认按收藏数量排序。所有接口均纳入 API 防火墙计数。
 
 | 方法   | 路径                                  | 说明                              |
 | ---- | ----------------------------------- | ------------------------------- |
@@ -493,6 +515,19 @@ export ENABLE_SSL=1 && python app.py
 | POST | `/buildings/<id>/comment`           | 发表评论（需验证码）                      |
 | POST | `/buildings/comment/<id>/delete`    | 删除评论（作者/建筑作者/管理员）               |
 | POST | `/buildings/<id>/report`            | 举报建筑                            |
+
+### 全站搜索 API
+
+| 方法  | 路径             | 说明                                                        |
+| --- | -------------- | --------------------------------------------------------- |
+| GET | `/search`      | 独立搜索页（参数 `q` 初始关键词、`type` 初始分类：`buildings/guides/music/topics`） |
+| GET | `/api/search`  | 聚合搜索 API（参数 `q` 关键词），返回四类命中结果与数量；每类条数由 `SEARCH_PER_PAGE` 控制，请求参数无法覆盖 |
+
+### 服务器指南 API
+
+| 方法  | 路径                   | 说明                                                    |
+| --- | -------------------- | ----------------------------------------------------- |
+| GET | `/api/guides/list`   | 指南列表（`page` 页码、`my=1` 我的指南、`q` 关键词匹配标题与摘要；每页条数由 `GUIDES_PER_PAGE` 控制） |
 
 ### 社区 AJAX 端点
 
@@ -678,6 +713,7 @@ workspace/
 │   ├── attachment_service/   #   附件上传/清理
 │   ├── background_service/   #   背景图片业务（WebP 转换 + 响应式变体）
 │   ├── cleanup_service/      #   被驳回内容自动清理（统一定时调度）
+│   ├── search/               #   全站搜索（跨建筑/指南/音频/讨论聚合）
 │   ├── settings_manager/     #   系统设置管理
 │   ├── sitemap_cache/        #   Sitemap 缓存服务
 ├── routes/                   # HTTP 路由层
@@ -691,6 +727,7 @@ workspace/
 │   ├── game_accounts/        #   申请账号（页面+API，纯申请注册）
 │   ├── guides/               #   服务器指南（页面+API）
 │   ├── public/               #   公开文件服务
+│   ├── search/               #   全站搜索（独立搜索页 + 聚合搜索 API）
 │   └── sitemap/              #   站点地图 & robots.txt
 ├── templates/                # Jinja2 模板（命名规范见 docs/DEVELOPMENT.md）
 │   ├── admin/                #   管理后台页面（无 admin_ 前缀）
@@ -704,6 +741,7 @@ workspace/
 │   ├── guides/               #   服务器指南页面（index / detail / form）
 │   ├── buildings/            #   公共建筑（index / create / detail）
 │   ├── music/                #   大喇叭音频页面（index / my / favorites / upload）
+│   ├── search/               #   全站搜索页（index）
 │   ├── macros/               #   通用模板宏（模态框/编辑器/进度条/音乐）
 │   ├── static/               #   静态资源（CSS/JS/本地化第三方库，构建生成 lib/）
 │   └── ...                   #   根级：base.html / index.html / error_simple.html

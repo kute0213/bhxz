@@ -8,6 +8,7 @@ from flask import request, jsonify
 from core.auth import login_required, get_current_user
 from core.db import get_db
 from core.shared.captcha import captcha_service
+from config import get_page_size
 from services.mail import email_service, guide_review_pending as build_pending_html
 from routes.guides import guides_bp
 
@@ -103,13 +104,9 @@ def _ensure_unique_slug(conn, base_slug, exclude_id=None):
     return slug
 
 
-from config import get_config_value
-PAGE_SIZE = get_config_value('PUBLIC_PAGE_SIZE', 5)
-
-
 @guides_bp.route('/api/guides/list', methods=['GET'])
 def api_guides_list():
-    """指南列表 API（分页，每次 10 条）。
+    """指南列表 API（分页，分页大小由系统设置 GUIDES_PER_PAGE 控制）。
 
     参数：
         page  页码，从 1 开始
@@ -124,6 +121,9 @@ def api_guides_list():
 
     my_mode = bool(user and request.args.get('my') == '1')
     keyword = (request.args.get('q') or '').strip()[:60]
+
+    # 分页大小只由后台设置决定，忽略任何前端传入的参数
+    page_size = get_page_size('GUIDES_PER_PAGE', 5)
 
     where = []
     params = []
@@ -156,7 +156,7 @@ def api_guides_list():
             {order_sql}
             LIMIT ? OFFSET ?
             """,
-            params + [PAGE_SIZE, (page - 1) * PAGE_SIZE],
+            params + [page_size, (page - 1) * page_size],
         ).fetchall()
         guides = [dict(r) for r in rows]
     finally:
@@ -166,9 +166,9 @@ def api_guides_list():
         'success': True,
         'guides': guides,
         'page': page,
-        'page_size': PAGE_SIZE,
+        'page_size': page_size,
         'total': total,
-        'has_more': page * PAGE_SIZE < total,
+        'has_more': page * page_size < total,
         'my_mode': my_mode,
         'keyword': keyword,
     })

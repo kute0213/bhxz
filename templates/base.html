@@ -196,7 +196,12 @@
 
             <!-- 导航链接 -->
             <div class="space-y-1 flex-1">
-                <div class="text-xs text-cream/40 font-medium uppercase tracking-wider px-4 mb-2">主页</div>
+                <button type="button" data-search-open="all"
+                        class="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors text-left">
+                    <i data-lucide="search" class="w-5 h-5"></i>
+                    <span>搜索</span>
+                </button>
+                <div class="text-xs text-cream/40 font-medium uppercase tracking-wider px-4 mb-2 mt-6">主页</div>
                 <a href="{{ url_for('main.home') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors{% if request.endpoint == 'main.home' %} active{% endif %}">
                     <i data-lucide="home" class="w-5 h-5"></i>
                     <span>主页</span>
@@ -376,8 +381,15 @@
                     </div>
                 </div>
 
-                <!-- 右侧：用户信息 + 汉堡菜单 -->
+                <!-- 右侧：搜索入口 + 用户信息 + 汉堡菜单 -->
                 <div class="flex items-center gap-2 sm:gap-3">
+                    <!-- 全站搜索入口：点击跳转独立搜索页 -->
+                    <button type="button" data-search-open="all"
+                            class="nav-search-trigger hidden md:inline-flex items-center gap-2 pl-3 pr-3 lg:pr-4 py-2 rounded-xl border border-gold-400/20 bg-gold-400/5 text-cream/70 hover:text-gold-400 hover:border-gold-400/40 transition-colors text-sm"
+                            aria-label="全站搜索">
+                        <i data-lucide="search" class="w-4 h-4"></i>
+                        <span class="hidden lg:inline">搜索…</span>
+                    </button>
                     <!-- 用户信息（桌面端显示） -->
                     <div class="hidden sm:flex items-center gap-3 pr-3 border-r border-gold-400/10">
                         {% if user %}
@@ -426,8 +438,8 @@
 
     <script src="{{ url_for('static', filename='js/core/base.js', v='24') }}"></script>
     <script src="{{ url_for('static', filename='js/core/uploader.js', v='1') }}"></script>
-    {# 全站统一搜索组件：点击放大置顶 + 输入即 API 搜索（无刷新） #}
-    <script src="{{ url_for('static', filename='js/core/search.js', v='2') }}"></script>
+    {# 全站统一搜索入口：点击「搜索框」跳转独立搜索页 /search（详见 search.js） #}
+    <script src="{{ url_for('static', filename='js/core/search.js', v='3') }}"></script>
 
     {# 统一弹窗控制器 #}
     {% from 'macros/modal.html' import modal_close_script %}

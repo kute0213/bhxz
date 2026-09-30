@@ -34,7 +34,6 @@ def api_buildings_list():
             user_id=user['id'],
             search=query,
             page=page,
-            page_size=buildings_service.PAGE_SIZE,
         )
         favorite_ids = {b['id'] for b in items}
     else:
@@ -42,7 +41,6 @@ def api_buildings_list():
             search=query,
             tag=tag,
             page=page,
-            page_size=buildings_service.PAGE_SIZE,
             author_id=user['id'] if user else None,
             my_mode=my_mode,
         )
@@ -145,10 +143,11 @@ def add_comment(building_id):
             return jsonify({'success': False, 'message': '该建筑尚未审核通过'})
 
         now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        conn.execute(
+        cursor = conn.execute(
             "INSERT INTO building_comments (building_id, user_id, content, created_at) VALUES (?, ?, ?, ?)",
             (building_id, user['id'], content, now),
         )
+        comment_id = cursor.lastrowid
         conn.commit()
         record_activity(user_id=user['id'], content_type='building_comment', content=content)
 
@@ -156,7 +155,7 @@ def add_comment(building_id):
             'success': True,
             'message': '评论已发布',
             'comment': {
-                'id': conn.last_insert_rowid(),
+                'id': comment_id,
                 'user_id': user['id'],
                 'username': user['username'],
                 'content': content,

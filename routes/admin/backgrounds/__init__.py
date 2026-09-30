@@ -25,7 +25,7 @@ def admin_backgrounds_page():
         pending_bgs=pending_bgs, pending_total=pending_total,
         approved_bgs=approved_bgs, approved_total=approved_total,
         rejected_bgs=rejected_bgs, rejected_total=rejected_total,
-        page_size=background_service.ADMIN_PAGE_SIZE,
+        page_size=background_service.get_admin_page_size(),
         status_labels=background_service.STATUS_LABELS,
     )
 
@@ -52,7 +52,7 @@ def admin_backgrounds_api():
     if status not in background_service.STATUS_LABELS:
         return jsonify({'success': False, 'message': '无效的状态'}), 400
 
-    page_size = background_service.ADMIN_PAGE_SIZE
+    page_size = background_service.get_admin_page_size()
     items, total = background_service.get_backgrounds_page(
         status=status, page=page, page_size=page_size)
 

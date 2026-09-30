@@ -10,6 +10,7 @@ from core.helpers import render_page
 from routes.admin import admin_bp
 import services.music as music_service
 from services.mail import email_service, music_review_result as build_result_html
+from config import get_page_size
 from core.shared.ip import get_client_ip
 
 
@@ -47,13 +48,13 @@ def _notify_author_music_result(music_id, approved):
 @admin_bp.route('/admin/music')
 @admin_required
 def admin_music_list():
-    """管理员查看所有音频 + 待审核队列（每次 10 条，加载更多走 API）。"""
+    """管理员查看所有音频 + 待审核队列（分页大小由系统设置控制）。"""
+    page_size = get_page_size('MUSIC_PER_PAGE', 5)
     pending_musics, pending_total = music_service.get_musics_page(
-        status=music_service.STATUS_PENDING, page=1, page_size=music_service.PAGE_SIZE)
+        status=music_service.STATUS_PENDING, page=1)
     music_service.attach_durations(pending_musics)
 
-    musics, musics_total = music_service.get_musics_page(
-        page=1, page_size=music_service.PAGE_SIZE)
+    musics, musics_total = music_service.get_musics_page(page=1)
     music_service.attach_durations(musics)
 
     return render_page(
@@ -62,14 +63,14 @@ def admin_music_list():
         pending_total=pending_total,
         musics=musics,
         musics_total=musics_total,
-        page_size=music_service.PAGE_SIZE,
+        page_size=page_size,
     )
 
 
 @admin_bp.route('/admin/music/api/list')
 @admin_required
 def admin_music_api_list():
-    """音频列表 JSON API（分页，每次 10 条）。
+    """音频列表 JSON API（分页，分页大小由系统设置控制）。
 
     参数：
         type  all=全部音频（默认） pending=待审核队列
@@ -85,9 +86,8 @@ def admin_music_api_list():
         return jsonify({'success': False, 'message': '无效的列表类型'}), 400
 
     status = music_service.STATUS_PENDING if list_type == 'pending' else None
-    page_size = music_service.PAGE_SIZE
-    items, total = music_service.get_musics_page(
-        status=status, page=page, page_size=page_size)
+    page_size = get_page_size('MUSIC_PER_PAGE', 5)
+    items, total = music_service.get_musics_page(status=status, page=page)
     music_service.attach_durations(items)
     for m in items:
         m['tags_list'] = music_service.tags_to_list(m.get('tags'))

@@ -17,7 +17,7 @@ from io import BytesIO
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 from core.db import get_db
-from config import UPLOAD_BACKGROUNDS_DIR, USER_IMAGE_MAX_BYTES
+from config import UPLOAD_BACKGROUNDS_DIR, USER_IMAGE_MAX_BYTES, get_page_size
 from core.system.logger import log
 from services.mail import email_service, background_review_result
 
@@ -358,13 +358,19 @@ def get_backgrounds(status=None, user_id=None):
         return [dict(r) for r in rows]
 
 
-ADMIN_PAGE_SIZE = 5
+def get_admin_page_size() -> int:
+    """后台背景图片列表每页数量，由系统设置 BACKGROUNDS_PER_PAGE 控制。"""
+    return get_page_size('BACKGROUNDS_PER_PAGE', 5)
 
 
-def get_backgrounds_page(status=None, page=1, page_size=ADMIN_PAGE_SIZE):
+def get_backgrounds_page(status=None, page=1, page_size=None):
     """分页获取背景图片列表，返回 (items, total)。"""
     if page < 1:
         page = 1
+    if page_size is None:
+        page_size = get_admin_page_size()
+    else:
+        page_size = max(1, min(int(page_size), 100))
     with get_db() as conn:
         conditions = []
         params = []

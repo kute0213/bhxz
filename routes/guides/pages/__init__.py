@@ -8,26 +8,34 @@ from core.helpers import render_page
 from core.db import get_db
 from core.shared.captcha import captcha_service
 from core.shared.ip import get_client_ip
+from config import get_page_size
 from routes.guides import guides_bp
 
 
 @guides_bp.route('/guides')
 def guide_list():
-    """公开指南列表页（默认展示已审核通过的；?my=1 展示当前用户的）。"""
+    """公开指南列表页（默认展示已审核通过的；?my=1 展示当前用户的；?q=关键字搜索）。"""
     user = get_current_user()
     my_mode = bool(user and request.args.get('my'))
-    page_size = 10
+    keyword = (request.args.get('q') or '').strip()[:60]
+    page_size = get_page_size('GUIDES_PER_PAGE', 5)
 
     conn = get_db()
     try:
+        where = []
+        params = []
         if my_mode:
-            where_sql = "WHERE g.author_id = ?"
-            params = [user['id']]
+            where.append("g.author_id = ?")
+            params.append(user['id'])
             order_sql = "ORDER BY g.updated_at DESC"
         else:
-            where_sql = "WHERE g.status = 'approved'"
-            params = []
+            where.append("g.status = 'approved'")
             order_sql = "ORDER BY g.is_pinned DESC, g.title ASC"
+        if keyword:
+            where.append("(g.title LIKE ? OR g.summary LIKE ?)")
+            like = f'%{keyword}%'
+            params.extend([like, like])
+        where_sql = 'WHERE ' + ' AND '.join(where)
 
         total = conn.execute(
             f"SELECT COUNT(*) AS c FROM server_guides g {where_sql}", params
@@ -51,6 +59,7 @@ def guide_list():
         'guides/index.html',
         guides=guides,
         my_mode=my_mode,
+        keyword=keyword,
         has_more=total > len(guides),
     )
 

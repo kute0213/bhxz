@@ -83,18 +83,17 @@
         </div>
 
         <div class="mb-6 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-            <form id="building-search-form"
-                  class="flex-1 min-w-0"
-                  action="{{ url_for('buildings.building_list') }}"
-                  method="GET" autocomplete="off" onsubmit="return false;">
-                <div class="site-search-wrap relative" id="building-search-wrap">
-                    <i data-lucide="search" class="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-cream/40 search-icon cursor-pointer"></i>
-                    <input id="building-search-input" name="q" type="text" maxlength="60"
-                           value="{{ search_query }}"
+            {# 搜索框：点击后打开独立搜索页（不再就地展开/置顶） #}
+            <div class="flex-1 min-w-0">
+                <div id="building-search-wrap" class="search-entry relative" data-search-open="buildings"
+                     role="button" tabindex="0" aria-label="搜索公共建筑">
+                    <i data-lucide="search" class="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-cream/40 search-icon"></i>
+                    <input id="building-search-input" type="text" maxlength="60"
+                           value="{{ search_query }}" readonly tabindex="-1" aria-hidden="true"
                            placeholder="搜索建筑标题或标签…"
                            class="input-field search-input w-full pl-10 py-2.5 rounded-xl text-sm">
                 </div>
-            </form>
+            </div>
             <div class="flex items-center gap-2 flex-shrink-0 flex-wrap">
                 {% if user %}
                     {% if fav_mode %}
@@ -344,37 +343,6 @@
         .finally(function () { setLoading(false); });
     }
 
-    // 搜索组件：点击放大置顶 + 输入即 API 搜索（无刷新）
-    if (window.SiteSearch) {
-        SiteSearch.attach({
-            input: document.getElementById('building-search-input'),
-            form: document.getElementById('building-search-form'),
-            pinEl: document.getElementById('building-search-wrap'),
-            endpoint: CFG.apiUrl,
-            params: function () {
-                var p = {};
-                if (state.tag) p.tag = state.tag;
-                if (CFG.favMode) p.fav = 1;
-                else if (CFG.myMode) p.my = 1;
-                return p;
-            },
-            onLoading: function () { setLoading(true); },
-            onResults: function (data) {
-                setLoading(false);
-                if (!data || !data.success) return;
-                state.query = (data.buildings && data.buildings.length === 0 && !document.getElementById('building-search-input').value.trim())
-                    ? '' : document.getElementById('building-search-input').value.trim();
-                state.page = 1;
-                render(data.buildings || [], false);
-                updateHint(grid.children.length);
-                loadMoreBtn.classList.toggle('hidden', !data.has_more);
-                loadMoreEnd.classList.toggle('hidden', !!data.has_more);
-            },
-            onError: function () { setLoading(false); Toast && Toast.error('搜索失败，请重试'); },
-            onSubmit: function (q) { state.query = (q || '').trim(); fetchPage(1, false); }
-        });
-    }
-
     // 标签筛选
     var tagsWrap = document.getElementById('building-tags');
     if (tagsWrap) {
@@ -383,7 +351,6 @@
             if (!chip) return;
             var tag = chip.getAttribute('data-tag') || '';
             state.tag = tag;
-            state.query = document.getElementById('building-search-input').value.trim();
             tagsWrap.querySelectorAll('.tag-chip').forEach(function (c) {
                 c.classList.toggle('active', c === chip);
             });
@@ -444,14 +411,6 @@
             .catch(function () { Toast && Toast.error('操作失败，请重试'); })
             .finally(function () { btn.disabled = false; });
     });
-
-    // 搜索图标点击 → 聚焦输入框
-    var icon = document.querySelector('#building-search-wrap .search-icon');
-    if (icon) icon.style.cursor = 'pointer';
-    var searchInput = document.getElementById('building-search-input');
-    if (icon && searchInput) {
-        icon.addEventListener('click', function () { searchInput.focus(); });
-    }
 })();
 </script>
 {% endblock %}

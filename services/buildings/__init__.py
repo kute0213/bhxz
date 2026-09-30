@@ -7,14 +7,16 @@
 from datetime import datetime
 
 from core.db import get_db
-
-# 列表分页大小：每次加载 10 条，前端点击「加载更多」再取下一页
-from config import get_config_value
-PAGE_SIZE = get_config_value('PUBLIC_PAGE_SIZE', 5)
+from config import get_page_size
 
 # 标签限制：最多 10 个，每个不超过 12 字
 MAX_TAGS = 10
 MAX_TAG_LEN = 12
+
+
+def _page_size() -> int:
+    """列表每页数量，由系统设置 BUILDINGS_PER_PAGE 控制（API 无法覆盖）。"""
+    return get_page_size('BUILDINGS_PER_PAGE', 5)
 
 
 def _now():
@@ -73,7 +75,7 @@ def get_all_tags():
 # ---------------------------------------------------------------------------
 
 
-def list_buildings(search=None, tag=None, page=1, page_size=PAGE_SIZE,
+def list_buildings(search=None, tag=None, page=1, page_size=None,
                    author_id=None, my_mode=False):
     """分页查询公共建筑。
 
@@ -81,7 +83,7 @@ def list_buildings(search=None, tag=None, page=1, page_size=PAGE_SIZE,
         search: 关键词，匹配标题与标签（模糊）
         tag: 精确标签过滤
         page: 页码（从 1 开始）
-        page_size: 每页条数
+        page_size: 每页条数；为 None 时使用系统设置 BUILDINGS_PER_PAGE
         author_id: 指定作者（我的建筑）
         my_mode: 我的建筑模式（显示全部状态，按更新时间排序）
 
@@ -89,7 +91,7 @@ def list_buildings(search=None, tag=None, page=1, page_size=PAGE_SIZE,
         (items, has_more)：items 为建筑 dict 列表，has_more 表示是否还有下一页
     """
     page = max(1, int(page or 1))
-    page_size = max(1, min(int(page_size or PAGE_SIZE), 50))
+    page_size = _page_size() if page_size is None else max(1, min(int(page_size), 100))
     offset = (page - 1) * page_size
 
     conditions = []
@@ -138,21 +140,21 @@ def list_buildings(search=None, tag=None, page=1, page_size=PAGE_SIZE,
     return items[:page_size], has_more
 
 
-def list_favorite_buildings(user_id, search=None, page=1, page_size=PAGE_SIZE):
+def list_favorite_buildings(user_id, search=None, page=1, page_size=None):
     """分页查询当前用户收藏的建筑（按收藏时间倒序）。
 
     Args:
         user_id: 用户 ID
         search: 关键词（匹配标题与标签）
         page: 页码（从 1 开始）
-        page_size: 每页条数
+        page_size: 每页条数；为 None 时使用系统设置 BUILDINGS_PER_PAGE
 
     Returns:
         (items, has_more)：items 为建筑 dict 列表（含 fav_created_at），
         has_more 表示是否还有下一页。
     """
     page = max(1, int(page or 1))
-    page_size = max(1, min(int(page_size or PAGE_SIZE), 50))
+    page_size = _page_size() if page_size is None else max(1, min(int(page_size), 100))
     offset = (page - 1) * page_size
 
     conditions = ['f.user_id = ?', "b.status = 'approved'"]

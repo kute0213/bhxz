@@ -17,7 +17,7 @@ from services.discussion import (
     delete_topic as svc_delete_topic,
     get_replies_page, get_new_replies,
 )
-from services.discussion.topics import PAGE_SIZE, get_topics_page
+from services.discussion.topics import get_topics_page, get_topic_page_size
 
 
 @discussion_bp.route('/discussion/<int:topic_id>/reply', methods=['POST'])
@@ -108,7 +108,7 @@ def delete_topic(topic_id):
 
 @discussion_bp.route('/discussion/api/topics')
 def api_topics():
-    """帖子列表 API（分页，每次 10 条）。
+    """帖子列表 API（分页，分页大小由系统设置控制）。
 
     参数：
         page      页码，从 1 开始
@@ -125,7 +125,7 @@ def api_topics():
         'success': True,
         'topics': topics,
         'page': page,
-        'page_size': PAGE_SIZE,
+        'page_size': get_topic_page_size(),
         'total': total,
         'has_more': page < total_pages,
     })

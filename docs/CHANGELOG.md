@@ -4,12 +4,17 @@
 
 ### 新增
 
+* **全站搜索（独立搜索页 `/search`）**：新增跨模块聚合搜索，一次查询同时覆盖公共建筑 / 服务器指南 / 大喇叭音频 / 讨论帖子，按分类分组展示并显示各类命中数量；顶部标签可切换分类（URL `?type=` 指定初始分类），输入即防抖搜索（`/api/search`）无刷新渲染。新增 `services/search/`（纯业务聚合）、`routes/search/`（页面 + API）、`templates/search/index.html`
+* **服务器指南搜索**：指南列表页顶部新增搜索入口（跳转全站搜索页并定位「服务器指南」分类）；`/api/guides/list` 与指南列表页支持 `q` 关键词，按标题与摘要模糊匹配
+* **列表分页可配置**：公共建筑 / 大喇叭音频 / 服务器指南 / 讨论帖子 / 讨论回复 / 后台背景图片 / 后台账号申请 / 全站搜索 的每页条数统一由系统设置「列表分页」或 `config.py` 控制（`config.get_page_size()`，限制 1–100，默认 5）
 * **统一文件上传组件（`uploader.js` + `macros/upload.html`）**：新增 `FilePicker`（多文件选择 + 预览 + 删除）、`UploadProgress`（复用 `.progress-track/.progress-fill` 的统一进度条）、`AjaxForm`（拦截表单提交，XHR 上传带进度 + JSON 响应处理，无刷新）三个模块与配套 Jinja2 宏 `file_attach_field()` / `upload_progress()`；讨论发帖、回复附件、公共建筑发布等全部改用该组件，所有文件上传统一显示进度条
 * **评论发布去图形验证码 + 删除确认网页内弹窗**：公共建筑评论发布不再需要图形验证码；删除评论确认由原生 `confirm` 改为网页内 `CustomModal.confirm`
 * **发布操作全面 API 化（无刷新）**：公共建筑发布/评论、讨论发帖/回复统一改为 `AjaxForm` 无刷新 JSON 提交（AJAX 请求返回 JSON、普通表单仍兼容 flash + 重定向），自动处理身份与 CSRF
 
 ### 修复
 
+* **评论失败（`'_ThreadSafeConnection' object has no attribute 'last_insert_rowid'`）**：`routes/buildings/api/__init__.py` 发表评论时改用 `conn.execute(...)` 返回的 cursor 的 `.lastrowid`，不再调用连接对象不存在的 `last_insert_rowid()`
+* **公共建筑管理「拒绝」弹窗穿模**：拒绝弹窗移出 `.page-content`（放入 `{% block page_modals %}`），避免受页面入场动画 `transform` 影响导致 `fixed` 定位错乱；建筑详情页举报 / 编辑标签弹窗同步处理
 * **robots.txt 的 Sitemap 指向错误域名**：`/robots.txt` 的 `Sitemap:` 原先固定取站点配置域名（如 `https://bhxz.tw.kg/sitemap.xml`），导致从 `https://binhai.cloud/robots.txt` 访问时地址不一致。改为优先匹配与当前 `Host` 相同的已配置域名（`SITE_URL` / `SITEMAP_DOMAINS`），未匹配时直接反映当前访问域名，兜底才回退站点配置；`services/sitemap_cache` 新增 `base_url_for_host()`
 * **邮件发送模板找不到（`TemplateNotFound: verification_code.html`）**：`services/mail/templates/__init__.py` 计算邮件模板目录时向上只回退了 3 层，得到不存在的 `services/templates/emails`；修正为 4 层，正确定位项目根下的 `templates/emails`
 * **服务器指南编辑提交 500（`NameError: get_client_ip`）**：`routes/guides/pages/__init__.py` 使用了 `get_client_ip()` 却未导入，已补充 `from core.shared.ip import get_client_ip`；并全站静态排查同类「使用未导入」问题
@@ -18,6 +23,8 @@
 
 ### 调整
 
+* **搜索框交互彻底重写**：全站「搜索框」不再就地展开/置顶，改为点击后跳转独立搜索页；搜索页顶部提供「返回」按钮回到原页面；导航栏新增搜索入口；大喇叭音频 / 讨论 / 服务器指南 / 公共建筑列表页的搜索框统一为该入口
+* **分页大小接口不可覆盖**：各列表 API 一律忽略前端传入的分页参数，仅使用系统设置/config.py 的值
 * **共享工具移回 `core/`（取消 `utils/` 目录）**：根目录不新增独立 `utils/` 文件夹，`utils/` 下工具（`shared/`、`helpers.py`、`template_context.py`、`errors.py`）全部收敛回 `core/`（`core/shared/` + `core/` 根模块），所有导入路径同步更新；开发准同步修正
 * **Jinja2 模板命名整体规范化**：按开发准则（`docs/DEVELOPMENT.md`）统一模板命名——`templates/admin/` 去掉 `admin_` 冗余前缀（`admin/admin_admin_logs.html` → `admin/logs.html`），列表页统一为 `index.html`（`music/list.html` → `music/index.html` 等），新增 `auth/`（登录/注册/找回密码）、`settings/`（用户设置）、`site/`（站点文档/服务器状态）分组目录，`docs`/`server_status` 等迁入对应目录；更新全部 `render_page`/`render_template` 引用，删除无用 `error.html`
 * **错误页改用独立精简模板**：错误页统一渲染 `error_simple.html`（无背景图、无导航栏、无登录检查，仅含错误号 / 可能原因 / 建议 / 返回首页，动画与样式整合进单文件）；`render_error_page` 调用方式与调用方完全兼容，不再依赖 `get_current_user`

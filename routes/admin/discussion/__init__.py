@@ -15,42 +15,43 @@ from services.discussion import (
     create_category, delete_category, get_categories_with_counts,
     get_admin_topics_page, get_category_dict,
 )
-from services.discussion.topics import PAGE_SIZE as TOPIC_PAGE_SIZE
+from services.discussion.topics import get_topic_page_size
 from core.shared.ip import get_client_ip
 
 
 @admin_bp.route('/admin/discussion')
 @admin_required
 def admin_discussion():
-    """讨论管理页（每次 10 条，加载更多走 API）。"""
+    """讨论管理页（分页大小由系统设置控制，加载更多走 API）。"""
     topics, topics_total = get_admin_topics_page(page=1)
     return render_page(
         'admin/discussion.html',
         topics=topics,
         topics_total=topics_total,
         cat_dict=get_category_dict(),
-        page_size=TOPIC_PAGE_SIZE,
+        page_size=get_topic_page_size(),
     )
 
 
 @admin_bp.route('/admin/discussion/api/list')
 @admin_required
 def admin_discussion_api_list():
-    """帖子列表 JSON API（分页，每次 10 条）。参数：page（从 1 开始）。"""
+    """帖子列表 JSON API（分页，分页大小由系统设置控制）。参数：page（从 1 开始）。"""
     try:
         page = max(1, int(request.args.get('page', 1)))
     except (TypeError, ValueError):
         page = 1
 
-    items, total = get_admin_topics_page(page=page, page_size=TOPIC_PAGE_SIZE)
+    items, total = get_admin_topics_page(page=page)
+    page_size = get_topic_page_size()
     return jsonify({
         'success': True,
         'topics': items,
         'cat_dict': get_category_dict(),
         'page': page,
-        'page_size': TOPIC_PAGE_SIZE,
+        'page_size': page_size,
         'total': total,
-        'has_more': page * TOPIC_PAGE_SIZE < total,
+        'has_more': page * page_size < total,
     })
 
 

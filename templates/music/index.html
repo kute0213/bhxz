@@ -38,16 +38,14 @@
                     <i data-lucide="music" class="w-5 h-5 text-gold-400"></i>
                     公开音频（游戏内大喇叭）
                 </h2>
-                <form method="GET" action="{{ url_for('main.music_page') }}" class="flex items-center gap-2" id="music-search-form" onsubmit="return false;">
-                    <div class="site-search-wrap relative" id="music-search-wrap">
-                        <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-cream/40 search-icon cursor-pointer"></i>
-                        <input type="text" name="q" id="music-search-input" value="{{ keyword }}" maxlength="60" placeholder="搜索音频名称或标签…"
-                               class="input-field pl-9 py-2 rounded-lg text-sm search-input">
-                    </div>
-                    <button type="submit" class="btn-secondary px-4 py-2 rounded-lg text-sm flex items-center gap-1.5">
-                        <i data-lucide="search" class="w-4 h-4"></i>搜索
-                    </button>
-                </form>
+                {# 搜索框：点击后打开独立搜索页（不再就地展开/置顶） #}
+                <div class="search-entry relative min-w-[190px]" data-search-open="music"
+                     role="button" tabindex="0" aria-label="搜索大喇叭音频">
+                    <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-cream/40 search-icon"></i>
+                    <input type="text" maxlength="60" value="{{ keyword }}" readonly tabindex="-1" aria-hidden="true"
+                           placeholder="搜索音频名称或标签…"
+                           class="input-field search-input w-full pl-9 py-2 rounded-lg text-sm">
+                </div>
             </div>
             <p class="text-sm text-cream/60 mb-3 hidden" id="music-result-hint"></p>
 
@@ -101,7 +99,6 @@
 
 {% block extra_script %}
 {{ music_player_assets() }}
-<script src="{{ url_for('static', filename='js/core/search.js', v='2') }}"></script>
 <script>
 (function () {
     var CFG = {
@@ -216,24 +213,8 @@
         .finally(function () { setLoading(false); });
     }
 
-    // 无刷新搜索（点击放大置顶 + 输入即搜）
-    if (window.SiteSearch) {
-        SiteSearch.attach({
-            input: document.getElementById('music-search-input'),
-            form: document.getElementById('music-search-form'),
-            pinEl: document.getElementById('music-search-wrap'),
-            endpoint: CFG.apiUrl,
-            onLoading: function () { setLoading(true); },
-            onResults: function (data) {
-                setLoading(false);
-                if (!data || !data.success) return;
-                state.query = document.getElementById('music-search-input').value.trim();
-                state.page = 1;
-                applyResult(data, false);
-            },
-            onError: function () { setLoading(false); Toast && Toast.error('搜索失败，请重试'); }
-        });
-    }
+    // 搜索入口已改为跳转独立搜索页（见 base.html 引入的 search.js），
+    // 本页不再就地展开/置顶搜索框。
 
     loadMoreBtn.addEventListener('click', function () { fetchPage(state.page + 1, true); });
 
@@ -253,11 +234,6 @@
             document.body.removeChild(ta);
         }
     });
-
-    // 搜索图标点击聚焦
-    var icon = document.querySelector('#music-search-wrap .search-icon');
-    var searchInput = document.getElementById('music-search-input');
-    if (icon && searchInput) icon.addEventListener('click', function () { searchInput.focus(); });
 })();
 </script>
 {% endblock %}

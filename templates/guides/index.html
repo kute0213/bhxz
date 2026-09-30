@@ -57,9 +57,21 @@
 {% block content %}
 <section class="page-container py-12">
     <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="text-center mb-10 sm:mb-12">
+        <div class="text-center mb-8">
             <h1 class="text-2xl sm:text-3xl font-bold mb-3">{{ '我的指南' if my_mode else '服务器指南' }}</h1>
             <p class="text-cream/60 text-sm sm:text-base">{{ '我提交或编辑过的指南' if my_mode else '探索滨海小镇的玩法与最新公告' }}</p>
+        </div>
+
+        {# 搜索框：点击后打开独立搜索页（不再就地展开/置顶） #}
+        <div class="max-w-xl mx-auto mb-8">
+            <div id="guide-search-wrap" class="search-entry relative" data-search-open="guides"
+                 role="button" tabindex="0" aria-label="搜索服务器指南">
+                <i data-lucide="search" class="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-cream/40 search-icon"></i>
+                <input id="guide-search-input" type="text" maxlength="60"
+                       value="{{ keyword }}" readonly tabindex="-1" aria-hidden="true"
+                       placeholder="搜索指南标题或摘要…"
+                       class="input-field search-input w-full pl-10 py-2.5 rounded-xl text-sm">
+            </div>
         </div>
 
         {% if user %}

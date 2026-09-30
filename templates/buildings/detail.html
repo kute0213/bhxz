@@ -128,6 +128,12 @@
     </div>
 </section>
 
+{{ modal_close_script() }}
+{% endblock %}
+
+{# 弹窗需放在 .page-content 之外（page_modals），
+   否则会受页面入场动画的 transform 影响导致 fixed 定位错乱「穿模」。 #}
+{% block page_modals %}
 {% call modal_shell('report-modal', size='sm', title='举报公共建筑', icon='flag', icon_color='red', close_on_overlay='false') %}
     <div class="modal-body">
         <p class="text-sm text-[var(--text-secondary)] mb-3">请说明举报 <b class="text-[var(--accent-blue)]">{{ building.title }}</b> 的原因：</p>
@@ -150,9 +156,8 @@
         <button type="button" class="btn-primary" id="edit-tags-save">保存</button>
     </div>
 {% endcall %}
-
-{{ modal_close_script() }}
 {% endblock %}
+
 {% block extra_script %}
 <script>
 var BUILDING_ID = {{ building.id }};

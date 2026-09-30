@@ -18,6 +18,17 @@
             {% endif %}
         </div>
 
+        {# 搜索框：点击后打开独立搜索页（不再就地展开/置顶） #}
+        <div class="mb-5">
+            <div id="topic-search-wrap" class="search-entry relative" data-search-open="topics"
+                 role="button" tabindex="0" aria-label="搜索讨论帖子">
+                <i data-lucide="search" class="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-cream/40 search-icon"></i>
+                <input id="topic-search-input" type="text" maxlength="60" readonly tabindex="-1" aria-hidden="true"
+                       placeholder="搜索讨论帖子标题或内容…"
+                       class="input-field search-input w-full pl-10 py-2.5 rounded-xl text-sm">
+            </div>
+        </div>
+
         <!-- 分类筛选 -->
         <div class="flex flex-wrap gap-2 mb-6">
             <a href="{{ url_for('discussion.list') }}"

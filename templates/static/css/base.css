@@ -544,86 +544,24 @@ body::after {
 .input-field::placeholder { color: var(--text-muted); }
 
 /* ============================================
-   全站统一搜索组件（SiteSearch）
-   点击搜索框 → 放大置顶；输入 → 调用 API 搜索（无刷新）
+   全站统一搜索入口（SiteSearch）
+   点击「搜索框」→ 跳转独立搜索页 /search（页面内含返回按钮）
    ============================================ */
-.search-input-wrap { position: relative; }
 .search-icon { cursor: pointer; transition: color var(--transition-fast); }
 .search-icon:hover { color: var(--text-secondary); }
 
-/* 置顶放大态：几何位置由 JS 用 FLIP 计算并过渡（left/top/width），
-   避免使用 transform: scale 造成文字变形「穿模」 */
-.site-search-wrap {
-    transition: left 0.45s cubic-bezier(0.34, 1.56, 0.64, 1),
-                top 0.45s cubic-bezier(0.34, 1.56, 0.64, 1),
-                width 0.45s cubic-bezier(0.34, 1.56, 0.64, 1),
-                opacity 0.25s ease-out,
-                box-shadow 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-    will-change: left, top, width;
+/* 页面内的搜索框入口：整块可点击，点击即打开搜索页 */
+.search-entry { position: relative; cursor: pointer; }
+.search-entry .input-field { cursor: pointer; transition: border-color var(--transition-fast), box-shadow var(--transition-fast); }
+.search-entry:hover .input-field,
+.search-entry:focus-visible .input-field {
+    border-color: rgba(2, 132, 199, 0.45);
+    box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.1);
 }
-.site-search-wrap.is-pinned { z-index: 1200; }
-.site-search-wrap.is-pinned .search-input,
-.site-search-wrap.is-pinned .input-field {
-    width: 100% !important;
-    padding-top: 0.85rem;
-    padding-bottom: 0.85rem;
-    font-size: 1rem;
-    border-radius: 16px !important;
-    background: rgba(255, 255, 255, 0.97);
-    box-shadow: 0 22px 60px rgba(15, 23, 42, 0.28), 0 0 0 1px rgba(2, 132, 199, 0.22);
-    transition: box-shadow 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-/* 输入框的内边距/字号/圆角平滑变化，防止动画过程中文字突兀或溢出 */
-.site-search-wrap .search-input,
-.site-search-wrap .input-field {
-    transition: padding 0.42s cubic-bezier(0.34, 1.56, 0.64, 1),
-                font-size 0.42s cubic-bezier(0.34, 1.56, 0.64, 1),
-                border-radius 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
-                background 0.35s ease,
-                box-shadow 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-/* 收起：淡出 + 轻微缩小 */
-.site-search-wrap.is-closing {
-    opacity: 0;
-    transform: scale(0.96);
-    transition: opacity 0.32s ease-in,
-                transform 0.45s cubic-bezier(0.5, 0, 0.84, 0, 1);
-}
-.site-search-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(15, 23, 42, 0.16);
-    opacity: 0;
-    visibility: hidden;
-    transition: opacity 0.3s ease, visibility 0.3s ease;
-    z-index: 1100;
-}
-.site-search-backdrop.show { opacity: 1; visibility: visible; }
-.site-search-clear {
-    position: absolute;
-    right: 0.6rem;
-    top: 50%;
-    transform: translateY(-50%);
-    display: none;
-    align-items: center;
-    justify-content: center;
-    width: 1.5rem;
-    height: 1.5rem;
-    border-radius: 999px;
-    color: var(--text-muted);
-    background: rgba(15, 23, 42, 0.06);
-    border: none;
-    cursor: pointer;
-    transition: background var(--transition-fast), color var(--transition-fast);
-}
-.site-search-clear:hover { background: rgba(15, 23, 42, 0.12); color: var(--text-primary); }
-.site-search-wrap.has-value .site-search-clear { display: flex; }
-.site-search-status {
-    text-align: center;
-    font-size: 0.8rem;
-    color: var(--text-muted);
-    padding: 0.75rem 0;
-}
+.search-entry:hover .search-icon { color: var(--text-secondary); }
+
+/* 导航栏搜索入口与所有 data-search-open 元素统一为可点击 */
+[data-search-open] { cursor: pointer; }
 
 /* 搜索时列表项的淡入，避免结果突变 */
 .search-fade-in { animation: searchFadeIn 0.35s cubic-bezier(0.22, 1, 0.36, 1) both; }
@@ -633,12 +571,6 @@ body::after {
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .site-search-wrap,
-    .site-search-wrap.is-pinned,
-    .site-search-wrap.is-closing,
-    .site-search-wrap .search-input,
-    .site-search-wrap .input-field,
-    .site-search-backdrop { transition: none !important; }
     .search-fade-in { animation: none; }
 }
 

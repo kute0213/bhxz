@@ -4,7 +4,7 @@ import json
 import datetime
 
 from core.db import get_db
-from config import get_config_value
+from config import get_page_size
 from core.system.logger import log
 from services.attachment_service import save_attachments, clean_attachment_json, parse_attachment_json, clean_attachments
 
@@ -116,8 +116,8 @@ def delete_reply(reply_id, user_id, is_admin, ip_address):
 
 
 def get_replies_page(topic_id, page):
-    """分页获取回复。"""
-    per_page = get_config_value('REPLIES_PER_PAGE', 5)
+    """分页获取回复（每页数量由系统设置 REPLIES_PER_PAGE 控制，API 无法覆盖）。"""
+    per_page = get_page_size('REPLIES_PER_PAGE', 5)
     if page < 1:
         page = 1
 

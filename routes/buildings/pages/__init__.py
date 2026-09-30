@@ -37,14 +37,12 @@ def building_list():
             user_id=user['id'],
             search=query,
             page=1,
-            page_size=buildings_service.PAGE_SIZE,
         )
     else:
         items, has_more = buildings_service.list_buildings(
             search=query,
             tag=active_tag,
             page=1,
-            page_size=buildings_service.PAGE_SIZE,
             author_id=user['id'] if user else None,
             my_mode=my_mode,
         )

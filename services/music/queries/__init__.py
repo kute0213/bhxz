@@ -7,12 +7,13 @@ import os
 import re
 
 from core.db import get_db
-from config import UPLOAD_MUSIC_DIR
+from config import UPLOAD_MUSIC_DIR, get_page_size
 from services.music.constants import STATUS_PUBLIC, STATUS_PENDING
 
-# 列表分页大小：每次加载 10 条，前端点击「加载更多」再取下一页
-from config import get_config_value
-PAGE_SIZE = get_config_value('PUBLIC_PAGE_SIZE', 5)
+
+def _page_size() -> int:
+    """列表每页数量，由系统设置 MUSIC_PER_PAGE 控制（API 无法覆盖）。"""
+    return get_page_size('MUSIC_PER_PAGE', 5)
 
 
 def parse_tags(raw):
@@ -72,14 +73,14 @@ def get_public_musics(keyword=''):
         conn.close()
 
 
-def get_public_musics_page(keyword='', page=1, page_size=PAGE_SIZE):
+def get_public_musics_page(keyword='', page=1, page_size=None):
     """分页获取已通过审核的公开音频，支持按名称或标签模糊搜索。
 
     Returns:
         (items, has_more)：items 为音频 dict 列表，has_more 表示是否还有下一页。
     """
     page = max(1, int(page or 1))
-    page_size = max(1, min(int(page_size or PAGE_SIZE), 50))
+    page_size = _page_size() if page_size is None else max(1, min(int(page_size), 100))
     offset = (page - 1) * page_size
 
     sql = ("SELECT id, user_id, username, title, tags, status, created_at "
@@ -143,14 +144,14 @@ def get_all_musics():
         conn.close()
 
 
-def get_musics_page(status=None, page=1, page_size=PAGE_SIZE):
+def get_musics_page(status=None, page=1, page_size=None):
     """分页获取音频列表（管理员后台），status 为空时返回全部。
 
     Returns:
         (items, total)：items 为当前页音频 dict 列表，total 为符合条件的总数。
     """
     page = max(1, int(page or 1))
-    page_size = max(1, min(int(page_size or PAGE_SIZE), 50))
+    page_size = _page_size() if page_size is None else max(1, min(int(page_size), 100))
     where = ' WHERE status = ?' if status is not None else ''
     params = (status,) if status is not None else ()
     conn = get_db()

@@ -10,7 +10,7 @@ from core.helpers import render_page
 from core.db import get_db
 from routes.discussion import discussion_bp
 from routes.community.helpers import _respond, _is_ajax
-from config import get_config_value
+from config import get_config_value, get_page_size
 from core.shared.ip import get_client_ip
 from services.discussion import (
     get_categories, get_category_dict, get_topics_page, get_topic_detail,
@@ -102,7 +102,7 @@ def detail(topic_id):
         'discussion/detail.html', topic=topic,
         total_replies=total_replies, last_reply_id=last_reply_id,
         discussion_refresh_interval=get_config_value('DISCUSSION_REFRESH_INTERVAL', 5),
-        replies_per_page=get_config_value('REPLIES_PER_PAGE', 10),
+        replies_per_page=get_page_size('REPLIES_PER_PAGE', 5),
     )
 
 

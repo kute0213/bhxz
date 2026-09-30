@@ -122,7 +122,11 @@
     </div>
 </section>
 
-<!-- 拒绝原因弹窗 -->
+{# 拒绝弹窗必须放在 .page-content 之外（page_modals），
+   否则会受页面入场动画的 transform 影响导致 fixed 定位错乱「穿模」。 #}
+{% endblock %}
+
+{% block page_modals %}
 {% call modal_shell('rejectReasonModal', size='sm', title='拒绝建筑', icon='x-circle', icon_color='red', close_on_overlay='false') %}
 <div>
     <p class="text-sm text-cream/60 mb-4" id="rejectBuildingTitle"></p>
@@ -138,7 +142,9 @@
     </div>
 </div>
 {% endcall %}
+{% endblock %}
 
+{% block extra_script %}
 <script>
 function showRejectModal(buildingId, buildingTitle) {
     document.getElementById('rejectBuildingTitle').textContent = '确定拒绝建筑「' + buildingTitle + '」？';

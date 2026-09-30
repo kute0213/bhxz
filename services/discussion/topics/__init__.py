@@ -5,11 +5,14 @@ import datetime
 
 from core.db import get_db
 from core.system.logger import log
+from config import get_page_size
 from services.attachment_service import save_attachments, clean_attachment_json, parse_attachment_json
 from services.discussion.categories import get_category_dict
 
-from config import get_config_value
-PAGE_SIZE = get_config_value('PUBLIC_PAGE_SIZE', 5)
+
+def get_topic_page_size() -> int:
+    """帖子列表每页数量，由系统设置 DISCUSSION_TOPICS_PER_PAGE 控制（API 无法覆盖）。"""
+    return get_page_size('DISCUSSION_TOPICS_PER_PAGE', 5)
 
 
 def get_topic_count(category_id=None):
@@ -32,12 +35,13 @@ def get_topics_page(category_id, page):
     """获取分页帖子列表。"""
     if page < 1:
         page = 1
+    per_page = get_topic_page_size()
     total = get_topic_count(category_id)
-    total_pages = max(1, (total + PAGE_SIZE - 1) // PAGE_SIZE)
+    total_pages = max(1, (total + per_page - 1) // per_page)
     if page > total_pages:
         page = total_pages
 
-    offset = (page - 1) * PAGE_SIZE
+    offset = (page - 1) * per_page
     conn = get_db()
     try:
         if category_id:
@@ -50,7 +54,7 @@ def get_topics_page(category_id, page):
                    WHERE t.category_id = ?
                    ORDER BY t.is_pinned DESC, t.updated_at DESC
                    LIMIT ? OFFSET ?""",
-                (category_id, PAGE_SIZE, offset)
+                (category_id, per_page, offset)
             ).fetchall()
         else:
             rows = conn.execute(
@@ -61,7 +65,7 @@ def get_topics_page(category_id, page):
                    LEFT JOIN discussion_categories c ON t.category_id = c.id
                    ORDER BY t.is_pinned DESC, t.updated_at DESC
                    LIMIT ? OFFSET ?""",
-                (PAGE_SIZE, offset)
+                (per_page, offset)
             ).fetchall()
         topics = [dict(r) for r in rows]
     finally:
@@ -70,10 +74,10 @@ def get_topics_page(category_id, page):
     return topics, total, total_pages
 
 
-def get_admin_topics_page(page=1, page_size=PAGE_SIZE):
+def get_admin_topics_page(page=1, page_size=None):
     """分页获取帖子列表（管理后台，按 ID 倒序）。返回 (items, total)。"""
     page = max(1, int(page or 1))
-    page_size = max(1, min(int(page_size or PAGE_SIZE), 50))
+    page_size = get_topic_page_size() if page_size is None else max(1, min(int(page_size), 100))
     conn = get_db()
     try:
         total = conn.execute(

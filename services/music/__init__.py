@@ -14,7 +14,6 @@ from services.music.constants import (
     STATUS_LABELS,
 )
 from services.music.queries import (
-    PAGE_SIZE,
     parse_tags,
     tags_to_list,
     get_public_musics,
@@ -52,7 +51,6 @@ __all__ = [
     'HLS_SEGMENT_SECONDS', 'STATUS_PRIVATE', 'STATUS_PENDING', 'STATUS_PUBLIC',
     'STATUS_REJECTED', 'STATUS_LABELS',
     # queries
-    'PAGE_SIZE',
     'parse_tags', 'tags_to_list', 'get_public_musics', 'get_public_musics_page',
     'get_user_musics',
     'get_pending_musics', 'get_all_musics', 'get_musics_page', 'get_music', 'get_music_file_path',

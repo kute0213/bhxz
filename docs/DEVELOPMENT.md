@@ -181,11 +181,12 @@ if not ok:
 
 `KIND_IMAGE` / `KIND_AUDIO` / `KIND_ATTACHMENT` 三档默认白名单见 `ALLOWED_BY_KIND`；危险扩展名一律拒绝，未知类型跳过魔数校验以降低误判。
 
-### 2. 列表一律「每次 10 条 + 加载更多」，走 JSON API 无刷新追加
+### 2. 列表一律「分页 + 加载更多」，走 JSON API 无刷新追加
 
 新增任何列表页时：
 
-* 服务端只渲染**首屏 10 条**，并把 `total` / `has_more` 传给模板；
+* 服务端只渲染**首屏一页**（每页条数由 `config.get_page_size(KEY)` 决定，**禁止硬编码**，也不接受前端传参覆盖），并把 `total` / `has_more` 传给模板；
+* 每页条数在 `config.py` 的「列表分页配置」中定义常量，并同步登记到 `SETTINGS_REGISTRY`（分类「列表分页」），以便在管理后台「系统设置」热改；
 * 另建分页 API（返回 `{success, items, page, page_size, total, has_more}`），前端「加载更多」按钮 `fetch` 后 `insertAdjacentHTML('beforeend', ...)` 追加，不整页跳转；
 * 追加的行必须复用首屏相同的结构与属性（如管理端的 `.admin-action` 及其 `data-*`），以便已存在的事件委托自动生效；HTML 一律用 `esc()` 转义，追加后调用 `lucide.createIcons()`；
 * API 请求带 `X-Requested-With: XMLHttpRequest`，自动纳入 API 防火墙限流。

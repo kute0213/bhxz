@@ -35,9 +35,7 @@ def music_page():
     """
     user = get_current_user()
     keyword = request.args.get('q', '').strip()
-    public_musics, has_more = music_service.get_public_musics_page(
-        keyword, page=1, page_size=music_service.PAGE_SIZE,
-    )
+    public_musics, has_more = music_service.get_public_musics_page(keyword, page=1)
     music_service.attach_durations(public_musics)
     favorite_ids = music_service.get_favorite_ids(user['id']) if user else set()
     return render_page(
@@ -59,9 +57,7 @@ def api_music_list():
     keyword = (request.args.get('q') or '').strip()[:60]
     page = request.args.get('page', type=int) or 1
 
-    items, has_more = music_service.get_public_musics_page(
-        keyword, page=page, page_size=music_service.PAGE_SIZE,
-    )
+    items, has_more = music_service.get_public_musics_page(keyword, page=page)
     music_service.attach_durations(items)
 
     favorite_ids = music_service.get_favorite_ids(user['id']) if user else set()
