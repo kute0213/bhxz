@@ -54,9 +54,9 @@
                     <div class="text-xs text-cream/50 mb-3">by {{ bg.username }} · {{ bg.created_at }}</div>
                     <div class="flex gap-2">
                         {% if bg.is_active %}
-                        <button class="btn-secondary px-3 py-1.5 text-xs rounded-lg toggle-btn" data-id="{{ bg.id }}">停用</button>
+                        
                         {% else %}
-                        <button class="btn-primary px-3 py-1.5 text-xs rounded-lg toggle-btn" data-id="{{ bg.id }}">启用</button>
+                        
                         {% endif %}
                         <button class="btn-danger px-3 py-1.5 text-xs rounded-lg admin-delete-btn" data-id="{{ bg.id }}">删除</button>
                     </div>
@@ -123,10 +123,7 @@
             actions = '<button class="btn-primary px-3 py-1.5 text-xs rounded-lg approve-btn" data-id="' + bg.id + '">通过</button>' +
                       '<button class="btn-danger px-3 py-1.5 text-xs rounded-lg reject-btn" data-id="' + bg.id + '">驳回</button>';
         } else if (status === 1) {
-            actions = (bg.is_active
-                        ? '<button class="btn-secondary px-3 py-1.5 text-xs rounded-lg toggle-btn" data-id="' + bg.id + '">停用</button>'
-                        : '<button class="btn-primary px-3 py-1.5 text-xs rounded-lg toggle-btn" data-id="' + bg.id + '">启用</button>')
-                    + '<button class="btn-danger px-3 py-1.5 text-xs rounded-lg admin-delete-btn" data-id="' + bg.id + '">删除</button>';
+            actions = '<button class="btn-danger px-3 py-1.5 text-xs rounded-lg admin-delete-btn" data-id="' + bg.id + '">删除</button>';
         } else {
             actions = '<button class="btn-danger px-3 py-1.5 text-xs rounded-lg admin-delete-btn" data-id="' + bg.id + '">删除</button>';
         }

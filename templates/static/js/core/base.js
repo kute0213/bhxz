@@ -1174,3 +1174,95 @@ document.addEventListener('click', function (e) {
         });
     });
 })();
+
+/* ============================================================
+   自定义开关 (.switch) —— 点击/键盘切换，hidden input 存值
+   ============================================================ */
+document.addEventListener('click', function (e) {
+    var sw = e.target.closest('[data-switch]');
+    if (!sw) return;
+    toggleSwitch(sw);
+});
+document.addEventListener('keydown', function (e) {
+    if (e.code !== 'Space' && e.code !== 'Enter') return;
+    var sw = document.activeElement && document.activeElement.closest('[data-switch]');
+    if (!sw) return;
+    e.preventDefault();
+    toggleSwitch(sw);
+});
+function toggleSwitch(sw) {
+    var on = sw.classList.toggle('is-on');
+    sw.setAttribute('aria-checked', on ? 'true' : 'false');
+    var hidden = sw.querySelector('input[type="hidden"]');
+    if (hidden) hidden.value = on ? '1' : '0';
+    sw.dispatchEvent(new CustomEvent('change', { bubbles: true }));
+}
+
+/* ============================================================
+   自定义下拉 (.custom-select) —— 点击展开 + 键盘导航
+   ============================================================ */
+document.addEventListener('click', function (e) {
+    var trigger = e.target.closest('[data-custom-select] [data-trigger]');
+    if (trigger) {
+        var cs = trigger.closest('[data-custom-select]');
+        document.querySelectorAll('[data-custom-select].is-open').forEach(function (el) {
+            if (el !== cs) closeSelect(el);
+        });
+        openSelect(cs);
+        return;
+    }
+    if (!e.target.closest('[data-custom-select]')) {
+        document.querySelectorAll('[data-custom-select].is-open').forEach(closeSelect);
+    }
+});
+document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') {
+        document.querySelectorAll('[data-custom-select].is-open').forEach(closeSelect);
+    }
+});
+function openSelect(cs) {
+    cs.classList.add('is-open');
+    var trigger = cs.querySelector('[data-trigger]');
+    if (trigger) trigger.setAttribute('aria-expanded', 'true');
+    // 选中当前值对应的 option
+    var hidden = cs.querySelector('input[type="hidden"]');
+    var current = hidden ? hidden.value : '';
+    var opts = cs.querySelectorAll('.custom-select-option');
+    opts.forEach(function (o) { o.classList.remove('is-hover'); });
+    opts.forEach(function (o) {
+        if (o.getAttribute('data-value') === current) {
+            o.classList.add('is-hover');
+            o.scrollIntoView({ block: 'nearest' });
+        }
+    });
+}
+function closeSelect(cs) {
+    cs.classList.remove('is-open');
+    var trigger = cs.querySelector('[data-trigger]');
+    if (trigger) trigger.setAttribute('aria-expanded', 'false');
+}
+document.addEventListener('click', function (e) {
+    var opt = e.target.closest('.custom-select-option');
+    if (!opt) return;
+    var cs = opt.closest('[data-custom-select]');
+    if (!cs) return;
+    // 清空之前的选中标记
+    cs.querySelectorAll('.custom-select-option.is-selected').forEach(function (o) {
+        o.classList.remove('is-selected');
+    });
+    opt.classList.add('is-selected');
+    // 更新 label
+    var label = cs.querySelector('.custom-select-label');
+    if (label) label.textContent = opt.textContent.trim();
+    // 更新 hidden input
+    var hidden = cs.querySelector('input[type="hidden"]');
+    var value = opt.getAttribute('data-value');
+    if (hidden) {
+        var prev = hidden.value;
+        hidden.value = value;
+        if (prev !== value) {
+            hidden.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+    }
+    closeSelect(cs);
+});

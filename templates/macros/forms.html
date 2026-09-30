@@ -147,3 +147,51 @@
     </select>
 </div>
 {%- endmacro %}
+
+{## 4. 自定义下拉选择框（完全自绘，高 z-index）
+ #
+ # 参数：
+ #   name      — name 属性（必填）
+ #   options   — [(value, label), ...]（必填）
+ #   selected  — 当前选中值
+ #   label     — 标签文字
+ #   class     — 附加类
+ ##}
+{% macro custom_select(name, options, selected='', label=None, class='') -%}
+{% set input_id = name | replace('.', '_') | replace('[', '_') | replace(']', '') %}
+{% set selected_label = '' %}
+{% for v, l in options %}
+    {% if selected == v %}{% set selected_label = l %}{% endif %}
+{% endfor %}
+<div class="form-group space-y-1.5">
+    {% if label %}
+    <label class="block text-sm font-medium text-cream/80">{{ label }}</label>
+    {% endif %}
+    <div class="custom-select {{ class }}" data-custom-select>
+        <div class="custom-select-trigger" data-trigger tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false">
+            <span class="custom-select-label">{{ selected_label }}</span>
+            <i data-lucide="chevron-down" class="caret"></i>
+        </div>
+        <div class="custom-select-dropdown" role="listbox">
+            {% for v, l in options %}
+            <div class="custom-select-option{% if selected == v %} is-selected{% endif %}" role="option" data-value="{{ v }}" tabindex="-1">{{ l }}</div>
+            {% endfor %}
+        </div>
+        <input type="hidden" id="{{ input_id }}" name="{{ name }}" value="{{ selected }}">
+    </div>
+</div>
+{%- endmacro %}
+
+{## 5. 自定义开关（完全自绘，替代原生 checkbox）
+ ##}
+{% macro custom_switch(name, checked=False, label=None, class='') -%}
+{% set input_id = name | replace('.', '_') | replace('[', '_') | replace(']', '') %}
+<div class="form-group space-y-1.5">
+    {% if label %}
+    <label class="block text-sm font-medium text-cream/80">{{ label }}</label>
+    {% endif %}
+    <div class="switch {{ 'is-on' if checked else '' }} {{ class }}" role="switch" aria-checked="{{ 'true' if checked else 'false' }}" tabindex="0" data-switch>
+        <input type="hidden" id="{{ input_id }}" name="{{ name }}" value="{{ '1' if checked else '0' }}">
+    </div>
+</div>
+{%- endmacro %}

@@ -21,10 +21,25 @@ def home():
         mod_intros = [dict(r) for r in mod_intros]
     finally:
         conn.close()
+
+    # 首页 Server Profile 卡片展示实时在线玩家数
+    online_players = None
+    max_players = None
+    try:
+        from services.rcon import player_tracker
+        pl = player_tracker.get_player_list()
+        if not pl.error:
+            online_players = pl.online
+            max_players = pl.max_players
+    except Exception:
+        online_players = None
+
     return render_page(
         'index.html', mod_intros=mod_intros,
         map_url=get_config_value('MAP_URL', 'https://map.bhxz.tw.kg'),
         qq_group_url=get_config_value('QQ_GROUP_URL', ''),
+        online_players=online_players,
+        max_players=max_players,
     )
 
 

@@ -400,6 +400,130 @@ body::after {
 }
 .btn-danger:active { transform: translateY(0); }
 
+/* 自定义开关（系统设置等）——完全自绘，替代原生复选框 */
+.switch {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    width: 46px;
+    height: 26px;
+    padding: 0;
+    border: 1px solid var(--border-card);
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.14);
+    cursor: pointer;
+    flex-shrink: 0;
+    vertical-align: middle;
+    transition: background 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
+}
+.switch::after {
+    content: '';
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: #ffffff;
+    box-shadow: 0 2px 6px rgba(15, 23, 42, 0.25);
+    transition: transform 0.28s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.switch:hover { border-color: var(--border-accent); }
+.switch.is-on {
+    background: var(--accent-blue);
+    border-color: transparent;
+    box-shadow: 0 0 0 3px var(--accent-blue-dim);
+}
+.switch.is-on::after { transform: translateX(20px); }
+.switch:focus-visible { outline: 2px solid var(--accent-blue); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) {
+    .switch, .switch::after { transition: none !important; }
+}
+
+/* 自定义下拉选择框 —— 完全自绘，层级 z-2000，支持键盘导航 */
+.custom-select {
+    position: relative;
+    display: inline-block;
+    width: 100%;
+    font-size: 14px;
+    line-height: 1;
+}
+.custom-select-trigger {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    padding: 0.55rem 2.2rem 0.55rem 0.9rem;
+    background: rgba(255,255,255,0.82);
+    backdrop-filter: blur(16px) saturate(120%);
+    -webkit-backdrop-filter: blur(16px) saturate(120%);
+    border: 1px solid var(--border-card);
+    border-radius: 12px;
+    color: var(--text-primary);
+    cursor: pointer;
+    user-select: none;
+    transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+    box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.05);
+    min-height: 38px;
+}
+.custom-select-trigger:hover { border-color: rgba(2,132,199,0.4); }
+.custom-select-trigger.is-open {
+    border-color: rgba(2,132,199,0.55);
+    box-shadow: 0 0 0 3px rgba(2,132,199,0.12);
+}
+.custom-select-trigger i.caret {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 16px; height: 16px;
+    color: var(--text-muted);
+    pointer-events: none;
+    transition: transform 0.2s ease;
+}
+.custom-select-trigger.is-open i.caret { transform: translateY(-50%) rotate(180deg); }
+.custom-select-dropdown {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    z-index: 2000;
+    background: rgba(255,255,255,0.98);
+    border: 1px solid var(--border-card);
+    border-radius: 12px;
+    box-shadow: 0 14px 40px rgba(15,23,42,0.18), 0 4px 12px rgba(15,23,42,0.08);
+    padding: 6px;
+    max-height: 260px;
+    overflow-y: auto;
+    opacity: 0;
+    transform: translateY(-4px);
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.18s ease, transform 0.18s ease, visibility 0s 0.18s;
+}
+.custom-select.is-open .custom-select-dropdown {
+    opacity: 1;
+    transform: translateY(0);
+    visibility: visible;
+    pointer-events: auto;
+    transition-delay: 0s;
+}
+.custom-select-option {
+    padding: 8px 12px;
+    border-radius: 8px;
+    color: var(--text-primary);
+    cursor: pointer;
+    transition: background 0.12s ease;
+    font-size: 14px;
+}
+.custom-select-option:hover,
+.custom-select-option.is-hover { background: rgba(2,132,199,0.08); }
+.custom-select-option.is-selected {
+    color: var(--accent-blue);
+    font-weight: 600;
+    background: rgba(2,132,199,0.06);
+}
+
 /* 输入框 - 白色磨砂玻璃控件（深色文字） */
 .input-field {
     background: rgba(255, 255, 255, 0.82);

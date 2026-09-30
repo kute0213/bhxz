@@ -17,10 +17,10 @@
                 <span id="save-status" class="text-sm text-cream/60">所有更改将自动保存</span>
             </div>
             <div class="flex items-center gap-2">
-                <button id="btn-reset-all" class="px-4 py-2 bg-red-500/20 hover:bg-red-500/30 text-red-300 text-sm rounded-lg transition-colors border border-red-500/30">
+                <button id="btn-reset-all" class="btn-danger px-4 py-2 text-sm">
                     <i data-lucide="rotate-ccw" class="w-4 h-4 inline mr-1"></i>重置所有
                 </button>
-                <button id="btn-save" class="px-4 py-2 bg-gold-500 hover:bg-gold-400 text-forest-900 font-bold text-sm rounded-lg transition-colors">
+                <button id="btn-save" class="btn-primary px-5 py-2 text-sm">
                     <i data-lucide="save" class="w-4 h-4 inline mr-1"></i>保存更改
                 </button>
             </div>
@@ -52,28 +52,55 @@
             return String(value);
         }
 
-        // 获取当前输入的值
+        // 获取当前输入的值（兼容原生 input/select + 自绘 switch/custom-select）
         function getInputValue(input) {
-            if (input.tagName === 'SELECT') {
-                return input.value;
+            var el = input;
+            // switch 容器：读它内部的 hidden input
+            if (el.classList && el.classList.contains('switch')) {
+                var h = el.querySelector('input[type="hidden"]');
+                return h ? (h.value === '1') : el.classList.contains('is-on');
             }
-            if (input.type === 'checkbox') {
-                return input.checked;
+            // custom-select 容器：读它内部的 hidden input
+            if (el.classList && el.classList.contains('custom-select')) {
+                var h = el.querySelector('input[type="hidden"]');
+                return h ? h.value : '';
             }
-            if (input.type === 'time') {
-                return input.value;
-            }
-            return input.value;
+            if (el.tagName === 'SELECT') return el.value;
+            if (el.type === 'checkbox') return el.checked;
+            return el.value;
         }
 
         // 设置输入的值
         function setInputValue(input, value, type) {
-            if (input.tagName === 'SELECT') {
-                input.value = value !== null && value !== undefined ? String(value) : '';
+            var el = input;
+            if (el.classList && el.classList.contains('switch')) {
+                var on = !!value;
+                el.classList.toggle('is-on', on);
+                el.setAttribute('aria-checked', on ? 'true' : 'false');
+                var h = el.querySelector('input[type="hidden"]');
+                if (h) h.value = on ? '1' : '0';
+                return;
+            }
+            if (el.classList && el.classList.contains('custom-select')) {
+                var str = value !== null && value !== undefined ? String(value) : '';
+                var hidden = el.querySelector('input[type="hidden"]');
+                if (hidden) hidden.value = str;
+                var label = el.querySelector('.custom-select-label');
+                el.querySelectorAll('.custom-select-option').forEach(function (o) {
+                    o.classList.remove('is-selected');
+                    if (o.getAttribute('data-value') === str) {
+                        o.classList.add('is-selected');
+                        if (label) label.textContent = o.textContent.trim();
+                    }
+                });
+                return;
+            }
+            if (el.tagName === 'SELECT') {
+                el.value = value !== null && value !== undefined ? String(value) : '';
             } else if (type === 'bool') {
-                input.checked = !!value;
+                el.checked = !!value;
             } else {
-                input.value = value !== null && value !== undefined ? String(value) : '';
+                el.value = value !== null && value !== undefined ? String(value) : '';
             }
         }
 
@@ -81,7 +108,7 @@
         function isChanged(key, currentValue, type) {
             const original = originalValues[key];
             if (original === undefined) return false;
-            if (type === 'bool') return currentValue !== original;
+            if (type === 'bool') return !!currentValue !== !!original;
             return String(currentValue) !== String(original);
         }
 
@@ -117,19 +144,27 @@
                     let inputHtml = '';
                     if (item.type === 'bool') {
                         inputHtml = `
-                            <label class="relative inline-flex items-center cursor-pointer">
-                                <input type="checkbox" class="sr-only peer" data-type="bool">
-                                <div class="w-11 h-6 bg-forest-700 rounded-full peer peer-checked:after:translate-x-full peer-checked:bg-gold-500 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all"></div>
-                            </label>
+                            <div class="switch" data-type="bool" tabindex="0" role="switch" aria-checked="false">
+                                <input type="hidden" value="0">
+                            </div>
                         `;
                     } else if (item.type === 'select') {
-                        const opts = (item.options || []).map(function(o) {
-                            return '<option value="' + o[0] + '">' + o[1] + '</option>';
-                        }).join('');
+                        const opts = (item.options || []);
+                        let selectedLabel = '';
+                        let optsHtml = '';
+                        opts.forEach(function (o) {
+                            if (String(item.value) === String(o[0])) selectedLabel = o[1];
+                            optsHtml += '<div class="custom-select-option" data-value="' + o[0] + '">' + o[1] + '</div>';
+                        });
                         inputHtml = `
-                            <select class="input-field w-full sm:w-48">
-                                ${opts}
-                            </select>
+                            <div class="custom-select w-full sm:w-48" data-custom-select>
+                                <div class="custom-select-trigger" data-trigger tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false">
+                                    <span class="custom-select-label">${selectedLabel}</span>
+                                    <i data-lucide="chevron-down" class="caret"></i>
+                                </div>
+                                <div class="custom-select-dropdown" role="listbox">${optsHtml}</div>
+                                <input type="hidden" value="${String(item.value !== null && item.value !== undefined ? item.value : '')}">
+                            </div>
                         `;
                     } else if (item.type === 'time') {
                         inputHtml = `
@@ -171,20 +206,16 @@
 
                     body.appendChild(row);
 
-                    // 设置输入值（支持 input 和 select 元素）
-                    const input = row.querySelector('input, select');
-                    if (input) {
-                        setInputValue(input, item.value, item.type);
-                        input.dataset.key = item.key;
-                        input.dataset.type = item.type;
-                        input.dataset.default = item.default;
+                    // 统一获取容器（优先自绘 switch / custom-select，否则原生 input/select）
+                    const control = row.querySelector('.switch, .custom-select, input, select');
+                    if (control) {
+                        setInputValue(control, item.value, item.type);
+                        control.dataset.key = item.key;
+                        control.dataset.type = item.type;
+                        control.dataset.default = item.default;
 
-                        // 确保 select 选中值
-                        if (input.tagName === 'SELECT') {
-                            input.value = String(item.value);
-                        }
-
-                        input.addEventListener('input', function () {
+                        // 统一的 change 监听（原生 input 事件 + custom-select/switch 手动触发的 change）
+                        control.addEventListener('change', function () {
                             const key = this.dataset.key;
                             const type = this.dataset.type;
                             const value = getInputValue(this);
@@ -195,15 +226,10 @@
                                 this.classList.remove('border-gold-400');
                             }
                         });
-
-                        input.addEventListener('change', function () {
-                            const key = this.dataset.key;
-                            const type = this.dataset.type;
-                            const value = getInputValue(this);
-                            if (isChanged(key, value, type)) {
-                                markDirty();
-                            }
-                        });
+                        // 原生 input 元素的 input 事件也标记 dirty
+                        if (control.tagName === 'INPUT' || control.tagName === 'SELECT') {
+                            control.addEventListener('input', function () { markDirty(); });
+                        }
                     }
 
                     // 绑定重置按钮
@@ -212,13 +238,13 @@
                         resetBtn.addEventListener('click', function () {
                             const row = this.closest('[data-key]');
                             const key = row.dataset.key;
-                            const input = row.querySelector('input, select');
-                            if (!input) return;
-                            const defaultVal = input.dataset.default;
-                            const type = input.dataset.type;
+                            const control = row.querySelector('.switch, .custom-select, input, select');
+                            if (!control) return;
+                            const defaultVal = control.dataset.default;
+                            const type = control.dataset.type;
 
-                            setInputValue(input, defaultVal, type);
-                            input.classList.remove('border-gold-400');
+                            setInputValue(control, defaultVal, type);
+                            control.classList.remove('border-gold-400');
 
                             // 如果有自定义值，发送重置请求
                             if (originalValues[key] !== undefined) {
@@ -287,7 +313,7 @@
 
         // 保存设置
         function saveSettings() {
-            const inputs = settingsContainer.querySelectorAll('input, select');
+            const inputs = settingsContainer.querySelectorAll('.switch, .custom-select, input, select');
             const items = [];
             let hasChange = false;
 
@@ -391,12 +417,14 @@
                 });
         });
 
-        // 自动保存（失焦时检查是否有更改）
+        // 自动保存（任意控件 change/input 后 1 秒）
         let saveTimer = null;
-        settingsContainer.addEventListener('input', function () {
+        function scheduleAutoSave() {
             clearTimeout(saveTimer);
-            saveTimer = setTimeout(saveSettings, 1000); // 停止输入 1 秒后自动保存
-        });
+            saveTimer = setTimeout(saveSettings, 1200);
+        }
+        settingsContainer.addEventListener('input', scheduleAutoSave);
+        settingsContainer.addEventListener('change', scheduleAutoSave);
 
         // 初始化加载
         loadSettings();

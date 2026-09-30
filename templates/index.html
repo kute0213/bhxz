@@ -472,7 +472,11 @@
         <aside class="hero-status" aria-label="服务器信息">
             <div class="hero-status-head">
                 <span class="hero-status-title">SERVER PROFILE</span>
-                <span class="hero-status-state"><span class="hero-status-dot"></span>服务在线</span>
+                {% if online_players is not none %}
+                <span class="hero-status-state"><span class="hero-status-dot"></span>{{ online_players }}/{{ max_players }} 在线</span>
+                {% else %}
+                <span class="hero-status-state text-cream/50"><span class="hero-status-dot" style="background:#94a3b8"></span>暂未连接</span>
+                {% endif %}
             </div>
             <div class="hero-specs">
                 <div class="hero-spec"><span>版本</span><strong>Java 1.20.1</strong></div>
