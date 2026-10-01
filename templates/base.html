@@ -43,7 +43,7 @@
     <!-- 入场动画见 base.css：纯 CSS animation，不依赖 JS，避免白屏 -->
     <noscript><style>.page-content{opacity:1!important;transform:none!important}</style></noscript>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/tailwind.css', v='4') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css', v='36') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css', v='37') }}">
     <script src="{{ url_for('static', filename='lib/purify/purify.min.js', v='1') }}"></script>
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <script>
@@ -385,7 +385,7 @@
                 <div class="flex items-center gap-2 sm:gap-3">
                     <!-- 全站搜索入口：就地展开 + API 搜索（v4） -->
                     <div id="nav-search" class="nav-search">
-                        <button type="button" class="nav-search-btn hidden md:inline-flex items-center gap-2 pl-3 pr-3 lg:pr-4 py-2 rounded-xl border border-gold-400/20 bg-gold-400/5 text-cream/70 hover:text-gold-400 hover:border-gold-400/40 transition-colors text-sm" aria-label="搜索">
+                        <button type="button" class="nav-search-btn inline-flex items-center gap-2 pl-3 pr-3 lg:pr-4 py-2 rounded-xl border border-gold-400/20 bg-gold-400/5 text-cream/70 hover:text-gold-400 hover:border-gold-400/40 transition-colors text-sm" aria-label="搜索">
                             <i data-lucide="search" class="w-4 h-4"></i>
                             <span class="hidden lg:inline">搜索…</span>
                         </button>

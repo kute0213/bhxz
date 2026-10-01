@@ -1290,7 +1290,7 @@ pre::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.24); }
 
 /* 折叠态：按钮 + 隐藏的输入壳 */
 .nav-search-btn {
-    /* 这个按钮就是折叠态触发器；展开后隐藏 */
+    cursor: pointer;
 }
 .nav-search.is-open .nav-search-btn {
     display: none;
@@ -1308,6 +1308,7 @@ pre::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.24); }
     border-radius: 14px;
     border: 1px solid rgba(234, 179, 8, 0.20);
     background: rgba(120, 53, 15, 0.08);
+    cursor: text;
     transition:
         width 0.28s cubic-bezier(0.4, 0, 0.2, 1),
         opacity 0.22s ease,
