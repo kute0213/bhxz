@@ -13,6 +13,7 @@
 * **DDoS 检测器 32 分片锁 + array 时间戳存储（理论无限并发）**：`routes/firewall/ddos.py` 重写为分片架构——`SHARDS=32` 个独立锁各管 `SHARD_MAX_IPS=1024` 个 IP 的时间戳队列（`array('d')` 双精度数组），各分片互不竞争；请求先算 IP→分片哈希，只锁目标分片；过期请求自动清理（窗口 `DDOS_WINDOW_SECONDS=10s`）；单分片硬上限 1024 IP 自动淘汰最老分片；**资源自动分配**：未被 DDoS 时各分片数组极小（仅活跃 IP 数），并发打满时最多 32×1024×8B ≈ 256KB 额外内存；彻底消除单一全局锁瓶颈
 * **服务器指南收藏功能 + 我的收藏页**：新增 `guide_favorites` 表（`user_id, guide_id` 联合唯一键 + 双索引），指南详情页标题旁添加收藏按钮（`bookmark` / `bookmark-check` 图标切换），列表默认按「置顶 → 收藏数倒序 → 标题升序」排序，`/api/guides/list` 与列表页返回 `favorite_count` + `is_favorited`，新增「我的收藏」列表页 `/guides/favorites`
 * **服务器初始化（原「自检」）分层优化**：`core/system/init.py` 按 6 层架构清晰组织——① 基础设施（工作目录 + 数据库）→ ② 监控（刷新日志设置 + 健康检查）→ ③ 路由（蓝图注册）→ ④ 中间件（请求钩子，依赖蓝图）→ ⑤ 视图（模板上下文）→ ⑥ 服务（后台异步，不阻塞启动）；删除"自检"命名，全站统一改为"初始化"
+* **WAL checkpoint 强制落盘 + 公共建筑审核持久化确认日志**：服务器优雅关闭时（`graceful_shutdown`）在 `conn.commit()` 后强制执行 `PRAGMA wal_checkpoint(TRUNCATE)`，确保 SQLite WAL 模式下所有待刷数据立即落盘到主 DB 文件，避免进程被杀时 WAL 残留导致读取异常；公共建筑审核通过后（`admin_building_approve`）追加 INFO 日志，commit 后再次 SELECT 确认持久化状态并打印（`Buildings| 公共建筑 id=N 审核通过持久化确认: status=approved`），审核失败（rowcount=0）时额外记录 WARN 级日志帮助排查（区分"建筑不存在"还是"当前 status 非 pending"）
 
 ### 修复
 

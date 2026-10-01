@@ -65,6 +65,11 @@ def shutdown_application(signum=None):
     try:
         conn = get_db()
         conn.commit()
+        # 强制 WAL checkpoint，确保所有待刷数据落盘（避免进程被杀导致 WAL 文件残留）
+        try:
+            conn.execute('PRAGMA wal_checkpoint(TRUNCATE)')
+        except Exception:
+            pass
     except Exception as exc:
         log('WARNING', 'App', f'关闭前提交数据库失败: {exc}')
     log('INFO', 'App', '服务器已关闭')

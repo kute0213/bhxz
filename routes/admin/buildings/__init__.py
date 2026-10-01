@@ -55,6 +55,7 @@ def admin_buildings():
 @admin_required
 def admin_building_approve(building_id):
     """管理后台：通过建筑审核（JSON API，前端无刷新）。"""
+    from core.system.logger import log
     conn = get_db()
     try:
         now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -68,7 +69,20 @@ def admin_building_approve(building_id):
         )
         conn.commit()
         if cur.rowcount == 0:
+            # 记录一下，方便排查：是建筑不存在还是已经处理过
+            exist = conn.execute(
+                "SELECT status FROM public_buildings WHERE id = ?", (building_id,)
+            ).fetchone()
+            if exist:
+                log('WARN', 'Buildings', f'审核 id={building_id} 失败：当前 status={exist[0]}（非 pending）')
+            else:
+                log('WARN', 'Buildings', f'审核 id={building_id} 失败：建筑不存在')
             return jsonify({'success': False, 'message': '建筑不存在或已处理'}), 404
+        # 再次查询确认持久化成功
+        row = conn.execute(
+            "SELECT status FROM public_buildings WHERE id = ?", (building_id,)
+        ).fetchone()
+        log('INFO', 'Buildings', f'公共建筑 id={building_id} 审核通过持久化确认: status={row[0] if row else "N/A"}')
         return jsonify({'success': True, 'message': '建筑已通过审核', 'status': 'approved'})
     except Exception:
         conn.rollback()
