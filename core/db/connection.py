@@ -31,25 +31,27 @@ def _migrate_legacy_db():
         log('INFO', 'DB', f'已迁移旧版数据库到 {DB_PATH}')
 
 
-def _cleanup_stale_wal_files():
-    """连接前清理残留的 WAL/SHM 文件。
+def _recover_pending_wal():
+    """记录上次异常退出残留的 WAL 文件，交给 SQLite 自动重放恢复。
 
-    上次进程崩溃或被强制结束后，-wal/-shm 文件可能残留并被 OS 锁定。
-    在连接数据库之前清理，避免 WAL 模式初始化时 disk I/O error。
+    ⚠️ 绝对不能删除 site.db-wal / site.db-shm。
+    WAL 里保存的是「已经 commit 成功、但还没合并进主库」的数据，
+    直接删除等同于丢数据。此前这里会无条件删除这两个文件，
+    导致「公共建筑审核通过后重启服务器，审核状态又变回待审核」——
+    因为 UPDATE ... status='approved' 提交后数据仍在 WAL 中，
+    进程一旦非正常结束（强杀 / 崩溃 / 看门狗重启），下次启动就被删掉了。
+
+    正确做法：什么都不删。SQLite 打开数据库时会自动重放 WAL 完成恢复，
+    在最后一个连接关闭时也会自动 checkpoint 并清理 WAL。
     """
-    for suffix in ('-wal', '-shm'):
-        stale = DB_PATH + suffix
-        if not os.path.isfile(stale):
-            continue
-        try:
-            os.remove(stale)
-        except PermissionError:
-            raise sqlite3.OperationalError(
-                f'数据库锁定：{stale} 被其他进程占用。\n'
-                f'请先关闭其他正在运行的实例（任务管理器结束 python.exe），然后重试。'
-            )
-        except Exception as e:
-            log('WARNING', 'DB', f'清理残留 {stale} 失败: {e}')
+    wal = DB_PATH + '-wal'
+    if not os.path.isfile(wal):
+        return
+    try:
+        size = os.path.getsize(wal)
+    except OSError:
+        size = -1
+    log('INFO', 'DB', f'检测到上次未合并的 WAL（{size} 字节），由 SQLite 自动重放恢复，不做删除')
 
 
 def _create_connection():
@@ -59,8 +61,8 @@ def _create_connection():
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
         os.makedirs(db_dir, exist_ok=True)
-    # 连接前清理残留 WAL/SHM 文件
-    _cleanup_stale_wal_files()
+    # 连接前先记录（绝不删除）残留 WAL，具体恢复由 SQLite 自动完成
+    _recover_pending_wal()
     conn = sqlite3.connect(
         DB_PATH,
         timeout=30,

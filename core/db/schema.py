@@ -22,7 +22,8 @@ def init_db():
         else:
             print(f'[FATAL] 数据库连接失败: {msg}', file=sys.stderr)
             print(f'[提示] 数据库路径: {_get_db_path}', file=sys.stderr)
-            print('[提示] 如果反复出现，请手动删除 uploads/db/ 下的 site.db-wal 和 site.db-shm 文件。', file=sys.stderr)
+            print('[提示] 切勿手动删除 site.db-wal / site.db-shm，里面可能还有未合并的已提交数据。', file=sys.stderr)
+            print('[提示] 请先结束占用数据库的其他进程，WAL 会由 SQLite 自动恢复。', file=sys.stderr)
         sys.stderr.flush()
         raise
     except Exception as e:
