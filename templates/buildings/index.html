@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from 'macros/search.html' import inline_search %}
 {% block title %}公共建筑{% endblock %}
 {% block extra_style %}
 <style>
@@ -83,16 +84,11 @@
         </div>
 
         <div class="mb-6 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-            {# 搜索框：点击后打开独立搜索页（不再就地展开/置顶） #}
+            {# 页面内就地搜索：点击展开、/api/search 搜索、无结果提示（见 macros/search.html） #}
             <div class="flex-1 min-w-0">
-                <div id="building-search-wrap" class="search-entry relative" data-search-open="buildings"
-                     role="button" tabindex="0" aria-label="搜索公共建筑">
-                    <i data-lucide="search" class="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-cream/40 search-icon"></i>
-                    <input id="building-search-input" type="text" maxlength="60"
-                           value="{{ search_query }}" readonly tabindex="-1" aria-hidden="true"
-                           placeholder="搜索建筑标题或标签…"
-                           class="input-field search-input w-full pl-10 py-2.5 rounded-xl text-sm">
-                </div>
+                {{ inline_search(kind='buildings', label='搜索建筑',
+                                 placeholder='搜索建筑标题或标签…',
+                                 value=search_query, open_width=520) }}
             </div>
             <div class="flex items-center gap-2 flex-shrink-0 flex-wrap">
                 {% if user %}
@@ -165,9 +161,6 @@
                         {% endfor %}
                     </div>
                     {% endif %}
-                    <a href="{{ url_for('buildings.building_detail', building_id=b.id) }}" class="hover:no-underline">
-                        <p class="text-cream/60 text-sm leading-relaxed mb-4 line-clamp-3">{{ b.description[:150] }}{{ '...' if b.description|length > 150 else '' }}</p>
-                    </a>
                     <div class="flex items-center justify-between text-xs text-cream/40">
                         <span class="flex items-center gap-1"><i data-lucide="user" class="w-3 h-3"></i>{{ b.author_name or '未知' }}</span>
                         <span class="flex items-center gap-3">
@@ -251,8 +244,6 @@
     }
 
     function cardHtml(b) {
-        var desc = b.description || '';
-        var shortDesc = desc.length > 150 ? desc.slice(0, 150) + '...' : desc;
         var detail = CFG.detailBase + b.id;
         return '<div class="building-card block p-6 search-fade-in" data-id="' + b.id + '">' +
             '<div class="building-card-top-bar"></div>' +
@@ -266,8 +257,6 @@
                     '<i data-lucide="map-pin" class="w-3 h-3"></i>' +
                     '<span class="font-mono">/res tp ' + escapeHtml(b.warp_name) + '</span></div>' +
                 tagsHtml(b.tags) +
-                '<a href="' + detail + '" class="hover:no-underline">' +
-                    '<p class="text-cream/60 text-sm leading-relaxed mb-4 line-clamp-3">' + escapeHtml(shortDesc) + '</p></a>' +
                 '<div class="flex items-center justify-between text-xs text-cream/40">' +
                     '<span class="flex items-center gap-1"><i data-lucide="user" class="w-3 h-3"></i>' + escapeHtml(b.author_name || '未知') + '</span>' +
                     '<span class="flex items-center gap-3">' +

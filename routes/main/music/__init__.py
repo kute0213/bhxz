@@ -29,22 +29,12 @@ from core.shared.ip import get_client_ip
 
 @main_bp.route('/music')
 def music_page():
-    """大喇叭音频板块：公开音频列表（支持按名称或标签搜索，每次加载 10 条）。
+    """大喇叭音频板块：公开音频列表。
 
-    前端搜索与「加载更多」通过 /api/music 无刷新获取；此处仅渲染首页数据。
+    列表数据统一由前端通过 /api/music 获取（首屏 / 搜索 / 「加载更多」），
+    此处仅渲染页面骨架，不再在服务端注入列表数据。
     """
-    user = get_current_user()
-    keyword = request.args.get('q', '').strip()
-    public_musics, has_more = music_service.get_public_musics_page(keyword, page=1)
-    music_service.attach_durations(public_musics)
-    favorite_ids = music_service.get_favorite_ids(user['id']) if user else set()
-    return render_page(
-        'music/index.html',
-        public_musics=public_musics,
-        has_more=has_more,
-        keyword=keyword,
-        favorite_ids=favorite_ids,
-    )
+    return render_page('music/index.html')
 
 
 @main_bp.route('/api/music')

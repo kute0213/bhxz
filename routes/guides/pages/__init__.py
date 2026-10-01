@@ -50,7 +50,9 @@ def guide_list():
         ).fetchone()['c']
         rows = conn.execute(
             f"""
-            SELECT g.*, u.username as author_name,
+            SELECT g.id, g.title, g.summary, g.status, g.is_pinned, g.cover_image,
+                   g.created_at, g.updated_at, g.published_at, g.rejected_reason,
+                   u.username as author_name,
                    (SELECT COUNT(*) FROM guide_favorites f WHERE f.guide_id = g.id) AS favorite_count
             FROM server_guides g
             LEFT JOIN users u ON g.author_id = u.id
@@ -126,7 +128,9 @@ def guide_favorites():
     try:
         rows = conn.execute(
             """
-            SELECT g.*, u.username AS author_name,
+            SELECT g.id, g.title, g.summary, g.status, g.is_pinned, g.cover_image,
+                   g.created_at, g.updated_at, g.published_at, g.rejected_reason,
+                   u.username AS author_name,
                    (SELECT COUNT(*) FROM guide_favorites f WHERE f.guide_id = g.id) AS favorite_count
             FROM guide_favorites fav
             JOIN server_guides g ON fav.guide_id = g.id

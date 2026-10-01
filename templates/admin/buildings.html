@@ -93,6 +93,9 @@
                             </td>
                             <td class="px-4 py-3">
                                 <div class="flex items-center gap-2 flex-wrap" data-building-actions="{{ b.id }}">
+                                    <button type="button"
+                                            class="text-xs px-2 py-1 rounded bg-sky-500/10 text-sky-400 border border-sky-500/20 hover:bg-sky-500/20"
+                                            onclick="previewBuilding({{ b.id }})">预览</button>
                                     {% if b.status == 'pending' %}
                                     <button type="button"
                                             class="admin-action text-xs px-2 py-1 rounded bg-green-500/10 text-green-400 border border-green-500/20 hover:bg-green-500/20"
@@ -142,10 +145,86 @@
     </div>
 </div>
 {% endcall %}
+
+{# 建筑预览弹窗：审核前无需跳转详情页即可查看完整内容 #}
+{% call modal_shell('buildingPreviewModal', size='lg', title='建筑预览', icon='eye', icon_color='blue') %}
+<div class="modal-body">
+    <div id="buildingPreviewBody"></div>
+</div>
+<div class="modal-footer">
+    <button type="button" class="btn-secondary" onclick="closeModal('buildingPreviewModal')">关闭</button>
+    <a href="#" id="buildingPreviewLink" target="_blank" rel="noopener"
+       class="btn-primary inline-flex items-center gap-2">
+        <i data-lucide="external-link" class="w-4 h-4"></i>前往详情页
+    </a>
+</div>
+{% endcall %}
+
+{# 建筑完整数据（含描述/使用说明/注意事项），供预览弹窗读取 #}
+<script id="buildingPreviewData" type="application/json">{{ buildings|tojson }}</script>
 {% endblock %}
 
 {% block extra_script %}
 <script>
+// 公共建筑预览：读取页面内嵌的完整数据（含描述/使用说明/注意事项）
+var BUILDING_PREVIEW = (function () {
+    try {
+        return JSON.parse(document.getElementById('buildingPreviewData').textContent || '[]');
+    } catch (_) { return []; }
+})();
+
+function pvEsc(t) {
+    var d = document.createElement('div');
+    d.textContent = t == null ? '' : String(t);
+    return d.innerHTML;
+}
+
+function pvField(label, value, mono) {
+    var v = (value == null ? '' : String(value)).trim();
+    if (!v) return '';
+    return '<div class="mb-4">' +
+        '<div class="text-xs text-cream/50 mb-1">' + pvEsc(label) + '</div>' +
+        '<div class="text-sm text-cream/85 whitespace-pre-wrap break-words' +
+        (mono ? ' font-mono' : '') + '">' + pvEsc(v) + '</div></div>';
+}
+
+function previewBuilding(id) {
+    var b = null;
+    for (var i = 0; i < BUILDING_PREVIEW.length; i++) {
+        if (Number(BUILDING_PREVIEW[i].id) === Number(id)) { b = BUILDING_PREVIEW[i]; break; }
+    }
+    if (!b) return;
+
+    var statusText = { approved: '已通过', pending: '待审核', rejected: '已拒绝' }[b.status] || b.status || '';
+    var statusCls = { approved: 'bg-green-500/10 text-green-400', pending: 'bg-yellow-500/10 text-yellow-400', rejected: 'bg-red-500/10 text-red-400' }[b.status] || 'bg-gray-500/10 text-gray-400';
+
+    var tags = String(b.tags || '').split(',').map(function (t) { return t.trim(); }).filter(Boolean);
+    var tagsHtml = tags.length ? '<div class="flex flex-wrap gap-1.5 mb-4">' + tags.map(function (t) {
+        return '<span class="text-xs px-2 py-0.5 rounded-full bg-sky-500/10 text-sky-300 border border-sky-500/20">#' + pvEsc(t) + '</span>';
+    }).join('') + '</div>' : '';
+
+    var html = '<div class="flex items-center gap-3 mb-4">' +
+        '<h3 class="text-lg font-bold text-cream flex-1 min-w-0 break-words">' + pvEsc(b.title || '（无标题）') + '</h3>' +
+        '<span class="text-xs px-2 py-0.5 rounded-full flex-shrink-0 ' + statusCls + '">' + pvEsc(statusText) + '</span></div>' +
+        '<div class="flex flex-wrap items-center gap-3 text-xs text-cream/60 mb-4">' +
+        '<span class="inline-flex items-center gap-1 font-mono text-[var(--accent-blue)]">/res tp ' + pvEsc(b.warp_name || '') + '</span>' +
+        '<span>作者：' + pvEsc(b.author_name || '未知') + '</span>' +
+        '<span>浏览：' + (b.view_count || 0) + '</span>' +
+        '<span>' + pvEsc((b.created_at || '').slice(0, 16)) + '</span></div>' +
+        tagsHtml +
+        pvField('建筑描述', b.description) +
+        pvField('使用说明', b.usage_info) +
+        pvField('注意事项', b.notes) +
+        (b.status === 'rejected' && b.rejected_reason
+            ? '<div class="mt-2 p-3 rounded-lg bg-red-500/10 border border-red-500/20 text-sm text-red-300">拒绝原因：' + pvEsc(b.rejected_reason) + '</div>'
+            : '');
+
+    document.getElementById('buildingPreviewBody').innerHTML = html;
+    document.getElementById('buildingPreviewLink').setAttribute('href', '/buildings/' + id);
+    openModal('buildingPreviewModal');
+    if (typeof lucide !== 'undefined' && lucide.createIcons) { try { lucide.createIcons(); } catch (_) {} }
+}
+
 function showRejectModal(buildingId, buildingTitle) {
     document.getElementById('rejectBuildingTitle').textContent = '确定拒绝建筑「' + buildingTitle + '」？';
     document.getElementById('rejectReasonInput').value = '';

@@ -4,6 +4,22 @@
 
 ### 新增
 
+* **页面内就地搜索框（SiteSearch v6）**：**每个列表页使用自己的搜索框**（公共建筑 / 服务器指南 / 大喇叭音频 / 讨论），由新宏 `templates/macros/search.html` 的 `inline_search()` 统一渲染；**导航栏移除搜索输入框**。折叠态仅显示「搜索」胶囊按钮，点击后按钮收起、输入框带缓动动画平滑展开（`max-width` + `opacity` 过渡，展开/收起双向流畅）；交互规则：输入框有文字 **或** 光标在框内 → 保持展开，无文字 **且** 失焦（点击外部）→ 平滑收起，Esc 一键清空并收起；输入防抖 220ms 调用 `/api/search` 聚合搜索，下拉面板按分类分组展示并显示各类命中数量，**无任何命中时显示「没有找到相关内容」**；过期请求用序列号丢弃，只渲染最新一次结果
+* **大喇叭音频列表整体走 API 获取**：公开音频列表**首屏 / 搜索 / 「加载更多」全部由前端调用 `GET /api/music` 获取**，页面路由 `music_page()` 仅渲染骨架、不再在服务端注入列表数据（`templates/music/index.html` 首屏显示加载态后 `fetch` 第一页；无结果显示空态提示）
+* **公共建筑管理「预览」功能**：`templates/admin/buildings.html` 每行新增「预览」按钮，弹窗内展示建筑完整内容（标题、领地名、标签、作者、浏览数、创建时间、建筑描述、使用说明、注意事项、拒绝原因）并提供「前往详情页」入口，审核前无需跳转详情页即可查看完整内容（复用 `macros/modal.html` 的 `modal_shell`）
+* **列表 API 不再返回正文内容**：公共建筑 / 服务器指南 / 讨论帖子列表接口仅返回列表所需字段，分别移除了 `description`（含使用方式/注意事项）、`content`（指南正文、帖子正文）等大字段（`services/buildings/`、`routes/guides/api/`、`services/discussion/topics/`、`routes/guides/pages/` 同步精简），减少响应体积；前端模板与 JS 同步移除对正文的依赖（无摘要时显示「暂无摘要」）；`/api/search` 结果中的描述截断为 120 字
+
+### 修复
+
+* **所有「查看数量」始终不增加**：`routes/buildings/pages/__init__.py` 的建筑详情页 `view_count + 1` 使用「`conn.execute()` 后直接 `conn.close()`」，**未提交事务**，SQLite 关闭连接时回滚更新，导致浏览量永远不变；改为 `with get_db() as conn:` 上下文（退出自动 `commit()`），浏览量正常累加。讨论帖子的浏览计数本就使用 `with get_db()`，一并核对无误
+* **圆角组件文字/图标穿模**：旧的搜索入口 `.search-entry` 用绝对定位按正方形摆放图标、输入框另加 `pl-10`，圆角下图标与文字易重叠越界；重写为 `.site-search` 组件后，圆角搜索框内部一律使用 flex 居中布局（`inline-flex` + `align-items:center`），图标 `flex-shrink:0`、输入框 `flex:1; min-width:0`，并在折叠动画容器上加 `overflow:hidden; white-space:nowrap`，文字与图标不再越出圆角边界
+
+### 调整
+
+* **搜索样式与脚本版本号**：`base.css` v38 → v39、`search.js` v5 → v6（迁移到页面内就地搜索组件，`.nav-search*` 全套样式替换为 `.site-search*`）
+
+### 新增
+
 * **全站搜索（独立搜索页 `/search`）**：新增跨模块聚合搜索，一次查询同时覆盖公共建筑 / 服务器指南 / 大喇叭音频 / 讨论帖子，按分类分组展示并显示各类命中数量；顶部标签可切换分类（URL `?type=` 指定初始分类），输入即防抖搜索（`/api/search`）无刷新渲染。新增 `services/search/`（纯业务聚合）、`routes/search/`（页面 + API）、`templates/search/index.html`
 * **服务器指南搜索**：指南列表页顶部新增搜索入口（跳转全站搜索页并定位「服务器指南」分类）；`/api/guides/list` 与指南列表页支持 `q` 关键词，按标题与摘要模糊匹配
 * **列表分页可配置**：公共建筑 / 大喇叭音频 / 服务器指南 / 讨论帖子 / 讨论回复 / 后台背景图片 / 后台账号申请 / 全站搜索 的每页条数统一由系统设置「列表分页」或 `config.py` 控制（`config.get_page_size()`，限制 1–100，默认 5）

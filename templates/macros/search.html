@@ -1,0 +1,36 @@
+{#
+  页面内就地搜索框宏（每个页面使用自己的搜索框，导航栏不放输入框）
+  用法:
+    {% from 'macros/search.html' import inline_search %}
+    {{ inline_search(kind='buildings', label='搜索建筑', placeholder='搜索建筑标题或标签…', value=search_query) }}
+
+  参数:
+    kind        分类键（all / buildings / guides / music / topics），用于预选结果面板的分类
+    label       折叠态胶囊按钮上的文案
+    placeholder 展开后输入框的占位文案
+    value       初始关键词（有值时组件默认展开）
+    open_width  展开后的最大宽度（px），用于适配不同页面的布局
+
+  交互逻辑见 static/js/core/search.js，样式见 static/css/base.css 的 .site-search 块。
+#}
+{% macro inline_search(kind='all', label='搜索', placeholder='', value='', open_width=520) %}
+<div class="site-search" data-search-kind="{{ kind }}" data-search-value="{{ value }}"
+     style="--search-open-w: {{ open_width }}px">
+    <button type="button" class="site-search-trigger" aria-label="{{ label }}">
+        <i data-lucide="search" class="w-4 h-4 site-search-trigger-icon"></i>
+        <span>{{ label }}</span>
+    </button>
+    <div class="site-search-field">
+        <i data-lucide="search" class="w-4 h-4 site-search-field-icon"></i>
+        <input type="text" class="site-search-input" maxlength="60" autocomplete="off"
+               value="{{ value }}" placeholder="{{ placeholder }}" aria-label="{{ label }}">
+        <button type="button" class="site-search-clear" aria-label="清空">
+            <i data-lucide="x" class="w-3.5 h-3.5"></i>
+        </button>
+        <button type="button" class="site-search-submit" aria-label="搜索">
+            <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+        </button>
+    </div>
+    <div class="site-search-panel" role="listbox" aria-hidden="true"></div>
+</div>
+{% endmacro %}

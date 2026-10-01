@@ -60,7 +60,7 @@ def _search_buildings(conn, like, limit):
     items = [{
         'id': r['id'],
         'title': r['title'] or '',
-        'desc': r['description'] or '',
+        'desc': (r['description'] or '')[:120],
         'tags': r['tags'] or '',
         'warp_name': r['warp_name'] or '',
         'author_name': r['author_name'] or '未知',

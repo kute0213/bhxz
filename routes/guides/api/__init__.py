@@ -155,7 +155,7 @@ def api_guides_list():
         ).fetchone()['c']
         rows = conn.execute(
             f"""
-            SELECT g.id, g.title, g.summary, g.content, g.status, g.is_pinned,
+            SELECT g.id, g.title, g.summary, g.status, g.is_pinned,
                    g.created_at, g.updated_at, g.published_at, g.rejected_reason,
                    u.username AS author_name
             FROM server_guides g

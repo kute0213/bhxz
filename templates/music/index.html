@@ -1,5 +1,6 @@
 {% extends "base.html" %}
-{% from "macros/music_macros.html" import music_status_badge, music_copy_link_button, music_mp3_link_button, music_duration_button, music_favorite_button, music_tags_list, music_audio_player, music_player_assets %}
+{% from "macros/music_macros.html" import music_player_assets %}
+{% from 'macros/search.html' import inline_search %}
 {% block title %}大喇叭音频{% endblock %}
 {% block content %}
 <section class="page-container py-12">
@@ -38,59 +39,34 @@
                     <i data-lucide="music" class="w-5 h-5 text-gold-400"></i>
                     公开音频（游戏内大喇叭）
                 </h2>
-                {# 搜索框：点击后打开独立搜索页（不再就地展开/置顶） #}
-                <div class="search-entry relative min-w-[190px]" data-search-open="music"
-                     role="button" tabindex="0" aria-label="搜索大喇叭音频">
-                    <i data-lucide="search" class="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-cream/40 search-icon"></i>
-                    <input type="text" maxlength="60" value="{{ keyword }}" readonly tabindex="-1" aria-hidden="true"
-                           placeholder="搜索音频名称或标签…"
-                           class="input-field search-input w-full pl-9 py-2 rounded-lg text-sm">
+                {# 页面内就地搜索：点击展开、/api/search 搜索、无结果提示（见 macros/search.html） #}
+                <div class="flex-1 min-w-[190px] flex justify-end">
+                    {{ inline_search(kind='music', label='搜索音频',
+                                     placeholder='搜索音频名称或标签…',
+                                     value='', open_width=360) }}
                 </div>
             </div>
             <p class="text-sm text-cream/60 mb-3 hidden" id="music-result-hint"></p>
 
+            {# 列表数据由前端通过 /api/music 获取（首屏 / 搜索 / 加载更多） #}
             <div class="space-y-3" id="music-list">
-                {% for m in public_musics %}
-                <div class="pixel-card music-card rounded-xl p-4 search-fade-in" data-id="{{ m.id }}">
-                    <div class="flex flex-wrap items-center gap-3">
-                        <div class="w-10 h-10 bg-gold-400/20 rounded-lg flex items-center justify-center flex-shrink-0">
-                            <i data-lucide="music" class="w-5 h-5 text-gold-400"></i>
-                        </div>
-                        <div class="flex-1 min-w-0">
-                            <div class="font-bold text-cream truncate">{{ m.title }}</div>
-                            <div class="text-xs text-cream/50 mt-1 flex items-center gap-3">
-                                <span class="flex items-center gap-1">
-                                    <i data-lucide="user" class="w-3 h-3"></i>{{ m.username }}
-                                </span>
-                                <span>{{ (m.created_at or '')[:10] }}</span>
-                            </div>
-                            {{ music_tags_list(m.tags) }}
-                        </div>
-                        <div class="music-card-actions">
-                            {{ music_favorite_button(m.id, m.id in favorite_ids, user) }}
-                            {{ music_copy_link_button(request.host_url.rstrip('/') ~ '/music/' ~ m.id ~ '.m3u8') }}
-                            {{ music_mp3_link_button(m.id) }}
-                            {{ music_duration_button(m.duration_seconds) }}
-                        </div>
-                    </div>
-                    <div class="mt-3">
-                        {{ music_audio_player(m.id) }}
-                    </div>
+                <div class="pixel-card rounded-xl p-12 text-center" id="music-loading">
+                    <i data-lucide="loader-2" class="w-10 h-10 mx-auto text-cream/30 mb-4 animate-spin"></i>
+                    <p class="text-cream/50">加载中…</p>
                 </div>
-                {% endfor %}
             </div>
 
-            <div class="pixel-card rounded-xl p-12 text-center{% if public_musics %} hidden{% endif %}" id="music-empty">
+            <div class="pixel-card rounded-xl p-12 text-center hidden" id="music-empty">
                 <i data-lucide="music" class="w-12 h-12 mx-auto text-cream/20 mb-4"></i>
-                <p class="text-cream/50" id="music-empty-text">{% if keyword %}没有找到匹配「{{ keyword }}」的公开音频{% else %}暂无公开音频{% endif %}</p>
+                <p class="text-cream/50" id="music-empty-text">暂无公开音频</p>
             </div>
 
             <div class="mt-6 text-center">
                 <button type="button" id="music-load-more"
-                        class="btn-secondary px-6 py-2.5 rounded-lg text-sm inline-flex items-center gap-2{% if not has_more %} hidden{% endif %}">
+                        class="btn-secondary px-6 py-2.5 rounded-lg text-sm inline-flex items-center gap-2 hidden">
                     <i data-lucide="chevron-down" class="w-4 h-4"></i>加载更多
                 </button>
-                <p id="music-load-end" class="text-xs text-cream/40 mt-2{% if has_more %} hidden{% endif %}">没有更多了</p>
+                <p id="music-load-end" class="text-xs text-cream/40 mt-2 hidden">没有更多了</p>
             </div>
         </div>
     </div>
@@ -109,12 +85,13 @@
     };
 
     var list = document.getElementById('music-list');
+    var loadingBox = document.getElementById('music-loading');
     var emptyBox = document.getElementById('music-empty');
     var emptyText = document.getElementById('music-empty-text');
     var loadMoreBtn = document.getElementById('music-load-more');
     var loadEnd = document.getElementById('music-load-end');
     var resultHint = document.getElementById('music-result-hint');
-    var state = { page: 1, query: "{{ keyword }}", loading: false };
+    var state = { page: 1, query: "", loading: false };
 
     function esc(t) { var d = document.createElement('div'); d.textContent = t == null ? '' : String(t); return d.innerHTML; }
     function refreshIcons() { if (typeof lucide !== 'undefined' && lucide.createIcons) { try { lucide.createIcons(); } catch (_) {} } }
@@ -168,6 +145,8 @@
     function render(items, append) {
         if (!append) list.innerHTML = '';
         if (items.length) list.insertAdjacentHTML('beforeend', items.map(cardHtml).join(''));
+        loadingBox = document.getElementById('music-loading');
+        if (loadingBox) loadingBox.remove();
         var hasAny = list.children.length > 0;
         emptyBox.classList.toggle('hidden', hasAny);
         refreshIcons();
@@ -213,9 +192,6 @@
         .finally(function () { setLoading(false); });
     }
 
-    // 搜索入口已改为跳转独立搜索页（见 base.html 引入的 search.js），
-    // 本页不再就地展开/置顶搜索框。
-
     loadMoreBtn.addEventListener('click', function () { fetchPage(state.page + 1, true); });
 
     // 复制链接（事件委托，兼容动态渲染）
@@ -234,6 +210,9 @@
             document.body.removeChild(ta);
         }
     });
+
+    // 首屏：通过 API 获取第一页公开音频
+    fetchPage(1, false);
 })();
 </script>
 {% endblock %}

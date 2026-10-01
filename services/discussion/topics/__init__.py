@@ -44,9 +44,13 @@ def get_topics_page(category_id, page):
     offset = (page - 1) * per_page
     conn = get_db()
     try:
+        COLS = (
+            "t.id, t.user_id, t.category_id, t.title, t.tags, "
+            "t.is_pinned, t.is_locked, t.view_count, t.created_at, t.updated_at"
+        )
         if category_id:
             rows = conn.execute(
-                """SELECT t.*, u.username, u.avatar_key, c.name AS category_name,
+                f"""SELECT {COLS}, u.username, u.avatar_key, c.name AS category_name,
                           (SELECT COUNT(*) FROM discussion_replies r WHERE r.topic_id = t.id) AS reply_count
                    FROM discussion_topics t
                    JOIN users u ON t.user_id = u.id
@@ -58,7 +62,7 @@ def get_topics_page(category_id, page):
             ).fetchall()
         else:
             rows = conn.execute(
-                """SELECT t.*, u.username, u.avatar_key, c.name AS category_name,
+                f"""SELECT {COLS}, u.username, u.avatar_key, c.name AS category_name,
                           (SELECT COUNT(*) FROM discussion_replies r WHERE r.topic_id = t.id) AS reply_count
                    FROM discussion_topics t
                    JOIN users u ON t.user_id = u.id
@@ -84,7 +88,9 @@ def get_admin_topics_page(page=1, page_size=None):
             "SELECT COUNT(*) AS c FROM discussion_topics"
         ).fetchone()['c']
         rows = conn.execute(
-            """SELECT t.*, u.username,
+            """SELECT t.id, t.user_id, t.category_id, t.title, t.tags,
+                      t.is_pinned, t.is_locked, t.view_count, t.created_at, t.updated_at,
+                      u.username,
                       (SELECT COUNT(*) FROM discussion_replies r WHERE r.topic_id = t.id) AS reply_count
                FROM discussion_topics t
                JOIN users u ON t.user_id = u.id

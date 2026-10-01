@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from 'macros/search.html' import inline_search %}
 {% block title %}服务器指南{% endblock %}
 {% block extra_style %}
 <style>
@@ -62,16 +63,11 @@
             <p class="text-cream/60 text-sm sm:text-base">{{ '我提交或编辑过的指南' if my_mode else '探索滨海小镇的玩法与最新公告' }}</p>
         </div>
 
-        {# 搜索框：点击后打开独立搜索页（不再就地展开/置顶） #}
+        {# 页面内就地搜索：点击展开、/api/search 搜索、无结果提示（见 macros/search.html） #}
         <div class="max-w-xl mx-auto mb-8">
-            <div id="guide-search-wrap" class="search-entry relative" data-search-open="guides"
-                 role="button" tabindex="0" aria-label="搜索服务器指南">
-                <i data-lucide="search" class="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-cream/40 search-icon"></i>
-                <input id="guide-search-input" type="text" maxlength="60"
-                       value="{{ keyword }}" readonly tabindex="-1" aria-hidden="true"
-                       placeholder="搜索指南标题或摘要…"
-                       class="input-field search-input w-full pl-10 py-2.5 rounded-xl text-sm">
-            </div>
+            {{ inline_search(kind='guides', label='搜索指南',
+                             placeholder='搜索指南标题或摘要…',
+                             value=keyword, open_width=520) }}
         </div>
 
         {% if user %}
@@ -113,7 +109,7 @@
                     </div>
                     <a href="{{ url_for('guides.guide_detail', guide_id=guide.id) }}" class="hover:no-underline">
                         <h3 class="text-lg font-bold mb-2 text-cream">{{ guide.title }}</h3>
-                        <p class="text-cream/60 text-sm leading-relaxed mb-4 line-clamp-3">{{ guide.summary or (guide.content or '')[:120] + '...' }}</p>
+                        <p class="text-cream/60 text-sm leading-relaxed mb-4 line-clamp-3">{{ guide.summary or '暂无摘要' }}</p>
                     </a>
                     <div class="flex items-center justify-between text-xs text-cream/40">
                         <span class="flex items-center gap-1"><i data-lucide="user" class="w-3 h-3"></i>{{ guide.author_name or '未知' }}</span>
@@ -191,7 +187,7 @@
         }
         var pin = g.is_pinned ? '<span class="inline-flex items-center gap-1 text-xs text-gold-400"><i data-lucide="pin" class="w-3 h-3"></i>置顶</span>' : '';
         var date = ((g.published_at || g.created_at || '') + '').slice(0, 10);
-        var summary = g.summary || (((g.content || '').slice(0, 120)) + '...');
+        var summary = g.summary || '暂无摘要';
         var mine = '';
         if (state.myMode) {
             mine = '<div class="mt-3 pt-3 border-t border-forest-700/30 flex items-center gap-2">' +

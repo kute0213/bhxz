@@ -123,7 +123,9 @@ def list_buildings(search=None, tag=None, page=1, page_size=None,
     with get_db() as conn:
         rows = conn.execute(
             f"""
-            SELECT b.*, u.username AS author_name,
+            SELECT b.id, b.title, b.warp_name, b.tags, b.author_id, b.status,
+                   b.view_count, b.created_at, b.updated_at, b.published_at,
+                   b.rejected_reason, u.username AS author_name,
                    (SELECT COUNT(*) FROM building_favorites f
                     WHERE f.building_id = b.id) AS favorite_count
             FROM public_buildings b
@@ -168,7 +170,10 @@ def list_favorite_buildings(user_id, search=None, page=1, page_size=None):
     with get_db() as conn:
         rows = conn.execute(
             f"""
-            SELECT b.*, u.username AS author_name, f.created_at AS fav_created_at,
+            SELECT b.id, b.title, b.warp_name, b.tags, b.author_id, b.status,
+                   b.view_count, b.created_at, b.updated_at, b.published_at,
+                   b.rejected_reason, u.username AS author_name,
+                   f.created_at AS fav_created_at,
                    (SELECT COUNT(*) FROM building_favorites ff
                     WHERE ff.building_id = b.id) AS favorite_count
             FROM building_favorites f

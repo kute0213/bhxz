@@ -217,15 +217,14 @@ def building_detail(building_id):
     finally:
         conn.close()
 
-    # 增加浏览次数
+    # 增加浏览次数（with get_db() 会在退出时自动 commit，避免计数丢失）
     if user is None or (user and building['author_id'] != user['id']):
         try:
-            conn = get_db()
-            conn.execute(
-                "UPDATE public_buildings SET view_count = view_count + 1 WHERE id = ?",
-                (building_id,),
-            )
-            conn.close()
+            with get_db() as conn:
+                conn.execute(
+                    "UPDATE public_buildings SET view_count = view_count + 1 WHERE id = ?",
+                    (building_id,),
+                )
         except Exception:
             pass
 

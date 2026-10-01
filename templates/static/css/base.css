@@ -544,26 +544,11 @@ body::after {
 .input-field::placeholder { color: var(--text-muted); }
 
 /* ============================================
-   全站统一搜索入口（SiteSearch）
-   点击「搜索框」→ 就地展开导航栏搜索框并自动聚焦（详见 search.js）
+   页面内就地搜索（SiteSearch）
+   每个页面使用自己的搜索框（导航栏不再放输入框），
+   组件结构与动画见文件末尾的 .site-search 样式块；逻辑见 static/js/core/search.js
    ============================================ */
-.search-icon { cursor: pointer; transition: color var(--transition-fast); }
-.search-icon:hover { color: var(--text-secondary); }
-
-/* 页面内的搜索框入口：外观与真实输入框一致，故统一使用「输入文字」光标 */
-.search-entry { position: relative; cursor: text; }
-.search-entry .input-field { cursor: text; transition: border-color var(--transition-fast), box-shadow var(--transition-fast); }
-.search-entry .search-icon { cursor: text; }
-.search-entry:hover .input-field,
-.search-entry:focus-visible .input-field,
-.search-entry:focus-within .input-field {
-    border-color: rgba(2, 132, 199, 0.45);
-    box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.1);
-}
-.search-entry:hover .search-icon { color: var(--text-secondary); }
-
-/* 其余 data-search-open 入口（如移动端菜单「搜索」按钮）保持手型光标 */
-[data-search-open]:not(.search-entry) { cursor: pointer; }
+[data-search-open] { cursor: pointer; }
 
 /* 搜索时列表项的淡入，避免结果突变 */
 .search-fade-in { animation: searchFadeIn 0.35s cubic-bezier(0.22, 1, 0.36, 1) both; }
@@ -1281,82 +1266,114 @@ pre::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.24); }
 }
 
 /* ============================================
-   导航栏就地搜索（nav-search）
-   初始折叠 → 点击平滑展开 → 有文字/有焦点保持展开 → 失焦且空自动收起
+   页面内就地搜索（site-search）
+   折叠态 → 仅显示「搜索」胶囊按钮
+   展开态 → 按钮收起 + 输入框平滑展开（展开/收起均有动画）
+   交互规则：输入框有文字 或 光标在其中 → 保持展开；
+             无文字 且 失焦 → 平滑收起
    ============================================ */
-.nav-search {
-    position: relative;
-    display: inline-flex;
-    align-items: center;
-}
-
-/* 折叠态：按钮 + 隐藏的输入壳 */
-.nav-search-btn {
-    cursor: pointer;
-}
-.nav-search.is-open .nav-search-btn {
-    display: none;
-}
-
-.nav-search-input-wrap {
+.site-search {
     position: relative;
     display: flex;
     align-items: center;
-    overflow: hidden;
-    width: 0;
-    max-width: 280px;
-    opacity: 0;
-    padding: 0;
-    border-radius: 14px;
-    border: 1px solid rgba(234, 179, 8, 0.20);
-    background: rgba(120, 53, 15, 0.08);
-    cursor: text;
-    transition:
-        width 0.28s cubic-bezier(0.4, 0, 0.2, 1),
-        opacity 0.22s ease,
-        padding 0.22s ease,
-        border-color 0.22s ease,
-        background-color 0.22s ease;
-}
-.nav-search.is-open .nav-search-input-wrap {
-    width: 280px;
-    padding: 0 4px 0 10px;
-    opacity: 1;
-    border-color: rgba(234, 179, 8, 0.45);
-    background: rgba(120, 53, 15, 0.14);
-}
-@media (max-width: 1023px) {
-    .nav-search.is-open .nav-search-input-wrap {
-        width: 220px;
-    }
+    width: 100%;
+    max-width: var(--search-open-w, 520px);
+    vertical-align: middle;
 }
 
-.nav-search-input-icon {
-    flex-shrink: 0;
-    color: rgba(255, 255, 255, 0.40);
+/* 折叠态：搜索胶囊按钮 */
+.site-search-trigger {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex: 0 0 auto;
+    max-width: 240px;
+    padding: 9px 14px;
+    border-radius: 12px;
+    border: 1px solid var(--border-card);
+    background: rgba(255, 255, 255, 0.72);
+    color: var(--text-secondary);
+    font-size: 13px;
+    line-height: 1.2;
+    white-space: nowrap;
+    overflow: hidden;
+    cursor: text;
+    transition:
+        max-width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+        padding 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+        opacity 0.2s ease,
+        border-width 0.3s ease,
+        color var(--transition-fast),
+        border-color var(--transition-fast);
+}
+.site-search-trigger:hover {
+    color: var(--accent-blue);
+    border-color: var(--border-accent);
+}
+.site-search-trigger-icon { flex-shrink: 0; }
+.site-search.is-open .site-search-trigger {
+    max-width: 0;
+    padding-left: 0;
+    padding-right: 0;
+    border-width: 0;
+    opacity: 0;
     pointer-events: none;
 }
-.nav-search-input {
+
+/* 展开态：输入框外壳（max-width 动画实现平滑展开/收起） */
+.site-search-field {
+    position: relative;
+    display: flex;
+    align-items: center;
     flex: 1 1 auto;
     min-width: 0;
+    width: 100%;
+    max-width: 0;
+    padding: 0;
+    opacity: 0;
+    overflow: hidden;
+    border: 1px solid var(--border-card);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.72);
+    transition:
+        max-width 0.34s cubic-bezier(0.4, 0, 0.2, 1),
+        padding 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+        opacity 0.22s ease 0.06s,
+        border-color var(--transition-fast),
+        box-shadow var(--transition-fast);
+}
+.site-search.is-open .site-search-field {
+    max-width: var(--search-open-w, 520px);
+    padding: 0 6px 0 10px;
+    opacity: 1;
+}
+.site-search-field:focus-within {
+    border-color: rgba(2, 132, 199, 0.45);
+    box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.1);
+}
+
+.site-search-field-icon {
+    flex-shrink: 0;
+    color: var(--text-muted);
+    pointer-events: none;
+}
+.site-search-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 38px;
     border: none;
     outline: none;
     background: transparent;
-    color: rgba(255, 255, 255, 0.92);
+    color: var(--text-primary);
     font-size: 14px;
-    line-height: 32px;
-    padding: 0 6px;
-    caret-color: #fbbf24;
+    padding: 0 4px;
 }
-.nav-search-input::placeholder {
-    color: rgba(255, 255, 255, 0.32);
-}
-.nav-search-input:focus {
-    outline: none;
+.site-search-input::placeholder {
+    color: var(--text-muted);
 }
 
-.nav-search-clear,
-.nav-search-submit {
+.site-search-clear,
+.site-search-submit {
     flex-shrink: 0;
     display: inline-flex;
     align-items: center;
@@ -1366,31 +1383,32 @@ pre::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.24); }
     border-radius: 8px;
     border: none;
     background: transparent;
-    color: rgba(255, 255, 255, 0.45);
+    color: var(--text-muted);
     cursor: pointer;
-    transition: color 0.15s, background-color 0.15s;
+    transition: color 0.15s, background-color 0.15s, opacity 0.18s, transform 0.18s;
 }
-.nav-search-clear:hover,
-.nav-search-submit:hover {
-    color: #fbbf24;
-    background: rgba(234, 179, 8, 0.12);
+.site-search-clear:hover,
+.site-search-submit:hover {
+    color: var(--accent-blue);
+    background: rgba(2, 132, 199, 0.1);
 }
-.nav-search-clear {
+.site-search-clear {
     opacity: 0;
     transform: scale(0.8);
-    transition: opacity 0.18s, transform 0.18s, color 0.15s, background-color 0.15s;
+    pointer-events: none;
 }
-.nav-search-clear.visible {
+.site-search-clear.visible {
     opacity: 1;
     transform: scale(1);
+    pointer-events: auto;
 }
 
 /* 下拉结果面板 */
-.nav-search-panel {
+.site-search-panel {
     position: absolute;
     top: calc(100% + 10px);
-    right: 0;
-    width: min(540px, 92vw);
+    left: 0;
+    width: min(520px, 92vw);
     max-height: min(520px, 75vh);
     overflow-y: auto;
     background: rgba(15, 23, 42, 0.96);
@@ -1405,13 +1423,13 @@ pre::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.24); }
     pointer-events: none;
     transition: opacity 0.18s ease, transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.nav-search-panel.is-visible {
+.site-search-panel.is-visible {
     opacity: 1;
     transform: translateY(0) scale(1);
     pointer-events: auto;
 }
 
-.nav-search-tabs {
+.site-search-tabs {
     display: flex;
     align-items: center;
     gap: 4px;
@@ -1424,7 +1442,7 @@ pre::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.24); }
     border-radius: 16px 16px 0 0;
     z-index: 1;
 }
-.nav-search-tab {
+.site-search-tab {
     display: inline-flex;
     align-items: center;
     gap: 4px;
@@ -1437,16 +1455,16 @@ pre::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.24); }
     cursor: pointer;
     transition: color 0.15s, background-color 0.15s, border-color 0.15s;
 }
-.nav-search-tab:hover {
+.site-search-tab:hover {
     color: rgba(255, 255, 255, 0.85);
     background: rgba(255, 255, 255, 0.06);
 }
-.nav-search-tab.is-active {
+.site-search-tab.is-active {
     color: #fbbf24;
     background: rgba(234, 179, 8, 0.12);
     border-color: rgba(234, 179, 8, 0.32);
 }
-.nav-search-tab-badge {
+.site-search-tab-badge {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -1460,10 +1478,10 @@ pre::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.24); }
     line-height: 1;
 }
 
-.nav-search-group {
+.site-search-group {
     padding: 4px 0;
 }
-.nav-search-group-title {
+.site-search-group-title {
     display: flex;
     align-items: center;
     gap: 6px;
@@ -1474,7 +1492,7 @@ pre::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.24); }
     letter-spacing: 0.06em;
     text-transform: uppercase;
 }
-.nav-search-group-count {
+.site-search-group-count {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -1490,7 +1508,7 @@ pre::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.24); }
     letter-spacing: 0;
 }
 
-.nav-search-item {
+.site-search-item {
     display: flex;
     align-items: center;
     gap: 12px;
@@ -1499,18 +1517,18 @@ pre::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.24); }
     text-decoration: none;
     transition: background-color 0.12s;
 }
-.nav-search-item:hover {
+.site-search-item:hover {
     background: rgba(234, 179, 8, 0.08);
 }
-.nav-search-item:hover .nav-search-item-arrow {
+.site-search-item:hover .site-search-item-arrow {
     opacity: 1;
     transform: translateX(0);
 }
-.nav-search-item-icon {
+.site-search-item-icon {
     flex-shrink: 0;
     color: rgba(255, 255, 255, 0.45);
 }
-.nav-search-item-title {
+.site-search-item-title {
     font-size: 14px;
     font-weight: 600;
     color: rgba(255, 255, 255, 0.92);
@@ -1518,7 +1536,7 @@ pre::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.24); }
     overflow: hidden;
     text-overflow: ellipsis;
 }
-.nav-search-item-desc {
+.site-search-item-desc {
     font-size: 12.5px;
     color: rgba(255, 255, 255, 0.45);
     margin-top: 2px;
@@ -1526,19 +1544,19 @@ pre::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.24); }
     overflow: hidden;
     text-overflow: ellipsis;
 }
-.nav-search-item-sub {
+.site-search-item-sub {
     font-size: 11px;
     color: rgba(255, 255, 255, 0.35);
     margin-top: 3px;
 }
-.nav-search-item-arrow {
+.site-search-item-arrow {
     flex-shrink: 0;
     opacity: 0.4;
     transform: translateX(-2px);
     transition: opacity 0.15s, transform 0.15s;
 }
 
-.nav-search-empty {
+.site-search-empty {
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -1546,4 +1564,12 @@ pre::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.24); }
     padding: 40px 16px;
     color: rgba(255, 255, 255, 0.55);
     font-size: 13px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .site-search-trigger,
+    .site-search-field,
+    .site-search-panel {
+        transition: none;
+    }
 }
