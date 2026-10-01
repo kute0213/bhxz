@@ -548,7 +548,6 @@ body::after {
    每个页面使用自己的搜索框（导航栏不再放输入框），
    组件结构与动画见文件末尾的 .site-search 样式块；逻辑见 static/js/core/search.js
    ============================================ */
-[data-search-open] { cursor: pointer; }
 
 /* 搜索时列表项的淡入，避免结果突变 */
 .search-fade-in { animation: searchFadeIn 0.35s cubic-bezier(0.22, 1, 0.36, 1) both; }
@@ -1298,11 +1297,15 @@ pre::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.24); }
     white-space: nowrap;
     overflow: hidden;
     cursor: text;
+    transform-origin: left center;
+    /* 使用 expo-out 缓动，起步快、收尾缓，展开/收起更自然流畅 */
     transition:
-        max-width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-        padding 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-        opacity 0.2s ease,
-        border-width 0.3s ease,
+        max-width 0.42s cubic-bezier(0.22, 1, 0.36, 1),
+        padding 0.42s cubic-bezier(0.22, 1, 0.36, 1),
+        margin 0.42s cubic-bezier(0.22, 1, 0.36, 1),
+        opacity 0.22s ease,
+        transform 0.42s cubic-bezier(0.22, 1, 0.36, 1),
+        border-width 0.42s ease,
         color var(--transition-fast),
         border-color var(--transition-fast);
 }
@@ -1315,12 +1318,14 @@ pre::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.24); }
     max-width: 0;
     padding-left: 0;
     padding-right: 0;
+    margin-right: -6px;
     border-width: 0;
     opacity: 0;
+    transform: translateX(-8px) scale(0.96);
     pointer-events: none;
 }
 
-/* 展开态：输入框外壳（max-width 动画实现平滑展开/收起） */
+/* 展开态：输入框外壳（max-width + 位移/缩放实现自然流畅的展开/收起） */
 .site-search-field {
     position: relative;
     display: flex;
@@ -1335,10 +1340,13 @@ pre::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.24); }
     border: 1px solid var(--border-card);
     border-radius: 12px;
     background: rgba(255, 255, 255, 0.72);
+    transform-origin: right center;
+    transform: translateX(10px) scale(0.98);
     transition:
-        max-width 0.34s cubic-bezier(0.4, 0, 0.2, 1),
-        padding 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-        opacity 0.22s ease 0.06s,
+        max-width 0.46s cubic-bezier(0.22, 1, 0.36, 1),
+        padding 0.4s cubic-bezier(0.22, 1, 0.36, 1),
+        opacity 0.26s ease 0.08s,
+        transform 0.46s cubic-bezier(0.22, 1, 0.36, 1),
         border-color var(--transition-fast),
         box-shadow var(--transition-fast);
 }
@@ -1346,6 +1354,7 @@ pre::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.24); }
     max-width: var(--search-open-w, 520px);
     padding: 0 6px 0 10px;
     opacity: 1;
+    transform: translateX(0) scale(1);
 }
 .site-search-field:focus-within {
     border-color: rgba(2, 132, 199, 0.45);
@@ -1403,173 +1412,9 @@ pre::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.24); }
     pointer-events: auto;
 }
 
-/* 下拉结果面板 */
-.site-search-panel {
-    position: absolute;
-    top: calc(100% + 10px);
-    left: 0;
-    width: min(520px, 92vw);
-    max-height: min(520px, 75vh);
-    overflow-y: auto;
-    background: rgba(15, 23, 42, 0.96);
-    backdrop-filter: blur(16px) saturate(1.1);
-    -webkit-backdrop-filter: blur(16px) saturate(1.1);
-    border: 1px solid rgba(251, 191, 36, 0.18);
-    border-radius: 16px;
-    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.12);
-    z-index: 9998;
-    opacity: 0;
-    transform: translateY(-6px) scale(0.97);
-    pointer-events: none;
-    transition: opacity 0.18s ease, transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
-}
-.site-search-panel.is-visible {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-    pointer-events: auto;
-}
-
-.site-search-tabs {
-    display: flex;
-    align-items: center;
-    gap: 4px;
-    padding: 10px 10px 6px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-    position: sticky;
-    top: 0;
-    background: inherit;
-    backdrop-filter: inherit;
-    border-radius: 16px 16px 0 0;
-    z-index: 1;
-}
-.site-search-tab {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    padding: 5px 10px;
-    border-radius: 999px;
-    border: 1px solid transparent;
-    background: transparent;
-    color: rgba(255, 255, 255, 0.55);
-    font-size: 12px;
-    cursor: pointer;
-    transition: color 0.15s, background-color 0.15s, border-color 0.15s;
-}
-.site-search-tab:hover {
-    color: rgba(255, 255, 255, 0.85);
-    background: rgba(255, 255, 255, 0.06);
-}
-.site-search-tab.is-active {
-    color: #fbbf24;
-    background: rgba(234, 179, 8, 0.12);
-    border-color: rgba(234, 179, 8, 0.32);
-}
-.site-search-tab-badge {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 18px;
-    height: 18px;
-    padding: 0 5px;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.12);
-    color: rgba(255, 255, 255, 0.78);
-    font-size: 11px;
-    line-height: 1;
-}
-
-.site-search-group {
-    padding: 4px 0;
-}
-.site-search-group-title {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 8px 14px 4px;
-    color: rgba(255, 255, 255, 0.55);
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 0.06em;
-    text-transform: uppercase;
-}
-.site-search-group-count {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 20px;
-    height: 16px;
-    padding: 0 5px;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, 0.10);
-    font-size: 10px;
-    color: rgba(255, 255, 255, 0.60);
-    font-weight: 500;
-    text-transform: none;
-    letter-spacing: 0;
-}
-
-.site-search-item {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 10px 14px;
-    color: inherit;
-    text-decoration: none;
-    transition: background-color 0.12s;
-}
-.site-search-item:hover {
-    background: rgba(234, 179, 8, 0.08);
-}
-.site-search-item:hover .site-search-item-arrow {
-    opacity: 1;
-    transform: translateX(0);
-}
-.site-search-item-icon {
-    flex-shrink: 0;
-    color: rgba(255, 255, 255, 0.45);
-}
-.site-search-item-title {
-    font-size: 14px;
-    font-weight: 600;
-    color: rgba(255, 255, 255, 0.92);
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-.site-search-item-desc {
-    font-size: 12.5px;
-    color: rgba(255, 255, 255, 0.45);
-    margin-top: 2px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-.site-search-item-sub {
-    font-size: 11px;
-    color: rgba(255, 255, 255, 0.35);
-    margin-top: 3px;
-}
-.site-search-item-arrow {
-    flex-shrink: 0;
-    opacity: 0.4;
-    transform: translateX(-2px);
-    transition: opacity 0.15s, transform 0.15s;
-}
-
-.site-search-empty {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 40px 16px;
-    color: rgba(255, 255, 255, 0.55);
-    font-size: 13px;
-}
-
 @media (prefers-reduced-motion: reduce) {
     .site-search-trigger,
-    .site-search-field,
-    .site-search-panel {
+    .site-search-field {
         transition: none;
     }
 }

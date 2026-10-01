@@ -15,28 +15,34 @@ def get_topic_page_size() -> int:
     return get_page_size('DISCUSSION_TOPICS_PER_PAGE', 5)
 
 
-def get_topic_count(category_id=None):
-    """获取帖子总数（可选按分类筛选）。"""
+def get_topic_count(category_id=None, keyword=None):
+    """获取帖子总数（可选按分类 / 关键词筛选）。"""
     conn = get_db()
     try:
+        where = []
+        params = []
         if category_id:
-            row = conn.execute(
-                "SELECT COUNT(*) AS c FROM discussion_topics WHERE category_id = ?",
-                (category_id,)
-            ).fetchone()
-        else:
-            row = conn.execute("SELECT COUNT(*) AS c FROM discussion_topics").fetchone()
+            where.append("category_id = ?")
+            params.append(category_id)
+        if keyword:
+            where.append("(title LIKE ? OR content LIKE ?)")
+            like = f'%{keyword}%'
+            params.extend([like, like])
+        where_sql = ('WHERE ' + ' AND '.join(where)) if where else ''
+        row = conn.execute(
+            f"SELECT COUNT(*) AS c FROM discussion_topics {where_sql}", params
+        ).fetchone()
         return row[0] if row else 0
     finally:
         conn.close()
 
 
-def get_topics_page(category_id, page):
-    """获取分页帖子列表。"""
+def get_topics_page(category_id, page, keyword=None):
+    """获取分页帖子列表（可选按分类 / 关键词筛选）。"""
     if page < 1:
         page = 1
     per_page = get_topic_page_size()
-    total = get_topic_count(category_id)
+    total = get_topic_count(category_id, keyword)
     total_pages = max(1, (total + per_page - 1) // per_page)
     if page > total_pages:
         page = total_pages
@@ -48,29 +54,27 @@ def get_topics_page(category_id, page):
             "t.id, t.user_id, t.category_id, t.title, t.tags, "
             "t.is_pinned, t.is_locked, t.view_count, t.created_at, t.updated_at"
         )
+        where = []
+        params = []
         if category_id:
-            rows = conn.execute(
-                f"""SELECT {COLS}, u.username, u.avatar_key, c.name AS category_name,
-                          (SELECT COUNT(*) FROM discussion_replies r WHERE r.topic_id = t.id) AS reply_count
-                   FROM discussion_topics t
-                   JOIN users u ON t.user_id = u.id
-                   LEFT JOIN discussion_categories c ON t.category_id = c.id
-                   WHERE t.category_id = ?
-                   ORDER BY t.is_pinned DESC, t.updated_at DESC
-                   LIMIT ? OFFSET ?""",
-                (category_id, per_page, offset)
-            ).fetchall()
-        else:
-            rows = conn.execute(
-                f"""SELECT {COLS}, u.username, u.avatar_key, c.name AS category_name,
-                          (SELECT COUNT(*) FROM discussion_replies r WHERE r.topic_id = t.id) AS reply_count
-                   FROM discussion_topics t
-                   JOIN users u ON t.user_id = u.id
-                   LEFT JOIN discussion_categories c ON t.category_id = c.id
-                   ORDER BY t.is_pinned DESC, t.updated_at DESC
-                   LIMIT ? OFFSET ?""",
-                (per_page, offset)
-            ).fetchall()
+            where.append("t.category_id = ?")
+            params.append(category_id)
+        if keyword:
+            where.append("(t.title LIKE ? OR t.content LIKE ?)")
+            like = f'%{keyword}%'
+            params.extend([like, like])
+        where_sql = ('WHERE ' + ' AND '.join(where)) if where else ''
+        rows = conn.execute(
+            f"""SELECT {COLS}, u.username, u.avatar_key, c.name AS category_name,
+                      (SELECT COUNT(*) FROM discussion_replies r WHERE r.topic_id = t.id) AS reply_count
+               FROM discussion_topics t
+               JOIN users u ON t.user_id = u.id
+               LEFT JOIN discussion_categories c ON t.category_id = c.id
+               {where_sql}
+               ORDER BY t.is_pinned DESC, t.updated_at DESC
+               LIMIT ? OFFSET ?""",
+            params + [per_page, offset]
+        ).fetchall()
         topics = [dict(r) for r in rows]
     finally:
         conn.close()

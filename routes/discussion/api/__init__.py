@@ -113,14 +113,16 @@ def api_topics():
     参数：
         page      页码，从 1 开始
         category  分类 ID（可选）
+        q         关键词，匹配标题与正文（可选）
     """
     try:
         page = max(1, int(request.args.get('page', 1)))
     except (TypeError, ValueError):
         page = 1
     category_id = request.args.get('category', type=int)
+    keyword = (request.args.get('q') or '').strip()[:60]
 
-    topics, total, total_pages = get_topics_page(category_id, page)
+    topics, total, total_pages = get_topics_page(category_id, page, keyword)
     return jsonify({
         'success': True,
         'topics': topics,
@@ -128,6 +130,7 @@ def api_topics():
         'page_size': get_topic_page_size(),
         'total': total,
         'has_more': page < total_pages,
+        'keyword': keyword,
     })
 
 

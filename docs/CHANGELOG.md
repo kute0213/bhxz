@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### 变更
+
+* **搜索结果改为当前列表就地渲染、移除聚合搜索**：搜索框不再弹出下拉面板，也不再跳转独立搜索页。`search.js`（v6 → v7）重写为：输入防抖（220ms）/ 回车 / 点击箭头 / 清空时，在搜索框自身派发 `site-search` 事件（`detail.query`）；**各列表页监听该事件后就地刷新当前列表**（`buildings/`、`guides/`、`music/`、`discussion/` 四个列表页），并显示「搜索「关键词」找到 N 条结果」提示与无结果空态文案，结果与页面风格完全一致。同步删除跨模块聚合搜索：`services/search/`、`routes/search/`（独立搜索页 + `/api/search`）、`templates/search/index.html`、`routes/__init__.py` 中的 `search_bp` 注册，以及系统设置/`config.py` 中的 `SEARCH_PER_PAGE`（含 README 相关章节）
+* **讨论帖子列表支持关键词搜索**：`services/discussion/topics/` 的 `get_topic_count()` / `get_topics_page()` 新增 `keyword` 参数，按标题与正文模糊匹配（`title LIKE ? OR content LIKE ?`）；`/discussion/api/topics` 与 `/discussion` 列表页接收 `q` 参数（截断 60 字）并透传，讨论列表页据此就地刷新
+* **搜索框展开/收起动画优化**：`base.css` 的 `.site-search` 样式块改用 expo-out 缓动 `cubic-bezier(0.22, 1, 0.36, 1)`（起步快、收尾缓），并给胶囊按钮与输入框外壳分别加上 `transform: translateX()/scale()` 位移缩放，`prefers-reduced-motion` 下仍禁用过渡，展开/收起更自然流畅；同时删除已废弃的下拉面板相关样式
+* **版本号 bump（浏览器缓存）**：`base.css` v39 → v40、`search.js` v6 → v7
+
 ### 新增
 
 * **页面内就地搜索框（SiteSearch v6）**：**每个列表页使用自己的搜索框**（公共建筑 / 服务器指南 / 大喇叭音频 / 讨论），由新宏 `templates/macros/search.html` 的 `inline_search()` 统一渲染；**导航栏移除搜索输入框**。折叠态仅显示「搜索」胶囊按钮，点击后按钮收起、输入框带缓动动画平滑展开（`max-width` + `opacity` 过渡，展开/收起双向流畅）；交互规则：输入框有文字 **或** 光标在框内 → 保持展开，无文字 **且** 失焦（点击外部）→ 平滑收起，Esc 一键清空并收起；输入防抖 220ms 调用 `/api/search` 聚合搜索，下拉面板按分类分组展示并显示各类命中数量，**无任何命中时显示「没有找到相关内容」**；过期请求用序列号丢弃，只渲染最新一次结果

@@ -111,7 +111,6 @@ python scripts/build/package.py
 │   ├── attachment_service/  #   附件上传/清理
 │   ├── background_service/  #   背景图片业务（WebP 转换 + 响应式变体）
 │   ├── cleanup_service/     #   被驳回内容自动清理
-│   ├── search/              #   全站搜索（跨建筑/指南/音频/讨论聚合）
 │   ├── settings_manager/    #   系统设置管理
 │   └── sitemap_cache/       #   Sitemap 缓存服务
 ├── routes/       # HTTP 路由层（Flask Blueprint）
@@ -127,7 +126,6 @@ python scripts/build/package.py
 │   ├── guides/         # 服务器指南（页面+API）
 │   ├── main/           # 主站（登录/注册/设置/音乐）
 │   ├── public/         # 公开文件服务
-│   ├── search/         # 全站搜索（独立搜索页 + 聚合搜索 API）
 │   └── sitemap/        # Sitemap & robots.txt（自动添加 Crawl-delay 防防火墙误判）
 ├── templates/    # Jinja2 模板（命名规范见 docs/DEVELOPMENT.md）
 │   ├── admin/          # 管理后台页面（如 users.html、settings.html，无 admin_ 前缀）
@@ -141,8 +139,7 @@ python scripts/build/package.py
 │   ├── guides/         # 服务器指南页面（index / detail / form）
 │   ├── buildings/      # 公共建筑（index / create / detail）
 │   ├── music/          # 大喇叭音频页面（index / my / favorites / upload）
-│   ├── search/         # 全站搜索页（index）
-│   ├── macros/         # 通用模板宏（模态框/编辑器/进度条/音乐）
+│   ├── macros/         # 通用模板宏（模态框/编辑器/进度条/音乐/页面内搜索）
 │   ├── static/         # 静态资源（CSS/JS/本地化第三方库，随模板目录存放）
 │   └── ...             # 根级通用页面（base.html 布局、index.html 首页、error_simple.html 精简错误页）
 ├── docs/         # 项目文档
@@ -214,13 +211,13 @@ python scripts/build/package.py
 
 * **防火墙数据库单写入线程**：所有写操作经队列提交给唯一写入线程顺序执行，相邻写操作合并为事务批量提交，彻底避免多线程并发写入 DuckDB 导致的锁表；封禁 / 白名单 / 账号封禁等高频查询走内存缓存（定期同步），查询性能显著提升
 
-### 全站搜索
+### 页面内搜索
 
-* **页面内就地搜索框（SiteSearch v6）**：**每个列表页使用自己的搜索框**（由 `templates/macros/search.html` 的 `inline_search()` 宏渲染），导航栏**不再放置**搜索输入框
-* **点击展开 / 平滑收起**：折叠态只显示「搜索」胶囊按钮，点击后按钮收起、输入框带缓动动画平滑展开；展开与收起均有流畅过渡（`base.css` 的 `.site-search` 样式块）
+* **就地搜索框（SiteSearch v7）**：**每个列表页使用自己的搜索框**（由 `templates/macros/search.html` 的 `inline_search()` 宏渲染），导航栏**不再放置**搜索输入框
+* **点击展开 / 平滑收起**：折叠态只显示「搜索」胶囊按钮，点击后按钮收起、输入框带缓动动画平滑展开；展开与收起均有流畅过渡（`base.css` 的 `.site-search` 样式块，采用 expo-out 缓动 `cubic-bezier(0.22, 1, 0.36, 1)` 并配合位移/缩放，起止更自然）
 * **保持展开规则**：输入框内有文字 **或** 光标在输入框内 → 保持展开；无文字 **且** 失焦（点击外部）→ 平滑收起；Esc 一键清空并收起
-* **跨模块聚合**：输入关键词后防抖调用 `/api/search`（`220ms`），下拉面板按分类分组展示**公共建筑 / 服务器指南 / 大喇叭音频 / 讨论帖子**四类命中结果与数量，无任何命中时显示「没有找到相关内容」
-* 每一类结果条数由系统设置 `SEARCH_PER_PAGE` 控制，接口不接受前端传入的数量参数；旧的独立搜索页 `/search` 路由保留可继续访问
+* **结果就地渲染**：输入关键词后防抖（`220ms`）、回车或点击箭头，由搜索框在自身派发 `site-search` 事件；**各列表页监听该事件后直接刷新当前列表**，不再弹出下拉面板或独立搜索页，结果与页面风格完全一致
+* **覆盖范围**：公共建筑 / 服务器指南 / 大喇叭音频 / 讨论帖子四个列表页均支持就地搜索；关键词通过各列表 API 的 `q` 参数传入，匹配各自的标题/摘要/正文/标签字段
 
 ### 服务器指南
 
@@ -370,7 +367,7 @@ python scripts/build/package.py
 
 * **讨论区配置**：回复实时刷新间隔
 
-* **列表分页**：公共建筑 / 大喇叭音频 / 服务器指南 / 讨论帖子 / 讨论回复 / 后台背景图片 / 后台账号申请 / 全站搜索 各列表每次加载条数（1–100，默认 5）。**分页大小仅可在此处或 `config.py` 修改，用户调用接口传入的参数一律被忽略**
+* **列表分页**：公共建筑 / 大喇叭音频 / 服务器指南 / 讨论帖子 / 讨论回复 / 后台背景图片 / 后台账号申请 各列表每次加载条数（1–100，默认 5）。**分页大小仅可在此处或 `config.py` 修改，用户调用接口传入的参数一律被忽略**
 
 * **外部链接**：卫星地图地址、QQ 群链接
 
@@ -411,7 +408,6 @@ python scripts/build/package.py
 | `REPLIES_PER_PAGE`            | 讨论区回复每页数量（1–100，接口传参无效）                  | `5`                                         |
 | `BACKGROUNDS_PER_PAGE`        | 后台背景图片列表每页数量（1–100，接口传参无效）               | `5`                                         |
 | `GAME_ACCOUNTS_PER_PAGE`      | 后台游戏账号申请列表每页数量（1–100，接口传参无效）             | `5`                                         |
-| `SEARCH_PER_PAGE`             | 全站搜索每类结果条数（1–100，接口传参无效）                 | `5`                                         |
 | `LOG_LEVEL`                   | 日志输出等级（DEBUG/INFO/WARNING/ERROR/CRITICAL） | `INFO`                                      |
 | `FAVICON_ICON`                | 网站图标（可选 compass/mountain/star/heart）      | `compass`                                   |
 | `MAP_URL`                     | 卫星地图地址                                    | `https://map.bhxz.tw.kg`                    |
@@ -519,12 +515,16 @@ export ENABLE_SSL=1 && python app.py
 | POST | `/buildings/comment/<id>/delete`    | 删除评论（作者/建筑作者/管理员）               |
 | POST | `/buildings/<id>/report`            | 举报建筑                            |
 
-### 全站搜索 API
+### 页面内搜索 API
 
-| 方法  | 路径             | 说明                                                        |
-| --- | -------------- | --------------------------------------------------------- |
-| GET | `/search`      | 独立搜索页（参数 `q` 初始关键词、`type` 初始分类：`buildings/guides/music/topics`） |
-| GET | `/api/search`  | 聚合搜索 API（参数 `q` 关键词），返回四类命中结果与数量；每类条数由 `SEARCH_PER_PAGE` 控制，请求参数无法覆盖 |
+各列表页的搜索框不调用独立聚合接口，而是由页面脚本监听 `site-search` 事件后就地调用对应列表 API（均通过 `q` 参数传关键词）：
+
+| 方法  | 路径                   | 说明                                                    |
+| --- | -------------------- | ----------------------------------------------------- |
+| GET | `/api/buildings`     | 公共建筑列表（`q` 匹配标题与标签）                                   |
+| GET | `/api/guides/list`   | 服务器指南列表（`q` 匹配标题与摘要）                                  |
+| GET | `/api/music`         | 大喇叭音频列表（`q` 匹配名称与标签）                                  |
+| GET | `/discussion/api/topics` | 讨论帖子列表（`q` 匹配标题与正文，可选 `category` 分类、`page` 页码）       |
 
 ### 服务器指南 API
 
@@ -717,7 +717,6 @@ workspace/
 │   ├── attachment_service/   #   附件上传/清理
 │   ├── background_service/   #   背景图片业务（WebP 转换 + 响应式变体）
 │   ├── cleanup_service/      #   被驳回内容自动清理（统一定时调度）
-│   ├── search/               #   全站搜索（跨建筑/指南/音频/讨论聚合）
 │   ├── settings_manager/     #   系统设置管理
 │   ├── sitemap_cache/        #   Sitemap 缓存服务
 ├── routes/                   # HTTP 路由层
@@ -731,7 +730,6 @@ workspace/
 │   ├── game_accounts/        #   申请账号（页面+API，纯申请注册）
 │   ├── guides/               #   服务器指南（页面+API）
 │   ├── public/               #   公开文件服务
-│   ├── search/               #   全站搜索（独立搜索页 + 聚合搜索 API）
 │   └── sitemap/              #   站点地图 & robots.txt
 ├── templates/                # Jinja2 模板（命名规范见 docs/DEVELOPMENT.md）
 │   ├── admin/                #   管理后台页面（无 admin_ 前缀）
@@ -745,8 +743,7 @@ workspace/
 │   ├── guides/               #   服务器指南页面（index / detail / form）
 │   ├── buildings/            #   公共建筑（index / create / detail）
 │   ├── music/                #   大喇叭音频页面（index / my / favorites / upload）
-│   ├── search/               #   全站搜索页（index）
-│   ├── macros/               #   通用模板宏（模态框/编辑器/进度条/音乐）
+│   ├── macros/               #   通用模板宏（模态框/编辑器/进度条/音乐/页面内搜索）
 │   ├── static/               #   静态资源（CSS/JS/本地化第三方库，构建生成 lib/）
 │   └── ...                   #   根级：base.html / index.html / error_simple.html
 ├── docs/                     # 项目文档

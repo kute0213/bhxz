@@ -23,8 +23,9 @@ def list_view():
     categories = get_categories()
     category_id = request.args.get('category', type=int)
     page = request.args.get('page', 1, type=int)
+    keyword = (request.args.get('q') or '').strip()[:60]
 
-    topics, total, total_pages = get_topics_page(category_id, page)
+    topics, total, total_pages = get_topics_page(category_id, page, keyword)
 
     cat_dict = get_category_dict()
     current_category_name = cat_dict.get(category_id, '') if category_id else ''
@@ -34,7 +35,7 @@ def list_view():
         categories=categories, category_id=category_id,
         current_category_name=current_category_name,
         page=page, total_pages=total_pages, total=total,
-        has_more=page < total_pages,
+        has_more=page < total_pages, keyword=keyword,
     )
 
 

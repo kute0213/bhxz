@@ -43,7 +43,7 @@
     <!-- 入场动画见 base.css：纯 CSS animation，不依赖 JS，避免白屏 -->
     <noscript><style>.page-content{opacity:1!important;transform:none!important}</style></noscript>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/tailwind.css', v='4') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css', v='39') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css', v='40') }}">
     <script src="{{ url_for('static', filename='lib/purify/purify.min.js', v='1') }}"></script>
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <script>
@@ -196,11 +196,6 @@
 
             <!-- 导航链接 -->
             <div class="space-y-1 flex-1">
-                <button type="button" data-search-open="all"
-                        class="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors text-left">
-                    <i data-lucide="search" class="w-5 h-5"></i>
-                    <span>搜索</span>
-                </button>
                 <div class="text-xs text-cream/40 font-medium uppercase tracking-wider px-4 mb-2 mt-6">主页</div>
                 <a href="{{ url_for('main.home') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors{% if request.endpoint == 'main.home' %} active{% endif %}">
                     <i data-lucide="home" class="w-5 h-5"></i>
@@ -431,8 +426,8 @@
 
     <script src="{{ url_for('static', filename='js/core/base.js', v='24') }}"></script>
     <script src="{{ url_for('static', filename='js/core/uploader.js', v='1') }}"></script>
-    {# 页面内就地搜索（SiteSearch v6：每页自带输入框、导航栏无输入框，详见 search.js） #}
-    <script src="{{ url_for('static', filename='js/core/search.js', v='6') }}"></script>
+    {# 页面内就地搜索（SiteSearch v7：每页自带输入框、导航栏无输入框，详见 search.js） #}
+    <script src="{{ url_for('static', filename='js/core/search.js', v='7') }}"></script>
 
     {# 统一弹窗控制器 #}
     {% from 'macros/modal.html' import modal_close_script %}

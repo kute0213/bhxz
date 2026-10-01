@@ -39,9 +39,9 @@
                     <i data-lucide="music" class="w-5 h-5 text-gold-400"></i>
                     公开音频（游戏内大喇叭）
                 </h2>
-                {# 页面内就地搜索：点击展开、/api/search 搜索、无结果提示（见 macros/search.html） #}
+                {# 页面内就地搜索：点击展开，输入后由本页列表脚本就地刷新结果（见 macros/search.html） #}
                 <div class="flex-1 min-w-[190px] flex justify-end">
-                    {{ inline_search(kind='music', label='搜索音频',
+                    {{ inline_search(label='搜索音频',
                                      placeholder='搜索音频名称或标签…',
                                      value='', open_width=360) }}
                 </div>
@@ -193,6 +193,15 @@
     }
 
     loadMoreBtn.addEventListener('click', function () { fetchPage(state.page + 1, true); });
+
+    // 就地搜索：搜索框派发的 site-search 事件 → 更新关键词并就地刷新列表
+    var searchBox = document.querySelector('.site-search');
+    if (searchBox) {
+        searchBox.addEventListener('site-search', function (e) {
+            state.query = e.detail.query || '';
+            fetchPage(1, false);
+        });
+    }
 
     // 复制链接（事件委托，兼容动态渲染）
     list.addEventListener('click', function (e) {

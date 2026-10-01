@@ -84,9 +84,9 @@
         </div>
 
         <div class="mb-6 flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-            {# 页面内就地搜索：点击展开、/api/search 搜索、无结果提示（见 macros/search.html） #}
+            {# 页面内就地搜索：点击展开，输入后由本页列表脚本就地刷新结果（见 macros/search.html） #}
             <div class="flex-1 min-w-0">
-                {{ inline_search(kind='buildings', label='搜索建筑',
+                {{ inline_search(label='搜索建筑',
                                  placeholder='搜索建筑标题或标签…',
                                  value=search_query, open_width=520) }}
             </div>
@@ -284,7 +284,10 @@
         } else {
             resultHint.classList.add('hidden');
         }
-        if (state.tag) {
+        if (state.query) {
+            emptyTitle.textContent = '没有找到相关建筑';
+            emptyHint.textContent = '换个关键词试试';
+        } else if (state.tag) {
             emptyTitle.textContent = '没有匹配该标签的建筑';
             emptyHint.textContent = '试试切换其他标签';
         } else if (CFG.favMode) {
@@ -353,6 +356,19 @@
 
     // 加载更多
     loadMoreBtn.addEventListener('click', function () { fetchPage(state.page + 1, true); });
+
+    // 就地搜索：搜索框派发的 site-search 事件 → 更新关键词并就地刷新列表
+    var searchBox = document.querySelector('.site-search');
+    if (searchBox) {
+        searchBox.addEventListener('site-search', function (e) {
+            state.query = e.detail.query || '';
+            var p = new URLSearchParams();
+            if (state.query) p.set('q', state.query);
+            if (state.tag) p.set('tag', state.tag);
+            history.replaceState(null, '', location.pathname + (p.toString() ? '?' + p.toString() : ''));
+            fetchPage(1, false);
+        });
+    }
 
     // 收藏切换（事件委托）
     grid.addEventListener('click', function (e) {
