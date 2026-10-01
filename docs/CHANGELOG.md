@@ -10,6 +10,9 @@
 * **统一文件上传组件（`uploader.js` + `macros/upload.html`）**：新增 `FilePicker`（多文件选择 + 预览 + 删除）、`UploadProgress`（复用 `.progress-track/.progress-fill` 的统一进度条）、`AjaxForm`（拦截表单提交，XHR 上传带进度 + JSON 响应处理，无刷新）三个模块与配套 Jinja2 宏 `file_attach_field()` / `upload_progress()`；讨论发帖、回复附件、公共建筑发布等全部改用该组件，所有文件上传统一显示进度条
 * **评论发布去图形验证码 + 删除确认网页内弹窗**：公共建筑评论发布不再需要图形验证码；删除评论确认由原生 `confirm` 改为网页内 `CustomModal.confirm`
 * **发布操作全面 API 化（无刷新）**：公共建筑发布/评论、讨论发帖/回复统一改为 `AjaxForm` 无刷新 JSON 提交（AJAX 请求返回 JSON、普通表单仍兼容 flash + 重定向），自动处理身份与 CSRF
+* **DDoS 检测器 32 分片锁 + array 时间戳存储（理论无限并发）**：`routes/firewall/ddos.py` 重写为分片架构——`SHARDS=32` 个独立锁各管 `SHARD_MAX_IPS=1024` 个 IP 的时间戳队列（`array('d')` 双精度数组），各分片互不竞争；请求先算 IP→分片哈希，只锁目标分片；过期请求自动清理（窗口 `DDOS_WINDOW_SECONDS=10s`）；单分片硬上限 1024 IP 自动淘汰最老分片；**资源自动分配**：未被 DDoS 时各分片数组极小（仅活跃 IP 数），并发打满时最多 32×1024×8B ≈ 256KB 额外内存；彻底消除单一全局锁瓶颈
+* **服务器指南收藏功能 + 我的收藏页**：新增 `guide_favorites` 表（`user_id, guide_id` 联合唯一键 + 双索引），指南详情页标题旁添加收藏按钮（`bookmark` / `bookmark-check` 图标切换），列表默认按「置顶 → 收藏数倒序 → 标题升序」排序，`/api/guides/list` 与列表页返回 `favorite_count` + `is_favorited`，新增「我的收藏」列表页 `/guides/favorites`
+* **服务器初始化（原「自检」）分层优化**：`core/system/init.py` 按 6 层架构清晰组织——① 基础设施（工作目录 + 数据库）→ ② 监控（刷新日志设置 + 健康检查）→ ③ 路由（蓝图注册）→ ④ 中间件（请求钩子，依赖蓝图）→ ⑤ 视图（模板上下文）→ ⑥ 服务（后台异步，不阻塞启动）；删除"自检"命名，全站统一改为"初始化"
 
 ### 修复
 
@@ -20,10 +23,12 @@
 * **服务器指南编辑提交 500（`NameError: get_client_ip`）**：`routes/guides/pages/__init__.py` 使用了 `get_client_ip()` 却未导入，已补充 `from core.shared.ip import get_client_ip`；并全站静态排查同类「使用未导入」问题
 
 * **回复附件显示 0B / 发布后附件消失**：根因是文件选择器在同步累计文件时先写 `input.files` 再清空 `input.value`，导致提交时附件为空。`FilePicker.sync()` 改为**先清空 `input.value` 再经 `DataTransfer` 回填**，附件不再丢失；回复附件展示统一走服务端返回的文件名列表，不再出现错误的 0B 大小
+* **IPv6 拦截开启后仍放行 IPv6 访问**：根因是 `connection_filter.py` 的 `_check_ipv6_block()` 只做了检查但未返回布尔值，`communicate()` 收到的始终是 `None`（falsy），导致拦截分支永远不触发。修复：`_check_ipv6_block()` 显式 `return True/False`，`communicate()` 在返回 `True` 时立即 `return False` 断开连接；IPv6 拦截现在真正生效
+* **防火墙 403 / 封禁 / 解封日志过度输出**：防火墙拦截事件原先使用 `log_firewall(..., console=True)` 全局双写，INFO 级别日志被淹没。改为 `console=False` 仅写入文件日志，控制台不再刷屏
 
 ### 调整
 
-* **搜索框交互彻底重写**：全站「搜索框」不再就地展开/置顶，改为点击后跳转独立搜索页；搜索页顶部提供「返回」按钮回到原页面；导航栏新增搜索入口；大喇叭音频 / 讨论 / 服务器指南 / 公共建筑列表页的搜索框统一为该入口
+* **搜索框交互彻底重写（就地展开 v4）**：全站搜索不再跳转独立 `/search` 页面（该路由保留但导航入口不再指向它），改为导航栏就地展开——点击图标触发按钮后搜索框平滑展开（cubic-bezier 0.28s 宽度过渡 + 120ms 延迟自动聚焦）；输入框有文字 **或** 当前有焦点时保持展开；无文字 AND 失焦 AND 点击外部 → 150ms 后自动收起；下拉结果面板（540px 宽磨砂玻璃）直接渲染 `/api/search` 聚合结果，分类 tab 带命中数徽标（全部 / 公共建筑 / 服务器指南 / 大喇叭音频 / 讨论帖子），防抖 220ms 搜索，Esc 一键清空收起；过期请求序列号隔离，只渲染最新一次；旧版 `templates/static/js/core/search.js` 完全重写，base.css 新增 `.nav-search` 全套过渡动画样式
 * **分页大小接口不可覆盖**：各列表 API 一律忽略前端传入的分页参数，仅使用系统设置/config.py 的值
 * **共享工具移回 `core/`（取消 `utils/` 目录）**：根目录不新增独立 `utils/` 文件夹，`utils/` 下工具（`shared/`、`helpers.py`、`template_context.py`、`errors.py`）全部收敛回 `core/`（`core/shared/` + `core/` 根模块），所有导入路径同步更新；开发准同步修正
 * **Jinja2 模板命名整体规范化**：按开发准则（`docs/DEVELOPMENT.md`）统一模板命名——`templates/admin/` 去掉 `admin_` 冗余前缀（`admin/admin_admin_logs.html` → `admin/logs.html`），列表页统一为 `index.html`（`music/list.html` → `music/index.html` 等），新增 `auth/`（登录/注册/找回密码）、`settings/`（用户设置）、`site/`（站点文档/服务器状态）分组目录，`docs`/`server_status` 等迁入对应目录；更新全部 `render_page`/`render_template` 引用，删除无用 `error.html`
