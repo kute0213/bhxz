@@ -21,19 +21,25 @@ from core.system.logger import log_firewall
 
 
 def _check_ipv6_block(ip, drop_callback):
-    """检查 IPv6 连接是否被拦截，是则执行断开回调函数。
+    """检查 IPv6 连接是否被拦截，是则执行断开回调并返回 True。
 
     Args:
         ip: 客户端 IP 地址
         drop_callback: 断开连接的回调函数，接收 IP 参数
+
+    Returns:
+        bool: True 表示已执行断开，False 表示放行
     """
     try:
         from config import get_config_value, IPV6_BLOCK_ENABLED
         if get_config_value('IPV6_BLOCK_ENABLED', IPV6_BLOCK_ENABLED):
+            # 必须在 drop_callback 之前记录日志，避免 close 后 socket 状态异常
             log_firewall('DEBUG', 'Firewall: IPv6 连接拦截断开', ip=ip)
             drop_callback(ip)
+            return True
     except Exception:
         pass
+    return False
 
 
 class BanFilterConnection(HTTPConnection):
@@ -77,9 +83,10 @@ class BanFilterConnection(HTTPConnection):
             self._drop_banned(ip)
             return False
 
-        # IPv6 拦截：检查是否为 IPv6 连接且开启了拦截
+        # IPv6 拦截：非 ::1 的 IPv6 连接在开关开启时直接断开
         if ip and ':' in ip and ip != '::1':
-            _check_ipv6_block(ip, lambda ip_addr: self._drop_banned(ip_addr))
+            if _check_ipv6_block(ip, lambda ip_addr: self._drop_banned(ip_addr)):
+                return False
 
         return super().communicate()
 

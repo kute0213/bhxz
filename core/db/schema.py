@@ -308,6 +308,16 @@ def init_db():
                 UNIQUE(building_id, user_id)
             )
         '''),
+        # 服务器指南收藏表（用户与指南多对多）
+        ('guide_favorites', '''
+            CREATE TABLE IF NOT EXISTS guide_favorites (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                guide_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                created_at TEXT NOT NULL,
+                UNIQUE(guide_id, user_id)
+            )
+        '''),
     ]
 
     for table_name, ddl in tables:
@@ -366,6 +376,18 @@ def init_db():
         )
     except Exception as e:
         log('ERROR', 'DB', f'创建 building_favorites 索引失败: {e}')
+    # 服务器指南：收藏表索引（按指南/用户统计收藏数）
+    try:
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_guide_fav_guide "
+            "ON guide_favorites (guide_id)"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_guide_fav_user "
+            "ON guide_favorites (user_id)"
+        )
+    except Exception as e:
+        log('ERROR', 'DB', f'创建 guide_favorites 索引失败: {e}')
     # 迁移前先检查 is_public 列是否存在（新库没有此列，跳过迁移）
     try:
         cursor.execute("SELECT is_public FROM music LIMIT 0")

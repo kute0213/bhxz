@@ -49,11 +49,26 @@
                             {% if guide.status == 'pending' %}待审核{% else %}已拒绝{% endif %}
                         </span>
                         {% endif %}
+                        <button id="guide-fav-btn" type="button"
+                                class="btn-secondary px-3 py-2 rounded-lg text-xs flex items-center gap-1 guide-fav-btn
+                                       {% if guide.is_favorited %}guide-fav-active{% endif %}">
+                            <i data-lucide="{% if guide.is_favorited %}bookmark-check{% else %}bookmark{% endif %}" class="w-3.5 h-3.5 guide-fav-icon"></i>
+                            <span class="guide-fav-label">{% if guide.is_favorited %}已收藏{% else %}收藏{% endif %}</span>
+                            <span class="guide-fav-count">{{ guide.favorite_count or 0 }}</span>
+                        </button>
                         <a href="{{ url_for('guides.guide_edit', guide_id=guide.id) }}"
                            class="btn-secondary px-3 py-2 rounded-lg text-xs flex items-center gap-1">
                             <i data-lucide="edit-3" class="w-3.5 h-3.5"></i>
                             修改
                         </a>
+                    </div>
+                    {% endif %}
+                    {% if not user %}
+                    <div class="flex items-center gap-2 flex-shrink-0">
+                        <span class="text-xs text-cream/40 flex items-center gap-1">
+                            <i data-lucide="bookmark" class="w-3.5 h-3.5"></i>
+                            <span>{{ guide.favorite_count or 0 }}</span>
+                        </span>
                     </div>
                     {% endif %}
                 </div>
@@ -68,17 +83,6 @@
 
             <div id="guide-body" class="prose-docs"></div>
         </article>
-
-        {% if user %}
-        <div class="mt-6 text-center">
-            <a href="{{ url_for('guides.guide_edit', guide_id=guide.id) }}"
-               class="btn-secondary px-5 py-2.5 rounded-lg text-sm inline-flex items-center gap-2">
-                <i data-lucide="edit-3" class="w-4 h-4"></i>
-                修改指南
-            </a>
-            <p class="text-cream/40 text-xs mt-2">修改后需重新审核</p>
-        </div>
-        {% endif %}
     </div>
 </section>
 
@@ -103,4 +107,53 @@
     }
 })();
 </script>
+
+{# 指南收藏按钮（复用页面内已注册的 Toast / lucide） #}
+<script>
+(function () {
+    var btn = document.getElementById('guide-fav-btn');
+    if (!btn) return;
+    var guideId = {{ guide.id }};
+    var icon = btn.querySelector('.guide-fav-icon');
+    var label = btn.querySelector('.guide-fav-label');
+    var count = btn.querySelector('.guide-fav-count');
+    var activeCls = 'guide-fav-active';
+
+    btn.addEventListener('click', function () {
+        fetch('/api/guides/' + guideId + '/favorite', {
+            method: 'POST',
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest',
+                       'X-CSRF-Token': (document.querySelector('meta[name="csrf-token"]') || {}).content || '' }
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+            if (!d.success) {
+                if (typeof Toast !== 'undefined') Toast.error(d.message || '操作失败');
+                return;
+            }
+            btn.classList.toggle(activeCls, d.is_favorited);
+            icon.setAttribute('data-lucide', d.is_favorited ? 'bookmark-check' : 'bookmark');
+            label.textContent = d.is_favorited ? '已收藏' : '收藏';
+            if (count) count.textContent = d.favorite_count;
+            if (typeof lucide !== 'undefined' && lucide.createIcons) lucide.createIcons();
+            if (typeof Toast !== 'undefined') Toast.success(d.is_favorited ? '已加入收藏' : '已取消收藏');
+        })
+        .catch(function () { if (typeof Toast !== 'undefined') Toast.error('操作失败，请重试'); });
+    });
+})();
+</script>
+<style>
+.guide-fav-btn.guide-fav-active {
+    background: rgba(234, 179, 8, 0.12);
+    border-color: rgba(234, 179, 8, 0.45);
+    color: #fbbf24;
+}
+.guide-fav-count {
+    background: rgba(255,255,255,0.06);
+    border-radius: 9999px;
+    padding: 0 6px;
+    font-size: 11px;
+    line-height: 16px;
+}
+</style>
 {% endblock %}

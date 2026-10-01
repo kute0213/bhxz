@@ -138,7 +138,15 @@ def api_guides_list():
         params.extend([like, like])
 
     where_sql = ('WHERE ' + ' AND '.join(where)) if where else ''
-    order_sql = "ORDER BY g.updated_at DESC" if my_mode else "ORDER BY g.is_pinned DESC, g.title ASC"
+    # 作者自己的指南按更新时间倒序；公开指南按置顶优先 → 收藏数倒序 → 标题升序
+    if my_mode:
+        order_sql = "ORDER BY g.updated_at DESC"
+    else:
+        order_sql = (
+            "ORDER BY g.is_pinned DESC, "
+            "(SELECT COUNT(*) FROM guide_favorites f WHERE f.guide_id = g.id) DESC, "
+            "g.title ASC"
+        )
 
     conn = get_db()
     try:
@@ -159,6 +167,7 @@ def api_guides_list():
             params + [page_size, (page - 1) * page_size],
         ).fetchall()
         guides = [dict(r) for r in rows]
+        _annotate_favorites(conn, guides, user['id'] if user else None)
     finally:
         conn.close()
 
@@ -214,3 +223,88 @@ def verify_guide_captcha():
     if not captcha_service.verify(captcha_id, user_input):
         return jsonify({'success': False, 'message': '验证码错误或已过期'})
     return jsonify({'success': True})
+
+
+# ---------------------------------------------------------------------------
+# 收藏功能
+# ---------------------------------------------------------------------------
+
+
+@guides_bp.route('/api/guides/<int:guide_id>/favorite', methods=['POST'])
+@login_required
+def toggle_guide_favorite(guide_id):
+    """收藏 / 取消收藏指南。返回 (is_favorited, favorite_count)。"""
+    user = get_current_user()
+    conn = get_db()
+    try:
+        row = conn.execute(
+            "SELECT id, status FROM server_guides WHERE id = ?", (guide_id,)
+        ).fetchone()
+        if not row:
+            return jsonify({'success': False, 'message': '指南不存在'}), 404
+        if row['status'] != 'approved' and row['id'] not in (0,):  # 0 占位，实际无
+            pass  # 作者收藏自己的待审核指南也允许
+
+        # 检查当前是否已收藏
+        existing = conn.execute(
+            "SELECT 1 FROM guide_favorites WHERE user_id = ? AND guide_id = ?",
+            (user['id'], guide_id),
+        ).fetchone()
+
+        if existing:
+            conn.execute(
+                "DELETE FROM guide_favorites WHERE user_id = ? AND guide_id = ?",
+                (user['id'], guide_id),
+            )
+            is_favorited = False
+        else:
+            conn.execute(
+                "INSERT INTO guide_favorites (guide_id, user_id, created_at) VALUES (?, ?, CURRENT_TIMESTAMP)",
+                (guide_id, user['id']),
+            )
+            is_favorited = True
+        conn.commit()
+
+        count_row = conn.execute(
+            "SELECT COUNT(*) AS c FROM guide_favorites WHERE guide_id = ?",
+            (guide_id,),
+        ).fetchone()
+        favorite_count = count_row['c']
+    finally:
+        conn.close()
+
+    return jsonify({
+        'success': True,
+        'is_favorited': is_favorited,
+        'favorite_count': favorite_count,
+    })
+
+
+def _annotate_favorites(conn, guides, user_id):
+    """批量给指南列表加上 favorite_count 和 is_favorited 字段（避免 N+1 查询）。"""
+    if not guides:
+        return guides
+    ids = [g['id'] for g in guides]
+    placeholders = ','.join('?' * len(ids))
+
+    # 收藏数批量统计
+    count_rows = conn.execute(
+        f"SELECT guide_id, COUNT(*) AS c FROM guide_favorites "
+        f"WHERE guide_id IN ({placeholders}) GROUP BY guide_id",
+        ids,
+    ).fetchall()
+    count_map = {r['guide_id']: r['c'] for r in count_rows}
+
+    fav_map = {}
+    if user_id:
+        fav_rows = conn.execute(
+            f"SELECT guide_id FROM guide_favorites "
+            f"WHERE guide_id IN ({placeholders}) AND user_id = ?",
+            ids + [user_id],
+        ).fetchall()
+        fav_map = {r['guide_id']: True for r in fav_rows}
+
+    for g in guides:
+        g['favorite_count'] = count_map.get(g['id'], 0)
+        g['is_favorited'] = bool(fav_map.get(g['id']))
+    return guides

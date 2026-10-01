@@ -1,4 +1,4 @@
-"""服务器指南公开页面：列表、详情、创建、编辑。"""
+"""服务器指南公开页面：列表、详情、创建、编辑、我的收藏。"""
 
 from flask import abort, request, redirect, url_for, flash
 from datetime import datetime
@@ -10,11 +10,15 @@ from core.shared.captcha import captcha_service
 from core.shared.ip import get_client_ip
 from config import get_page_size
 from routes.guides import guides_bp
+from routes.guides.api import _annotate_favorites
 
 
 @guides_bp.route('/guides')
 def guide_list():
-    """公开指南列表页（默认展示已审核通过的；?my=1 展示当前用户的；?q=关键字搜索）。"""
+    """公开指南列表页（默认展示已审核通过的；?my=1 展示当前用户的；?q=关键字搜索）。
+
+    公开指南按 置顶优先 → 收藏数倒序 → 标题升序 排序。
+    """
     user = get_current_user()
     my_mode = bool(user and request.args.get('my'))
     keyword = (request.args.get('q') or '').strip()[:60]
@@ -30,7 +34,11 @@ def guide_list():
             order_sql = "ORDER BY g.updated_at DESC"
         else:
             where.append("g.status = 'approved'")
-            order_sql = "ORDER BY g.is_pinned DESC, g.title ASC"
+            order_sql = (
+                "ORDER BY g.is_pinned DESC, "
+                "(SELECT COUNT(*) FROM guide_favorites f WHERE f.guide_id = g.id) DESC, "
+                "g.title ASC"
+            )
         if keyword:
             where.append("(g.title LIKE ? OR g.summary LIKE ?)")
             like = f'%{keyword}%'
@@ -42,7 +50,8 @@ def guide_list():
         ).fetchone()['c']
         rows = conn.execute(
             f"""
-            SELECT g.*, u.username as author_name
+            SELECT g.*, u.username as author_name,
+                   (SELECT COUNT(*) FROM guide_favorites f WHERE f.guide_id = g.id) AS favorite_count
             FROM server_guides g
             LEFT JOIN users u ON g.author_id = u.id
             {where_sql}
@@ -52,6 +61,7 @@ def guide_list():
             params + [page_size],
         ).fetchall()
         guides = [dict(r) for r in rows]
+        _annotate_favorites(conn, guides, user['id'] if user else None)
     finally:
         conn.close()
 
@@ -73,17 +83,21 @@ def guide_detail(guide_id):
         if user:
             row = conn.execute(
                 """
-                SELECT g.*, u.username as author_name
+                SELECT g.*, u.username as author_name,
+                       (SELECT COUNT(*) FROM guide_favorites f WHERE f.guide_id = g.id) AS favorite_count,
+                       (SELECT 1 FROM guide_favorites f WHERE f.guide_id = g.id AND f.user_id = ?) AS is_favorited
                 FROM server_guides g
                 LEFT JOIN users u ON g.author_id = u.id
                 WHERE g.id = ? AND (g.status = 'approved' OR g.author_id = ?)
                 """,
-                (guide_id, user['id']),
+                (user['id'], guide_id, user['id']),
             ).fetchone()
         else:
             row = conn.execute(
                 """
-                SELECT g.*, u.username as author_name
+                SELECT g.*, u.username as author_name,
+                       (SELECT COUNT(*) FROM guide_favorites f WHERE f.guide_id = g.id) AS favorite_count,
+                       0 AS is_favorited
                 FROM server_guides g
                 LEFT JOIN users u ON g.author_id = u.id
                 WHERE g.id = ? AND g.status = 'approved'
@@ -97,7 +111,50 @@ def guide_detail(guide_id):
         abort(404)
 
     guide = dict(row)
+    # 把 SQLite 的 0/1 整数转 bool
+    guide['is_favorited'] = bool(guide.get('is_favorited'))
     return render_page('guides/detail.html', guide=guide)
+
+
+@guides_bp.route('/guides/favorites')
+@login_required
+def guide_favorites():
+    """当前用户收藏的服务器指南列表。"""
+    user = get_current_user()
+    page_size = get_page_size('GUIDES_PER_PAGE', 5)
+    conn = get_db()
+    try:
+        rows = conn.execute(
+            """
+            SELECT g.*, u.username AS author_name,
+                   (SELECT COUNT(*) FROM guide_favorites f WHERE f.guide_id = g.id) AS favorite_count
+            FROM guide_favorites fav
+            JOIN server_guides g ON fav.guide_id = g.id
+            LEFT JOIN users u ON g.author_id = u.id
+            WHERE fav.user_id = ? AND g.status = 'approved'
+            ORDER BY fav.created_at DESC
+            LIMIT ? OFFSET 0
+            """,
+            (user['id'], page_size),
+        ).fetchall()
+        guides = [dict(r) for r in rows]
+        _annotate_favorites(conn, guides, user['id'])
+        # 总数用于底部「加载更多」（简化：只取首屏）
+        total_row = conn.execute(
+            "SELECT COUNT(*) AS c FROM guide_favorites fav "
+            "JOIN server_guides g ON fav.guide_id = g.id "
+            "WHERE fav.user_id = ? AND g.status = 'approved'",
+            (user['id'],),
+        ).fetchone()
+        total = total_row['c']
+    finally:
+        conn.close()
+
+    return render_page(
+        'guides/favorites.html',
+        guides=guides,
+        has_more=total > len(guides),
+    )
 
 
 @guides_bp.route('/guides/create', methods=['GET', 'POST'])
@@ -221,6 +278,11 @@ def guide_edit(guide_id):
             flash('验证码错误或已过期', 'error')
             return render_page('guides/form.html', guide=guide)
 
+        from routes.firewall.spam import check_spam, record_activity
+        if check_spam(user_id=user['id'], content_type='guide', content=title):
+            flash('发布过于频繁，请稍后再试', 'error')
+            return render_page('guides/form.html', guide=guide)
+
         from routes.guides.api import _slugify, _ensure_unique_slug
         conn = get_db()
         try:
@@ -236,6 +298,7 @@ def guide_edit(guide_id):
                 (title, slug, summary, content, now, guide_id),
             )
             conn.commit()
+            record_activity(user_id=user['id'], content_type='guide', content=title)
             flash('修改已提交，等待管理员审核', 'success')
             return redirect(url_for('guides.guide_detail', guide_id=guide_id))
         except Exception as e:
