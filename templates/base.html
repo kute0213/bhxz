@@ -43,7 +43,7 @@
     <!-- 入场动画见 base.css：纯 CSS animation，不依赖 JS，避免白屏 -->
     <noscript><style>.page-content{opacity:1!important;transform:none!important}</style></noscript>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/tailwind.css', v='4') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css', v='37') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css', v='38') }}">
     <script src="{{ url_for('static', filename='lib/purify/purify.min.js', v='1') }}"></script>
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <script>
@@ -454,7 +454,7 @@
     <script src="{{ url_for('static', filename='js/core/base.js', v='24') }}"></script>
     <script src="{{ url_for('static', filename='js/core/uploader.js', v='1') }}"></script>
     {# 全站统一搜索入口：就地展开 + API 搜索（v4，详见 search.js） #}
-    <script src="{{ url_for('static', filename='js/core/search.js', v='4') }}"></script>
+    <script src="{{ url_for('static', filename='js/core/search.js', v='5') }}"></script>
 
     {# 统一弹窗控制器 #}
     {% from 'macros/modal.html' import modal_close_script %}

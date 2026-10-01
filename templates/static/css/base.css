@@ -545,23 +545,25 @@ body::after {
 
 /* ============================================
    全站统一搜索入口（SiteSearch）
-   点击「搜索框」→ 跳转独立搜索页 /search（页面内含返回按钮）
+   点击「搜索框」→ 就地展开导航栏搜索框并自动聚焦（详见 search.js）
    ============================================ */
 .search-icon { cursor: pointer; transition: color var(--transition-fast); }
 .search-icon:hover { color: var(--text-secondary); }
 
-/* 页面内的搜索框入口：整块可点击，点击即打开搜索页 */
-.search-entry { position: relative; cursor: pointer; }
-.search-entry .input-field { cursor: pointer; transition: border-color var(--transition-fast), box-shadow var(--transition-fast); }
+/* 页面内的搜索框入口：外观与真实输入框一致，故统一使用「输入文字」光标 */
+.search-entry { position: relative; cursor: text; }
+.search-entry .input-field { cursor: text; transition: border-color var(--transition-fast), box-shadow var(--transition-fast); }
+.search-entry .search-icon { cursor: text; }
 .search-entry:hover .input-field,
-.search-entry:focus-visible .input-field {
+.search-entry:focus-visible .input-field,
+.search-entry:focus-within .input-field {
     border-color: rgba(2, 132, 199, 0.45);
     box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.1);
 }
 .search-entry:hover .search-icon { color: var(--text-secondary); }
 
-/* 导航栏搜索入口与所有 data-search-open 元素统一为可点击 */
-[data-search-open] { cursor: pointer; }
+/* 其余 data-search-open 入口（如移动端菜单「搜索」按钮）保持手型光标 */
+[data-search-open]:not(.search-entry) { cursor: pointer; }
 
 /* 搜索时列表项的淡入，避免结果突变 */
 .search-fade-in { animation: searchFadeIn 0.35s cubic-bezier(0.22, 1, 0.36, 1) both; }

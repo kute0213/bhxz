@@ -1,8 +1,10 @@
-// 滨海小镇 - 全站统一搜索入口（SiteSearch v4 · 就地展开版）
+// 滨海小镇 - 全站统一搜索入口（SiteSearch v5 · 就地展开版）
 //
 // 交互约定：
 //   - 导航栏搜索区域是一个可原地展开/收起的容器
 //   - 点击图标或触发器 → 平滑展开输入框（宽度过渡），自动聚焦
+//   - 页面内任意 [data-search-open] 入口（建筑/指南/音频/讨论的搜索框、
+//     移动端菜单「搜索」按钮）→ 同样就地展开导航栏搜索框，并带入当前分类与关键词
 //   - 输入框内有文字 OR 当前有焦点 → 保持展开
 //   - 无文字 AND 失焦 AND 点击了外部 → 平滑收起
 //   - 回车 / 点击放大镜 → 调用 /api/search → 下拉面板渲染结果
@@ -62,17 +64,15 @@
     }
 
     // ---------- 展开 / 收起 ----------
-    function expand() {
-        if (state.expanded) return;
+    function expand(delay) {
         clearTimeout(state.timerClose);
         state.expanded = true;
         root.classList.add('is-open');
-        // 过渡结束后自动聚焦（让输入框获得光标）
-        // 但 transition 时长是 280ms，稍微延迟
+        // 过渡结束后自动聚焦（让输入框获得光标）；transition 时长 280ms，稍微延迟
         setTimeout(function () {
-            input.focus();
+            try { input.focus(); } catch (_) {}
             input.select();
-        }, 120);
+        }, typeof delay === 'number' ? delay : 120);
     }
 
     function collapse(force) {
@@ -175,6 +175,43 @@
     // 7) 点击面板外 → 可能触发收起（由 blur 处理）
     //    但面板内点击不应触发关闭：在面板上阻止冒泡
     panel.addEventListener('mousedown', function (e) { e.stopPropagation(); });
+
+    // 8) 页面内搜索框入口（[data-search-open] / .search-entry，含移动端菜单「搜索」）
+    //    → 就地展开导航栏搜索框，并自动带入入口的当前关键词与对应分类
+    function normalizeKind(k) {
+        for (var i = 0; i < KINDS.length; i++) { if (KINDS[i].key === k) return k; }
+        return 'all';
+    }
+
+    function openFromEntry(el) {
+        state.currentTab = normalizeKind(el.getAttribute('data-search-open'));
+        // 位于移动端侧边菜单内时，先关闭菜单再展开搜索
+        if (el.closest && el.closest('#mobile-menu')) {
+            var menuClose = document.getElementById('mobile-close-btn');
+            if (menuClose) menuClose.click();
+        }
+        var src = el.querySelector('input, textarea');
+        var v = src ? (src.value || '').trim() : '';
+        expand(160);
+        if (v) {
+            input.value = v.slice(0, MAX_KEYWORD_LEN);
+            refreshClear();
+            clearTimeout(state.timerSearch);
+            state.timerSearch = setTimeout(function () { doSearch(input.value.trim()); }, 140);
+        }
+    }
+
+    (function bindEntries() {
+        var entries = document.querySelectorAll('[data-search-open]');
+        Array.prototype.forEach.call(entries, function (el) {
+            // 入口内的输入框是只读展示，阻止其抢焦点，统一聚焦到导航栏输入框
+            el.addEventListener('mousedown', function (e) { e.preventDefault(); });
+            el.addEventListener('click', function (e) { e.preventDefault(); openFromEntry(el); });
+            el.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openFromEntry(el); }
+            });
+        });
+    })();
 
     // ---------- 渲染 ----------
     function refreshClear() {

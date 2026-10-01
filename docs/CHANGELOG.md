@@ -17,6 +17,7 @@
 
 ### 修复
 
+* **页面内搜索框点击无反应、光标为手型**：搜索组件 v4 重写时漏掉了 v3 中 `[data-search-open]` 的点击绑定，导致公共建筑 / 服务器指南 / 大喇叭音频 / 讨论列表页的搜索框以及移动端菜单「搜索」按钮全部变成死链接（点击无任何反应），同时 CSS 还把它们强制为 `cursor: pointer`（手型）而非输入框应有的 `cursor: text`。现已恢复绑定：点击（或回车 / 空格）任意 `[data-search-open]` 入口即就地展开导航栏搜索框、自动带入该入口的当前关键词与对应分类并聚焦输入框；移动端菜单内的入口会先关闭菜单。CSS 同步将 `.search-entry` 及其输入框 / 图标的光标改为 `text`（输入文字光标），仅非搜索框形态的入口保留手型。`search.js` v4→v5、`base.css` v37→v38
 * **评论失败（`'_ThreadSafeConnection' object has no attribute 'last_insert_rowid'`）**：`routes/buildings/api/__init__.py` 发表评论时改用 `conn.execute(...)` 返回的 cursor 的 `.lastrowid`，不再调用连接对象不存在的 `last_insert_rowid()`
 * **公共建筑管理「拒绝」弹窗穿模**：拒绝弹窗移出 `.page-content`（放入 `{% block page_modals %}`），避免受页面入场动画 `transform` 影响导致 `fixed` 定位错乱；建筑详情页举报 / 编辑标签弹窗同步处理
 * **robots.txt 的 Sitemap 指向错误域名**：`/robots.txt` 的 `Sitemap:` 原先固定取站点配置域名（如 `https://bhxz.tw.kg/sitemap.xml`），导致从 `https://binhai.cloud/robots.txt` 访问时地址不一致。改为优先匹配与当前 `Host` 相同的已配置域名（`SITE_URL` / `SITEMAP_DOMAINS`），未匹配时直接反映当前访问域名，兜底才回退站点配置；`services/sitemap_cache` 新增 `base_url_for_host()`
