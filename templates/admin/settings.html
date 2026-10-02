@@ -119,11 +119,11 @@
             const categories = data.categories || {};
             for (const [category, items] of Object.entries(categories)) {
                 const card = document.createElement('div');
-                card.className = 'pixel-card rounded-xl overflow-hidden';
+                card.className = 'pixel-card rounded-xl';
 
                 // 分类标题
                 const header = document.createElement('div');
-                header.className = 'px-4 sm:px-6 py-4 border-b border-cream/10 bg-forest-900/30';
+                header.className = 'px-4 sm:px-6 py-4 border-b border-cream/10 bg-forest-900/30 rounded-t-2xl';
                 header.innerHTML = `
                     <h2 class="text-lg font-bold flex items-center gap-2">
                         <i data-lucide="settings" class="w-5 h-5 text-gold-400"></i>
@@ -144,7 +144,7 @@
                     let inputHtml = '';
                     if (item.type === 'bool') {
                         inputHtml = `
-                            <div class="switch" data-type="bool" tabindex="0" role="switch" aria-checked="false">
+                            <div class="switch" data-switch data-type="bool" tabindex="0" role="switch" aria-checked="false">
                                 <input type="hidden" value="0">
                             </div>
                         `;
