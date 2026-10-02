@@ -73,6 +73,8 @@ if not _is_child:
         init_app(app, _APP_ROOT)
     except Exception as e:
         import traceback
+        from core.system.logger import log_fatal
+        log_fatal('CRITICAL', 'App', '应用初始化失败，服务器退出', error=str(e))
         print(f'[FATAL] 应用初始化失败: {e}', file=sys.stderr)
         traceback.print_exc(file=sys.stderr)
         sys.stderr.flush()

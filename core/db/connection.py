@@ -14,7 +14,7 @@ import sqlite3
 import threading
 
 from config import DB_PATH, APP_ROOT
-from core.system.logger import log
+from core.system.logger import log, log_fatal
 
 
 def _migrate_legacy_db():
@@ -108,7 +108,8 @@ def get_db():
                     _conn = _create_connection()
                     log('INFO', 'DB', '数据库连接成功', path=DB_PATH, mode='WAL')
                 except Exception as e:
-                    log('CRITICAL', 'DB', '无法打开数据库', path=DB_PATH, error=str(e))
+                    log_fatal('CRITICAL', 'DB', '无法打开数据库，服务器无法启动',
+                              path=DB_PATH, error=str(e))
                     raise
     return _ThreadSafeConnection(_conn, _conn_lock)
 

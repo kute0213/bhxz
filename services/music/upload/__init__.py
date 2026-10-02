@@ -279,7 +279,7 @@ def upload_music(user_id, username, title, is_public, upload_file, ip_address, t
 
         _finalize_music_files(work_dir, music_id)
 
-        log('Music', '上传大喇叭音频', music_id=music_id, user_id=user_id,
+        log('INFO', 'Music', '上传大喇叭音频', music_id=music_id, user_id=user_id,
             username=username, title=title, status=status, tags=parse_tags(tags), ip=ip_address)
         return True, {'music_id': music_id, 'title': title}
     except Exception as e:
@@ -418,13 +418,13 @@ def _run_upload_task(task_id, user_id, username, title, is_public,
             raise RuntimeError('音频记录创建失败')
         _finalize_music_files(work_dir, music_id)
 
-        log('Music', '上传大喇叭音频', music_id=music_id, user_id=user_id,
+        log('INFO', 'Music', '上传大喇叭音频', music_id=music_id, user_id=user_id,
             username=username, title=title, status=status, tags=parse_tags(tags), ip=ip_address)
         _set_task(task_id, status='done', percent=100, message='转码完成', music_id=music_id)
     except Exception as e:
         shutil.rmtree(work_dir, ignore_errors=True)
         _set_task(task_id, status='error', message='转码失败', error=str(e))
-        log('Music', '上传大喇叭音频失败', user_id=user_id, title=title,
+        log('ERROR', 'Music', '上传大喇叭音频失败', user_id=user_id, title=title,
             error=str(e), ip=ip_address)
 
 

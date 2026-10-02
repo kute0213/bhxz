@@ -104,7 +104,7 @@ def do_something(user_id, value, ip_address):
     try:
         # ... 业务逻辑 ...
         conn.commit()
-        log('Module', '操作成功', user_id=user_id, ip=ip_address)
+        log('INFO', 'Module', '操作成功', user_id=user_id, ip=ip_address)
         return True, '操作成功'
     except Exception:
         conn.rollback()
@@ -119,7 +119,7 @@ def do_something(user_id, value, ip_address):
 
 * `success` 为 `bool` 类型
 
-* 日志记录在核心层统一完成（`from core.logger import log`）
+* 日志记录在核心层统一完成（`from core.system.logger import log`）
 
 * 禁止导入 `flask`、`request`、`session`、`render_template`、`redirect`、`flash`
 
@@ -134,6 +134,20 @@ def do_something(user_id, value, ip_address):
 * `core/auth/` — 认证装饰器、密码哈希
 
 * `core/web/middleware.py` — 请求中间件
+
+### 日志规范（`core/system/logger.py`）
+
+所有日志都经由统一入口 `_emit()` 写出，对外分三类，**不要绕过 logger 直接 `print` 或写文件**：
+
+| 类别 | 入口 | 存储 | 是否打印到控制台 |
+|------|------|------|------------------|
+| 全局日志 | `log(level, event, detail, **kwargs)` | `logs/app.log` + 内存环形缓冲 + SSE | 受 `LOG_CONSOLE_ENABLED` 控制 |
+| 严重错误日志 | `log_fatal(level, event, detail, **kwargs)` | `logs/fatal.log`（**每次写入覆盖，只保留最后一次**） | 始终打印 |
+| 模块单独日志 | `register_module_log(name)` + `log_module(name, level, event, ...)` | 模块独立内存缓冲 + `logs/modules/<name>.log`（是否落盘由 `LOG_MODULE_<NAME>_STORE` 控制） | **从不打印** |
+
+* 等级：`DEBUG < INFO < WARNING < ERROR < CRITICAL`，由 `LOG_LEVEL` 控制；严重错误日志不受等级过滤。
+* 模块单独日志**不进入**全局日志文件、全局缓冲与 SSE，也未注册时自动按默认（不落盘）注册。
+* 现有模块单独日志使用者：防火墙（在 `services/firewall/__init__.py` 启动时 `register_module_log('firewall', store=False)`，便捷入口 `log_firewall(...)`）。
 
 ## 新增功能的流程
 

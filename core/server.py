@@ -6,7 +6,7 @@ import signal
 import ssl
 import threading
 
-from core.system.logger import log
+from core.system.logger import log, log_fatal
 
 _server = None
 _shutdown_started = False
@@ -97,7 +97,7 @@ def run_server(app, port=5000, app_root=None):
     log('INFO', 'App', f'APP_ROOT: {app_root}')
 
     if is_port_in_use(port):
-        log('ERROR', 'App', f'端口 {port} 已被占用，请先关闭其他程序')
+        log_fatal('CRITICAL', 'App', '端口已被占用，服务器退出', port=port)
         return
 
     ssl_dir = os.path.join(app_root, 'ssl') if app_root else os.path.join(
@@ -173,7 +173,7 @@ def run_server(app, port=5000, app_root=None):
     except KeyboardInterrupt:
         shutdown_application(signal.SIGINT)
     except Exception as e:
-        log('ERROR', 'App', f'服务器启动失败: {e}')
+        log_fatal('CRITICAL', 'App', '服务器启动失败，进程退出', error=str(e))
         raise
     finally:
         shutdown_application()

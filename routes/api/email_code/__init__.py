@@ -66,42 +66,42 @@ def send_email_code():
         return jsonify({'success': False, 'message': '请先登录'}), 401
 
     if not email:
-        log('EmailCode', '邮箱为空', ip=get_client_ip())
+        log('WARNING', 'EmailCode', '邮箱为空', ip=get_client_ip())
         return jsonify({'success': False, 'message': '请输入邮箱地址'}), 400
 
     if not _is_valid_email(email):
-        log('EmailCode', '邮箱格式不正确', email=email, ip=get_client_ip())
+        log('WARNING', 'EmailCode', '邮箱格式不正确', email=email, ip=get_client_ip())
         return jsonify({'success': False, 'message': '邮箱格式不正确'}), 400
 
     # 群内验证码校验（仅注册场景需要）
     if purpose == '注册' and not session.get('group_code_verified', False):
-        log('EmailCode', '群内验证码错误', email=email, purpose=purpose, ip=get_client_ip())
+        log('WARNING', 'EmailCode', '群内验证码错误', email=email, purpose=purpose, ip=get_client_ip())
         return jsonify({'success': False, 'message': '群内验证码错误，请在QQ群公告中获取正确验证码'}), 400
 
     # 图形验证码校验（服务端内存存储，一次性删除防止重放）
     if not captcha_service.verify(captcha_id, captcha_input):
-        log('EmailCode', '图形验证码错误', email=email, purpose=purpose, ip=get_client_ip())
+        log('WARNING', 'EmailCode', '图形验证码错误', email=email, purpose=purpose, ip=get_client_ip())
         return jsonify({'success': False, 'message': '图形验证码错误或已过期', 'need_captcha': True}), 400
 
     # 检查邮件功能是否启用
     if not email_service.is_enabled():
-        log('EmailCode', '邮件功能未启用', email=email, purpose=purpose, ip=get_client_ip())
+        log('WARNING', 'EmailCode', '邮件功能未启用', email=email, purpose=purpose, ip=get_client_ip())
         return jsonify({'success': False, 'message': '邮件功能未启用'}), 400
 
     # 检查注册邮箱验证是否开启（仅注册场景）
     if purpose == '注册' and not get_config_value('REGISTER_EMAIL_VERIFY', False):
-        log('EmailCode', '注册邮箱验证未开启', email=email, ip=get_client_ip())
+        log('WARNING', 'EmailCode', '注册邮箱验证未开启', email=email, ip=get_client_ip())
         return jsonify({'success': False, 'message': '注册邮箱验证未开启'}), 400
 
     # 找回密码场景：检查邮件功能是否启用即可
     if purpose == '找回密码' and not email_service.is_enabled():
-        log('EmailCode', '邮件功能未启用', email=email, purpose=purpose, ip=get_client_ip())
+        log('WARNING', 'EmailCode', '邮件功能未启用', email=email, purpose=purpose, ip=get_client_ip())
         return jsonify({'success': False, 'message': '邮件功能未启用'}), 400
 
     # IP 频率限制：发送过于频繁时自动封禁该 IP（防止批量刷邮箱验证码）
     ip = get_client_ip()
     if not email_limiter.check(ip, request.headers.get('User-Agent', '')):
-        log('EmailCode', '验证码发送过于频繁，触发自动封禁', email=email, purpose=purpose, ip=ip)
+        log('WARNING', 'EmailCode', '验证码发送过于频繁，触发自动封禁', email=email, purpose=purpose, ip=ip)
         auto_ban(ip, 'email', reason=f'邮箱验证码发送过于频繁（{purpose}）')
         return jsonify({'success': False, 'message': '发送过于频繁，请稍后再试'}), 429
 
@@ -110,8 +110,8 @@ def send_email_code():
     if success:
         # 消耗验证码，防止重放攻击（前端在发送成功后已重新加载新验证码）
         captcha_service.consume(captcha_id)
-        log('EmailCode', '验证码发送成功', email=email, purpose=purpose, ip=get_client_ip())
+        log('INFO', 'EmailCode', '验证码发送成功', email=email, purpose=purpose, ip=get_client_ip())
         return jsonify({'success': True, 'message': message})
     else:
-        log('EmailCode', '验证码发送失败', email=email, purpose=purpose, ip=get_client_ip(), reason=message)
+        log('WARNING', 'EmailCode', '验证码发送失败', email=email, purpose=purpose, ip=get_client_ip(), reason=message)
         return jsonify({'success': False, 'message': message}), 429

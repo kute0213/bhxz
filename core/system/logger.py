@@ -1,17 +1,37 @@
-"""统一日志系统 —— 同时输出到控制台、日志文件、内存缓冲（供后台实时查看）。
+"""统一日志系统 —— 三类日志集中管理，所有写入统一经过 ``_emit()``。
 
-用法:
-    from core.system.logger import log
+日志分为三类：
 
-    log('INFO', 'App', '服务器启动成功', port=5000)
-    log('WARNING', 'DB', '连接超时', retry=3)
-    log('ERROR', 'Auth', '登录失败', username='alice', ip='1.2.3.4')
+1. **全局日志**（``log``）
+   普通运行日志：控制台 + ``logs/app.log`` + 全局内存环形缓冲 + SSE 实时推送。
 
-日志等级由 LOG_LEVEL 配置项控制（config.py 默认值，系统设置面板热重载）：
+2. **严重错误日志**（``log_fatal``）
+   导致服务器退出的报错（端口被占用、数据库无法打开、应用初始化失败等）。
+   单独写入 ``logs/fatal.log``，**每次写入直接覆盖文件**（只保留最后一次），
+   并始终打印到控制台；不受日志等级与控制台开关限制。
+
+3. **模块单独日志**（``register_module_log`` / ``log_module``）
+   模块在启动时向日志模块注册自己的独立日志器，写入模块独立文件
+   ``logs/modules/<模块名>.log``（是否落盘由设置 ``LOG_MODULE_<模块名>_STORE`` 控制），
+   并拥有独立内存缓冲供后台单独查看。
+   **不打印到全局日志、不进入全局日志文件与全局缓冲、不进入 SSE**。
+   当前使用者：防火墙（``firewall``，默认不落盘）。
+
+用法::
+
+    from core.system.logger import log, log_fatal, register_module_log, log_module
+
+    log('INFO', 'App', '服务器启动成功', port=5000)             # 全局日志
+    log_fatal('CRITICAL', 'App', '端口被占用，服务器退出')        # 严重错误日志
+    register_module_log('firewall', store=False)                # 模块启动时注册
+    log_module('firewall', 'WARNING', 'Security', '自动封禁', ip='1.2.3.4')
+
+日志等级由 ``LOG_LEVEL`` 配置项控制（config.py 默认值，系统设置面板热重载）：
     DEBUG < INFO < WARNING < ERROR < CRITICAL
 """
 
 import os
+import re
 import threading
 from datetime import datetime
 
@@ -30,38 +50,47 @@ LOG_LEVELS = {
 }
 
 # ---------------------------------------------------------------------------
+# 日志类别
+# ---------------------------------------------------------------------------
+
+CATEGORY_GLOBAL = 'global'   # 全局日志
+CATEGORY_FATAL = 'fatal'     # 严重错误日志（导致服务器退出）
+CATEGORY_MODULE = 'module'   # 模块单独日志
+
+# ---------------------------------------------------------------------------
 # 日志文件路径
 # ---------------------------------------------------------------------------
 
 LOG_DIR = os.path.join(APP_ROOT, 'logs')
-LOG_FILE = os.path.join(LOG_DIR, 'app.log')
-# 防火墙专用日志文件 —— 防火墙日志独立存放，不进入全局日志（app.log）
-FIREWALL_LOG_FILE = os.path.join(LOG_DIR, 'firewall.log')
+LOG_FILE = os.path.join(LOG_DIR, 'app.log')                 # 全局日志文件
+FATAL_LOG_FILE = os.path.join(LOG_DIR, 'fatal.log')         # 严重错误日志文件（覆盖写入）
+MODULE_LOG_DIR = os.path.join(LOG_DIR, 'modules')           # 模块单独日志目录
 
 # ---------------------------------------------------------------------------
 # 内存环形缓冲 —— 供管理后台实时查看
 # ---------------------------------------------------------------------------
 
 MAX_LOG_ENTRIES = 2000
-_log_buffer = []           # list[dict]
+_log_buffer = []           # list[dict] 全局日志缓冲
 _log_buffer_lock = threading.Lock()
 _log_monitor_clients = []  # list[queue.Queue] — SSE 客户端
 _monitor_lock = threading.Lock()
 
-# 防火墙独立环形缓冲 —— 与全局缓冲隔离，供后台「防火墙日志」页面单独查看
-MAX_FIREWALL_LOG_ENTRIES = 2000
-_firewall_buffer = []      # list[dict]
-_firewall_buffer_lock = threading.Lock()
+# 模块单独日志缓冲上限（每个模块各自独立）
+MAX_MODULE_LOG_ENTRIES = 2000
 
+# ---------------------------------------------------------------------------
+# 日志等级缓存
+# ---------------------------------------------------------------------------
 
 def _get_level_number(level_name: str) -> int:
     """将等级名转为数字，未知等级按 INFO 处理。"""
-    return LOG_LEVELS.get(level_name.upper(), 1)
+    return LOG_LEVELS.get(str(level_name).upper(), LOG_LEVELS['INFO'])
 
 
 # 内存中的日志等级缓存，避免 _get_current_min_level() 调用 get_db() 导致死锁
-# 初始默认 INFO，数据库就绪后通过 refresh_log_level() 刷新
-_current_min_level = 1
+# 初始默认 INFO，数据库就绪后通过 refresh_log_settings() 刷新
+_current_min_level = LOG_LEVELS['INFO']
 _current_min_level_lock = threading.Lock()
 
 
@@ -81,29 +110,12 @@ def refresh_log_level():
         pass  # 数据库未就绪时保持默认值
 
 
-def refresh_console_enabled():
-    """从数据库刷新控制台打印开关（数据库就绪或设置更新后调用）。"""
-    try:
-        cfg = get_config_value('LOG_CONSOLE_ENABLED', True)
-        if isinstance(cfg, str):
-            cfg = cfg.strip().lower() in ('1', 'true', 'yes', 'on')
-        set_console_enabled(bool(cfg))
-    except Exception:
-        pass  # 数据库未就绪时保持默认值
-
-
-def refresh_log_settings():
-    """一次性刷新全部日志相关设置（等级 + 控制台开关）。"""
-    refresh_log_level()
-    refresh_console_enabled()
-
-
 # ---------------------------------------------------------------------------
 # 控制台输出开关
 # ---------------------------------------------------------------------------
 
-# 全局开关：是否将日志打印到控制台。无论开关状态如何，日志始终写入日志文件
-# 并进入内存缓冲（供管理后台实时查看）。
+# 全局开关：是否将全局日志打印到控制台。无论开关状态如何，全局日志始终写入日志文件
+# 并进入内存缓冲（供管理后台实时查看）。严重错误日志始终打印，模块单独日志从不打印。
 _console_enabled = True
 
 
@@ -118,39 +130,37 @@ def is_console_enabled() -> bool:
     return _console_enabled
 
 
+def refresh_console_enabled():
+    """从数据库刷新控制台打印开关（数据库就绪或设置更新后调用）。"""
+    try:
+        cfg = get_config_value('LOG_CONSOLE_ENABLED', True)
+        if isinstance(cfg, str):
+            cfg = cfg.strip().lower() in ('1', 'true', 'yes', 'on')
+        set_console_enabled(bool(cfg))
+    except Exception:
+        pass  # 数据库未就绪时保持默认值
+
+
 # ---------------------------------------------------------------------------
-# 核心日志函数
+# 统一的等级过滤与行格式化
 # ---------------------------------------------------------------------------
 
-def log(level: str, event: str, detail: str = '', *, console: bool = True, **kwargs):
-    """统一日志输出。
+def _build_line(level: str, event: str, detail: str, kwargs: dict):
+    """生成一行日志文本，返回 (timestamp, thread_name, line)。"""
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    thread = threading.current_thread().name
+    line = f'[{now}] [{level}] [{thread}] [{event}]'
+    if detail:
+        line += f' {detail}'
+    for key, value in kwargs.items():
+        line += f' {key}={value}'
+    return now, thread, line
 
-    参数:
-        level:  日志等级，如 'DEBUG' / 'INFO' / 'WARNING' / 'ERROR' / 'CRITICAL'
-        event:  事件标签，如 'DB' / 'Auth' / 'App' / 'Backup'
-        detail: 简要描述（可选）
-        console: 是否允许本次输出到控制台。默认 True；
-                 设为 False（如防火墙高频日志）时仍会写入日志文件与内存缓冲。
-                 实际是否打印还会同时受全局开关 set_console_enabled() 控制。
-        **kwargs: 附加键值对，自动拼接到日志行末尾
 
-    日志始终写入日志文件；控制台打印可按调用或全局关闭。
-    """
-    # 等级过滤
-    if _get_level_number(level) < _get_current_min_level():
-        return
-
-    now, thread, line = _build_line(level, event, detail, kwargs)
-
-    # 1. 输出到控制台（受本次调用与全局开关共同控制）
-    if console and _console_enabled:
-        print(line, flush=True)
-
-    # 2. 写入日志文件（始终执行）
-    _write_file(line)
-
-    # 3. 存入内存环形缓冲
-    entry = {
+def _make_entry(now: str, thread: str, line: str, level: str,
+                event: str, detail: str, kwargs: dict) -> dict:
+    """构造结构化日志条目（供内存缓冲 / 后台页面使用）。"""
+    return {
         'timestamp': now,
         'level': level,
         'thread': thread,
@@ -159,191 +169,375 @@ def log(level: str, event: str, detail: str = '', *, console: bool = True, **kwa
         'kwargs': {k: str(v) for k, v in kwargs.items()},
         'line': line,
     }
-    with _log_buffer_lock:
-        _log_buffer.append(entry)
-        if len(_log_buffer) > MAX_LOG_ENTRIES:
-            _log_buffer.pop(0)
-
-    # 4. 推送给 SSE 客户端
-    _push_to_clients(entry)
 
 
-# ---------------------------------------------------------------------------
-# 文件写入
-# ---------------------------------------------------------------------------
-
-def _build_line(level: str, event: str, detail: str, kwargs: dict):
-    """构建统一格式的日志行，返回 (timestamp, thread, line)。"""
-    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    thread = threading.current_thread().name
-    parts = [f'[{now}] [{level}] [{thread}] [{event}]']
-    if detail:
-        parts.append(detail)
-    for k, v in kwargs.items():
-        parts.append(f'{k}={v}')
-    return now, thread, ' '.join(parts)
+def _filter_buffer(buffer: list, level_filter: str = '', after_index: int = 0):
+    """按等级与索引过滤缓冲，返回 [(index, entry), ...]。"""
+    min_level = _get_level_number(level_filter) if level_filter else None
+    result = []
+    for idx, entry in enumerate(buffer):
+        # after_index > 0 时只返回索引更大的条目（增量拉取）；<= 0 表示从头返回
+        if after_index > 0 and idx <= after_index:
+            continue
+        if min_level is not None and _get_level_number(entry.get('level', 'INFO')) < min_level:
+            continue
+        result.append((idx, entry))
+    return result
 
 
-def _write_line_to(path: str, line: str):
-    """追加写入指定日志文件（自动创建目录，失败不抛出）。"""
+def _write_line_to(path: str, line: str) -> None:
+    """追加写入一行日志（失败静默，不影响主流程）。"""
     try:
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, 'a', encoding='utf-8') as f:
             f.write(line + '\n')
     except Exception:
-        pass  # 文件写入失败不抛出，避免级联崩溃
+        pass
 
 
-def _write_file(line: str):
-    """追加写入全局日志文件（自动创建目录）。"""
-    _write_line_to(LOG_FILE, line)
+def _write_overwrite(path: str, line: str) -> None:
+    """覆盖写入一行日志（只保留最后一次，用于严重错误日志）。"""
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, 'w', encoding='utf-8') as f:
+            f.write(line + '\n')
+    except Exception:
+        pass
+
+
+def _push_to_clients(entry: dict) -> None:
+    """向所有 SSE 客户端推送全局日志条目。"""
+    import json as _json
+    try:
+        payload = _json.dumps(entry, ensure_ascii=False)
+    except Exception:
+        return
+    with _monitor_lock:
+        clients = list(_log_monitor_clients)
+    for q in clients:
+        try:
+            q.put_nowait(payload)
+        except Exception:
+            pass
+
+
+# ===========================================================================
+# 模块单独日志器
+# ===========================================================================
+
+_modules = {}              # name -> ModuleLogger
+_modules_lock = threading.Lock()
+
+
+def _safe_name(name: str) -> str:
+    """将模块名转为安全的文件名片段。"""
+    return re.sub(r'[^0-9A-Za-z_-]', '_', str(name)) or 'module'
+
+
+def _module_store_key(name: str) -> str:
+    """模块日志是否落盘的设置键，如 firewall → LOG_MODULE_FIREWALL_STORE。"""
+    return f'LOG_MODULE_{_safe_name(name).upper()}_STORE'
+
+
+class ModuleLogger:
+    """模块单独日志器：独立文件（可选落盘）+ 独立内存缓冲，不进入全局日志。"""
+
+    def __init__(self, name: str, store: bool = False,
+                 max_entries: int = MAX_MODULE_LOG_ENTRIES):
+        self.name = name
+        self.store = bool(store)          # 是否落盘（可被设置热更新）
+        self._default_store = bool(store)  # 注册时的默认值
+        self._max_entries = max_entries
+        self._buffer = []                 # list[dict]
+        self._lock = threading.Lock()
+        self.file_path = os.path.join(MODULE_LOG_DIR, f'{_safe_name(name)}.log')
+
+    # --- 写入 ---
+    def log(self, level: str, event: str, detail: str = '', **kwargs):
+        """写入一条模块单独日志（走统一入口 _emit）。"""
+        _emit(CATEGORY_MODULE, level, event, detail, kwargs, module=self)
+
+    # --- 读取 ---
+    def get_buffer(self, level_filter: str = '', after_index: int = 0):
+        with self._lock:
+            return _filter_buffer(self._buffer, level_filter, after_index)
+
+    def get_tail(self, count: int = 200):
+        with self._lock:
+            if count <= 0:
+                return list(self._buffer)
+            return list(self._buffer[-count:])
+
+    def clear(self):
+        with self._lock:
+            self._buffer.clear()
+
+
+def register_module_log(name: str, *, store: bool = False,
+                        max_entries: int = MAX_MODULE_LOG_ENTRIES) -> ModuleLogger:
+    """模块启动时向日志模块注册一个独立日志器（幂等）。
+
+    Args:
+        name: 模块名（如 'firewall'）。
+        store: 默认是否落盘；实际取值会被设置 LOG_MODULE_<NAME>_STORE 覆盖。
+        max_entries: 该模块内存缓冲上限。
+
+    Returns:
+        该模块的 ModuleLogger 实例。
+    """
+    name = str(name or '').strip()
+    if not name:
+        raise ValueError('模块日志名称不能为空')
+
+    with _modules_lock:
+        existing = _modules.get(name)
+    if existing is not None:
+        return existing
+
+    # 解析是否落盘（数据库未就绪时回退到注册默认值）
+    try:
+        store_cfg = bool(get_config_value(_module_store_key(name), store))
+    except Exception:
+        store_cfg = bool(store)
+
+    logger = ModuleLogger(name, store=store_cfg, max_entries=max_entries)
+    with _modules_lock:
+        return _modules.setdefault(name, logger)
+
+
+def get_module_logger(name: str):
+    """获取已注册的模块日志器，未注册返回 None。"""
+    with _modules_lock:
+        return _modules.get(name)
+
+
+def list_module_loggers():
+    """返回所有已注册的模块日志器。"""
+    with _modules_lock:
+        return list(_modules.values())
+
+
+def refresh_module_store_flags():
+    """从数据库刷新各模块日志的「是否落盘」开关（数据库就绪或设置更新后调用）。"""
+    for logger in list_module_loggers():
+        try:
+            logger.store = bool(
+                get_config_value(_module_store_key(logger.name), logger._default_store))
+        except Exception:
+            pass  # 数据库未就绪时保持注册默认值
+
+
+def refresh_log_settings():
+    """一次性刷新全部日志相关设置（等级 + 控制台开关 + 模块落盘开关）。"""
+    refresh_log_level()
+    refresh_console_enabled()
+    refresh_module_store_flags()
+
+
+# ===========================================================================
+# 统一写出入口 —— 所有日志都经过这里
+# ===========================================================================
+
+def _emit(category: str, level: str, event: str, detail: str, kwargs: dict,
+          *, module: 'ModuleLogger' = None, console: bool = True) -> None:
+    """统一日志写出入口。
+
+    按类别分发到不同的存储介质；模块单独日志与严重错误日志不会进入全局日志。
+    """
+    is_fatal = category == CATEGORY_FATAL
+
+    # 等级过滤：严重错误日志不受过滤
+    if not is_fatal and _get_level_number(level) < _get_current_min_level():
+        return
+
+    now, thread, line = _build_line(level, event, detail, kwargs)
+
+    if category == CATEGORY_GLOBAL:
+        if console and _console_enabled:
+            print(line, flush=True)
+        _write_line_to(LOG_FILE, line)
+        entry = _make_entry(now, thread, line, level, event, detail, kwargs)
+        with _log_buffer_lock:
+            _log_buffer.append(entry)
+            if len(_log_buffer) > MAX_LOG_ENTRIES:
+                _log_buffer.pop(0)
+        _push_to_clients(entry)
+        return
+
+    if category == CATEGORY_FATAL:
+        # 严重错误：覆盖写入（只保留最后一次）+ 始终打印
+        _write_overwrite(FATAL_LOG_FILE, line)
+        print(line, flush=True)
+        return
+
+    if category == CATEGORY_MODULE:
+        logger = module
+        if logger is None:
+            return
+        if logger.store:
+            _write_line_to(logger.file_path, line)
+        entry = _make_entry(now, thread, line, level, event, detail, kwargs)
+        with logger._lock:
+            logger._buffer.append(entry)
+            if len(logger._buffer) > logger._max_entries:
+                logger._buffer.pop(0)
+        return
+
+
+# ===========================================================================
+# 公共 API
+# ===========================================================================
+
+def log(level: str, event: str, detail: str = '', *, console: bool = True, **kwargs):
+    """写入全局日志（控制台 + logs/app.log + 全局缓冲 + SSE）。
+
+    Args:
+        level: 日志等级（DEBUG/INFO/WARNING/ERROR/CRITICAL）。
+        event: 事件/模块标签，如 'App'、'DB'、'Auth'。
+        detail: 描述文本。
+        console: 是否允许打印到控制台（仍受全局控制台开关约束）。
+        kwargs: 附加结构化字段，如 ip='1.2.3.4'。
+    """
+    _emit(CATEGORY_GLOBAL, level, event, detail, kwargs, console=console)
+
+
+def log_fatal(level: str, event: str, detail: str = '', **kwargs):
+    """写入严重错误日志（导致服务器退出的报错）。
+
+    单独写入 logs/fatal.log，每次写入直接覆盖文件（只保留最后一次），
+    并始终打印到控制台；不受日志等级与控制台开关限制。
+    """
+    _emit(CATEGORY_FATAL, level, event, detail, kwargs)
+
+
+def log_module(name: str, level: str, event: str, detail: str = '', **kwargs):
+    """写入指定模块的单独日志（未注册时自动注册，默认不落盘）。"""
+    logger = get_module_logger(name)
+    if logger is None:
+        logger = register_module_log(name)
+    logger.log(level, event, detail, **kwargs)
+
+
+def read_fatal_log() -> str:
+    """读取严重错误日志文件内容（不存在返回空串）。"""
+    try:
+        with open(FATAL_LOG_FILE, 'r', encoding='utf-8') as f:
+            return f.read()
+    except Exception:
+        return ''
+
+
+def clear_fatal_log() -> None:
+    """清空严重错误日志文件。"""
+    try:
+        if os.path.exists(FATAL_LOG_FILE):
+            os.remove(FATAL_LOG_FILE)
+    except Exception:
+        pass
 
 
 # ---------------------------------------------------------------------------
-# 内存缓冲读取
+# 全局日志缓冲读取（供管理后台）
 # ---------------------------------------------------------------------------
 
-def _filter_buffer(buf: list, level_filter: str, after_index: int) -> list:
-    """按等级与起始索引过滤缓冲条目（调用方需持有对应缓冲锁）。
-
-    返回 [(index, entry), ...]，index 为该条目在缓冲内的位置。
-    """
-    min_level = None
-    filter_raw = (level_filter or '').strip().upper()
-    if filter_raw and filter_raw != 'DEBUG':
-        if filter_raw.startswith('>='):
-            filter_raw = filter_raw[2:].strip()
-        if filter_raw in LOG_LEVELS:
-            min_level = LOG_LEVELS[filter_raw]
-
-    result = []
-    start = max(0, after_index)
-    for i, entry in enumerate(buf):
-        if i < start:
-            continue
-        if min_level is not None and LOG_LEVELS.get(entry['level'], 1) < min_level:
-            continue
-        result.append((i, entry))
-    return result
-
-
-def get_log_buffer(level_filter: str = '', after_index: int = 0) -> list:
-    """获取全局内存缓冲中的日志条目。
-
-    参数:
-        level_filter: 按等级筛选。
-           - 空字符串或 'DEBUG' 表示不过滤（显示所有）
-           - 其他等级（如 'WARNING'）表示筛选该等级及以上的条目
-           - 支持 '>=' 前缀，如 '>=WARNING' 与 'WARNING' 效果相同
-        after_index:  只返回索引 > after_index 的条目（用于增量拉取）
-    返回:
-        [(index, entry), ...]  按时间正序（旧→新）
-    """
+def get_log_buffer(level_filter: str = '', after_index: int = 0):
+    """获取全局日志缓冲（返回 [(index, entry), ...]）。"""
     with _log_buffer_lock:
         return _filter_buffer(_log_buffer, level_filter, after_index)
 
 
-def get_log_buffer_tail(count: int = 200) -> list:
-    """获取最近 N 条全局日志（正序，旧→新，前端自行反转）。"""
+def get_log_buffer_tail(count: int = 200):
+    """获取全局日志缓冲最近 count 条。"""
     with _log_buffer_lock:
+        if count <= 0:
+            return list(_log_buffer)
         return list(_log_buffer[-count:])
 
 
 def clear_log_buffer():
-    """清空全局内存缓冲。"""
+    """清空全局日志缓冲。"""
     with _log_buffer_lock:
         _log_buffer.clear()
 
 
-def get_firewall_log_buffer(level_filter: str = '', after_index: int = 0) -> list:
-    """获取防火墙独立缓冲中的日志条目（结构同 get_log_buffer）。"""
-    with _firewall_buffer_lock:
-        return _filter_buffer(_firewall_buffer, level_filter, after_index)
+# ---------------------------------------------------------------------------
+# 模块单独日志缓冲读取（供管理后台）
+# ---------------------------------------------------------------------------
+
+def get_module_log_buffer(name: str, level_filter: str = '', after_index: int = 0):
+    """获取指定模块的独立日志缓冲，未注册返回空列表。"""
+    logger = get_module_logger(name)
+    if logger is None:
+        return []
+    return logger.get_buffer(level_filter, after_index)
 
 
-def get_firewall_log_buffer_tail(count: int = 200) -> list:
-    """获取最近 N 条防火墙日志（正序，旧→新）。"""
-    with _firewall_buffer_lock:
-        return list(_firewall_buffer[-count:])
+def get_module_log_buffer_tail(name: str, count: int = 200):
+    """获取指定模块独立日志缓冲最近 count 条。"""
+    logger = get_module_logger(name)
+    if logger is None:
+        return []
+    return logger.get_tail(count)
 
 
-def clear_firewall_log_buffer():
-    """清空防火墙独立缓冲。"""
-    with _firewall_buffer_lock:
-        _firewall_buffer.clear()
+def clear_module_log_buffer(name: str) -> None:
+    """清空指定模块的独立日志缓冲。"""
+    logger = get_module_logger(name)
+    if logger is not None:
+        logger.clear()
 
 
 # ---------------------------------------------------------------------------
-# SSE 实时推送
+# SSE 客户端管理
 # ---------------------------------------------------------------------------
 
-def _push_to_clients(entry: dict):
-    """将新日志条目推送给所有已连接的 SSE 客户端。"""
-    import json
-    payload = json.dumps(entry, ensure_ascii=False)
+def register_monitor_client(queue_obj) -> None:
+    """注册一个 SSE 客户端队列（接收全局日志推送）。"""
     with _monitor_lock:
-        dead = []
-        for q in _log_monitor_clients:
-            try:
-                q.put_nowait(payload)
-            except Exception:
-                dead.append(q)
-        for q in dead:
-            try:
-                _log_monitor_clients.remove(q)
-            except ValueError:
-                pass
+        _log_monitor_clients.append(queue_obj)
 
 
-def register_monitor_client(queue) -> None:
-    """注册一个 SSE 客户端队列。"""
-    with _monitor_lock:
-        _log_monitor_clients.append(queue)
-
-
-def unregister_monitor_client(queue) -> None:
+def unregister_monitor_client(queue_obj) -> None:
     """注销一个 SSE 客户端队列。"""
     with _monitor_lock:
         try:
-            _log_monitor_clients.remove(queue)
+            _log_monitor_clients.remove(queue_obj)
         except ValueError:
             pass
 
 
+# ---------------------------------------------------------------------------
+# 防火墙模块日志 —— 模块单独日志的便捷入口
+# ---------------------------------------------------------------------------
+
+FIREWALL_MODULE = 'firewall'
+
+
 def log_firewall(level: str, event: str, detail: str = '', **kwargs):
-    """防火墙专用日志入口：写入独立文件 logs/firewall.log + 独立内存缓冲。
+    """防火墙模块单独日志入口（等价 log_module('firewall', ...)）。
 
-    防火墙日志（刷屏、DDoS、IP 拦截、封禁等）高频且属于独立子系统，
-    统一写入 logs/firewall.log 与专用缓冲，**不进入**系统全局日志
-    （app.log / 全局缓冲 / SSE / 控制台），避免污染全局日志；
-    后台「防火墙日志」页面从专用缓冲读取。
-
-    参数与 log() 完全一致，仍受全局日志等级 LOG_LEVEL 过滤。
+    只写入防火墙模块的独立缓冲（默认不落盘），不进入全局日志。
     """
-    # 等级过滤：与全局日志保持一致
-    if _get_level_number(level) < _get_current_min_level():
-        return
+    log_module(FIREWALL_MODULE, level, event, detail, **kwargs)
 
-    now, thread, line = _build_line(level, event, detail, kwargs)
-    _write_line_to(FIREWALL_LOG_FILE, line)
 
-    entry = {
-        'timestamp': now,
-        'level': level,
-        'thread': thread,
-        'event': event,
-        'detail': detail,
-        'kwargs': {k: str(v) for k, v in kwargs.items()},
-        'line': line,
-    }
-    with _firewall_buffer_lock:
-        _firewall_buffer.append(entry)
-        if len(_firewall_buffer) > MAX_FIREWALL_LOG_ENTRIES:
-            _firewall_buffer.pop(0)
+def get_firewall_log_buffer(level_filter: str = '', after_index: int = 0):
+    """获取防火墙模块日志缓冲。"""
+    return get_module_log_buffer(FIREWALL_MODULE, level_filter, after_index)
+
+
+def get_firewall_log_buffer_tail(count: int = 200):
+    """获取防火墙模块日志缓冲最近 count 条。"""
+    return get_module_log_buffer_tail(FIREWALL_MODULE, count)
+
+
+def clear_firewall_log_buffer():
+    """清空防火墙模块日志缓冲。"""
+    clear_module_log_buffer(FIREWALL_MODULE)
 
 
 # ===========================================================================
-# 便捷函数 —— 与旧版 log(event, detail, **kwargs) 签名兼容
+# 便捷函数 —— 全局日志快捷入口
 # ===========================================================================
 
 def log_info(event: str, detail: str = '', **kwargs):

@@ -175,13 +175,13 @@ def create_topic(user_id, username, title, content, category_id, tags, attachmen
             (user_id, category_id, title, content, tags, attachment_json, now, now)
         )
         conn.commit()
-        log('Discussion', '发帖成功', user_id=user_id, username=username,
+        log('INFO', 'Discussion', '发帖成功', user_id=user_id, username=username,
             title=title, category_id=category_id, ip=ip_address)
         return True, '发帖成功'
     except Exception:
         conn.rollback()
         clean_attachment_json(attachment_json)
-        log('Discussion', '发帖失败', user_id=user_id, username=username,
+        log('ERROR', 'Discussion', '发帖失败', user_id=user_id, username=username,
             title=title, ip=ip_address)
         return False, '发帖失败，请稍后重试'
     finally:
@@ -203,12 +203,12 @@ def edit_topic(topic_id, user_id, username, title, content, category_id, tags, i
             (title, content, category_id, tags, now, topic_id)
         )
         conn.commit()
-        log('Discussion', '编辑帖子成功', user_id=user_id, username=username,
+        log('INFO', 'Discussion', '编辑帖子成功', user_id=user_id, username=username,
             topic_id=topic_id, ip=ip_address)
         return True, '编辑成功'
     except Exception:
         conn.rollback()
-        log('Discussion', '编辑帖子失败', user_id=user_id, username=username,
+        log('ERROR', 'Discussion', '编辑帖子失败', user_id=user_id, username=username,
             topic_id=topic_id, ip=ip_address)
         return False, '编辑失败，请稍后重试'
     finally:
@@ -241,11 +241,11 @@ def delete_topic(topic_id, caller_user_id, is_admin, ip_address):
         conn.execute("DELETE FROM discussion_replies WHERE topic_id = ?", (topic_id,))
         conn.execute("DELETE FROM discussion_topics WHERE id = ?", (topic_id,))
         conn.commit()
-        log('Discussion', '删除帖子', user_id=caller_user_id, topic_id=topic_id, ip=ip_address)
+        log('INFO', 'Discussion', '删除帖子', user_id=caller_user_id, topic_id=topic_id, ip=ip_address)
         return True, '帖子已删除'
     except Exception:
         conn.rollback()
-        log('Discussion', '删除帖子失败', user_id=caller_user_id, topic_id=topic_id, ip=ip_address)
+        log('ERROR', 'Discussion', '删除帖子失败', user_id=caller_user_id, topic_id=topic_id, ip=ip_address)
         return False, '删除失败'
     finally:
         conn.close()
@@ -263,7 +263,7 @@ def toggle_pin(topic_id, ip_address):
         new_status = 0 if topic['is_pinned'] else 1
         conn.execute("UPDATE discussion_topics SET is_pinned = ? WHERE id = ?", (new_status, topic_id))
         conn.commit()
-        log('Discussion', '切换置顶', topic_id=topic_id, is_pinned=new_status, ip=ip_address)
+        log('INFO', 'Discussion', '切换置顶', topic_id=topic_id, is_pinned=new_status, ip=ip_address)
         return True, '置顶状态已更新'
     except Exception:
         try:
@@ -287,7 +287,7 @@ def toggle_lock(topic_id, ip_address):
         new_status = 0 if topic['is_locked'] else 1
         conn.execute("UPDATE discussion_topics SET is_locked = ? WHERE id = ?", (new_status, topic_id))
         conn.commit()
-        log('Discussion', '切换锁定', topic_id=topic_id, is_locked=new_status, ip=ip_address)
+        log('INFO', 'Discussion', '切换锁定', topic_id=topic_id, is_locked=new_status, ip=ip_address)
         return True, '锁定状态已更新'
     except Exception:
         try:

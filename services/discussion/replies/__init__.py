@@ -52,7 +52,7 @@ def reply_to_topic(user_id, username, topic_id, content, attachment_files, ip_ad
         reply_id = cursor.lastrowid
         conn.execute("UPDATE discussion_topics SET updated_at = ? WHERE id = ?", (now, topic_id))
         conn.commit()
-        log('Discussion', '回复帖子', user_id=user_id, username=username,
+        log('INFO', 'Discussion', '回复帖子', user_id=user_id, username=username,
             topic_id=topic_id, ip=ip_address)
         reply = {
             'id': reply_id,
@@ -70,7 +70,7 @@ def reply_to_topic(user_id, username, topic_id, content, attachment_files, ip_ad
         except Exception:
             pass
         clean_attachments(attachment_names)
-        log('Discussion', '回复帖子失败', user_id=user_id, username=username,
+        log('ERROR', 'Discussion', '回复帖子失败', user_id=user_id, username=username,
             topic_id=topic_id, ip=ip_address)
         return False, '回复失败，请稍后重试', None
     finally:
@@ -101,7 +101,7 @@ def delete_reply(reply_id, user_id, is_admin, ip_address):
         now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         conn.execute("UPDATE discussion_topics SET updated_at = ? WHERE id = ?", (now, reply['topic_id']))
         conn.commit()
-        log('Discussion', '删除回复', user_id=user_id, reply_id=reply_id,
+        log('INFO', 'Discussion', '删除回复', user_id=user_id, reply_id=reply_id,
             topic_id=reply['topic_id'], ip=ip_address)
         return True, '回复已删除'
     except Exception:
@@ -109,7 +109,7 @@ def delete_reply(reply_id, user_id, is_admin, ip_address):
             conn.rollback()
         except Exception:
             pass
-        log('Discussion', '删除回复失败', user_id=user_id, reply_id=reply_id, ip=ip_address)
+        log('ERROR', 'Discussion', '删除回复失败', user_id=user_id, reply_id=reply_id, ip=ip_address)
         return False, '删除失败'
     finally:
         conn.close()

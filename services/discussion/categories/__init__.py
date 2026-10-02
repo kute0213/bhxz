@@ -36,7 +36,7 @@ def create_category(name, slug, admin_user, ip_address):
             (name, slug, now)
         )
         conn.commit()
-        log('Admin', '创建讨论分类', admin_user=admin_user['username'], name=name, slug=slug, ip=ip_address)
+        log('INFO', 'Admin', '创建讨论分类', admin_user=admin_user['username'], name=name, slug=slug, ip=ip_address)
         return True, '分类已创建'
     except Exception:
         conn.rollback()
@@ -53,7 +53,7 @@ def delete_category(cat_id, admin_user, ip_address):
     try:
         conn.execute("DELETE FROM discussion_categories WHERE id = ?", (cat_id,))
         conn.commit()
-        log('Admin', '删除讨论分类', admin_user=admin_user['username'], category_id=cat_id, ip=ip_address)
+        log('INFO', 'Admin', '删除讨论分类', admin_user=admin_user['username'], category_id=cat_id, ip=ip_address)
         return True, '分类已删除'
     except Exception:
         conn.rollback()

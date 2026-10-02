@@ -117,10 +117,10 @@ def upload_avatar():
         with open(filepath, 'wb') as f:
             f.write(data)
         _update_user_object_key(user['id'], 'avatar_key', filepath)
-        log('UserMedia', '用户头像上传成功', user_id=user['id'], username=user['username'])
+        log('INFO', 'UserMedia', '用户头像上传成功', user_id=user['id'], username=user['username'])
         flash('头像更新成功！', 'success')
     except ValueError as exc:
-        log('UserMedia', '用户头像上传失败', user_id=user['id'], error=str(exc))
+        log('ERROR', 'UserMedia', '用户头像上传失败', user_id=user['id'], error=str(exc))
         flash(str(exc), 'error')
     return redirect(url_for('main.settings', tab='avatar'))
 
@@ -136,7 +136,7 @@ def delete_avatar():
         _update_user_object_key(user['id'], 'avatar_key', '')
         flash('头像已恢复为默认样式', 'success')
     except Exception as exc:
-        log('UserMedia', '用户头像删除失败', user_id=user['id'], error=str(exc))
+        log('ERROR', 'UserMedia', '用户头像删除失败', user_id=user['id'], error=str(exc))
         flash('头像删除失败，请稍后重试', 'error')
     return redirect(url_for('main.settings', tab='avatar'))
 

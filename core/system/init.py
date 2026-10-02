@@ -12,7 +12,7 @@
 import os
 import sys
 
-from core.system.logger import log
+from core.system.logger import log, log_fatal
 from core.template_context import register_template_context
 
 
@@ -59,6 +59,7 @@ def init_app(app, app_root):
         init_db()
     except Exception as e:
         import traceback
+        log_fatal('CRITICAL', 'App', '数据库初始化失败，服务器退出', error=str(e))
         print(f'[FATAL] 数据库初始化失败: {e}', file=sys.stderr)
         traceback.print_exc(file=sys.stderr)
         sys.stderr.flush()
