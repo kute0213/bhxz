@@ -221,8 +221,8 @@
               <div class="space-y-3">
                 <label class="flex items-center justify-between gap-2 cursor-pointer p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
                   <span class="text-sm text-cream/80"><i data-lucide="globe" class="w-4 h-4 inline-block mr-1 text-rose-400"></i>拦截所有 IPv6 访问</span>
-                  <div id="cfg-IPV6_BLOCK_ENABLED" class="switch { { 'is-on' if ipv6_block_enabled else '' } }" aria-checked="{ { 'true' if ipv6_block_enabled else 'false' } }" role="switch" tabindex="0">
-                                <input type="hidden" value="{ { '1' if ipv6_block_enabled else '0' }}">
+                  <div id="cfg-IPV6_BLOCK_ENABLED" class="switch {{ 'is-on' if ipv6_block_enabled else '' }}" aria-checked="{{ 'true' if ipv6_block_enabled else 'false' }}" role="switch" tabindex="0" data-switch>
+                                <input type="hidden" value="{{ '1' if ipv6_block_enabled else '0' }}">
                             </div>
                 </label>
                 <p class="text-xs text-cream/50 mt-1">开启后，除本地回环（::1）外所有 IPv6 连接将直接被断开</p>
@@ -235,8 +235,8 @@
               <div class="space-y-3">
                 <label class="flex items-center justify-between gap-2 cursor-pointer">
                   <span class="text-sm text-cream/80">启用自动封禁</span>
-                  <div id="cfg-AUTO_BAN_ENABLED" class="switch { { 'is-on' if auto_ban_enabled else '' } }" aria-checked="{ { 'true' if auto_ban_enabled else 'false' } }" role="switch" tabindex="0">
-                                <input type="hidden" value="{ { '1' if auto_ban_enabled else '0' }}">
+                  <div id="cfg-AUTO_BAN_ENABLED" class="switch {{ 'is-on' if auto_ban_enabled else '' }}" aria-checked="{{ 'true' if auto_ban_enabled else 'false' }}" role="switch" tabindex="0" data-switch>
+                                <input type="hidden" value="{{ '1' if auto_ban_enabled else '0' }}">
                             </div>
                 </label>
                 <div>
@@ -254,26 +254,26 @@
                 </div>
                 <label class="flex items-center justify-between gap-2 cursor-pointer p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
                   <span class="text-sm text-cream/80"><i data-lucide="log-in" class="w-4 h-4 inline-block mr-1 text-gold-400"></i>登录失败</span>
-                  <div id="cfg-AUTO_BAN_LOGIN_ENABLED" class="switch { { 'is-on' if auto_ban_login_enabled else '' } }" aria-checked="{ { 'true' if auto_ban_login_enabled else 'false' } }" role="switch" tabindex="0">
-                                <input type="hidden" value="{ { '1' if auto_ban_login_enabled else '0' }}">
+                  <div id="cfg-AUTO_BAN_LOGIN_ENABLED" class="switch {{ 'is-on' if auto_ban_login_enabled else '' }}" aria-checked="{{ 'true' if auto_ban_login_enabled else 'false' }}" role="switch" tabindex="0" data-switch>
+                                <input type="hidden" value="{{ '1' if auto_ban_login_enabled else '0' }}">
                             </div>
                 </label>
                 <label class="flex items-center justify-between gap-2 cursor-pointer p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
                   <span class="text-sm text-cream/80"><i data-lucide="user-plus" class="w-4 h-4 inline-block mr-1 text-gold-400"></i>注册异常</span>
-                  <div id="cfg-AUTO_BAN_REGISTER_ENABLED" class="switch { { 'is-on' if auto_ban_register_enabled else '' } }" aria-checked="{ { 'true' if auto_ban_register_enabled else 'false' } }" role="switch" tabindex="0">
-                                <input type="hidden" value="{ { '1' if auto_ban_register_enabled else '0' }}">
+                  <div id="cfg-AUTO_BAN_REGISTER_ENABLED" class="switch {{ 'is-on' if auto_ban_register_enabled else '' }}" aria-checked="{{ 'true' if auto_ban_register_enabled else 'false' }}" role="switch" tabindex="0" data-switch>
+                                <input type="hidden" value="{{ '1' if auto_ban_register_enabled else '0' }}">
                             </div>
                 </label>
                 <label class="flex items-center justify-between gap-2 cursor-pointer p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
                   <span class="text-sm text-cream/80"><i data-lucide="mail" class="w-4 h-4 inline-block mr-1 text-gold-400"></i>邮件验证异常</span>
-                  <div id="cfg-AUTO_BAN_EMAIL_ENABLED" class="switch { { 'is-on' if auto_ban_email_enabled else '' } }" aria-checked="{ { 'true' if auto_ban_email_enabled else 'false' } }" role="switch" tabindex="0">
-                                <input type="hidden" value="{ { '1' if auto_ban_email_enabled else '0' }}">
+                  <div id="cfg-AUTO_BAN_EMAIL_ENABLED" class="switch {{ 'is-on' if auto_ban_email_enabled else '' }}" aria-checked="{{ 'true' if auto_ban_email_enabled else 'false' }}" role="switch" tabindex="0" data-switch>
+                                <input type="hidden" value="{{ '1' if auto_ban_email_enabled else '0' }}">
                             </div>
                 </label>
                 <label class="flex items-center justify-between gap-2 cursor-pointer p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
                   <span class="text-sm text-cream/80"><i data-lucide="key-round" class="w-4 h-4 inline-block mr-1 text-gold-400"></i>找回密码异常</span>
-                  <div id="cfg-AUTO_BAN_FORGOT_PASSWORD_ENABLED" class="switch { { 'is-on' if auto_ban_forgot_password_enabled else '' } }" aria-checked="{ { 'true' if auto_ban_forgot_password_enabled else 'false' } }" role="switch" tabindex="0">
-                                <input type="hidden" value="{ { '1' if auto_ban_forgot_password_enabled else '0' }}">
+                  <div id="cfg-AUTO_BAN_FORGOT_PASSWORD_ENABLED" class="switch {{ 'is-on' if auto_ban_forgot_password_enabled else '' }}" aria-checked="{{ 'true' if auto_ban_forgot_password_enabled else 'false' }}" role="switch" tabindex="0" data-switch>
+                                <input type="hidden" value="{{ '1' if auto_ban_forgot_password_enabled else '0' }}">
                             </div>
                 </label>
               </div>
@@ -285,8 +285,8 @@
               <div class="space-y-3">
                 <label class="flex items-center justify-between gap-2 cursor-pointer">
                   <span class="text-sm text-cream/80">启用可疑拦截</span>
-                  <div id="cfg-SUSPICIOUS_BLOCK_ENABLED" class="switch { { 'is-on' if suspicious_block_enabled else '' } }" aria-checked="{ { 'true' if suspicious_block_enabled else 'false' } }" role="switch" tabindex="0">
-                                <input type="hidden" value="{ { '1' if suspicious_block_enabled else '0' }}">
+                  <div id="cfg-SUSPICIOUS_BLOCK_ENABLED" class="switch {{ 'is-on' if suspicious_block_enabled else '' }}" aria-checked="{{ 'true' if suspicious_block_enabled else 'false' }}" role="switch" tabindex="0" data-switch>
+                                <input type="hidden" value="{{ '1' if suspicious_block_enabled else '0' }}">
                             </div>
                 </label>
                 <div>
@@ -296,38 +296,38 @@
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <label class="flex items-center justify-between gap-2 cursor-pointer p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
                     <span class="text-sm text-cream/80"><i data-lucide="database" class="w-4 h-4 inline-block mr-1 text-gold-400"></i>SQL 注入</span>
-                    <div id="cfg-SUSPICIOUS_BLOCK_SQLI_ENABLED" class="switch { { 'is-on' if suspicious_sqli_enabled else '' } }" aria-checked="{ { 'true' if suspicious_sqli_enabled else 'false' } }" role="switch" tabindex="0">
-                                <input type="hidden" value="{ { '1' if suspicious_sqli_enabled else '0' }}">
+                    <div id="cfg-SUSPICIOUS_BLOCK_SQLI_ENABLED" class="switch {{ 'is-on' if suspicious_sqli_enabled else '' }}" aria-checked="{{ 'true' if suspicious_sqli_enabled else 'false' }}" role="switch" tabindex="0" data-switch>
+                                <input type="hidden" value="{{ '1' if suspicious_sqli_enabled else '0' }}">
                             </div>
                   </label>
                   <label class="flex items-center justify-between gap-2 cursor-pointer p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
                     <span class="text-sm text-cream/80"><i data-lucide="code" class="w-4 h-4 inline-block mr-1 text-gold-400"></i>XSS</span>
-                    <div id="cfg-SUSPICIOUS_BLOCK_XSS_ENABLED" class="switch { { 'is-on' if suspicious_xss_enabled else '' } }" aria-checked="{ { 'true' if suspicious_xss_enabled else 'false' } }" role="switch" tabindex="0">
-                                <input type="hidden" value="{ { '1' if suspicious_xss_enabled else '0' }}">
+                    <div id="cfg-SUSPICIOUS_BLOCK_XSS_ENABLED" class="switch {{ 'is-on' if suspicious_xss_enabled else '' }}" aria-checked="{{ 'true' if suspicious_xss_enabled else 'false' }}" role="switch" tabindex="0" data-switch>
+                                <input type="hidden" value="{{ '1' if suspicious_xss_enabled else '0' }}">
                             </div>
                   </label>
                   <label class="flex items-center justify-between gap-2 cursor-pointer p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
                     <span class="text-sm text-cream/80"><i data-lucide="folder-tree" class="w-4 h-4 inline-block mr-1 text-gold-400"></i>路径遍历</span>
-                    <div id="cfg-SUSPICIOUS_BLOCK_PATH_TRAVERSAL_ENABLED" class="switch { { 'is-on' if suspicious_path_traversal_enabled else '' } }" aria-checked="{ { 'true' if suspicious_path_traversal_enabled else 'false' } }" role="switch" tabindex="0">
-                                <input type="hidden" value="{ { '1' if suspicious_path_traversal_enabled else '0' }}">
+                    <div id="cfg-SUSPICIOUS_BLOCK_PATH_TRAVERSAL_ENABLED" class="switch {{ 'is-on' if suspicious_path_traversal_enabled else '' }}" aria-checked="{{ 'true' if suspicious_path_traversal_enabled else 'false' }}" role="switch" tabindex="0" data-switch>
+                                <input type="hidden" value="{{ '1' if suspicious_path_traversal_enabled else '0' }}">
                             </div>
                   </label>
                   <label class="flex items-center justify-between gap-2 cursor-pointer p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
                     <span class="text-sm text-cream/80"><i data-lucide="terminal" class="w-4 h-4 inline-block mr-1 text-gold-400"></i>命令注入</span>
-                    <div id="cfg-SUSPICIOUS_BLOCK_COMMAND_INJECTION_ENABLED" class="switch { { 'is-on' if suspicious_command_injection_enabled else '' } }" aria-checked="{ { 'true' if suspicious_command_injection_enabled else 'false' } }" role="switch" tabindex="0">
-                                <input type="hidden" value="{ { '1' if suspicious_command_injection_enabled else '0' }}">
+                    <div id="cfg-SUSPICIOUS_BLOCK_COMMAND_INJECTION_ENABLED" class="switch {{ 'is-on' if suspicious_command_injection_enabled else '' }}" aria-checked="{{ 'true' if suspicious_command_injection_enabled else 'false' }}" role="switch" tabindex="0" data-switch>
+                                <input type="hidden" value="{{ '1' if suspicious_command_injection_enabled else '0' }}">
                             </div>
                   </label>
                   <label class="flex items-center justify-between gap-2 cursor-pointer p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
                     <span class="text-sm text-cream/80"><i data-lucide="file-search" class="w-4 h-4 inline-block mr-1 text-gold-400"></i>敏感探测</span>
-                    <div id="cfg-SUSPICIOUS_BLOCK_SENSITIVE_PROBE_ENABLED" class="switch { { 'is-on' if suspicious_sensitive_probe_enabled else '' } }" aria-checked="{ { 'true' if suspicious_sensitive_probe_enabled else 'false' } }" role="switch" tabindex="0">
-                                <input type="hidden" value="{ { '1' if suspicious_sensitive_probe_enabled else '0' }}">
+                    <div id="cfg-SUSPICIOUS_BLOCK_SENSITIVE_PROBE_ENABLED" class="switch {{ 'is-on' if suspicious_sensitive_probe_enabled else '' }}" aria-checked="{{ 'true' if suspicious_sensitive_probe_enabled else 'false' }}" role="switch" tabindex="0" data-switch>
+                                <input type="hidden" value="{{ '1' if suspicious_sensitive_probe_enabled else '0' }}">
                             </div>
                   </label>
                   <label class="flex items-center justify-between gap-2 cursor-pointer p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
                     <span class="text-sm text-cream/80"><i data-lucide="bot" class="w-4 h-4 inline-block mr-1 text-gold-400"></i>恶意 UA</span>
-                    <div id="cfg-SUSPICIOUS_BLOCK_MALICIOUS_UA_ENABLED" class="switch { { 'is-on' if suspicious_malicious_ua_enabled else '' } }" aria-checked="{ { 'true' if suspicious_malicious_ua_enabled else 'false' } }" role="switch" tabindex="0">
-                                <input type="hidden" value="{ { '1' if suspicious_malicious_ua_enabled else '0' }}">
+                    <div id="cfg-SUSPICIOUS_BLOCK_MALICIOUS_UA_ENABLED" class="switch {{ 'is-on' if suspicious_malicious_ua_enabled else '' }}" aria-checked="{{ 'true' if suspicious_malicious_ua_enabled else 'false' }}" role="switch" tabindex="0" data-switch>
+                                <input type="hidden" value="{{ '1' if suspicious_malicious_ua_enabled else '0' }}">
                             </div>
                   </label>
                 </div>
@@ -340,8 +340,8 @@
               <div class="space-y-3">
                 <label class="flex items-center justify-between gap-2 cursor-pointer">
                   <span class="text-sm text-cream/80">启用 DDoS 防护</span>
-                  <div id="cfg-DDOS_GUARD_ENABLED" class="switch { { 'is-on' if ddos_guard_enabled else '' } }" aria-checked="{ { 'true' if ddos_guard_enabled else 'false' } }" role="switch" tabindex="0">
-                                <input type="hidden" value="{ { '1' if ddos_guard_enabled else '0' }}">
+                  <div id="cfg-DDOS_GUARD_ENABLED" class="switch {{ 'is-on' if ddos_guard_enabled else '' }}" aria-checked="{{ 'true' if ddos_guard_enabled else 'false' }}" role="switch" tabindex="0" data-switch>
+                                <input type="hidden" value="{{ '1' if ddos_guard_enabled else '0' }}">
                             </div>
                 </label>
                 <div>
@@ -384,8 +384,8 @@
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label class="flex items-center gap-2 cursor-pointer">
-                    <div id="cfg-CONTENT_INJECTION_BAN_ENABLED" class="switch { { 'is-on' if content_injection_enabled else '' else '' } }" aria-checked="{ { 'true' if content_injection_enabled else '' else 'false' } }" role="switch" tabindex="0">
-                                <input type="hidden" value="{ { '1' if content_injection_enabled else '' else '0' }}">
+                    <div id="cfg-CONTENT_INJECTION_BAN_ENABLED" class="switch {{ 'is-on' if content_injection_enabled else '' }}" aria-checked="{{ 'true' if content_injection_enabled else 'false' }}" role="switch" tabindex="0" data-switch>
+                                <input type="hidden" value="{{ '1' if content_injection_enabled else '0' }}">
                             </div>
                     <span class="text-sm text-cream/80">启用内容注入拦截</span>
                   </label>

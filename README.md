@@ -876,6 +876,8 @@ workspace/
 
 ## 最近更新
 
+* **修复防火墙设置页所有开关显示为关闭且无法点击切换**：`templates/admin/firewall.html` 设置区 15 个开关的 Jinja 表达式被误写成 `{ { ... } }`（多一个空格，Jinja 不识别而原样输出为文本），导致 `is-on` 类与 `aria-checked` 从未正确渲染，无论实际配置为何一律显示为关闭；同时这些开关缺少全局开关脚本依赖的 `data-switch` 属性（`base.js` 只对 `[data-switch]` 生效），点击/键盘均无法切换。现已全部改为标准 `{{ ... }}` 并补上 `data-switch`（并修掉内容注入拦截开关 `else '' else ''` 的语法错误），开关按实际配置正确回显、可正常切换；`/admin/firewall/settings/save` 的布尔键集合补入 `CONTENT_INJECTION_BAN_ENABLED`。
+
 * **防火墙从路由层迁至服务层 + 修复「服务器正常启动但完全无法访问」**：防火墙模块由 `routes/firewall/` 迁至 `services/firewall/`（`service/` 业务层、`protection/` 防护策略、`transport/` 连接层；原路径保留 shim 转发，所有外部 `from routes.firewall.xxx import` 零改动）。迁移中 `BanFilterConnection.communicate()` 误把返回 `(banned, reason)` **元组**的 `is_banned(ip)` 当布尔判断——非空元组恒为真，导致**每个 TCP 连接都被判定为黑名单并在请求解析前强制断开**，表现为进程/端口正常监听、日志无任何报错但所有请求均无响应；已改为显式解包 `banned, _reason = is_banned(ip)` 后再判断，实测 `/`、`/favicon`、`/api/stats`、`/login` 全部返回 200。
 
 * **修复 robots.txt 的 Sitemap 域名错误 + 邮件模板路径 + 指南编辑 500**：`/robots.txt` 的 `Sitemap:` 原先写死站点配置域名（`https://bhxz.tw.kg/sitemap.xml`），访问 `https://binhai.cloud/robots.txt` 时地址不一致。`routes/sitemap/__init__.py` 新增 `_robots_base_url()`：优先匹配与当前 `Host` 一致的已配置域名（`SITE_URL` / `SITEMAP_DOMAINS`），未匹配则直接反映当前访问域名，确保 Sitemap 始终指向当前域名下的 `/sitemap.xml`（`services/sitemap_cache` 同步新增 `base_url_for_host()`）。修复邮件发送 `TemplateNotFound: 'verification_code.html'`——`services/mail/templates/__init__.py` 的模板目录层级少算一级，指向了不存在的 `services/templates/emails`，已修正为项目根 `templates/emails`。修复 `/guides/<id>/edit` 提交 500（`NameError: get_client_ip`）——`routes/guides/pages/__init__.py` 漏导入 `get_client_ip`，已补上并全站排查同类漏导入。
