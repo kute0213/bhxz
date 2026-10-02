@@ -1,34 +1,45 @@
 {#
-  页面内就地搜索框宏（每个页面使用自己的搜索框，导航栏不放输入框）
-  用法:
-    {% from 'macros/search.html' import inline_search %}
-    {{ inline_search(label='搜索建筑', placeholder='搜索建筑标题或标签…', value=search_query) }}
+  页面内就地搜索框宏（每个列表页使用自己的搜索框；导航栏不放搜索输入框）
+  --------------------------------------------------------------------------
+  DOM 设计：一个胶囊容器，内含「折叠态内容 ss-collapsed」和「展开态内容
+  ss-expanded」两组互斥子元素；展开/收起只是切换子元素显示，动画过渡的是
+  **同一个容器** 的 max-width / padding / border-radius / box-shadow——
+  与导航栏 .glass-nav-inner 同款 --transition-bounce 缓动，无闪烁、无 layout
+  thrash、不是双层切换。
 
-  参数:
+  用法：
+    {% from 'macros/search.html' import inline_search %}
+    {{ inline_search(label='搜索建筑', placeholder='搜索建筑标题或标签…',
+                     value=search_query, open_width=520) }}
+
+  参数：
     label       折叠态胶囊按钮上的文案
     placeholder 展开后输入框的占位文案
     value       初始关键词（有值时组件默认展开，且首屏由服务端按该关键词渲染）
-    open_width  展开后的最大宽度（px），用于适配不同页面的布局
+    open_width  展开后的最大宽度（px）
 
-  交互逻辑见 static/js/core/search.js：输入/回车/清空时在组件上派发 `site-search`
-  事件（detail.query），由各页面列表脚本监听后就地刷新列表，不弹出下拉窗口。
+  交互逻辑见 static/js/core/search.js：输入/回车/清空时派发 `site-search`
+  事件（detail.query），由各页面列表脚本监听后就地刷新列表。
 #}
 {% macro inline_search(label='搜索', placeholder='', value='', open_width=520) %}
 <div class="site-search" data-search-value="{{ value }}"
      style="--search-open-w: {{ open_width }}px">
-    <button type="button" class="site-search-trigger" aria-label="{{ label }}">
-        <i data-lucide="search" class="w-4 h-4 site-search-trigger-icon"></i>
-        <span>{{ label }}</span>
-    </button>
-    <div class="site-search-field">
-        <i data-lucide="search" class="w-4 h-4 site-search-field-icon"></i>
-        <input type="text" class="site-search-input" maxlength="60" autocomplete="off"
-               value="{{ value }}" placeholder="{{ placeholder }}" aria-label="{{ label }}">
-        <button type="button" class="site-search-clear" aria-label="清空">
-            <i data-lucide="x" class="w-3.5 h-3.5"></i>
+    <!-- 折叠态：只显示一个胶囊按钮内容 -->
+    <div class="ss-collapsed" aria-label="{{ label }}" role="button" tabindex="0">
+        <i data-lucide="search" class="ss-i"></i>
+        <span class="ss-label">{{ label }}</span>
+    </div>
+    <!-- 展开态：真正的输入框 + 操作按钮 -->
+    <div class="ss-expanded">
+        <i data-lucide="search" class="ss-i"></i>
+        <input type="text" class="ss-input" maxlength="60" autocomplete="off"
+               value="{{ value }}" placeholder="{{ placeholder }}"
+               aria-label="{{ label }}">
+        <button type="button" class="ss-clear" aria-label="清空">
+            <i data-lucide="x"></i>
         </button>
-        <button type="button" class="site-search-submit" aria-label="搜索">
-            <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+        <button type="button" class="ss-submit" aria-label="搜索">
+            <i data-lucide="arrow-right"></i>
         </button>
     </div>
 </div>

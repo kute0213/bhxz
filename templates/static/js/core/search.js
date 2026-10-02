@@ -1,52 +1,50 @@
-// 滨海小镇 - 页面内就地搜索（SiteSearch v7 · 就地过滤列表）
+// 滨海小镇 · 页面内就地搜索（SiteSearch v8 · 单容器重写）
 //
-// 交互约定：
-//   - 每个页面的搜索框（.site-search，由 macros/search.html 的 inline_search 渲染）
-//     都是独立的就地展开/收起组件；导航栏不放置搜索框。
-//   - 折叠态：只显示「搜索」胶囊按钮；点击后按钮收起、输入框平滑展开（双向动画）。
-//   - 输入框内有文字 或 光标在输入框内 → 保持展开；
-//     无文字 且 失焦（点击外部）→ 平滑收起。
-//   - 输入防抖 / 回车 / 点击箭头 / 清空 → 在组件上派发 `site-search` 事件，
-//     detail.query 为当前关键词；由各页面自己的列表脚本监听，
-//     直接把结果渲染到当前列表，不再弹出下拉窗口（不使用聚合搜索接口）。
+// 核心交互：
+//   - 每个列表页独立的胶囊搜索框（.site-search），单容器承载两种形态：
+//     折叠态只显示「搜索」按钮内容，展开态容器拉宽到 open_width、
+//     显示真正的 <input> —— 过渡的是同一个容器的 max-width / padding /
+//     border-radius / box-shadow，与导航栏 .glass-nav-inner 同款缓动。
+//   - 展开触发：点击折叠胶囊 / focus 输入框 / 预填关键词。
+//   - 保持展开：输入框有文字 或 光标在其中。
+//   - 收起：输入框空 + blur / 点击组件外部。
+//   - 搜索事件：输入防抖 220ms / 回车 / 点击箭头，组件上派发
+//     CustomEvent('site-search', {detail:{query}})，各列表页自己监听
+//     就地刷新列表——不弹出下拉、不走聚合搜索。
 
 (function () {
     'use strict';
 
-    // ---------- 常量 ----------
-    var MAX_KEYWORD_LEN = 60;
-    var DEBOUNCE_MS = 220;   // 输入防抖
-    var CLOSE_MS = 150;      // 失焦后延迟收起（ms）
-    var FOCUS_DELAY = 140;   // 展开动画起步后再聚焦，避免抢焦点导致动画卡顿
+    var MAX_LEN = 60;
+    var DEBOUNCE = 220;
+    var CLOSE_DELAY = 150;
+    var FOCUS_DELAY = 140;   /* 等展开动画起步再 focus，避免抢焦点卡顿 */
 
     var roots = document.querySelectorAll('.site-search');
     if (!roots.length) return;
 
-    // 所有实例，供全局「点击外部收起」统一处理
     var instances = [];
 
     Array.prototype.forEach.call(roots, init);
 
     function init(root) {
-        var trigger = root.querySelector('.site-search-trigger');
-        var input = root.querySelector('.site-search-input');
-        var clearBtn = root.querySelector('.site-search-clear');
-        var submitBtn = root.querySelector('.site-search-submit');
-        if (!trigger || !input) return;
+        var collapsed = root.querySelector('.ss-collapsed');
+        var input = root.querySelector('.ss-input');
+        var clearBtn = root.querySelector('.ss-clear');
+        var submitBtn = root.querySelector('.ss-submit');
+        if (!collapsed || !input) return;
 
         var st = {
             expanded: false,
             focused: false,
             timerClose: null,
             timerSearch: null,
-            last: null            // 上次派发的关键词，避免重复触发列表刷新
+            last: null
         };
-
         instances.push({ root: root, state: st, input: input, collapse: collapse });
 
-        // ---------- 派发搜索事件（各页面列表脚本监听） ----------
         function emit(q) {
-            q = (q || '').trim().slice(0, MAX_KEYWORD_LEN);
+            q = (q || '').trim().slice(0, MAX_LEN);
             if (q === st.last) return;
             st.last = q;
             root.dispatchEvent(new CustomEvent('site-search', {
@@ -55,7 +53,6 @@
             }));
         }
 
-        // ---------- 展开 / 收起 ----------
         function expand() {
             clearTimeout(st.timerClose);
             if (!st.expanded) {
@@ -69,8 +66,7 @@
 
         function collapse(force) {
             if (!st.expanded) return;
-            // 未强制时，只要输入框还有文字就保持展开
-            if (!force && input.value.trim()) return;
+            if (!force && input.value.trim()) return;   /* 有值不收 */
             clearTimeout(st.timerClose);
             clearTimeout(st.timerSearch);
             st.expanded = false;
@@ -81,17 +77,17 @@
             clearTimeout(st.timerClose);
             st.timerClose = setTimeout(function () {
                 if (!st.focused && !input.value.trim()) collapse(true);
-            }, CLOSE_MS);
+            }, CLOSE_DELAY);
         }
 
         function refreshClear() {
             if (clearBtn) clearBtn.classList.toggle('visible', !!input.value.trim());
         }
 
-        // ---------- 事件绑定 ----------
-        // 点击整个组件（胶囊按钮 / 输入框区域）→ 展开
-        root.addEventListener('click', function () {
-            if (!st.expanded) expand();
+        /* ---- 事件 ---- */
+        collapsed.addEventListener('click', function (e) { expand(); });
+        collapsed.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); expand(); }
         });
 
         input.addEventListener('focus', function () {
@@ -109,7 +105,7 @@
             clearTimeout(st.timerClose);
             refreshClear();
             var q = input.value.trim();
-            st.timerSearch = setTimeout(function () { emit(q); }, DEBOUNCE_MS);
+            st.timerSearch = setTimeout(function () { emit(q); }, DEBOUNCE);
         });
 
         input.addEventListener('keydown', function (e) {
@@ -127,41 +123,34 @@
             }
         });
 
-        if (clearBtn) {
-            clearBtn.addEventListener('click', function (e) {
-                e.stopPropagation();
-                input.value = '';
-                clearTimeout(st.timerSearch);
-                refreshClear();
-                emit('');
-                input.focus();
-            });
-        }
+        if (clearBtn) clearBtn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            input.value = '';
+            clearTimeout(st.timerSearch);
+            refreshClear();
+            emit('');
+            input.focus();
+        });
 
-        if (submitBtn) {
-            submitBtn.addEventListener('click', function (e) {
-                e.stopPropagation();
-                var q = input.value.trim();
-                if (q) {
-                    clearTimeout(st.timerSearch);
-                    emit(q);
-                }
-            });
-        }
+        if (submitBtn) submitBtn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            var q = input.value.trim();
+            if (q) { clearTimeout(st.timerSearch); emit(q); }
+        });
 
-        // ---------- 初始化 ----------
+        /* ---- 初始化 ---- */
         refreshClear();
-        var prefill = (root.getAttribute('data-search-value') || '').trim().slice(0, MAX_KEYWORD_LEN);
+        var prefill = (root.getAttribute('data-search-value') || '').trim().slice(0, MAX_LEN);
         if (prefill) {
             input.value = prefill;
-            st.last = prefill;      // 首屏已由服务端按该关键词渲染，避免重复请求
+            st.last = prefill;
             refreshClear();
             st.expanded = true;
             root.classList.add('is-open');
         }
     }
 
-    // 点击组件外部：所有「输入框为空且未聚焦」的实例平滑收起
+    /* 点击组件外部：所有「空 + 失焦」的实例平滑收起 */
     document.addEventListener('mousedown', function (e) {
         instances.forEach(function (inst) {
             if (inst.root.contains(e.target)) return;

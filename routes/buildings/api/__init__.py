@@ -11,7 +11,7 @@ from routes.buildings import buildings_bp
 from services import buildings as buildings_service
 
 
-@buildings_bp.route('/api/buildings')
+@buildings_bp.route('/api/buildings/list')
 def api_buildings_list():
     """公共建筑搜索/分页列表（JSON，供前端无刷新搜索与「加载更多」）。
 

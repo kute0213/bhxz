@@ -1273,150 +1273,138 @@ pre::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.24); }
 }
 
 /* ============================================
-   页面内就地搜索（site-search）
-   折叠态 → 仅显示「搜索」胶囊按钮
-   展开态 → 按钮收起 + 输入框平滑展开（展开/收起均有动画）
-   交互规则：输入框有文字 或 光标在其中 → 保持展开；
-             无文字 且 失焦 → 平滑收起
+   页面内就地搜索（site-search）· 单容器方案
+   --------------------------------------------
+   DOM 只有一个胶囊容器，展开/收起只是切换两组子元素的显示；
+   动画过渡的始终是容器本身的 max-width / padding / border-radius /
+   box-shadow / border-color——与导航栏 .glass-nav-inner 同款缓动。
+   折叠态 max-width: 200px（够放图标 + 标签），展开态 max-width 到
+   --search-open-w（默认 520px）。
+
+   为什么这样写：
+   - 不是两个独立容器（旧的 .site-search-trigger / .site-search-field）
+     互相抢位置，只有一个背景、一个边框、一个圆角——零闪烁、零 layout thrash
+   - 折叠态和展开态视觉高度一致，border-radius 过渡平滑不跳
+   - CSS transition 列表与 .glass-nav-inner 对齐（仅 width 换为 max-width，
+     因搜索框宽度由内容 + max-width 共同决定）
    ============================================ */
 .site-search {
     position: relative;
-    display: flex;
-    align-items: center;
-    width: 100%;
-    max-width: var(--search-open-w, 520px);
-    vertical-align: middle;
-}
-
-/* 折叠态：搜索胶囊按钮 */
-.site-search-trigger {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    flex: 0 0 auto;
-    max-width: 240px;
+    gap: 8px;
     padding: 9px 14px;
+    max-width: 200px;              /* 折叠态：只够放胶囊按钮 */
+    width: 100%;
     border-radius: 12px;
     border: 1px solid var(--border-card);
     background: rgba(255, 255, 255, 0.72);
+    backdrop-filter: blur(20px) saturate(110%);
+    -webkit-backdrop-filter: blur(20px) saturate(110%);
     color: var(--text-secondary);
     font-size: 13px;
     line-height: 1.2;
+    cursor: text;
+    overflow: hidden;
+    /* 与 .glass-nav-inner 同款过渡属性（width→max-width） */
+    transition:
+        max-width  var(--transition-bounce),
+        padding    var(--transition-bounce),
+        border-radius var(--transition-bounce),
+        border-color  var(--transition-normal),
+        box-shadow    var(--transition-bounce),
+        background    var(--transition-normal);
+}
+.site-search:hover {
+    border-color: var(--border-accent);
+    color: var(--accent-blue);
+}
+/* 展开态：容器宽度拉伸到 open_width；背景色微调以示聚焦 */
+.site-search.is-open {
+    max-width: var(--search-open-w, 520px);
+    padding: 9px 10px;
+    border-color: rgba(2, 132, 199, 0.45);
+    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06), 0 0 0 3px rgba(2, 132, 199, 0.1);
+    color: var(--text-primary);
+}
+
+/* ---- 折叠态内容 ---- */
+.ss-collapsed {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
     white-space: nowrap;
     overflow: hidden;
-    cursor: text;
-    /* 展开动画与导航栏胶囊（.glass-nav-inner）保持一致：
-       宽度 + 圆角 + 阴影 用同一套 --transition-bounce 缓动，展开时带轻微回弹 */
-    transition:
-        max-width var(--transition-bounce),
-        padding var(--transition-bounce),
-        border-radius var(--transition-bounce),
-        opacity var(--transition-normal),
-        color var(--transition-fast),
-        border-color var(--transition-fast);
+    cursor: inherit;
+    outline: none;
 }
-.site-search-trigger:hover {
-    color: var(--accent-blue);
-    border-color: var(--border-accent);
-}
-.site-search-trigger-icon { flex-shrink: 0; }
-.site-search.is-open .site-search-trigger {
-    max-width: 0;
-    padding-left: 0;
-    padding-right: 0;
-    border-width: 0;
-    opacity: 0;
-    pointer-events: none;
-}
+.ss-collapsed:hover { color: var(--accent-blue); }
+.site-search.is-open .ss-collapsed { display: none; }
+.ss-label { font-size: 13px; }
 
-/* 展开态：输入框外壳（宽度平滑展开，与导航栏胶囊同款动画，不做位移/置顶） */
-.site-search-field {
-    position: relative;
-    display: flex;
-    align-items: center;
-    flex: 1 1 auto;
-    min-width: 0;
+/* ---- 展开态内容 ---- */
+.ss-expanded {
+    display: none;          /* 折叠态隐藏 */
     width: 100%;
-    max-width: 0;
-    padding: 0;
-    opacity: 0;
-    overflow: hidden;
-    border: 1px solid var(--border-card);
-    border-radius: 12px;
-    background: rgba(255, 255, 255, 0.72);
-    transition:
-        max-width var(--transition-bounce),
-        padding var(--transition-bounce),
-        border-radius var(--transition-bounce),
-        opacity var(--transition-normal),
-        border-color var(--transition-fast),
-        box-shadow var(--transition-bounce);
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
 }
-.site-search.is-open .site-search-field {
-    max-width: var(--search-open-w, 520px);
-    padding: 0 6px 0 10px;
-    opacity: 1;
-    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
-}
-.site-search-field:focus-within {
-    border-color: rgba(2, 132, 199, 0.45);
-    box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.1);
-}
+.site-search.is-open .ss-expanded { display: inline-flex; }
 
-.site-search-field-icon {
+.ss-i {
     flex-shrink: 0;
+    width: 16px;
+    height: 16px;
     color: var(--text-muted);
     pointer-events: none;
 }
-.site-search-input {
+.ss-input {
     flex: 1 1 auto;
     min-width: 0;
-    height: 38px;
+    height: 24px;            /* line-height 够了，不用固定高度 */
     border: none;
     outline: none;
     background: transparent;
     color: var(--text-primary);
     font-size: 14px;
-    padding: 0 4px;
+    padding: 0;
 }
-.site-search-input::placeholder {
-    color: var(--text-muted);
-}
+.ss-input::placeholder { color: var(--text-muted); }
 
-.site-search-clear,
-.site-search-submit {
+.ss-clear,
+.ss-submit {
     flex-shrink: 0;
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 28px;
-    height: 28px;
-    border-radius: 8px;
+    width: 26px;
+    height: 26px;
+    border-radius: 7px;
     border: none;
     background: transparent;
     color: var(--text-muted);
     cursor: pointer;
-    transition: color 0.15s, background-color 0.15s, opacity 0.18s, transform 0.18s;
+    transition: color 0.15s, background-color 0.15s, opacity 0.18s;
 }
-.site-search-clear:hover,
-.site-search-submit:hover {
+.ss-clear:hover,
+.ss-submit:hover {
     color: var(--accent-blue);
     background: rgba(2, 132, 199, 0.1);
 }
-.site-search-clear {
-    opacity: 0;
-    transform: scale(0.8);
-    pointer-events: none;
-}
-.site-search-clear.visible {
-    opacity: 1;
-    transform: scale(1);
-    pointer-events: auto;
+/* 清空按钮默认隐藏，有值时才出现（与旧 .site-search-clear.visible 同款） */
+.ss-clear { opacity: 0; pointer-events: none; }
+.ss-clear.visible { opacity: 1; pointer-events: auto; }
+
+/* 聚焦时容器的交互反馈 */
+.site-search.is-open:focus-within,
+.site-search.is-open:focus-within {
+    border-color: rgba(2, 132, 199, 0.45);
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .site-search-trigger,
-    .site-search-field {
+    .site-search {
         transition: none;
     }
 }

@@ -17,7 +17,7 @@
     - DuckDB 文件位于 db/firewall.duckdb，独立于主站业务数据库
 """
 
-from routes.firewall.service import (
+from services.firewall.service.core import (
     ban_ip,
     unban_ip,
     unban_by_ip,
@@ -63,14 +63,14 @@ from routes.firewall.service import (
     SYSTEM_BANNER_ID,
 )
 
-from routes.firewall.connection_filter import BanFilterConnection, FirewallGateway, FirewallServer
-from routes.firewall.wrappers import FirewallWSGIWrapper
-from routes.firewall.monitor import FirewallMonitor
+from services.firewall.transport.connection_filter import BanFilterConnection, FirewallGateway, FirewallServer
+from services.firewall.transport.wrappers import FirewallWSGIWrapper
+from services.firewall.service.monitor import FirewallMonitor
 
 # 发布内容注入检测
-from routes.firewall.content_filter import check_content_injection
+from services.firewall.protection.content_filter import check_content_injection
 
-from routes.firewall.service import get_combined_bans
+from services.firewall.service.core import get_combined_bans
 
 # 防火墙全局单例（集成连接过滤器 + WSGI 门禁 + 后台监控）
 class Firewall:
@@ -80,7 +80,7 @@ class Firewall:
         from routes.firewall import firewall
 
         # 在 server.py 中使用 FirewallServer
-        from routes.firewall.connection_filter import FirewallServer
+        from services.firewall.transport.connection_filter import FirewallServer
         server = FirewallServer(..., firewall.wrap(app))
 
         # 注册后台监控
@@ -111,12 +111,12 @@ class Firewall:
         """O(1) 黑名单查询（使用数据库层内存缓存）。"""
         if not ip or ip in ('127.0.0.1', '::1', 'localhost'):
             return False
-        from routes.firewall.database import is_ip_banned_cache
+        from services.firewall.service.database import is_ip_banned_cache
         return is_ip_banned_cache(ip)[0]
 
     def is_account_banned(self, user_id):
         """O(1) 账号封禁查询（使用数据库层内存缓存）。"""
-        from routes.firewall.database import is_account_banned_cache
+        from services.firewall.service.database import is_account_banned_cache
         return is_account_banned_cache(user_id)[0]
 
     # ---- WSGI 包装 ----
