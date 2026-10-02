@@ -5,9 +5,11 @@
 ### 变更
 
 * **搜索结果改为当前列表就地渲染、移除聚合搜索**：搜索框不再弹出下拉面板，也不再跳转独立搜索页。`search.js`（v6 → v7）重写为：输入防抖（220ms）/ 回车 / 点击箭头 / 清空时，在搜索框自身派发 `site-search` 事件（`detail.query`）；**各列表页监听该事件后就地刷新当前列表**（`buildings/`、`guides/`、`music/`、`discussion/` 四个列表页），并显示「搜索「关键词」找到 N 条结果」提示与无结果空态文案，结果与页面风格完全一致。同步删除跨模块聚合搜索：`services/search/`、`routes/search/`（独立搜索页 + `/api/search`）、`templates/search/index.html`、`routes/__init__.py` 中的 `search_bp` 注册，以及系统设置/`config.py` 中的 `SEARCH_PER_PAGE`（含 README 相关章节）
-* **讨论帖子列表支持关键词搜索**：`services/discussion/topics/` 的 `get_topic_count()` / `get_topics_page()` 新增 `keyword` 参数，按标题与正文模糊匹配（`title LIKE ? OR content LIKE ?`）；`/discussion/api/topics` 与 `/discussion` 列表页接收 `q` 参数（截断 60 字）并透传，讨论列表页据此就地刷新
-* **搜索框展开/收起动画优化**：`base.css` 的 `.site-search` 样式块改用 expo-out 缓动 `cubic-bezier(0.22, 1, 0.36, 1)`（起步快、收尾缓），并给胶囊按钮与输入框外壳分别加上 `transform: translateX()/scale()` 位移缩放，`prefers-reduced-motion` 下仍禁用过渡，展开/收起更自然流畅；同时删除已废弃的下拉面板相关样式
-* **版本号 bump（浏览器缓存）**：`base.css` v39 → v40、`search.js` v6 → v7
+* **讨论帖子列表支持关键词搜索**：`services/discussion/topics/` 的 `get_topic_count()` / `get_topics_page()` 新增 `keyword` 参数，按标题与正文模糊匹配（`title LIKE ? OR content LIKE ?`）；`/api/discussion/topics` 与 `/discussion` 列表页接收 `q` 参数（截断 60 字）并透传，讨论列表页据此就地刷新
+* **搜索框展开/收起动画重写（对齐导航栏胶囊）**：`base.css` 的 `.site-search` 去掉位移/缩放变换，改为与导航栏胶囊 `.glass-nav-inner` 同款的 `--transition-bounce` 缓动，统一过渡 `max-width` / `padding` / `border-radius` / `opacity` / `box-shadow`；展开是**就地宽度扩张**（非置顶、无 `transform`），并移除 `transform-origin`、`margin` 过渡，`prefers-reduced-motion` 下仍禁用过渡
+* **API 路径统一收敛到 `api` 段**：移除业务路径中间的 `api`——公开接口统一 `/api/...`、后台接口统一 `/admin/api/...`。迁移清单：`/discussion/api/topics` → `/api/discussion/topics`、`/discussion/<id>/api/replies` → `/api/discussion/<id>/replies`、`/discussion/<id>/api/new-replies` → `/api/discussion/<id>/new-replies`、`/docs/api/list` → `/api/docs/list`、`/docs/api/content/<file>` → `/api/docs/content/<file>`、`/game-accounts/api/apply-register` → `/api/game-accounts/apply-register`、`/game-accounts/api/ban-apply` → `/api/game-accounts/ban-apply`、`/admin/users/api/list` → `/admin/api/users/list`、`/admin/guides/api/list` → `/admin/api/guides/list`、`/admin/music/api/list` → `/admin/api/music/list`、`/admin/discussion/api/list` → `/admin/api/discussion/list`、`/admin/firewall/bans/api` → `/admin/api/firewall/bans`；前端模板、`README.md` 接口表同步更新（页面路由 `/game-accounts/apply`、`/game-accounts/ban-apply` 不变，`url_for` 端点名不变）
+* **官网图标与标签页 favicon 统一**：`templates/static/favicons/*.svg` 全部改用本地 Lucide 图标库同款图形路径，背景由深蓝改为浅蓝渐变（`#38bdf8 → #0284c7`，圆角 7），与官网 Logo 风格一致，标签页图标与官网图标同源同款
+* **版本号 bump（浏览器缓存）**：`base.css` v40 → v41、`base.js` v24 → v25、`search.js` v6 → v7
 
 ### 新增
 
@@ -18,7 +20,11 @@
 
 ### 修复
 
-* **所有「查看数量」始终不增加**：`routes/buildings/pages/__init__.py` 的建筑详情页 `view_count + 1` 使用「`conn.execute()` 后直接 `conn.close()`」，**未提交事务**，SQLite 关闭连接时回滚更新，导致浏览量永远不变；改为 `with get_db() as conn:` 上下文（退出自动 `commit()`），浏览量正常累加。讨论帖子的浏览计数本就使用 `with get_db()`，一并核对无误
+* **所有「查看数量」始终不增加**：① 公共建筑详情页的 `view_count + 1` 原先使用「`conn.execute()` 后直接 `conn.close()`」，**未提交事务**，SQLite 关闭连接时回滚更新，导致浏览量永远不变；改为 `with get_db() as conn:` 上下文（退出自动 `commit()`），不再排除作者/管理员（任何访问都计数），失败时记录 WARN 日志而非静默吞掉，并在同一请求内把展示值自增，浏览量正常累加；② 讨论帖子详情 `get_topic_detail()` 在自增后回写 `topic['view_count']`，页面展示自增后的实时数值，避免「刷新后仍旧数字」的错觉；③ `core/middleware.py` 对 `text/html` 响应下发 `Cache-Control: no-store, no-cache, must-revalidate, max-age=0`，防止浏览器/反向代理缓存旧页面造成的「计数不变」假象（静态资源不受影响）
+* **弹窗关闭后「残影」再次弹出并瞬间关闭**：`base.js` 的 `CustomModal.close()` 原先在遮罩淡出前就清理弹窗卡片的内联 `transform / opacity / transition`，卡片会在遮罩尚未消失时先回到 `opacity:1 / scale(1)`，视觉上「闪」出一个重影再关闭；改为等遮罩淡出（约 320ms）后再清理内联样式，并加 `.active` 判断，避免期间被重新打开时误清
+* **防火墙「封禁详情」弹窗改用统一模板 + 遮罩覆盖页脚**：`templates/admin/firewall.html` 的详情弹窗原先放在 `.page-content` 内，页面入场动画的 `transform` 会让 `position: fixed` 相对该容器定位——遮罩覆盖不到页脚（底部「© 2026 binhai.cloud. 保留所有权利.」不会变暗）且动画异常；现移到 `page_modals` 块，统一走 `modal_shell` 磨砂风格与统一动画
+* **公共建筑 / 服务器指南列表顶部蓝条**：删除列表卡片顶部的渐变蓝条样式与对应 DOM（`.building-card-top-bar`、`.guide-card-top-bar` 及其 `::after` 光晕，含 JS 动态渲染卡片中的同款元素）
+* **密码校验改为输入时实时提示（不再提交后才报错）**：新增前端 `PasswordPolicy`（与 `core/shared/validation.validate_password_strength` 同规则：8-30 位、必须含大写/小写/数字/特殊字符、拒绝常见弱密码与连续序列），密码框输入时实时显示「密码强度」与「还需：…」缺失项；确认密码框通过 `data-password-confirm` 实时提示两次输入是否一致；注册 / 找回密码 / 修改密码在提交前拦截不符合项并指出具体缺哪一项（注册页、找回密码页、设置页修改密码三处统一）
 * **圆角组件文字/图标穿模**：旧的搜索入口 `.search-entry` 用绝对定位按正方形摆放图标、输入框另加 `pl-10`，圆角下图标与文字易重叠越界；重写为 `.site-search` 组件后，圆角搜索框内部一律使用 flex 居中布局（`inline-flex` + `align-items:center`），图标 `flex-shrink:0`、输入框 `flex:1; min-width:0`，并在折叠动画容器上加 `overflow:hidden; white-space:nowrap`，文字与图标不再越出圆角边界
 
 ### 调整

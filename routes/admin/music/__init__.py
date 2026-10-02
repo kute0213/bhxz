@@ -67,7 +67,7 @@ def admin_music_list():
     )
 
 
-@admin_bp.route('/admin/music/api/list')
+@admin_bp.route('/admin/api/music/list')
 @admin_required
 def admin_music_api_list():
     """音频列表 JSON API（分页，分页大小由系统设置控制）。

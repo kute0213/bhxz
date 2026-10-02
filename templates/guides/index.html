@@ -22,28 +22,6 @@
     content: ''; position: absolute; top: 0; left: 0; right: 0; height: 50%; border-radius: 24px 24px 0 0; pointer-events: none;
     background: linear-gradient(180deg, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0) 100%);
 }
-.guide-card-top-bar {
-    position: absolute; top: 0; left: 0; right: 0; height: 4px;
-    background: linear-gradient(90deg,
-        rgba(96, 165, 250, 0) 0%,
-        rgba(96, 165, 250, 0.6) 15%,
-        #60a5fa 30%,
-        #3b82f6 50%,
-        #2563eb 70%,
-        rgba(37, 99, 235, 0.6) 85%,
-        rgba(37, 99, 235, 0) 100%
-    );
-    border-radius: 24px 24px 0 0;
-    z-index: 1;
-    pointer-events: none;
-}
-.guide-card-top-bar::after {
-    content: ''; position: absolute; top: 4px; left: 10%; right: 10%; height: 12px;
-    background: linear-gradient(180deg, rgba(96, 165, 250, 0.15) 0%, rgba(96, 165, 250, 0) 100%);
-    border-radius: 0 0 50% 50%;
-    filter: blur(4px);
-    pointer-events: none;
-}
 .guide-status-badge {
     display: inline-flex; align-items: center; gap: 0.25rem;
     font-size: 0.75rem; padding: 0.125rem 0.5rem; border-radius: 9999px;
@@ -95,7 +73,6 @@
         <div id="guide-list" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
             {% for guide in guides %}
             <div class="guide-card block p-6">
-                <div class="guide-card-top-bar"></div>
                 <div class="relative z-10">
                     <div class="flex items-center gap-2 mb-3">
                         {% if guide.is_pinned %}
@@ -190,7 +167,7 @@
                 (g.status === 'rejected' && g.rejected_reason ? '<span class="text-xs text-red-300">原因：' + esc(g.rejected_reason) + '</span>' : '') +
                 '</div>';
         }
-        return '<div class="guide-card block p-6 search-fade-in"><div class="guide-card-top-bar"></div><div class="relative z-10">' +
+        return '<div class="guide-card block p-6 search-fade-in"><div class="relative z-10">' +
             '<div class="flex items-center gap-2 mb-3">' + pin + status + '</div>' +
             '<a href="' + detailUrl(g.id) + '" class="hover:no-underline">' +
             '<h3 class="text-lg font-bold mb-2 text-cream">' + esc(g.title) + '</h3>' +

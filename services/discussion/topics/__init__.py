@@ -130,6 +130,8 @@ def get_topic_detail(topic_id):
             (topic_id,)
         )
         conn.commit()
+        # 页面展示自增后的实时数值，避免「刷新后仍然不变」的错觉
+        topic['view_count'] = (topic.get('view_count') or 0) + 1
 
         total_replies = conn.execute(
             "SELECT COUNT(*) AS c FROM discussion_replies WHERE topic_id = ?",

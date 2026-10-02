@@ -43,7 +43,7 @@
     <!-- 入场动画见 base.css：纯 CSS animation，不依赖 JS，避免白屏 -->
     <noscript><style>.page-content{opacity:1!important;transform:none!important}</style></noscript>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/tailwind.css', v='4') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css', v='40') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css', v='41') }}">
     <script src="{{ url_for('static', filename='lib/purify/purify.min.js', v='1') }}"></script>
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <script>
@@ -424,7 +424,7 @@
     {% from 'macros/modal.html' import modal_captcha %}
     {{ modal_captcha() }}
 
-    <script src="{{ url_for('static', filename='js/core/base.js', v='24') }}"></script>
+    <script src="{{ url_for('static', filename='js/core/base.js', v='25') }}"></script>
     <script src="{{ url_for('static', filename='js/core/uploader.js', v='1') }}"></script>
     {# 页面内就地搜索（SiteSearch v7：每页自带输入框、导航栏无输入框，详见 search.js） #}
     <script src="{{ url_for('static', filename='js/core/search.js', v='7') }}"></script>

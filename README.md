@@ -456,25 +456,32 @@ export ENABLE_SSL=1 && python app.py
 
 ## API 接口
 
-所有 API 以 `/api` 为前缀，返回 JSON。
+所有 JSON 接口统一收敛到 `api` 路由段：公开接口为 `/api/...`，管理后台接口为 `/admin/api/...`，不在业务路径中间插入 `api`（如不使用 `/music/api/list` 这类写法），返回 JSON。
 
 ### 公开接口
 
 | 端点                             | 说明                        |
 | ------------------------------ | ------------------------- |
-| `GET /api/performance`         | 服务器性能数据（CPU/内存/运行时间/在线玩家） |
 | `GET /api/stats`               | 网站统计数据                    |
+| `GET /api/server-status`       | 服务器实时状态（在线玩家/CPU/内存）      |
 | `GET /api/captcha/generate`    | 生成图形验证码                   |
 | `POST /api/captcha/verify`     | 验证图形验证码                   |
 | `POST /api/email/send-code`    | 发送邮箱验证码                   |
 | `GET /api/email/check-enabled` | 检查邮件功能是否启用                |
+| `GET /api/username/check`      | 注册页实时检测用户名是否可用            |
+| `POST /api/verify-group-code`  | 校验注册用群内验证码                |
+| `GET /api/verify-group-code/check` | 查询群内验证码是否已通过             |
+| `GET /api/docs/list`           | 文档列表                      |
+| `GET /api/docs/content/<file>` | 文档正文                      |
 
 ### 申请账号 API（需登录）
 
 | 方法   | 路径                                   | 说明                 |
 | ---- | ------------------------------------ | ------------------ |
 | GET  | `/game-accounts/apply`               | 申请注册页面             |
-| POST | `/game-accounts/api/apply-register`  | 提交注册申请（需图形验证码）    |
+| POST | `/api/game-accounts/apply-register`  | 提交注册申请（需图形验证码）    |
+| GET  | `/game-accounts/ban-apply`           | 申请封禁页面             |
+| POST | `/api/game-accounts/ban-apply`       | 提交封禁申请（需图形验证码）    |
 
 ### 申请账号管理 API（管理员）
 
@@ -495,10 +502,11 @@ export ENABLE_SSL=1 && python app.py
 
 | 方法 | 路径                                          | 说明                          |
 | -- | ------------------------------------------- | --------------------------- |
-| GET | `/admin/users/api/list`                     | 用户分页列表（`page`）              |
-| GET | `/admin/guides/api/list`                    | 指南分页列表（`page`）              |
-| GET | `/admin/music/api/list`                     | 音频分页列表（`type=all\|pending`，`page`） |
-| GET | `/admin/discussion/api/list`                | 帖子分页列表（`page`）              |
+| GET | `/admin/api/users/list`                     | 用户分页列表（`page`）              |
+| GET | `/admin/api/guides/list`                    | 指南分页列表（`page`）              |
+| GET | `/admin/api/music/list`                     | 音频分页列表（`type=all\|pending`，`page`） |
+| GET | `/admin/api/discussion/list`                | 帖子分页列表（`page`）              |
+| GET | `/admin/api/firewall/bans`                  | 合并封禁列表（`page`）              |
 | GET | `/admin/api/backgrounds`                    | 背景图片分页列表（`page`，可选 `status` 筛选） |
 | GET | `/admin/api/game-accounts/applications/list` | 注册申请分页列表（`status=pending\|approved\|rejected\|all`，`page`） |
 
@@ -524,7 +532,9 @@ export ENABLE_SSL=1 && python app.py
 | GET | `/api/buildings`     | 公共建筑列表（`q` 匹配标题与标签）                                   |
 | GET | `/api/guides/list`   | 服务器指南列表（`q` 匹配标题与摘要）                                  |
 | GET | `/api/music`         | 大喇叭音频列表（`q` 匹配名称与标签）                                  |
-| GET | `/discussion/api/topics` | 讨论帖子列表（`q` 匹配标题与正文，可选 `category` 分类、`page` 页码）       |
+| GET | `/api/discussion/topics` | 讨论帖子列表（`q` 匹配标题与正文，可选 `category` 分类、`page` 页码）       |
+| GET | `/api/discussion/<id>/replies` | 帖子回复分页（`page` 页码） |
+| GET | `/api/discussion/<id>/new-replies` | 增量拉取新回复（`last_id`） |
 
 ### 服务器指南 API
 

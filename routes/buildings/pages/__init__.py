@@ -217,16 +217,18 @@ def building_detail(building_id):
     finally:
         conn.close()
 
-    # 增加浏览次数（with get_db() 会在退出时自动 commit，避免计数丢失）
-    if user is None or (user and building['author_id'] != user['id']):
-        try:
-            with get_db() as conn:
-                conn.execute(
-                    "UPDATE public_buildings SET view_count = view_count + 1 WHERE id = ?",
-                    (building_id,),
-                )
-        except Exception:
-            pass
+    # 增加浏览次数：任何访问都计数（含作者本人与管理员的查看）
+    # with get_db() 退出时自动 commit，避免计数丢失；失败时记录日志而非静默吞掉
+    try:
+        with get_db() as conn:
+            conn.execute(
+                "UPDATE public_buildings SET view_count = view_count + 1 WHERE id = ?",
+                (building_id,),
+            )
+        building['view_count'] = (building.get('view_count') or 0) + 1
+    except Exception as e:
+        from core.system.logger import log
+        log('WARNING', 'Buildings', f'建筑浏览次数更新失败 id={building_id}: {e}')
 
     return render_page(
         'buildings/detail.html',

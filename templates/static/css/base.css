@@ -838,11 +838,19 @@ body.page-leaving .page-transition-overlay { opacity: 1; pointer-events: all; }
     border-radius: 24px !important;
     box-shadow: var(--shadow-elevated);
     max-width: 90vw; width: 440px;
-    transform: scale(1) translate(0,0); opacity: 1;
-    transition: transform var(--transition-bounce), opacity 0.3s ease;
+    /* 关闭态：略微缩小并淡出；打开态（.open / .active）回弹到正常大小。
+       CustomModal 会用内联样式覆盖，页面级弹窗走这套统一动画。 */
+    transform: scale(0.94) translateY(10px);
+    opacity: 0;
+    transition: transform var(--transition-bounce), opacity 0.32s ease;
     overflow: hidden;
     max-height: 90vh;
     display: flex; flex-direction: column;
+}
+.modal-overlay.open > .modal-box,
+.modal-overlay.active > .modal-box {
+    transform: scale(1) translateY(0);
+    opacity: 1;
 }
 .modal-box::before {
     content: ''; position: absolute; inset: 0; border-radius: inherit;
@@ -1297,15 +1305,13 @@ pre::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.24); }
     white-space: nowrap;
     overflow: hidden;
     cursor: text;
-    transform-origin: left center;
-    /* 使用 expo-out 缓动，起步快、收尾缓，展开/收起更自然流畅 */
+    /* 展开动画与导航栏胶囊（.glass-nav-inner）保持一致：
+       宽度 + 圆角 + 阴影 用同一套 --transition-bounce 缓动，展开时带轻微回弹 */
     transition:
-        max-width 0.42s cubic-bezier(0.22, 1, 0.36, 1),
-        padding 0.42s cubic-bezier(0.22, 1, 0.36, 1),
-        margin 0.42s cubic-bezier(0.22, 1, 0.36, 1),
-        opacity 0.22s ease,
-        transform 0.42s cubic-bezier(0.22, 1, 0.36, 1),
-        border-width 0.42s ease,
+        max-width var(--transition-bounce),
+        padding var(--transition-bounce),
+        border-radius var(--transition-bounce),
+        opacity var(--transition-normal),
         color var(--transition-fast),
         border-color var(--transition-fast);
 }
@@ -1318,14 +1324,12 @@ pre::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.24); }
     max-width: 0;
     padding-left: 0;
     padding-right: 0;
-    margin-right: -6px;
     border-width: 0;
     opacity: 0;
-    transform: translateX(-8px) scale(0.96);
     pointer-events: none;
 }
 
-/* 展开态：输入框外壳（max-width + 位移/缩放实现自然流畅的展开/收起） */
+/* 展开态：输入框外壳（宽度平滑展开，与导航栏胶囊同款动画，不做位移/置顶） */
 .site-search-field {
     position: relative;
     display: flex;
@@ -1340,21 +1344,19 @@ pre::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.24); }
     border: 1px solid var(--border-card);
     border-radius: 12px;
     background: rgba(255, 255, 255, 0.72);
-    transform-origin: right center;
-    transform: translateX(10px) scale(0.98);
     transition:
-        max-width 0.46s cubic-bezier(0.22, 1, 0.36, 1),
-        padding 0.4s cubic-bezier(0.22, 1, 0.36, 1),
-        opacity 0.26s ease 0.08s,
-        transform 0.46s cubic-bezier(0.22, 1, 0.36, 1),
+        max-width var(--transition-bounce),
+        padding var(--transition-bounce),
+        border-radius var(--transition-bounce),
+        opacity var(--transition-normal),
         border-color var(--transition-fast),
-        box-shadow var(--transition-fast);
+        box-shadow var(--transition-bounce);
 }
 .site-search.is-open .site-search-field {
     max-width: var(--search-open-w, 520px);
     padding: 0 6px 0 10px;
     opacity: 1;
-    transform: translateX(0) scale(1);
+    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06);
 }
 .site-search-field:focus-within {
     border-color: rgba(2, 132, 199, 0.45);

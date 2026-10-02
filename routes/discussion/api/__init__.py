@@ -106,7 +106,7 @@ def delete_topic(topic_id):
                     redirect_to=url_for('discussion.list'))
 
 
-@discussion_bp.route('/discussion/api/topics')
+@discussion_bp.route('/api/discussion/topics')
 def api_topics():
     """帖子列表 API（分页，分页大小由系统设置控制）。
 
@@ -134,14 +134,14 @@ def api_topics():
     })
 
 
-@discussion_bp.route('/discussion/<int:topic_id>/api/replies')
+@discussion_bp.route('/api/discussion/<int:topic_id>/replies')
 def api_get_replies(topic_id):
     page = request.args.get('page', 1, type=int)
     data = get_replies_page(topic_id, page)
     return jsonify({'success': True, **data})
 
 
-@discussion_bp.route('/discussion/<int:topic_id>/api/new-replies')
+@discussion_bp.route('/api/discussion/<int:topic_id>/new-replies')
 def api_get_new_replies(topic_id):
     last_id = request.args.get('last_id', 0, type=int)
     replies = get_new_replies(topic_id, last_id)

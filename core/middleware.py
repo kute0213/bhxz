@@ -79,6 +79,13 @@ def _set_security_headers(response):
     # ---- 内容安全策略 ----
     response.headers.setdefault('Content-Security-Policy', CSP_POLICY)
 
+    # ---- HTML 页面禁用缓存：避免浏览器 / 反向代理返回旧页面，
+    #      导致「浏览量、状态等刷新后不变化」的假象（静态资源不受影响） ----
+    if (response.mimetype or '').startswith('text/html'):
+        response.headers.setdefault(
+            'Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0'
+        )
+
     # ---- 强制 HTTPS：仅 HTTPS 请求下发，避免 HTTP 部署被强制升级而无法访问 ----
     if request.is_secure:
         response.headers.setdefault('Strict-Transport-Security', HSTS_POLICY)

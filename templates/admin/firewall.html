@@ -714,7 +714,12 @@
 
   </div>
 </section>
+{% endblock %}
 
+{# 详情弹窗必须放在 .page-content 之外（page_modals），
+   否则会受页面入场动画的 transform 影响导致 fixed 定位错乱「穿模」，
+   表现为遮罩无法覆盖页脚、动画异常。 #}
+{% block page_modals %}
 {% call modal_shell('ban-detail-modal', size='lg', title='封禁详情',
                      icon='info', icon_color='blue', close_on_overlay='false') %}
     <div class="modal-body" id="detail-body">
@@ -727,7 +732,6 @@
         <button type="button" class="btn-secondary" onclick="closeModal('ban-detail-modal')">关闭</button>
     </div>
 {% endcall %}
-
 {% endblock %}
 
 {% block extra_script %}

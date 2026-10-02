@@ -18,7 +18,7 @@ def docs_index():
     return render_page('site/docs.html')
 
 
-@docs_bp.route('/docs/api/list')
+@docs_bp.route('/api/docs/list')
 def docs_list():
     """获取文档列表"""
     docs = []
@@ -39,7 +39,7 @@ def docs_list():
     return jsonify({'docs': docs})
 
 
-@docs_bp.route('/docs/api/content/<path:filename>')
+@docs_bp.route('/api/docs/content/<path:filename>')
 def docs_content(filename):
     """获取文档内容"""
     # 安全检查：防止路径穿越

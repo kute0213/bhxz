@@ -89,7 +89,7 @@
     marked.use({ renderer });
 
     // 加载文档列表
-    fetch('/docs/api/list')
+    fetch('/api/docs/list')
         .then(r => r.json())
         .then(data => {
             if (!data.docs || data.docs.length === 0) {
@@ -122,7 +122,7 @@
 
         content.innerHTML = '<p class="text-cream/50 text-center py-12">加载中...</p>';
 
-        fetch('/docs/api/content/' + filename)
+        fetch('/api/docs/content/' + filename)
             .then(r => r.json())
             .then(data => {
                 if (data.error) {

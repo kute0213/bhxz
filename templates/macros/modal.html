@@ -152,10 +152,12 @@ window.closeModal = function(id) {
     var el = document.getElementById(id);
     if (!el) return;
     el.classList.remove('open');
-    // 等待 CSS 过渡结束后隐藏
+    // 等待 CSS 过渡（遮罩 0.3s / 弹窗卡片 0.32s）结束后再隐藏，
+    // 时间过短会在动画未完时直接隐藏，过长则残留不可见节点。
     setTimeout(function() {
+        if (el.classList.contains('open')) return; // 期间又被重新打开则不清
         el.style.display = 'none';
-    }, 300);
+    }, 350);
     document.body.style.overflow = '';
 };
 // 点击 Escape 关闭所有打开的 modal-overlay

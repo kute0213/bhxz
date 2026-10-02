@@ -33,7 +33,7 @@ def admin_discussion():
     )
 
 
-@admin_bp.route('/admin/discussion/api/list')
+@admin_bp.route('/admin/api/discussion/list')
 @admin_required
 def admin_discussion_api_list():
     """帖子列表 JSON API（分页，分页大小由系统设置控制）。参数：page（从 1 开始）。"""

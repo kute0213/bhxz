@@ -46,10 +46,12 @@
                         <input
                                 type="password"
                                 name="password"
+                                id="register-password"
                                 required
                                 minlength="8"
                                 maxlength="30"
                                 autocomplete="new-password"
+                                data-password-strength
                                 class="input-field w-full px-4 py-3 rounded-lg"
                                 placeholder="8-30 位，需包含大小写字母、数字和特殊字符">
                     </div>
@@ -58,10 +60,12 @@
                         <input
                                 type="password"
                                 name="confirm"
+                                id="register-confirm"
                                 required
                                 minlength="8"
                                 maxlength="30"
                                 autocomplete="new-password"
+                                data-password-confirm='input[name="password"]'
                                 class="input-field w-full px-4 py-3 rounded-lg"
                                 placeholder="再次输入密码">
                     </div>
@@ -151,6 +155,8 @@ document.addEventListener('DOMContentLoaded', function() {
     const input = document.getElementById('register-username');
     const status = document.getElementById('username-availability');
     const submitBtn = document.getElementById('register-submit');
+    const pwdInput = document.getElementById('register-password');
+    const confirmInput = document.getElementById('register-confirm');
     if (!form || !input || !status || !submitBtn) return;
 
     let availability = 'unknown';
@@ -201,13 +207,28 @@ document.addEventListener('DOMContentLoaded', function() {
         timer = setTimeout(checkUsername, 300);
     });
 
-    // 此监听器先于验证码弹窗注册，用户名未确认可用时直接阻止提交。
+    // 此监听器先于验证码弹窗注册，校验不通过时直接阻止提交。
     form.addEventListener('submit', function(e) {
         if (availability !== 'available') {
             e.preventDefault();
             e.stopImmediatePropagation();
             Toast.warning(availability === 'checking' ? '请等待用户名检查完成' : '请先使用可用的用户名');
             input.focus();
+            return;
+        }
+        const pwdResult = PasswordPolicy.validate(pwdInput.value || '');
+        if (!pwdResult.valid) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            Toast.error('密码不符合要求：还需' + pwdResult.missing.join('、'));
+            pwdInput.focus();
+            return;
+        }
+        if ((confirmInput.value || '') !== (pwdInput.value || '')) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            Toast.error('两次输入的密码不一致');
+            confirmInput.focus();
         }
     });
 

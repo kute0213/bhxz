@@ -6,7 +6,84 @@ if (typeof lucide !== 'undefined' && lucide.createIcons) {
     try { lucide.createIcons(); } catch (_) {}
 }
 
-// 密码强度展示：与 core.auth.validate_password 规则保持一致
+// 密码策略：与 core/shared/validation.validate_password_strength 规则保持一致
+// 规则：长度 8-30 位；必须同时包含大写字母、小写字母、数字、特殊字符；拒绝常见弱密码
+var PasswordPolicy = (function() {
+    var MIN_LENGTH = 8;
+    var MAX_LENGTH = 30;
+    // 常见弱密码（仅用于前端即时提示，完整弱密码库以后端为准）
+    var WEAK_PASSWORDS = {
+        'password': 1, 'password1': 1, 'password123': 1, 'passw0rd': 1,
+        'admin': 1, 'admin123': 1, 'admin1234': 1, 'adminadmin': 1,
+        'root1234': 1, 'rootroot': 1, 'manager': 1, 'guest123': 1,
+        'test1234': 1, 'testtest': 1, 'temp1234': 1, 'default': 1,
+        'iloveyou': 1, 'sunshine': 1, 'princess': 1, 'dragon': 1,
+        'monkey': 1, 'football': 1, 'baseball': 1, 'welcome': 1,
+        'master': 1, 'shadow': 1, 'killer': 1, 'superman': 1, 'batman': 1,
+        'qwerty123': 1, 'qwertyuiop': 1, '1q2w3e4r': 1, '1qaz2wsx': 1,
+        'qwe123': 1, 'qweasd': 1, 'a1b2c3d4': 1, 'abcd1234': 1,
+        'password!': 1, 'p@ssw0rd': 1, 'minecraft': 1, 'minecraft123': 1
+    };
+
+    // 连续递增/递减序列（如 abcdefg、1234567）
+    function isSequential(s) {
+        if (s.length < 4) return false;
+        var asc = true, desc = true;
+        for (var i = 1; i < s.length; i++) {
+            var diff = s.charCodeAt(i) - s.charCodeAt(i - 1);
+            if (diff !== 1) asc = false;
+            if (diff !== -1) desc = false;
+            if (!asc && !desc) return false;
+        }
+        return /^[A-Za-z0-9]+$/.test(s);
+    }
+
+    function isWeak(password) {
+        var s = (password || '').trim().toLowerCase();
+        if (!s) return false;
+        if (Object.prototype.hasOwnProperty.call(WEAK_PASSWORDS, s)) return true;
+        if (s.length >= 4) {
+            var first = s.charAt(0), allSame = true;
+            for (var i = 1; i < s.length; i++) {
+                if (s.charAt(i) !== first) { allSame = false; break; }
+            }
+            if (allSame) return true;
+        }
+        return isSequential(s);
+    }
+
+    // 返回 { valid, missing: [...], level, empty }
+    function validate(password) {
+        var pw = password || '';
+        if (!pw) {
+            return { valid: false, empty: true, level: 0, missing: ['请输入密码'] };
+        }
+        var missing = [];
+        if (pw.length < MIN_LENGTH) missing.push('至少 ' + MIN_LENGTH + ' 位');
+        if (pw.length > MAX_LENGTH) missing.push('不超过 ' + MAX_LENGTH + ' 位');
+        if (!/[A-Z]/.test(pw)) missing.push('大写字母');
+        if (!/[a-z]/.test(pw)) missing.push('小写字母');
+        if (!/\d/.test(pw)) missing.push('数字');
+        if (!/[^A-Za-z0-9]/.test(pw)) missing.push('特殊字符');
+        if (isWeak(pw)) missing.push('不要使用常见弱密码');
+
+        var hasMixedCase = /[a-z]/.test(pw) && /[A-Z]/.test(pw);
+        var hasNumber = /\d/.test(pw);
+        var hasSymbol = /[^A-Za-z0-9]/.test(pw);
+        var level = 1;
+        if (pw.length >= MIN_LENGTH && hasMixedCase) {
+            level = 2;
+            if (hasNumber || hasSymbol) level = 3;
+            if (pw.length >= 12 && hasNumber && hasSymbol && hasMixedCase) level = 4;
+        }
+
+        return { valid: missing.length === 0, empty: false, level: level, missing: missing };
+    }
+
+    return { MIN_LENGTH: MIN_LENGTH, MAX_LENGTH: MAX_LENGTH, validate: validate, isWeak: isWeak };
+})();
+
+// 密码强度展示：输入时实时检测，并列出尚未满足的规则
 (function initPasswordStrengthIndicators() {
     document.querySelectorAll('input[data-password-strength]').forEach(function(input) {
         if (input.dataset.strengthInitialized === 'true') return;
@@ -30,47 +107,64 @@ if (typeof lucide !== 'undefined' && lucide.createIcons) {
         var hint = indicator.querySelector('.password-strength-hint');
 
         function updateStrength() {
-            var password = input.value || '';
-            if (!password) {
+            var result = PasswordPolicy.validate(input.value || '');
+            input.setCustomValidity(result.valid || result.empty ? '' : result.missing.join('、'));
+            if (result.empty) {
                 indicator.dataset.level = '0';
                 label.textContent = '密码强度：未输入';
                 hint.textContent = '至少 8 位，含大小写字母、数字和特殊字符';
                 return;
             }
 
-            var hasLetter = /\p{L}/u.test(password);
-            var hasNumber = /\d/.test(password);
-            var hasSymbol = /[^A-Za-z0-9]/.test(password);
-            var hasMixedCase = /[a-z]/.test(password) && /[A-Z]/.test(password);
-            var validLength = password.length >= 8;
-            var level = 1;
-
-            if (validLength && hasLetter) {
-                level = 2;
-                if (hasNumber || hasSymbol || hasMixedCase) level = 3;
-                if (password.length >= 12 && hasNumber && hasSymbol && hasMixedCase) level = 4;
-            }
-
             var labels = ['', '弱', '一般', '中等', '强'];
-            indicator.dataset.level = String(level);
-            label.textContent = '密码强度：' + labels[level];
-
-            var missing = [];
-            if (!validLength) missing.push('至少 8 位');
-            if (!hasMixedCase) missing.push('大小写字母');
-            if (!hasNumber) missing.push('数字');
-            if (!hasSymbol) missing.push('特殊字符');
-            if (missing.length) {
-                hint.textContent = '还需：' + missing.join('、');
-            } else if (level < 4) {
-                hint.textContent = '可加入大小写字母、数字和符号增强';
-            } else {
-                hint.textContent = '密码强度良好';
-            }
+            indicator.dataset.level = String(result.level);
+            label.textContent = '密码强度：' + labels[result.level];
+            hint.textContent = result.valid
+                ? (result.level < 4 ? '密码符合要求，可再增强强度' : '密码强度良好')
+                : '还需：' + result.missing.join('、');
         }
 
         input.addEventListener('input', updateStrength);
         updateStrength();
+    });
+})();
+
+// 确认密码实时一致性检测：data-password-confirm="选择器"
+(function initPasswordConfirmChecks() {
+    document.querySelectorAll('input[data-password-confirm]').forEach(function(confirmInput) {
+        if (confirmInput.dataset.confirmInitialized === 'true') return;
+        confirmInput.dataset.confirmInitialized = 'true';
+
+        var target = document.querySelector(confirmInput.getAttribute('data-password-confirm'));
+        if (!target) return;
+
+        var hint = document.createElement('p');
+        hint.className = 'mt-2 text-xs min-h-[1rem] text-cream/50';
+        hint.setAttribute('aria-live', 'polite');
+        confirmInput.insertAdjacentElement('afterend', hint);
+
+        function updateMatch() {
+            var value = confirmInput.value || '';
+            if (!value) {
+                hint.textContent = '';
+                hint.className = 'mt-2 text-xs min-h-[1rem] text-cream/50';
+                confirmInput.setCustomValidity('');
+                return;
+            }
+            if (value === (target.value || '')) {
+                hint.textContent = '两次输入的密码一致';
+                hint.className = 'mt-2 text-xs min-h-[1rem] text-green-400';
+                confirmInput.setCustomValidity('');
+            } else {
+                hint.textContent = '两次输入的密码不一致';
+                hint.className = 'mt-2 text-xs min-h-[1rem] text-red-400';
+                confirmInput.setCustomValidity('两次输入的密码不一致');
+            }
+        }
+
+        confirmInput.addEventListener('input', updateMatch);
+        target.addEventListener('input', updateMatch);
+        updateMatch();
     });
 })();
 
@@ -447,9 +541,6 @@ var CustomModal = (function () {
         setTimeout(function () {
             modal.classList.remove('active');
             document.body.style.overflow = '';
-            modalBox.style.transform = '';
-            modalBox.style.opacity = '';
-            modalBox.style.transition = '';
 
             // prompt 模式：确认返回输入值，取消/关闭返回 null
             var value = result;
@@ -468,6 +559,16 @@ var CustomModal = (function () {
             currentTrigger = null;
             triggerRect = null;
             currentShowInput = false;
+
+            // 等遮罩淡出（0.3s）结束后再清理内联样式。
+            // 若立即清理，弹窗卡片会先回到 opacity:1 / scale(1)，
+            // 在遮罩尚未消失时「闪现」出一个重影后再关闭。
+            setTimeout(function () {
+                if (modal.classList.contains('active')) return; // 期间又被重新打开则不清
+                modalBox.style.transform = '';
+                modalBox.style.opacity = '';
+                modalBox.style.transition = '';
+            }, 320);
         }, 400);
     }
 

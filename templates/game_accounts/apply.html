@@ -57,7 +57,7 @@
         applyBtn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i>提交中...';
         lucide.createIcons({ targets: [applyBtn] });
 
-        fetch('/game-accounts/api/apply-register', {
+        fetch('/api/game-accounts/apply-register', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({

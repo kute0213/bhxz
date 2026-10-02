@@ -51,7 +51,7 @@ def admin_users():
     )
 
 
-@admin_bp.route('/admin/users/api/list')
+@admin_bp.route('/admin/api/users/list')
 @admin_required
 def admin_users_api():
     """用户列表 API（JSON，分页，每次 10 条）。"""

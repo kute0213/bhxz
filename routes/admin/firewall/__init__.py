@@ -220,7 +220,7 @@ FIREWALL_CONFIG_KEYS = {
 # ===========================================================================
 
 
-@admin_bp.route('/admin/firewall/bans/api')
+@admin_bp.route('/admin/api/firewall/bans')
 @admin_required
 def admin_firewall_bans_api():
     """返回合并封禁列表 JSON（分页，每页 10 条）。"""

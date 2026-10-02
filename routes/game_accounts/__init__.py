@@ -10,10 +10,10 @@ from core.auth import login_required, get_current_user
 from services.game_accounts.registration_service import create_application
 from services.game_server_ban import create_application as create_ban_application
 
-account_apply_bp = Blueprint('account_apply', __name__, url_prefix='/game-accounts')
+account_apply_bp = Blueprint('account_apply', __name__)
 
 
-@account_apply_bp.route('/apply')
+@account_apply_bp.route('/game-accounts/apply')
 @login_required
 def apply_page():
     """申请注册游戏账号页面。"""
@@ -21,7 +21,7 @@ def apply_page():
     return render_template('game_accounts/apply.html', user=user)
 
 
-@account_apply_bp.route('/api/apply-register', methods=['POST'])
+@account_apply_bp.route('/api/game-accounts/apply-register', methods=['POST'])
 @login_required
 def api_apply_register():
     """提交游戏账号注册申请（AJAX）。
@@ -66,7 +66,7 @@ def api_apply_register():
 # 游戏服务器封禁申请（用户发起 → 管理员审批 → RCON ban → 到期自动 pardon）
 # ---------------------------------------------------------------------------
 
-@account_apply_bp.route('/ban-apply')
+@account_apply_bp.route('/game-accounts/ban-apply')
 @login_required
 def ban_apply_page():
     """申请封禁游戏服务器账号页面。"""
@@ -74,7 +74,7 @@ def ban_apply_page():
     return render_template('game_accounts/ban_apply.html', user=user)
 
 
-@account_apply_bp.route('/api/ban-apply', methods=['POST'])
+@account_apply_bp.route('/api/game-accounts/ban-apply', methods=['POST'])
 @login_required
 def api_ban_apply():
     """提交游戏服务器封禁申请（AJAX）。

@@ -93,7 +93,7 @@ def admin_guides():
     )
 
 
-@admin_bp.route('/admin/guides/api/list')
+@admin_bp.route('/admin/api/guides/list')
 @admin_required
 def admin_guides_api():
     """指南列表 API（JSON，分页，每次 10 条，保留原有排序/筛选）。"""
