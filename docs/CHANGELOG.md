@@ -21,6 +21,7 @@
 
 ### 修复
 
+* **403 授权拒绝日志仍打印到全局日志**：`core/middleware.py` 的 `log_403_response` 钩子调用了旧签名 `log('Auth', '403 授权拒绝', ...)`，把 `'Auth'` 误当日志等级（打印成 `[Auth] ... [403 授权拒绝]`），且写入系统全局日志（控制台 / `app.log` / 全局缓冲）。现改为 `log_firewall('WARNING', 'Auth', '403 授权拒绝', ...)`，作为安全审计日志写入防火墙独立日志——**不再打印到控制台、不再进入系统全局日志**，后台「防火墙日志」页面可查
 * **批量调用 API 后被整体封禁、连接被断且「日志无记录 / 封禁列表为空」**：根因有两条——① `services/firewall/protection/ddos.py` 的 `SKIP_PATHS` 未排除 API 请求，批量调接口时高频请求被计入 DDoS 计数并触发 IP 封禁，导致全站连接被连接层直接断开；② 封禁断开日志原用 `DEBUG` 级别，在默认日志等级（`INFO`）下被过滤，且封禁动作未落库，因此「日志里查不到、封禁列表里也没有」。现已在 `SKIP_PATHS` 中新增 `/api/` 与 `/admin/api/`（API 请求不再计入 DDoS 的 IP 级封禁，统一交由 API 防火墙限流，超限返回 429 而非断开），并把连接层断开日志提升为 `INFO`（`services/firewall/transport/connection_filter.py`），确保默认配置下可见可查
 * **防火墙日志仍会打印/混入系统全局日志**：`core/system/logger.py` 的 `log_firewall()` 原先是 `log()` 的薄封装，日志同时进入全局日志（`logs/app.log` / 全局内存缓冲 / SSE / 控制台），污染系统日志。现重构为**完全独立**：只写入 `logs/firewall.log` 与专用内存环形缓冲（`MAX_FIREWALL_LOG_ENTRIES=2000`），不再进入全局日志、SSE 与控制台；同时新增 `get_firewall_log_buffer()` / `get_firewall_log_buffer_tail()` / `clear_firewall_log_buffer()` 供后台单独读取与清空
 * **防火墙日志页面看不到日志（读取源错误）**：`templates/admin/firewall.html` 的日志轮询原先从**全局缓冲**拉取再按 `Firewall` 关键字筛选，日志迁移到独立缓冲后页面自然为空；现改为请求携带 `source=firewall` 直接读取防火墙独立缓冲（清空按钮同步携带该参数，只清清防火墙日志），并移除「按 Firewall 关键字筛选」逻辑（独立缓冲内本就全是防火墙日志，避免漏掉 `Security` / `ContentFilter` / `FirewallDB` 等非 Firewall 标签条目）

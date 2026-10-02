@@ -6,7 +6,7 @@
 from flask import request, session
 from werkzeug.exceptions import HTTPException
 
-from core.system.logger import log, log_firewall
+from core.system.logger import log_firewall
 from core.shared.ip import get_client_ip
 
 # 跳过公共文件服务的路径前缀（这些路径由 Flask 蓝图处理）
@@ -246,11 +246,12 @@ def register_hooks(app, try_serve_public):
     # HTTPS 强制跳转（在安全标头之后注册，确保跳转优先）
     app.after_request(_ssl_redirect)
 
-    # 统一记录 403 授权失败日志，避免在每个路由中重复写 log()
+    # 统一记录 403 授权失败日志：属安全审计类，写入防火墙独立日志
+    # （不打印到控制台、不进入系统全局日志），避免污染系统日志
     @app.after_request
     def log_403_response(response):
         if response.status_code == 403:
             user = session.get('username', 'anonymous')
-            log('Auth', f'403 授权拒绝', username=user,
+            log_firewall('WARNING', 'Auth', '403 授权拒绝', username=user,
                 ip=get_client_ip(), path=request.path, method=request.method)
         return response
