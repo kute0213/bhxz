@@ -58,6 +58,11 @@ SKIP_PATHS = (
     '/sitemap.xml',
     '/music/play/',
     '/music/download/',
+    # API 请求不计入 DDoS 的 IP 级封禁：批量调用接口属于正常用法，
+    # 统一交由 API 防火墙限流（超限返回 429）处理，避免批量调用后被整体封禁、
+    # 全站无法连接（原症状：批量调 API 后连接被断，且无封禁记录可查）。
+    '/api/',
+    '/admin/api/',
 )
 
 # 不计入 DDoS 计数的扩展名（媒体 & 静态资源）
@@ -246,7 +251,7 @@ class DDoSDetector:
                 )
             except Exception:
                 pass
-            log_firewall('Security', 'DDoS 防护：自动封禁',
+            log_firewall('WARNING', 'Security', 'DDoS 防护：自动封禁',
                 ip=ip, threshold=threshold, window=DDOS_WINDOW_SECONDS,
                 permanent=permanent, offense_count=offense_count)
 

@@ -34,7 +34,7 @@ def _check_ipv6_block(ip, drop_callback):
         from config import get_config_value, IPV6_BLOCK_ENABLED
         if get_config_value('IPV6_BLOCK_ENABLED', IPV6_BLOCK_ENABLED):
             # 必须在 drop_callback 之前记录日志，避免 close 后 socket 状态异常
-            log_firewall('DEBUG', 'Firewall: IPv6 连接拦截断开', ip=ip)
+            log_firewall('INFO', 'Firewall', 'IPv6 连接拦截断开', ip=ip)
             drop_callback(ip)
             return True
     except Exception:
@@ -104,7 +104,9 @@ class BanFilterConnection(HTTPConnection):
         """直接关闭黑名单连接，不返回 HTTP 响应。"""
         self.linger = False
         self.close()
-        log_firewall('DEBUG', 'Firewall: 黑名单连接强制断开', ip=ip)
+        # 用 INFO 级别记录：DEBUG 在默认日志等级（INFO）下会被过滤，
+        # 会导致「IP 被封禁断开后防火墙日志查不到任何记录」。
+        log_firewall('INFO', 'Firewall', '黑名单连接强制断开', ip=ip)
 
 
 class FirewallGateway(Gateway_10):

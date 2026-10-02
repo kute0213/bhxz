@@ -108,7 +108,7 @@ def check_api_rate_limit(ip):
             # 超过阈值 → 封禁至本窗口结束
             rec['blocked_until'] = rec['window_start'] + window
             retry_after = max(1, int(rec['blocked_until'] - now) + 1)
-            log_firewall('Security', 'API 调用超限，防火墙封禁 API',
+            log_firewall('WARNING', 'Security', 'API 调用超限，防火墙封禁 API',
                 ip=ip, count=rec['count'], limit=limit, window=window)
             return False, 0, retry_after
 

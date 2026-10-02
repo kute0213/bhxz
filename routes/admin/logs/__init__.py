@@ -12,6 +12,7 @@ from core.auth import admin_required
 from core.helpers import render_page
 from core.system.logger import (
     get_log_buffer, get_log_buffer_tail, clear_log_buffer,
+    get_firewall_log_buffer, get_firewall_log_buffer_tail, clear_firewall_log_buffer,
     register_monitor_client, unregister_monitor_client,
 )
 from routes.admin import admin_bp
@@ -35,16 +36,19 @@ def api_get_logs():
         level:  筛选等级，如 'ERROR'，空字符串表示不过滤
         after:  只返回索引大于此值的条目（增量拉取）
         tail:   获取最近 N 条（默认 200），与 after 互斥
+        source: 日志来源，'firewall' 读取防火墙独立缓冲，其余读取全局缓冲
     """
     level = request.args.get('level', '', type=str)
     after = request.args.get('after', 0, type=int)
     tail = request.args.get('tail', 0, type=int)
+    is_firewall = request.args.get('source', '', type=str).lower() == 'firewall'
 
     if tail > 0:
-        entries = get_log_buffer_tail(tail)
+        entries = (get_firewall_log_buffer_tail if is_firewall else get_log_buffer_tail)(tail)
         result = [{'index': i, **e} for i, e in enumerate(entries)]
     else:
-        raw = get_log_buffer(level_filter=level, after_index=after)
+        getter = get_firewall_log_buffer if is_firewall else get_log_buffer
+        raw = getter(level_filter=level, after_index=after)
         result = [{'index': idx, **e} for idx, e in raw]
 
     return jsonify({
@@ -57,7 +61,10 @@ def api_get_logs():
 @admin_bp.route('/admin/api/logs/clear', methods=['POST'])
 @admin_required
 def api_clear_logs():
-    """清空内存日志缓冲。"""
+    """清空内存日志缓冲（source=firewall 时只清空防火墙独立缓冲）。"""
+    if request.args.get('source', '', type=str).lower() == 'firewall':
+        clear_firewall_log_buffer()
+        return jsonify({'success': True, 'message': '防火墙日志已清空'})
     clear_log_buffer()
     return jsonify({'success': True, 'message': '日志已清空'})
 

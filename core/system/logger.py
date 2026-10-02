@@ -35,6 +35,8 @@ LOG_LEVELS = {
 
 LOG_DIR = os.path.join(APP_ROOT, 'logs')
 LOG_FILE = os.path.join(LOG_DIR, 'app.log')
+# 防火墙专用日志文件 —— 防火墙日志独立存放，不进入全局日志（app.log）
+FIREWALL_LOG_FILE = os.path.join(LOG_DIR, 'firewall.log')
 
 # ---------------------------------------------------------------------------
 # 内存环形缓冲 —— 供管理后台实时查看
@@ -45,6 +47,11 @@ _log_buffer = []           # list[dict]
 _log_buffer_lock = threading.Lock()
 _log_monitor_clients = []  # list[queue.Queue] — SSE 客户端
 _monitor_lock = threading.Lock()
+
+# 防火墙独立环形缓冲 —— 与全局缓冲隔离，供后台「防火墙日志」页面单独查看
+MAX_FIREWALL_LOG_ENTRIES = 2000
+_firewall_buffer = []      # list[dict]
+_firewall_buffer_lock = threading.Lock()
 
 
 def _get_level_number(level_name: str) -> int:
@@ -133,16 +140,7 @@ def log(level: str, event: str, detail: str = '', *, console: bool = True, **kwa
     if _get_level_number(level) < _get_current_min_level():
         return
 
-    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-    thread = threading.current_thread().name
-
-    # 构建日志文本
-    parts = [f'[{now}] [{level}] [{thread}] [{event}]']
-    if detail:
-        parts.append(detail)
-    for k, v in kwargs.items():
-        parts.append(f'{k}={v}')
-    line = ' '.join(parts)
+    now, thread, line = _build_line(level, event, detail, kwargs)
 
     # 1. 输出到控制台（受本次调用与全局开关共同控制）
     if console and _console_enabled:
@@ -174,22 +172,63 @@ def log(level: str, event: str, detail: str = '', *, console: bool = True, **kwa
 # 文件写入
 # ---------------------------------------------------------------------------
 
-def _write_file(line: str):
-    """追加写入日志文件（自动创建目录）。"""
+def _build_line(level: str, event: str, detail: str, kwargs: dict):
+    """构建统一格式的日志行，返回 (timestamp, thread, line)。"""
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    thread = threading.current_thread().name
+    parts = [f'[{now}] [{level}] [{thread}] [{event}]']
+    if detail:
+        parts.append(detail)
+    for k, v in kwargs.items():
+        parts.append(f'{k}={v}')
+    return now, thread, ' '.join(parts)
+
+
+def _write_line_to(path: str, line: str):
+    """追加写入指定日志文件（自动创建目录，失败不抛出）。"""
     try:
-        os.makedirs(LOG_DIR, exist_ok=True)
-        with open(LOG_FILE, 'a', encoding='utf-8') as f:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, 'a', encoding='utf-8') as f:
             f.write(line + '\n')
     except Exception:
         pass  # 文件写入失败不抛出，避免级联崩溃
+
+
+def _write_file(line: str):
+    """追加写入全局日志文件（自动创建目录）。"""
+    _write_line_to(LOG_FILE, line)
 
 
 # ---------------------------------------------------------------------------
 # 内存缓冲读取
 # ---------------------------------------------------------------------------
 
+def _filter_buffer(buf: list, level_filter: str, after_index: int) -> list:
+    """按等级与起始索引过滤缓冲条目（调用方需持有对应缓冲锁）。
+
+    返回 [(index, entry), ...]，index 为该条目在缓冲内的位置。
+    """
+    min_level = None
+    filter_raw = (level_filter or '').strip().upper()
+    if filter_raw and filter_raw != 'DEBUG':
+        if filter_raw.startswith('>='):
+            filter_raw = filter_raw[2:].strip()
+        if filter_raw in LOG_LEVELS:
+            min_level = LOG_LEVELS[filter_raw]
+
+    result = []
+    start = max(0, after_index)
+    for i, entry in enumerate(buf):
+        if i < start:
+            continue
+        if min_level is not None and LOG_LEVELS.get(entry['level'], 1) < min_level:
+            continue
+        result.append((i, entry))
+    return result
+
+
 def get_log_buffer(level_filter: str = '', after_index: int = 0) -> list:
-    """获取内存缓冲中的日志条目。
+    """获取全局内存缓冲中的日志条目。
 
     参数:
         level_filter: 按等级筛选。
@@ -200,39 +239,38 @@ def get_log_buffer(level_filter: str = '', after_index: int = 0) -> list:
     返回:
         [(index, entry), ...]  按时间正序（旧→新）
     """
-    min_level = None
-    filter_raw = (level_filter or '').strip().upper()
-    if filter_raw and filter_raw != 'DEBUG':
-        if filter_raw.startswith('>='):
-            filter_raw = filter_raw[2:].strip()
-        if filter_raw in LOG_LEVELS:
-            min_level = LOG_LEVELS[filter_raw]
-
     with _log_buffer_lock:
-        result = []
-        start = max(0, after_index)
-        for i, entry in enumerate(_log_buffer):
-            idx = i
-            if idx < start:
-                continue
-            if min_level is not None:
-                entry_level = LOG_LEVELS.get(entry['level'], 1)
-                if entry_level < min_level:
-                    continue
-            result.append((idx, entry))
-        return result
+        return _filter_buffer(_log_buffer, level_filter, after_index)
 
 
 def get_log_buffer_tail(count: int = 200) -> list:
-    """获取最近 N 条日志（正序，旧→新，前端自行反转）。"""
+    """获取最近 N 条全局日志（正序，旧→新，前端自行反转）。"""
     with _log_buffer_lock:
         return list(_log_buffer[-count:])
 
 
 def clear_log_buffer():
-    """清空内存缓冲。"""
+    """清空全局内存缓冲。"""
     with _log_buffer_lock:
         _log_buffer.clear()
+
+
+def get_firewall_log_buffer(level_filter: str = '', after_index: int = 0) -> list:
+    """获取防火墙独立缓冲中的日志条目（结构同 get_log_buffer）。"""
+    with _firewall_buffer_lock:
+        return _filter_buffer(_firewall_buffer, level_filter, after_index)
+
+
+def get_firewall_log_buffer_tail(count: int = 200) -> list:
+    """获取最近 N 条防火墙日志（正序，旧→新）。"""
+    with _firewall_buffer_lock:
+        return list(_firewall_buffer[-count:])
+
+
+def clear_firewall_log_buffer():
+    """清空防火墙独立缓冲。"""
+    with _firewall_buffer_lock:
+        _firewall_buffer.clear()
 
 
 # ---------------------------------------------------------------------------
@@ -273,12 +311,35 @@ def unregister_monitor_client(queue) -> None:
 
 
 def log_firewall(level: str, event: str, detail: str = '', **kwargs):
-    """防火墙专用日志入口：走统一日志函数，但不打印到控制台。
+    """防火墙专用日志入口：写入独立文件 logs/firewall.log + 独立内存缓冲。
 
-    防火墙日志（刷屏、DDoS、IP 拦截等）高频且不面向终端运维，
-    统一只写入日志文件与内存缓冲，避免污染全局终端输出。
+    防火墙日志（刷屏、DDoS、IP 拦截、封禁等）高频且属于独立子系统，
+    统一写入 logs/firewall.log 与专用缓冲，**不进入**系统全局日志
+    （app.log / 全局缓冲 / SSE / 控制台），避免污染全局日志；
+    后台「防火墙日志」页面从专用缓冲读取。
+
+    参数与 log() 完全一致，仍受全局日志等级 LOG_LEVEL 过滤。
     """
-    log(level, event, detail, console=False, **kwargs)
+    # 等级过滤：与全局日志保持一致
+    if _get_level_number(level) < _get_current_min_level():
+        return
+
+    now, thread, line = _build_line(level, event, detail, kwargs)
+    _write_line_to(FIREWALL_LOG_FILE, line)
+
+    entry = {
+        'timestamp': now,
+        'level': level,
+        'thread': thread,
+        'event': event,
+        'detail': detail,
+        'kwargs': {k: str(v) for k, v in kwargs.items()},
+        'line': line,
+    }
+    with _firewall_buffer_lock:
+        _firewall_buffer.append(entry)
+        if len(_firewall_buffer) > MAX_FIREWALL_LOG_ENTRIES:
+            _firewall_buffer.pop(0)
 
 
 # ===========================================================================

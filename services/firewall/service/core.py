@@ -823,7 +823,7 @@ def auto_ban(ip_address, action, reason=''):
     )
     if success:
         log_firewall(
-            'Security', '自动封禁生效', ip=ip, action=action,
+            'WARNING', 'Security', '自动封禁生效', ip=ip, action=action,
             duration_minutes=duration_minutes or '永久',
         )
     return success, message
@@ -914,7 +914,7 @@ def ban_suspicious_ip(ip_address, attack_type, matched=''):
     )
     if success:
         log_firewall(
-            'Security', '可疑访问自动封禁生效', ip=ip, attack=attack_type,
+            'WARNING', 'Security', '可疑访问自动封禁生效', ip=ip, attack=attack_type,
             duration_minutes=duration_minutes or '永久',
         )
     return success, message

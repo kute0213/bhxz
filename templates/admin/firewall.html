@@ -503,7 +503,7 @@
               <option value="CRITICAL">仅 CRITICAL</option>
             </select>
           </div>
-          <span class="text-xs text-cream/50">自动筛选 Firewall 相关日志</span>
+          <span class="text-xs text-cream/50">防火墙专用日志（独立于系统日志）</span>
           <div class="flex items-center gap-2 ml-auto">
             <span id="fw-log-count" class="text-xs text-cream/50">0 条</span>
             <button id="fw-btn-clear" class="px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-300 text-sm rounded-lg transition-colors border border-red-500/30">
@@ -548,23 +548,21 @@
       });
 
       btnClear.addEventListener('click', function() {
-        fetch('{{ url_for("admin.api_clear_logs") }}', { method: 'POST', headers: {'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').getAttribute('content')} })
+        fetch('{{ url_for("admin.api_clear_logs") }}?source=firewall', { method: 'POST', headers: {'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').getAttribute('content')} })
           .then(function(r) { return r.json(); })
           .then(function() { loadedEntries = []; lastIndex = -1; renderLogs(); });
       });
 
       function fetchLogs() {
         var level = levelFilter.value;
-        var url = '{{ url_for("admin.api_get_logs") }}?after=' + lastIndex;
+        // source=firewall：从防火墙独立缓冲读取，不再从全局日志里筛 Firewall 条目
+        var url = '{{ url_for("admin.api_get_logs") }}?source=firewall&after=' + lastIndex;
         if (level) url += '&level=' + level;
         fetch(url)
           .then(function(r) { return r.json(); })
           .then(function(data) {
             if (data.entries && data.entries.length) {
-              var newEntries = data.entries.filter(function(e) {
-                return e.event === 'Firewall' || e.detail.indexOf('Firewall') !== -1 || (e.kwargs && JSON.stringify(e.kwargs).indexOf('Firewall') !== -1);
-              });
-              newEntries.forEach(function(e) {
+              data.entries.forEach(function(e) {
                 if (e.index > lastIndex) {
                   loadedEntries.push(e);
                   lastIndex = e.index;
