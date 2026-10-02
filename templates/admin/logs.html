@@ -8,12 +8,19 @@
                 <i data-lucide="arrow-left" class="w-4 h-4 inline mr-1"></i>返回管理中心
             </a>
             <h1 class="text-xl sm:text-2xl font-bold">系统日志</h1>
-            <p class="text-cream/60 text-sm mt-1">实时查看应用运行日志（按时间顺序，最早在前，与控制台一致）</p>
+            <p class="text-cream/60 text-sm mt-1">可切换查看全局日志、严重错误日志与各模块单独日志（按时间顺序，最早在前）</p>
         </div>
 
         <!-- 控制栏 -->
         <div class="pixel-card rounded-xl p-4 mb-4">
             <div class="flex flex-wrap items-center gap-3">
+                <div class="flex items-center gap-2">
+                    <label class="text-sm text-cream/60">日志来源：</label>
+                    <select id="log-source" class="px-3 py-1.5 bg-forest-900/60 border border-cream/20 rounded-lg text-sm focus:outline-none focus:border-gold-400 transition-colors">
+                        <option value="global">全局日志</option>
+                        <option value="fatal">严重错误日志</option>
+                    </select>
+                </div>
                 <div class="flex items-center gap-2">
                     <label class="text-sm text-cream/60">最低等级：</label>
                     <select id="log-level-filter" class="px-3 py-1.5 bg-forest-900/60 border border-cream/20 rounded-lg text-sm focus:outline-none focus:border-gold-400 transition-colors">
@@ -26,6 +33,9 @@
                 </div>
                 <div class="flex items-center gap-2 ml-auto">
                     <span id="log-count" class="text-xs text-cream/50">0 条</span>
+                    <button id="btn-log-settings" class="px-3 py-1.5 bg-forest-900/60 hover:bg-forest-800 text-cream/80 text-sm rounded-lg transition-colors border border-cream/20">
+                        <i data-lucide="settings-2" class="w-4 h-4 inline mr-1"></i>日志设置
+                    </button>
                     <button id="btn-clear-logs" class="px-3 py-1.5 bg-red-500/20 hover:bg-red-500/30 text-red-300 text-sm rounded-lg transition-colors border border-red-500/30">
                         <i data-lucide="trash-2" class="w-4 h-4 inline mr-1"></i>清空
                     </button>
@@ -33,6 +43,20 @@
                         <i data-lucide="arrow-up-to-line" class="w-4 h-4 inline mr-1"></i>自动滚动
                     </button>
                 </div>
+            </div>
+        </div>
+
+        <!-- 日志设置（按模块配置 存储 / 全局） -->
+        <div id="log-settings-panel" class="pixel-card rounded-xl p-4 mb-4" style="display: none;">
+            <div class="flex flex-wrap items-baseline justify-between gap-2 mb-2">
+                <h2 class="font-semibold text-sm">日志设置</h2>
+                <p class="text-xs text-cream/50">
+                    「存储」= 落盘到 <code class="text-cream/70">logs/modules/&lt;模块名&gt;.log</code>；
+                    「全局」= 并入全局日志（控制台 + app.log + SSE）。修改后实时生效。
+                </p>
+            </div>
+            <div id="log-settings-list" class="divide-y divide-cream/10">
+                <div class="text-cream/40 text-sm py-3">加载中...</div>
             </div>
         </div>
 
@@ -50,15 +74,40 @@
 <script>
 (function() {
     const container = document.getElementById('log-container');
+    const sourceSelect = document.getElementById('log-source');
     const levelFilter = document.getElementById('log-level-filter');
     const logCount = document.getElementById('log-count');
     const btnClear = document.getElementById('btn-clear-logs');
     const btnAutoScroll = document.getElementById('btn-auto-scroll');
+    const btnSettings = document.getElementById('btn-log-settings');
+    const settingsPanel = document.getElementById('log-settings-panel');
+    const settingsList = document.getElementById('log-settings-list');
+
+    const LOGS_URL = '{{ url_for("admin.api_get_logs") }}';
+    const CLEAR_URL = '{{ url_for("admin.api_clear_logs") }}';
+    const STREAM_URL = '{{ url_for("admin.api_log_stream") }}';
+    const MODULES_GET_URL = '{{ url_for("admin.api_get_log_modules") }}';
+    const MODULES_SET_URL = '{{ url_for("admin.api_set_log_module") }}';
+
+    // 模块名 → 展示名
+    const MODULE_LABELS = {
+        'firewall': '防火墙',
+        'captcha': '图形验证码',
+        'email_code': '邮箱验证码',
+        'register': '注册账号',
+        'login': '登录账号',
+    };
+    function moduleLabel(name) {
+        return MODULE_LABELS[name] || name;
+    }
 
     let autoScroll = true;
     let eventSource = null;
+    let pollTimer = null;
     let entries = [];
     let currentLevel = 'DEBUG';
+    let currentSource = 'global';
+    let modulesLoaded = false;
 
     // 日志等级颜色映射
     const LEVEL_COLORS = {
@@ -90,7 +139,8 @@
             }
         }
         if (filtered.length === 0) {
-            container.innerHTML = '<div class="text-cream/40 text-center py-8">暂无日志</div>';
+            var emptyText = currentSource === 'fatal' ? '暂无严重错误日志' : '暂无日志';
+            container.innerHTML = '<div class="text-cream/40 text-center py-8">' + emptyText + '</div>';
             logCount.textContent = '0 条';
             return;
         }
@@ -107,9 +157,9 @@
         }
     }
 
-    // 加载初始日志
-    function loadInitial() {
-        const url = '{{ url_for("admin.api_get_logs") }}?tail=500';
+    // 拉取当前来源的日志（整体替换，用于首屏与轮询）
+    function loadLogs() {
+        var url = LOGS_URL + '?tail=500&source=' + encodeURIComponent(currentSource);
         fetch(url)
             .then(r => r.json())
             .then(data => {
@@ -121,14 +171,14 @@
             .catch(function() {});
     }
 
-    // 连接 SSE
+    // 连接 SSE（仅全局日志实时推送）
     function connectSSE() {
         if (eventSource) {
             eventSource.close();
         }
-        eventSource = new EventSource('{{ url_for("admin.api_log_stream") }}');
+        eventSource = new EventSource(STREAM_URL);
         eventSource.addEventListener('connected', function() {
-            loadInitial();
+            loadLogs();
         });
         eventSource.onmessage = function(e) {
             try {
@@ -142,8 +192,26 @@
         };
         eventSource.onerror = function() {
             eventSource.close();
-            setTimeout(connectSSE, 3000);
+            setTimeout(function() {
+                if (currentSource === 'global') connectSSE();
+            }, 3000);
         };
+    }
+
+    // 切换日志来源
+    function applySource(src) {
+        currentSource = src;
+        if (eventSource) { eventSource.close(); eventSource = null; }
+        if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+        entries = [];
+        container.innerHTML = '<div class="text-cream/40 text-center py-8">加载中...</div>';
+        loadLogs();
+        if (src === 'global') {
+            connectSSE();
+        } else {
+            // 非全局来源（严重错误 / 模块单独日志）用轮询刷新
+            pollTimer = setInterval(loadLogs, 3000);
+        }
     }
 
     // 等级筛选
@@ -152,13 +220,18 @@
         render();
     });
 
-    // 清空
+    // 切换来源
+    sourceSelect.addEventListener('change', function() {
+        applySource(this.value);
+    });
+
+    // 清空（按当前来源）
     btnClear.addEventListener('click', function() {
-        CustomModal.confirm('确认清空所有日志？', {
+        CustomModal.confirm('确认清空当前来源（' + sourceSelect.options[sourceSelect.selectedIndex].text + '）的日志？', {
             trigger: this,
             callback: function(confirmed) {
                 if (!confirmed) return;
-                fetch('{{ url_for("admin.api_clear_logs") }}', { method: 'POST' })
+                fetch(CLEAR_URL + '?source=' + encodeURIComponent(currentSource), { method: 'POST' })
                     .then(r => r.json())
                     .then(data => {
                         if (data.success) {
@@ -180,16 +253,112 @@
         }
     });
 
+    // 展开/收起日志设置
+    btnSettings.addEventListener('click', function() {
+        var opened = settingsPanel.style.display !== 'none';
+        settingsPanel.style.display = opened ? 'none' : '';
+        if (!opened && !modulesLoaded) {
+            loadModules();
+        }
+    });
+
+    // 加载模块列表 → 填充「来源」下拉与「日志设置」列表
+    function loadModules() {
+        fetch(MODULES_GET_URL)
+            .then(r => r.json())
+            .then(function(data) {
+                if (!data.success || !data.modules) return;
+                modulesLoaded = true;
+
+                // 来源下拉：保留前两项（全局 / 严重错误），其余重建
+                while (sourceSelect.options.length > 2) {
+                    sourceSelect.remove(2);
+                }
+                data.modules.forEach(function(m) {
+                    var opt = document.createElement('option');
+                    opt.value = 'module:' + m.name;
+                    opt.textContent = moduleLabel(m.name) + '（模块单独日志）';
+                    sourceSelect.appendChild(opt);
+                });
+
+                // 日志设置列表
+                if (data.modules.length === 0) {
+                    settingsList.innerHTML = '<div class="text-cream/40 text-sm py-3">暂无已注册的模块日志</div>';
+                    return;
+                }
+                var html = '';
+                data.modules.forEach(function(m) {
+                    html += renderModuleRow(m);
+                });
+                settingsList.innerHTML = html;
+            })
+            .catch(function() {});
+    }
+
+    // 渲染单个模块的配置行
+    function renderModuleRow(m) {
+        function switchHtml(opt, on) {
+            return '<div class="switch ' + (on ? 'is-on' : '') + '" data-switch role="switch" tabindex="0" ' +
+                   'aria-checked="' + (on ? 'true' : 'false') + '" data-name="' + escapeAttr(m.name) + '" data-opt="' + opt + '">' +
+                   '<input type="hidden" value="' + (on ? '1' : '0') + '"></div>';
+        }
+        return '' +
+            '<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 py-3">' +
+                '<div>' +
+                    '<div class="text-sm font-medium">' + escapeHtml(moduleLabel(m.name)) +
+                        ' <span class="text-cream/40 text-xs">(' + escapeHtml(m.name) + ')</span></div>' +
+                    '<div class="text-xs text-cream/50 mt-0.5">落盘文件：logs/modules/' + escapeHtml(m.name) + '.log</div>' +
+                '</div>' +
+                '<div class="flex items-center gap-6">' +
+                    '<div class="flex items-center gap-2 text-xs text-cream/60">存储 ' + switchHtml('store', m.store) + '</div>' +
+                    '<div class="flex items-center gap-2 text-xs text-cream/60">全局 ' + switchHtml('global_enabled', m.global_enabled) + '</div>' +
+                '</div>' +
+            '</div>';
+    }
+
+    // 设置切换（事件委托，实时保存）
+    settingsList.addEventListener('change', function(e) {
+        var sw = e.target.closest('[data-switch]');
+        if (!sw) return;
+        var name = sw.getAttribute('data-name');
+        var opt = sw.getAttribute('data-opt');
+        var on = sw.classList.contains('is-on');
+        var payload = { name: name };
+        payload[opt] = on;
+
+        fetch(MODULES_SET_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        })
+            .then(r => r.json())
+            .then(function(data) {
+                if (typeof Toast !== 'undefined') {
+                    if (data.success) Toast.success('已保存');
+                    else Toast.error(data.message || '保存失败');
+                }
+            })
+            .catch(function() {
+                if (typeof Toast !== 'undefined') Toast.error('网络异常，保存失败');
+            });
+    });
+
     // HTML 转义
     function escapeHtml(text) {
         var div = document.createElement('div');
-        div.textContent = text;
+        div.textContent = text == null ? '' : text;
         return div.innerHTML;
     }
 
+    function escapeAttr(text) {
+        return String(text == null ? '' : text).replace(/[&<>"']/g, function(c) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
+    }
+
     // 初始化
-    loadInitial();
-    connectSSE();
+    loadModules();
+    applySource('global');
 })();
 </script>
 {% endblock %}

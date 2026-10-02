@@ -181,7 +181,7 @@ python scripts/build/package.py
 
 * 系统设置（在线编辑，热重载，含网站图标选择、日志等级、背景图片开关、RCON 配置、MC 游戏文件夹）
 
-* 系统日志（实时查看，SSE 推送，支持等级过滤、自动滚动；按时间顺序从上到下展示，与控制台一致；**仅包含全局日志**）。统一日志系统分为三类：**① 全局日志**（普通运行日志 → 控制台 + `logs/app.log` + 内存缓冲 + SSE）；**② 严重错误日志**（导致服务器退出的报错 → 单独写入 `logs/fatal.log`，**每次写入直接覆盖文件、只保留最后一次**，且始终打印到控制台，不受日志等级/控制台开关限制）；**③ 模块单独日志**（模块启动时向日志模块注册，→ 独立内存缓冲 + `logs/modules/<模块名>.log`（是否落盘由设置控制），**不打印到全局日志/控制台，也不进入全局日志文件与缓冲**；当前使用者为防火墙（默认不落盘，仅内存缓冲）、图形验证码（`captcha`）、邮箱验证码（`email_code`）、注册账号（`register`）、登录账号（`login`），后四者默认落盘到 `logs/modules/<模块名>.log`，均可由对应 `LOG_MODULE_<模块名>_STORE` 设置关闭为仅内存缓冲）。**403 授权拒绝**属安全审计，写入防火墙模块日志，不在系统日志/控制台出现
+* 系统日志（实时查看，SSE 推送，支持等级过滤、自动滚动；按时间顺序从上到下展示，与控制台一致；**可在页面顶部切换来源查看全局日志 / 严重错误日志 / 各模块单独日志**，页面内「日志设置」可为任意模块配置「是否落盘」「是否并入全局日志」，保存即时生效）。统一日志系统分为三类：**① 全局日志**（普通运行日志 → 控制台 + `logs/app.log` + 内存缓冲 + SSE）；**② 严重错误日志**（导致服务器退出的报错 → 单独写入 `logs/fatal.log`，**每次写入直接覆盖文件、只保留最后一次**，且始终打印到控制台，不受日志等级/控制台开关限制）；**③ 模块单独日志**（模块启动时向日志模块注册，→ 独立内存缓冲 + 可选 `logs/modules/<模块名>.log`；是否落盘、是否并入全局日志**均由设置在「日志页面 → 日志设置」决定，不在模块注册时写死**，支持任意模块；当前使用者为防火墙（`firewall`）、图形验证码（`captcha`）、邮箱验证码（`email_code`）、注册账号（`register`）、登录账号（`login`），其中后四者默认落盘、全部默认不并入全局；两个开关都关闭时日志仅存在于模块独立缓冲，不打印、不落盘、不进全局）。**每次启动自动清理日志**（全局日志文件、严重错误日志文件、所有模块日志文件与内存缓冲统一清空）。**403 授权拒绝**属安全审计，写入防火墙模块日志，不在系统日志/控制台出现
 
 * 数据备份（手动/自动，极限压缩 zip，进度条；备份目录支持设置绝对/相对路径，默认 `../bhxz_backups`）
 
@@ -405,12 +405,7 @@ python scripts/build/package.py
 | `BACKGROUNDS_PER_PAGE`        | 后台背景图片列表每页数量（1–100，接口传参无效）               | `5`                                         |
 | `GAME_ACCOUNTS_PER_PAGE`      | 后台游戏账号申请列表每页数量（1–100，接口传参无效）             | `5`                                         |
 | `LOG_LEVEL`                   | 日志输出等级（DEBUG/INFO/WARNING/ERROR/CRITICAL） | `INFO`                                      |
-| `LOG_CONSOLE_ENABLED`         | 是否将全局日志打印到终端（模块单独日志始终不打印）              | `1`（开启）                                    |
-| `LOG_MODULE_FIREWALL_STORE`   | 是否将防火墙模块日志落盘到 `logs/modules/firewall.log`   | `0`（关闭，仅内存缓冲）                            |
-| `LOG_MODULE_CAPTCHA_STORE`    | 是否将图形验证码模块日志落盘到 `logs/modules/captcha.log`  | `1`（开启）                                    |
-| `LOG_MODULE_EMAIL_CODE_STORE` | 是否将邮箱验证码模块日志落盘到 `logs/modules/email_code.log` | `1`（开启）                                    |
-| `LOG_MODULE_REGISTER_STORE`   | 是否将注册账号模块日志落盘到 `logs/modules/register.log`   | `1`（开启）                                    |
-| `LOG_MODULE_LOGIN_STORE`      | 是否将登录账号模块日志落盘到 `logs/modules/login.log`     | `1`（开启）                                    |
+| `LOG_CONSOLE_ENABLED`         | 是否将全局日志打印到终端（模块单独日志默认不打印，仅在「全局」开关打开时随此开关打印） | `1`（开启）                                    |
 | `FAVICON_ICON`                | 网站图标（可选 compass/mountain/star/heart）      | `compass`                                   |
 | `MAP_URL`                     | 卫星地图地址                                    | `https://map.bhxz.tw.kg`                    |
 | `QQ_GROUP_URL`                | QQ 群链接                                    | 空                                           |
@@ -879,6 +874,8 @@ workspace/
 详见 [docs/CHANGELOG.md](docs/CHANGELOG.md)。
 
 ## 最近更新
+
+* **日志页面支持多来源查看 + 按模块配置日志行为 + 启动自动清理**：日志页面（`/admin/logs`）顶部新增「日志来源」下拉，可切换查看**全局日志 / 严重错误日志 / 任意模块单独日志**（`source=global|fatal|module:<名称>`，全局走 SSE 实时推送，其余来源 3 秒轮询）；新增「日志设置」面板，列出所有已注册模块并各自提供「存储」（落盘到 `logs/modules/<模块名>.log`）与「全局」（并入全局日志：控制台 + `app.log` + SSE）两个开关，实时保存即时生效（`GET/POST /admin/api/logs/modules`）。**模块单独日志的行为不再由模块注册写死**——`register_module_log(name)` 只声明存在，是否落盘、是否并入全局一律由设置 `LOG_MODULE_<模块名>_STORE` / `_GLOBAL` 决定（因此从「系统设置」移除，统一收到日志页）；默认落盘仅保留图形验证码 / 邮箱验证码 / 注册 / 登录，全部默认不并入全局。**每次启动自动清理日志**：`purge_logs_on_startup()` 在应用初始化最开始清空全局日志文件与缓冲、严重错误日志文件、所有 `logs/modules/*.log` 与各模块缓冲，保证每轮启动都从干净状态开始（`core/system/init.py`）。
 
 * **图形验证码 / 邮箱验证码 / 注册账号 / 登录账号改为模块单独日志**：这四类日志不再进入全局日志（控制台 / `logs/app.log` / 全局缓冲 / SSE），改为在各自模块启动时注册独立日志器（`register_module_log`），并用统一入口 `log_module(name, level, event, detail, **kwargs)` 输出到独立内存缓冲并默认落盘到 `logs/modules/{captcha,email_code,register,login}.log`。注册位置：图形验证码 [routes/api/captcha/\_\_init\_\_.py](file:///workspace/routes/api/captcha/__init__.py)、邮箱验证码 [routes/api/email_code/\_\_init\_\_.py](file:///workspace/routes/api/email_code/__init__.py)、注册与登录 [services/user/auth/\_\_init\_\_.py](file:///workspace/services/user/auth/__init__.py)（「找回密码」仍为全局日志）。新增设置项 `LOG_MODULE_CAPTCHA_STORE` / `LOG_MODULE_EMAIL_CODE_STORE` / `LOG_MODULE_REGISTER_STORE` / `LOG_MODULE_LOGIN_STORE`，均默认开启、可在系统设置热切换并即时生效。
 

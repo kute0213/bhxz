@@ -14,10 +14,10 @@ from core.shared.ratelimit import register_limiter, login_limiter, forgot_passwo
 from routes.firewall import auto_ban
 from core.system.logger import log, log_module, register_module_log
 
-# 模块启动时向日志模块注册「注册账号」「登录账号」独立日志：
-# 均不进入全局日志，分别落盘到 logs/modules/register.log 与 logs/modules/login.log
-register_module_log('register', store=True)
-register_module_log('login', store=True)
+# 模块启动时向日志模块注册「注册账号」「登录账号」独立日志
+# （仅声明存在，是否落盘 / 是否并入全局日志由设置决定，可在「日志页面 → 日志设置」修改）
+register_module_log('register')
+register_module_log('login')
 
 
 def _get_ua():

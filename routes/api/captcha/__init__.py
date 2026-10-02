@@ -5,8 +5,8 @@ from core.shared.captcha import captcha_service
 from core.system.logger import log_module, register_module_log
 from core.shared.ip import get_client_ip
 
-# 模块启动时向日志模块注册「图形验证码」独立日志：不进入全局日志，落盘到 logs/modules/captcha.log
-register_module_log('captcha', store=True)
+# 模块启动时向日志模块注册「图形验证码」独立日志（仅声明存在，是否落盘/是否并入全局由设置决定）
+register_module_log('captcha')
 
 captcha_bp = Blueprint('captcha', __name__)
 

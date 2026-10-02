@@ -2,11 +2,12 @@
 
 防火墙日志属于「模块单独日志」：
   - 拥有独立内存缓冲，供后台「防火墙日志」页面查看；
-  - 默认不落盘（``store=False``），是否存储由设置 ``LOG_MODULE_FIREWALL_STORE`` 控制；
-  - 不打印到控制台、不进入全局日志（app.log / 全局缓冲 / SSE）。
+  - 是否落盘、是否并入全局日志**不在注册时写死**，由设置
+    ``LOG_MODULE_FIREWALL_STORE`` / ``LOG_MODULE_FIREWALL_GLOBAL`` 决定
+    （默认都不开启，可在「日志页面 → 日志设置」修改）。
 """
 
 from core.system.logger import register_module_log
 
-# 模块启动注册（幂等）；默认不存储，防火墙日志仅保留在内存缓冲中
-register_module_log('firewall', store=False)
+# 模块启动注册（幂等）；仅声明存在，具体行为由设置决定
+register_module_log('firewall')

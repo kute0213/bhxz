@@ -143,21 +143,23 @@ def do_something(user_id, value, ip_address):
 |------|------|------|------------------|
 | 全局日志 | `log(level, event, detail, **kwargs)` | `logs/app.log` + 内存环形缓冲 + SSE | 受 `LOG_CONSOLE_ENABLED` 控制 |
 | 严重错误日志 | `log_fatal(level, event, detail, **kwargs)` | `logs/fatal.log`（**每次写入覆盖，只保留最后一次**） | 始终打印 |
-| 模块单独日志 | `register_module_log(name)` + `log_module(name, level, event, ...)` | 模块独立内存缓冲 + `logs/modules/<name>.log`（是否落盘由 `LOG_MODULE_<NAME>_STORE` 控制） | **从不打印** |
+| 模块单独日志 | `register_module_log(name)` + `log_module(name, level, event, ...)` | 模块独立内存缓冲 + 可选 `logs/modules/<name>.log`（`LOG_MODULE_<NAME>_STORE`） | 默认不打印；开启「全局」后随 `LOG_CONSOLE_ENABLED` 打印 |
 
 * 等级：`DEBUG < INFO < WARNING < ERROR < CRITICAL`，由 `LOG_LEVEL` 控制；严重错误日志不受等级过滤。
-* 模块单独日志**不进入**全局日志文件、全局缓冲与 SSE，也未注册时自动按默认（不落盘）注册。
-* 模块单独日志**在模块启动时自行注册**（`register_module_log(name, store=...)`），现有使用者与落盘默认值：
+* **每次启动自动清理**：`core/system/init.py` 在初始化最开始调用 `purge_logs_on_startup()`，清空全局日志文件与缓冲、严重错误日志文件、所有 `logs/modules/*.log` 与各模块缓冲。
+* 模块单独日志默认**不进入**全局日志文件、全局缓冲与 SSE；未注册时自动按默认（不落盘、不并入全局）注册。
+* **模块的行为不在注册时写死**：`register_module_log('名称')` 只声明模块存在，是否落盘、是否并入全局日志一律由设置决定（`LOG_MODULE_<名称>_STORE` / `LOG_MODULE_<名称>_GLOBAL`），可在**日志页面 → 日志设置**为任意模块配置（`GET/POST /admin/api/logs/modules`），保存即时生效。两项都关闭时，日志仅存在于模块独立缓冲（后台仍可按来源单独查看）。
+* 模块单独日志**在模块启动时自行注册**，现有使用者：
 
-  | 模块名 | 注册位置 | 覆盖内容 | 默认落盘 |
-  |--------|----------|----------|----------|
-  | `firewall` | `services/firewall/__init__.py` | 防火墙拦截、403 授权拒绝、自动封禁 | 否（`logs/modules/firewall.log` 可选） |
-  | `captcha` | `routes/api/captcha/__init__.py` | 图形验证码生成 / 校验 | 是 |
-  | `email_code` | `routes/api/email_code/__init__.py` | 邮箱验证码发送 / 校验 | 是 |
-  | `register` | `services/user/auth/__init__.py` | 注册账号全流程 | 是 |
-  | `login` | `services/user/auth/__init__.py` | 登录账号全流程 | 是 |
+  | 模块名 | 注册位置 | 覆盖内容 | 默认落盘 | 默认并入全局 |
+  |--------|----------|----------|----------|--------------|
+  | `firewall` | `services/firewall/__init__.py` | 防火墙拦截、403 授权拒绝、自动封禁 | 否 | 否 |
+  | `captcha` | `routes/api/captcha/__init__.py` | 图形验证码生成 / 校验 | 是 | 否 |
+  | `email_code` | `routes/api/email_code/__init__.py` | 邮箱验证码发送 / 校验 | 是 | 否 |
+  | `register` | `services/user/auth/__init__.py` | 注册账号全流程 | 是 | 否 |
+  | `login` | `services/user/auth/__init__.py` | 登录账号全流程 | 是 | 否 |
 
-  新增模块单独日志时，在所属模块 import 处调用 `register_module_log('<名称>', store=<默认是否落盘>)`，并在 `config.py` 的 `SETTINGS_REGISTRY` 增加 `LOG_MODULE_<名称>_STORE` 设置项；日志一律通过 `log_module(name, level, event, detail, **kwargs)` 输出，**不得**再调用全局 `log()`。
+  默认值集中定义在 `core/system/logger.py` 的 `MODULE_LOG_DEFAULTS`（仅作设置缺失时的兜底）。新增模块单独日志时，只需在所属模块 import 处调用 `register_module_log('<名称>')`，日志一律通过 `log_module(name, level, event, detail, **kwargs)` 输出，**不得**调用全局 `log()`；如需自定义默认落盘行为，在 `MODULE_LOG_DEFAULTS` 中补一条即可（**不要**新增 `SETTINGS_REGISTRY` 设置项，模块日志配置统一在日志页面维护）。
 
 ## 新增功能的流程
 

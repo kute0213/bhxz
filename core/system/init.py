@@ -54,6 +54,10 @@ def init_app(app, app_root):
     # 确保工作目录始终是项目根目录
     os.chdir(app_root)
 
+    # 每次启动清空历史日志（全局 / 严重错误 / 模块单独），保证从干净状态开始
+    from core.system.logger import purge_logs_on_startup
+    purge_logs_on_startup()
+
     log('INFO', 'App', '正在初始化数据库...')
     try:
         init_db()

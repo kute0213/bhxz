@@ -10,8 +10,8 @@ from core.system.logger import log_module, register_module_log
 from config import get_config_value
 from core.shared.ip import get_client_ip
 
-# 模块启动时向日志模块注册「邮箱验证码」独立日志：不进入全局日志，落盘到 logs/modules/email_code.log
-register_module_log('email_code', store=True)
+# 模块启动时向日志模块注册「邮箱验证码」独立日志（仅声明存在，是否落盘/是否并入全局由设置决定）
+register_module_log('email_code')
 
 
 email_code_bp = Blueprint('email_code', __name__)

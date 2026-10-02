@@ -11,11 +11,12 @@
    并始终打印到控制台；不受日志等级与控制台开关限制。
 
 3. **模块单独日志**（``register_module_log`` / ``log_module``）
-   模块在启动时向日志模块注册自己的独立日志器，写入模块独立文件
-   ``logs/modules/<模块名>.log``（是否落盘由设置 ``LOG_MODULE_<模块名>_STORE`` 控制），
-   并拥有独立内存缓冲供后台单独查看。
-   **不打印到全局日志、不进入全局日志文件与全局缓冲、不进入 SSE**。
-   当前使用者：防火墙（``firewall``，默认不落盘）。
+   模块在启动时向日志模块注册自己的独立日志器，拥有独立内存缓冲供后台单独查看，
+   可落盘到独立文件 ``logs/modules/<模块名>.log``。
+   模块注册时**只声明存在**，是否落盘、是否并入全局日志一律由设置决定
+   （``LOG_MODULE_<模块名>_STORE`` / ``LOG_MODULE_<模块名>_GLOBAL``），
+   可在「日志页面 → 日志设置」为任意模块配置。
+   两个开关都为关时，日志仅存在于模块独立缓冲，不打印、不落盘、不进全局。
 
 用法::
 
@@ -23,7 +24,7 @@
 
     log('INFO', 'App', '服务器启动成功', port=5000)             # 全局日志
     log_fatal('CRITICAL', 'App', '端口被占用，服务器退出')        # 严重错误日志
-    register_module_log('firewall', store=False)                # 模块启动时注册
+    register_module_log('firewall')                             # 模块启动时注册（幂等）
     log_module('firewall', 'WARNING', 'Security', '自动封禁', ip='1.2.3.4')
 
 日志等级由 ``LOG_LEVEL`` 配置项控制（config.py 默认值，系统设置面板热重载）：
@@ -78,6 +79,25 @@ _monitor_lock = threading.Lock()
 
 # 模块单独日志缓冲上限（每个模块各自独立）
 MAX_MODULE_LOG_ENTRIES = 2000
+
+# 模块单独日志的兜底默认值（仅在对应设置缺失时生效）。
+# 是否落盘、是否并入全局日志一律由设置决定：
+#   LOG_MODULE_<名称>_STORE   是否落盘到 logs/modules/<名称>.log
+#   LOG_MODULE_<名称>_GLOBAL  是否并入全局日志（控制台 + logs/app.log + 全局缓冲 + SSE）
+# 模块注册时不再写死这两项，统一由「日志页面 → 日志设置」配置（支持任意模块）。
+MODULE_LOG_DEFAULTS = {
+    'firewall': {'store': False, 'global': False},
+    'captcha': {'store': True, 'global': False},
+    'email_code': {'store': True, 'global': False},
+    'register': {'store': True, 'global': False},
+    'login': {'store': True, 'global': False},
+}
+
+
+def _module_default(name: str, option: str) -> bool:
+    """取某模块某选项的兜底默认值（默认全 False）。"""
+    return bool(MODULE_LOG_DEFAULTS.get(name, {}).get(option, False))
+
 
 # ---------------------------------------------------------------------------
 # 日志等级缓存
@@ -239,14 +259,21 @@ def _module_store_key(name: str) -> str:
     return f'LOG_MODULE_{_safe_name(name).upper()}_STORE'
 
 
-class ModuleLogger:
-    """模块单独日志器：独立文件（可选落盘）+ 独立内存缓冲，不进入全局日志。"""
+def _module_global_key(name: str) -> str:
+    """模块日志是否并入全局日志的设置键，如 firewall → LOG_MODULE_FIREWALL_GLOBAL。"""
+    return f'LOG_MODULE_{_safe_name(name).upper()}_GLOBAL'
 
-    def __init__(self, name: str, store: bool = False,
+
+class ModuleLogger:
+    """模块单独日志器：独立文件（可选落盘）+ 独立内存缓冲；可选并入全局日志。"""
+
+    def __init__(self, name: str, store: bool = False, global_enabled: bool = False,
                  max_entries: int = MAX_MODULE_LOG_ENTRIES):
         self.name = name
-        self.store = bool(store)          # 是否落盘（可被设置热更新）
-        self._default_store = bool(store)  # 注册时的默认值
+        self.store = bool(store)                    # 是否落盘（设置驱动）
+        self.global_enabled = bool(global_enabled)  # 是否并入全局日志（设置驱动）
+        self._default_store = bool(store)           # 兜底默认值
+        self._default_global = bool(global_enabled)
         self._max_entries = max_entries
         self._buffer = []                 # list[dict]
         self._lock = threading.Lock()
@@ -273,13 +300,31 @@ class ModuleLogger:
             self._buffer.clear()
 
 
-def register_module_log(name: str, *, store: bool = False,
-                        max_entries: int = MAX_MODULE_LOG_ENTRIES) -> ModuleLogger:
+def _resolve_module_options(name: str):
+    """从设置解析模块日志的两个选项（数据库未就绪时回退到兜底默认值）。
+
+    Returns:
+        (store, global_enabled)
+    """
+    default_store = _module_default(name, 'store')
+    default_global = _module_default(name, 'global')
+    try:
+        store = get_config_value(_module_store_key(name), default_store)
+        global_enabled = get_config_value(_module_global_key(name), default_global)
+        return bool(store), bool(global_enabled)
+    except Exception:
+        return default_store, default_global
+
+
+def register_module_log(name: str, *, max_entries: int = MAX_MODULE_LOG_ENTRIES) -> ModuleLogger:
     """模块启动时向日志模块注册一个独立日志器（幂等）。
+
+    模块只声明「存在」——是否落盘、是否并入全局日志**不在注册时写死**，
+    一律由设置 LOG_MODULE_<名称>_STORE / LOG_MODULE_<名称>_GLOBAL 决定
+    （可在「日志页面 → 日志设置」中为任意模块配置）。
 
     Args:
         name: 模块名（如 'firewall'）。
-        store: 默认是否落盘；实际取值会被设置 LOG_MODULE_<NAME>_STORE 覆盖。
         max_entries: 该模块内存缓冲上限。
 
     Returns:
@@ -294,13 +339,9 @@ def register_module_log(name: str, *, store: bool = False,
     if existing is not None:
         return existing
 
-    # 解析是否落盘（数据库未就绪时回退到注册默认值）
-    try:
-        store_cfg = bool(get_config_value(_module_store_key(name), store))
-    except Exception:
-        store_cfg = bool(store)
-
-    logger = ModuleLogger(name, store=store_cfg, max_entries=max_entries)
+    store, global_enabled = _resolve_module_options(name)
+    logger = ModuleLogger(name, store=store, global_enabled=global_enabled,
+                          max_entries=max_entries)
     with _modules_lock:
         return _modules.setdefault(name, logger)
 
@@ -317,21 +358,50 @@ def list_module_loggers():
         return list(_modules.values())
 
 
-def refresh_module_store_flags():
-    """从数据库刷新各模块日志的「是否落盘」开关（数据库就绪或设置更新后调用）。"""
+def get_module_log_configs():
+    """返回所有已注册模块日志的配置（供后台「日志设置」）。"""
+    return [{
+        'name': lg.name,
+        'store': lg.store,
+        'global_enabled': lg.global_enabled,
+        'file_path': lg.file_path,
+    } for lg in list_module_loggers()]
+
+
+def set_module_log_config(name: str, *, store=None, global_enabled=None):
+    """写入某个模块日志的选项（是否落盘 / 是否并入全局日志）并即时生效。
+
+    直接写 settings 表（不依赖 SETTINGS_REGISTRY），随后热刷新，支持任意模块。
+    """
+    name = str(name or '').strip()
+    if not name:
+        raise ValueError('模块日志名称不能为空')
+
+    from services.settings_manager import settings_manager
+    if store is not None:
+        settings_manager.set(_module_store_key(name), bool(store))
+    if global_enabled is not None:
+        settings_manager.set(_module_global_key(name), bool(global_enabled))
+    settings_manager.invalidate_cache()
+
+    refresh_module_log_options()
+    return get_module_logger(name)
+
+
+def refresh_module_log_options():
+    """从设置刷新各模块日志的「是否落盘 / 是否并入全局日志」（数据库就绪或设置更新后调用）。"""
     for logger in list_module_loggers():
         try:
-            logger.store = bool(
-                get_config_value(_module_store_key(logger.name), logger._default_store))
+            logger.store, logger.global_enabled = _resolve_module_options(logger.name)
         except Exception:
-            pass  # 数据库未就绪时保持注册默认值
+            pass  # 数据库未就绪时保持兜底默认值
 
 
 def refresh_log_settings():
-    """一次性刷新全部日志相关设置（等级 + 控制台开关 + 模块落盘开关）。"""
+    """一次性刷新全部日志相关设置（等级 + 控制台开关 + 各模块选项）。"""
     refresh_log_level()
     refresh_console_enabled()
-    refresh_module_store_flags()
+    refresh_module_log_options()
 
 
 # ===========================================================================
@@ -374,13 +444,28 @@ def _emit(category: str, level: str, event: str, detail: str, kwargs: dict,
         logger = module
         if logger is None:
             return
-        if logger.store:
-            _write_line_to(logger.file_path, line)
         entry = _make_entry(now, thread, line, level, event, detail, kwargs)
+
+        # ① 模块自身的独立内存缓冲（始终写入，保证后台可单独查看）
         with logger._lock:
             logger._buffer.append(entry)
             if len(logger._buffer) > logger._max_entries:
                 logger._buffer.pop(0)
+
+        # ② 按需落盘到独立文件
+        if logger.store:
+            _write_line_to(logger.file_path, line)
+
+        # ③ 按需并入全局日志（控制台 + logs/app.log + 全局缓冲 + SSE）
+        if logger.global_enabled:
+            if console and _console_enabled:
+                print(line, flush=True)
+            _write_line_to(LOG_FILE, line)
+            with _log_buffer_lock:
+                _log_buffer.append(entry)
+                if len(_log_buffer) > MAX_LOG_ENTRIES:
+                    _log_buffer.pop(0)
+            _push_to_clients(entry)
         return
 
 
@@ -432,6 +517,49 @@ def clear_fatal_log() -> None:
     try:
         if os.path.exists(FATAL_LOG_FILE):
             os.remove(FATAL_LOG_FILE)
+    except Exception:
+        pass
+
+
+# ---------------------------------------------------------------------------
+# 启动清理 —— 每次启动清空历史日志
+# ---------------------------------------------------------------------------
+
+def _truncate_file(path: str) -> None:
+    """将文件清空（不存在则创建一个空文件）。"""
+    try:
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, 'w', encoding='utf-8'):
+            pass
+    except Exception:
+        pass
+
+
+def purge_logs_on_startup() -> None:
+    """启动时清理全部历史日志，保证每次启动都从干净状态开始。
+
+    清理范围：全局日志文件与全局缓冲、严重错误日志文件、各模块单独日志文件与缓冲。
+    只清历史内容，不影响本轮启动之后的正常写入。
+    """
+    # 全局日志：清空内存缓冲 + 截断日志文件
+    with _log_buffer_lock:
+        _log_buffer.clear()
+    _truncate_file(LOG_FILE)
+
+    # 严重错误日志（覆盖存储，只有最后一次）——直接删除
+    clear_fatal_log()
+
+    # 模块单独日志：清空已注册模块的内存缓冲 + 删除模块日志目录下的 .log 文件
+    for logger in list_module_loggers():
+        logger.clear()
+    try:
+        if os.path.isdir(MODULE_LOG_DIR):
+            for filename in os.listdir(MODULE_LOG_DIR):
+                if filename.endswith('.log'):
+                    try:
+                        os.remove(os.path.join(MODULE_LOG_DIR, filename))
+                    except OSError:
+                        pass
     except Exception:
         pass
 
@@ -516,7 +644,8 @@ FIREWALL_MODULE = 'firewall'
 def log_firewall(level: str, event: str, detail: str = '', **kwargs):
     """防火墙模块单独日志入口（等价 log_module('firewall', ...)）。
 
-    只写入防火墙模块的独立缓冲（默认不落盘），不进入全局日志。
+    只写入防火墙模块的独立缓冲；是否落盘、是否并入全局日志由设置
+    ``LOG_MODULE_FIREWALL_STORE`` / ``LOG_MODULE_FIREWALL_GLOBAL`` 决定（默认均关闭）。
     """
     log_module(FIREWALL_MODULE, level, event, detail, **kwargs)
 
