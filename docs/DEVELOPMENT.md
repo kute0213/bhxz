@@ -147,7 +147,17 @@ def do_something(user_id, value, ip_address):
 
 * 等级：`DEBUG < INFO < WARNING < ERROR < CRITICAL`，由 `LOG_LEVEL` 控制；严重错误日志不受等级过滤。
 * 模块单独日志**不进入**全局日志文件、全局缓冲与 SSE，也未注册时自动按默认（不落盘）注册。
-* 现有模块单独日志使用者：防火墙（在 `services/firewall/__init__.py` 启动时 `register_module_log('firewall', store=False)`，便捷入口 `log_firewall(...)`）。
+* 模块单独日志**在模块启动时自行注册**（`register_module_log(name, store=...)`），现有使用者与落盘默认值：
+
+  | 模块名 | 注册位置 | 覆盖内容 | 默认落盘 |
+  |--------|----------|----------|----------|
+  | `firewall` | `services/firewall/__init__.py` | 防火墙拦截、403 授权拒绝、自动封禁 | 否（`logs/modules/firewall.log` 可选） |
+  | `captcha` | `routes/api/captcha/__init__.py` | 图形验证码生成 / 校验 | 是 |
+  | `email_code` | `routes/api/email_code/__init__.py` | 邮箱验证码发送 / 校验 | 是 |
+  | `register` | `services/user/auth/__init__.py` | 注册账号全流程 | 是 |
+  | `login` | `services/user/auth/__init__.py` | 登录账号全流程 | 是 |
+
+  新增模块单独日志时，在所属模块 import 处调用 `register_module_log('<名称>', store=<默认是否落盘>)`，并在 `config.py` 的 `SETTINGS_REGISTRY` 增加 `LOG_MODULE_<名称>_STORE` 设置项；日志一律通过 `log_module(name, level, event, detail, **kwargs)` 输出，**不得**再调用全局 `log()`。
 
 ## 新增功能的流程
 

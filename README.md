@@ -181,7 +181,7 @@ python scripts/build/package.py
 
 * 系统设置（在线编辑，热重载，含网站图标选择、日志等级、背景图片开关、RCON 配置、MC 游戏文件夹）
 
-* 系统日志（实时查看，SSE 推送，支持等级过滤、自动滚动；按时间顺序从上到下展示，与控制台一致；**仅包含全局日志**）。统一日志系统分为三类：**① 全局日志**（普通运行日志 → 控制台 + `logs/app.log` + 内存缓冲 + SSE）；**② 严重错误日志**（导致服务器退出的报错 → 单独写入 `logs/fatal.log`，**每次写入直接覆盖文件、只保留最后一次**，且始终打印到控制台，不受日志等级/控制台开关限制）；**③ 模块单独日志**（模块启动时向日志模块注册，→ 独立内存缓冲 + `logs/modules/<模块名>.log`（是否落盘由设置控制），**不打印到全局日志/控制台，也不进入全局日志文件与缓冲**；当前使用者为防火墙，默认不落盘）。**403 授权拒绝**属安全审计，写入防火墙模块日志，不在系统日志/控制台出现
+* 系统日志（实时查看，SSE 推送，支持等级过滤、自动滚动；按时间顺序从上到下展示，与控制台一致；**仅包含全局日志**）。统一日志系统分为三类：**① 全局日志**（普通运行日志 → 控制台 + `logs/app.log` + 内存缓冲 + SSE）；**② 严重错误日志**（导致服务器退出的报错 → 单独写入 `logs/fatal.log`，**每次写入直接覆盖文件、只保留最后一次**，且始终打印到控制台，不受日志等级/控制台开关限制）；**③ 模块单独日志**（模块启动时向日志模块注册，→ 独立内存缓冲 + `logs/modules/<模块名>.log`（是否落盘由设置控制），**不打印到全局日志/控制台，也不进入全局日志文件与缓冲**；当前使用者为防火墙（默认不落盘，仅内存缓冲）、图形验证码（`captcha`）、邮箱验证码（`email_code`）、注册账号（`register`）、登录账号（`login`），后四者默认落盘到 `logs/modules/<模块名>.log`，均可由对应 `LOG_MODULE_<模块名>_STORE` 设置关闭为仅内存缓冲）。**403 授权拒绝**属安全审计，写入防火墙模块日志，不在系统日志/控制台出现
 
 * 数据备份（手动/自动，极限压缩 zip，进度条；备份目录支持设置绝对/相对路径，默认 `../bhxz_backups`）
 
@@ -407,6 +407,10 @@ python scripts/build/package.py
 | `LOG_LEVEL`                   | 日志输出等级（DEBUG/INFO/WARNING/ERROR/CRITICAL） | `INFO`                                      |
 | `LOG_CONSOLE_ENABLED`         | 是否将全局日志打印到终端（模块单独日志始终不打印）              | `1`（开启）                                    |
 | `LOG_MODULE_FIREWALL_STORE`   | 是否将防火墙模块日志落盘到 `logs/modules/firewall.log`   | `0`（关闭，仅内存缓冲）                            |
+| `LOG_MODULE_CAPTCHA_STORE`    | 是否将图形验证码模块日志落盘到 `logs/modules/captcha.log`  | `1`（开启）                                    |
+| `LOG_MODULE_EMAIL_CODE_STORE` | 是否将邮箱验证码模块日志落盘到 `logs/modules/email_code.log` | `1`（开启）                                    |
+| `LOG_MODULE_REGISTER_STORE`   | 是否将注册账号模块日志落盘到 `logs/modules/register.log`   | `1`（开启）                                    |
+| `LOG_MODULE_LOGIN_STORE`      | 是否将登录账号模块日志落盘到 `logs/modules/login.log`     | `1`（开启）                                    |
 | `FAVICON_ICON`                | 网站图标（可选 compass/mountain/star/heart）      | `compass`                                   |
 | `MAP_URL`                     | 卫星地图地址                                    | `https://map.bhxz.tw.kg`                    |
 | `QQ_GROUP_URL`                | QQ 群链接                                    | 空                                           |
@@ -875,6 +879,8 @@ workspace/
 详见 [docs/CHANGELOG.md](docs/CHANGELOG.md)。
 
 ## 最近更新
+
+* **图形验证码 / 邮箱验证码 / 注册账号 / 登录账号改为模块单独日志**：这四类日志不再进入全局日志（控制台 / `logs/app.log` / 全局缓冲 / SSE），改为在各自模块启动时注册独立日志器（`register_module_log`），并用统一入口 `log_module(name, level, event, detail, **kwargs)` 输出到独立内存缓冲并默认落盘到 `logs/modules/{captcha,email_code,register,login}.log`。注册位置：图形验证码 [routes/api/captcha/\_\_init\_\_.py](file:///workspace/routes/api/captcha/__init__.py)、邮箱验证码 [routes/api/email_code/\_\_init\_\_.py](file:///workspace/routes/api/email_code/__init__.py)、注册与登录 [services/user/auth/\_\_init\_\_.py](file:///workspace/services/user/auth/__init__.py)（「找回密码」仍为全局日志）。新增设置项 `LOG_MODULE_CAPTCHA_STORE` / `LOG_MODULE_EMAIL_CODE_STORE` / `LOG_MODULE_REGISTER_STORE` / `LOG_MODULE_LOGIN_STORE`，均默认开启、可在系统设置热切换并即时生效。
 
 * **修复系统设置页下拉选择框被裁切 + 开关无法切换**：`templates/admin/settings.html` 动态生成的分类卡片带有 `overflow-hidden`，会把自绘下拉 `.custom-select-dropdown`（绝对定位，`z-index:2000`）裁掉，导致选项被遮挡/看不全；同时开关容器缺少全局开关脚本依赖的 `data-switch` 属性（`base.js` 只对 `[data-switch]` 生效），点击与键盘都无法切换。现移除卡片 `overflow-hidden`（标题栏补 `rounded-t-2xl` 保持顶部圆角），并为开关补上 `data-switch`，下拉可完整展开、开关可正常切换并触发自动保存。
 

@@ -2,8 +2,11 @@
 
 from flask import Blueprint, jsonify, request
 from core.shared.captcha import captcha_service
-from core.system.logger import log
+from core.system.logger import log_module, register_module_log
 from core.shared.ip import get_client_ip
+
+# 模块启动时向日志模块注册「图形验证码」独立日志：不进入全局日志，落盘到 logs/modules/captcha.log
+register_module_log('captcha', store=True)
 
 captcha_bp = Blueprint('captcha', __name__)
 
@@ -31,7 +34,7 @@ def generate():
 
         # 生成验证码，答案存于服务端内存，返回 captcha_id
         captcha_id, _answer, image_data = captcha_service.generate()
-        log('INFO', 'Captcha', '验证码生成成功', captcha_id=captcha_id, ip=get_client_ip())
+        log_module('captcha', 'INFO', 'Captcha', '验证码生成成功', captcha_id=captcha_id, ip=get_client_ip())
         response = jsonify({
             'success': True,
             'image': image_data,
@@ -42,7 +45,7 @@ def generate():
         response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
         return response
     except Exception as e:
-        log('ERROR', 'Captcha', '验证码生成失败', error=str(e), ip=get_client_ip())
+        log_module('captcha', 'ERROR', 'Captcha', '验证码生成失败', error=str(e), ip=get_client_ip())
         return jsonify({
             'success': False,
             'message': f'生成验证码失败: {str(e)}'
@@ -76,8 +79,8 @@ def verify():
         return jsonify({'success': False, 'message': '请输入完整的 4 位验证码'}), 400
 
     if captcha_service.verify(captcha_id, captcha_input):
-        log('INFO', 'Captcha', '验证码校验成功', captcha_id=captcha_id, ip=get_client_ip())
+        log_module('captcha', 'INFO', 'Captcha', '验证码校验成功', captcha_id=captcha_id, ip=get_client_ip())
         return jsonify({'success': True, 'message': '验证成功'})
     else:
-        log('WARNING', 'Captcha', '验证码校验失败', captcha_id=captcha_id, ip=get_client_ip())
+        log_module('captcha', 'WARNING', 'Captcha', '验证码校验失败', captcha_id=captcha_id, ip=get_client_ip())
         return jsonify({'success': False, 'message': '验证码错误或已过期'})

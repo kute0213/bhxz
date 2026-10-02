@@ -340,6 +340,10 @@ SETTINGS_REGISTRY = [
     ('LOG_LEVEL', 'INFO', 'select', '日志输出等级', '控制日志输出级别，可选：DEBUG（调试）, INFO（信息）, WARNING（警告）, ERROR（错误）, CRITICAL（严重）', '日志'),
     ('LOG_CONSOLE_ENABLED', True, 'bool', '打印日志到终端', '开启后日志会同步打印到控制台；关闭后仅在日志文件与后台日志页可见（防火墙等模块单独日志始终不打印到终端）', '日志'),
     ('LOG_MODULE_FIREWALL_STORE', False, 'bool', '存储防火墙模块日志', '开启后将防火墙模块日志写入 logs/modules/firewall.log；关闭则仅保留在内存缓冲（后台「防火墙日志」页可查看）。默认关闭', '日志'),
+    ('LOG_MODULE_CAPTCHA_STORE', True, 'bool', '存储图形验证码模块日志', '开启后将图形验证码模块日志写入 logs/modules/captcha.log；关闭则仅保留内存缓冲。默认开启', '日志'),
+    ('LOG_MODULE_EMAIL_CODE_STORE', True, 'bool', '存储邮箱验证码模块日志', '开启后将邮箱验证码模块日志写入 logs/modules/email_code.log；关闭则仅保留内存缓冲。默认开启', '日志'),
+    ('LOG_MODULE_REGISTER_STORE', True, 'bool', '存储注册账号模块日志', '开启后将注册账号模块日志写入 logs/modules/register.log；关闭则仅保留内存缓冲。默认开启', '日志'),
+    ('LOG_MODULE_LOGIN_STORE', True, 'bool', '存储登录账号模块日志', '开启后将登录账号模块日志写入 logs/modules/login.log；关闭则仅保留内存缓冲。默认开启', '日志'),
 
     # 数据备份
     ('BACKUP_DIR', '../bhxz_backups', 'str', '备份目录', '备份文件存放根目录，支持绝对路径或相对路径（相对路径基于网站根目录解析）。默认 ../bhxz_backups。更改后新备份将写入新目录。', '数据备份'),

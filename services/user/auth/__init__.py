@@ -12,7 +12,12 @@ from core.shared.captcha import captcha_service
 from services.mail import email_code_service
 from core.shared.ratelimit import register_limiter, login_limiter, forgot_password_limiter
 from routes.firewall import auto_ban
-from core.system.logger import log
+from core.system.logger import log, log_module, register_module_log
+
+# 模块启动时向日志模块注册「注册账号」「登录账号」独立日志：
+# 均不进入全局日志，分别落盘到 logs/modules/register.log 与 logs/modules/login.log
+register_module_log('register', store=True)
+register_module_log('login', store=True)
 
 
 def _get_ua():
@@ -39,7 +44,7 @@ def check_username_available(username):
                 (username,)
             ).fetchone()
     except Exception as exc:
-        log('ERROR', 'Register', '用户名可用性查询失败', username=username, error=str(exc))
+        log_module('register', 'ERROR', 'Register', '用户名可用性查询失败', username=username, error=str(exc))
         return False, '暂时无法检查用户名，请稍后重试'
 
     if existing:
@@ -53,41 +58,41 @@ def register(username, password, confirm, verify_code, captcha_input, captcha_id
     """注册用户。返回 (success, data_or_error)。"""
 
     if not register_limiter.check(ip_address or 'unknown', _get_ua()):
-        log('WARNING', 'Register', '注册请求过于频繁，触发自动封禁', ip=ip_address, username=username)
+        log_module('register', 'WARNING', 'Register', '注册请求过于频繁，触发自动封禁', ip=ip_address, username=username)
         auto_ban(ip_address or 'unknown', 'register')
         return False, '注册请求过于频繁，请稍后再试'
 
     from core.shared.validation import validate_website_username, validate_password_strength
     valid_uname, uname_err = validate_website_username(username)
     if not valid_uname:
-        log('WARNING', 'Register', '用户名格式不符合要求', username=username, ip=ip_address)
+        log_module('register', 'WARNING', 'Register', '用户名格式不符合要求', username=username, ip=ip_address)
         return False, uname_err
 
     valid_pwd, pwd_err = validate_password_strength(password)
     if not valid_pwd:
-        log('WARNING', 'Register', '密码不符合要求', username=username, ip=ip_address)
+        log_module('register', 'WARNING', 'Register', '密码不符合要求', username=username, ip=ip_address)
         return False, pwd_err
 
     if password != confirm:
-        log('WARNING', 'Register', '两次密码不一致', username=username, ip=ip_address)
+        log_module('register', 'WARNING', 'Register', '两次密码不一致', username=username, ip=ip_address)
         return False, '两次输入的密码不一致'
 
     if not group_code_verified and verify_code != REGISTER_VERIFY_CODE:
-        log('WARNING', 'Register', '群内验证码错误', username=username, ip=ip_address)
+        log_module('register', 'WARNING', 'Register', '群内验证码错误', username=username, ip=ip_address)
         return False, '群内验证码错误，请在QQ群公告中获取正确验证码'
 
     if email_verify_enabled:
         if not email:
-            log('WARNING', 'Register', '邮箱为空', username=username, ip=ip_address)
+            log_module('register', 'WARNING', 'Register', '邮箱为空', username=username, ip=ip_address)
             return False, '请输入邮箱地址'
         if not email_code:
-            log('WARNING', 'Register', '邮箱验证码为空', username=username, ip=ip_address)
+            log_module('register', 'WARNING', 'Register', '邮箱验证码为空', username=username, ip=ip_address)
             return False, '请输入邮箱验证码'
     else:
         email = ''
 
     if not captcha_service.verify(captcha_id, captcha_input):
-        log('WARNING', 'Register', '图形验证码错误', username=username, ip=ip_address)
+        log_module('register', 'WARNING', 'Register', '图形验证码错误', username=username, ip=ip_address)
         return False, '验证码错误或已过期'
 
     try:
@@ -97,7 +102,7 @@ def register(username, password, confirm, verify_code, captcha_input, captcha_id
                 (username,)
             ).fetchone()
             if existing:
-                log('WARNING', 'Register', '用户名已被注册', username=username, ip=ip_address)
+                log_module('register', 'WARNING', 'Register', '用户名已被注册', username=username, ip=ip_address)
                 return False, '该用户名已被注册'
 
             if email:
@@ -106,12 +111,12 @@ def register(username, password, confirm, verify_code, captcha_input, captcha_id
                     (email,)
                 ).fetchone()
                 if email_exists:
-                    log('WARNING', 'Register', '邮箱已被注册', email=email, ip=ip_address)
+                    log_module('register', 'WARNING', 'Register', '邮箱已被注册', email=email, ip=ip_address)
                     return False, '该邮箱已被其他账号使用，一个邮箱只可注册一个账号'
 
             if email_verify_enabled and not email_code_service.verify(
                     email, email_code, purpose='注册', consume=False):
-                log('WARNING', 'Register', '邮箱验证码错误', username=username, email=email, ip=ip_address)
+                log_module('register', 'WARNING', 'Register', '邮箱验证码错误', username=username, email=email, ip=ip_address)
                 return False, '邮箱验证码错误或已过期'
 
             password_hash = hash_password(password)
@@ -130,7 +135,7 @@ def register(username, password, confirm, verify_code, captcha_input, captcha_id
         if email_verify_enabled:
             email_code_service.consume(email, email_code, purpose='注册')
 
-        log('INFO', 'Register', '注册成功', username=username, user_id=new_user['id'],
+        log_module('register', 'INFO', 'Register', '注册成功', username=username, user_id=new_user['id'],
             email=email, ip=ip_address)
         return True, {
             'user_id': new_user['id'],
@@ -138,7 +143,7 @@ def register(username, password, confirm, verify_code, captcha_input, captcha_id
             'is_admin': bool(new_user['is_admin']),
         }
     except Exception as exc:
-        log('ERROR', 'Register', '注册异常', username=username, ip=ip_address, error=str(exc))
+        log_module('register', 'ERROR', 'Register', '注册异常', username=username, ip=ip_address, error=str(exc))
         return False, '注册失败，请稍后重试'
 
 
@@ -147,12 +152,12 @@ def login(username, password, captcha_input, captcha_id, ip_address,
     """登录验证。返回 (success, data_or_error)。"""
 
     if not login_limiter.check(ip_address or 'unknown', _get_ua()):
-        log('WARNING', 'Login', '登录请求过于频繁，触发自动封禁', ip=ip_address, username=username)
+        log_module('login', 'WARNING', 'Login', '登录请求过于频繁，触发自动封禁', ip=ip_address, username=username)
         auto_ban(ip_address or 'unknown', 'login')
         return False, '登录请求过于频繁，请稍后再试'
 
     if not username or not password:
-        log('WARNING', 'Login', '用户名或密码为空', ip=ip_address)
+        log_module('login', 'WARNING', 'Login', '用户名或密码为空', ip=ip_address)
         return False, '请输入用户名和密码'
 
     should_verify_captcha = captcha_required and \
@@ -160,7 +165,7 @@ def login(username, password, captcha_input, captcha_id, ip_address,
 
     if should_verify_captcha and \
             not captcha_service.verify(captcha_id, captcha_input):
-        log('WARNING', 'Login', '验证码错误', username=username, ip=ip_address)
+        log_module('login', 'WARNING', 'Login', '验证码错误', username=username, ip=ip_address)
         return False, '验证码错误或已过期'
 
     if should_verify_captcha:
@@ -180,7 +185,7 @@ def login(username, password, captcha_input, captcha_id, ip_address,
             if user:
                 locked_until_str = user['locked_until'] or ''
                 if locked_until_str and locked_until_str > now_str:
-                    log('WARNING', 'Login', '账户已被锁定', username=username, user_id=user['id'],
+                    log_module('login', 'WARNING', 'Login', '账户已被锁定', username=username, user_id=user['id'],
                         ip=ip_address, locked_until=locked_until_str)
                     return False, '账户已被锁定，请稍后再试'
 
@@ -197,7 +202,7 @@ def login(username, password, captcha_input, captcha_id, ip_address,
                             (new_attempts, locked_until, user['id'])
                         )
                         conn.commit()
-                        log('WARNING', 'Login', '密码错误次数过多，账户已锁定', username=username,
+                        log_module('login', 'WARNING', 'Login', '密码错误次数过多，账户已锁定', username=username,
                             user_id=user['id'], ip=ip_address,
                             attempts=new_attempts, locked_until=locked_until)
                         return False, '密码错误次数过多，账户已被锁定，请稍后再试'
@@ -208,12 +213,12 @@ def login(username, password, captcha_input, captcha_id, ip_address,
                         )
                         conn.commit()
 
-                    log('WARNING', 'Login', '用户名或密码错误', username=username, user_id=user['id'],
+                    log_module('login', 'WARNING', 'Login', '用户名或密码错误', username=username, user_id=user['id'],
                         ip=ip_address, attempts=new_attempts)
                     return False, '用户名或密码错误'
 
             if not user:
-                log('WARNING', 'Login', '用户名或密码错误', username=username, ip=ip_address)
+                log_module('login', 'WARNING', 'Login', '用户名或密码错误', username=username, ip=ip_address)
                 return False, '用户名或密码错误'
 
             if (user['login_attempts'] or 0) > 0 or (user['locked_until'] or ''):
@@ -231,10 +236,10 @@ def login(username, password, captcha_input, captcha_id, ip_address,
                 conn.commit()
 
     except Exception as exc:
-        log('ERROR', 'Login', '查询用户失败', username=username, ip=ip_address, error=str(exc))
+        log_module('login', 'ERROR', 'Login', '查询用户失败', username=username, ip=ip_address, error=str(exc))
         return False, '登录服务暂时不可用，请稍后再试'
 
-    log('INFO', 'Login', '登录成功', username=username, user_id=user['id'],
+    log_module('login', 'INFO', 'Login', '登录成功', username=username, user_id=user['id'],
         ip=ip_address, is_admin=user['is_admin'])
     return True, {
         'user_id': user['id'],
