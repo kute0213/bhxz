@@ -31,13 +31,13 @@ from core.shared.ip import get_client_ip
 def music_page():
     """大喇叭音频板块：公开音频列表。
 
-    列表数据统一由前端通过 /api/music 获取（首屏 / 搜索 / 「加载更多」），
+    列表数据统一由前端通过 /api/music/list 获取（首屏 / 搜索 / 「加载更多」），
     此处仅渲染页面骨架，不再在服务端注入列表数据。
     """
     return render_page('music/index.html')
 
 
-@main_bp.route('/api/music')
+@main_bp.route('/api/music/list')
 def api_music_list():
     """公开音频搜索/分页列表（JSON，供前端无刷新搜索与「加载更多」）。
 
