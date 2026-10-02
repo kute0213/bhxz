@@ -78,9 +78,11 @@ class BanFilterConnection(HTTPConnection):
 
     def communicate(self):
         ip = self._peer_ip()
-        from services.firewall.service.core import is_banned as _is_banned
-        firewall = None
-        if _is_banned(ip):
+        # 注意：is_banned() 返回 (banned, reason) 元组，必须解包后再判断。
+        # 若直接当布尔用，非空元组恒为真，会把所有连接误判为黑名单而断开。
+        from services.firewall.service.core import is_banned
+        banned, _reason = is_banned(ip)
+        if banned:
             self._drop_banned(ip)
             return False
 

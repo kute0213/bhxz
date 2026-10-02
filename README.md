@@ -88,14 +88,6 @@ python scripts/build/package.py
 │   ├── helpers.py            #   页面渲染辅助（render_page / admin_page）
 │   ├── template_context.py   #   全局模板上下文注入
 │   └── errors.py             #   统一精简错误页渲染（error_simple）
-│   ├── firewall/             #   高性能防火墙（DuckDB 引擎 + 连接级阻断 + DDoS 防护）
-│   │   ├── __init__.py       #   全局单例 + 统一 API
-│   │   ├── database.py       #   DuckDB 引擎
-│   │   ├── service.py        #   封禁/白名单/警告/自动封禁
-│   │   ├── connection_filter.py  # 连接级黑名单拦截 + 强制断开
-│   │   ├── ddos.py           #   DDoS 检测（防误判）
-│   │   ├── monitor.py        #   后台监控
-│   │   └── wrappers.py       #   WSGI 门禁
 ├── services/     # 业务逻辑层（纯 Python，不依赖 Flask）
 │   ├── backup/               #   数据备份（/uploads/ 全量 zip 极限压缩）
 │   ├── discussion/     # 讨论区（帖子/回复/分类）
@@ -111,6 +103,11 @@ python scripts/build/package.py
 │   ├── attachment_service/  #   附件上传/清理
 │   ├── background_service/  #   背景图片业务（WebP 转换 + 响应式变体）
 │   ├── cleanup_service/     #   被驳回内容自动清理
+│   ├── firewall/            #   高性能防火墙（DuckDB 引擎 + 连接级阻断 + DDoS 防护）
+│   │   ├── api_guard.py     #     接口频率限制
+│   │   ├── service/         #     业务层（core / database / monitor）
+│   │   ├── protection/      #     防护策略（spam / content_filter / ddos / file_guard）
+│   │   └── transport/       #     连接层（connection_filter / wrappers）
 │   ├── settings_manager/    #   系统设置管理
 │   └── sitemap_cache/       #   Sitemap 缓存服务
 ├── routes/       # HTTP 路由层（Flask Blueprint）
@@ -121,7 +118,6 @@ python scripts/build/package.py
 │   ├── community/      # 社区留言板
 │   ├── discussion/     # 讨论区（页面+API）
 │   ├── docs/           # 文档页面
-│   ├── firewall/       # 高性能防火墙（DuckDB 引擎 + 连接级阻断 + DDoS 防护 + 可疑访问拦截）
 │   ├── game_accounts/  # 申请账号（页面+API，纯申请注册）
 │   ├── guides/         # 服务器指南（页面+API）
 │   ├── main/           # 主站（登录/注册/设置/音乐）
@@ -203,11 +199,11 @@ python scripts/build/package.py
 
 * 可疑访问拦截（识别 SQL 注入 / XSS / 路径穿越 / 命令注入 / 敏感文件与漏洞端点探测 / 恶意扫描 UA 等攻击特征，命中即拦截并自动封禁来源 IP，总开关与各攻击类型子开关独立配置、封禁时长可配，白名单 IP 不受影响）
 
-* DDoS 攻击防护（高性能防火墙模块 `routes/firewall/`）：独立 DuckDB 数据库存储封禁/白名单/警告/攻击日志，连接级阻断在请求解析前直接强制断开黑名单 TCP 连接（自定义 Cheroot BanFilterConnection），不返回任何 HTTP 响应，客户端收到连接重置/EOF。按检测强度统计单位时间窗口内每个 IP 的请求数（低/中/高三档，检测窗口 10 秒），**防误判机制**：静态资源（`.css/.js/.ico`）、媒体文件（`.mp3/.ts/.m3u8/.webp`）、公共路径（`/static/`、`/music/<id>.mp3`、`/robots.txt`、`/sitemap.xml`）不计入请求计数，音频下载不会误判为 DDoS。超阈值自动封禁来源 IP（首次限时封禁；屡教不改升级永久封禁）。后台监控线程同步黑名单镜像、强制关闭已建立的空闲连接（先注销连接管理器再关闭，线程安全），定时清理过期数据与 VACUUM。检测强度、封禁时长、永久封禁触发次数等可在线热更新，白名单 IP 不受影响。robots.txt 自动添加 Crawl‑delay 与敏感路径 Disallow 规则，防止合法爬虫被误封
+* DDoS 攻击防护（高性能防火墙模块 `services/firewall/`）：独立 DuckDB 数据库存储封禁/白名单/警告/攻击日志，连接级阻断在请求解析前直接强制断开黑名单 TCP 连接（自定义 Cheroot BanFilterConnection），不返回任何 HTTP 响应，客户端收到连接重置/EOF。按检测强度统计单位时间窗口内每个 IP 的请求数（低/中/高三档，检测窗口 10 秒），**防误判机制**：静态资源（`.css/.js/.ico`）、媒体文件（`.mp3/.ts/.m3u8/.webp`）、公共路径（`/static/`、`/music/<id>.mp3`、`/robots.txt`、`/sitemap.xml`）不计入请求计数，音频下载不会误判为 DDoS。超阈值自动封禁来源 IP（首次限时封禁；屡教不改升级永久封禁）。后台监控线程同步黑名单镜像、强制关闭已建立的空闲连接（先注销连接管理器再关闭，线程安全），定时清理过期数据与 VACUUM。检测强度、封禁时长、永久封禁触发次数等可在线热更新，白名单 IP 不受影响。robots.txt 自动添加 Crawl‑delay 与敏感路径 Disallow 规则，防止合法爬虫被误封
 
-* **API 调用限流（`routes/firewall/api_guard.py`）**：所有 API 请求（`/api/` 前缀、带 `X-Requested-With: XMLHttpRequest` 或 `Accept: application/json`）按来源 IP 限流，**默认每分钟 60 次**；超限返回 429 JSON（含 `Retry-After`），计数存于内存缓存，刷新后随滚动窗口恢复；白名单 IP 与本地回环不受限。搜索、列表「加载更多」等前端 API 调用均纳入计数
+* **API 调用限流（`services/firewall/api_guard.py`）**：所有 API 请求（`/api/` 前缀、带 `X-Requested-With: XMLHttpRequest` 或 `Accept: application/json`）按来源 IP 限流，**默认每分钟 60 次**；超限返回 429 JSON（含 `Retry-After`），计数存于内存缓存，刷新后随滚动窗口恢复；白名单 IP 与本地回环不受限。搜索、列表「加载更多」等前端 API 调用均纳入计数
 
-* **上传文件防火墙（`routes/firewall/file_guard.py`）**：统一校验附件 / 音频 / 图片上传——危险扩展名（html/svg/js/php/exe 等）直接拒绝；按上传场景限定扩展名白名单；校验文件头魔数，防止「改名伪装」（如 .html 改名 .png）；纯文本文件做内容嗅探拦截脚本标记。未知类型跳过魔数校验以尽可能不误判，被拦截的上传写入防火墙日志。已接入讨论/帖子附件、大喇叭音频、背景图片三条上传链路
+* **上传文件防火墙（`services/firewall/protection/file_guard.py`）**：统一校验附件 / 音频 / 图片上传——危险扩展名（html/svg/js/php/exe 等）直接拒绝；按上传场景限定扩展名白名单；校验文件头魔数，防止「改名伪装」（如 .html 改名 .png）；纯文本文件做内容嗅探拦截脚本标记。未知类型跳过魔数校验以尽可能不误判，被拦截的上传写入防火墙日志。已接入讨论/帖子附件、大喇叭音频、背景图片三条上传链路
 
 * **防火墙数据库单写入线程**：所有写操作经队列提交给唯一写入线程顺序执行，相邻写操作合并为事务批量提交，彻底避免多线程并发写入 DuckDB 导致的锁表；封禁 / 白名单 / 账号封禁等高频查询走内存缓存（定期同步），查询性能显著提升
 
@@ -727,6 +723,12 @@ workspace/
 │   ├── attachment_service/   #   附件上传/清理
 │   ├── background_service/   #   背景图片业务（WebP 转换 + 响应式变体）
 │   ├── cleanup_service/      #   被驳回内容自动清理（统一定时调度）
+│   ├── firewall/             #   高性能防火墙（DuckDB 引擎 + 连接级阻断 + DDoS 防护）
+│   │   ├── __init__.py       #     公共 API re-export（ban_ip / FirewallServer / firewall 单例等）
+│   │   ├── api_guard.py      #     接口频率限制（每 IP 每分钟）
+│   │   ├── service/          #     业务层：core（封禁/白名单/警告）/ database（DuckDB）/ monitor（后台监控）
+│   │   ├── protection/       #     防护策略：spam（防刷）/ content_filter（内容注入）/ ddos / file_guard
+│   │   └── transport/        #     连接层：connection_filter（连接级拦截）/ wrappers（WSGI 门禁）
 │   ├── settings_manager/     #   系统设置管理
 │   ├── sitemap_cache/        #   Sitemap 缓存服务
 ├── routes/                   # HTTP 路由层
@@ -871,6 +873,8 @@ workspace/
 详见 [docs/CHANGELOG.md](docs/CHANGELOG.md)。
 
 ## 最近更新
+
+* **防火墙从路由层迁至服务层 + 修复「服务器正常启动但完全无法访问」**：防火墙模块由 `routes/firewall/` 迁至 `services/firewall/`（`service/` 业务层、`protection/` 防护策略、`transport/` 连接层；原路径保留 shim 转发，所有外部 `from routes.firewall.xxx import` 零改动）。迁移中 `BanFilterConnection.communicate()` 误把返回 `(banned, reason)` **元组**的 `is_banned(ip)` 当布尔判断——非空元组恒为真，导致**每个 TCP 连接都被判定为黑名单并在请求解析前强制断开**，表现为进程/端口正常监听、日志无任何报错但所有请求均无响应；已改为显式解包 `banned, _reason = is_banned(ip)` 后再判断，实测 `/`、`/favicon`、`/api/stats`、`/login` 全部返回 200。
 
 * **修复 robots.txt 的 Sitemap 域名错误 + 邮件模板路径 + 指南编辑 500**：`/robots.txt` 的 `Sitemap:` 原先写死站点配置域名（`https://bhxz.tw.kg/sitemap.xml`），访问 `https://binhai.cloud/robots.txt` 时地址不一致。`routes/sitemap/__init__.py` 新增 `_robots_base_url()`：优先匹配与当前 `Host` 一致的已配置域名（`SITE_URL` / `SITEMAP_DOMAINS`），未匹配则直接反映当前访问域名，确保 Sitemap 始终指向当前域名下的 `/sitemap.xml`（`services/sitemap_cache` 同步新增 `base_url_for_host()`）。修复邮件发送 `TemplateNotFound: 'verification_code.html'`——`services/mail/templates/__init__.py` 的模板目录层级少算一级，指向了不存在的 `services/templates/emails`，已修正为项目根 `templates/emails`。修复 `/guides/<id>/edit` 提交 500（`NameError: get_client_ip`）——`routes/guides/pages/__init__.py` 漏导入 `get_client_ip`，已补上并全站排查同类漏导入。
 

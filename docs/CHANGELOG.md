@@ -21,6 +21,7 @@
 
 ### 修复
 
+* **服务器正常启动但完全无法访问（元组误判）**：`services/firewall/transport/connection_filter.py` 的 `BanFilterConnection.communicate()` 误把返回 `(banned, reason)` **元组**的 `is_banned(ip)` 当布尔判断——非空元组恒为真，导致**每个 TCP 连接都被判定为黑名单并在请求解析前强制断开**，表现为进程/端口正常监听、日志无任何报错但所有请求均无响应；已改为显式解包 `banned, _reason = is_banned(ip)` 后再判断，实测 `/`、`/login`、`/api/stats` 全部返回 200
 * **所有「查看数量」始终不增加**：① 公共建筑详情页的 `view_count + 1` 原先使用「`conn.execute()` 后直接 `conn.close()`」，**未提交事务**，SQLite 关闭连接时回滚更新，导致浏览量永远不变；改为 `with get_db() as conn:` 上下文（退出自动 `commit()`），不再排除作者/管理员（任何访问都计数），失败时记录 WARN 日志而非静默吞掉，并在同一请求内把展示值自增，浏览量正常累加；② 讨论帖子详情 `get_topic_detail()` 在自增后回写 `topic['view_count']`，页面展示自增后的实时数值，避免「刷新后仍旧数字」的错觉；③ `core/middleware.py` 对 `text/html` 响应下发 `Cache-Control: no-store, no-cache, must-revalidate, max-age=0`，防止浏览器/反向代理缓存旧页面造成的「计数不变」假象（静态资源不受影响）
 * **弹窗关闭后「残影」再次弹出并瞬间关闭**：`base.js` 的 `CustomModal.close()` 原先在遮罩淡出前就清理弹窗卡片的内联 `transform / opacity / transition`，卡片会在遮罩尚未消失时先回到 `opacity:1 / scale(1)`，视觉上「闪」出一个重影再关闭；改为等遮罩淡出（约 320ms）后再清理内联样式，并加 `.active` 判断，避免期间被重新打开时误清
 * **防火墙「封禁详情」弹窗改用统一模板 + 遮罩覆盖页脚**：`templates/admin/firewall.html` 的详情弹窗原先放在 `.page-content` 内，页面入场动画的 `transform` 会让 `position: fixed` 相对该容器定位——遮罩覆盖不到页脚（底部「© 2026 binhai.cloud. 保留所有权利.」不会变暗）且动画异常；现移到 `page_modals` 块，统一走 `modal_shell` 磨砂风格与统一动画
