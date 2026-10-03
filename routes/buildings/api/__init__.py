@@ -64,6 +64,47 @@ def api_buildings_list():
     })
 
 
+@buildings_bp.route('/api/buildings/<int:building_id>/comments')
+def api_building_comments(building_id):
+    """建筑评论分页列表（JSON，供详情页分段加载）。
+
+    参数：
+      page 页码（从 1 开始，默认 1）
+    分页大小由系统设置 BUILDING_COMMENTS_PER_PAGE 控制，前端传参一律忽略。
+    """
+    user = get_current_user()
+    page = request.args.get('page', type=int) or 1
+
+    conn = get_db()
+    try:
+        row = conn.execute(
+            "SELECT id, author_id, status FROM public_buildings WHERE id = ?",
+            (building_id,),
+        ).fetchone()
+    finally:
+        conn.close()
+
+    if not row:
+        return jsonify({'success': False, 'message': '建筑不存在'}), 404
+    # 非审核通过的建筑仅作者本人与管理员可查看评论
+    if row['status'] != 'approved':
+        is_author = bool(user and row['author_id'] == user['id'])
+        is_admin = bool(user and user.get('is_admin'))
+        if not (is_author or is_admin):
+            return jsonify({'success': False, 'message': '该建筑尚未审核通过'}), 404
+
+    items, has_more, total = buildings_service.list_comments(building_id, page=page)
+
+    return jsonify({
+        'success': True,
+        'comments': items,
+        'has_more': has_more,
+        'page': page,
+        'next_page': page + 1,
+        'total': total,
+    })
+
+
 @buildings_bp.route('/buildings/<int:building_id>/favorite', methods=['POST'])
 @login_required
 def toggle_building_favorite(building_id):

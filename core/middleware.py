@@ -3,16 +3,15 @@
 设计原则：所有请求钩子在此模块集中管理，避免在 app.py 中散落。
 """
 
-from flask import request, session, g
+from flask import request
 from werkzeug.exceptions import HTTPException
 
-from core.system.logger import log_firewall
 from core.shared.ip import get_client_ip
 
 # 跳过公共文件服务的路径前缀（这些路径由 Flask 蓝图处理）
 ROUTE_PREFIXES = (
     '/static/', '/admin', '/api/',
-    '/community', '/docs',
+    '/docs',
     '/login', '/register', '/', '/settings',
     '/music', '/sitemap.xml',
 )
@@ -143,13 +142,12 @@ def register_hooks(app, try_serve_public):
         WSGI 门禁（FirewallWSGIWrapper）已拦截绝大多数被封 IP 的请求；
         此钩子仅在 werkzeug 开发服务器等无 WSGI 门禁的环境下生效，
         不渲染页面、不查询额外数据，直接返回空 403 断开连接。
-        防火墙成功拦截返回 403 属预期行为，不写日志（见 log_403_response）。
+        防火墙成功拦截返回 403 属预期行为，不写任何日志。
         """
         from routes.firewall import is_banned
         ip = get_client_ip()
         banned, _reason = is_banned(ip)
         if banned:
-            g.suppress_403_log = True
             return '', 403, {'Connection': 'close'}
 
     @app.before_request
@@ -177,8 +175,7 @@ def register_hooks(app, try_serve_public):
         )
         if attack_type:
             ip = get_client_ip()
-            # 防火墙成功拦截（返回 403）不写日志，仅执行自动封禁
-            g.suppress_403_log = True
+            # 防火墙成功拦截（返回 403）不写日志；实际封禁动作由 ban_suspicious_ip 内部记录
             ban_suspicious_ip(ip, attack_type, matched)
             return render_error_page(
                 403, 'Forbidden',
@@ -246,15 +243,3 @@ def register_hooks(app, try_serve_public):
 
     # HTTPS 强制跳转（在安全标头之后注册，确保跳转优先）
     app.after_request(_ssl_redirect)
-
-    # 统一记录 403 授权失败日志：属安全审计类，写入防火墙独立日志
-    # （不打印到控制台、不进入系统全局日志），避免污染系统日志。
-    # 防火墙拦截（IP 封禁 / 可疑访问）返回的 403 属预期行为，已在钩子中标记
-    # g.suppress_403_log，不记录日志，避免被封 IP 反复请求时刷屏。
-    @app.after_request
-    def log_403_response(response):
-        if response.status_code == 403 and not getattr(g, 'suppress_403_log', False):
-            user = session.get('username', 'anonymous')
-            log_firewall('WARNING', 'Auth', '403 授权拒绝', username=user,
-                ip=get_client_ip(), path=request.path, method=request.method)
-        return response

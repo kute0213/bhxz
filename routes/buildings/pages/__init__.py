@@ -195,24 +195,12 @@ def building_detail(building_id):
             ).fetchone()
             author_reported = r is not None
 
-        # 统计评论数
+        # 统计评论数（评论列表由前端调用 /api/buildings/<id>/comments 分段加载）
         c = conn.execute(
             "SELECT COUNT(*) AS c FROM building_comments WHERE building_id = ?",
             (building_id,),
         ).fetchone()
         building['comment_count'] = c['c'] if c else 0
-
-        # 读取评论（含用户信息）
-        comments = conn.execute(
-            """
-            SELECT bc.*, u.username
-            FROM building_comments bc
-            LEFT JOIN users u ON bc.user_id = u.id
-            WHERE bc.building_id = ?
-            ORDER BY bc.created_at ASC
-            """,
-            (building_id,),
-        ).fetchall()
 
     finally:
         conn.close()
@@ -233,6 +221,5 @@ def building_detail(building_id):
     return render_page(
         'buildings/detail.html',
         building=building,
-        comments=[dict(c) for c in comments],
         author_reported=author_reported,
     )

@@ -86,11 +86,11 @@
             {% endif %}
         </div>
 
-        <!-- 评论区 -->
+        <!-- 评论区（列表由 /api/buildings/<id>/comments 分段加载） -->
         <div class="pixel-card rounded-xl p-6 sm:p-8">
             <h2 class="text-lg font-bold mb-4 flex items-center gap-2">
                 <i data-lucide="message-circle" class="w-5 h-5 text-gold-400"></i>
-                评论 ({{ building.comment_count }})
+                评论 (<span id="comment-count">{{ building.comment_count }}</span>)
             </h2>
 
             {% if user %}
@@ -107,22 +107,18 @@
             {% endif %}
 
             <div id="comments-list" class="space-y-4">
-                {% for c in comments %}
-                <div class="comment-item p-4 bg-black/[0.03] rounded-xl" data-comment-id="{{ c.id }}">
-                    <div class="flex items-center justify-between mb-2">
-                        <div class="flex items-center gap-2">
-                            <span class="text-sm font-medium text-cream/80">{{ c.username or '未知' }}</span>
-                            <span class="text-xs text-cream/40">{{ c.created_at[:16] }}</span>
-                        </div>
-                        {% if user and (user.id == c.user_id or user.id == building.author_id or user.is_admin) %}
-                        <button type="button" class="comment-delete-btn text-xs text-red-400/60 hover:text-red-400 transition-colors" data-comment-id="{{ c.id }}">删除</button>
-                        {% endif %}
-                    </div>
-                    <p class="text-sm text-cream/70 whitespace-pre-wrap">{{ c.content }}</p>
+                <div id="comments-loading" class="text-center py-8 text-cream/40 text-sm">
+                    <i data-lucide="loader-2" class="w-5 h-5 animate-spin inline-block"></i>
+                    <span class="ml-1">评论加载中…</span>
                 </div>
-                {% else %}
-                <div class="text-center py-8 text-cream/40 text-sm">暂无评论，抢个沙发吧～</div>
-                {% endfor %}
+            </div>
+
+            <div class="mt-6 text-center">
+                <button type="button" id="comments-load-more" data-autoload-more
+                        class="btn-secondary px-6 py-2.5 rounded-lg text-sm inline-flex items-center gap-2 hidden">
+                    <i data-lucide="chevron-down" class="w-4 h-4"></i>加载更多
+                </button>
+                <p id="comments-load-end" class="text-xs text-cream/40 mt-2 hidden">没有更多了</p>
             </div>
         </div>
     </div>
@@ -267,11 +263,31 @@ function fallbackCopy(text) {
     }
 })();
 
-// ---- 评论（API 无刷新发布，无需图形验证码） ----
+// ---- 评论区（API 分段加载：首屏 / 加载更多 / 滚动自动加载）+ 发布 / 删除 ----
 (function () {
-    var btn = document.getElementById('comment-submit-btn');
-    var form = document.getElementById('comment-form');
-    if (!btn || !form) return;
+    var list = document.getElementById('comments-list');
+    if (!list) return;
+    var loadingEl = document.getElementById('comments-loading');
+    var loadMoreBtn = document.getElementById('comments-load-more');
+    var loadEndEl = document.getElementById('comments-load-end');
+    var countEl = document.getElementById('comment-count');
+    var API_URL = '/api/buildings/' + BUILDING_ID + '/comments';
+    var state = { page: 0, loading: false, hasMore: false, total: 0, initialized: false };
+
+    function nodeCount() { return list.querySelectorAll('.comment-item').length; }
+
+    function showEmpty() {
+        if (document.getElementById('comments-empty')) return;
+        var div = document.createElement('div');
+        div.id = 'comments-empty';
+        div.className = 'text-center py-8 text-cream/40 text-sm';
+        div.textContent = '暂无评论，抢个沙发吧～';
+        list.appendChild(div);
+    }
+    function removeEmpty() {
+        var el = document.getElementById('comments-empty');
+        if (el) el.remove();
+    }
 
     function buildCommentNode(comment) {
         var canDelete = CURRENT_USER_ID && (
@@ -294,13 +310,74 @@ function fallbackCopy(text) {
         return div;
     }
 
-    btn.addEventListener('click', function (e) {
+    function refreshIcons() {
+        if (typeof lucide !== 'undefined' && lucide.createIcons) {
+            try { lucide.createIcons(); } catch (_) {}
+        }
+    }
+
+    function setLoadMoreLoading(loading) {
+        if (!loadMoreBtn) return;
+        loadMoreBtn.innerHTML = loading
+            ? '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i>加载中…'
+            : '<i data-lucide="chevron-down" class="w-4 h-4"></i>加载更多';
+        refreshIcons();
+    }
+
+    function updateFooter() {
+        if (nodeCount()) removeEmpty(); else showEmpty();
+        if (loadMoreBtn) loadMoreBtn.classList.toggle('hidden', !state.hasMore);
+        if (loadEndEl) loadEndEl.classList.toggle('hidden', !(state.initialized && !state.hasMore && nodeCount() > 0));
+        if (countEl) countEl.textContent = state.total;
+    }
+
+    function fetchPage(page, append) {
+        if (state.loading) return;
+        state.loading = true;
+        if (append) setLoadMoreLoading(true);
+        fetch(API_URL + '?page=' + page, {
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) {
+            if (!data.success) { bToast(data.message || '评论加载失败', 'error'); return; }
+            state.initialized = true;
+            state.page = page;
+            state.hasMore = !!data.has_more;
+            state.total = data.total || 0;
+            if (!append) {
+                list.querySelectorAll('.comment-item').forEach(function (n) { n.remove(); });
+                removeEmpty();
+            }
+            (data.comments || []).forEach(function (c) { list.appendChild(buildCommentNode(c)); });
+            refreshIcons();
+            updateFooter();
+        })
+        .catch(function () { bToast('评论加载失败，请重试', 'error'); })
+        .finally(function () {
+            state.loading = false;
+            if (loadingEl) { loadingEl.remove(); loadingEl = null; }
+            setLoadMoreLoading(false);
+        });
+    }
+
+    fetchPage(1, false);
+
+    if (loadMoreBtn) loadMoreBtn.addEventListener('click', function () {
+        if (!state.hasMore) return;
+        fetchPage(state.page + 1, true);
+    });
+
+    // 发布评论（API 无刷新，无需图形验证码）
+    var submitBtn = document.getElementById('comment-submit-btn');
+    if (submitBtn) submitBtn.addEventListener('click', function (e) {
         e.preventDefault();
-        var content = document.getElementById('comment-input').value.trim();
+        var input = document.getElementById('comment-input');
+        var content = input.value.trim();
         if (!content) { bToast('评论内容不能为空', 'error'); return; }
-        btn.disabled = true;
-        var original = btn.textContent;
-        btn.textContent = '发布中...';
+        submitBtn.disabled = true;
+        var original = submitBtn.textContent;
+        submitBtn.textContent = '发布中...';
         var formData = new FormData();
         formData.append('content', content);
         fetch('/buildings/' + BUILDING_ID + '/comment', {
@@ -309,46 +386,52 @@ function fallbackCopy(text) {
         .then(function (r) { return r.json(); })
         .then(function (data) {
             if (!data.success) { bToast(data.message || '发布失败', 'error'); return; }
-            var list = document.getElementById('comments-list');
-            var empty = list.querySelector('.text-center.py-8');
-            if (empty) empty.remove();
+            state.initialized = true;
+            removeEmpty();
             list.insertBefore(buildCommentNode(data.comment), list.firstChild);
-            document.getElementById('comment-input').value = '';
+            state.total += 1;
+            if (countEl) countEl.textContent = state.total;
+            updateFooter();
+            input.value = '';
             bToast(data.message || '评论已发布');
         })
         .catch(function () { bToast('评论失败，请重试', 'error'); })
-        .finally(function () { btn.disabled = false; btn.textContent = original; });
+        .finally(function () { submitBtn.disabled = false; submitBtn.textContent = original; });
+    });
+
+    // 删除评论（网页内弹窗确认，API 无刷新）
+    list.addEventListener('click', function (e) {
+        var btn = e.target.closest('.comment-delete-btn');
+        if (!btn) return;
+        var commentId = btn.getAttribute('data-comment-id');
+        CustomModal.confirm('确定删除此评论？', {
+            title: '删除评论',
+            trigger: btn,
+            callback: function (ok) {
+                if (!ok) return;
+                fetch('/buildings/comment/' + commentId + '/delete', {
+                    method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (!data.success) { bToast(data.message, 'error'); return; }
+                    var el = list.querySelector('.comment-item[data-comment-id="' + commentId + '"]');
+                    if (el) {
+                        el.style.transition = 'opacity 0.25s';
+                        el.style.opacity = '0';
+                        setTimeout(function () { el.remove(); updateFooter(); }, 250);
+                    } else {
+                        updateFooter();
+                    }
+                    if (state.total > 0) state.total -= 1;
+                    if (countEl) countEl.textContent = state.total;
+                    bToast('评论已删除');
+                })
+                .catch(function () { bToast('删除失败', 'error'); });
+            }
+        });
     });
 })();
-
-// ---- 删除评论（网页内弹窗确认，API 无刷新） ----
-document.getElementById('comments-list') && document.getElementById('comments-list').addEventListener('click', function (e) {
-    var btn = e.target.closest('.comment-delete-btn');
-    if (!btn) return;
-    var commentId = btn.getAttribute('data-comment-id');
-    CustomModal.confirm('确定删除此评论？', {
-        title: '删除评论',
-        trigger: btn,
-        callback: function (ok) {
-            if (!ok) return;
-            fetch('/buildings/comment/' + commentId + '/delete', {
-                method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }
-            })
-            .then(function (r) { return r.json(); })
-            .then(function (data) {
-                if (!data.success) { bToast(data.message, 'error'); return; }
-                var el = document.querySelector('.comment-item[data-comment-id="' + commentId + '"]');
-                if (el) {
-                    el.style.transition = 'opacity 0.25s';
-                    el.style.opacity = '0';
-                    setTimeout(function () { el.remove(); }, 250);
-                }
-                bToast('评论已删除');
-            })
-            .catch(function () { bToast('删除失败', 'error'); });
-        }
-    });
-});
 
 // ---- 举报 ----
 document.getElementById('report-btn') && document.getElementById('report-btn').addEventListener('click', function() {

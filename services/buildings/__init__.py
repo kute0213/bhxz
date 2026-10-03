@@ -19,6 +19,11 @@ def _page_size() -> int:
     return get_page_size('BUILDINGS_PER_PAGE', 5)
 
 
+def _comment_page_size() -> int:
+    """评论每页数量，由系统设置 BUILDING_COMMENTS_PER_PAGE 控制（API 无法覆盖）。"""
+    return get_page_size('BUILDING_COMMENTS_PER_PAGE', 10)
+
+
 def _now():
     return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
@@ -206,6 +211,61 @@ def get_building(building_id):
             (building_id,),
         ).fetchone()
         return dict(row) if row else None
+
+
+# ---------------------------------------------------------------------------
+# 评论
+# ---------------------------------------------------------------------------
+
+
+def count_comments(building_id) -> int:
+    """统计某建筑的评论总数。"""
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT COUNT(*) AS c FROM building_comments WHERE building_id = ?",
+            (building_id,),
+        ).fetchone()
+        return row['c'] if row else 0
+
+
+def list_comments(building_id, page=1, page_size=None):
+    """分页查询建筑评论（按时间倒序，最新在前，与列表页保持一致）。
+
+    Args:
+        building_id: 建筑 ID
+        page: 页码（从 1 开始）
+        page_size: 每页条数；为 None 时使用系统设置 BUILDING_COMMENTS_PER_PAGE
+
+    Returns:
+        (items, has_more, total)：items 为评论 dict 列表（含 username），
+        has_more 表示是否还有下一页，total 为评论总数。
+    """
+    page = max(1, int(page or 1))
+    page_size = _comment_page_size() if page_size is None else max(1, min(int(page_size), 100))
+    offset = (page - 1) * page_size
+
+    with get_db() as conn:
+        total_row = conn.execute(
+            "SELECT COUNT(*) AS c FROM building_comments WHERE building_id = ?",
+            (building_id,),
+        ).fetchone()
+        total = total_row['c'] if total_row else 0
+
+        rows = conn.execute(
+            """
+            SELECT bc.*, u.username
+            FROM building_comments bc
+            LEFT JOIN users u ON bc.user_id = u.id
+            WHERE bc.building_id = ?
+            ORDER BY bc.created_at DESC, bc.id DESC
+            LIMIT ? OFFSET ?
+            """,
+            (building_id, page_size + 1, offset),
+        ).fetchall()
+
+    items = [dict(r) for r in rows]
+    has_more = len(items) > page_size
+    return items[:page_size], has_more, total
 
 
 # ---------------------------------------------------------------------------

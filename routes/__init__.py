@@ -12,22 +12,20 @@ def register_blueprints(app: Flask):
     各蓝图请在此模块导入注册，不要直接修改 app.py。
     """
     from routes.main import main_bp
-    from routes.community import community_bp
     from routes.admin import admin_bp
     from routes.api import api_bp, captcha_bp, email_code_bp
     from routes.docs import docs_bp
     from routes.guides import guides_bp
     from routes.buildings import buildings_bp
-    from routes.discussion import discussion_bp
     from routes.backgrounds import backgrounds_bp
     from routes.public import public_bp, try_serve_public
     from routes.sitemap import sitemap_bp
     from routes.game_accounts import account_apply_bp
 
     blueprints = [
-        public_bp, main_bp, community_bp, admin_bp,
+        public_bp, main_bp, admin_bp,
         api_bp, captcha_bp, email_code_bp,
-        docs_bp, guides_bp, buildings_bp, discussion_bp,
+        docs_bp, guides_bp, buildings_bp,
         backgrounds_bp, sitemap_bp, account_apply_bp,
     ]
     for bp in blueprints:

@@ -43,7 +43,7 @@
                 </div>
                 <div id="pending-empty" class="text-cream/50 text-sm text-center py-6{% if pending_apps %} hidden{% endif %}">暂无待审批的注册申请</div>
                 <div class="mt-4 text-center">
-                    <button type="button" id="pending-more" class="btn-secondary px-5 py-2 rounded-lg text-xs{% if pending_apps|length >= pending_total %} hidden{% endif %}">加载更多</button>
+                    <button type="button" id="pending-more" data-autoload-more class="btn-secondary px-5 py-2 rounded-lg text-xs{% if pending_apps|length >= pending_total %} hidden{% endif %}">加载更多</button>
                 </div>
             </div>
         </div>
@@ -81,7 +81,7 @@
                     </table>
                 </div>
                 <div class="mt-4 text-center">
-                    <button type="button" id="history-more" class="btn-secondary px-5 py-2 rounded-lg text-xs{% if history_apps|length >= history_total %} hidden{% endif %}">加载更多</button>
+                    <button type="button" id="history-more" data-autoload-more class="btn-secondary px-5 py-2 rounded-lg text-xs{% if history_apps|length >= history_total %} hidden{% endif %}">加载更多</button>
                 </div>
             </div>
         </div>

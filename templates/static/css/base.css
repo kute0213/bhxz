@@ -1246,7 +1246,7 @@ pre::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.24); }
 .hover\:bg-cream\/20:hover { background: rgba(15,23,42,0.12) !important; }
 
 /* ============================================
-   Markdown 正文（讨论区/指南）：代码块深色卡片保证可读性
+   Markdown 正文（指南）：代码块深色卡片保证可读性
    ============================================ */
 .prose pre {
     background: #101826 !important;

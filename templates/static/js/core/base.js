@@ -1367,3 +1367,59 @@ document.addEventListener('click', function (e) {
     }
     closeSelect(cs);
 });
+
+/* ============================================================
+   分段列表「滚动到底部自动加载」
+   任何带 [data-autoload-more] 的「加载更多」按钮，进入视口即自动点击一次
+   （按钮隐藏 / 禁用时不会触发；加载后新内容把按钮推离视口，
+   再次滚动到底会继续加载，因此始终只自动加载一次后面的内容）
+   ============================================================ */
+(function initAutoLoadMore() {
+    if (typeof IntersectionObserver === 'undefined') return;
+
+    function clickIfReady(btn) {
+        if (!btn || btn.disabled) return;
+        if (btn.classList.contains('hidden') || btn.offsetParent === null) return;
+        var now = Date.now();
+        // 600ms 内不重复自动触发，避免加载时布局抖动导致的连点
+        if (btn.__autoloadTs && now - btn.__autoloadTs < 600) return;
+        btn.__autoloadTs = now;
+        btn.click();
+    }
+
+    var observer = new IntersectionObserver(function (entries) {
+        entries.forEach(function (entry) {
+            if (entry.isIntersecting) clickIfReady(entry.target);
+        });
+    }, { rootMargin: '150px 0px' });
+
+    function observeOne(btn) {
+        if (!btn || btn.dataset.autoloadReady === '1') return;
+        btn.dataset.autoloadReady = '1';
+        observer.observe(btn);
+    }
+
+    function observe(root) {
+        if (!root) return;
+        if (root.matches && root.matches('[data-autoload-more]')) observeOne(root);
+        if (root.querySelectorAll) root.querySelectorAll('[data-autoload-more]').forEach(observeOne);
+    }
+
+    function start() {
+        observe(document.body || document);
+        var mo = new MutationObserver(function (mutations) {
+            mutations.forEach(function (m) {
+                m.addedNodes.forEach(function (node) {
+                    if (node.nodeType === 1) observe(node);
+                });
+            });
+        });
+        if (document.body) mo.observe(document.body, { childList: true, subtree: true });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', start);
+    } else {
+        start();
+    }
+})();

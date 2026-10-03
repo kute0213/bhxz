@@ -140,45 +140,6 @@ def init_db():
                 created_at TEXT NOT NULL
             )
         '''),
-        # 讨论分类表
-        ('discussion_categories', '''
-            CREATE TABLE IF NOT EXISTS discussion_categories (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                name TEXT NOT NULL,
-                slug TEXT UNIQUE NOT NULL,
-                sort_order INTEGER DEFAULT 0,
-                created_at TEXT NOT NULL
-            )
-        '''),
-        # 讨论帖子表
-        ('discussion_topics', '''
-            CREATE TABLE IF NOT EXISTS discussion_topics (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                user_id INTEGER NOT NULL,
-                category_id INTEGER,
-                title TEXT NOT NULL,
-                content TEXT NOT NULL DEFAULT '',
-                tags TEXT DEFAULT '',
-                attachment TEXT,
-                is_pinned INTEGER DEFAULT 0,
-                is_locked INTEGER DEFAULT 0,
-                view_count INTEGER DEFAULT 0,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
-            )
-        '''),
-        # 讨论回复表
-        ('discussion_replies', '''
-            CREATE TABLE IF NOT EXISTS discussion_replies (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                topic_id INTEGER NOT NULL,
-                user_id INTEGER NOT NULL,
-                content TEXT NOT NULL,
-                attachment TEXT,
-                created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
-            )
-        '''),
         # 大喇叭音频表（上传音频转码为 HLS，供游戏内大喇叭播放）
         # status: 0=私有 1=待审核 2=已公开（3=已驳回，仅遗留老数据保留，新驳回直接转为私有）
         ('music', '''
@@ -488,5 +449,15 @@ def init_db():
         log('INFO', 'DB', '已删除废弃的游戏账号绑定表 game_account_bindings')
     except Exception as e:
         log('ERROR', 'DB', f'删除 game_account_bindings 表失败: {e}')
+
+    # ---- 彻底删除讨论区功能：移除旧讨论表 ----
+    # 讨论区已整体移除，旧库遗留的分类 / 帖子 / 回复表不再使用，直接删除。
+    try:
+        for table in ('discussion_categories', 'discussion_topics', 'discussion_replies'):
+            cursor.execute(f"DROP TABLE IF EXISTS {table}")
+        conn.commit()
+        log('INFO', 'DB', '已删除废弃的讨论区表')
+    except Exception as e:
+        log('ERROR', 'DB', f'删除讨论区表失败: {e}')
 
     conn.close()

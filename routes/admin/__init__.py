@@ -20,7 +20,6 @@ import routes.admin.guide_bans       # noqa: E402,F401
 import routes.admin.backup           # noqa: E402,F401
 import routes.admin.settings         # noqa: E402,F401
 import routes.admin.broadcast        # noqa: E402,F401
-import routes.admin.discussion       # noqa: E402,F401
 import routes.admin.music            # noqa: E402,F401
 import routes.admin.backgrounds      # noqa: E402,F401
 import routes.admin.logs             # noqa: E402,F401

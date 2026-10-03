@@ -138,6 +138,7 @@
              {% if bans|length >= bans_total %}style="display:none;"{% endif %}>
           <button id="ban-load-more-btn"
                   data-page="1"
+                  data-autoload-more
                   class="btn-primary px-6 py-2 rounded-lg text-sm inline-flex items-center gap-2"
                   onclick="loadMoreBans()">
             <i data-lucide="chevron-down" class="w-4 h-4"></i>
@@ -380,7 +381,7 @@
                 <i data-lucide="file-code" class="w-4 h-4 text-rose-400"></i>
                 发布内容注入检测
               </h3>
-              <p class="text-xs text-cream/50 mb-3">检测用户发布的讨论/指南等包含 XSS/HTML/JS 注入的恶意代码。首次拦截仅拒绝发布，累计 2 次后自动封禁账号</p>
+              <p class="text-xs text-cream/50 mb-3">检测用户发布的指南/建筑等包含 XSS/HTML/JS 注入的恶意代码。首次拦截仅拒绝发布，累计 2 次后自动封禁账号</p>
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label class="flex items-center gap-2 cursor-pointer">
@@ -419,26 +420,6 @@
                     <input type="number" id="cfg-SPAM_LIMIT_BUILDING_COMMENT" value="{{ spam_limit_building_comment }}" class="input-field w-16 px-2 py-1.5 rounded text-center text-sm">
                     <span class="text-xs text-cream/50">条 /</span>
                     <input type="number" id="cfg-SPAM_LIMIT_BUILDING_COMMENT_WINDOW" value="{{ spam_limit_building_comment_window }}" class="input-field w-16 px-2 py-1.5 rounded text-center text-sm">
-                    <span class="text-xs text-cream/50">秒</span>
-                  </div>
-                </div>
-                <div class="p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
-                  <label class="block text-xs text-cream/70 mb-1 font-medium">讨论话题</label>
-                  <div class="flex items-center gap-2">
-                    <span class="text-xs text-cream/50">限</span>
-                    <input type="number" id="cfg-SPAM_LIMIT_DISCUSSION_TOPIC" value="{{ spam_limit_discussion_topic }}" class="input-field w-16 px-2 py-1.5 rounded text-center text-sm">
-                    <span class="text-xs text-cream/50">条 /</span>
-                    <input type="number" id="cfg-SPAM_LIMIT_DISCUSSION_TOPIC_WINDOW" value="{{ spam_limit_discussion_topic_window }}" class="input-field w-16 px-2 py-1.5 rounded text-center text-sm">
-                    <span class="text-xs text-cream/50">秒</span>
-                  </div>
-                </div>
-                <div class="p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
-                  <label class="block text-xs text-cream/70 mb-1 font-medium">讨论回复</label>
-                  <div class="flex items-center gap-2">
-                    <span class="text-xs text-cream/50">限</span>
-                    <input type="number" id="cfg-SPAM_LIMIT_DISCUSSION_REPLY" value="{{ spam_limit_discussion_reply }}" class="input-field w-16 px-2 py-1.5 rounded text-center text-sm">
-                    <span class="text-xs text-cream/50">条 /</span>
-                    <input type="number" id="cfg-SPAM_LIMIT_DISCUSSION_REPLY_WINDOW" value="{{ spam_limit_discussion_reply_window }}" class="input-field w-16 px-2 py-1.5 rounded text-center text-sm">
                     <span class="text-xs text-cream/50">秒</span>
                   </div>
                 </div>

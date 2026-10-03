@@ -68,7 +68,7 @@
                 {{ empty_state('暂无待审核的公开申请', 'check-circle') }}
             </div>
             <div class="mt-4 text-center">
-                <button type="button" data-pending-more class="btn-secondary px-5 py-2 rounded-lg text-xs{% if pending_musics|length >= pending_total %} hidden{% endif %}">加载更多</button>
+                <button type="button" data-pending-more data-autoload-more class="btn-secondary px-5 py-2 rounded-lg text-xs{% if pending_musics|length >= pending_total %} hidden{% endif %}">加载更多</button>
             </div>
         </div>
 
@@ -113,7 +113,7 @@
             {{ empty_state('暂无音频', 'music') }}
         </div>
         <div class="mt-4 text-center">
-            <button type="button" data-music-more class="btn-secondary px-5 py-2 rounded-lg text-xs{% if musics|length >= musics_total %} hidden{% endif %}">加载更多</button>
+            <button type="button" data-music-more data-autoload-more class="btn-secondary px-5 py-2 rounded-lg text-xs{% if musics|length >= musics_total %} hidden{% endif %}">加载更多</button>
         </div>
     </div>
 </section>

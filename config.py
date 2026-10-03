@@ -9,19 +9,13 @@ load_dotenv(os.path.join(APP_ROOT, '.env'), override=False)
 
 DB_PATH = os.path.join(APP_ROOT, 'uploads', 'db', 'site.db')
 UPLOAD_DIR = os.path.join(APP_ROOT, 'uploads')
-UPLOAD_ATTACHMENTS_DIR = os.path.join(UPLOAD_DIR, 'attachments')
-UPLOAD_COMMUNITY_DIR = os.path.join(UPLOAD_DIR, 'community')
 UPLOAD_SITEMAP_DIR = os.path.join(UPLOAD_DIR, 'sitemap')
 UPLOAD_MUSIC_DIR = os.path.join(UPLOAD_DIR, 'music')
 UPLOAD_BACKGROUNDS_DIR = os.path.join(UPLOAD_DIR, 'backgrounds')
-ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'pdf', 'txt', 'zip', 'rar', '7z', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'mp4', 'mp3', 'wav'}
 
 # 大喇叭音频：允许上传的音频格式（上传后由 ffmpeg 转码为 HLS/m3u8）
 MUSIC_ALLOWED_EXTENSIONS = {'mp3', 'wav', 'ogg', 'm4a', 'flac', 'mp4'}
 MAX_CONTENT_LENGTH = 100 * 1024 * 1024
-
-# 附件上传大小限制（字节），默认 10MB
-ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024
 
 # 音频上传大小限制（字节），默认 100MB
 AUDIO_MAX_BYTES = 100 * 1024 * 1024
@@ -159,7 +153,7 @@ AUTO_BAN_PERMANENT_AFTER = int(os.environ.get('AUTO_BAN_PERMANENT_AFTER', '0'))
 # 违规记录的有效时间窗口（小时），超过后重新累计
 AUTO_BAN_OFFENSE_WINDOW_HOURS = int(os.environ.get('AUTO_BAN_OFFENSE_WINDOW_HOURS', '24'))
 
-# 发布内容注入检测总开关：开启后，用户发布的讨论/指南等包含 XSS/HTML/JS 注入的内容将被拦截
+# 发布内容注入检测总开关：开启后，用户发布的指南/建筑等包含 XSS/HTML/JS 注入的内容将被拦截
 # 首次拦截仅拒绝发布，累计 2 次后自动封禁账号；可在管理后台 → 系统设置中热更新
 CONTENT_INJECTION_BAN_ENABLED = os.environ.get('CONTENT_INJECTION_BAN_ENABLED', '1').lower() in ('1', 'true', 'yes', 'on')
 
@@ -272,8 +266,6 @@ WORKER_THREADS = 4
 
 os.makedirs(os.path.join(UPLOAD_DIR, 'db'), exist_ok=True)
 os.makedirs(UPLOAD_DIR, exist_ok=True)
-os.makedirs(UPLOAD_ATTACHMENTS_DIR, exist_ok=True)
-os.makedirs(UPLOAD_COMMUNITY_DIR, exist_ok=True)
 os.makedirs(UPLOAD_SITEMAP_DIR, exist_ok=True)
 os.makedirs(UPLOAD_MUSIC_DIR, exist_ok=True)
 os.makedirs(UPLOAD_BACKGROUNDS_DIR, exist_ok=True)
@@ -281,10 +273,6 @@ os.makedirs(UPLOADS_BACKUP_DIR, exist_ok=True)
 # 注：自定义备份目录（相对/绝对）在运行时由 services/backup/manager 首次使用时创建，
 # 不在导入期调用 get_config_value（其定义位于本文件末尾，避免导入期 NameError）。
 
-
-# ---------------------------------------------------------------------------
-# 讨论区配置
-# ---------------------------------------------------------------------------
 
 # ---------------------------------------------------------------------------
 # 列表分页配置
@@ -295,17 +283,14 @@ os.makedirs(UPLOADS_BACKUP_DIR, exist_ok=True)
 # 公共建筑列表每页数量
 BUILDINGS_PER_PAGE = 5
 
+# 公共建筑评论每页数量
+BUILDING_COMMENTS_PER_PAGE = 10
+
 # 大喇叭音频列表每页数量
 MUSIC_PER_PAGE = 5
 
 # 服务器指南列表每页数量
 GUIDES_PER_PAGE = 5
-
-# 讨论帖子列表每页数量
-DISCUSSION_TOPICS_PER_PAGE = 5
-
-# 讨论区回复每页加载数量
-REPLIES_PER_PAGE = 5
 
 # 后台背景图片列表每页数量
 BACKGROUNDS_PER_PAGE = 5
@@ -371,7 +356,7 @@ SETTINGS_REGISTRY = [
     ('AUTO_BAN_FORGOT_PASSWORD_ENABLED', True, 'bool', '找回密码异常自动封禁', '找回密码请求过于频繁时自动封禁该 IP', 'IP 封禁'),
 
     # 发布内容注入检测（发布内容包含 XSS/HTML/JS 注入时拦截，累计 2 次自动封禁账号）
-    ('CONTENT_INJECTION_BAN_ENABLED', True, 'bool', '发布内容注入拦截（总开关）', '开启后，用户发布的讨论/指南等内容中包含 XSS/HTML/JS 注入的将被拦截。首次拦截仅拒绝发布，累计 2 次后自动封禁账号', '内容注入检测'),
+    ('CONTENT_INJECTION_BAN_ENABLED', True, 'bool', '发布内容注入拦截（总开关）', '开启后，用户发布的指南/建筑等内容中包含 XSS/HTML/JS 注入的将被拦截。首次拦截仅拒绝发布，累计 2 次后自动封禁账号', '内容注入检测'),
     ('CONTENT_INJECTION_BAN_DURATION_MINUTES', 30, 'int', '内容注入封禁时长（分钟）', '累计 2 次内容注入后自动封禁账号的持续时长，到期自动解除；0 表示永久封禁', '内容注入检测'),
 
     # 可疑访问拦截（命中攻击特征自动封禁 IP，白名单见 config.py 的 FIREWALL_WHITELIST）
@@ -407,15 +392,11 @@ SETTINGS_REGISTRY = [
     ('SMTP_PASSWORD', '', 'str', 'SMTP 密码/授权码', '邮箱授权码（非登录密码）', '邮件配置'),
     ('SMTP_SENDER_NAME', '滨海小镇', 'str', '发件人显示名称', '收件人看到的发件人名称', '邮件配置'),
 
-    # 讨论区
-    ('DISCUSSION_REFRESH_INTERVAL', 5, 'int', '回复实时刷新间隔（秒）', '讨论区回复列表自动刷新频率，仅后台可修改', '讨论区配置'),
-
     # 列表分页（各列表每次加载条数，仅管理员可改；用户调用 API 传入的参数一律忽略）
     ('BUILDINGS_PER_PAGE', 5, 'int', '公共建筑每页数量', '公共建筑列表每次加载的条数，用户调用接口传入的参数一律被忽略', '列表分页'),
+    ('BUILDING_COMMENTS_PER_PAGE', 10, 'int', '公共建筑评论每页数量', '公共建筑评论列表每次加载的条数，用户调用接口传入的参数一律被忽略', '列表分页'),
     ('MUSIC_PER_PAGE', 5, 'int', '大喇叭音频每页数量', '公开音频列表每次加载的条数，用户调用接口传入的参数一律被忽略', '列表分页'),
     ('GUIDES_PER_PAGE', 5, 'int', '服务器指南每页数量', '服务器指南列表每次加载的条数，用户调用接口传入的参数一律被忽略', '列表分页'),
-    ('DISCUSSION_TOPICS_PER_PAGE', 5, 'int', '讨论帖子每页数量', '讨论区帖子列表每次加载的条数，用户调用接口传入的参数一律被忽略', '列表分页'),
-    ('REPLIES_PER_PAGE', 5, 'int', '讨论回复每页数量', '讨论区回复列表每次加载的条数，用户调用接口传入的参数一律被忽略', '列表分页'),
     ('BACKGROUNDS_PER_PAGE', 5, 'int', '后台背景图片每页数量', '管理后台背景图片列表每次加载的条数，用户调用接口传入的参数一律被忽略', '列表分页'),
     ('GAME_ACCOUNTS_PER_PAGE', 5, 'int', '后台账号申请每页数量', '管理后台游戏账号申请列表每次加载的条数，用户调用接口传入的参数一律被忽略', '列表分页'),
 

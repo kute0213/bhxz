@@ -7,7 +7,7 @@
 
 使用方式：
     from services.firewall.protection.content_filter import check_content_injection
-    result = check_content_injection(user_id=uid, content=text, content_type='discussion_topic')
+    result = check_content_injection(user_id=uid, content=text, content_type='building_comment')
     if result['blocked']:
         # 拒绝发布，显示 result['message']
         return flash(result['message'], 'error')

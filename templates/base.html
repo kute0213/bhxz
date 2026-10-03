@@ -217,10 +217,6 @@
                 </a>
 
                 <div class="text-xs text-cream/40 font-medium uppercase tracking-wider px-4 mb-2 mt-6">社区</div>
-                <a href="{{ url_for('discussion.list') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors{% if request.endpoint and request.endpoint.startswith('discussion.') %} active{% endif %}">
-                    <i data-lucide="message-square" class="w-5 h-5"></i>
-                    <span>讨论</span>
-                </a>
                 <a href="{{ url_for('main.music_page') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors{% if request.endpoint and request.endpoint.startswith('main.music') %} active{% endif %}">
                     <i data-lucide="music" class="w-5 h-5"></i>
                     <span>大喇叭音频</span>
@@ -319,9 +315,6 @@
                             <i data-lucide="chevron-down" class="nav-caret"></i>
                         </button>
                         <div class="desktop-nav-dropdown" role="menu">
-                            <a href="{{ url_for('discussion.list') }}" class="desktop-nav-dropdown-link{% if request.endpoint and request.endpoint.startswith('discussion.') %} active{% endif %}" role="menuitem">
-                                <i data-lucide="message-square"></i><span>讨论</span>
-                            </a>
                             <a href="{{ url_for('main.music_page') }}" class="desktop-nav-dropdown-link{% if request.endpoint and request.endpoint.startswith('main.music') %} active{% endif %}" role="menuitem">
                                 <i data-lucide="music"></i><span>大喇叭音频</span>
                             </a>
@@ -424,7 +417,7 @@
     {% from 'macros/modal.html' import modal_captcha %}
     {{ modal_captcha() }}
 
-    <script src="{{ url_for('static', filename='js/core/base.js', v='25') }}"></script>
+    <script src="{{ url_for('static', filename='js/core/base.js', v='26') }}"></script>
     <script src="{{ url_for('static', filename='js/core/uploader.js', v='1') }}"></script>
     {# 页面内就地搜索（SiteSearch v7：每页自带输入框、导航栏无输入框，详见 search.js） #}
     <script src="{{ url_for('static', filename='js/core/search.js', v='8') }}"></script>

@@ -233,10 +233,8 @@ def _get_default_base_url() -> str:
 _STATIC_PAGES = [
     ('/', 'monthly', '1.0'),
     ('/server-status', 'weekly', '0.8'),
-    ('/community', 'weekly', '0.8'),
     ('/docs', 'monthly', '0.7'),
     ('/guides', 'weekly', '0.8'),
-    ('/discussion', 'weekly', '0.8'),
     ('/apply', 'monthly', '0.5'),
 ]
 
@@ -257,7 +255,6 @@ def _site_latest(conn) -> str:
     """全站最近内容更新时间：跨所有内容表取最大，作为静态页面的 lastmod。"""
     candidates = (
         _latest_time(conn, 'server_guides', 'updated_at'),
-        _latest_time(conn, 'discussion_topics', 'updated_at'),
         _latest_time(conn, 'backgrounds', 'created_at'),
         _latest_time(conn, 'music', 'created_at'),
         _latest_time(conn, 'public_paths', 'created_at'),
@@ -310,19 +307,7 @@ def _build_url_entries() -> list:
                 'priority': '0.7',
             })
 
-        # 4) 讨论帖子
-        rows = conn.execute(
-            "SELECT id, updated_at FROM discussion_topics ORDER BY id"
-        ).fetchall()
-        for row in rows:
-            entries.append({
-                'path': f'/discussion/{row["id"]}',
-                'lastmod': _format_date(row['updated_at']),
-                'changefreq': 'monthly',
-                'priority': '0.6',
-            })
-
-        # 5) 自定义公开页面（public_paths 表）
+        # 4) 自定义公开页面（public_paths 表）
         rows = conn.execute(
             "SELECT url_path, created_at FROM public_paths WHERE is_active = 1 ORDER BY id"
         ).fetchall()

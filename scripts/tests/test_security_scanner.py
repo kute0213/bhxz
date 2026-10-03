@@ -139,18 +139,18 @@ class TestBodyScan:
         assert attack == TYPE_COMMAND_INJECTION
 
     def test_markdown_code_block_not_false_positive(self):
-        # 讨论区用户生成内容：markdown 代码块（反引号 + select + <script> 演示）不应误判
+        # 用户生成内容：markdown 代码块（反引号 + select + <script> 演示）不应误判
         body = (
             'content=这是一个测试帖子，代码如下：\n'
             '```sql\nSELECT * FROM users WHERE id = 1;\n```\n'
             '以及 HTML 示例：\n'
             '```html\n<script>console.log(1)</script>\n```'
         )
-        attack, _ = _scan('/discussion/create', '', body)
+        attack, _ = _scan('/buildings/create', '', body)
         assert attack is None, '用户生成内容不应误判为攻击'
 
     def test_chinese_text_not_detected(self):
-        attack, _ = _scan('/discussion/create', '', 'content=今天天气不错，我们一起去服务器玩吧。')
+        attack, _ = _scan('/buildings/create', '', 'content=今天天气不错，我们一起去服务器玩吧。')
         assert attack is None
 
 
@@ -159,7 +159,7 @@ class TestNormalRequests:
         assert _scan('/') == (None, '')
 
     def test_normal_query(self):
-        assert _scan('/discussion', 'page=2&category=综合') == (None, '')
+        assert _scan('/buildings', 'page=2&category=综合') == (None, '')
 
     def test_music_stream(self):
         assert _scan('/music/12.m3u8') == (None, '')

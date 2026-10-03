@@ -5,7 +5,7 @@
 //   UploadProgress— 基于 .progress-track / .progress-fill 的上传进度条
 //   AjaxForm      — 拦截表单提交，XHR 上传（含进度）+ JSON 响应处理，无刷新
 //
-// 页面通过 data-file-picker 自动初始化文件选择器（见 macros/upload.html）。
+// 页面通过 [data-file-picker] 自动初始化文件选择器。
 // AjaxForm 需页面显式调用 AjaxForm.attach(form, options) 以绑定成功回调。
 
 /* ------------------------------------------------------------------ */

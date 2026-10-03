@@ -621,7 +621,7 @@ def record_spam(user_id, content_type, content_preview='', action='flag'):
 
     Args:
         user_id: 用户 ID
-        content_type: 内容类型（discussion_topic, discussion_reply, guide, music 等）
+        content_type: 内容类型（guide, music, building, building_comment 等）
         content_preview: 内容预览（可选）
         action: 采取的动作（flag / ban）
     """

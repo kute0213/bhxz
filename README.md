@@ -90,7 +90,7 @@ python scripts/build/package.py
 │   └── errors.py             #   统一精简错误页渲染（error_simple）
 ├── services/     # 业务逻辑层（纯 Python，不依赖 Flask）
 │   ├── backup/               #   数据备份（/uploads/ 全量 zip 极限压缩）
-│   ├── discussion/     # 讨论区（帖子/回复/分类）
+│   ├── buildings/      # 公共建筑（列表/搜索/收藏/评论分页）
 │   ├── email/          # 异步邮件发送
 │   ├── game_accounts/  # 游戏账号注册申请（审批/驳回/封禁）
 │   ├── game_server_ban/ # 游戏服务器封禁申请（审批 → RCON ban → 到期自动 pardon）
@@ -100,7 +100,6 @@ python scripts/build/package.py
 │   ├── rcon/           # RCON 连接管理、玩家列表追踪、EasyAuth 指令
 │   ├── updater/        # 自动更新（配置/核心逻辑）
 │   ├── user/           # 用户（认证/资料/管理）
-│   ├── attachment_service/  #   附件上传/清理
 │   ├── background_service/  #   背景图片业务（WebP 转换 + 响应式变体）
 │   ├── cleanup_service/     #   被驳回内容自动清理
 │   ├── firewall/            #   高性能防火墙（DuckDB 引擎 + 连接级阻断 + DDoS 防护）
@@ -111,12 +110,11 @@ python scripts/build/package.py
 │   ├── settings_manager/    #   系统设置管理
 │   └── sitemap_cache/       #   Sitemap 缓存服务
 ├── routes/       # HTTP 路由层（Flask Blueprint）
-│   ├── admin/          # 管理后台（用户/备份/设置/日志/更新/游戏账号/指南/音乐/讨论等）
+│   ├── admin/          # 管理后台（用户/备份/设置/日志/更新/游戏账号/指南/音乐/背景/建筑等）
 │   ├── api/            # 公开 API（性能/统计/验证码/邮箱）
 │   ├── backgrounds/    # 背景图片页面
-│   ├── buildings/      # 公共建筑（页面+API，搜索/标签/收藏，发布需审核）
-│   ├── community/      # 社区留言板
-│   ├── discussion/     # 讨论区（页面+API）
+│   ├── buildings/      # 公共建筑（页面+API，搜索/标签/收藏/评论分页，发布需审核）
+│   ├── community/      # 社区辅助（AJAX / 表单统一响应）
 │   ├── docs/           # 文档页面
 │   ├── game_accounts/  # 申请账号（页面+API，纯申请注册）
 │   ├── guides/         # 服务器指南（页面+API）
@@ -129,7 +127,6 @@ python scripts/build/package.py
 │   ├── settings/       # 用户个人设置
 │   ├── site/           # 站点级信息页（站点文档、服务器状态）
 │   ├── backgrounds/    # 背景图片页面（index / upload）
-│   ├── discussion/     # 讨论区页面（index / create / detail）
 │   ├── emails/         # 邮件模板（独立 Jinja2 loader）
 │   ├── game_accounts/  # 游戏账号页面（apply / ban_apply）
 │   ├── guides/         # 服务器指南页面（index / detail / form）
@@ -141,9 +138,7 @@ python scripts/build/package.py
 ├── docs/         # 项目文档
 ├── scripts/      # 数据库迁移（migrate_db/）与测试（tests/）
 ├── uploads/      # 运行期上传数据
-│   ├── attachments/    # 留言板/讨论区附件
 │   ├── backgrounds/    # 全站背景图片
-│   ├── community/      # 社区资源
 │   ├── music/          # 大喇叭音频（每个音频一个 ID 目录，含 m3u8、ts 分片与唱片 MP3）
 │   └── db/             # 数据库文件（site.db + firewall.duckdb）
 ├── backups/      # 数据备份（默认 ../bhxz_backups，支持自定义路径与运行时热改）
@@ -171,8 +166,6 @@ python scripts/build/package.py
 
 * 服务器指南 CRUD + 审核工作流 + 编辑封禁
 
-* 讨论区管理（帖子置顶/锁定/删除 + 分类管理）
-
 * 大喇叭音频管理（公开申请审核、查看全部音频、一键下架）
 
 * **公共建筑管理**（审核通过/拒绝、管理删除、处理举报）：列表每行提供「预览」按钮，无需跳转详情页即可在弹窗内查看完整内容（标题、领地名、标签、作者、浏览数、建筑描述、使用说明、注意事项、拒绝原因），并提供「前往详情页」入口
@@ -181,7 +174,7 @@ python scripts/build/package.py
 
 * 系统设置（在线编辑，热重载，含网站图标选择、日志等级、背景图片开关、RCON 配置、MC 游戏文件夹）
 
-* 系统日志（实时查看，SSE 推送，支持等级过滤、自动滚动；按时间顺序从上到下展示，与控制台一致；**可在页面顶部切换来源查看全局日志 / 严重错误日志 / 各模块单独日志**，页面内「日志设置」可为任意模块配置「是否落盘」「是否并入全局日志」，保存即时生效）。统一日志系统分为三类：**① 全局日志**（普通运行日志 → 控制台 + `logs/app.log` + 内存缓冲 + SSE）；**② 严重错误日志**（导致服务器退出的报错 → 单独写入 `logs/fatal.log`，**每次写入直接覆盖文件、只保留最后一次**，且始终打印到控制台，不受日志等级/控制台开关限制）；**③ 模块单独日志**（模块启动时向日志模块注册，→ 独立内存缓冲 + 可选 `logs/modules/<模块名>.log`；是否落盘、是否并入全局日志**均由设置在「日志页面 → 日志设置」决定，不在模块注册时写死**，支持任意模块；当前使用者为防火墙（`firewall`）、图形验证码（`captcha`）、邮箱验证码（`email_code`）、注册账号（`register`）、登录账号（`login`），其中后四者默认落盘、全部默认不并入全局；两个开关都关闭时日志仅存在于模块独立缓冲，不打印、不落盘、不进全局）。**每次启动自动清理日志**（全局日志文件、严重错误日志文件、所有模块日志文件与内存缓冲统一清空）。**403 授权拒绝**属安全审计，写入防火墙模块日志，不在系统日志/控制台出现
+* 系统日志（实时查看，SSE 推送，支持等级过滤、自动滚动；按时间顺序从上到下展示，与控制台一致；**可在页面顶部切换来源查看全局日志 / 严重错误日志 / 各模块单独日志**，页面内「日志设置」可为任意模块配置「是否落盘」「是否并入全局日志」，保存即时生效）。统一日志系统分为三类：**① 全局日志**（普通运行日志 → 控制台 + `logs/app.log` + 内存缓冲 + SSE）；**② 严重错误日志**（导致服务器退出的报错 → 单独写入 `logs/fatal.log`，**每次写入直接覆盖文件、只保留最后一次**，且始终打印到控制台，不受日志等级/控制台开关限制）；**③ 模块单独日志**（模块启动时向日志模块注册，→ 独立内存缓冲 + 可选 `logs/modules/<模块名>.log`；是否落盘、是否并入全局日志**均由设置在「日志页面 → 日志设置」决定，不在模块注册时写死**，支持任意模块；当前使用者为防火墙（`firewall`）、图形验证码（`captcha`）、邮箱验证码（`email_code`）、注册账号（`register`）、登录账号（`login`），其中后四者默认落盘、全部默认不并入全局；两个开关都关闭时日志仅存在于模块独立缓冲，不打印、不落盘、不进全局）。**每次启动自动清理日志**（全局日志文件、严重错误日志文件、所有模块日志文件与内存缓冲统一清空）。**403 响应不写入防火墙模块日志**（防火墙成功拦截与授权拒绝类 403 均不记录；仅保留 IP 封禁 / 自动封禁等封禁动作日志）
 
 * 数据备份（手动/自动，极限压缩 zip，进度条；备份目录支持设置绝对/相对路径，默认 `../bhxz_backups`）
 
@@ -195,7 +188,7 @@ python scripts/build/package.py
 
 * **游戏账号封禁**（用户申请 → 管理员审批 → RCON 自动执行）：用户在「申请封禁玩家」页提交封禁玩家名、QQ名、理由；管理员在管理中心「游戏账号封禁」页同意（可设封禁时长，留空为永久）或驳回；同意后经 RCON 执行 `ban 玩家游戏名`（无引号），到期由后台定时任务（每 60 秒检查一次，走 `(status, expires_at)` 索引，单周期最多处理 50 条）执行 `pardon 玩家游戏名`（无引号）自动解封；支持手动提前解封。玩家名经安全清洗杜绝 RCON 命令注入，RCON 执行失败自动保留状态下个周期重试
 
-* 防火墙管理（IP 封禁/IP 白名单/IPv6 拦截/违规警告/防火墙日志：独立高性能 DuckDB 数据库，支持临时/永久封禁，全站 403 拦截，后台一键解封；**IPv6 拦截**：开启后所有 IPv6 连接（除 ::1）在三层拦截点（连接层 → WSGI 层 → 中间件层）直接被断开；**防火墙日志**：作为「模块单独日志」写入独立内存缓冲（默认不落盘，可在「日志页面 → 日志设置」开启写入 `logs/modules/firewall.log`），不与系统日志混流，页面内「日志」Tab 从该缓冲读取，支持等级筛选、清空、自动滚动、3 秒轮询刷新；**防火墙成功拦截返回 403 不记录日志**（IP 封禁兜底、可疑访问拦截均不写日志，避免被封 IP 反复请求时刷屏；授权拒绝类 403 仍记录）；自动识别可疑操作限流并自动封禁，各操作可独立开关、时长可配；**页面内直接编辑**自动封禁/可疑拦截/DDoS 防护/IPv6 拦截开关与时长、白名单，无需跳转系统设置）
+* 防火墙管理（IP 封禁/IP 白名单/IPv6 拦截/违规警告/防火墙日志：独立高性能 DuckDB 数据库，支持临时/永久封禁，全站 403 拦截，后台一键解封；**IPv6 拦截**：开启后所有 IPv6 连接（除 ::1）在三层拦截点（连接层 → WSGI 层 → 中间件层）直接被断开；**防火墙日志**：作为「模块单独日志」写入独立内存缓冲（默认不落盘，可在「日志页面 → 日志设置」开启写入 `logs/modules/firewall.log`），不与系统日志混流，页面内「日志」Tab 从该缓冲读取，支持等级筛选、清空、自动滚动、3 秒轮询刷新；**防火墙成功拦截返回 403 不记录日志**（IP 封禁兜底、可疑访问拦截均不写日志，避免被封 IP 反复请求时刷屏）；授权拒绝类 403（权限不足 / CSRF 校验失败等）同样不写入防火墙日志，仅保留 IP 封禁 / 自动封禁等封禁动作日志；自动识别可疑操作限流并自动封禁，各操作可独立开关、时长可配；**页面内直接编辑**自动封禁/可疑拦截/DDoS 防护/IPv6 拦截开关与时长、白名单，无需跳转系统设置）
 
 * 可疑访问拦截（识别 SQL 注入 / XSS / 路径穿越 / 命令注入 / 敏感文件与漏洞端点探测 / 恶意扫描 UA 等攻击特征，命中即拦截并自动封禁来源 IP，总开关与各攻击类型子开关独立配置、封禁时长可配，白名单 IP 不受影响）
 
@@ -203,7 +196,7 @@ python scripts/build/package.py
 
 * **API 调用限流（`services/firewall/api_guard.py`）**：所有 API 请求（`/api/` 前缀、带 `X-Requested-With: XMLHttpRequest` 或 `Accept: application/json`）按来源 IP 限流，**默认每分钟 60 次**；超限返回 429 JSON（含 `Retry-After`），计数存于内存缓存，刷新后随滚动窗口恢复；白名单 IP 与本地回环不受限。搜索、列表「加载更多」等前端 API 调用均纳入计数
 
-* **上传文件防火墙（`services/firewall/protection/file_guard.py`）**：统一校验附件 / 音频 / 图片上传——危险扩展名（html/svg/js/php/exe 等）直接拒绝；按上传场景限定扩展名白名单；校验文件头魔数，防止「改名伪装」（如 .html 改名 .png）；纯文本文件做内容嗅探拦截脚本标记。未知类型跳过魔数校验以尽可能不误判，被拦截的上传写入防火墙日志。已接入讨论/帖子附件、大喇叭音频、背景图片三条上传链路
+* **上传文件防火墙（`services/firewall/protection/file_guard.py`）**：统一校验音频 / 图片上传——危险扩展名（html/svg/js/php/exe 等）直接拒绝；按上传场景限定扩展名白名单；校验文件头魔数，防止「改名伪装」（如 .html 改名 .png）；纯文本文件做内容嗅探拦截脚本标记。未知类型跳过魔数校验以尽可能不误判，被拦截的上传写入防火墙日志。已接入大喇叭音频、背景图片两条上传链路
 
 * **防火墙数据库单写入线程**：所有写操作经队列提交给唯一写入线程顺序执行，相邻写操作合并为事务批量提交，彻底避免多线程并发写入 DuckDB 导致的锁表；封禁 / 白名单 / 账号封禁等高频查询走内存缓存（定期同步），查询性能显著提升
 
@@ -213,7 +206,7 @@ python scripts/build/package.py
 * **点击展开 / 平滑收起**：折叠态只显示「搜索」胶囊按钮，点击后按钮收起、输入框带缓动动画平滑展开；展开与收起均有流畅过渡（`base.css` 的 `.site-search` 样式块，采用 expo-out 缓动 `cubic-bezier(0.22, 1, 0.36, 1)` 并配合位移/缩放，起止更自然）
 * **保持展开规则**：输入框内有文字 **或** 光标在输入框内 → 保持展开；无文字 **且** 失焦（点击外部）→ 平滑收起；Esc 一键清空并收起
 * **结果就地渲染**：输入关键词后防抖（`220ms`）、回车或点击箭头，由搜索框在自身派发 `site-search` 事件；**各列表页监听该事件后直接刷新当前列表**，不再弹出下拉面板或独立搜索页，结果与页面风格完全一致
-* **覆盖范围**：公共建筑 / 服务器指南 / 大喇叭音频 / 讨论帖子四个列表页均支持就地搜索；关键词通过各列表 API 的 `q` 参数传入，匹配各自的标题/摘要/正文/标签字段
+* **覆盖范围**：公共建筑 / 服务器指南 / 大喇叭音频三个列表页均支持就地搜索；关键词通过各列表 API 的 `q` 参数传入，匹配各自的标题/摘要/标签字段
 
 ### 服务器指南
 
@@ -234,18 +227,9 @@ python scripts/build/package.py
 * **收藏**：登录用户可收藏/取消收藏建筑，收藏数参与排序
 * 一键复制传送指令 `/res tp 领地名`
 * **浏览量统计**：访问建筑详情页时 `view_count` 自动 +1（作者本人访问不计入）；浏览数在列表卡片与详情页展示
-* 评论功能：登录用户可发表评论，作者/管理员可删除评论
+* 评论功能：登录用户可发表评论，作者/管理员可删除评论；评论列表经 `GET /api/buildings/<id>/comments` 分段加载（每页条数由系统设置 `BUILDING_COMMENTS_PER_PAGE` 控制），滚动到列表底部自动加载下一页
 * 举报功能：用户可举报违规建筑，管理员在后台可查看举报并删除建筑
 * 接入防火墙内容检测、防刷机制和图形验证码
-
-### 讨论区
-
-* 分类筛选、置顶优先
-* **列表分页**：每次加载条数由系统设置 `DISCUSSION_TOPICS_PER_PAGE` 控制（默认 5），点击「加载更多」通过 API 无刷新追加
-
-* 回复实时刷新（默认 5 秒）
-
-* Markdown 编辑 + 附件上传
 
 ### 大喇叭音频
 
@@ -361,9 +345,7 @@ python scripts/build/package.py
 
 * **DDoS 防护**：总开关、检测强度（low=宽松 300 次/10 秒 / medium=中等 150 次/10 秒 / high=严格 80 次/10 秒）、首次封禁时长（分钟，0 为直接永久封禁）、永久封禁触发次数（违规记录时间窗口内多次触发自动升级永久封禁）、违规记录时间窗口（小时）
 
-* **讨论区配置**：回复实时刷新间隔
-
-* **列表分页**：公共建筑 / 大喇叭音频 / 服务器指南 / 讨论帖子 / 讨论回复 / 后台背景图片 / 后台账号申请 各列表每次加载条数（1–100，默认 5）。**分页大小仅可在此处或 `config.py` 修改，用户调用接口传入的参数一律被忽略**
+* **列表分页**：公共建筑 / 公共建筑评论 / 大喇叭音频 / 服务器指南 / 后台背景图片 / 后台账号申请 各列表每次加载条数（1–100，默认 5）。**分页大小仅可在此处或 `config.py` 修改，用户调用接口传入的参数一律被忽略**
 
 * **外部链接**：卫星地图地址、QQ 群链接
 
@@ -396,12 +378,10 @@ python scripts/build/package.py
 | `REGISTER_VERIFY_CODE`        | 注册验证码                                     | `binhai_xz`                                 |
 | `BACKUP_SCHEDULED_TIME`       | 每日自动备份时间                                  | `03:00`                                     |
 | `MAX_BACKUPS`                 | 最大保留备份份数                                  | `30`                                        |
-| `DISCUSSION_REFRESH_INTERVAL` | 讨论区回复刷新间隔                                 | `5s`                                        |
 | `BUILDINGS_PER_PAGE`          | 公共建筑列表每页数量（1–100，接口传参无效）                 | `5`                                         |
+| `BUILDING_COMMENTS_PER_PAGE`  | 公共建筑评论列表每页数量（1–100，接口传参无效）               | `10`                                        |
 | `MUSIC_PER_PAGE`              | 大喇叭音频列表每页数量（1–100，接口传参无效）                | `5`                                         |
 | `GUIDES_PER_PAGE`             | 服务器指南列表每页数量（1–100，接口传参无效）                | `5`                                         |
-| `DISCUSSION_TOPICS_PER_PAGE`  | 讨论帖子列表每页数量（1–100，接口传参无效）                 | `5`                                         |
-| `REPLIES_PER_PAGE`            | 讨论区回复每页数量（1–100，接口传参无效）                  | `5`                                         |
 | `BACKGROUNDS_PER_PAGE`        | 后台背景图片列表每页数量（1–100，接口传参无效）               | `5`                                         |
 | `GAME_ACCOUNTS_PER_PAGE`      | 后台游戏账号申请列表每页数量（1–100，接口传参无效）             | `5`                                         |
 | `LOG_LEVEL`                   | 日志输出等级（DEBUG/INFO/WARNING/ERROR/CRITICAL） | `INFO`                                      |
@@ -495,28 +475,28 @@ export ENABLE_SSL=1 && python app.py
 
 ### 管理后台列表 API（管理员，分页）
 
-管理后台「用户 / 指南 / 音乐列表 / 讨论管理 / 背景图片 / 游戏账号申请」列表均为点击「加载更多」无刷新追加，页面路由仅渲染第 1 页；每页条数由系统设置「列表分页」分类下的对应配置项控制，接口不接受前端传入的数量参数。
+管理后台「用户 / 指南 / 音乐列表 / 背景图片 / 游戏账号申请」列表均为点击「加载更多」无刷新追加，页面路由仅渲染第 1 页；每页条数由系统设置「列表分页」分类下的对应配置项控制，接口不接受前端传入的数量参数。
 
 | 方法 | 路径                                          | 说明                          |
 | -- | ------------------------------------------- | --------------------------- |
 | GET | `/admin/api/users/list`                     | 用户分页列表（`page`）              |
 | GET | `/admin/api/guides/list`                    | 指南分页列表（`page`）              |
 | GET | `/admin/api/music/list`                     | 音频分页列表（`type=all\|pending`，`page`） |
-| GET | `/admin/api/discussion/list`                | 帖子分页列表（`page`）              |
 | GET | `/admin/api/firewall/bans`                  | 合并封禁列表（`page`）              |
 | GET | `/admin/api/backgrounds`                    | 背景图片分页列表（`page`，可选 `status` 筛选） |
 | GET | `/admin/api/game-accounts/applications/list` | 注册申请分页列表（`status=pending\|approved\|rejected\|all`，`page`） |
 
-### 公共建筑 API（搜索 / 标签 / 收藏）
+### 公共建筑 API（搜索 / 标签 / 收藏 / 评论）
 
-公共建筑列表经 `GET /api/buildings/list` 无刷新搜索与分页加载（每页条数由 `BUILDINGS_PER_PAGE` 控制，接口不接受前端传入的数量参数），搜索关键词同时匹配标题与标签；列表默认按收藏数量排序。所有接口均纳入 API 防火墙计数。
+公共建筑列表经 `GET /api/buildings/list` 无刷新搜索与分页加载（每页条数由 `BUILDINGS_PER_PAGE` 控制，接口不接受前端传入的数量参数），搜索关键词同时匹配标题与标签；列表默认按收藏数量排序。详情页评论经 `GET /api/buildings/<id>/comments` 分段加载（每页条数由 `BUILDING_COMMENTS_PER_PAGE` 控制，接口不接受前端传入的数量参数）。所有接口均纳入 API 防火墙计数。
 
 | 方法   | 路径                                  | 说明                              |
 | ---- | ----------------------------------- | ------------------------------- |
 | GET  | `/api/buildings/list`                    | 搜索/分页列表（`q` 关键词、`tag` 标签、`page` 页码、`my=1` 我的建筑） |
+| GET  | `/api/buildings/<id>/comments`           | 评论分段列表（`page` 页码，返回 `has_more` / `total`） |
 | POST | `/buildings/<id>/favorite`          | 收藏 / 取消收藏（需登录）                  |
 | POST | `/buildings/<id>/tags`              | 编辑标签（作者本人或管理员）                  |
-| POST | `/buildings/<id>/comment`           | 发表评论（需验证码）                      |
+| POST | `/buildings/<id>/comment`           | 发表评论（需登录）                       |
 | POST | `/buildings/comment/<id>/delete`    | 删除评论（作者/建筑作者/管理员）               |
 | POST | `/buildings/<id>/report`            | 举报建筑                            |
 
@@ -529,27 +509,12 @@ export ENABLE_SSL=1 && python app.py
 | GET | `/api/buildings/list`     | 公共建筑列表（`q` 匹配标题与标签）                                   |
 | GET | `/api/guides/list`   | 服务器指南列表（`q` 匹配标题与摘要）                                  |
 | GET | `/api/music/list`    | 大喇叭音频列表（`q` 匹配名称与标签）                                  |
-| GET | `/api/discussion/topics` | 讨论帖子列表（`q` 匹配标题与正文，可选 `category` 分类、`page` 页码）       |
-| GET | `/api/discussion/<id>/replies` | 帖子回复分页（`page` 页码） |
-| GET | `/api/discussion/<id>/new-replies` | 增量拉取新回复（`last_id`） |
 
 ### 服务器指南 API
 
 | 方法  | 路径                   | 说明                                                    |
 | --- | -------------------- | ----------------------------------------------------- |
 | GET | `/api/guides/list`   | 指南列表（`page` 页码、`my=1` 我的指南、`q` 关键词匹配标题与摘要；每页条数由 `GUIDES_PER_PAGE` 控制） |
-
-### 社区 AJAX 端点
-
-| 方法   | 路径                                 | 说明           |
-| ---- | ---------------------------------- | ------------ |
-| POST | `/discussion/<id>/reply`           | 回复帖子         |
-| POST | `/discussion/reply/<id>/delete`    | 删除回复         |
-| GET  | `/discussion/<id>/api/replies`     | 分页获取回复       |
-| GET  | `/discussion/<id>/api/new-replies` | 获取最新回复（实时刷新） |
-| POST | `/discussion/<id>/pin`             | 置顶/取消置顶（管理员） |
-| POST | `/discussion/<id>/lock`            | 锁定/解锁（管理员）   |
-| POST | `/discussion/<id>/delete`          | 删除帖子         |
 
 ### 大喇叭音频 AJAX 端点
 
@@ -610,6 +575,8 @@ export ENABLE_SSL=1 && python app.py
 
 * **系统字体栈**：中文字体使用各平台预装字体（PingFang SC / Noto Sans CJK），零下载、零延迟
 
+* **分段列表滚动自动加载**：所有分段加载列表（公共建筑 / 公共建筑评论 / 大喇叭音频 / 服务器指南 / 后台各列表）的「加载更多」按钮带 `data-autoload-more` 属性，`base.js` 用 `IntersectionObserver` 监听——按钮进入视口即自动点击加载下一页；按钮隐藏 / 禁用时不触发，加载后按钮被新内容推出视口，滚动到底再次自动加载，始终只自动加载后面的内容
+
 * `overflow-x: clip` 替代 `hidden`（消除滚动回弹）
 
 * 尊重 `prefers-reduced-motion`（无障碍用户自动禁用动画）
@@ -667,16 +634,14 @@ app.py ──→ routes/ ──→ services/ ──→ core/
              │            │
          main/        user/（auth / profile）
          docs/        game_accounts/（registration_service）
-         public/      discussion/（topics / replies / categories）
-         admin/       music/（constants / queries / crud / upload / favorites）
-         api/         rcon/（client / pool / easy_auth）
-         discussion/  email/（service / code / templates / sanitize）
+         public/      music/（constants / queries / crud / upload / favorites）
+         admin/       rcon/（client / pool / easy_auth）
+         api/         mail/（service / verification / templates / sanitize）
          guides/      updater/（config / core）
-         backgrounds/ backup/（manager / scheduler）
-         sitemap/     attachment_service/（附件上传/清理）
-         game_accounts/ background_service/（背景图片业务）
-                      cleanup_service/（被驳回内容自动清理）
-                      settings_manager/（系统设置管理）
+         buildings/   backup/（manager / scheduler）
+         backgrounds/ background_service/（背景图片业务）
+         sitemap/     cleanup_service/（被驳回内容自动清理）
+         community/   settings_manager/（系统设置管理）
                       sitemap_cache/（Sitemap 缓存）
                       monitoring/（系统性能监控）
                       logging/（日志自动清理）
@@ -713,7 +678,7 @@ workspace/
 │   └── errors.py             #   统一错误页渲染（error_simple）
 ├── services/                 # 业务逻辑层（纯 Python，不依赖 Flask）
 │   ├── backup/               #   数据备份（/uploads/ 全量 zip 极限压缩）
-│   ├── discussion/           #   讨论区（帖子/回复/分类）
+│   ├── buildings/            #   公共建筑（列表/搜索/收藏/评论分页）
 │   ├── email/                #   异步邮件发送
 │   ├── game_accounts/        #   游戏账号注册申请
 │   ├── monitoring/           #   系统监控（CPU/内存/系统/性能追踪）
@@ -721,7 +686,6 @@ workspace/
 │   ├── rcon/                 #   RCON 连接管理、玩家列表追踪、EasyAuth 指令
 │   ├── updater/              #   自动更新（配置/核心逻辑）
 │   ├── user/                 #   用户（认证/资料/管理）
-│   ├── attachment_service/   #   附件上传/清理
 │   ├── background_service/   #   背景图片业务（WebP 转换 + 响应式变体）
 │   ├── cleanup_service/      #   被驳回内容自动清理（统一定时调度）
 │   ├── firewall/             #   高性能防火墙（DuckDB 引擎 + 连接级阻断 + DDoS 防护）
@@ -734,11 +698,10 @@ workspace/
 │   ├── sitemap_cache/        #   Sitemap 缓存服务
 ├── routes/                   # HTTP 路由层
 │   ├── main/                 #   首页、登录、注册、设置、音乐
-│   ├── admin/                #   管理后台（用户/备份/设置/日志/更新/游戏账号/指南/音乐/讨论/广播/背景/公共建筑等）
+│   ├── admin/                #   管理后台（用户/备份/设置/日志/更新/游戏账号/指南/音乐/广播/背景/公共建筑等）
 │   ├── api/                  #   JSON API（性能/统计/验证码/邮箱）
 │   ├── backgrounds/          #   背景图片页面
-│   ├── community/            #   社区留言板
-│   ├── discussion/           #   讨论区（页面+API）
+│   ├── community/            #   社区辅助（AJAX / 表单统一响应）
 │   ├── docs/                 #   文档页面
 │   ├── game_accounts/        #   申请账号（页面+API，纯申请注册）
 │   ├── guides/               #   服务器指南（页面+API）
@@ -750,7 +713,6 @@ workspace/
 │   ├── settings/             #   用户个人设置
 │   ├── site/                 #   站点级信息页（站点文档、服务器状态）
 │   ├── backgrounds/          #   背景图片页面（index / upload）
-│   ├── discussion/           #   讨论区页面（index / create / detail）
 │   ├── emails/               #   邮件模板（独立 loader）
 │   ├── game_accounts/        #   游戏账号页面（apply / ban_apply）
 │   ├── guides/               #   服务器指南页面（index / detail / form）
@@ -788,7 +750,7 @@ workspace/
 
 ### 数据库
 
-使用 **SQLite**（嵌入式单文件数据库），启用 **WAL 模式**（`PRAGMA journal_mode=WAL`）+ `synchronous=NORMAL` + `busy_timeout=30000`，读写并发性能优秀且崩溃可恢复；单例共享连接 + 可重入锁保证多线程安全。首次启动自动建表，共 17 张表：
+使用 **SQLite**（嵌入式单文件数据库），启用 **WAL 模式**（`PRAGMA journal_mode=WAL`）+ `synchronous=NORMAL` + `busy_timeout=30000`，读写并发性能优秀且崩溃可恢复；单例共享连接 + 可重入锁保证多线程安全。首次启动自动建表，共 19 张表：
 
 > ⚠️ **切勿删除 `uploads/db/site.db-wal` 与 `site.db-shm`。**
 > WAL 模式下，「已经 `commit` 成功、但尚未 checkpoint 合并进主库」的数据全部保存在 `-wal` 文件里。删除它 = 丢掉最近写入的数据（曾导致「公共建筑审核通过后重启服务器又变回待审核」）。
@@ -804,17 +766,17 @@ workspace/
 | `server_guides`           | 服务器指南    | 支持 Markdown，审核工作流                                                                                               |
 | `guide_edit_bans`         | 编辑封禁     | 用户名/IP，限时/永久                                                                                                    |
 | `broadcast_logs`          | 广播邮件日志   | —                                                                                                               |
-| `discussion_categories`   | 讨论分类     | slug 唯一                                                                                                         |
-| `discussion_topics`       | 讨论帖子     | 支持分类/标签/附件/置顶/锁定                                                                                                |
-| `discussion_replies`      | 讨论回复     | 外键 `topic_id`，支持附件                                                                                              |
 | `music`                   | 大喇叭音频    | `status` 状态机（0=私有/1=待审核/2=已公开，驳回后自动转为私有；旧库 `gain` 列仅保留不再使用），`tags` 逗号分隔标签列，删除记录时同步删除 `uploads/music/<ID>/` 文件目录 |
 | `music_favorites`         | 大喇叭音频收藏  | 联合主键 `(user_id, music_id)`（同一用户对同一音频仅一条收藏）                                                                      |
 | `backgrounds`             | 背景图片     | `status` 审核状态，WebP 格式，响应式变体，`rejected_at` 记录驳回时间（超 24h 自动删除）                                            |
 | `game_account_registrations` | 游戏账号注册申请 | 申请注册 MC 账号，管理员审批                                                                                               |
 | `game_account_bans`       | 游戏账号封禁   | 封禁 MC 账号申请资格                                                                                                    |
+| `game_server_ban_applications` | 游戏服务器封禁申请 | 用户申请 → 管理员审批 → RCON ban，到期自动 pardon                                                                             |
 | `public_buildings`        | 公共建筑     | 标题/领地名/介绍/使用方式/注意事项，审核工作流（pending→approved/rejected）                                                        |
 | `building_comments`       | 建筑评论     | 外键 `building_id`，支持作者/管理员删除                                                                                       |
 | `building_reports`        | 建筑举报     | 外键 `building_id`，待处理→驳回流程                                                                                         |
+| `building_favorites`      | 建筑收藏     | 联合主键 `(user_id, building_id)`                                                                                   |
+| `guide_favorites`         | 指南收藏     | 联合主键 `(user_id, guide_id)`                                                                                      |
 
 > 旧版 DuckDB 数据库（`site.duckdb`）可通过 `scripts/migrate_db.py` 一键迁移到 SQLite（迁移前会自动备份旧库）。
 
@@ -875,9 +837,14 @@ workspace/
 
 ## 最近更新
 
+* **彻底删除讨论区功能 + 建筑评论改分段加载 + 分段列表滚动自动加载**：
+  * **删除讨论区**：移除 `routes/discussion/`、`services/discussion/`、`templates/discussion/`、`routes/admin/discussion/`、`templates/admin/discussion.html` 与 `discussion_categories.html`，以及数据库表 `discussion_categories` / `discussion_topics` / `discussion_replies`（旧库启动时自动 `DROP`）；同步清理导航栏讨论入口、系统设置「讨论区配置」及 `DISCUSSION_REFRESH_INTERVAL` / `DISCUSSION_TOPICS_PER_PAGE` / `REPLIES_PER_PAGE` 配置项、`templates/macros/upload.html` 与 `services/attachment_service/`；并删除仅供讨论附件使用的死代码——社区蓝图与其 `/uploads/<filename>` 附件下载路由、`UPLOAD_ATTACHMENTS_DIR` / `UPLOAD_COMMUNITY_DIR` 配置与 `uploads/attachments`、`uploads/community` 遗留目录，无残留。
+  * **建筑评论分段加载**：新增 `GET /api/buildings/<id>/comments`（分页由 `BUILDING_COMMENTS_PER_PAGE` 控制，返回 `has_more` / `total`），详情页评论区改为 API 分段加载，删除原实时刷新逻辑。
+  * **分段列表滚动自动加载**：`base.js` 新增 `initAutoLoadMore`——任何带 `data-autoload-more` 的「加载更多」按钮进入视口即自动点击一次加载下一页（隐藏 / 禁用时不触发，加载后按钮被新内容推出视口，滚动到底继续加载）。
+
 * **修复大喇叭音频管理页「待审核公开申请」标题后原样显示 HTML 文本**：`templates/macros/page_header.html` 的 `section_title` 宏以 `{{ extra }}` 输出 `extra` 参数，在 Jinja 自动转义下把 `templates/admin/music.html` 传入的 `<span data-pending-count ...>` 标签当成纯文本渲染，页面出现「待审核公开申请 `<span ...>0</span>`」。现改为 `{{ extra | safe }}` 按 HTML 渲染（`extra` 由模板开发者提供、非用户输入，且仅此一处使用），待审核数量角标正常显示。
 
-* **防火墙成功拦截返回 403 不再记录日志**：此前 IP 封禁兜底（`ip_ban_check_hook`）与可疑访问拦截（`suspicious_request_check_hook`）返回的 403 会被通用 `after_request` 钩子记成「403 授权拒绝」，可疑拦截还会额外记一条「拦截可疑访问并自动封禁」，被封 IP 反复请求时刷屏。现在两处在返回 403 前标记 `g.suppress_403_log`，`log_403_response` 跳过该标记；可疑拦截的显式日志一并移除，仅保留自动封禁动作的封禁生效记录。授权拒绝类 403（权限不足 / CSRF 等）仍照常记录到防火墙模块日志。
+* **防火墙拦截与授权拒绝的 403 均不写入防火墙模块日志**：`ip_ban_check_hook`（IP 封禁兜底）与 `suspicious_request_check_hook`（可疑访问拦截）返回 403 时**直接不调用日志函数**（删除原通用 `after_request` 钩子 `log_403_response`，不再需要任何布尔标记）；授权拒绝类 403（权限不足 / CSRF 校验失败等）同样不写防火墙日志。仅保留 IP 封禁 / 自动封禁等封禁动作日志（`可疑访问自动封禁生效` / `自动封禁生效`），被封 IP 反复请求不再刷屏。
 
 * **日志页面支持多来源查看 + 按模块配置日志行为 + 启动自动清理**：日志页面（`/admin/logs`）顶部新增「日志来源」下拉，可切换查看**全局日志 / 严重错误日志 / 任意模块单独日志**（`source=global|fatal|module:<名称>`，全局走 SSE 实时推送，其余来源 3 秒轮询）；新增「日志设置」面板，列出所有已注册模块并各自提供「存储」（落盘到 `logs/modules/<模块名>.log`）与「全局」（并入全局日志：控制台 + `app.log` + SSE）两个开关，实时保存即时生效（`GET/POST /admin/api/logs/modules`）。**模块单独日志的行为不再由模块注册写死**——`register_module_log(name)` 只声明存在，是否落盘、是否并入全局一律由设置 `LOG_MODULE_<模块名>_STORE` / `_GLOBAL` 决定（因此从「系统设置」移除，统一收到日志页）；默认落盘仅保留图形验证码 / 邮箱验证码 / 注册 / 登录，全部默认不并入全局。**每次启动自动清理日志**：`purge_logs_on_startup()` 在应用初始化最开始清空全局日志文件与缓冲、严重错误日志文件、所有 `logs/modules/*.log` 与各模块缓冲，保证每轮启动都从干净状态开始（`core/system/init.py`）。
 
@@ -891,11 +858,11 @@ workspace/
 
 * **修复 robots.txt 的 Sitemap 域名错误 + 邮件模板路径 + 指南编辑 500**：`/robots.txt` 的 `Sitemap:` 原先写死站点配置域名（`https://bhxz.tw.kg/sitemap.xml`），访问 `https://binhai.cloud/robots.txt` 时地址不一致。`routes/sitemap/__init__.py` 新增 `_robots_base_url()`：优先匹配与当前 `Host` 一致的已配置域名（`SITE_URL` / `SITEMAP_DOMAINS`），未匹配则直接反映当前访问域名，确保 Sitemap 始终指向当前域名下的 `/sitemap.xml`（`services/sitemap_cache` 同步新增 `base_url_for_host()`）。修复邮件发送 `TemplateNotFound: 'verification_code.html'`——`services/mail/templates/__init__.py` 的模板目录层级少算一级，指向了不存在的 `services/templates/emails`，已修正为项目根 `templates/emails`。修复 `/guides/<id>/edit` 提交 500（`NameError: get_client_ip`）——`routes/guides/pages/__init__.py` 漏导入 `get_client_ip`，已补上并全站排查同类漏导入。
 
-* **评论与发布全面 API 化 + 上传进度统一**：删除评论确认改为网页内弹窗（`CustomModal.confirm`，替代原生 `confirm`）；**发布评论不再需要图形验证码**；公共建筑发布/评论、讨论发帖/回复等发布操作统一走无刷新 `AjaxForm`（自动携带身份与 CSRF）；新增统一上传组件 [`uploader.js`](templates/static/js/core/uploader.js)（`FilePicker` / `UploadProgress` / `AjaxForm`）与 [`macros/upload.html`](templates/macros/upload.html)，修复「回复附件显示 0B / 发布后附件消失」（`input.value` 清空顺序错误导致附件丢失），所有文件上传均带进度条。
+* **评论与发布全面 API 化 + 上传进度统一**：删除评论确认改为网页内弹窗（`CustomModal.confirm`，替代原生 `confirm`）；**发布评论不再需要图形验证码**；公共建筑发布/评论等发布操作统一走无刷新 `AjaxForm`（自动携带身份与 CSRF）；新增统一上传组件 [`uploader.js`](templates/static/js/core/uploader.js)（`FilePicker` / `UploadProgress` / `AjaxForm`），所有文件上传均带进度条。
 
-* **修复 `/buildings/<id>` 页面 500（`modal_shell is undefined`）+ 规范 Jinja2 宏导入**：`templates/buildings/detail.html` 原先用 `{% include 'macros/modal.html' %}` 引入弹窗宏，而 `include` 只渲染模板文件、**不会把宏注入当前命名空间**，导致访问公共建筑详情页时 `modal_shell is undefined` 直接 500。改用 `{% from 'macros/modal.html' import modal_shell, modal_close_script %}` 显式导入，并统一放在 `{% extends %}` 之后、第一个 `{% block %}` 之前；同步修正 `admin/guides.html`、`admin/firewall.html`、`admin/broadcast.html`、`admin/guide_form.html`、`auth/register.html`、`guides/form.html`、`discussion/create.html` 的宏导入位置，并修正 `admin/buildings.html` 拒绝弹窗把标题误传为 `size` 参数的问题。开发准则（`docs/DEVELOPMENT.md`）新增「宏导入方式（`import` 而非 `include`）」章节，并已用脚本对全站模板做语法编译 + 宏调用/导入一致性校验（0 处未导入）。
+* **修复 `/buildings/<id>` 页面 500（`modal_shell is undefined`）+ 规范 Jinja2 宏导入**：`templates/buildings/detail.html` 原先用 `{% include 'macros/modal.html' %}` 引入弹窗宏，而 `include` 只渲染模板文件、**不会把宏注入当前命名空间**，导致访问公共建筑详情页时 `modal_shell is undefined` 直接 500。改用 `{% from 'macros/modal.html' import modal_shell, modal_close_script %}` 显式导入，并统一放在 `{% extends %}` 之后、第一个 `{% block %}` 之前；同步修正 `admin/guides.html`、`admin/firewall.html`、`admin/broadcast.html`、`admin/guide_form.html`、`auth/register.html`、`guides/form.html` 的宏导入位置，并修正 `admin/buildings.html` 拒绝弹窗把标题误传为 `size` 参数的问题。开发准则（`docs/DEVELOPMENT.md`）新增「宏导入方式（`import` 而非 `include`）」章节，并已用脚本对全站模板做语法编译 + 宏调用/导入一致性校验（0 处未导入）。
 
-* **修复管理员删除用户失败 + 清理废弃代码**：修复管理后台删除用户时因引用已删除的 `poll_votes`、`board_topics`、`board_replies` 表导致数据库操作失败的问题，改为级联清理 `discussion_topics`/`discussion_replies`（当前使用的讨论区表）；同步修复用户注销功能的相同问题，修复 `_clean_user_attachments` 函数引用废弃表的问题；优化 `routes/admin/mod_intros/__init__.py` 中三处嵌套 try-except 屎山代码为单层。
+* **修复管理员删除用户失败 + 清理废弃代码**：修复管理后台删除用户时因引用已删除的 `poll_votes`、`board_topics`、`board_replies` 表导致数据库操作失败的问题，改为级联清理相关业务表；同步修复用户注销功能的相同问题，修复 `_clean_user_attachments` 函数引用废弃表的问题；优化 `routes/admin/mod_intros/__init__.py` 中三处嵌套 try-except 屎山代码为单层。
 
 * **防火墙迁移至路由层 + 公共建筑去审核 + robots.txt 安全增强**：防火墙模块从 `core/firewall/` 整体迁移至 `routes/firewall/`（路由层，更合理的分层），所有导入引用同步更新；公共建筑**发布即公开**，彻底移除管理员审核流程（删除 approve/reject 路由、模板按钮、仪表盘统计），管理员 403 问题一并修复；全站验证码统一使用 `core.shared.captcha.captcha_service` 单例；robots.txt 路由升级为函数式生成，根据策略自动附加 Crawl‑delay（5 秒）与敏感路径 Disallow 规则，配合 DDoS 防护的 `/robots.txt` 白名单，防止合法爬虫被防火墙误封；更新所有过期注释引用。
 
@@ -927,7 +894,7 @@ workspace/
 
 * **图形验证码进一步优化（字更大 + 干扰更丰富 + 颜色更多）**：字号比例提升至 `min(120, height*0.76)`；干扰横线/斜线增至 5~8 条、干扰字符增至 30~50 个，新增 2~5 个随机彩色圆点干扰；干扰线色池 14 色、字符深色池 12 色、浅色干扰字符池 14 色，随机性更强、更难被机器识别，同时保持人类可读
 
-* **修复背景图片与评论等删除失败问题**：背景图片删除时 `remove_background_files` 对 `sqlite3.Row` 使用 `.get()` 导致 `AttributeError`，已改为按键访问；讨论区删除的 AJAX 统一响应 `_respond` 重定向端点从不存在的 `community.community_page` 改为 `main.home`，避免 `url_for` 构建失败返回 500；前端回复删除错误提示统一为「删除失败，请重试。」。删除权限校验正常返回 JSON 失败结果而非 500。
+* **修复背景图片与评论等删除失败问题**：背景图片删除时 `remove_background_files` 对 `sqlite3.Row` 使用 `.get()` 导致 `AttributeError`，已改为按键访问；前端删除错误提示统一为「删除失败，请重试。」。删除权限校验正常返回 JSON 失败结果而非 500。
 
 * **背景图片按屏幕比例最适配取图**：保存时自动记录图片自然宽高比（`backgrounds.ratio`，不再强制裁剪 16:9）；客户端在页面解析到背景元素后立即预加载（不等动画与其他脚本），自动携带屏幕宽高比与物理像素长边请求图片；服务端将所选档位中心裁剪到该比例后返回（结果缓存）。横屏/竖屏均获得与屏幕比例完全匹配且像素充足的图片，移动端清晰度大幅提升。
 
@@ -941,7 +908,7 @@ workspace/
 
 * **全站 UI 优化为白色浅蓝磨砂玻璃风格**：主页由深色海洋风格全面转换为白色浅蓝主题（滚动时背景图片保持可见，标题深色 + 浅蓝渐变强调）；全站图标统一为浅蓝色；进度条与滚动条改为浅蓝渐变磨砂玻璃风格；修复 `/backgrounds` 页面「当前显示」按钮与状态徽章浅色文字浅色底融合不可见的问题，黄色/绿色等状态文字改为深色可读版本。
 
-* **控件全面改为白色略微透明磨砂玻璃**：主按钮（`.btn-primary`）由黑色渐变改为白色半透明磨砂玻璃（深色文字 + 蓝色强调边），次按钮/危险按钮/输入框/导航/弹窗/Toast 等控件统一为白色磨砂玻璃质感，更好适配全站背景图片；深色工具类（`.bg-forest-900` 系列）全局映射为白色半透明背景；Markdown 编辑器面板、讨论区与指南正文的代码块保持深色卡片保证可读性，行内代码改为浅蓝底深蓝字；浅色状态文字（红/黄/绿/蓝 300/400 系列）全局映射为深色可读版本（代码块内除外）；指南卡片、广播富文本编辑器、更新日志面板等同步改为白色磨砂玻璃。
+* **控件全面改为白色略微透明磨砂玻璃**：主按钮（`.btn-primary`）由黑色渐变改为白色半透明磨砂玻璃（深色文字 + 蓝色强调边），次按钮/危险按钮/输入框/导航/弹窗/Toast 等控件统一为白色磨砂玻璃质感，更好适配全站背景图片；深色工具类（`.bg-forest-900` 系列）全局映射为白色半透明背景；Markdown 编辑器面板、指南正文的代码块保持深色卡片保证可读性，行内代码改为浅蓝底深蓝字；浅色状态文字（红/黄/绿/蓝 300/400 系列）全局映射为深色可读版本（代码块内除外）；指南卡片、广播富文本编辑器、更新日志面板等同步改为白色磨砂玻璃。
 
 * **同步 GitHub 代码 + 上传**：本地改动已与 GitHub 仓库同步并提交。
 
@@ -969,7 +936,7 @@ workspace/
 
 * **彻底删除 CMD 控制台**：移除快捷命令、定时任务、脚本执行/终端等全部功能（路由、服务、模板、前端脚本、数据库表、xterm.js 依赖与构建下载逻辑），管理后台不再显示终端控制台入口。
 
-* **UI 改回白色页面 + 黑色控件**：全站由深色主题改为白色磨砂玻璃风格（白色卡片 + 深色控件），磨砂玻璃质感保留；导航栏大屏端（≥1024px）改为「首页 / 导航 / 互动 / 账号」悬停下拉菜单（导航=指南/讨论/服务器状态，互动=大喇叭音频/背景图片/游戏账号，账号=设置/管理/退出），小屏端保持右侧滑出菜单；下拉使用 CSS 过渡动画流畅展开
+* **UI 改回白色页面 + 黑色控件**：全站由深色主题改为白色磨砂玻璃风格（白色卡片 + 深色控件），磨砂玻璃质感保留；导航栏大屏端（≥1024px）改为「首页 / 导航 / 互动 / 账号」悬停下拉菜单（导航=指南/服务器状态，互动=大喇叭音频/背景图片/游戏账号，账号=设置/管理/退出），小屏端保持右侧滑出菜单；下拉使用 CSS 过渡动画流畅展开
 
 * **数据库迁移到 SQLite（WAL 模式）**：从 DuckDB 迁移到 SQLite，启用 `PRAGMA journal_mode=WAL` + `synchronous=NORMAL` + `busy_timeout=30000`，单例共享连接 + 可重入锁保证多线程安全；备份改用 SQLite 在线备份 API（`Connection.backup()`）；新增迁移脚本 `scripts/migrate_db.py`（自动备份旧库后一键迁移）
 
@@ -1004,7 +971,7 @@ workspace/
 
 * **代码清理**：移除未使用的导入（`request`、`abort`、`redirect`、`url_for`）、死代码注释、未使用函数参数和未使用变量，提升代码可维护性。
 
-* **项目结构优化**：将大文件按功能模块拆分为子包，`services/music_service.py` → `services/music/`（常量/查询/CRUD/上传/收藏），`services/user_service.py` → `services/user/`（认证/资料/管理），`services/updater.py` → `services/updater/`（配置/核心逻辑），`services/discussion_service.py` → `services/discussion/`（帖子/回复/分类）；保留原文件作为兼容性重导出层，旧代码无需修改导入路径。
+* **项目结构优化**：将大文件按功能模块拆分为子包，`services/music_service.py` → `services/music/`（常量/查询/CRUD/上传/收藏），`services/user_service.py` → `services/user/`（认证/资料/管理），`services/updater.py` → `services/updater/`（配置/核心逻辑）；保留原文件作为兼容性重导出层，旧代码无需修改导入路径。
 
 * **一键更新重写**：重写 `services/updater/core.py` 更新逻辑，实现跨平台独立重启脚本（Windows 批处理 / Linux Shell），通过 `tasklist` 检测旧进程退出后启动新进程，解决 Windows 环境下更新后服务器无法正常重启的问题。修复前端日志重复显示问题，调整重启检测时机避免误判。
 

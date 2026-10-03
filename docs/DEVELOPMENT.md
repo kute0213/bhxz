@@ -186,20 +186,18 @@ def do_something(user_id, value, ip_address):
 
 发现重复代码时，正确做法是**抽取到 services**，而非复制粘贴：
 
-* 附件处理始终使用 `services/attachment_service/`
-
 * 用户操作始终使用 `services/user/` 子模块
 
-* 讨论区操作始终使用 `services/discussion/` 子模块
+* 公共建筑与建筑评论始终使用 `services/buildings/` 子模块
 
 ## 上传与列表交互规范
 
 ### 1. 文件上传必须过防火墙文件守卫
 
-所有用户上传（附件 / 音频 / 图片）必须调用 `routes/firewall/file_guard.py` 的 `check_upload()` 做安全校验，不要在各处自行实现扩展名 / 魔数判断：
+所有用户上传（音频 / 图片 / 附件）必须调用 `services/firewall/protection/file_guard.py` 的 `check_upload()` 做安全校验，不要在各处自行实现扩展名 / 魔数判断：
 
 ```python
-from routes.firewall.file_guard import check_upload, KIND_ATTACHMENT
+from services.firewall.protection.file_guard import check_upload, KIND_ATTACHMENT
 ok, message = check_upload(upload, KIND_ATTACHMENT, max_bytes=ATTACHMENT_MAX_BYTES, source='attachment')
 if not ok:
     return False, message
@@ -235,7 +233,7 @@ if not ok:
 | `templates/auth/` | 登录、注册、找回密码 |
 | `templates/settings/` | 用户个人设置 |
 | `templates/admin/` | 管理后台所有页面 |
-| `templates/buildings/`、`guides/`、`music/`、`discussion/`、`backgrounds/`、`game_accounts/` | 对应功能模块页面 |
+| `templates/buildings/`、`guides/`、`music/`、`backgrounds/`、`game_accounts/` | 对应功能模块页面 |
 | `templates/site/` | 站点级信息页（站点文档、服务器状态） |
 | `templates/macros/` | 可复用 Jinja2 宏（`data_table`、`modal` 等） |
 | `templates/emails/` | 邮件 HTML 模板（独立 Jinja2 loader，`templates/emails/base.html` 为其专用布局） |
@@ -244,7 +242,7 @@ if not ok:
 
 每个模板文件名以**语义化小写单词**表达页面类型：
 
-* `index.html` — 功能域入口 / 列表页（如 `discussion/index.html`、`admin/index.html`）
+* `index.html` — 功能域入口 / 列表页（如 `guides/index.html`、`admin/index.html`）
 * `detail.html` — 详情页（如 `guides/detail.html`）
 * `create.html` — 新建表单页（如 `buildings/create.html`）
 * `form.html` — 新增/编辑共用表单页（如 `guides/form.html`）
@@ -262,7 +260,7 @@ if not ok:
 
 ```python
 render_page('admin/users.html', users=users)   # ✅
-render_page('discussion/index.html')           # ✅
+render_page('buildings/index.html')            # ✅
 admin_page('admin/settings.html')              # ✅
 render_page('admin/admin_users.html')          # ❌ 双重前缀
 ```
@@ -340,7 +338,7 @@ Flask 默认以**函数名**作为端点名（`蓝图名.函数名`），模板�
 
 ```bash
 # 匿名访问
-curl -s -o /dev/null -w "%{http_code}" http://localhost:5000/discussion
+curl -s -o /dev/null -w "%{http_code}" http://localhost:5000/buildings
 # 应返回 200
 ```
 
@@ -443,7 +441,7 @@ body.page-leaving .page-content {
 # 认证要求: False=公开, True=需登录, 'admin'=需管理员权限
 
 # 公开页面
-('/discussion', 'GET', [200], False, '讨论区'),
+('/buildings', 'GET', [200], False, '公共建筑列表'),
 
 # 需登录（未登录预期 302 跳转）
 ('/settings', 'GET', [302, 401], True, '设置页'),
@@ -492,7 +490,7 @@ body.page-leaving .page-content {
 | 页面                       | 渲染方式                | 复制触发                                      |
 | ------------------------ | ------------------- | ----------------------------------------- |
 | `guides/detail.html`     | 直接 `marked.parse()` | `CodeBlocks.enhance()`                    |
-| `discussion/detail.html` | 初始内容 + 动态回复         | `CodeBlocks.enhance()` + MutationObserver |
+| `buildings/detail.html`  | 初始内容 + 评论分段加载       | `CodeBlocks.enhance()` + MutationObserver |
 | `docs.html`              | 动态加载                | `CodeBlocks.enhance()`                    |
 
 **新增 Markdown 渲染页面的步骤：**

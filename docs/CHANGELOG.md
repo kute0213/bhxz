@@ -4,7 +4,11 @@
 
 ### 变更
 
-* **防火墙成功拦截返回 403 不再记录日志**（`core/middleware.py`）：`ip_ban_check_hook`（IP 封禁兜底）与 `suspicious_request_check_hook`（可疑访问拦截）在返回 403 前标记 `g.suppress_403_log`，通用 `after_request` 钩子 `log_403_response` 见到该标记即跳过日志；同时移除可疑拦截里显式的「拦截可疑访问并自动封禁」日志。此前被封 IP 反复请求会持续刷出「403 授权拒绝」与拦截日志；现在成功拦截返回 403 不产生任何日志，仅保留自动封禁动作的封禁生效记录（`可疑访问自动封禁生效` / `自动封禁生效`）。授权拒绝类 403（权限不足、CSRF 校验失败等）仍照常写入防火墙模块日志。
+* **彻底删除讨论区功能 + 建筑评论改分段加载 + 分段列表滚动自动加载**：
+  * **删除讨论区**：移除 `routes/discussion/`、`services/discussion/`、`templates/discussion/`、`routes/admin/discussion/`、`templates/admin/discussion.html` 与 `discussion_categories.html`，以及数据库表 `discussion_categories` / `discussion_topics` / `discussion_replies`（旧库启动时自动 `DROP`）；同步清理导航栏讨论入口、系统设置「讨论区配置」、`DISCUSSION_REFRESH_INTERVAL` / `DISCUSSION_TOPICS_PER_PAGE` / `REPLIES_PER_PAGE` 配置项、`templates/macros/upload.html` 与 `services/attachment_service/`；并删除仅供讨论附件使用的死代码——`routes/community` 社区蓝图与其 `/uploads/<filename>` 附件下载路由、`UPLOAD_ATTACHMENTS_DIR` / `UPLOAD_COMMUNITY_DIR` 配置、`uploads/attachments` 与 `uploads/community` 遗留目录、sitemap 与路由前缀中的 `/community` 条目，无残留。
+  * **建筑评论分段加载**：新增 `GET /api/buildings/<id>/comments`（分页由 `BUILDING_COMMENTS_PER_PAGE` 控制，返回 `has_more` / `total`），详情页评论区改为 API 分段加载，删除原实时刷新逻辑。
+  * **分段列表滚动自动加载**：`base.js` 新增 `initAutoLoadMore`——任何带 `data-autoload-more` 的「加载更多」按钮进入视口即自动点击一次加载下一页（隐藏 / 禁用时不触发，加载后按钮被新内容推出视口，滚动到底继续加载）。
+* **防火墙拦截与授权拒绝的 403 均不写入防火墙模块日志**（`core/middleware.py`）：`ip_ban_check_hook`（IP 封禁兜底）与 `suspicious_request_check_hook`（可疑访问拦截）返回 403 时**直接不调用日志函数**（并删除可疑拦截里显式的「拦截可疑访问并自动封禁」日志）；同时删除原通用 `after_request` 钩子 `log_403_response` —— 授权拒绝类 403（权限不足 / CSRF 校验失败等）同样不写防火墙日志，不再需要任何布尔标记。仅保留 IP 封禁 / 自动封禁等**封禁动作**日志（`可疑访问自动封禁生效` / `自动封禁生效`），被封 IP 反复请求不再刷屏。
 * **日志页面支持多来源查看 + 按模块配置 + 启动自动清理日志**：
   * 日志页面（`/admin/logs`）顶部新增「日志来源」下拉，可切换查看**全局日志 / 严重错误日志 / 任意模块单独日志**（`source=global|fatal|module:<名称>`）；全局来源继续走 SSE 实时推送，严重错误与模块来源改为 3 秒轮询整体刷新；清空按钮按当前来源只清对应缓冲/文件。
   * 新增「日志设置」面板：列出所有已注册模块（`GET /admin/api/logs/modules`），每个模块两个开关——「存储」= 落盘到 `logs/modules/<模块名>.log`、「全局」= 并入全局日志（控制台 + `app.log` + 全局缓冲 + SSE），点击即时保存（`POST /admin/api/logs/modules`）并热刷新生效。

@@ -3,11 +3,11 @@
 设计原则：
   - 纯内存计数，不写数据库（频率检测的高频路径不走 DuckDB）
   - 达到阈值后自动调用 service.ban_account() 封禁账号
-  - 由其他模块（讨论、指南、音乐等）在发布内容前调用 check_spam()
+  - 由其他模块（指南、音乐、建筑等）在发布内容前调用 check_spam()
 
 使用方式：
     from services.firewall.protection.spam import check_spam
-    if check_spam(user_id=uid, content_type='discussion_topic', content=text):
+    if check_spam(user_id=uid, content_type='building_comment', content=text):
         return '发布过于频繁，请稍后再试', 429
 """
 
@@ -17,8 +17,6 @@ import threading
 # ---- 频率限制阈值 ----
 # 各内容类型在检测窗口内的最大发布次数
 SPAM_LIMITS = {
-    'discussion_topic':   (2, 60),    # 60秒内最多 2 条话题
-    'discussion_reply':   (5, 60),    # 60秒内最多 5 条回复
     'guide':              (2, 120),   # 120秒内最多 2 篇指南
     'music':              (3, 600),   # 600秒内最多 3 个音乐（每3个计数一次）
     'background':         (6, 60),    # 60秒内最多 6 个背景
@@ -37,8 +35,6 @@ def get_spam_limit(content_type):
     config_map = {
         'building': ('SPAM_LIMIT_BUILDING', 'SPAM_LIMIT_BUILDING_WINDOW'),
         'building_comment': ('SPAM_LIMIT_BUILDING_COMMENT', 'SPAM_LIMIT_BUILDING_COMMENT_WINDOW'),
-        'discussion_topic': ('SPAM_LIMIT_DISCUSSION_TOPIC', 'SPAM_LIMIT_DISCUSSION_TOPIC_WINDOW'),
-        'discussion_reply': ('SPAM_LIMIT_DISCUSSION_REPLY', 'SPAM_LIMIT_DISCUSSION_REPLY_WINDOW'),
         'guide': ('SPAM_LIMIT_GUIDE', 'SPAM_LIMIT_GUIDE_WINDOW'),
         'background': ('SPAM_LIMIT_BACKGROUND', 'SPAM_LIMIT_BACKGROUND_WINDOW'),
         'music': ('SPAM_LIMIT_MUSIC', 'SPAM_LIMIT_MUSIC_WINDOW'),

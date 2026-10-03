@@ -38,7 +38,7 @@
                 <p>暂无待审核的背景图片</p>
             </div>
             <div class="mt-4 text-center">
-                <button type="button" data-bg-more="0" class="btn-secondary px-5 py-2 rounded-lg text-xs{% if pending_bgs|length >= pending_total %} hidden{% endif %}">加载更多</button>
+                <button type="button" data-bg-more="0" data-autoload-more class="btn-secondary px-5 py-2 rounded-lg text-xs{% if pending_bgs|length >= pending_total %} hidden{% endif %}">加载更多</button>
             </div>
         </div>
 
@@ -67,7 +67,7 @@
                 <p>暂无已通过的背景图片</p>
             </div>
             <div class="mt-4 text-center">
-                <button type="button" data-bg-more="1" class="btn-secondary px-5 py-2 rounded-lg text-xs{% if approved_bgs|length >= approved_total %} hidden{% endif %}">加载更多</button>
+                <button type="button" data-bg-more="1" data-autoload-more class="btn-secondary px-5 py-2 rounded-lg text-xs{% if approved_bgs|length >= approved_total %} hidden{% endif %}">加载更多</button>
             </div>
         </div>
 
@@ -97,7 +97,7 @@
                 <p>暂无已驳回的背景图片</p>
             </div>
             <div class="mt-4 text-center">
-                <button type="button" data-bg-more="2" class="btn-secondary px-5 py-2 rounded-lg text-xs{% if rejected_bgs|length >= rejected_total %} hidden{% endif %}">加载更多</button>
+                <button type="button" data-bg-more="2" data-autoload-more class="btn-secondary px-5 py-2 rounded-lg text-xs{% if rejected_bgs|length >= rejected_total %} hidden{% endif %}">加载更多</button>
             </div>
         </div>
     </div>

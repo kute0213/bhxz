@@ -1,11 +1,4 @@
-"""社区蓝图包：文件下载。
+"""社区辅助包：提供 AJAX / 表单统一响应辅助函数。
 
-Blueprint 在此创建，子模块从本包导入 bp 后用 @bp.route 注册路由。
+辅助函数见 routes/community/helpers/，供建筑等模块复用。
 """
-
-from flask import Blueprint
-
-community_bp = Blueprint('community', __name__)
-
-# 导入子模块以注册路由（使用普通 import，避免 fromlist 循环导入反模式）
-import routes.community.pages  # noqa: E402,F401
