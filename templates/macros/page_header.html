@@ -51,6 +51,6 @@
 <h2 class="text-lg font-bold mb-4 flex items-center gap-2">
     {% if icon %}<i data-lucide="{{ icon }}" class="w-5 h-5 text-gold-400"></i>{% endif %}
     {{ title }}
-    {% if extra %}{{ extra }}{% endif %}
+    {% if extra %}{{ extra | safe }}{% endif %}
 </h2>
 {% endmacro %}

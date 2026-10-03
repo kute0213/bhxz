@@ -4,6 +4,7 @@
 
 ### 变更
 
+* **防火墙成功拦截返回 403 不再记录日志**（`core/middleware.py`）：`ip_ban_check_hook`（IP 封禁兜底）与 `suspicious_request_check_hook`（可疑访问拦截）在返回 403 前标记 `g.suppress_403_log`，通用 `after_request` 钩子 `log_403_response` 见到该标记即跳过日志；同时移除可疑拦截里显式的「拦截可疑访问并自动封禁」日志。此前被封 IP 反复请求会持续刷出「403 授权拒绝」与拦截日志；现在成功拦截返回 403 不产生任何日志，仅保留自动封禁动作的封禁生效记录（`可疑访问自动封禁生效` / `自动封禁生效`）。授权拒绝类 403（权限不足、CSRF 校验失败等）仍照常写入防火墙模块日志。
 * **日志页面支持多来源查看 + 按模块配置 + 启动自动清理日志**：
   * 日志页面（`/admin/logs`）顶部新增「日志来源」下拉，可切换查看**全局日志 / 严重错误日志 / 任意模块单独日志**（`source=global|fatal|module:<名称>`）；全局来源继续走 SSE 实时推送，严重错误与模块来源改为 3 秒轮询整体刷新；清空按钮按当前来源只清对应缓冲/文件。
   * 新增「日志设置」面板：列出所有已注册模块（`GET /admin/api/logs/modules`），每个模块两个开关——「存储」= 落盘到 `logs/modules/<模块名>.log`、「全局」= 并入全局日志（控制台 + `app.log` + 全局缓冲 + SSE），点击即时保存（`POST /admin/api/logs/modules`）并热刷新生效。
@@ -28,6 +29,7 @@
 
 ### 修复
 
+* **大喇叭音频管理页「待审核公开申请」标题后原样显示 HTML 文本**：`templates/macros/page_header.html` 的 `section_title` 宏以 `{{ extra }}` 输出 `extra` 参数，在 Jinja 自动转义下 `templates/admin/music.html` 传入的 `<span data-pending-count ...>` 标签被当成纯文本原样渲染，页面上出现「待审核公开申请 `<span ...>0</span>`」。现改为 `{{ extra | safe }}` 按 HTML 渲染（`extra` 由模板开发者提供、非用户输入，仅此一处使用），待审核数量角标正常显示
 * **系统设置页下拉选择框被裁切 + 开关无法切换**：`templates/admin/settings.html` 动态生成的分类卡片带有 `overflow-hidden`，自绘下拉 `.custom-select-dropdown` 为绝对定位（`top: calc(100% + 6px)`、`z-index:2000`），被卡片裁掉导致选项被遮挡/看不全；同时开关容器缺少全局开关脚本依赖的 `data-switch` 属性（`base.js` 只对 `[data-switch]` 绑定点击/键盘切换），点击与键盘都无法切换。现移除卡片 `overflow-hidden`（标题栏补 `rounded-t-2xl` 以匹配卡片 16px 圆角，保持顶部圆角不露出直角底色），并为开关补上 `data-switch`，下拉可完整展开、开关按实际配置正确回显且可正常切换并触发自动保存
 * **防火墙设置页所有开关显示为关闭且无法切换**：`templates/admin/firewall.html` 设置区 15 个开关（IPv6 拦截 / 自动封禁及其 4 个子开关 / 可疑拦截及其 6 个子开关 / DDoS 防护 / 内容注入拦截）的 Jinja 表达式被误写成 `{ { ... } }`（多一个空格，Jinja 不识别而原样输出为文本），导致 `is-on` 类与 `aria-checked` 从未正确渲染——无论实际配置为何，开关一律显示为关闭；同时这些开关缺少全局开关脚本依赖的 `data-switch` 属性（`base.js` 只对 `[data-switch]` 绑定点击/键盘切换），因此点击与键盘都无法切换。现已将全部表达式改回标准 `{{ ... }}` 并补齐 `data-switch`（含内容注入拦截开关 `else '' else ''` 的语法错误），开关按实际配置正确回显且可正常切换；`/admin/firewall/settings/save` 的布尔键集合补入 `CONTENT_INJECTION_BAN_ENABLED`
 * **大量日志调用使用旧签名，事件名落入等级位**：全项目 13 个文件共 92 处 `log('<事件名>', '<描述>', ...)` 旧签名调用（如 `log('Register', '注册成功', ...)`、`log('Login', ...)`、`log('Admin', ...)`、`log('Discussion', ...)`、`log('Captcha', ...)`、`log('Music', ...)` 等）会把事件名渲染到等级位（形如 `[Register] ... [注册成功]`），且等级被误判为 INFO。现统一补齐等级参数为 `log('<LEVEL>', '<事件名>', '<描述>', ...)`（成功/操作记录→INFO、业务校验失败/限流→WARNING、异常与失败→ERROR），全项目「首参非等级」的 `log(` 调用清零（`update.py` 的本地彩色 `log()` 不在范围内）
