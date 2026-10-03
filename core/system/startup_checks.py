@@ -1,19 +1,21 @@
-"""服务器启动健康检查 —— 每次启动自动运行，自动修复不删文件。
+"""服务器启动健康检查 —— 每次启动自动运行，幂等自愈。
 
 检查项：
+0. 废弃模块残留清理：删除已彻底移除功能的遗留模块目录，避免误报
 1. 数据库完整性：检查所有表是否存在，缺失时自动创建
 2. 文件结构完整性：检查必需目录是否存在，缺失时自动创建
 3. 配置完整性：检查关键系统设置是否存在，缺失时自动写入默认值
 4. 数据库文件健康：检查数据库文件是否可正常打开
 
 原则：
-- 只创建不删除（不删文件、不删表、不删数据）
+- 除「已彻底移除功能的废弃残留」外，只创建不删除
 - 所有修复操作都是幂等的
 - 检查失败不阻塞启动，仅记录警告
 """
 
 import os
 import sys
+import shutil
 import importlib
 
 from core.system.logger import log
@@ -25,6 +27,7 @@ def run_startup_checks(app_root: str):
     log('INFO', 'Startup', '║     开始服务器健康检查...            ║')
     log('INFO', 'Startup', '╚══════════════════════════════════════╝')
 
+    _cleanup_obsolete_modules()
     _check_module_imports()
     _check_database()
     _check_directories(app_root)
@@ -38,7 +41,40 @@ def run_startup_checks(app_root: str):
 
 
 # ---------------------------------------------------------------------------
-# 0. 模块导入完整性检查
+# 0. 废弃模块残留清理
+# ---------------------------------------------------------------------------
+
+# 已彻底移除功能的旧模块目录。
+# 文件同步（只覆盖不删除）可能在本地遗留这些目录，导致下面的模块导入检查
+# 误报 "cannot import name ... from config"。此处按路径精确清理，幂等安全。
+_OBSOLETE_MODULE_DIRS = [
+    'routes/discussion',
+    'routes/admin/discussion',
+    'routes/community/pages',
+    'services/discussion',
+    'services/attachment_service',
+]
+
+
+def _cleanup_obsolete_modules():
+    """删除已废弃功能的遗留模块目录（幂等）。"""
+    removed = []
+    for rel_path in _OBSOLETE_MODULE_DIRS:
+        full_path = os.path.join(os.getcwd(), rel_path)
+        if not os.path.isdir(full_path):
+            continue
+        try:
+            shutil.rmtree(full_path)
+            removed.append(rel_path)
+        except Exception as e:
+            log('WARNING', 'Startup', f'  ! 清理废弃模块残留失败 {rel_path}: {e}')
+
+    if removed:
+        log('INFO', 'Startup', f'  ✓ 已清理 {len(removed)} 个废弃模块残留: {", ".join(removed)}')
+
+
+# ---------------------------------------------------------------------------
+# 0.1 模块导入完整性检查
 # ---------------------------------------------------------------------------
 
 # 需要检查的项目顶层包名

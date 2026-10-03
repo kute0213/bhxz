@@ -837,6 +837,8 @@ workspace/
 
 ## 最近更新
 
+* **修复启动时「9 个模块导入失败」误报（废弃模块残留自动清理）**：现象是启动日志出现 `routes.admin.discussion`、`routes.discussion`、`services.discussion`、`services.attachment_service` 等模块 `cannot import name 'UPLOAD_ATTACHMENTS_DIR' from 'config'`。这些功能已在上一版彻底删除，报错源自**文件同步只覆盖不删除**在本地遗留的旧模块目录（`.py` 已被删除但目录仍在，启动扫描时被导入）。`core/system/startup_checks.py` 新增第 0 步 `_cleanup_obsolete_modules()`：按精确路径（`routes/discussion`、`routes/admin/discussion`、`routes/community/pages`、`services/discussion`、`services/attachment_service`）幂等删除废弃残留目录（含 `__pycache__`），随后再执行模块导入检查，确保不再误报。
+
 * **彻底删除讨论区功能 + 建筑评论改分段加载 + 分段列表滚动自动加载**：
   * **删除讨论区**：移除 `routes/discussion/`、`services/discussion/`、`templates/discussion/`、`routes/admin/discussion/`、`templates/admin/discussion.html` 与 `discussion_categories.html`，以及数据库表 `discussion_categories` / `discussion_topics` / `discussion_replies`（旧库启动时自动 `DROP`）；同步清理导航栏讨论入口、系统设置「讨论区配置」及 `DISCUSSION_REFRESH_INTERVAL` / `DISCUSSION_TOPICS_PER_PAGE` / `REPLIES_PER_PAGE` 配置项、`templates/macros/upload.html` 与 `services/attachment_service/`；并删除仅供讨论附件使用的死代码——社区蓝图与其 `/uploads/<filename>` 附件下载路由、`UPLOAD_ATTACHMENTS_DIR` / `UPLOAD_COMMUNITY_DIR` 配置与 `uploads/attachments`、`uploads/community` 遗留目录，无残留。
   * **建筑评论分段加载**：新增 `GET /api/buildings/<id>/comments`（分页由 `BUILDING_COMMENTS_PER_PAGE` 控制，返回 `has_more` / `total`），详情页评论区改为 API 分段加载，删除原实时刷新逻辑。
@@ -975,7 +977,7 @@ workspace/
 
 * **一键更新重写**：重写 `services/updater/core.py` 更新逻辑，实现跨平台独立重启脚本（Windows 批处理 / Linux Shell），通过 `tasklist` 检测旧进程退出后启动新进程，解决 Windows 环境下更新后服务器无法正常重启的问题。修复前端日志重复显示问题，调整重启检测时机避免误判。
 
-- **启动健康检查**：新增 `core/system/startup_checks.py`，每次启动固定运行服务器健康检查——数据库完整性、文件结构、配置完整性、uploads 目录结构检查，自动尝试修复且不删除任何文件。`core/system/init.py` 集成该检查，在数据库初始化前执行。
+- **启动健康检查**：新增 `core/system/startup_checks.py`，每次启动固定运行服务器健康检查——废弃模块残留清理、模块导入完整性、数据库完整性、文件结构、配置完整性、uploads 目录结构检查，自动尝试修复；除「已彻底移除功能的废弃残留目录」外不删除任何文件。`core/system/init.py` 集成该检查，在数据库初始化前执行。
 
 - **错误页面修复**：修复 403/404 错误页面未传递 `user` 上下文变量，导致登录用户显示"请登录"的问题。
 
