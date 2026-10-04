@@ -99,7 +99,7 @@ def building_create():
             return fail('标题、领地名和介绍不能为空')
 
         # 内容注入检测
-        from routes.firewall.content_filter import check_content_injection
+        from services.firewall.protection.content_filter import check_content_injection
         inj_result = check_content_injection(
             user_id=user['id'],
             content=f'{title}\n{warp_name}\n{description}\n{usage_info}\n{notes}\n{tags}',
@@ -116,7 +116,7 @@ def building_create():
         if not captcha_service.verify(captcha_id, captcha_input):
             return fail('验证码错误或已过期')
 
-        from routes.firewall.spam import check_spam, record_activity
+        from services.firewall.protection.spam import check_spam, record_activity
         if check_spam(user_id=user['id'], content_type='building', content=title):
             return fail('发布过于频繁，请稍后再试')
 

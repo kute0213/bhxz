@@ -129,7 +129,7 @@ def edit_building_tags(building_id):
     raw_tags = request.form.get('tags') or ''
 
     # 标签同样做内容注入检测，避免通过标签绕过内容防护
-    from routes.firewall.content_filter import check_content_injection
+    from services.firewall.protection.content_filter import check_content_injection
     inj = check_content_injection(
         user_id=user['id'], content=raw_tags, content_type='building_tags',
         ip_address=get_client_ip(), username=user['username'],
@@ -152,8 +152,8 @@ def add_comment(building_id):
     """发表评论。"""
     user = get_current_user()
 
-    from routes.firewall.spam import check_spam, record_activity
-    from routes.firewall.content_filter import check_content_injection
+    from services.firewall.protection.spam import check_spam, record_activity
+    from services.firewall.protection.content_filter import check_content_injection
 
     content = (request.form.get('content') or '').strip()
     if not content:

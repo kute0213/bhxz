@@ -47,7 +47,7 @@ def shutdown_application(signum=None):
 
     # 停止高性能防火墙（黑名单镜像同步 / DDoS 检测后台线程）
     try:
-        from routes.firewall import firewall
+        from services.firewall import firewall
         firewall.stop_monitor()
     except Exception as exc:
         log('WARNING', 'App', f'防火墙关闭异常: {exc}')
@@ -90,7 +90,7 @@ def run_server(app, port=5000, app_root=None):
     """使用 Cheroot 作为 WSGI 服务器，可选 SSL。"""
     global _server
 
-    from routes.firewall import firewall
+    from services.firewall import firewall
     wrapped_app = firewall.wrap(app)
 
     log('INFO', 'App', f'工作目录: {os.getcwd()}')
@@ -131,7 +131,8 @@ def run_server(app, port=5000, app_root=None):
         return
 
     log('INFO', 'App', '使用 Cheroot 服务器')
-    from routes.firewall import firewall, FirewallServer
+    from services.firewall import firewall
+    from services.firewall.transport.connection_filter import FirewallServer
     server = FirewallServer(
         ('0.0.0.0', port),
         wrapped_app,

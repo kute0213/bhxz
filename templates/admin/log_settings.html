@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block title %}日志设置{% endblock %}
+{% block content %}
+<section class="page-container py-12">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="mb-8">
+            <a href="{{ url_for('admin.admin_logs_page') }}" class="text-gold-400 hover:text-gold-300 text-sm mb-2 inline-block">
+                <i data-lucide="arrow-left" class="w-4 h-4 inline mr-1"></i>返回日志查看
+            </a>
+            <h1 class="text-xl sm:text-2xl font-bold">日志设置</h1>
+            <p class="text-cream/60 text-sm mt-1">按模块配置「存储」与「全局」开关，修改后实时生效。</p>
+        </div>
+
+        <div class="pixel-card rounded-xl p-4 mb-4">
+            <div class="flex flex-wrap items-baseline justify-between gap-2 mb-2">
+                <h2 class="font-semibold text-sm">模块单独日志</h2>
+                <p class="text-xs text-cream/50">
+                    「存储」= 落盘到 <code class="text-cream/70">logs/modules/&lt;模块名&gt;.log</code>；
+                    「全局」= 并入全局日志（控制台 + app.log + SSE）。两个开关都关闭时，
+                    日志仅保留在模块独立缓冲，供「日志查看 → 模块单独日志」查看。
+                </p>
+            </div>
+            <div id="log-settings-list" class="divide-y divide-cream/10">
+                <div class="text-cream/40 text-sm py-3">加载中...</div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_script %}
+<script>
+(function() {
+    const settingsList = document.getElementById('log-settings-list');
+    const MODULES_GET_URL = '{{ url_for("admin.api_get_log_modules") }}';
+    const MODULES_SET_URL = '{{ url_for("admin.api_set_log_module") }}';
+
+    // 模块名 → 展示名
+    const MODULE_LABELS = {
+        'firewall': '防火墙',
+        'captcha': '图形验证码',
+        'email_code': '邮箱验证码',
+        'register': '注册账号',
+        'login': '登录账号',
+    };
+    function moduleLabel(name) {
+        return MODULE_LABELS[name] || name;
+    }
+
+    // 渲染单个模块的配置行
+    function renderModuleRow(m) {
+        function switchHtml(opt, on) {
+            return '<div class="switch ' + (on ? 'is-on' : '') + '" data-switch role="switch" tabindex="0" ' +
+                   'aria-checked="' + (on ? 'true' : 'false') + '" data-name="' + escapeAttr(m.name) + '" data-opt="' + opt + '">' +
+                   '<input type="hidden" value="' + (on ? '1' : '0') + '"></div>';
+        }
+        return '' +
+            '<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 py-3">' +
+                '<div>' +
+                    '<div class="text-sm font-medium">' + escapeHtml(moduleLabel(m.name)) +
+                        ' <span class="text-cream/40 text-xs">(' + escapeHtml(m.name) + ')</span></div>' +
+                    '<div class="text-xs text-cream/50 mt-0.5">落盘文件：logs/modules/' + escapeHtml(m.name) + '.log</div>' +
+                '</div>' +
+                '<div class="flex items-center gap-6">' +
+                    '<div class="flex items-center gap-2 text-xs text-cream/60">存储 ' + switchHtml('store', m.store) + '</div>' +
+                    '<div class="flex items-center gap-2 text-xs text-cream/60">全局 ' + switchHtml('global_enabled', m.global_enabled) + '</div>' +
+                '</div>' +
+            '</div>';
+    }
+
+    // 加载模块列表
+    function loadModules() {
+        fetch(MODULES_GET_URL)
+            .then(r => r.json())
+            .then(function(data) {
+                if (!data.success || !data.modules) return;
+                if (data.modules.length === 0) {
+                    settingsList.innerHTML = '<div class="text-cream/40 text-sm py-3">暂无已注册的模块日志</div>';
+                    return;
+                }
+                var html = '';
+                data.modules.forEach(function(m) {
+                    html += renderModuleRow(m);
+                });
+                settingsList.innerHTML = html;
+            })
+            .catch(function() {
+                settingsList.innerHTML = '<div class="text-red-400 text-sm py-3">模块列表加载失败，请刷新重试</div>';
+            });
+    }
+
+    // 开关切换（事件委托，实时保存）
+    settingsList.addEventListener('change', function(e) {
+        var sw = e.target.closest('[data-switch]');
+        if (!sw) return;
+        var name = sw.getAttribute('data-name');
+        var opt = sw.getAttribute('data-opt');
+        var on = sw.classList.contains('is-on');
+        var payload = { name: name };
+        payload[opt] = on;
+
+        fetch(MODULES_SET_URL, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        })
+            .then(r => r.json())
+            .then(function(data) {
+                if (typeof Toast !== 'undefined') {
+                    if (data.success) Toast.success('已保存');
+                    else Toast.error(data.message || '保存失败');
+                }
+            })
+            .catch(function() {
+                if (typeof Toast !== 'undefined') Toast.error('网络异常，保存失败');
+            });
+    });
+
+    function escapeHtml(text) {
+        var div = document.createElement('div');
+        div.textContent = text == null ? '' : text;
+        return div.innerHTML;
+    }
+
+    function escapeAttr(text) {
+        return String(text == null ? '' : text).replace(/[&<>"']/g, function(c) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
+    }
+
+    loadModules();
+})();
+</script>
+{% endblock %}

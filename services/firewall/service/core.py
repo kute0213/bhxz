@@ -1,7 +1,7 @@
 """防火墙统一业务服务 —— 封禁 IP/账号、白名单管理、警告系统、自动封禁、刷屏记录。
 
 为所有路由模块提供统一、安全的调用接口：
-    from routes.firewall import ban_ip, unban_ip, is_banned, ...
+    from services.firewall import ban_ip, unban_ip, is_banned, ...
 
 设计要点：
   - 所有写操作通过 DuckDB 持久化，同时失效内存缓存
@@ -94,7 +94,7 @@ def get_whitelist():
     Returns:
         list[str]: IP 地址列表
     """
-    from routes.firewall import database as _db
+    from services.firewall.service import database as _db
     cached = getattr(_db, '_cache', {}).get('whitelist', set())
     return list(cached)
 
@@ -348,7 +348,7 @@ def get_banned_ips():
     Returns:
         dict: {ip_address: reason}
     """
-    from routes.firewall import database as _db
+    from services.firewall.service import database as _db
     cached = getattr(_db, '_cache', {}).get('banned_ips', {})
     return dict(cached)
 

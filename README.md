@@ -79,7 +79,7 @@ python scripts/build/package.py
 │   │   └── init.py, logger.py, startup_checks.py
 │   ├── shared/               #   共享工具（无业务逻辑，原 utils 收敛于此）
 │   │   ├── ip.py, captcha.py, ratelimit.py, validation.py
-│   │   ├── process_utils.py, security_scanner.py
+│   │   ├── process_utils.py
 │   │   └── scheduler/        #   统一任务注册表（task / executors / registry）
 │   ├── auth.py               #   认证装饰器、密码哈希
 │   ├── csrf.py               #   CSRF 防护
@@ -108,6 +108,7 @@ python scripts/build/package.py
 │   │   ├── protection/      #     防护策略（spam / content_filter / ddos / file_guard）
 │   │   └── transport/       #     连接层（connection_filter / wrappers）
 │   ├── settings_manager/    #   系统设置管理
+│   ├── security/            #   安全扫描（SQL 注入 / XSS / 路径穿越 / 命令注入 / 敏感探测 / 恶意 UA）
 │   └── sitemap_cache/       #   Sitemap 缓存服务
 ├── routes/       # HTTP 路由层（Flask Blueprint）
 │   ├── admin/          # 管理后台（用户/备份/设置/日志/更新/游戏账号/指南/音乐/背景/建筑等）
@@ -651,7 +652,7 @@ app.py ──→ routes/ ──→ services/ ──→ core/
 | ------ | ----------- | ----------------------------------------------- | --------------------------------- |
 | **入口** | `app.py`    | Flask 实例、蓝图注册、WSGI 服务器                          | 不得包含业务逻辑                          |
 | **路由** | `routes/`   | HTTP 请求解析、参数校验、Session 管理、响应构造                  | 不得包含 SQL、事务、业务逻辑                  |
-| **核心** | `core/`     | 数据库连接、认证装饰器、中间件、CSRF、服务器入口、共享工具（验证码/IP/限流/安全扫描/调度器/错误页/模板上下文/页面渲染） | 不得包含业务逻辑，不导入 services |
+| **核心** | `core/`     | 数据库连接、认证装饰器、中间件、CSRF、服务器入口、共享工具（验证码/IP/限流/调度器/错误页/模板上下文/页面渲染） | 不得包含业务逻辑，不导入 services |
 
 ### 目录结构
 
@@ -667,7 +668,7 @@ workspace/
 │   │   ├── init.py, logger.py, startup_checks.py
 │   ├── shared/               #   共享工具（原 utils 收敛于此）
 │   │   ├── ip.py, captcha.py, ratelimit.py, validation.py
-│   │   ├── process_utils.py, security_scanner.py
+│   │   ├── process_utils.py
 │   │   └── scheduler/        #   统一任务注册表（task / executors / registry）
 │   ├── auth.py               #   认证装饰器、密码哈希
 │   ├── csrf.py               #   CSRF 防护
@@ -836,6 +837,12 @@ workspace/
 详见 [docs/CHANGELOG.md](docs/CHANGELOG.md)。
 
 ## 最近更新
+
+* **防火墙数据库重启不丢 + 项目结构分层优化 + 日志设置独立页面**：
+  * **修复防火墙数据库重启后全部丢失**：`services/firewall/service/database.py` 数据库路径原先经多层 `os.path.dirname` 计算，迁移后层级变深导致实际写入 `services/uploads/db/`（代码目录，不在备份范围、更新时被覆盖）。现改为基于 `APP_ROOT` 直接指向 `uploads/db/firewall.duckdb`（与主站 SQLite 同目录，随站点备份并受更新排除保护），并新增幂等的一次性迁移 `_migrate_legacy_db()`：仅当旧路径存在且比新文件更新时才搬移，不覆盖新数据。
+  * **项目结构分层优化**：跨业务的基础能力统一放入 `core/`（日志 `core/system/logger.py`、监控 `services/firewall/service/monitor.py`、调度 `core/shared/scheduler/`）；有业务语义的模块放入 `services/`——安全扫描从 `core/shared/security_scanner.py` 迁至 `services/security/`，防火墙完整下沉至 `services/firewall/`（`service/` 业务层、`protection/` 防护策略、`transport/` 连接层、`api_guard.py`），`routes/firewall/` 只保留 HTTP 路由入口、实际逻辑全部调用服务层，全站导入同步更新。
+  * **修复部分模块单独日志仍打印到全局日志**：排查确认各模块统一走 `log_module()` 接口、模块设置 `LOG_MODULE_*_GLOBAL` 均关闭后，确保模块单独日志仅写入独立缓冲与文件，不混入全局日志（控制台 / `logs/app.log` / SSE）。
+  * **日志设置改为独立页面**：从日志查看页弹窗重构为独立页面 `/admin/logs/settings`（`templates/admin/log_settings.html`），按模块展示「存储 / 全局」开关并即时保存，日志查看页改为链接跳转。
 
 * **修复启动时「9 个模块导入失败」误报（废弃模块残留自动清理）**：现象是启动日志出现 `routes.admin.discussion`、`routes.discussion`、`services.discussion`、`services.attachment_service` 等模块 `cannot import name 'UPLOAD_ATTACHMENTS_DIR' from 'config'`。这些功能已在上一版彻底删除，报错源自**文件同步只覆盖不删除**在本地遗留的旧模块目录（`.py` 已被删除但目录仍在，启动扫描时被导入）。`core/system/startup_checks.py` 新增第 0 步 `_cleanup_obsolete_modules()`：按精确路径（`routes/discussion`、`routes/admin/discussion`、`routes/community/pages`、`services/discussion`、`services/attachment_service`）幂等删除废弃残留目录（含 `__pycache__`），随后再执行模块导入检查，确保不再误报。
 

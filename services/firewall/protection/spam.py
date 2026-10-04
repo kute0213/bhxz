@@ -121,7 +121,7 @@ class SpamDetector:
 
         if total_violations >= AUTO_BAN_AFTER:
             # 延迟导入避免循环依赖
-            from routes.firewall import ban_account
+            from services.firewall.service.core import ban_account
             ban_account(
                 user_id=user_id,
                 reason=f'自动封禁：刷屏违规 {total_violations} 次',

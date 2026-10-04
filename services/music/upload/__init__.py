@@ -307,7 +307,7 @@ def start_upload(user_id, username, title, is_public, upload_file, ip_address, t
         return False, f'不支持的音频格式，仅支持：{"、".join(sorted(MUSIC_ALLOWED_EXTENSIONS))}'
 
     # 音频安全校验（扩展名白名单 + 危险类型拦截 + 文件头魔数）
-    from routes.firewall.file_guard import check_upload, KIND_AUDIO
+    from services.firewall.protection.file_guard import check_upload, KIND_AUDIO
     ok, message = check_upload(
         upload_file, KIND_AUDIO,
         max_bytes=AUDIO_MAX_BYTES,

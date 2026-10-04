@@ -51,6 +51,13 @@ def admin_logs_page():
     return render_page('admin/logs.html')
 
 
+@admin_bp.route('/admin/logs/settings')
+@admin_required
+def admin_log_settings_page():
+    """日志设置独立页面（按模块配置 是否落盘 / 是否并入全局日志）。"""
+    return render_page('admin/log_settings.html')
+
+
 @admin_bp.route('/admin/api/logs')
 @admin_required
 def api_get_logs():

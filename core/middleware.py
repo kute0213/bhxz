@@ -144,7 +144,7 @@ def register_hooks(app, try_serve_public):
         不渲染页面、不查询额外数据，直接返回空 403 断开连接。
         防火墙成功拦截返回 403 属预期行为，不写任何日志。
         """
-        from routes.firewall import is_banned
+        from services.firewall import is_banned
         ip = get_client_ip()
         banned, _reason = is_banned(ip)
         if banned:
@@ -164,8 +164,8 @@ def register_hooks(app, try_serve_public):
         if request.path.startswith('/static/'):
             return None
 
-        from core.shared.security_scanner import scan_request
-        from routes.firewall import ban_suspicious_ip
+        from services.security import scan_request
+        from services.firewall import ban_suspicious_ip
         from core.errors import render_error_page
         attack_type, matched = scan_request(
             path=request.path,
@@ -192,7 +192,7 @@ def register_hooks(app, try_serve_public):
         计数由防火墙内存缓存维护，超限时直接返回 429 JSON（不进入业务逻辑）。
         白名单 IP 与本地回环不受限制；非 API 请求不做任何处理。
         """
-        from routes.firewall.api_guard import guard_api_request
+        from services.firewall.api_guard import guard_api_request
         resp = guard_api_request()
         if resp is not None:
             return resp
@@ -204,7 +204,7 @@ def register_hooks(app, try_serve_public):
 
         满足「到达限制后防火墙封禁 API，但刷新后即可继续调用」的行为要求。
         """
-        from routes.firewall.api_guard import is_api_request, reset_api_limit
+        from services.firewall.api_guard import is_api_request, reset_api_limit
         if is_api_request(request):
             return None
         # 仅对浏览器页面导航（Accept 含 text/html）重置，避免爬虫/接口误触发

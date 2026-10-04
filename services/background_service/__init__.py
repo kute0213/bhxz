@@ -74,7 +74,7 @@ def _validate_image(upload):
         raise ValueError('不支持的图片格式，支持：png、jpg、jpeg、gif、webp、bmp、tiff')
 
     # 防火墙文件守卫：拒绝危险扩展名 + 校验文件头魔数（防改名伪装）
-    from routes.firewall.file_guard import check_upload, KIND_IMAGE
+    from services.firewall.protection.file_guard import check_upload, KIND_IMAGE
     ok, message = check_upload(
         upload, KIND_IMAGE,
         max_bytes=USER_IMAGE_MAX_BYTES,

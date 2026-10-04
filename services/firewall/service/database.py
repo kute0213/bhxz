@@ -9,19 +9,53 @@
 
 import os
 import queue
+import shutil
 import threading
 import time
 from datetime import datetime
 
 import duckdb
 
+from config import APP_ROOT
 from core.system.logger import log_firewall
 
-DB_DIR = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-    'uploads', 'db',
-)
+# 防火墙数据库固定存放在项目根目录的 uploads/db/ 下（与主站 SQLite 同目录），
+# 随站点一起被备份、且在更新时受 UPDATE_EXCLUDED_FILES 保护，重启不丢。
+DB_DIR = os.path.join(APP_ROOT, 'uploads', 'db')
 DB_PATH = os.path.join(DB_DIR, 'firewall.duckdb')
+
+# 旧版路径计算错误时写入的遗留位置（防火墙服务迁移后层级变深，dirname 少了
+# 一级，曾把数据库写到 services/uploads/db/）。该位置不在备份范围、更新会被
+# 代码目录覆盖，导致重启后数据「丢失」。此处仅作一次性迁移来源。
+_LEGACY_DB_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    'uploads', 'db', 'firewall.duckdb',
+)
+
+
+def _migrate_legacy_db():
+    """将旧路径下遗留的防火墙数据库迁移到正确位置（幂等，一次性）。
+
+    优先迁移「更新」的数据：仅当正确路径不存在、或旧路径文件更新时才执行，
+    避免把活跃数据留在会被覆盖的旧位置，也避免用旧数据覆盖新数据。
+    """
+    if not os.path.isfile(_LEGACY_DB_PATH):
+        return
+    try:
+        legacy_mtime = os.path.getmtime(_LEGACY_DB_PATH)
+        if os.path.exists(DB_PATH) and os.path.getmtime(DB_PATH) >= legacy_mtime:
+            return
+        _ensure_dir()
+        shutil.move(_LEGACY_DB_PATH, DB_PATH)
+        for suffix in ('.wal', '.tmp'):
+            legacy = _LEGACY_DB_PATH + suffix
+            target = DB_PATH + suffix
+            if os.path.isfile(legacy) and not os.path.exists(target):
+                shutil.move(legacy, target)
+        log_firewall('INFO', 'FirewallDB', '已迁移旧路径防火墙数据库到正确位置',
+                     src=_LEGACY_DB_PATH, dst=DB_PATH)
+    except Exception as exc:
+        log_firewall('WARNING', 'FirewallDB', f'迁移旧路径防火墙数据库失败: {exc}')
 
 _conn = None
 _conn_lock = threading.Lock()
@@ -508,6 +542,7 @@ def get_db():
     if _conn is None:
         with _conn_lock:
             if _conn is None:
+                _migrate_legacy_db()
                 _ensure_dir()
                 _conn = duckdb.connect(DB_PATH)
                 _conn.execute("SET threads TO 2")
