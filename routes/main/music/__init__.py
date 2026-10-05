@@ -136,6 +136,13 @@ def upload_music():
     if check_spam(user_id=user['id'], content_type='music', content=title):
         return jsonify({'error': '上传过于频繁，请稍后再试'}), 400
 
+    # 待审核数量上限（仅「申请公开」时进入待审核，先查再上传，避免白传大文件）
+    if is_public:
+        from core.helpers import check_pending_limit
+        allowed, msg = check_pending_limit(user, 'music')
+        if not allowed:
+            return jsonify({'error': msg}), 400
+
     success, result = music_service.start_upload(
         user_id=user['id'],
         username=user['username'],

@@ -210,263 +210,328 @@
 
     <!-- ============ 设置页面 ============ -->
     {% if page == 'settings' %}
-    <div class="grid grid-cols-1 gap-6">
-      <div class="col-span-full">
-        <div class="pixel-card rounded-xl p-6">
-          <h2 class="text-lg font-bold mb-4">防火墙配置</h2>
-          <form id="settings-form" class="space-y-6">
+    <form id="settings-form" class="grid grid-cols-1 gap-6">
 
-            <!-- IPv6 拦截 -->
-            <div>
-              <h3 class="text-base font-semibold text-cream/80 border-b border-forest-700/30 pb-2 mb-3">IPv6 拦截</h3>
-              <div class="space-y-3">
-                <label class="flex items-center justify-between gap-2 cursor-pointer p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
-                  <span class="text-sm text-cream/80"><i data-lucide="globe" class="w-4 h-4 inline-block mr-1 text-rose-400"></i>拦截所有 IPv6 访问</span>
-                  <div id="cfg-IPV6_BLOCK_ENABLED" class="switch {{ 'is-on' if ipv6_block_enabled else '' }}" aria-checked="{{ 'true' if ipv6_block_enabled else 'false' }}" role="switch" tabindex="0" data-switch>
-                                <input type="hidden" value="{{ '1' if ipv6_block_enabled else '0' }}">
-                            </div>
-                </label>
-                <p class="text-xs text-cream/50 mt-1">开启后，除本地回环（::1）外所有 IPv6 连接将直接被断开</p>
-              </div>
+      <!-- IPv6 拦截 -->
+      <div class="pixel-card rounded-xl p-6">
+        <h3 class="font-bold text-base mb-3 flex items-center gap-2">
+          <i data-lucide="globe" class="w-4 h-4 text-rose-400"></i>
+          IPv6 拦截
+        </h3>
+        <p class="text-xs text-cream/50 mb-3">开启后，除本地回环（::1）外所有 IPv6 连接将直接被断开</p>
+        <label class="flex items-center justify-between gap-2 cursor-pointer p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
+          <span class="text-sm text-cream/80">拦截所有 IPv6 访问</span>
+          <div id="cfg-IPV6_BLOCK_ENABLED" class="switch {{ 'is-on' if ipv6_block_enabled else '' }}" aria-checked="{{ 'true' if ipv6_block_enabled else 'false' }}" role="switch" tabindex="0" data-switch>
+            <input type="hidden" value="{{ '1' if ipv6_block_enabled else '0' }}">
+          </div>
+        </label>
+      </div>
+
+      <!-- 自动 IP 封禁 -->
+      <div class="pixel-card rounded-xl p-6">
+        <h3 class="font-bold text-base mb-3 flex items-center gap-2">
+          <i data-lucide="shield-alert" class="w-4 h-4 text-rose-400"></i>
+          自动 IP 封禁
+        </h3>
+        <p class="text-xs text-cream/50 mb-3">触发限流的可疑操作（登录/注册/找回密码/邮箱验证码）将自动封禁对应 IP；白名单 IP 不受影响</p>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="flex items-center justify-between gap-2 p-3 rounded-lg bg-forest-800/30 border border-forest-700/30 md:col-span-2">
+            <span class="text-sm text-cream/80">启用自动封禁</span>
+            <div id="cfg-AUTO_BAN_ENABLED" class="switch {{ 'is-on' if auto_ban_enabled else '' }}" aria-checked="{{ 'true' if auto_ban_enabled else 'false' }}" role="switch" tabindex="0" data-switch>
+              <input type="hidden" value="{{ '1' if auto_ban_enabled else '0' }}">
             </div>
-
-            <!-- 自动 IP 封禁 -->
-            <div>
-              <h3 class="text-base font-semibold text-cream/80 border-b border-forest-700/30 pb-2 mb-3">自动 IP 封禁</h3>
-              <div class="space-y-3">
-                <label class="flex items-center justify-between gap-2 cursor-pointer">
-                  <span class="text-sm text-cream/80">启用自动封禁</span>
-                  <div id="cfg-AUTO_BAN_ENABLED" class="switch {{ 'is-on' if auto_ban_enabled else '' }}" aria-checked="{{ 'true' if auto_ban_enabled else 'false' }}" role="switch" tabindex="0" data-switch>
-                                <input type="hidden" value="{{ '1' if auto_ban_enabled else '0' }}">
-                            </div>
-                </label>
-                <div>
-                  <label class="block text-sm text-cream/70 mb-1">封禁时长（分钟）</label>
-                  <input type="number" id="cfg-AUTO_BAN_DURATION_MINUTES" value="{{ auto_ban_duration_minutes }}" class="input-field w-full px-4 py-2 rounded-lg">
-                </div>
-                <div>
-                  <label class="block text-sm text-cream/70 mb-1">永久封禁触发次数</label>
-                  <input type="number" id="cfg-AUTO_BAN_PERMANENT_AFTER" value="{{ auto_ban_permanent_after }}" class="input-field w-full px-4 py-2 rounded-lg">
-                  <p class="text-xs text-cream/50 mt-1">在统计窗口内多次触发自动封禁达到该次数后升级为永久封禁；0 = 关闭</p>
-                </div>
-                <div>
-                  <label class="block text-sm text-cream/70 mb-1">违规统计窗口（小时）</label>
-                  <input type="number" id="cfg-AUTO_BAN_OFFENSE_WINDOW_HOURS" value="{{ auto_ban_offense_window_hours }}" class="input-field w-full px-4 py-2 rounded-lg">
-                </div>
-                <label class="flex items-center justify-between gap-2 cursor-pointer p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
-                  <span class="text-sm text-cream/80"><i data-lucide="log-in" class="w-4 h-4 inline-block mr-1 text-gold-400"></i>登录失败</span>
-                  <div id="cfg-AUTO_BAN_LOGIN_ENABLED" class="switch {{ 'is-on' if auto_ban_login_enabled else '' }}" aria-checked="{{ 'true' if auto_ban_login_enabled else 'false' }}" role="switch" tabindex="0" data-switch>
-                                <input type="hidden" value="{{ '1' if auto_ban_login_enabled else '0' }}">
-                            </div>
-                </label>
-                <label class="flex items-center justify-between gap-2 cursor-pointer p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
-                  <span class="text-sm text-cream/80"><i data-lucide="user-plus" class="w-4 h-4 inline-block mr-1 text-gold-400"></i>注册异常</span>
-                  <div id="cfg-AUTO_BAN_REGISTER_ENABLED" class="switch {{ 'is-on' if auto_ban_register_enabled else '' }}" aria-checked="{{ 'true' if auto_ban_register_enabled else 'false' }}" role="switch" tabindex="0" data-switch>
-                                <input type="hidden" value="{{ '1' if auto_ban_register_enabled else '0' }}">
-                            </div>
-                </label>
-                <label class="flex items-center justify-between gap-2 cursor-pointer p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
-                  <span class="text-sm text-cream/80"><i data-lucide="mail" class="w-4 h-4 inline-block mr-1 text-gold-400"></i>邮件验证异常</span>
-                  <div id="cfg-AUTO_BAN_EMAIL_ENABLED" class="switch {{ 'is-on' if auto_ban_email_enabled else '' }}" aria-checked="{{ 'true' if auto_ban_email_enabled else 'false' }}" role="switch" tabindex="0" data-switch>
-                                <input type="hidden" value="{{ '1' if auto_ban_email_enabled else '0' }}">
-                            </div>
-                </label>
-                <label class="flex items-center justify-between gap-2 cursor-pointer p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
-                  <span class="text-sm text-cream/80"><i data-lucide="key-round" class="w-4 h-4 inline-block mr-1 text-gold-400"></i>找回密码异常</span>
-                  <div id="cfg-AUTO_BAN_FORGOT_PASSWORD_ENABLED" class="switch {{ 'is-on' if auto_ban_forgot_password_enabled else '' }}" aria-checked="{{ 'true' if auto_ban_forgot_password_enabled else 'false' }}" role="switch" tabindex="0" data-switch>
-                                <input type="hidden" value="{{ '1' if auto_ban_forgot_password_enabled else '0' }}">
-                            </div>
-                </label>
-              </div>
+          </div>
+          <div>
+            <label class="block text-sm text-cream/70 mb-1">封禁时长（分钟）</label>
+            <input type="number" id="cfg-AUTO_BAN_DURATION_MINUTES" value="{{ auto_ban_duration_minutes }}" class="input-field w-full px-4 py-2 rounded-lg">
+            <p class="text-xs text-cream/50 mt-1">0 = 永久封禁</p>
+          </div>
+          <div>
+            <label class="block text-sm text-cream/70 mb-1">永久封禁触发次数</label>
+            <input type="number" id="cfg-AUTO_BAN_PERMANENT_AFTER" value="{{ auto_ban_permanent_after }}" class="input-field w-full px-4 py-2 rounded-lg">
+            <p class="text-xs text-cream/50 mt-1">统计窗口内多次触发达到该次数后升级为永久封禁；0 = 关闭</p>
+          </div>
+          <div>
+            <label class="block text-sm text-cream/70 mb-1">违规统计窗口（小时）</label>
+            <input type="number" id="cfg-AUTO_BAN_OFFENSE_WINDOW_HOURS" value="{{ auto_ban_offense_window_hours }}" class="input-field w-full px-4 py-2 rounded-lg">
+          </div>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-4">
+          <label class="flex items-center justify-between gap-2 cursor-pointer p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
+            <span class="text-sm text-cream/80"><i data-lucide="log-in" class="w-4 h-4 inline-block mr-1 text-gold-400"></i>登录失败</span>
+            <div id="cfg-AUTO_BAN_LOGIN_ENABLED" class="switch {{ 'is-on' if auto_ban_login_enabled else '' }}" aria-checked="{{ 'true' if auto_ban_login_enabled else 'false' }}" role="switch" tabindex="0" data-switch>
+              <input type="hidden" value="{{ '1' if auto_ban_login_enabled else '0' }}">
             </div>
-
-            <!-- 可疑访问拦截 -->
-            <div>
-              <h3 class="text-base font-semibold text-cream/80 border-b border-forest-700/30 pb-2 mb-3">可疑访问拦截</h3>
-              <div class="space-y-3">
-                <label class="flex items-center justify-between gap-2 cursor-pointer">
-                  <span class="text-sm text-cream/80">启用可疑拦截</span>
-                  <div id="cfg-SUSPICIOUS_BLOCK_ENABLED" class="switch {{ 'is-on' if suspicious_block_enabled else '' }}" aria-checked="{{ 'true' if suspicious_block_enabled else 'false' }}" role="switch" tabindex="0" data-switch>
-                                <input type="hidden" value="{{ '1' if suspicious_block_enabled else '0' }}">
-                            </div>
-                </label>
-                <div>
-                  <label class="block text-sm text-cream/70 mb-1">封禁时长（分钟）</label>
-                  <input type="number" id="cfg-SUSPICIOUS_BLOCK_DURATION_MINUTES" value="{{ suspicious_block_duration_minutes }}" class="input-field w-full px-4 py-2 rounded-lg">
-                </div>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <label class="flex items-center justify-between gap-2 cursor-pointer p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
-                    <span class="text-sm text-cream/80"><i data-lucide="database" class="w-4 h-4 inline-block mr-1 text-gold-400"></i>SQL 注入</span>
-                    <div id="cfg-SUSPICIOUS_BLOCK_SQLI_ENABLED" class="switch {{ 'is-on' if suspicious_sqli_enabled else '' }}" aria-checked="{{ 'true' if suspicious_sqli_enabled else 'false' }}" role="switch" tabindex="0" data-switch>
-                                <input type="hidden" value="{{ '1' if suspicious_sqli_enabled else '0' }}">
-                            </div>
-                  </label>
-                  <label class="flex items-center justify-between gap-2 cursor-pointer p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
-                    <span class="text-sm text-cream/80"><i data-lucide="code" class="w-4 h-4 inline-block mr-1 text-gold-400"></i>XSS</span>
-                    <div id="cfg-SUSPICIOUS_BLOCK_XSS_ENABLED" class="switch {{ 'is-on' if suspicious_xss_enabled else '' }}" aria-checked="{{ 'true' if suspicious_xss_enabled else 'false' }}" role="switch" tabindex="0" data-switch>
-                                <input type="hidden" value="{{ '1' if suspicious_xss_enabled else '0' }}">
-                            </div>
-                  </label>
-                  <label class="flex items-center justify-between gap-2 cursor-pointer p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
-                    <span class="text-sm text-cream/80"><i data-lucide="folder-tree" class="w-4 h-4 inline-block mr-1 text-gold-400"></i>路径遍历</span>
-                    <div id="cfg-SUSPICIOUS_BLOCK_PATH_TRAVERSAL_ENABLED" class="switch {{ 'is-on' if suspicious_path_traversal_enabled else '' }}" aria-checked="{{ 'true' if suspicious_path_traversal_enabled else 'false' }}" role="switch" tabindex="0" data-switch>
-                                <input type="hidden" value="{{ '1' if suspicious_path_traversal_enabled else '0' }}">
-                            </div>
-                  </label>
-                  <label class="flex items-center justify-between gap-2 cursor-pointer p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
-                    <span class="text-sm text-cream/80"><i data-lucide="terminal" class="w-4 h-4 inline-block mr-1 text-gold-400"></i>命令注入</span>
-                    <div id="cfg-SUSPICIOUS_BLOCK_COMMAND_INJECTION_ENABLED" class="switch {{ 'is-on' if suspicious_command_injection_enabled else '' }}" aria-checked="{{ 'true' if suspicious_command_injection_enabled else 'false' }}" role="switch" tabindex="0" data-switch>
-                                <input type="hidden" value="{{ '1' if suspicious_command_injection_enabled else '0' }}">
-                            </div>
-                  </label>
-                  <label class="flex items-center justify-between gap-2 cursor-pointer p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
-                    <span class="text-sm text-cream/80"><i data-lucide="file-search" class="w-4 h-4 inline-block mr-1 text-gold-400"></i>敏感探测</span>
-                    <div id="cfg-SUSPICIOUS_BLOCK_SENSITIVE_PROBE_ENABLED" class="switch {{ 'is-on' if suspicious_sensitive_probe_enabled else '' }}" aria-checked="{{ 'true' if suspicious_sensitive_probe_enabled else 'false' }}" role="switch" tabindex="0" data-switch>
-                                <input type="hidden" value="{{ '1' if suspicious_sensitive_probe_enabled else '0' }}">
-                            </div>
-                  </label>
-                  <label class="flex items-center justify-between gap-2 cursor-pointer p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
-                    <span class="text-sm text-cream/80"><i data-lucide="bot" class="w-4 h-4 inline-block mr-1 text-gold-400"></i>恶意 UA</span>
-                    <div id="cfg-SUSPICIOUS_BLOCK_MALICIOUS_UA_ENABLED" class="switch {{ 'is-on' if suspicious_malicious_ua_enabled else '' }}" aria-checked="{{ 'true' if suspicious_malicious_ua_enabled else 'false' }}" role="switch" tabindex="0" data-switch>
-                                <input type="hidden" value="{{ '1' if suspicious_malicious_ua_enabled else '0' }}">
-                            </div>
-                  </label>
-                </div>
-              </div>
+          </label>
+          <label class="flex items-center justify-between gap-2 cursor-pointer p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
+            <span class="text-sm text-cream/80"><i data-lucide="user-plus" class="w-4 h-4 inline-block mr-1 text-gold-400"></i>注册异常</span>
+            <div id="cfg-AUTO_BAN_REGISTER_ENABLED" class="switch {{ 'is-on' if auto_ban_register_enabled else '' }}" aria-checked="{{ 'true' if auto_ban_register_enabled else 'false' }}" role="switch" tabindex="0" data-switch>
+              <input type="hidden" value="{{ '1' if auto_ban_register_enabled else '0' }}">
             </div>
-
-            <!-- DDoS 防护 -->
-            <div>
-              <h3 class="text-base font-semibold text-cream/80 border-b border-forest-700/30 pb-2 mb-3">DDoS 防护</h3>
-              <div class="space-y-3">
-                <label class="flex items-center justify-between gap-2 cursor-pointer">
-                  <span class="text-sm text-cream/80">启用 DDoS 防护</span>
-                  <div id="cfg-DDOS_GUARD_ENABLED" class="switch {{ 'is-on' if ddos_guard_enabled else '' }}" aria-checked="{{ 'true' if ddos_guard_enabled else 'false' }}" role="switch" tabindex="0" data-switch>
-                                <input type="hidden" value="{{ '1' if ddos_guard_enabled else '0' }}">
-                            </div>
-                </label>
-                <div>
-                  <label class="block text-sm text-cream/70 mb-1">防护强度</label>
-                  <div id="cfg-DDOS_GUARD_INTENSITY" class="custom-select w-full" data-custom-select>
-                    <div class="custom-select-trigger" data-trigger tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false">
-                        <span class="custom-select-label">{{ '低' if ddos_guard_intensity == 'low' else ('中' if ddos_guard_intensity == 'medium' else '高') }}</span>
-                        <i data-lucide="chevron-down" class="caret"></i>
-                    </div>
-                    <div class="custom-select-dropdown" role="listbox">
-                        <div class="custom-select-option{{ ' is-selected' if ddos_guard_intensity == 'low' }}" data-value="low">低</div>
-                        <div class="custom-select-option{{ ' is-selected' if ddos_guard_intensity == 'medium' }}" data-value="medium">中</div>
-                        <div class="custom-select-option{{ ' is-selected' if ddos_guard_intensity == 'high' }}" data-value="high">高</div>
-                    </div>
-                    <input type="hidden" value="{{ ddos_guard_intensity }}">
-                </div>
-                </div>
-                <div>
-                  <label class="block text-sm text-cream/70 mb-1">封禁时长（分钟）</label>
-                  <input type="number" id="cfg-DDOS_GUARD_BAN_MINUTES" value="{{ ddos_guard_ban_minutes }}" class="input-field w-full px-4 py-2 rounded-lg">
-                </div>
-                <div>
-                  <label class="block text-sm text-cream/70 mb-1">永久封禁次数阈值</label>
-                  <input type="number" id="cfg-DDOS_GUARD_PERMANENT_AFTER" value="{{ ddos_guard_permanent_after }}" class="input-field w-full px-4 py-2 rounded-lg">
-                </div>
-                <div>
-                  <label class="block text-sm text-cream/70 mb-1">违规统计窗口（小时）</label>
-                  <input type="number" id="cfg-DDOS_GUARD_OFFENSE_WINDOW_HOURS" value="{{ ddos_guard_offense_window_hours }}" class="input-field w-full px-4 py-2 rounded-lg">
-                </div>
-              </div>
+          </label>
+          <label class="flex items-center justify-between gap-2 cursor-pointer p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
+            <span class="text-sm text-cream/80"><i data-lucide="mail" class="w-4 h-4 inline-block mr-1 text-gold-400"></i>邮件验证异常</span>
+            <div id="cfg-AUTO_BAN_EMAIL_ENABLED" class="switch {{ 'is-on' if auto_ban_email_enabled else '' }}" aria-checked="{{ 'true' if auto_ban_email_enabled else 'false' }}" role="switch" tabindex="0" data-switch>
+              <input type="hidden" value="{{ '1' if auto_ban_email_enabled else '0' }}">
             </div>
-
-            <!-- 发布内容注入检测 -->
-            <div class="pixel-card rounded-xl p-6">
-              <h3 class="font-bold text-base mb-3 flex items-center gap-2">
-                <i data-lucide="file-code" class="w-4 h-4 text-rose-400"></i>
-                发布内容注入检测
-              </h3>
-              <p class="text-xs text-cream/50 mb-3">检测用户发布的指南/建筑等包含 XSS/HTML/JS 注入的恶意代码。首次拦截仅拒绝发布，累计 2 次后自动封禁账号</p>
-              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label class="flex items-center gap-2 cursor-pointer">
-                    <div id="cfg-CONTENT_INJECTION_BAN_ENABLED" class="switch {{ 'is-on' if content_injection_enabled else '' }}" aria-checked="{{ 'true' if content_injection_enabled else 'false' }}" role="switch" tabindex="0" data-switch>
-                                <input type="hidden" value="{{ '1' if content_injection_enabled else '0' }}">
-                            </div>
-                    <span class="text-sm text-cream/80">启用内容注入拦截</span>
-                  </label>
-                </div>
-                <div>
-                  <label class="block text-sm text-cream/70 mb-1">封禁时长（分钟）</label>
-                  <input type="number" id="cfg-CONTENT_INJECTION_BAN_DURATION_MINUTES" value="{{ content_injection_duration }}" class="input-field w-full px-4 py-2 rounded-lg">
-                </div>
-              </div>
+          </label>
+          <label class="flex items-center justify-between gap-2 cursor-pointer p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
+            <span class="text-sm text-cream/80"><i data-lucide="key-round" class="w-4 h-4 inline-block mr-1 text-gold-400"></i>找回密码异常</span>
+            <div id="cfg-AUTO_BAN_FORGOT_PASSWORD_ENABLED" class="switch {{ 'is-on' if auto_ban_forgot_password_enabled else '' }}" aria-checked="{{ 'true' if auto_ban_forgot_password_enabled else 'false' }}" role="switch" tabindex="0" data-switch>
+              <input type="hidden" value="{{ '1' if auto_ban_forgot_password_enabled else '0' }}">
             </div>
-
-            <!-- 发布频率限制 -->
-            <div>
-              <h3 class="text-base font-semibold text-cream/80 border-b border-forest-700/30 pb-2 mb-3">发布频率限制</h3>
-              <p class="text-xs text-cream/50 mb-3">各内容类型在检测窗口内的最大发布次数，超限将触发自动封禁</p>
-              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                <div class="p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
-                  <label class="block text-xs text-cream/70 mb-1 font-medium">公共建筑</label>
-                  <div class="flex items-center gap-2">
-                    <span class="text-xs text-cream/50">限</span>
-                    <input type="number" id="cfg-SPAM_LIMIT_BUILDING" value="{{ spam_limit_building }}" class="input-field w-16 px-2 py-1.5 rounded text-center text-sm">
-                    <span class="text-xs text-cream/50">条 /</span>
-                    <input type="number" id="cfg-SPAM_LIMIT_BUILDING_WINDOW" value="{{ spam_limit_building_window }}" class="input-field w-16 px-2 py-1.5 rounded text-center text-sm">
-                    <span class="text-xs text-cream/50">秒</span>
-                  </div>
-                </div>
-                <div class="p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
-                  <label class="block text-xs text-cream/70 mb-1 font-medium">建筑评论</label>
-                  <div class="flex items-center gap-2">
-                    <span class="text-xs text-cream/50">限</span>
-                    <input type="number" id="cfg-SPAM_LIMIT_BUILDING_COMMENT" value="{{ spam_limit_building_comment }}" class="input-field w-16 px-2 py-1.5 rounded text-center text-sm">
-                    <span class="text-xs text-cream/50">条 /</span>
-                    <input type="number" id="cfg-SPAM_LIMIT_BUILDING_COMMENT_WINDOW" value="{{ spam_limit_building_comment_window }}" class="input-field w-16 px-2 py-1.5 rounded text-center text-sm">
-                    <span class="text-xs text-cream/50">秒</span>
-                  </div>
-                </div>
-                <div class="p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
-                  <label class="block text-xs text-cream/70 mb-1 font-medium">服务器指南</label>
-                  <div class="flex items-center gap-2">
-                    <span class="text-xs text-cream/50">限</span>
-                    <input type="number" id="cfg-SPAM_LIMIT_GUIDE" value="{{ spam_limit_guide }}" class="input-field w-16 px-2 py-1.5 rounded text-center text-sm">
-                    <span class="text-xs text-cream/50">条 /</span>
-                    <input type="number" id="cfg-SPAM_LIMIT_GUIDE_WINDOW" value="{{ spam_limit_guide_window }}" class="input-field w-16 px-2 py-1.5 rounded text-center text-sm">
-                    <span class="text-xs text-cream/50">秒</span>
-                  </div>
-                </div>
-                <div class="p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
-                  <label class="block text-xs text-cream/70 mb-1 font-medium">背景图片</label>
-                  <div class="flex items-center gap-2">
-                    <span class="text-xs text-cream/50">限</span>
-                    <input type="number" id="cfg-SPAM_LIMIT_BACKGROUND" value="{{ spam_limit_background }}" class="input-field w-16 px-2 py-1.5 rounded text-center text-sm">
-                    <span class="text-xs text-cream/50">条 /</span>
-                    <input type="number" id="cfg-SPAM_LIMIT_BACKGROUND_WINDOW" value="{{ spam_limit_background_window }}" class="input-field w-16 px-2 py-1.5 rounded text-center text-sm">
-                    <span class="text-xs text-cream/50">秒</span>
-                  </div>
-                </div>
-                <div class="p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
-                  <label class="block text-xs text-cream/70 mb-1 font-medium">大喇叭音频</label>
-                  <div class="flex items-center gap-2">
-                    <span class="text-xs text-cream/50">限</span>
-                    <input type="number" id="cfg-SPAM_LIMIT_MUSIC" value="{{ spam_limit_music }}" class="input-field w-16 px-2 py-1.5 rounded text-center text-sm">
-                    <span class="text-xs text-cream/50">条 /</span>
-                    <input type="number" id="cfg-SPAM_LIMIT_MUSIC_WINDOW" value="{{ spam_limit_music_window }}" class="input-field w-16 px-2 py-1.5 rounded text-center text-sm">
-                    <span class="text-xs text-cream/50">秒</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <button type="button" id="fw-save-btn" class="btn-primary px-5 py-2 text-sm inline-flex items-center gap-2" onclick="saveFirewallSettings()">
-              <i data-lucide="save" class="w-4 h-4"></i>
-              保存设置
-            </button>
-            <span id="settings-status" class="ms-2 text-sm"></span>
-          </form>
+          </label>
         </div>
       </div>
 
+      <!-- 可疑访问拦截 -->
+      <div class="pixel-card rounded-xl p-6">
+        <h3 class="font-bold text-base mb-3 flex items-center gap-2">
+          <i data-lucide="scan-search" class="w-4 h-4 text-rose-400"></i>
+          可疑访问拦截
+        </h3>
+        <p class="text-xs text-cream/50 mb-3">命中攻击特征（SQL 注入/XSS/路径穿越/命令注入/敏感探测/恶意 UA）的请求将被拦截并自动封禁来源 IP；白名单 IP 不受影响</p>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="flex items-center justify-between gap-2 p-3 rounded-lg bg-forest-800/30 border border-forest-700/30 md:col-span-2">
+            <span class="text-sm text-cream/80">启用可疑拦截</span>
+            <div id="cfg-SUSPICIOUS_BLOCK_ENABLED" class="switch {{ 'is-on' if suspicious_block_enabled else '' }}" aria-checked="{{ 'true' if suspicious_block_enabled else 'false' }}" role="switch" tabindex="0" data-switch>
+              <input type="hidden" value="{{ '1' if suspicious_block_enabled else '0' }}">
+            </div>
+          </div>
+          <div>
+            <label class="block text-sm text-cream/70 mb-1">封禁时长（分钟）</label>
+            <input type="number" id="cfg-SUSPICIOUS_BLOCK_DURATION_MINUTES" value="{{ suspicious_block_duration_minutes }}" class="input-field w-full px-4 py-2 rounded-lg">
+            <p class="text-xs text-cream/50 mt-1">0 = 永久封禁</p>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-4">
+          <label class="flex items-center justify-between gap-2 cursor-pointer p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
+            <span class="text-sm text-cream/80"><i data-lucide="database" class="w-4 h-4 inline-block mr-1 text-gold-400"></i>SQL 注入</span>
+            <div id="cfg-SUSPICIOUS_BLOCK_SQLI_ENABLED" class="switch {{ 'is-on' if suspicious_sqli_enabled else '' }}" aria-checked="{{ 'true' if suspicious_sqli_enabled else 'false' }}" role="switch" tabindex="0" data-switch>
+              <input type="hidden" value="{{ '1' if suspicious_sqli_enabled else '0' }}">
+            </div>
+          </label>
+          <label class="flex items-center justify-between gap-2 cursor-pointer p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
+            <span class="text-sm text-cream/80"><i data-lucide="code" class="w-4 h-4 inline-block mr-1 text-gold-400"></i>XSS</span>
+            <div id="cfg-SUSPICIOUS_BLOCK_XSS_ENABLED" class="switch {{ 'is-on' if suspicious_xss_enabled else '' }}" aria-checked="{{ 'true' if suspicious_xss_enabled else 'false' }}" role="switch" tabindex="0" data-switch>
+              <input type="hidden" value="{{ '1' if suspicious_xss_enabled else '0' }}">
+            </div>
+          </label>
+          <label class="flex items-center justify-between gap-2 cursor-pointer p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
+            <span class="text-sm text-cream/80"><i data-lucide="folder-tree" class="w-4 h-4 inline-block mr-1 text-gold-400"></i>路径遍历</span>
+            <div id="cfg-SUSPICIOUS_BLOCK_PATH_TRAVERSAL_ENABLED" class="switch {{ 'is-on' if suspicious_path_traversal_enabled else '' }}" aria-checked="{{ 'true' if suspicious_path_traversal_enabled else 'false' }}" role="switch" tabindex="0" data-switch>
+              <input type="hidden" value="{{ '1' if suspicious_path_traversal_enabled else '0' }}">
+            </div>
+          </label>
+          <label class="flex items-center justify-between gap-2 cursor-pointer p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
+            <span class="text-sm text-cream/80"><i data-lucide="terminal" class="w-4 h-4 inline-block mr-1 text-gold-400"></i>命令注入</span>
+            <div id="cfg-SUSPICIOUS_BLOCK_COMMAND_INJECTION_ENABLED" class="switch {{ 'is-on' if suspicious_command_injection_enabled else '' }}" aria-checked="{{ 'true' if suspicious_command_injection_enabled else 'false' }}" role="switch" tabindex="0" data-switch>
+              <input type="hidden" value="{{ '1' if suspicious_command_injection_enabled else '0' }}">
+            </div>
+          </label>
+          <label class="flex items-center justify-between gap-2 cursor-pointer p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
+            <span class="text-sm text-cream/80"><i data-lucide="file-search" class="w-4 h-4 inline-block mr-1 text-gold-400"></i>敏感探测</span>
+            <div id="cfg-SUSPICIOUS_BLOCK_SENSITIVE_PROBE_ENABLED" class="switch {{ 'is-on' if suspicious_sensitive_probe_enabled else '' }}" aria-checked="{{ 'true' if suspicious_sensitive_probe_enabled else 'false' }}" role="switch" tabindex="0" data-switch>
+              <input type="hidden" value="{{ '1' if suspicious_sensitive_probe_enabled else '0' }}">
+            </div>
+          </label>
+          <label class="flex items-center justify-between gap-2 cursor-pointer p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
+            <span class="text-sm text-cream/80"><i data-lucide="bot" class="w-4 h-4 inline-block mr-1 text-gold-400"></i>恶意 UA</span>
+            <div id="cfg-SUSPICIOUS_BLOCK_MALICIOUS_UA_ENABLED" class="switch {{ 'is-on' if suspicious_malicious_ua_enabled else '' }}" aria-checked="{{ 'true' if suspicious_malicious_ua_enabled else 'false' }}" role="switch" tabindex="0" data-switch>
+              <input type="hidden" value="{{ '1' if suspicious_malicious_ua_enabled else '0' }}">
+            </div>
+          </label>
+        </div>
+      </div>
 
-    </div>
+      <!-- DDoS 防护 -->
+      <div class="pixel-card rounded-xl p-6">
+        <h3 class="font-bold text-base mb-3 flex items-center gap-2">
+          <i data-lucide="activity" class="w-4 h-4 text-rose-400"></i>
+          DDoS 防护
+        </h3>
+        <p class="text-xs text-cream/50 mb-3">按检测强度统计单位时间窗口内请求数，超阈值自动封禁来源 IP（限时封禁，屡教不改升级永久封禁）</p>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="flex items-center justify-between gap-2 p-3 rounded-lg bg-forest-800/30 border border-forest-700/30 md:col-span-2">
+            <span class="text-sm text-cream/80">启用 DDoS 防护</span>
+            <div id="cfg-DDOS_GUARD_ENABLED" class="switch {{ 'is-on' if ddos_guard_enabled else '' }}" aria-checked="{{ 'true' if ddos_guard_enabled else 'false' }}" role="switch" tabindex="0" data-switch>
+              <input type="hidden" value="{{ '1' if ddos_guard_enabled else '0' }}">
+            </div>
+          </div>
+          <div>
+            <label class="block text-sm text-cream/70 mb-1">防护强度</label>
+            <div id="cfg-DDOS_GUARD_INTENSITY" class="custom-select w-full" data-custom-select>
+              <div class="custom-select-trigger" data-trigger tabindex="0" role="button" aria-haspopup="listbox" aria-expanded="false">
+                <span class="custom-select-label">{{ '低' if ddos_guard_intensity == 'low' else ('中' if ddos_guard_intensity == 'medium' else '高') }}</span>
+                <i data-lucide="chevron-down" class="caret"></i>
+              </div>
+              <div class="custom-select-dropdown" role="listbox">
+                <div class="custom-select-option{{ ' is-selected' if ddos_guard_intensity == 'low' }}" data-value="low">低</div>
+                <div class="custom-select-option{{ ' is-selected' if ddos_guard_intensity == 'medium' }}" data-value="medium">中</div>
+                <div class="custom-select-option{{ ' is-selected' if ddos_guard_intensity == 'high' }}" data-value="high">高</div>
+              </div>
+              <input type="hidden" value="{{ ddos_guard_intensity }}">
+            </div>
+          </div>
+          <div>
+            <label class="block text-sm text-cream/70 mb-1">首次封禁时长（分钟）</label>
+            <input type="number" id="cfg-DDOS_GUARD_BAN_MINUTES" value="{{ ddos_guard_ban_minutes }}" class="input-field w-full px-4 py-2 rounded-lg">
+            <p class="text-xs text-cream/50 mt-1">0 = 直接永久封禁</p>
+          </div>
+          <div>
+            <label class="block text-sm text-cream/70 mb-1">永久封禁次数阈值</label>
+            <input type="number" id="cfg-DDOS_GUARD_PERMANENT_AFTER" value="{{ ddos_guard_permanent_after }}" class="input-field w-full px-4 py-2 rounded-lg">
+          </div>
+          <div>
+            <label class="block text-sm text-cream/70 mb-1">违规统计窗口（小时）</label>
+            <input type="number" id="cfg-DDOS_GUARD_OFFENSE_WINDOW_HOURS" value="{{ ddos_guard_offense_window_hours }}" class="input-field w-full px-4 py-2 rounded-lg">
+          </div>
+        </div>
+      </div>
+
+      <!-- 发布内容注入检测 -->
+      <div class="pixel-card rounded-xl p-6">
+        <h3 class="font-bold text-base mb-3 flex items-center gap-2">
+          <i data-lucide="file-code" class="w-4 h-4 text-rose-400"></i>
+          发布内容注入检测
+        </h3>
+        <p class="text-xs text-cream/50 mb-3">检测用户发布的指南/建筑等包含 XSS/HTML/JS 注入的恶意代码。首次拦截仅拒绝发布，累计 2 次后自动封禁账号</p>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="flex items-center justify-between gap-2 p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
+            <span class="text-sm text-cream/80">启用内容注入拦截</span>
+            <div id="cfg-CONTENT_INJECTION_BAN_ENABLED" class="switch {{ 'is-on' if content_injection_enabled else '' }}" aria-checked="{{ 'true' if content_injection_enabled else 'false' }}" role="switch" tabindex="0" data-switch>
+              <input type="hidden" value="{{ '1' if content_injection_enabled else '0' }}">
+            </div>
+          </div>
+          <div>
+            <label class="block text-sm text-cream/70 mb-1">封禁时长（分钟）</label>
+            <input type="number" id="cfg-CONTENT_INJECTION_BAN_DURATION_MINUTES" value="{{ content_injection_duration }}" class="input-field w-full px-4 py-2 rounded-lg">
+            <p class="text-xs text-cream/50 mt-1">0 = 永久封禁</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- 待审核数量限制 -->
+      <div class="pixel-card rounded-xl p-6">
+        <h3 class="font-bold text-base mb-3 flex items-center gap-2">
+          <i data-lucide="clipboard-check" class="w-4 h-4 text-rose-400"></i>
+          待审核数量限制
+        </h3>
+        <p class="text-xs text-cream/50 mb-3">用户同时处于待审核状态的内容数量上限，超过后无法继续发布需要审核的内容。总量与单类型上限同时生效（先达到的先生效），0 = 不限制；管理员不受此限制</p>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div class="md:col-span-2">
+            <label class="block text-sm text-cream/70 mb-1">总量上限</label>
+            <input type="number" id="cfg-MAX_PENDING_CONTENT" value="{{ max_pending_content }}" class="input-field w-full px-4 py-2 rounded-lg">
+            <p class="text-xs text-cream/50 mt-1">建筑/指南/音频/背景待审核内容的总数量上限；0 = 不限制</p>
+          </div>
+        </div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-4">
+          <div class="p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
+            <label class="block text-xs text-cream/70 mb-1 font-medium">公共建筑</label>
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-cream/50">限</span>
+              <input type="number" id="cfg-MAX_PENDING_BUILDING" value="{{ max_pending_building }}" class="input-field w-16 px-2 py-1.5 rounded text-center text-sm">
+              <span class="text-xs text-cream/50">个</span>
+            </div>
+          </div>
+          <div class="p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
+            <label class="block text-xs text-cream/70 mb-1 font-medium">服务器指南</label>
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-cream/50">限</span>
+              <input type="number" id="cfg-MAX_PENDING_GUIDE" value="{{ max_pending_guide }}" class="input-field w-16 px-2 py-1.5 rounded text-center text-sm">
+              <span class="text-xs text-cream/50">个</span>
+            </div>
+          </div>
+          <div class="p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
+            <label class="block text-xs text-cream/70 mb-1 font-medium">大喇叭音频</label>
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-cream/50">限</span>
+              <input type="number" id="cfg-MAX_PENDING_MUSIC" value="{{ max_pending_music }}" class="input-field w-16 px-2 py-1.5 rounded text-center text-sm">
+              <span class="text-xs text-cream/50">个</span>
+            </div>
+          </div>
+          <div class="p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
+            <label class="block text-xs text-cream/70 mb-1 font-medium">背景图片</label>
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-cream/50">限</span>
+              <input type="number" id="cfg-MAX_PENDING_BACKGROUND" value="{{ max_pending_background }}" class="input-field w-16 px-2 py-1.5 rounded text-center text-sm">
+              <span class="text-xs text-cream/50">个</span>
+            </div>
+          </div>
+        </div>
+        <p class="text-xs text-cream/50 mt-3">各单类型上限留 0 表示不单独限制，仅受总量上限约束</p>
+      </div>
+
+      <!-- 发布频率限制 -->
+      <div class="pixel-card rounded-xl p-6">
+        <h3 class="font-bold text-base mb-3 flex items-center gap-2">
+          <i data-lucide="timer" class="w-4 h-4 text-rose-400"></i>
+          发布频率限制
+        </h3>
+        <p class="text-xs text-cream/50 mb-3">各内容类型在检测窗口内的最大发布次数，超限将触发自动封禁</p>
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div class="p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
+            <label class="block text-xs text-cream/70 mb-1 font-medium">公共建筑</label>
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-cream/50">限</span>
+              <input type="number" id="cfg-SPAM_LIMIT_BUILDING" value="{{ spam_limit_building }}" class="input-field w-16 px-2 py-1.5 rounded text-center text-sm">
+              <span class="text-xs text-cream/50">条 /</span>
+              <input type="number" id="cfg-SPAM_LIMIT_BUILDING_WINDOW" value="{{ spam_limit_building_window }}" class="input-field w-16 px-2 py-1.5 rounded text-center text-sm">
+              <span class="text-xs text-cream/50">秒</span>
+            </div>
+          </div>
+          <div class="p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
+            <label class="block text-xs text-cream/70 mb-1 font-medium">建筑评论</label>
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-cream/50">限</span>
+              <input type="number" id="cfg-SPAM_LIMIT_BUILDING_COMMENT" value="{{ spam_limit_building_comment }}" class="input-field w-16 px-2 py-1.5 rounded text-center text-sm">
+              <span class="text-xs text-cream/50">条 /</span>
+              <input type="number" id="cfg-SPAM_LIMIT_BUILDING_COMMENT_WINDOW" value="{{ spam_limit_building_comment_window }}" class="input-field w-16 px-2 py-1.5 rounded text-center text-sm">
+              <span class="text-xs text-cream/50">秒</span>
+            </div>
+          </div>
+          <div class="p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
+            <label class="block text-xs text-cream/70 mb-1 font-medium">服务器指南</label>
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-cream/50">限</span>
+              <input type="number" id="cfg-SPAM_LIMIT_GUIDE" value="{{ spam_limit_guide }}" class="input-field w-16 px-2 py-1.5 rounded text-center text-sm">
+              <span class="text-xs text-cream/50">条 /</span>
+              <input type="number" id="cfg-SPAM_LIMIT_GUIDE_WINDOW" value="{{ spam_limit_guide_window }}" class="input-field w-16 px-2 py-1.5 rounded text-center text-sm">
+              <span class="text-xs text-cream/50">秒</span>
+            </div>
+          </div>
+          <div class="p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
+            <label class="block text-xs text-cream/70 mb-1 font-medium">背景图片</label>
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-cream/50">限</span>
+              <input type="number" id="cfg-SPAM_LIMIT_BACKGROUND" value="{{ spam_limit_background }}" class="input-field w-16 px-2 py-1.5 rounded text-center text-sm">
+              <span class="text-xs text-cream/50">条 /</span>
+              <input type="number" id="cfg-SPAM_LIMIT_BACKGROUND_WINDOW" value="{{ spam_limit_background_window }}" class="input-field w-16 px-2 py-1.5 rounded text-center text-sm">
+              <span class="text-xs text-cream/50">秒</span>
+            </div>
+          </div>
+          <div class="p-3 rounded-lg bg-forest-800/30 border border-forest-700/30">
+            <label class="block text-xs text-cream/70 mb-1 font-medium">大喇叭音频</label>
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-cream/50">限</span>
+              <input type="number" id="cfg-SPAM_LIMIT_MUSIC" value="{{ spam_limit_music }}" class="input-field w-16 px-2 py-1.5 rounded text-center text-sm">
+              <span class="text-xs text-cream/50">条 /</span>
+              <input type="number" id="cfg-SPAM_LIMIT_MUSIC_WINDOW" value="{{ spam_limit_music_window }}" class="input-field w-16 px-2 py-1.5 rounded text-center text-sm">
+              <span class="text-xs text-cream/50">秒</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 保存 -->
+      <div class="flex items-center gap-3">
+        <button type="button" id="fw-save-btn" class="btn-primary px-5 py-2 text-sm inline-flex items-center gap-2" onclick="saveFirewallSettings()">
+          <i data-lucide="save" class="w-4 h-4"></i>
+          保存设置
+        </button>
+        <span id="settings-status" class="text-sm"></span>
+      </div>
+    </form>
     {% endif %}
 
   <!-- ============ 防火墙日志页面 ============ -->

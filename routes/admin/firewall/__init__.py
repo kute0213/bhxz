@@ -160,6 +160,12 @@ def admin_firewall_settings_page():
         spam_limit_background_window=get_config_value('SPAM_LIMIT_BACKGROUND_WINDOW', SPAM_LIMITS.get('background', (6, 60))[1]),
         spam_limit_music=get_config_value('SPAM_LIMIT_MUSIC', SPAM_LIMITS.get('music', (3, 600))[0]),
         spam_limit_music_window=get_config_value('SPAM_LIMIT_MUSIC_WINDOW', SPAM_LIMITS.get('music', (3, 600))[1]),
+        # 待审核数量限制（总量 + 单类型，0 = 不限制）
+        max_pending_content=get_config_value('MAX_PENDING_CONTENT', 5),
+        max_pending_building=get_config_value('MAX_PENDING_BUILDING', 0),
+        max_pending_guide=get_config_value('MAX_PENDING_GUIDE', 0),
+        max_pending_music=get_config_value('MAX_PENDING_MUSIC', 0),
+        max_pending_background=get_config_value('MAX_PENDING_BACKGROUND', 0),
     )
 
 
@@ -207,6 +213,9 @@ FIREWALL_CONFIG_KEYS = {
     'SPAM_LIMIT_GUIDE', 'SPAM_LIMIT_GUIDE_WINDOW',
     'SPAM_LIMIT_BACKGROUND', 'SPAM_LIMIT_BACKGROUND_WINDOW',
     'SPAM_LIMIT_MUSIC', 'SPAM_LIMIT_MUSIC_WINDOW',
+    # 待审核数量限制
+    'MAX_PENDING_CONTENT', 'MAX_PENDING_BUILDING', 'MAX_PENDING_GUIDE',
+    'MAX_PENDING_MUSIC', 'MAX_PENDING_BACKGROUND',
 }
 
 # ===========================================================================
@@ -277,6 +286,8 @@ def admin_firewall_settings_save():
         'SPAM_LIMIT_GUIDE', 'SPAM_LIMIT_GUIDE_WINDOW',
         'SPAM_LIMIT_BACKGROUND', 'SPAM_LIMIT_BACKGROUND_WINDOW',
         'SPAM_LIMIT_MUSIC', 'SPAM_LIMIT_MUSIC_WINDOW',
+        'MAX_PENDING_CONTENT', 'MAX_PENDING_BUILDING', 'MAX_PENDING_GUIDE',
+        'MAX_PENDING_MUSIC', 'MAX_PENDING_BACKGROUND',
     }
     for item in items:
         key = item.get('key')

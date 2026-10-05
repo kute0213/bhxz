@@ -56,6 +56,12 @@ def upload_background():
     if check_spam(user_id=user['id'], content_type='background', content=files[0].filename or 'background'):
         return jsonify({'error': '上传过于频繁，请稍后再试'}), 400
 
+    # 待审核数量上限（背景图片上传后进入待审核，总量 + 背景单类）
+    from core.helpers import check_pending_limit
+    allowed, msg = check_pending_limit(user, 'background')
+    if not allowed:
+        return jsonify({'error': msg}), 400
+
     task_ids = []
     for upload_file in files:
         success, result = background_service.start_upload(

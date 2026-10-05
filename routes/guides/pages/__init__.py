@@ -168,9 +168,9 @@ def guide_create():
     user = get_current_user()
 
     if request.method == 'POST':
-        # 检查待审核内容上限
+        # 检查待审核数量上限（总量 + 服务器指南单类）
         from core.helpers import check_pending_limit
-        allowed, msg = check_pending_limit(user)
+        allowed, msg = check_pending_limit(user, 'guide')
         if not allowed:
             flash(msg, 'error')
             return render_page('guides/form.html', guide=None)

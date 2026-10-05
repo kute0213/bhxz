@@ -82,9 +82,9 @@ def building_create():
             flash(msg, 'error')
             return render_page('buildings/create.html', building=None)
 
-        # 检查待审核内容上限
+        # 检查待审核数量上限（总量 + 公共建筑单类）
         from core.helpers import check_pending_limit
-        allowed, msg = check_pending_limit(user)
+        allowed, msg = check_pending_limit(user, 'building')
         if not allowed:
             return fail(msg)
 

@@ -46,10 +46,23 @@ def redirect_with_flash(endpoint, message, category='success', **kwargs):
     return redirect(url_for(endpoint, **kwargs))
 
 
-def check_pending_limit(user) -> tuple:
-    """检查用户的待审核内容是否达到上限。
+# 各类待审核内容的统计信息：类型键 -> (表名, 用户列, 待审核条件, 单独上限配置键, 显示名)
+_PENDING_TYPES = {
+    'building':   ('public_buildings', 'author_id', "status = 'pending'", 'MAX_PENDING_BUILDING', '公共建筑'),
+    'guide':      ('server_guides',    'author_id', "status = 'pending'", 'MAX_PENDING_GUIDE', '服务器指南'),
+    'music':      ('music',            'user_id',   'status = 1',         'MAX_PENDING_MUSIC', '大喇叭音频'),
+    'background': ('backgrounds',      'user_id',   'status = 0',         'MAX_PENDING_BACKGROUND', '背景图片'),
+}
+
+
+def check_pending_limit(user, content_type=None) -> tuple:
+    """检查用户的待审核内容是否达到上限（总量上限 + 单类型上限）。
 
     管理员豁免。返回 (allowed: bool, message: str)。
+
+    content_type 为 _PENDING_TYPES 的键（building/guide/music/background）时，
+    额外校验该类型的单独上限；总量与单类型上限取「先达到者」。
+    任一上限设为 0 表示不限制。
     """
     if user.get('is_admin'):
         return True, ''
@@ -57,28 +70,28 @@ def check_pending_limit(user) -> tuple:
     from core.db import get_db
     from config import get_config_value
 
-    limit = get_config_value('MAX_PENDING_CONTENT', 5)
     conn = get_db()
     try:
-        # 统计所有待审核内容：公共建筑、服务器指南、音频（status=1）、背景（status=0）
-        pending = conn.execute(
-            """
-            SELECT (
-                SELECT COUNT(*) FROM public_buildings WHERE author_id = ? AND status = 'pending'
-            ) + (
-                SELECT COUNT(*) FROM server_guides WHERE author_id = ? AND status = 'pending'
-            ) + (
-                SELECT COUNT(*) FROM music WHERE author_id = ? AND status = 1
-            ) + (
-                SELECT COUNT(*) FROM backgrounds WHERE author_id = ? AND status = 0
-            ) AS total
-            """,
-            (user['id'], user['id'], user['id'], user['id']),
-        ).fetchone()
-        count = pending['total'] if pending else 0
-        if count >= limit:
-            return False, f'您的待审核内容已达上限（{limit} 个），请等待现有内容审核通过后再发布'
+        counts = {}
+        for key, (table, user_col, condition, _, _) in _PENDING_TYPES.items():
+            row = conn.execute(
+                f'SELECT COUNT(*) AS c FROM {table} WHERE {user_col} = ? AND {condition}',
+                (user['id'],),
+            ).fetchone()
+            counts[key] = row['c'] if row else 0
     finally:
         conn.close()
+
+    # 总量上限
+    total_limit = int(get_config_value('MAX_PENDING_CONTENT', 5) or 0)
+    if total_limit > 0 and sum(counts.values()) >= total_limit:
+        return False, f'您的待审核内容已达上限（共 {total_limit} 个），请等待现有内容审核通过后再发布'
+
+    # 单类型上限
+    if content_type in _PENDING_TYPES:
+        _, _, _, limit_key, label = _PENDING_TYPES[content_type]
+        limit = int(get_config_value(limit_key, 0) or 0)
+        if limit > 0 and counts[content_type] >= limit:
+            return False, f'您的{label}待审核数量已达上限（{limit} 个），请等待现有内容审核通过后再发布'
 
     return True, ''

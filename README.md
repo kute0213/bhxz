@@ -346,6 +346,12 @@ python scripts/build/package.py
 
 * **DDoS 防护**：总开关、检测强度（low=宽松 300 次/10 秒 / medium=中等 150 次/10 秒 / high=严格 80 次/10 秒）、首次封禁时长（分钟，0 为直接永久封禁）、永久封禁触发次数（违规记录时间窗口内多次触发自动升级永久封禁）、违规记录时间窗口（小时）
 
+* **发布内容注入检测**：总开关、内容注入封禁时长（分钟，0 为永久封禁）
+
+* **发布频率限制**：公共建筑 / 建筑评论 / 服务器指南 / 背景图片 / 大喇叭音频 各自「限 X 条 / 窗口秒数」
+
+* **待审核数量限制**：总量上限 + 公共建筑 / 服务器指南 / 大喇叭音频 / 背景图片 单类型上限（0 = 不限制，管理员不受限制）
+
 * **列表分页**：公共建筑 / 公共建筑评论 / 大喇叭音频 / 服务器指南 / 后台背景图片 / 后台账号申请 各列表每次加载条数（1–100，默认 5）。**分页大小仅可在此处或 `config.py` 修改，用户调用接口传入的参数一律被忽略**
 
 * **外部链接**：卫星地图地址、QQ 群链接
@@ -835,6 +841,13 @@ workspace/
 详见 [docs/CHANGELOG.md](docs/CHANGELOG.md)。
 
 ## 最近更新
+
+* **待审核数量限制（总量 + 单类型）+ 防火墙设置面板卡片化**：
+  * **发布数量限制 → 待审核数量限制**：原「发布数量限制」改为对**待审核状态内容数量**的限制，并支持**总量上限 + 单类型上限**双重校验（先达到者先生效），任一上限设为 `0` 表示不限制，管理员不受限制。
+  * **配置入口**：`config.py` 的 `SETTINGS_REGISTRY` 新增 `MAX_PENDING_CONTENT`（总量）、`MAX_PENDING_BUILDING` / `MAX_PENDING_GUIDE` / `MAX_PENDING_MUSIC` / `MAX_PENDING_BACKGROUND`（单类型），并可在**管理后台 → 防火墙 → 设置**在线热改。
+  * **校验逻辑**：重写 [`core/helpers.py`](core/helpers.py) 的 `check_pending_limit(user, content_type=None)`，按 `_PENDING_TYPES` 统一统计公共建筑（`pending`）/ 服务器指南（`pending`）/ 大喇叭音频（`status=1`）/ 背景图片（`status=0`）的待审核数量；修复原实现对 `music` / `backgrounds` 误用 `author_id` 列的问题。
+  * **接入发布流程**：公共建筑发布（`routes/buildings/pages`）、服务器指南发布（`routes/guides/pages`）、大喇叭音频上传申请公开（`routes/main/music`）与私有转公开（`services/music/crud`）、背景图片上传（`routes/backgrounds/pages`）均按对应类型校验。
+  * **防火墙设置面板整理**：设置页所有配置按板块重构为统一的卡片式布局（与「发布内容注入检测」样式一致）——IPv6 拦截 / 自动 IP 封禁 / 可疑访问拦截 / DDoS 防护 / 发布内容注入检测 / **待审核数量限制（新增）** / 发布频率限制。
 
 * **移除一次性迁移 / 清理临时代码**：最新版已完整启动过一次，所有一次性迁移与清理逻辑已完成使命，全部删除，避免长期携带历史包袱：
   * **防火墙数据库迁移**：删除 `services/firewall/service/database.py` 的 `_LEGACY_DB_PATH` / `_migrate_legacy_db()`（旧路径数据已搬到 `uploads/db/firewall.duckdb`）。
