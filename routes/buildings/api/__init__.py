@@ -152,7 +152,6 @@ def add_comment(building_id):
     """发表评论。"""
     user = get_current_user()
 
-    from services.firewall.protection.spam import check_spam, record_activity
     from services.firewall.protection.content_filter import check_content_injection
 
     content = (request.form.get('content') or '').strip()
@@ -167,9 +166,6 @@ def add_comment(building_id):
     )
     if inj_result['blocked']:
         return jsonify({'success': False, 'message': inj_result['message']})
-
-    if check_spam(user_id=user['id'], content_type='building_comment', content=content):
-        return jsonify({'success': False, 'message': '发布过于频繁，请稍后再试'})
 
     conn = get_db()
     try:
@@ -190,7 +186,6 @@ def add_comment(building_id):
         )
         comment_id = cursor.lastrowid
         conn.commit()
-        record_activity(user_id=user['id'], content_type='building_comment', content=content)
 
         return jsonify({
             'success': True,

@@ -1,4 +1,4 @@
-"""防火墙统一业务服务 —— 封禁 IP/账号、白名单管理、警告系统、自动封禁、刷屏记录。
+"""防火墙统一业务服务 —— 封禁 IP/账号、白名单管理、警告系统、自动封禁。
 
 为所有路由模块提供统一、安全的调用接口：
     from services.firewall import ban_ip, unban_ip, is_banned, ...
@@ -28,7 +28,6 @@ from services.firewall.service.database import (
     record_ban_detail,     # 自动记录封禁详情
     push_ban_context,      # 从 WSGI/DDOS 层传递上下文
     get_ban_detail,        # 查询封禁详情
-    submit_write,          # 单写入线程：即发即忘写
     execute_write,         # 单写入线程：同步写
     # 账号白名单
     get_account_whitelist_db,
@@ -609,130 +608,6 @@ def get_combined_bans(offset=0, limit=10):
     except Exception as exc:
         log_firewall('WARNING', 'Firewall', f'查询合并封禁列表失败: {exc}')
         return [], 0
-
-
-# ---------------------------------------------------------------------------
-# 刷屏记录
-# ---------------------------------------------------------------------------
-
-
-def record_spam(user_id, content_type, content_preview='', action='flag'):
-    """记录一次刷屏行为到日志表。
-
-    Args:
-        user_id: 用户 ID
-        content_type: 内容类型（guide, music, building, building_comment 等）
-        content_preview: 内容预览（可选）
-        action: 采取的动作（flag / ban）
-    """
-    try:
-        submit_write(
-            "INSERT INTO firewall_spam_log "
-            "(user_id, content_type, content_preview, action, created_at) "
-            "VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)",
-            (user_id, content_type, content_preview, action),
-        )
-    except Exception as exc:
-        log_firewall('WARNING', 'Firewall', f'记录刷屏日志失败: {exc}', user_id=user_id)
-
-
-def get_spam_log(hours=24):
-    """获取指定小时内的刷屏日志列表（含用户名，通过 LEFT JOIN 关联）。
-
-    Args:
-        hours: 时间窗口（小时）
-
-    Returns:
-        list[dict]: 刷屏日志记录列表
-    """
-    try:
-        with get_db() as conn:
-            # DuckDB 不支持跨数据库 JOIN，这里尝试直接关联
-            # 如果 main.users 在同一 DuckDB 中则有效，否则 username 回退为 '[已删除]'
-            try:
-                rows = conn.execute(
-                    "SELECT s.id, s.user_id, "
-                    "       COALESCE(u.username, '[已删除]') AS username, "
-                    "       s.content_type, s.content_preview, s.action, "
-                    "       strftime('%Y-%m-%d %H:%M:%S', s.created_at) AS created_at "
-                    "FROM firewall_spam_log s "
-                    "LEFT JOIN main.users u ON s.user_id = u.id "
-                    "WHERE s.created_at >= CURRENT_TIMESTAMP - INTERVAL '{} hours' "
-                    "ORDER BY s.created_at DESC".format(hours),
-                ).fetchall()
-                return [
-                    {
-                        'id': r[0], 'user_id': r[1], 'username': r[2],
-                        'content_type': r[3], 'content_preview': r[4],
-                        'action': r[5], 'created_at': r[6],
-                    }
-                    for r in rows
-                ]
-            except Exception:
-                # 如果跨数据库 JOIN 失败，降级为查询不包含 username
-                rows = conn.execute(
-                    "SELECT s.id, s.user_id, "
-                    "       s.content_type, s.content_preview, s.action, "
-                    "       strftime('%Y-%m-%d %H:%M:%S', s.created_at) AS created_at "
-                    "FROM firewall_spam_log s "
-                    "WHERE s.created_at >= CURRENT_TIMESTAMP - INTERVAL '{} hours' "
-                    "ORDER BY s.created_at DESC".format(hours),
-                ).fetchall()
-                return [
-                    {
-                        'id': r[0], 'user_id': r[1],
-                        'username': '[已删除]',
-                        'content_type': r[2], 'content_preview': r[3],
-                        'action': r[4], 'created_at': r[5],
-                    }
-                    for r in rows
-                ]
-    except Exception as exc:
-        log_firewall('WARNING', 'Firewall', f'查询刷屏日志失败: {exc}')
-        return []
-
-
-def get_user_spam_count(user_id, hours=1):
-    """获取用户在指定小时内的刷屏记录数。
-
-    Args:
-        user_id: 用户 ID
-        hours: 时间窗口（小时）
-
-    Returns:
-        int: 刷屏记录数
-    """
-    try:
-        with get_db() as conn:
-            row = conn.execute(
-                "SELECT COUNT(*) FROM firewall_spam_log "
-                "WHERE user_id = ? "
-                "  AND created_at >= CURRENT_TIMESTAMP - INTERVAL '{} hours'".format(
-                    hours
-                ),
-                (user_id,),
-            ).fetchone()
-            return row[0] if row else 0
-    except Exception:
-        return 0
-
-
-def clear_spam_log(user_id=None):
-    """清除刷屏日志记录。
-
-    Args:
-        user_id: 如果提供，只清除该用户的记录；否则清除全部
-    """
-    try:
-        if user_id:
-            execute_write(
-                "DELETE FROM firewall_spam_log WHERE user_id = ?",
-                (user_id,),
-            )
-        else:
-            execute_write("DELETE FROM firewall_spam_log")
-    except Exception:
-        pass
 
 
 # ---------------------------------------------------------------------------

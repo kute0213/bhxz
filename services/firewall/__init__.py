@@ -44,11 +44,6 @@ from services.firewall.service.core import (
     is_account_banned,
     get_account_bans,
     get_account_ban,
-    # 刷屏记录
-    record_spam,
-    get_spam_log,
-    get_user_spam_count,
-    clear_spam_log,
     # 警告系统
     add_warning,
     get_warnings,

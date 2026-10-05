@@ -201,11 +201,6 @@ def guide_create():
             flash('验证码错误或已过期', 'error')
             return render_page('guides/form.html', guide=None)
 
-        from services.firewall.protection.spam import check_spam, record_activity
-        if check_spam(user_id=user['id'], content_type='guide', content=title):
-            flash('发布过于频繁，请稍后再试', 'error')
-            return render_page('guides/form.html', guide=None)
-
         from routes.guides.api import _slugify, _ensure_unique_slug
         conn = get_db()
         try:
@@ -220,7 +215,6 @@ def guide_create():
                 (title, slug, summary, content, user['id'], now, now),
             )
             conn.commit()
-            record_activity(user_id=user['id'], content_type='guide', content=title)
             flash('指南已提交，等待管理员审核', 'success')
             return redirect(url_for('guides.guide_list', my=1))
         except Exception as e:
@@ -282,11 +276,6 @@ def guide_edit(guide_id):
             flash('验证码错误或已过期', 'error')
             return render_page('guides/form.html', guide=guide)
 
-        from services.firewall.protection.spam import check_spam, record_activity
-        if check_spam(user_id=user['id'], content_type='guide', content=title):
-            flash('发布过于频繁，请稍后再试', 'error')
-            return render_page('guides/form.html', guide=guide)
-
         from routes.guides.api import _slugify, _ensure_unique_slug
         conn = get_db()
         try:
@@ -302,7 +291,6 @@ def guide_edit(guide_id):
                 (title, slug, summary, content, now, guide_id),
             )
             conn.commit()
-            record_activity(user_id=user['id'], content_type='guide', content=title)
             flash('修改已提交，等待管理员审核', 'success')
             return redirect(url_for('guides.guide_detail', guide_id=guide_id))
         except Exception as e:

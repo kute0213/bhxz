@@ -116,10 +116,6 @@ def building_create():
         if not captcha_service.verify(captcha_id, captcha_input):
             return fail('验证码错误或已过期')
 
-        from services.firewall.protection.spam import check_spam, record_activity
-        if check_spam(user_id=user['id'], content_type='building', content=title):
-            return fail('发布过于频繁，请稍后再试')
-
         conn = get_db()
         try:
             now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -133,7 +129,6 @@ def building_create():
                 (title, warp_name, description, usage_info, notes, tags, user['id'], now, now),
             )
             conn.commit()
-            record_activity(user_id=user['id'], content_type='building', content=title)
             return _respond('公共建筑已提交，等待管理员审核', 'success',
                             redirect_to=url_for('buildings.building_list', my=1))
         except Exception as e:

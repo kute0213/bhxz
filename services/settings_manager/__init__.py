@@ -116,23 +116,26 @@ class SettingsManager:
         return default
 
     def _save_to_db(self, key: str, value):
-        """保存单个设置到数据库。"""
+        """保存单个设置到数据库。
+
+        注意：不能用 `INSERT ... ON CONFLICT(key) DO UPDATE`。settings 表使用
+        `INTEGER PRIMARY KEY AUTOINCREMENT`，而保险的 upsert 在「走 UPDATE 分支」时
+        仍会先分配、消耗一个自增 ID（sqlite_sequence 每次 +1），导致 ID 无意义地飞涨。
+        这里改为「先 UPDATE，未命中再 INSERT」，避免消耗自增 ID。
+        """
         str_value = _value_to_string(value)
         now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         try:
-            conn = get_db()
-            # UPSERT：存在则更新，不存在则插入
-            conn.execute(
-                """INSERT INTO settings (key, value, updated_at)
-                   VALUES (?, ?, ?)
-                   ON CONFLICT (key) DO UPDATE SET
-                       value = excluded.value,
-                       updated_at = excluded.updated_at
-                """,
-                (key, str_value, now)
-            )
-            conn.commit()
-            conn.close()
+            with get_db() as conn:
+                cur = conn.execute(
+                    "UPDATE settings SET value = ?, updated_at = ? WHERE key = ?",
+                    (str_value, now, key),
+                )
+                if cur.rowcount == 0:
+                    conn.execute(
+                        "INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)",
+                        (key, str_value, now),
+                    )
 
             # 更新缓存
             with self._cache_lock:
@@ -163,24 +166,20 @@ class SettingsManager:
         self._save_to_db(key, value)
 
     def bulk_set(self, items: dict):
-        """批量设置多个设置值。"""
-        conn = get_db()
+        """批量设置多个设置值（同一连接内完成，避免消耗多余自增 ID）。"""
         now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        try:
+        with get_db() as conn:
             for key, value in items.items():
                 str_value = _value_to_string(value)
-                conn.execute(
-                    """INSERT INTO settings (key, value, updated_at)
-                       VALUES (?, ?, ?)
-                       ON CONFLICT (key) DO UPDATE SET
-                           value = excluded.value,
-                           updated_at = excluded.updated_at
-                    """,
-                    (key, str_value, now)
+                cur = conn.execute(
+                    "UPDATE settings SET value = ?, updated_at = ? WHERE key = ?",
+                    (str_value, now, key),
                 )
-            conn.commit()
-        finally:
-            conn.close()
+                if cur.rowcount == 0:
+                    conn.execute(
+                        "INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)",
+                        (key, str_value, now),
+                    )
 
         # 更新缓存
         with self._cache_lock:

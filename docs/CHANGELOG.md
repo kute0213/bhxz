@@ -4,12 +4,19 @@
 
 ### 变更
 
+* **删除「发布频率限制」功能 + 修复配置表自增 ID 空耗**：
+  * **删除发布频率限制**：移除 `services/firewall/protection/spam.py`（基于内存计数的发布频率检测 + 超限自动封禁）及其全部调用点——公共建筑发布（`routes/buildings/pages`）、建筑评论（`routes/buildings/api`）、服务器指南发布/编辑（`routes/guides/pages`）、大喇叭音频上传（`routes/main/music`）、背景图片上传（`routes/backgrounds/pages`）、后台邮件广播（`routes/admin/broadcast`）；`services/firewall/protection/__init__.py` 移除 `from .spam import *`；防火墙后台监控（`services/firewall/service/monitor.py`）移除 `SPAM_PRUNE_INTERVAL` 与刷屏记录清理任务。
+  * **清理底层残留死代码**：`services/firewall/service/core.py` 移除已无任何调用方的 `record_spam` / `get_spam_log` / `get_user_spam_count` / `clear_spam_log` 及 `services/firewall/__init__.py` 的对应 re-export；`services/firewall/service/database.py` 移除 `firewall_spam_log` 表、`seq_firewall_spam_log` 序列与相关索引（DuckDB 中已有旧表不受影响，仅不再创建）。
+  * **移除配置入口**：防火墙设置页删除「发布频率限制」板块，`routes/admin/firewall/__init__.py` 删除 `SPAM_LIMITS` 导入、`spam_limit_*` 上下文变量、`FIREWALL_CONFIG_KEYS` 与保存接口 `int_keys` 中的全部 `SPAM_LIMIT_*` 键。
+  * **修复配置表自增 ID 空耗**：`services/settings_manager` 保存配置原用 `INSERT INTO settings ... ON CONFLICT(key) DO UPDATE`，而 SQLite 对 `INTEGER PRIMARY KEY AUTOINCREMENT` 表在走「更新」分支时仍会分配并消耗一个自增 ID（实测：23 行配置把 `sqlite_sequence` 推到 500）。改为「先 `UPDATE`，`rowcount == 0` 再 `INSERT`」，重复保存不再消耗 ID（实测连续保存 20 次，计数器 0 增长）。这是「ID 一下跳好几个」的一个真实来源。
+  * **关于 ID 跳号的说明**：各表**并非共用一张 ID 表**——SQLite 每个 `INTEGER PRIMARY KEY AUTOINCREMENT` 表在 `sqlite_sequence` 中各自维护独立序列，DuckDB 防火墙表也各自独立 `CREATE SEQUENCE`。除上述 `settings` 的 upsert 缺陷外，其余跳号来自 `AUTOINCREMENT` 的固有语义：已分配 ID 在记录被删除（驳回/超期内容清理、管理员删除、用户注销）或事务回滚后**不会回收重用**，因此 `backgrounds`、`public_buildings` 等表在反复上传/删除后会出现 ID 不连续。该行为是为保证 ID 全局唯一、防止旧引用（收藏、评论、URL）指向新内容而**有意保留**，不属于缺陷。
+
 * **待审核数量限制（总量 + 单类型）+ 防火墙设置面板卡片化**：
   * **「发布数量限制」改为「待审核数量限制」**：限制对象由「发布行为」改为「用户同时处于待审核状态的内容数量」，并支持**总量上限 + 单类型上限**双重校验（先达到者先生效），任一上限为 `0` 表示不限制，管理员不受限制。
   * **配置入口**：`config.py` 的 `SETTINGS_REGISTRY` 新增 `MAX_PENDING_CONTENT`（总量，默认 5）、`MAX_PENDING_BUILDING` / `MAX_PENDING_GUIDE` / `MAX_PENDING_MUSIC` / `MAX_PENDING_BACKGROUND`（单类型，默认 0），分类均为「内容审核」；防火墙设置页与 `FIREWALL_CONFIG_KEYS` / 保存接口（`int_keys`）同步支持，可在**管理后台 → 防火墙 → 设置**在线热改。
   * **校验逻辑**：重写 `core/helpers.py` 的 `check_pending_limit(user, content_type=None)`，改用 `_PENDING_TYPES` 统一描述各表（表名 / 用户列 / 待审核条件 / 单类型配置键 / 显示名）——公共建筑 `public_buildings.author_id status='pending'`、服务器指南 `server_guides.author_id status='pending'`、大喇叭音频 `music.user_id status=1`、背景图片 `backgrounds.user_id status=0`；顺带修复原实现统一写死 `author_id`、对 `music` / `backgrounds` 误用列名的问题。
   * **接入发布流程**：公共建筑发布（`routes/buildings/pages`）、服务器指南发布（`routes/guides/pages`）、大喇叭音频「上传即申请公开」（`routes/main/music`，先校验后上传避免白传大文件）与「私有转公开」（`services/music/crud` 的 `toggle_music_public`）、背景图片上传（`routes/backgrounds/pages`）均按对应类型校验。
-  * **防火墙设置面板整理**：设置页全部配置重构为统一的卡片式板块（与「发布内容注入检测」样式一致）——IPv6 拦截 / 自动 IP 封禁 / 可疑访问拦截 / DDoS 防护 / 发布内容注入检测 / **待审核数量限制（新增）** / 发布频率限制，所有 `cfg-<KEY>` 控件 id 与保存逻辑保持不变。
+  * **防火墙设置面板整理**：设置页全部配置重构为统一的卡片式板块（与「发布内容注入检测」样式一致）——IPv6 拦截 / 自动 IP 封禁 / 可疑访问拦截 / DDoS 防护 / 发布内容注入检测 / **待审核数量限制（新增）**，所有 `cfg-<KEY>` 控件 id 与保存逻辑保持不变。
 
 * **移除一次性迁移 / 清理临时代码**（最新版已完整启动过一次，迁移使命完成）：
   * **防火墙数据库迁移**：删除 `services/firewall/service/database.py` 的 `_LEGACY_DB_PATH` / `_migrate_legacy_db()` 及其调用（旧路径数据已在上一版本搬到 `uploads/db/firewall.duckdb`）。

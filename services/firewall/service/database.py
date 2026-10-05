@@ -346,7 +346,6 @@ CREATE SEQUENCE IF NOT EXISTS seq_firewall_bans START 1;
 CREATE SEQUENCE IF NOT EXISTS seq_firewall_account_bans START 1;
 CREATE SEQUENCE IF NOT EXISTS seq_firewall_warnings START 1;
 CREATE SEQUENCE IF NOT EXISTS seq_firewall_ddos_log START 1;
-CREATE SEQUENCE IF NOT EXISTS seq_firewall_spam_log START 1;
 CREATE SEQUENCE IF NOT EXISTS seq_firewall_ban_details START 1;
 CREATE SEQUENCE IF NOT EXISTS seq_firewall_content_injections START 1;
 
@@ -417,17 +416,6 @@ CREATE TABLE IF NOT EXISTS firewall_warnings (
 );
 CREATE INDEX IF NOT EXISTS idx_firewall_warnings_ip ON firewall_warnings(ip_address);
 CREATE INDEX IF NOT EXISTS idx_firewall_warnings_time ON firewall_warnings(created_at);
-
-CREATE TABLE IF NOT EXISTS firewall_spam_log (
-    id INTEGER PRIMARY KEY DEFAULT nextval('seq_firewall_spam_log'),
-    user_id INTEGER NOT NULL,
-    content_type VARCHAR NOT NULL,
-    content_preview VARCHAR DEFAULT '',
-    action VARCHAR NOT NULL DEFAULT 'flag',
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-CREATE INDEX IF NOT EXISTS idx_firewall_spam_log_user ON firewall_spam_log(user_id);
-CREATE INDEX IF NOT EXISTS idx_firewall_spam_log_time ON firewall_spam_log(created_at);
 
 CREATE TABLE IF NOT EXISTS firewall_ddos_log (
     id INTEGER PRIMARY KEY DEFAULT nextval('seq_firewall_ddos_log'),

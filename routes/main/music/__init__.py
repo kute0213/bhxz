@@ -132,10 +132,6 @@ def upload_music():
     if inj_result['blocked']:
         return jsonify({'error': inj_result['message']}), 400
 
-    from services.firewall.protection.spam import check_spam, record_activity
-    if check_spam(user_id=user['id'], content_type='music', content=title):
-        return jsonify({'error': '上传过于频繁，请稍后再试'}), 400
-
     # 待审核数量上限（仅「申请公开」时进入待审核，先查再上传，避免白传大文件）
     if is_public:
         from core.helpers import check_pending_limit
@@ -153,7 +149,6 @@ def upload_music():
         tags=tags,
     )
     if success:
-        record_activity(user_id=user['id'], content_type='music', content=title)
         return jsonify({'task_id': result['task_id']})
     return jsonify({'error': result}), 400
 
