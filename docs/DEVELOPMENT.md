@@ -352,16 +352,27 @@ curl -s -o /dev/null -w "%{http_code}" http://localhost:5000/buildings
 
 * [ ] 有数据时访问 vs 无数据时访问
 
-### 3. 数据库迁移兼容
+### 3. 数据库表结构变更
 
-修改表结构时，必须使用 `add_column_if_not_exists` 模式，确保老数据库兼容：
+本项目**不再内置运行时迁移**（历史一次性迁移代码已全部移除），修改表结构时直接改 `core/db/schema.py` 的建表语句：
 
 ```python
-# 在 core/db/schema.py 的 migrate 部分添加：
-add_column_if_not_exists('表名', '列名', '类型 DEFAULT 默认值')
+# 直接把新列写进 CREATE TABLE IF NOT EXISTS：
+('表名', '''
+    CREATE TABLE IF NOT EXISTS 表名 (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        ...
+        新列名 类型 DEFAULT 默认值
+    )
+'''),
 ```
 
-不要在 `CREATE TABLE IF NOT EXISTS` 中修改已有表的列定义——那对已存在的表无效。
+* **新装库**：建表语句自带新列，无需额外处理。
+* **已有库**：`CREATE TABLE IF NOT EXISTS` 对已存在的表不生效，需部署方自行执行
+  `ALTER TABLE 表名 ADD COLUMN 列名 类型 DEFAULT 默认值;` 后再部署（或重建库）。
+
+> 历史上曾在启动流程用 `add_column_if_not_exists()` 自动补列，该方法已随全部一次性迁移代码一并删除；
+> 索引仍使用 `CREATE INDEX IF NOT EXISTS`（幂等，属于常规 schema 初始化）。
 
 ### 4. 页面入场动画不得依赖 JS 显示（避免白屏）
 

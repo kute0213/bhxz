@@ -4,8 +4,16 @@
 
 ### 变更
 
+* **移除一次性迁移 / 清理临时代码**（最新版已完整启动过一次，迁移使命完成）：
+  * **防火墙数据库迁移**：删除 `services/firewall/service/database.py` 的 `_LEGACY_DB_PATH` / `_migrate_legacy_db()` 及其调用（旧路径数据已在上一版本搬到 `uploads/db/firewall.duckdb`）。
+  * **启动废弃模块清理**：删除 `core/system/startup_checks.py` 的 `_cleanup_obsolete_modules()` 与 `_OBSOLETE_MODULE_DIRS`（残留目录已清理，启动检查恢复「只创建不删除」，检查项由 6 项收敛为 5 项）。
+  * **配置键名迁移**：删除 `core/system/startup_checks.py` 的 `_migrate_settings()`（旧键 `IP_BAN_WHITELIST` 已迁移为 `FIREWALL_WHITELIST`）。
+  * **旧数据库 / 旧备份目录迁移**：删除 `core/db/connection.py` 的旧根目录 `site.db` 迁移与 `services/backup/manager` 的 `_migrate_old_backups()` / `_rewrite_backup_paths()`（连带清理不再使用的 `get_backup_dir` 导入）。
+  * **数据库表删除**：删除 `core/db/schema.py` 中 `game_account_bindings` 与讨论区三表 `DROP TABLE` 逻辑。
+  * **历史列 / 状态迁移**：删除 `add_column_if_not_exists()` 及全部调用、music `is_public → status` 迁移、`server_guides.rejected_at` 回填；相关列（`users.login_attempts` / `locked_until`、`game_account_bans.user_id`、`music.tags`、`backgrounds.ratio` / `rejected_at`）直接内联进 `CREATE TABLE` 建表语句，新装库自带、老库此前已补齐。索引创建（`CREATE INDEX IF NOT EXISTS`）保留为常规 schema 初始化。
+  * **独立迁移脚本**：删除 `scripts/migrate_db/`（DuckDB → SQLite 迁移）与 `scripts/uploads/`（一次性清理迁移脚本）；README 目录树与用法说明同步更新。
 * **防火墙数据库重启不丢 + 项目结构分层优化 + 日志设置独立页面**：
-  * **修复防火墙数据库重启后全部丢失**（`services/firewall/service/database.py`）：数据库路径原先经多层 `os.path.dirname` 计算，防火墙迁移到服务层后层级变深，实际写入 `services/uploads/db/firewall.duckdb`（代码目录，不在备份范围、更新时被代码覆盖），导致重启后数据「全部丢失」。现改为基于 `config.APP_ROOT` 直接指向 `uploads/db/firewall.duckdb`（与主站 SQLite 同目录，随站点一起备份并受 `UPDATE_EXCLUDED_FILES` 保护）；并新增幂等的一次性迁移 `_migrate_legacy_db()`——仅当旧路径文件存在且比新文件更新时搬移（含 `.wal` / `.tmp`），不覆盖新数据，重复执行安全。
+  * **修复防火墙数据库重启后全部丢失**（`services/firewall/service/database.py`）：数据库路径原先经多层 `os.path.dirname` 计算，防火墙迁移到服务层后层级变深，实际写入 `services/uploads/db/firewall.duckdb`（代码目录，不在备份范围、更新时被代码覆盖），导致重启后数据「全部丢失」。现改为基于 `config.APP_ROOT` 直接指向 `uploads/db/firewall.duckdb`（与主站 SQLite 同目录，随站点一起备份并受 `UPDATE_EXCLUDED_FILES` 保护）；迁移旧数据的 `_migrate_legacy_db()` 已在后续版本移除。
   * **项目结构分层优化**：跨业务的基础能力统一收进 `core/`（日志 `core/system/logger.py`、调度 `core/shared/scheduler/`、监控并入 `services/firewall/service/monitor.py`）；有业务语义的模块放入 `services/`——安全扫描从 `core/shared/security_scanner.py` 迁至 `services/security/__init__.py`（`core/middleware.py`、测试脚本导入同步更新），防火墙完整下沉至 `services/firewall/`（`service/` 业务层、`protection/` 防护策略、`transport/` 连接层、`api_guard.py`）。`routes/firewall/` 只保留 HTTP 路由入口、实际逻辑全部调用服务层（原平铺 shim 子模块删除，外部导入统一指向 `services.firewall`）。
   * **修复部分模块单独日志仍打印到全局日志**：排查确认各模块统一经 `log_module()` 接口输出、数据库设置 `LOG_MODULE_*_GLOBAL` 均为关闭后，确保模块单独日志仅写入独立缓冲与文件，不混入全局日志（控制台 / `logs/app.log` / 全局缓冲 / SSE）。
   * **日志设置改为独立页面**：由日志查看页弹窗重构为独立页面 `/admin/logs/settings`（`templates/admin/log_settings.html`，路由 `admin.admin_log_settings_page`），按模块展示「存储 / 全局」开关并即时保存；日志查看页（`templates/admin/logs.html`）移除弹窗，改为链接跳转。

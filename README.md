@@ -137,7 +137,7 @@ python scripts/build/package.py
 │   ├── static/         # 静态资源（CSS/JS/本地化第三方库，随模板目录存放）
 │   └── ...             # 根级通用页面（base.html 布局、index.html 首页、error_simple.html 精简错误页）
 ├── docs/         # 项目文档
-├── scripts/      # 数据库迁移（migrate_db/）与测试（tests/）
+├── scripts/      # 构建脚本（build/）与测试（tests/）
 ├── uploads/      # 运行期上传数据
 │   ├── backgrounds/    # 全站背景图片
 │   ├── music/          # 大喇叭音频（每个音频一个 ID 目录，含 m3u8、ts 分片与唱片 MP3）
@@ -779,8 +779,6 @@ workspace/
 | `building_favorites`      | 建筑收藏     | 联合主键 `(user_id, building_id)`                                                                                   |
 | `guide_favorites`         | 指南收藏     | 联合主键 `(user_id, guide_id)`                                                                                      |
 
-> 旧版 DuckDB 数据库（`site.duckdb`）可通过 `scripts/migrate_db.py` 一键迁移到 SQLite（迁移前会自动备份旧库）。
-
 #### 数据备份
 
 每日凌晨 3:00（可配置）自动执行：
@@ -838,16 +836,25 @@ workspace/
 
 ## 最近更新
 
+* **移除一次性迁移 / 清理临时代码**：最新版已完整启动过一次，所有一次性迁移与清理逻辑已完成使命，全部删除，避免长期携带历史包袱：
+  * **防火墙数据库迁移**：删除 `services/firewall/service/database.py` 的 `_LEGACY_DB_PATH` / `_migrate_legacy_db()`（旧路径数据已搬到 `uploads/db/firewall.duckdb`）。
+  * **启动废弃模块清理**：删除 `core/system/startup_checks.py` 的 `_cleanup_obsolete_modules()` 与 `_OBSOLETE_MODULE_DIRS`（残留目录已清理，启动检查不再删除任何文件）。
+  * **配置键名迁移**：删除 `core/system/startup_checks.py` 的 `_migrate_settings()`（旧键 `IP_BAN_WHITELIST` 已迁移为 `FIREWALL_WHITELIST`）。
+  * **旧数据库 / 旧备份目录迁移**：删除 `core/db/connection.py` 的旧 `site.db` 迁移与 `services/backup/manager` 的 `_migrate_old_backups()` / `_rewrite_backup_paths()`。
+  * **数据库表删除**：删除 `core/db/schema.py` 中的 `game_account_bindings` 与讨论区三表 `DROP TABLE` 逻辑。
+  * **历史列 / 状态迁移**：删除 `add_column_if_not_exists()` 及全部调用、music `is_public → status` 迁移、`server_guides.rejected_at` 回填——相关列（`users.login_attempts` / `locked_until`、`game_account_bans.user_id`、`music.tags`、`backgrounds.ratio` / `rejected_at`）已直接内联进 `CREATE TABLE` 建表语句，新装库自带、老库此前已补齐。
+  * **独立迁移脚本**：删除 `scripts/migrate_db/`（DuckDB → SQLite 迁移）与 `scripts/uploads/`（一次性清理迁移脚本）。
+
 * **防火墙数据库重启不丢 + 项目结构分层优化 + 日志设置独立页面**：
-  * **修复防火墙数据库重启后全部丢失**：`services/firewall/service/database.py` 数据库路径原先经多层 `os.path.dirname` 计算，迁移后层级变深导致实际写入 `services/uploads/db/`（代码目录，不在备份范围、更新时被覆盖）。现改为基于 `APP_ROOT` 直接指向 `uploads/db/firewall.duckdb`（与主站 SQLite 同目录，随站点备份并受更新排除保护），并新增幂等的一次性迁移 `_migrate_legacy_db()`：仅当旧路径存在且比新文件更新时才搬移，不覆盖新数据。
+  * **修复防火墙数据库重启后全部丢失**：`services/firewall/service/database.py` 数据库路径原先经多层 `os.path.dirname` 计算，迁移后层级变深导致实际写入 `services/uploads/db/`（代码目录，不在备份范围、更新时被覆盖）。现改为基于 `APP_ROOT` 直接指向 `uploads/db/firewall.duckdb`（与主站 SQLite 同目录，随站点备份并受更新排除保护）。
   * **项目结构分层优化**：跨业务的基础能力统一放入 `core/`（日志 `core/system/logger.py`、监控 `services/firewall/service/monitor.py`、调度 `core/shared/scheduler/`）；有业务语义的模块放入 `services/`——安全扫描从 `core/shared/security_scanner.py` 迁至 `services/security/`，防火墙完整下沉至 `services/firewall/`（`service/` 业务层、`protection/` 防护策略、`transport/` 连接层、`api_guard.py`），`routes/firewall/` 只保留 HTTP 路由入口、实际逻辑全部调用服务层，全站导入同步更新。
   * **修复部分模块单独日志仍打印到全局日志**：排查确认各模块统一走 `log_module()` 接口、模块设置 `LOG_MODULE_*_GLOBAL` 均关闭后，确保模块单独日志仅写入独立缓冲与文件，不混入全局日志（控制台 / `logs/app.log` / SSE）。
   * **日志设置改为独立页面**：从日志查看页弹窗重构为独立页面 `/admin/logs/settings`（`templates/admin/log_settings.html`），按模块展示「存储 / 全局」开关并即时保存，日志查看页改为链接跳转。
 
-* **修复启动时「9 个模块导入失败」误报（废弃模块残留自动清理）**：现象是启动日志出现 `routes.admin.discussion`、`routes.discussion`、`services.discussion`、`services.attachment_service` 等模块 `cannot import name 'UPLOAD_ATTACHMENTS_DIR' from 'config'`。这些功能已在上一版彻底删除，报错源自**文件同步只覆盖不删除**在本地遗留的旧模块目录（`.py` 已被删除但目录仍在，启动扫描时被导入）。`core/system/startup_checks.py` 新增第 0 步 `_cleanup_obsolete_modules()`：按精确路径（`routes/discussion`、`routes/admin/discussion`、`routes/community/pages`、`services/discussion`、`services/attachment_service`）幂等删除废弃残留目录（含 `__pycache__`），随后再执行模块导入检查，确保不再误报。
+* **修复启动时「9 个模块导入失败」误报（废弃模块残留一次性清理）**：现象是启动日志出现 `routes.admin.discussion`、`routes.discussion`、`services.discussion`、`services.attachment_service` 等模块 `cannot import name 'UPLOAD_ATTACHMENTS_DIR' from 'config'`。这些功能已在上一版彻底删除，报错源自**文件同步只覆盖不删除**在本地遗留的旧模块目录（`.py` 已被删除但目录仍在，启动扫描时被导入）。`core/system/startup_checks.py` 曾新增一次性的 `_cleanup_obsolete_modules()`：按精确路径（`routes/discussion`、`routes/admin/discussion`、`routes/community/pages`、`services/discussion`、`services/attachment_service`）幂等删除废弃残留目录（含 `__pycache__`）；**该一次性清理步骤已在后续版本移除**。
 
 * **彻底删除讨论区功能 + 建筑评论改分段加载 + 分段列表滚动自动加载**：
-  * **删除讨论区**：移除 `routes/discussion/`、`services/discussion/`、`templates/discussion/`、`routes/admin/discussion/`、`templates/admin/discussion.html` 与 `discussion_categories.html`，以及数据库表 `discussion_categories` / `discussion_topics` / `discussion_replies`（旧库启动时自动 `DROP`）；同步清理导航栏讨论入口、系统设置「讨论区配置」及 `DISCUSSION_REFRESH_INTERVAL` / `DISCUSSION_TOPICS_PER_PAGE` / `REPLIES_PER_PAGE` 配置项、`templates/macros/upload.html` 与 `services/attachment_service/`；并删除仅供讨论附件使用的死代码——社区蓝图与其 `/uploads/<filename>` 附件下载路由、`UPLOAD_ATTACHMENTS_DIR` / `UPLOAD_COMMUNITY_DIR` 配置与 `uploads/attachments`、`uploads/community` 遗留目录，无残留。
+  * **删除讨论区**：移除 `routes/discussion/`、`services/discussion/`、`templates/discussion/`、`routes/admin/discussion/`、`templates/admin/discussion.html` 与 `discussion_categories.html`，以及数据库表 `discussion_categories` / `discussion_topics` / `discussion_replies`（旧库的一次性 `DROP` 已随后移除）；同步清理导航栏讨论入口、系统设置「讨论区配置」及 `DISCUSSION_REFRESH_INTERVAL` / `DISCUSSION_TOPICS_PER_PAGE` / `REPLIES_PER_PAGE` 配置项、`templates/macros/upload.html` 与 `services/attachment_service/`；并删除仅供讨论附件使用的死代码——社区蓝图与其 `/uploads/<filename>` 附件下载路由、`UPLOAD_ATTACHMENTS_DIR` / `UPLOAD_COMMUNITY_DIR` 配置与 `uploads/attachments`、`uploads/community` 遗留目录，无残留。
   * **建筑评论分段加载**：新增 `GET /api/buildings/<id>/comments`（分页由 `BUILDING_COMMENTS_PER_PAGE` 控制，返回 `has_more` / `total`），详情页评论区改为 API 分段加载，删除原实时刷新逻辑。
   * **分段列表滚动自动加载**：`base.js` 新增 `initAutoLoadMore`——任何带 `data-autoload-more` 的「加载更多」按钮进入视口即自动点击一次加载下一页（隐藏 / 禁用时不触发，加载后按钮被新内容推出视口，滚动到底继续加载）。
 
@@ -984,7 +991,7 @@ workspace/
 
 * **一键更新重写**：重写 `services/updater/core.py` 更新逻辑，实现跨平台独立重启脚本（Windows 批处理 / Linux Shell），通过 `tasklist` 检测旧进程退出后启动新进程，解决 Windows 环境下更新后服务器无法正常重启的问题。修复前端日志重复显示问题，调整重启检测时机避免误判。
 
-- **启动健康检查**：新增 `core/system/startup_checks.py`，每次启动固定运行服务器健康检查——废弃模块残留清理、模块导入完整性、数据库完整性、文件结构、配置完整性、uploads 目录结构检查，自动尝试修复；除「已彻底移除功能的废弃残留目录」外不删除任何文件。`core/system/init.py` 集成该检查，在数据库初始化前执行。
+- **启动健康检查**：`core/system/startup_checks.py` 每次启动固定运行服务器健康检查——模块导入完整性、数据库完整性、文件结构、配置完整性、uploads 目录结构检查，只创建不删除、自动修复；`core/system/init.py` 集成该检查，在数据库初始化前执行。
 
 - **错误页面修复**：修复 403/404 错误页面未传递 `user` 上下文变量，导致登录用户显示"请登录"的问题。
 

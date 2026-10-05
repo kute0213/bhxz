@@ -1,4 +1,4 @@
-"""数据库 schema 初始化 —— 建表、迁移、默认数据。"""
+"""数据库 schema 初始化 —— 建表与默认数据。"""
 
 import hashlib
 import sys
@@ -43,6 +43,8 @@ def init_db():
                 email TEXT DEFAULT '',
                 avatar_key TEXT DEFAULT '',
                 is_admin INTEGER DEFAULT 0,
+                login_attempts INTEGER DEFAULT 0,
+                locked_until TEXT DEFAULT '',
                 created_at TEXT NOT NULL
             )
         '''),
@@ -150,6 +152,7 @@ def init_db():
                 title TEXT NOT NULL,
                 file_path TEXT DEFAULT '',
                 status INTEGER DEFAULT 0,
+                tags TEXT DEFAULT '',
                 created_at TEXT NOT NULL
             )
         '''),
@@ -172,6 +175,8 @@ def init_db():
                 file_path TEXT NOT NULL,
                 status INTEGER DEFAULT 0,
                 is_active INTEGER DEFAULT 0,
+                ratio REAL DEFAULT 1.7778,
+                rejected_at TEXT DEFAULT NULL,
                 created_at TEXT NOT NULL
             )
         '''),
@@ -195,6 +200,7 @@ def init_db():
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 mc_username TEXT NOT NULL UNIQUE,
                 reason TEXT DEFAULT '',
+                user_id INTEGER DEFAULT NULL,
                 created_at TEXT NOT NULL,
                 created_by INTEGER DEFAULT NULL
             )
@@ -290,26 +296,7 @@ def init_db():
 
     conn.commit()
 
-    # ---- 迁移：检查并添加缺失列（兼容老库） ----
-    def add_column_if_not_exists(table, column, definition):
-        try:
-            cursor.execute(f'SELECT {column} FROM {table} LIMIT 1')
-        except Exception:
-            try:
-                cursor.execute(f'ALTER TABLE {table} ADD COLUMN {column} {definition}')
-                conn.commit()
-            except Exception as e:
-                log('ERROR', 'DB', f'添加列 {table}.{column} 失败: {e}')
-
-    # 用户表：邮箱、头像路径、登录失败锁定
-    add_column_if_not_exists('users', 'email', "TEXT DEFAULT ''")
-    # 用户头像与个性背景只保存本地文件路径，图片内容不写入数据库。
-    add_column_if_not_exists('users', 'avatar_key', "TEXT DEFAULT ''")
-    add_column_if_not_exists('users', 'login_attempts', 'INTEGER DEFAULT 0')
-    add_column_if_not_exists('users', 'locked_until', "TEXT DEFAULT ''")
-    # 游戏账号封禁表：添加 user_id 列，支持封禁官网账号申请资格
-    add_column_if_not_exists('game_account_bans', 'user_id', 'INTEGER DEFAULT NULL')
-
+    # ---- 索引 ----
     # 游戏服务器封禁申请：自动解封查询索引（status + expires_at，避免全表扫描）
     try:
         cursor.execute(
@@ -319,13 +306,6 @@ def init_db():
     except Exception as e:
         log('ERROR', 'DB', f'创建 game_server_ban_applications 索引失败: {e}')
 
-    # ---- 大喇叭音频：公开审核机制迁移 ----
-    # 老库使用 is_public（0/1）标记公开，新库改用 status（0=私有 1=待审核 2=已公开）
-    add_column_if_not_exists('music', 'status', 'INTEGER DEFAULT 0')
-    # 大喇叭音频：标签列（逗号分隔，供搜索匹配与卡片展示）
-    add_column_if_not_exists('music', 'tags', "TEXT DEFAULT ''")
-    # 公共建筑：标签列（逗号分隔，供搜索匹配与卡片展示）
-    add_column_if_not_exists('public_buildings', 'tags', "TEXT DEFAULT ''")
     # 公共建筑：收藏表索引（按建筑/用户统计收藏数）
     try:
         cursor.execute(
@@ -350,19 +330,6 @@ def init_db():
         )
     except Exception as e:
         log('ERROR', 'DB', f'创建 guide_favorites 索引失败: {e}')
-    # 迁移前先检查 is_public 列是否存在（新库没有此列，跳过迁移）
-    try:
-        cursor.execute("SELECT is_public FROM music LIMIT 0")
-        has_is_public = True
-    except Exception:
-        has_is_public = False
-    if has_is_public:
-        try:
-            # 历史已公开音频（is_public=1）直接迁移为「已通过」状态，立即在公开列表可见
-            cursor.execute("UPDATE music SET status = 2 WHERE status = 0 AND is_public = 1")
-            conn.commit()
-        except Exception as e:
-            log('ERROR', 'DB', f'迁移 music 公开状态失败: {e}')
 
     # ---- 管理员账号 ----
     # 确保 PRIMARY_ADMIN_USERNAMES 中的所有账号为管理员，
@@ -418,46 +385,5 @@ def init_db():
                 (icon, title, content, now)
             )
         conn.commit()
-
-    # ---- 指南拒绝审核：添加 rejected_at 列 ----
-    add_column_if_not_exists('server_guides', 'rejected_at', "TEXT DEFAULT NULL")
-    # 兼容旧数据：已拒绝但无 rejected_at 的指南，用 updated_at 填充
-    try:
-        cursor.execute(
-            "UPDATE server_guides SET rejected_at = updated_at "
-            "WHERE status = 'rejected' AND rejected_at IS NULL"
-        )
-        conn.commit()
-    except Exception as e:
-        log('ERROR', 'DB', f'迁移 server_guides.rejected_at 失败: {e}')
-
-    # ---- 背景图片：添加 rejected_at 列（被驳回内容 24 小时后自动清理） ----
-    add_column_if_not_exists('backgrounds', 'rejected_at', "TEXT DEFAULT NULL")
-
-    # ---- 背景图片：添加 ratio 列（保存上传图片的自然宽高比，供按屏幕比例取图） ----
-    # 旧数据上传时强制裁剪为 16:9，默认值取 16/9（1.7778）
-    add_column_if_not_exists('backgrounds', 'ratio', 'REAL DEFAULT 1.7778')
-
-    # ---- 模组介绍：添加 link 列（点击卡片跳转到模组链接） ----
-    add_column_if_not_exists('mod_intros', 'link', "TEXT DEFAULT ''")
-
-    # ---- 彻底删除游戏账号绑定功能：移除旧绑定表 ----
-    # 绑定/改密功能已移除，旧库遗留的绑定表不再使用，直接删除。
-    try:
-        cursor.execute("DROP TABLE IF EXISTS game_account_bindings")
-        conn.commit()
-        log('INFO', 'DB', '已删除废弃的游戏账号绑定表 game_account_bindings')
-    except Exception as e:
-        log('ERROR', 'DB', f'删除 game_account_bindings 表失败: {e}')
-
-    # ---- 彻底删除讨论区功能：移除旧讨论表 ----
-    # 讨论区已整体移除，旧库遗留的分类 / 帖子 / 回复表不再使用，直接删除。
-    try:
-        for table in ('discussion_categories', 'discussion_topics', 'discussion_replies'):
-            cursor.execute(f"DROP TABLE IF EXISTS {table}")
-        conn.commit()
-        log('INFO', 'DB', '已删除废弃的讨论区表')
-    except Exception as e:
-        log('ERROR', 'DB', f'删除讨论区表失败: {e}')
 
     conn.close()

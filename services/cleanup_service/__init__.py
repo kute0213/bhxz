@@ -30,11 +30,7 @@ def _deadline():
 
 
 def cleanup_expired_rejected_guides():
-    """删除被驳回超过 REJECTED_KEEP_HOURS 小时的服务器指南。
-
-    兼容旧数据：已驳回但无 rejected_at 的指南（由 init_db 迁移填充为 updated_at），
-    同样会被清理。
-    """
+    """删除被驳回超过 REJECTED_KEEP_HOURS 小时的服务器指南。"""
     conn = get_db()
     try:
         rows = conn.execute(

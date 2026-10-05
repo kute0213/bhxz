@@ -13,22 +13,8 @@ import os
 import sqlite3
 import threading
 
-from config import DB_PATH, APP_ROOT
+from config import DB_PATH
 from core.system.logger import log, log_fatal
-
-
-def _migrate_legacy_db():
-    """将旧版根目录下的 site.db 迁移到 ./db 文件夹（首次启动时执行一次）。"""
-    legacy_db = os.path.join(APP_ROOT, 'site.db')
-    if os.path.isfile(legacy_db) and not os.path.isfile(DB_PATH):
-        for suffix in ('', '-wal', '-shm'):
-            src = legacy_db + suffix
-            if os.path.isfile(src):
-                try:
-                    os.replace(src, DB_PATH + suffix)
-                except Exception as e:
-                    log('WARNING', 'DB', f'迁移旧数据库 {src} 失败: {e}')
-        log('INFO', 'DB', f'已迁移旧版数据库到 {DB_PATH}')
 
 
 def _recover_pending_wal():
@@ -56,7 +42,6 @@ def _recover_pending_wal():
 
 def _create_connection():
     """创建并配置 SQLite 连接。"""
-    _migrate_legacy_db()
     # 确保数据库所在目录存在
     db_dir = os.path.dirname(DB_PATH)
     if db_dir:
