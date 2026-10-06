@@ -5,10 +5,10 @@
 //     折叠态只显示「搜索」按钮内容，展开态容器拉宽到 open_width、
 //     显示真正的 <input> —— 过渡的是同一个容器的 max-width / padding /
 //     border-radius / box-shadow，与导航栏 .glass-nav-inner 同款缓动。
-//   - 展开触发：点击折叠胶囊 / focus 输入框 / 预填关键词。
+//   - 展开触发：点击搜索框（容器任意位置）/ focus 输入框 / 预填关键词。
 //   - 保持展开：输入框有文字 或 光标在其中。
 //   - 收起：输入框空 + blur / 点击组件外部。
-//   - 搜索事件：输入防抖 220ms / 回车 / 点击箭头，组件上派发
+//   - 搜索事件：输入防抖 220ms / 回车，组件上派发
 //     CustomEvent('site-search', {detail:{query}})，各列表页自己监听
 //     就地刷新列表——不弹出下拉、不走聚合搜索。
 
@@ -31,7 +31,6 @@
         var collapsed = root.querySelector('.ss-collapsed');
         var input = root.querySelector('.ss-input');
         var clearBtn = root.querySelector('.ss-clear');
-        var submitBtn = root.querySelector('.ss-submit');
         if (!collapsed || !input) return;
 
         var st = {
@@ -85,7 +84,8 @@
         }
 
         /* ---- 事件 ---- */
-        collapsed.addEventListener('click', function (e) { expand(); });
+        /* 点击搜索框任意位置即展开（含折叠态的图标/文字及四周留白） */
+        root.addEventListener('click', function () { expand(); });
         collapsed.addEventListener('keydown', function (e) {
             if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); expand(); }
         });
@@ -130,12 +130,6 @@
             refreshClear();
             emit('');
             input.focus();
-        });
-
-        if (submitBtn) submitBtn.addEventListener('click', function (e) {
-            e.stopPropagation();
-            var q = input.value.trim();
-            if (q) { clearTimeout(st.timerSearch); emit(q); }
         });
 
         /* ---- 初始化 ---- */

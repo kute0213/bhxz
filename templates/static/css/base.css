@@ -1284,7 +1284,8 @@ pre::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.24); }
    为什么这样写：
    - 不是两个独立容器（旧的 .site-search-trigger / .site-search-field）
      互相抢位置，只有一个背景、一个边框、一个圆角——零闪烁、零 layout thrash
-   - 折叠态和展开态视觉高度一致，border-radius 过渡平滑不跳
+   - 容器固定 height: 44px、无上下 padding，折叠/展开两态上下长度完全一致，
+     展开动画只做水平方向（max-width / 左右 padding），不会上下抖动
    - CSS transition 列表与 .glass-nav-inner 对齐（仅 width 换为 max-width，
      因搜索框宽度由内容 + max-width 共同决定）
    ============================================ */
@@ -1293,7 +1294,9 @@ pre::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.24); }
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    padding: 9px 14px;
+    height: 44px;                 /* 固定高度：折叠/展开两态上下长度一致，动画只做水平伸缩 */
+    box-sizing: border-box;
+    padding: 0 14px;              /* 无上下 padding，垂直尺寸完全由 height 决定 */
     max-width: 200px;              /* 折叠态：只够放胶囊按钮 */
     width: 100%;
     border-radius: 12px;
@@ -1322,7 +1325,7 @@ pre::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.24); }
 /* 展开态：容器宽度拉伸到 open_width；背景色微调以示聚焦 */
 .site-search.is-open {
     max-width: var(--search-open-w, 520px);
-    padding: 9px 10px;
+    padding: 0 10px;
     border-color: rgba(2, 132, 199, 0.45);
     box-shadow: 0 6px 18px rgba(15, 23, 42, 0.06), 0 0 0 3px rgba(2, 132, 199, 0.1);
     color: var(--text-primary);
@@ -1373,8 +1376,7 @@ pre::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.24); }
 }
 .ss-input::placeholder { color: var(--text-muted); }
 
-.ss-clear,
-.ss-submit {
+.ss-clear {
     flex-shrink: 0;
     display: inline-flex;
     align-items: center;
@@ -1388,8 +1390,7 @@ pre::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.24); }
     cursor: pointer;
     transition: color 0.15s, background-color 0.15s, opacity 0.18s;
 }
-.ss-clear:hover,
-.ss-submit:hover {
+.ss-clear:hover {
     color: var(--accent-blue);
     background: rgba(2, 132, 199, 0.1);
 }

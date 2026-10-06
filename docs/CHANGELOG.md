@@ -4,6 +4,12 @@
 
 ### 变更
 
+* **就地搜索框交互优化（SiteSearch v8）**：
+  * **点击搜索框任意位置即可展开**：展开触发由原来只监听折叠态按钮改为监听整个容器（`templates/static/js/core/search.js`），点击图标、文字或四周留白都能展开。
+  * **展开动画改为纯水平伸缩**：`.site-search` 改用固定 `height: 44px` + 无上下 `padding`（`templates/static/css/base.css`），折叠态与展开态上下长度完全一致，展开仅左右伸缩，消除上下抖动。
+  * **移除尾部箭头按钮**：删除展开态的 `.ss-submit` 按钮（`templates/macros/search.html`）及其样式与脚本绑定，搜索仍由输入防抖（220ms）与回车触发。
+  * 资源缓存版本号 `base.css` v42 → v43、`search.js` v8 → v9。
+
 * **修复备份报错与启动残留问题**：
   * **备份跳过被锁定的 DuckDB 文件**：`services/backup/manager` 新增备份跳过规则（`.duckdb` / `.duckdb.wal` / `.duckdb.tmp` 及 SQLite 的 `-wal` / `-shm` / `-journal`）。DuckDB 运行期对其主库文件持有独占锁，Windows 下读取会 `Permission denied (Errno 13)`，直接被 `zipfile` 记录为 WARNING；现改为备份前统一跳过并汇总为一条 INFO 日志，不再刷屏报错。
   * **启动自愈清理废弃目录**：`core/system/startup_checks.py` 在模块导入检查之前清理旧版本残留的 `routes/firewall/` 目录。网站在线更新为「覆盖式」（`update.py`），不会删除上游已移除的文件，导致旧 `routes/firewall/__init__.py` 仍引用已删除的 `record_spam`，触发「模块导入失败」误报；清理后恢复正常。
