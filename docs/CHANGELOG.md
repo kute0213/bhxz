@@ -4,11 +4,23 @@
 
 ### 变更
 
-* **服务器状态页新增网络监控（`routes/api/public/__init__.py`、`templates/site/server_status.html`）**：
-  * **接口**：`GET /api/server-status` 新增 `net_sent` / `net_recv` 两个字段，返回自开机以来的累计发送 / 接收字节数（`psutil.net_io_counters()`；部分平台无该计数器时用 `getattr` 兜底为 0，不影响 CPU / 内存 / 玩家数据）。
-  * **页面**：服务器状态页在「内存使用率」下方新增「网络」卡片，采用与 CPU / 内存一致的 `pixel-card` 视觉，以「上行（绿）/ 下行（蓝）」双栏展示**实时速率**与**累计流量**。
-  * **速率换算**：上行 / 下行速率由**前端**对相邻两次轮询的累计字节数做差值换算（除以实际间隔秒数），服务端不保存任何跨请求状态——多客户端 / 多标签页同时轮询互不干扰；首次轮询仅有累计量（速率显示 `-`），第二次起显示速率；对计数器回绕做了负值保护（置 0）。
-  * **单位**：`formatBytes` 单位补充 `TB`，避免长期运行的累计流量被截断在 GB 档；速率以 `xxx/s` 展示。
+* **全面改用 Waitress 生产服务器 + 移除应用层 SSL**（`core/server.py`、`requirements.txt`、`app.py`、`core/middleware.py`、`core/system/startup_checks.py`、`config.py`、`update.py`、`.gitignore`、`scripts/build/package.py`）：
+  * **WSGI 服务器 Cheroot → Waitress**：`run_server()` 改用 `waitress.create_server()`（`threads=20` / `connection_limit=1000` / `channel_timeout=300` / `asyncore_use_poll=True`），关闭时调用 `server.close()`；`requirements.txt` 将 `cheroot` 替换为 `waitress>=3.0.0`。启动方式、对外端口（`0.0.0.0:5000`）与所有业务功能保持不变。未安装 waitress 时退化为 werkzeug `run_simple`（WSGI 防火墙仍生效）。
+  * **删除应用层 SSL 功能**（SSL 改由内网穿透 / 反向代理层终结）：`core/server.py` 移除 `import ssl`、`ENABLE_SSL` 判断、证书加载与 Cheroot `BuiltinSSLAdapter`；`app.py` 的 `SESSION_COOKIE_SECURE` 固定为 `False`；`core/middleware.py` 删除 `_ssl_redirect()` 及其 `after_request` 注册；`core/system/startup_checks.py` 从必需目录移除 `ssl/`、从默认设置移除 `ENABLE_SSL`；`config.py` / `startup_checks.py` / `update.py` / `scripts/build/package.py` / `.gitignore` 同步移除 `ssl` 相关排除项。
+  * **删除 Cheroot 专用连接拦截层**：删除 `services/firewall/transport/connection_filter.py`（`FirewallServer` / `BanFilterConnection`）；`services/firewall/__init__.py` 移除 `attach_server()`，`Firewall` 单例仅保留 WSGI 门禁 + 后台监控。
+
+* **服务器状态页网络监控改为「服务端采样缓存」**（`services/system_metrics/`、`routes/api/public/__init__.py`、`templates/site/server_status.html`、`core/system/init.py`）：
+  * **背景**：上行 / 下行速率必须由两次采样求差才能得到。此前换算放在**前端**，用户打开状态页要等到第二次轮询（约 5 秒后）才看得到速率，首次只显示累计量。
+  * **新增后台采样服务**（`services/system_metrics/`）：接入统一任务注册表（`core/shared/scheduler/`），每 `SAMPLE_INTERVAL=5` 秒采样一次 `psutil` 的 CPU / 内存 / `net_io_counters()`，在**服务端**用相邻两次采样的累计字节差除以实际间隔换算出上行 / 下行速率并写入内存缓存（计数器回绕 / 重置时钳到 0）；导入时先采样一次建立基线，采样异常仅记 WARNING 并保留上次缓存值，不中断后台任务。
+  * **接口**：`GET /api/server-status` 的 CPU / 内存 / 网络字段统一改为读取缓存（`get_metrics()`），并新增 `net_up` / `net_down` 速率字段与 `net_sent` / `net_recv` 累计字段；CPU 采样由原先的阻塞式 `cpu_percent(interval=0.1)` 改为缓存值，请求不再被阻塞 100ms。
+  * **页面**：前端直接展示服务端下发的 `net_up` / `net_down`，**打开即有效**（不再需要等一两次刷新），并删除原先基于 `prevNet` 的前端差值换算逻辑。
+  * **单位**：`formatBytes` 单位保留 `TB`，速率以 `xxx/s` 展示。
+
+* **封禁 IP 改为「直接断开连接、不返回任何数据」**（`services/firewall/transport/wrappers.py`）：
+  * **背景**：此前 WSGI 门禁对被封 IP 先关闭 socket、再 `start_response('403 Forbidden')`，但响应头写入的是已关闭的连接，浏览器最终读到的是空响应（`EOF`），既不干净也名不副实。
+  * **改动**：`FirewallWSGIWrapper._reject()` 改为抛出 `waitress.channel.ClientDisconnected`——waitress 的 `HTTPChannel.service()` 捕获该异常后设置 `task.close_on_finish`，此时尚未调用 `start_response`、未写出任何响应头与响应体，客户端读到 0 字节后连接断开，等价于「直接断开、不返回数据」，同时避免向已关闭连接写入而抛异常刷错误日志。
+  * **非 waitress 环境**（如 werkzeug 开发服务器，`waitress.channel` 不可导入）退化为 `403 Forbidden` 空响应。
+  * **验证**：真实 waitress 服务器端到端测试——被封 IP 的请求客户端收到 0 字节后连接断开（无响应），正常 IP 仍返回 200，全程无 ERROR 日志。
 
 * **修复 DDoS 防护失效与攻击后报错（防火墙真实 IP / 白名单 / SQLite 并发 / 模板空值）**：
   * **穿透环境下 DDoS 统计与封禁全部失效**（`services/firewall/transport/wrappers.py`、`core/shared/ip.py`）：网站经 natfrp 内网穿透对外服务，所有外部请求的 `REMOTE_ADDR` 恒为本机回环地址，而 WSGI 门禁此前**硬编码放行回环 IP**，导致攻击请求既不计入 DDoS 窗口、也不会被黑名单拦截。现改为在 WSGI 层用 `resolve_ip_from_environ()` 解析真实客户端 IP——仅当直连来源为**可信代理**（回环 / 内网地址，或 `TRUSTED_PROXIES` 中配置的 IP）时才采信 `X-Forwarded-For` / `X-Real-IP` / `CF-Connecting-IP` 等头部，并取链路中**最右侧的公网 IP**（该值由最近的可信代理写入，客户端无法伪造）；公网直连时一律忽略代理头部，防止伪造 `X-Forwarded-For` 绕过防护。只有解析结果确为本机回环时才跳过 DDoS 计数。

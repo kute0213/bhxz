@@ -33,9 +33,6 @@ uploads/
 /logs/
 *.log
 
-# SSL 证书
-ssl/
-
 # 环境变量
 .env
 .env.local

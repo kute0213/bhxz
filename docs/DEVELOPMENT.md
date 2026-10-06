@@ -569,15 +569,14 @@ pip install -r requirements.txt
 python app.py          # 默认监听 0.0.0.0:5000
 ```
 
-生产环境监听端口、HTTPS、登录保护等在 `config.py` 中配置。
+生产环境监听端口、登录保护等在 `config.py` 中配置；HTTPS 由内网穿透 / 反向代理层终结，应用本身不处理 SSL。
 
-### 2. 直接部署（CherryPy 内置）
+### 2. 直接部署（Waitress 内置）
 
-默认使用内置 Cheroot WSGI 服务器，无需反向代理即可独立运行：
+默认使用内置 Waitress WSGI 服务器（生产级多线程），无需反向代理即可独立运行：
 
 ```bash
-python app.py                    # HTTP
-export ENABLE_SSL=1 && python app.py  # HTTPS
+python app.py                    # 默认监听 0.0.0.0:5000
 ```
 
 #### Nginx 反向代理（可选）
@@ -608,12 +607,9 @@ server {
 > **SSE 依赖**：实时进度条、日志实时刷新均依赖 SSE 长连接，Nginx 必须
 > 关闭缓冲（`proxy_buffering off`）并调大读超时，否则连接会中断。
 
-#### 开启 HTTPS（内置服务器）
+#### 开启 HTTPS
 
-1. 将证书文件放到 `ssl/` 目录：`ssl/server.crt`、`ssl/server.key`
-2. Nginx 上启用 HTTPS，将 HTTP 转 HTTPS
-
-未找到证书或未设置 `ENABLE_SSL` 时，自动回退 HTTP 模式。
+应用层**不再内置 SSL**，证书与 HTTPS 统一由**内网穿透客户端**或**反向代理（如 Nginx）**终结：在穿透 / 代理层配置证书并把 HTTPS 流量回源到本应用的 HTTP 端口（默认 `127.0.0.1:5000`）即可，应用无需任何改动。
 
 ### 3. 构建静态资源
 

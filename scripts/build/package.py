@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""打包发布 zip：排除敏感文件、数据库、上传、备份、SSL、日志、Monaco 编辑器等。
+"""打包发布 zip：排除敏感文件、数据库、上传、备份、日志、Monaco 编辑器等。
 
 用法：
     python scripts/build/package.py
@@ -18,7 +18,7 @@ OUT_ZIP = os.path.join(OUT_DIR, f'bhxz-{datetime.now():%Y%m%d-%H%M%S}.zip')
 
 # 排除的目录/文件（前缀或精确名）
 EXCLUDE_DIRS = {
-    '.git', '__pycache__', 'node_modules', 'uploads', 'backups', 'ssl',
+    '.git', '__pycache__', 'node_modules', 'uploads', 'backups',
     'logs', 'release', '.venv', 'venv', 'env', 'dist', 'build',
 }
 EXCLUDE_FILES = {

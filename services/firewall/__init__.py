@@ -1,12 +1,11 @@
-"""防火墙服务包 —— 统一业务层、连接过滤器、DDoS 防护、后台监控与日志注册。
+"""防火墙服务包 —— 统一业务层、WSGI 门禁、DDoS 防护、后台监控与日志注册。
 
 架构层次（自底向上）：
   1. DuckDB 引擎 — 独立高性能数据库，存放封禁/白名单/警告/攻击日志
   2. 统一业务层 — 封禁 IP、白名单管理、警告系统等路由级 API
-  3. 连接过滤器 — BanFilterConnection 在 Cheroot 连接层直接断开黑名单 TCP 连接
+  3. WSGI 门禁 — 在进入 Flask 前直接断开黑名单 / IPv6 连接（0 字节响应）
   4. DDoS 监测 — 按窗口统计请求数、自动封禁（静态资源/媒体下载等不计入）
-  5. 后台监控 — 同步黑名单镜像、强制关闭黑名单连接、定时清理过期数据
-  6. WSGI 门禁 — 在进入 Flask 前二次拦截（兜底）
+  5. 后台监控 — 同步黑名单镜像、清理过期数据
 
 使用方式（路由/服务中）：
     from services.firewall import ban_ip, unban_ip, is_banned, is_whitelisted, ...
@@ -63,7 +62,6 @@ from services.firewall.service.core import (
     SYSTEM_BANNER_ID,
 )
 
-from services.firewall.transport.connection_filter import BanFilterConnection, FirewallGateway, FirewallServer
 from services.firewall.transport.wrappers import FirewallWSGIWrapper
 from services.firewall.service.monitor import FirewallMonitor
 
@@ -72,19 +70,17 @@ from services.firewall.protection.content_filter import check_content_injection
 
 from services.firewall.service.core import get_combined_bans
 
-# 防火墙全局单例（集成连接过滤器 + WSGI 门禁 + 后台监控）
+# 防火墙全局单例（集成 WSGI 门禁 + 后台监控）
 class Firewall:
-    """防火墙主入口：管理连接过滤器、WSGI 门禁与后台监控。
+    """防火墙主入口：管理 WSGI 门禁与后台监控。
 
     用法：
         from services.firewall import firewall
 
-        # 在 server.py 中使用 FirewallServer
-        from services.firewall.transport.connection_filter import FirewallServer
-        server = FirewallServer(..., firewall.wrap(app))
+        # 生产环境：包装应用后交给 waitress
+        wrapped = firewall.wrap(app)
+        waitress.serve(wrapped, ...)
 
-        # 注册后台监控
-        firewall.attach_server(server)
         firewall.start_monitor()
     """
 
@@ -102,7 +98,6 @@ class Firewall:
             return
         self._initialized = True
         self._state_lock = __import__('threading').Lock()
-        self._server = None
         self._monitor = None
 
     # ---- 黑名单查询 ----
@@ -128,16 +123,6 @@ class Firewall:
         """
         wrapper = FirewallWSGIWrapper(wsgi_app, self)
         return wrapper
-
-    # ---- 连接跟踪与强制关闭 ----
-
-    def attach_server(self, server):
-        """绑定 Cheroot 服务器实例（供监控线程扫描其连接管理器中的活跃连接）。"""
-        self._server = server
-
-    @property
-    def server(self):
-        return self._server
 
     # ---- 后台监控 ----
 

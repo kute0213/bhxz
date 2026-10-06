@@ -51,7 +51,7 @@ DOWNLOAD_TIMEOUT = 120
 
 # 覆盖时保留的根级内容（运行期数据 / 本地配置，绝不覆盖）
 EXCLUDE_ROOT = {
-    'db', 'backups', 'uploads', 'ssl', 'logs',
+    'db', 'backups', 'uploads', 'logs',
     '.env', '.env.local', '.git',
     '.venv', 'venv', 'env', 'node_modules', '.trae',
     'release', '__pycache__', '.pytest_cache',
@@ -71,7 +71,7 @@ PROTECTED_PATHS = {
     # 用户数据：强制跳过，任何情况下都不删除
     'uploads',
     # 运行期数据 / 本地配置 / 生成物（见 .gitignore）
-    'backups', 'logs', 'ssl', 'db', 'release', 'dist', 'build',
+    'backups', 'logs', 'db', 'release', 'dist', 'build',
     '.git', '.venv', 'venv', 'env', 'ENV', '.env', '.env.local',
     '.trae', '.trae-html-share-packages', '.vscode', '.idea',
     # 本地下载的构建产物（.gitignore 排除，服务器上必须保留）

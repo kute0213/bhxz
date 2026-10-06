@@ -32,6 +32,8 @@ def start_background_services():
     from services.rcon import player_tracker
     from services.cleanup_service import cleanup_scheduler
     from services.game_server_ban import game_ban_scheduler
+    # 系统指标采样（CPU / 内存 / 网络速率）—— 导入即完成定时任务注册
+    from services.system_metrics import metrics_scheduler
 
     # 先启动统一任务注册表（每秒检测，全站定时任务共用，见 utils/shared/scheduler/）
     start_task_scheduler()

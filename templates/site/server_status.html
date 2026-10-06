@@ -119,7 +119,6 @@
 <script>
 (function() {
     var POLL_INTERVAL = 5000;
-    var prevNet = null;   // 上一次网络计数采样 { sent, recv, ts }，用于换算速率
 
     function formatBytes(bytes) {
         if (bytes === 0) return '0 B';
@@ -150,21 +149,10 @@
                         '已用 ' + formatBytes(d.memory_used) + ' / 总计 ' + formatBytes(d.memory_total);
                 }
 
-                // 网络：累计收发量 + 上行/下行速率（由两次轮询差值换算）
-                if (d.net_sent !== undefined && d.net_recv !== undefined) {
-                    var nowTs = Date.now();
-                    if (prevNet) {
-                        var dt = (nowTs - prevNet.ts) / 1000;
-                        if (dt > 0) {
-                            var upBps = (d.net_sent - prevNet.sent) / dt;
-                            var downBps = (d.net_recv - prevNet.recv) / dt;
-                            if (upBps < 0) upBps = 0;     // 计数器回绕保护
-                            if (downBps < 0) downBps = 0;
-                            document.getElementById('status-net-up').textContent = formatSpeed(upBps);
-                            document.getElementById('status-net-down').textContent = formatSpeed(downBps);
-                        }
-                    }
-                    prevNet = { sent: d.net_sent, recv: d.net_recv, ts: nowTs };
+                // 网络：速率由服务端缓存提供，直接展示；累计量为自开机总量
+                if (d.net_up !== undefined && d.net_down !== undefined) {
+                    document.getElementById('status-net-up').textContent = formatSpeed(d.net_up);
+                    document.getElementById('status-net-down').textContent = formatSpeed(d.net_down);
                     document.getElementById('status-net-up-total').textContent = formatBytes(d.net_sent);
                     document.getElementById('status-net-down-total').textContent = formatBytes(d.net_recv);
                 }

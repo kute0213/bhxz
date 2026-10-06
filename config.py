@@ -402,7 +402,7 @@ SETTINGS_REGISTRY = [
 
     # 一键更新
     ('BUILD_STATIC_ON_UPDATE', False, 'bool', '更新时构建静态资源', '开启后每次更新都会重新下载外部 CDN 资源（Monaco、hls.js 等），关闭则仅同步代码', '一键更新'),
-    ('UPDATE_EXCLUDED_FILES', 'db,backups,uploads,ssl,.env,.git,__pycache__', 'str', '不替换的文件/文件夹', '逗号分隔，更新时不会被删除或覆盖', '一键更新'),
+    ('UPDATE_EXCLUDED_FILES', 'db,backups,uploads,.env,.git,__pycache__', 'str', '不替换的文件/文件夹', '逗号分隔，更新时不会被删除或覆盖', '一键更新'),
     ('GITHUB_PROXIES', '', 'str', '自定义 GitHub 代理', '每行一个，格式：名称=URL。留空使用默认代理列表', '一键更新'),
 
     # 外部链接

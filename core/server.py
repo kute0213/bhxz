@@ -3,7 +3,6 @@
 import os
 import socket
 import signal
-import ssl
 import threading
 
 from core.system.logger import log, log_fatal
@@ -19,6 +18,16 @@ def is_port_in_use(port):
             return s.connect_ex(('127.0.0.1', port)) == 0
     except Exception:
         return False
+
+
+def _stop_server():
+    """停止 Waitress 服务器（幂等）。"""
+    if _server is None:
+        return
+    try:
+        _server.close()
+    except Exception as exc:
+        log('WARNING', 'App', f'HTTP 服务关闭异常: {exc}')
 
 
 def shutdown_application(signum=None):
@@ -39,11 +48,7 @@ def shutdown_application(signum=None):
     from core.db import get_db
 
     # 先停止接收新请求
-    if _server is not None:
-        try:
-            _server.stop()
-        except Exception as exc:
-            log('WARNING', 'App', f'HTTP 服务关闭异常: {exc}')
+    _stop_server()
 
     # 停止高性能防火墙（黑名单镜像同步 / DDoS 检测后台线程）
     try:
@@ -87,7 +92,11 @@ def graceful_shutdown(signum, frame):
 
 
 def run_server(app, port=5000, app_root=None):
-    """使用 Cheroot 作为 WSGI 服务器，可选 SSL。"""
+    """使用 Waitress 作为生产 WSGI 服务器。
+
+    SSL 不在应用层处理：证书与 HTTPS 由内网穿透 / 反向代理层统一终结，
+    应用仅监听 HTTP。被防火墙拦截的请求由 WSGI 门禁直接断开连接。
+    """
     global _server
 
     from services.firewall import firewall
@@ -100,77 +109,34 @@ def run_server(app, port=5000, app_root=None):
         log_fatal('CRITICAL', 'App', '端口已被占用，服务器退出', port=port)
         return
 
-    ssl_dir = os.path.join(app_root, 'ssl') if app_root else os.path.join(
-        os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'ssl')
-    key_path = os.path.join(ssl_dir, 'private.key')
-    cert_path = os.path.join(ssl_dir, 'fullchain.pem')
-
-    enable_ssl = os.environ.get('ENABLE_SSL', '0').lower() in ('1', 'true', 'yes', 'on')
-    has_ssl = enable_ssl and os.path.isfile(key_path) and os.path.isfile(cert_path)
-
     try:
-        from cheroot.wsgi import Server as CherootServer
+        from waitress import create_server
     except ImportError:
-        log('ERROR', 'App', 'Cheroot 未安装，请执行: pip install cheroot')
+        log('ERROR', 'App', 'Waitress 未安装，请执行: pip install waitress')
         log('WARNING', 'App', '回退到 Flask 内置服务器（WSGI 防火墙仍生效）')
         firewall.start_monitor()
         from werkzeug.serving import run_simple
-        ssl_context = None
-        if has_ssl:
-            try:
-                ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-                ssl_context.load_cert_chain(cert_path, key_path)
-            except Exception as e:
-                log('WARNING', 'App', f'SSL 加载失败 ({e})，回退到 HTTP')
-        protocol = 'HTTPS' if ssl_context else 'HTTP'
-        log('INFO', 'App', f'使用 run_simple（{protocol} 模式）')
-        run_simple(
-            '0.0.0.0', port, wrapped_app,
-            threaded=True, ssl_context=ssl_context,
-        )
+        log('INFO', 'App', f'使用 run_simple（HTTP 模式，端口 {port}）')
+        run_simple('0.0.0.0', port, wrapped_app, threaded=True)
         return
 
-    log('INFO', 'App', '使用 Cheroot 服务器')
-    from services.firewall import firewall
-    from services.firewall.transport.connection_filter import FirewallServer
-    server = FirewallServer(
-        ('0.0.0.0', port),
+    server = create_server(
         wrapped_app,
-        request_queue_size=100,
-        numthreads=20,
+        host='0.0.0.0',
+        port=port,
+        threads=20,
+        connection_limit=1000,
+        channel_timeout=300,
+        asyncore_use_poll=True,
     )
     _server = server
-    # 启动高性能防火墙（黑名单镜像同步 + DDoS 检测 + 黑名单连接强制关闭）
-    firewall.attach_server(server)
-    firewall.start_monitor()
 
-    if has_ssl:
-        log('INFO', 'App', f'HTTPS 模式运行 (端口 {port})')
-        log('INFO', 'App', f'证书: {cert_path}')
-        log('INFO', 'App', f'私钥: {key_path}')
-        try:
-            from cheroot.ssl.builtin import BuiltinSSLAdapter
-            server.ssl_adapter = BuiltinSSLAdapter(
-                certificate=cert_path,
-                private_key=key_path,
-                certificate_chain=None,
-                ciphers='ECDHE+AESGCM:ECDHE+CHACHA20:DHE+AESGCM:DHE+CHACHA20:!aNULL:!MD5:!DSS',
-            )
-            # 配置 SSL 会话上下文（启用会话缓存）
-            ctx = ssl.create_default_context(purpose=ssl.Purpose.CLIENT_AUTH)
-            ctx.set_ciphers(
-                'ECDHE+AESGCM:ECDHE+CHACHA20:DHE+AESGCM:DHE+CHACHA20:!aNULL:!MD5:!DSS',
-            )
-            ctx.session_stats()
-            server.ssl_adapter.context = ctx
-        except ImportError as e:
-            log('WARNING', 'App', f'无法加载 SSL 适配器 ({e})，回退到 HTTP 模式')
-            log('WARNING', 'App', f'HTTP 模式运行 (端口 {port})')
-    else:
-        log('INFO', 'App', f'HTTP 模式运行 (端口 {port})')
+    # 启动高性能防火墙（黑名单镜像同步 + DDoS 检测后台线程）
+    firewall.start_monitor()
+    log('INFO', 'App', f'使用 Waitress 服务器，HTTP 模式运行 (端口 {port})')
 
     try:
-        server.start()
+        server.run()
     except KeyboardInterrupt:
         shutdown_application(signal.SIGINT)
     except Exception as e:

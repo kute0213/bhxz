@@ -37,7 +37,7 @@
 | -------------------------- | -------- | -------------------------------------------------------------------------------- |
 | Session cookie 设置 HttpOnly | ✅ **通过** | `SESSION_COOKIE_HTTPONLY = True`，防止 JavaScript 读取                                |
 | Session cookie 设置 SameSite | ✅ **通过** | `SESSION_COOKIE_SAMESITE = 'Lax'`，缓解跨站请求                                         |
-| Session cookie 设置 Secure   | ✅ **通过** | 通过 `ENABLE_SSL` 环境变量动态控制，HTTPS 部署时自动启用 Secure 标志，HTTP 部署时自动禁用防兼容问题               |
+| Session cookie 设置 Secure   | ✅ **通过** | 应用自身以 HTTP 对外提供服务，Secure 标志置为 `False`；HTTPS 由内网穿透 / 反向代理层终结，如需 Secure 可在代理层强制回源 HTTPS |
 | Session 过期时间               | ✅ **通过** | `PERMANENT_SESSION_LIFETIME = timedelta(seconds=SESSION_LIFETIME)` 已配置，默认 7 天    |
 | 登录前 session 清理             | ✅ **通过** | 登录/注册前均调用 `session.clear()`，防 session 固定攻击                                       |
 | 退出登录会话销毁                   | ✅ **通过** | 退出路由调用 `session.clear()` 后，同时通过 `response.delete_cookie()` 清除浏览器端 session cookie |
@@ -117,11 +117,10 @@
 
 | 检查项          | 状态       | 说明                                                                                                         |
 | ------------ | -------- | ---------------------------------------------------------------------------------------------------------- |
-| SSL/TLS 支持   | ✅ **通过** | 基于 Cheroot `BuiltinSSLAdapter` 实现，通过 `ENABLE_SSL` 环境变量开启，证书文件位于 `ssl/` 目录（`private.key` + `fullchain.pem`） |
-| HTTPS 强制跳转   | ✅ **通过** | `ENABLE_SSL` 开启时自动 301 跳转 HTTP→HTTPS，无需额外反向代理配置                                                            |
+| SSL/TLS 支持   | ✅ **通过** | 应用层不内置 SSL，HTTPS 由**内网穿透 / 反向代理层**统一终结（应用仅监听 HTTP，端口 `5000`）                                                  |
+| HTTPS 强制跳转   | ✅ **通过** | 由内网穿透 / 反向代理层负责 HTTP→HTTPS 跳转，应用无需额外配置                                                                     |
 | HSTS         | ✅ **通过** | 仅在 HTTPS 请求时下发 `max-age=31536000; includeSubDomains`                                                       |
-| 敏感信息 POST 传输 | ✅ **通过** | 密码/验证码等通过 POST body 传输，HTTPS 模式下全程加密                                                                       |
-| SSL 会话缓存     | ✅ **通过** | 配置现代密码套件（`TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256:ECDHE-ECDSA-AES128-GCM-SHA256`），启用会话复用优化性能   |
+| 敏感信息 POST 传输 | ✅ **通过** | 密码/验证码等通过 POST body 传输，由代理层终结 TLS 后全程加密                                                                       |
 
 ### 2.12 权限管理
 
@@ -195,13 +194,13 @@
 项目在以下方面表现出良好的安全实践：
 
 1. **CSRF 防护**：基于 Session 的 Token 方案，所有状态变更请求（POST/PUT/DELETE/PATCH）强制校验，使用 `hmac.compare_digest` 常量时间比较防时序攻击
-2. **SSL/TLS 加密传输**：基于 Cheroot `BuiltinSSLAdapter` 实现，通过 `ENABLE_SSL` 环境变量一键开启 HTTPS，支持标准 `private.key` + `fullchain.pem` 证书部署
+2. **SSL/TLS 加密传输**：应用层不内置 SSL，HTTPS 由内网穿透 / 反向代理层统一终结（应用仅监听 HTTP）
 3. **密码哈希**：使用 `scrypt`（现代内存硬哈希算法），优于常见的 `bcrypt` 和 `pbkdf2`
 4. **SQL 注入防护**：全站统一使用参数化查询，未发现用户可控的 SQL 拼接
 5. **响应头安全**：CSP、HSTS（仅 HTTPS 下发）、X-Frame-Options、X-Content-Type-Options、Referrer-Policy、Permissions-Policy 均正确配置
 6. **富文本清洗**：广播邮件 HTML 白名单清洗到位，仅允许安全标签和属性
 7. **路径遍历防护**：公开文件服务和 HLS 分片服务均有双重路径校验
-8. **Session 管理**：`session.clear()` 防固定攻击、`HttpOnly` + `SameSite=Lax` 防跨站、Secure 标志随 `ENABLE_SSL` 动态启用
+8. **Session 管理**：`session.clear()` 防固定攻击、`HttpOnly` + `SameSite=Lax` 防跨站，Secure 标志由代理层 HTTPS 部署时按需启用
 9. **图形验证码**：一次性消费、不区分大小写、防重放
 10. **速率限制**：注册/登录/邮箱验证码均有限频
 11. **重定向校验**：`_is_safe_redirect_url()` 防开放重定向

@@ -107,11 +107,11 @@ python scripts/build/package.py
 │   ├── user/           # 用户（认证/资料/管理）
 │   ├── background_service/  #   背景图片业务（WebP 转换 + 响应式变体）
 │   ├── cleanup_service/     #   被驳回内容自动清理
-│   ├── firewall/            #   高性能防火墙（DuckDB 引擎 + 连接级阻断 + DDoS 防护）
+│   ├── firewall/            #   高性能防火墙（DuckDB 引擎 + WSGI 门禁 + DDoS 防护）
 │   │   ├── api_guard.py     #     接口频率限制
 │   │   ├── service/         #     业务层（core / database / monitor）
 │   │   ├── protection/      #     防护策略（content_filter / ddos / file_guard）
-│   │   └── transport/       #     连接层（connection_filter / wrappers）
+│   │   └── transport/       #     连接层（wrappers：WSGI 门禁）
 │   ├── settings_manager/    #   系统设置管理
 │   ├── security/            #   安全扫描（SQL 注入 / XSS / 路径穿越 / 命令注入 / 敏感探测 / 恶意 UA）
 │   └── sitemap_cache/       #   Sitemap 缓存服务
@@ -194,11 +194,11 @@ python scripts/build/package.py
 
 * **游戏账号封禁**（用户申请 → 管理员审批 → RCON 自动执行）：用户在「申请封禁玩家」页提交封禁玩家名、QQ名、理由；管理员在管理中心「游戏账号封禁」页同意（可设封禁时长，留空为永久）或驳回；同意后经 RCON 执行 `ban 玩家游戏名`（无引号），到期由后台定时任务（每 60 秒检查一次，走 `(status, expires_at)` 索引，单周期最多处理 50 条）执行 `pardon 玩家游戏名`（无引号）自动解封；支持手动提前解封。玩家名经安全清洗杜绝 RCON 命令注入，RCON 执行失败自动保留状态下个周期重试
 
-* 防火墙管理（IP 封禁/IP 白名单/IPv6 拦截/违规警告/防火墙日志：独立高性能 DuckDB 数据库，支持临时/永久封禁，全站 403 拦截，后台一键解封；**IPv6 拦截**：开启后所有 IPv6 连接（除 ::1）在三层拦截点（连接层 → WSGI 层 → 中间件层）直接被断开；**防火墙日志**：作为「模块单独日志」写入独立内存缓冲（默认不落盘，可在「日志页面 → 日志设置」开启写入 `logs/modules/firewall.log`），不与系统日志混流，页面内「日志」Tab 从该缓冲读取，支持等级筛选、清空、自动滚动、3 秒轮询刷新；**防火墙成功拦截返回 403 不记录日志**（IP 封禁兜底、可疑访问拦截均不写日志，避免被封 IP 反复请求时刷屏）；授权拒绝类 403（权限不足 / CSRF 校验失败等）同样不写入防火墙日志，仅保留 IP 封禁 / 自动封禁等封禁动作日志；自动识别可疑操作限流并自动封禁，各操作可独立开关、时长可配；**页面内直接编辑**自动封禁/可疑拦截/DDoS 防护/IPv6 拦截开关与时长、白名单，无需跳转系统设置）
+* 防火墙管理（IP 封禁/IP 白名单/IPv6 拦截/违规警告/防火墙日志：独立高性能 DuckDB 数据库，支持临时/永久封禁，全站拦截，后台一键解封；**IPv6 拦截**：开启后所有 IPv6 连接（除 ::1）在 WSGI 门禁层被直接断开；**防火墙日志**：作为「模块单独日志」写入独立内存缓冲（默认不落盘，可在「日志页面 → 日志设置」开启写入 `logs/modules/firewall.log`），不与系统日志混流，页面内「日志」Tab 从该缓冲读取，支持等级筛选、清空、自动滚动、3 秒轮询刷新；**防火墙成功拦截不记录日志**（IP 封禁兜底、可疑访问拦截均不写日志，避免被封 IP 反复请求时刷屏）；授权拒绝类 403（权限不足 / CSRF 校验失败等）同样不写入防火墙日志，仅保留 IP 封禁 / 自动封禁等封禁动作日志；自动识别可疑操作限流并自动封禁，各操作可独立开关、时长可配；**页面内直接编辑**自动封禁/可疑拦截/DDoS 防护/IPv6 拦截开关与时长、白名单，无需跳转系统设置）
 
 * 可疑访问拦截（识别 SQL 注入 / XSS / 路径穿越 / 命令注入 / 敏感文件与漏洞端点探测 / 恶意扫描 UA 等攻击特征，命中即拦截并自动封禁来源 IP，总开关与各攻击类型子开关独立配置、封禁时长可配，白名单 IP 不受影响）
 
-* DDoS 攻击防护（高性能防火墙模块 `services/firewall/`）：独立 DuckDB 数据库存储封禁/白名单/警告/攻击日志，连接级阻断在请求解析前直接强制断开黑名单 TCP 连接（自定义 Cheroot BanFilterConnection），不返回任何 HTTP 响应，客户端收到连接重置/EOF。按检测强度统计单位时间窗口内每个 IP 的请求数（低/中/高三档，检测窗口 10 秒），**防误判机制**：静态资源（`.css/.js/.ico`）、媒体文件（`.mp3/.ts/.m3u8/.webp`）、公共路径（`/static/`、`/music/<id>.mp3`、`/robots.txt`、`/sitemap.xml`）、**API 路径（`/api/`、`/admin/api/`）**不计入请求计数，音频下载与批量接口调用不会误判为 DDoS（批量 API 调用统一交由 API 防火墙限流处理，超限返回 429 而非断开连接）。超阈值自动封禁来源 IP（首次限时封禁；屡教不改升级永久封禁）。后台监控线程同步黑名单镜像、强制关闭已建立的空闲连接（先注销连接管理器再关闭，线程安全），定时清理过期数据与 VACUUM。检测强度、封禁时长、永久封禁触发次数等可在线热更新，白名单 IP 不受影响。robots.txt 自动添加 Crawl‑delay 与敏感路径 Disallow 规则，防止合法爬虫被误封
+* DDoS 攻击防护（高性能防火墙模块 `services/firewall/`）：独立 DuckDB 数据库存储封禁/白名单/警告/攻击日志，WSGI 门禁在进入 Flask 前直接断开黑名单 IP 的连接（抛出 `waitress.channel.ClientDisconnected`，不写任何响应字节，客户端读到 0 字节后连接断开），不返回任何 HTTP 响应。按检测强度统计单位时间窗口内每个 IP 的请求数（低/中/高三档，检测窗口 10 秒），**防误判机制**：静态资源（`.css/.js/.ico`）、媒体文件（`.mp3/.ts/.m3u8/.webp`）、公共路径（`/static/`、`/music/<id>.mp3`、`/robots.txt`、`/sitemap.xml`）、**API 路径（`/api/`、`/admin/api/`）**不计入请求计数，音频下载与批量接口调用不会误判为 DDoS（批量 API 调用统一交由 API 防火墙限流处理，超限返回 429 而非断开连接）。超阈值自动封禁来源 IP（首次限时封禁；屡教不改升级永久封禁）。后台监控线程同步黑名单镜像、定时清理过期数据与 VACUUM。检测强度、封禁时长、永久封禁触发次数等可在线热更新，白名单 IP 不受影响。robots.txt 自动添加 Crawl‑delay 与敏感路径 Disallow 规则，防止合法爬虫被误封
 
 * **API 调用限流（`services/firewall/api_guard.py`）**：所有 API 请求（`/api/` 前缀、带 `X-Requested-With: XMLHttpRequest` 或 `Accept: application/json`）按来源 IP 限流，**默认每分钟 60 次**；超限返回 429 JSON（含 `Retry-After`），计数存于内存缓存，刷新后随滚动窗口恢复；白名单 IP 与本地回环不受限。搜索、列表「加载更多」等前端 API 调用均纳入计数
 
@@ -278,7 +278,7 @@ python scripts/build/package.py
 
 * **统一任务注册模块（`core/shared/scheduler/`）**：全站所有定时执行功能的唯一入口（**防火墙除外**，防火墙保持独立实现）。任务按下次执行时间排序，注册表单线程每秒检测队首（最早到期）任务，到期即派发并检查下一个；派发不阻塞——执行走共享守护线程池（`pool`，默认）或独立守护线程（`thread`），任务执行期间从注册表取出、完成才重新入列，天然防重叠执行
 * 两种调度模式：**固定间隔**（连续失败可按退避算法延长间隔）与**每日时间点**（`HH:MM`，支持配置热重载，当天至多执行一次，手动完成可跳过当天）
-* 已接入：验证码清理、邮箱验证码清理、RCON 连接池清理、玩家列表追踪（含失败退避）、被驳回内容自动清理、每日 /uploads/ 全量 zip 备份、站点地图刷新、游戏服务器封禁到期自动解封
+* 已接入：验证码清理、邮箱验证码清理、RCON 连接池清理、玩家列表追踪（含失败退避）、被驳回内容自动清理、每日 /uploads/ 全量 zip 备份、站点地图刷新、游戏服务器封禁到期自动解封、系统指标采样（CPU / 内存 / 网络速率）
 
 ### 服务器性能监控
 
@@ -286,7 +286,7 @@ python scripts/build/package.py
 
 * 公开页面，无需登录即可查看
 
-* 后台线程每 5 秒自动采集数据并缓存，前端轮询读取
+* 后台任务每 5 秒自动采集数据并缓存（`services/system_metrics/`，接入统一任务注册表），网络上下行速率在**服务端**由两次采样差值换算后缓存，前端直接读取，打开即有效（无需等待刷新一两次）
 
 ### Minecraft 在线玩家
 
@@ -421,7 +421,6 @@ python scripts/build/package.py
 
 | 变量名          | 说明       | 默认值     |
 | ------------ | -------- | ------- |
-| `ENABLE_SSL` | 启用 HTTPS | `0`（禁用） |
 | `FIREWALL_WHITELIST` | 封禁白名单（逗号分隔） | `112.82.136.172` |
 | `AUTO_BAN_ENABLED` | 自动 IP 封禁总开关 | `1`（开启） |
 | `AUTO_BAN_DURATION_MINUTES` | 自动封禁时长（分钟，0 为永久） | `30` |
@@ -433,14 +432,9 @@ python scripts/build/package.py
 | `DDOS_GUARD_PERMANENT_AFTER` | 永久封禁触发次数 | `3` |
 | `DDOS_GUARD_OFFENSE_WINDOW_HOURS` | 违规记录时间窗口（小时） | `24` |
 
-### SSL 证书
+### HTTPS / SSL
 
-```bash
-mkdir ssl && cp /path/to/private.key ssl/ && cp /path/to/fullchain.pem ssl/
-export ENABLE_SSL=1 && python app.py
-```
-
-未找到证书或未设置 `ENABLE_SSL` 时，自动回退 HTTP 模式。
+应用层**不再内置 SSL**，证书与 HTTPS 统一由**内网穿透 / 反向代理层**终结，应用自身仅监听 HTTP（默认 `0.0.0.0:5000`）。此时需在穿透 / 代理层配置证书，并把 HTTPS 流量回源到本应用的 HTTP 端口。
 
 ## API 接口
 
@@ -620,7 +614,9 @@ export ENABLE_SSL=1 && python app.py
 
 部署方式、构建静态资源、打包发布详见 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)。
 
-* 内置 Cheroot WSGI 服务器，`python app.py` 即可独立运行
+* 内置 Waitress WSGI 服务器，`python app.py` 即可独立运行（生产级多线程）
+
+* HTTPS 由内网穿透 / 反向代理层终结，应用自身仅监听 HTTP
 
 * 生产环境推荐前置 Nginx 反向代理，且必须关闭缓冲以支持 SSE 长连接
 
@@ -699,12 +695,12 @@ workspace/
 │   ├── user/                 #   用户（认证/资料/管理）
 │   ├── background_service/   #   背景图片业务（WebP 转换 + 响应式变体）
 │   ├── cleanup_service/      #   被驳回内容自动清理（统一定时调度）
-│   ├── firewall/             #   高性能防火墙（DuckDB 引擎 + 连接级阻断 + DDoS 防护）
-│   │   ├── __init__.py       #     公共 API re-export（ban_ip / FirewallServer / firewall 单例等）
+│   ├── firewall/             #   高性能防火墙（DuckDB 引擎 + WSGI 门禁 + DDoS 防护）
+│   │   ├── __init__.py       #     公共 API re-export（ban_ip / firewall 单例等）
 │   │   ├── api_guard.py      #     接口频率限制（每 IP 每分钟）
 │   │   ├── service/          #     业务层：core（封禁/白名单/警告）/ database（DuckDB）/ monitor（后台监控）
 │   │   ├── protection/       #     防护策略：content_filter（内容注入）/ ddos / file_guard
-│   │   └── transport/        #     连接层：connection_filter（连接级拦截）/ wrappers（WSGI 门禁）
+│   │   └── transport/        #     连接层：wrappers（WSGI 门禁，直接断开连接）
 │   ├── settings_manager/     #   系统设置管理
 │   ├── sitemap_cache/        #   Sitemap 缓存服务
 ├── routes/                   # HTTP 路由层
@@ -743,7 +739,7 @@ workspace/
 | 类别       | 选型                            |
 | -------- | ----------------------------- |
 | 后端框架     | Flask 3.x                     |
-| WSGI 服务器 | Cheroot（内置）                   |
+| WSGI 服务器 | Waitress（内置，生产级多线程）           |
 | 数据库      | SQLite（WAL 模式，嵌入式单文件）         |
 | 模板引擎     | Jinja2                        |
 | CSS      | Tailwind CSS + 自定义样式（白色磨砂玻璃） |
@@ -842,7 +838,7 @@ workspace/
 
    * `Strict-Transport-Security`（HSTS）：**仅 HTTPS 请求下发**，避免 HTTP 部署被强制升级而无法访问
 
-9. **极高性能多线程防火墙**（`core/firewall/`，运行于 WSGI 入口、先于一切 Flask 逻辑）：黑名单 IP 的请求不参与任何业务处理，直接返回最小 403 响应并标记 `Connection: close`；后台监控线程周期性从数据库同步黑名单镜像、利用 Cheroot 连接特性（`linger=False` + `close()`）强制关闭黑名单 IP 的现存连接（含 keep-alive 空闲与处理中的请求），客户端表现为连接被重置；配套 DDoS 攻击检测按强度自动封禁（详见上文功能特性）。
+9. **极高性能多线程防火墙**（`services/firewall/`，运行于 WSGI 入口、先于一切 Flask 逻辑）：黑名单 IP 的请求不参与任何业务处理，**直接断开连接且不返回任何数据**（`FirewallWSGIWrapper` 抛出 `waitress.channel.ClientDisconnected`，waitress 捕获后关闭连接、不写任何响应字节，客户端读到 0 字节后连接断开）；后台监控线程周期性从数据库同步黑名单镜像；配套 DDoS 攻击检测按强度自动封禁（详见上文功能特性）。
 
 ## 开发注意事项
 
@@ -854,7 +850,9 @@ workspace/
 
 ## 最近更新
 
-* **服务器状态页新增网络监控（`routes/api/public/__init__.py`、`templates/site/server_status.html`）**：`/api/server-status` 新增 `net_sent` / `net_recv` 两个累计收发字节字段（取自 `psutil.net_io_counters()`，平台不支持时兜底为 0）；服务器状态页在「内存使用率」下方新增「网络」卡片，以「上行 / 下行」双栏展示**实时速率**与**累计流量**，速率由前端对相邻两次轮询的差值换算（服务端不保存跨请求状态，多客户端互不干扰），首次轮询仅显示累计量、第二次起显示速率；`formatBytes` 单位补充 `TB`，以正确显示长期累计流量。
+* **全面改用 Waitress 生产服务器 + 移除应用层 SSL**（`core/server.py`、`requirements.txt`、`app.py`、`core/middleware.py`、`startup_checks.py`）：WSGI 服务器由 Cheroot 迁移到 **Waitress**（生产级多线程，`threads=20` / `connection_limit=1000` / `channel_timeout=300`），启动方式与对外端口不变；**删除应用层全部 SSL 功能**（`ENABLE_SSL` 环境变量、`ssl/` 证书目录、Cheroot `BuiltinSSLAdapter`、HTTPS 强制跳转、Session Cookie Secure 动态开关与相关启动检查），HTTPS 改由内网穿透 / 反向代理层统一终结，应用仅监听 HTTP；防火墙不再依赖服务器私有连接对象，被拦截请求通过抛出 `waitress.channel.ClientDisconnected` 由 Waitress 关闭连接、**不写任何响应字节**。
+
+* **服务器状态页网络监控改为「服务端采样缓存」**（`services/system_metrics/`、`routes/api/public/__init__.py`、`templates/site/server_status.html`）：新增后台采样服务（每 5 秒采样 `psutil` 的 CPU / 内存 / `net_io_counters()`），在服务端用相邻两次采样的累计字节差换算上行 / 下行速率并写入内存缓存；`/api/server-status` 新增 `net_up` / `net_down` 速率字段，页面**打开即显示速率**（不再需要等一两次刷新），`formatBytes` 单位补充 `TB`。
 
 * **修复 DDoS 防护失效与攻击后报错（防火墙真实 IP / 白名单 / SQLite 并发 / 模板空值）**：
   * **穿透环境下 DDoS 统计与封禁失效**（`services/firewall/transport/wrappers.py`、`core/shared/ip.py`）：网站经 natfrp 内网穿透对外服务，外部请求的 `REMOTE_ADDR` 恒为本机回环地址，而 WSGI 门禁此前硬编码放行回环 IP，导致攻击请求既不计入 DDoS 窗口也不被黑名单拦截。现于 WSGI 层解析真实客户端 IP：仅当直连来源为可信代理（回环 / 内网地址，或 `config.py` 的 `TRUSTED_PROXIES`）时才采信 `X-Forwarded-For` / `X-Real-IP` 等头部，取链路中**最右侧公网 IP**；公网直连一律忽略代理头，防止伪造头部绕过防护。

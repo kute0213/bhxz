@@ -29,36 +29,32 @@ def api_stats():
 
 @api_bp.route('/server-status')
 def api_server_status():
-    """获取服务器实时状态（在线玩家列表、人数、CPU、内存等）。
+    """获取服务器实时状态（在线玩家列表、人数、CPU、内存、网络等）。
 
     数据来源：
     - 玩家数据：PlayerTracker 后台线程每 5 秒通过 RCON /list 采集并缓存。
-    - 系统资源：使用 psutil 实时采集。
+    - 系统资源（CPU / 内存 / 网络）：SystemMetrics 后台任务每 5 秒采样一次，
+      网络上下行速率在服务端由两次采样差值换算并缓存，前端直接展示，
+      无需等待两次轮询即可看到速率。
     前端可按需轮询此接口，无需额外更新时间提示（服务端固定周期）。
     """
     from services.rcon import player_tracker
-    import psutil
+    from services.system_metrics import get_metrics
 
     pl = player_tracker.get_player_list()
-
-    # CPU 使用率：interval=0.1 确保首次调用返回真实值而非 0
-    cpu_percent = psutil.cpu_percent(interval=0.1)
-    mem = psutil.virtual_memory()
-    # 网络：返回自开机以来的累计收发字节数（getattr 兜底，部分平台无该计数器），
-    # 上行/下行速率由前端按两次轮询的差值自行换算，服务端不保存跨请求状态。
-    net = getattr(psutil, 'net_io_counters', lambda: None)()
-    net_sent = net.bytes_sent if net else 0
-    net_recv = net.bytes_recv if net else 0
+    m = get_metrics()
 
     return jsonify({
         'online': pl.online,
         'max_players': pl.max_players,
         'players': pl.players,
         'error': pl.error,
-        'cpu_percent': cpu_percent,
-        'memory_percent': mem.percent,
-        'memory_used': mem.used,
-        'memory_total': mem.total,
-        'net_sent': net_sent,
-        'net_recv': net_recv,
+        'cpu_percent': m['cpu_percent'],
+        'memory_percent': m['memory_percent'],
+        'memory_used': m['memory_used'],
+        'memory_total': m['memory_total'],
+        'net_sent': m['net_sent'],
+        'net_recv': m['net_recv'],
+        'net_up': m['net_up'],
+        'net_down': m['net_down'],
     })
