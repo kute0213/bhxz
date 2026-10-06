@@ -28,6 +28,21 @@ from config import (
 from core.system.logger import log
 
 
+# 备份时需要跳过的文件后缀：
+#   - SQLite / DuckDB 的 WAL / SHM / journal 等临时文件（正在写入，内容不一致）
+#   - DuckDB 主库文件：DuckDB 运行期对 .duckdb 持有独占锁，Windows 下读取会
+#     Permission denied（Errno 13），无法直接复制
+_SKIP_BACKUP_SUFFIXES = (
+    '-wal', '-shm', '-journal',           # SQLite 临时文件
+    '.duckdb', '.duckdb.wal', '.duckdb.tmp',  # DuckDB 主库与临时文件
+)
+
+
+def _should_skip_backup_file(fname: str) -> bool:
+    """判断文件是否属于使用中/临时文件，备份时跳过。"""
+    return fname.endswith(_SKIP_BACKUP_SUFFIXES)
+
+
 # ---------------------------------------------------------------------------
 # 单例：备份管理器
 # ---------------------------------------------------------------------------
@@ -171,17 +186,18 @@ class BackupManager:
             # 更新记录中的路径
             self._update_backup_record(backup_id, backup_name=backup_name, backup_path=backup_path)
 
-            # 阶段 2: 统计文件数量（用于进度计算）
+            # 阶段 2: 统计文件数量（用于进度计算，跳过使用中/临时文件）
             self._report_progress(10, '统计文件...', progress_callback)
             total_files = 0
             for dirpath, dirnames, filenames in os.walk(UPLOAD_DIR):
-                total_files += len(filenames)
+                total_files += sum(1 for f in filenames if not _should_skip_backup_file(f))
             if total_files == 0:
                 total_files = 1  # 避免除零
 
             # 阶段 3: 极限压缩打包
             self._report_progress(20, f'正在压缩 {total_files} 个文件...', progress_callback)
             processed = 0
+            skipped = 0
 
             with zipfile.ZipFile(
                 backup_path, 'w',
@@ -190,8 +206,9 @@ class BackupManager:
             ) as zf:
                 for dirpath, dirnames, filenames in os.walk(UPLOAD_DIR):
                     for fname in filenames:
-                        # 跳过 DuckDB/SQLite WAL/SHM 临时文件
-                        if fname.endswith('-wal') or fname.endswith('-shm'):
+                        # 跳过 SQLite/DuckDB 的 WAL/SHM/临时文件与加锁的 DuckDB 主库
+                        if _should_skip_backup_file(fname):
+                            skipped += 1
                             continue
                         full_path = os.path.join(dirpath, fname)
                         # zip 内使用相对路径
@@ -204,6 +221,9 @@ class BackupManager:
                         if processed % max(1, total_files // 5) == 0:
                             pct = 20 + int(processed / total_files * 55)
                             self._report_progress(pct, f'已压缩 {processed}/{total_files}...', progress_callback)
+
+            if skipped:
+                log('INFO', 'BackupManager', f'已跳过 {skipped} 个使用中/临时文件（SQLite/DuckDB WAL 与 DuckDB 主库）')
 
             size_bytes = os.path.getsize(backup_path)
 

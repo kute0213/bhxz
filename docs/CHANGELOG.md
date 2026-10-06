@@ -4,6 +4,11 @@
 
 ### 变更
 
+* **修复备份报错与启动残留问题**：
+  * **备份跳过被锁定的 DuckDB 文件**：`services/backup/manager` 新增备份跳过规则（`.duckdb` / `.duckdb.wal` / `.duckdb.tmp` 及 SQLite 的 `-wal` / `-shm` / `-journal`）。DuckDB 运行期对其主库文件持有独占锁，Windows 下读取会 `Permission denied (Errno 13)`，直接被 `zipfile` 记录为 WARNING；现改为备份前统一跳过并汇总为一条 INFO 日志，不再刷屏报错。
+  * **启动自愈清理废弃目录**：`core/system/startup_checks.py` 在模块导入检查之前清理旧版本残留的 `routes/firewall/` 目录。网站在线更新为「覆盖式」（`update.py`），不会删除上游已移除的文件，导致旧 `routes/firewall/__init__.py` 仍引用已删除的 `record_spam`，触发「模块导入失败」误报；清理后恢复正常。
+  * **不再自动创建 `./backups`**：从启动检查的必需目录中移除 `backups`。备份目录早已改为可配置项 `BACKUP_DIR`（默认 `../bhxz_backups`，支持绝对/相对路径），旧的 `./backups` 硬编码创建逻辑已属多余。
+
 * **删除「发布频率限制」功能 + 修复配置表自增 ID 空耗**：
   * **删除发布频率限制**：移除 `services/firewall/protection/spam.py`（基于内存计数的发布频率检测 + 超限自动封禁）及其全部调用点——公共建筑发布（`routes/buildings/pages`）、建筑评论（`routes/buildings/api`）、服务器指南发布/编辑（`routes/guides/pages`）、大喇叭音频上传（`routes/main/music`）、背景图片上传（`routes/backgrounds/pages`）、后台邮件广播（`routes/admin/broadcast`）；`services/firewall/protection/__init__.py` 移除 `from .spam import *`；防火墙后台监控（`services/firewall/service/monitor.py`）移除 `SPAM_PRUNE_INTERVAL` 与刷屏记录清理任务。
   * **清理底层残留死代码**：`services/firewall/service/core.py` 移除已无任何调用方的 `record_spam` / `get_spam_log` / `get_user_spam_count` / `clear_spam_log` 及 `services/firewall/__init__.py` 的对应 re-export；`services/firewall/service/database.py` 移除 `firewall_spam_log` 表、`seq_firewall_spam_log` 序列与相关索引（DuckDB 中已有旧表不受影响，仅不再创建）。

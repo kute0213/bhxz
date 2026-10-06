@@ -15,9 +15,28 @@
 
 import os
 import sys
+import shutil
 import importlib
 
 from core.system.logger import log
+
+
+# 已废弃目录：结构重构后可能由旧版本残留。
+# 网站的在线更新机制是「覆盖式」（见 update.py），不会删除上游已移除的文件，
+# 这些旧模块会引用已删除的符号（如 record_spam），导致「模块导入失败」误报，
+# 因此启动时统一清理（幂等，目录不存在时静默）。
+_OBSOLETE_DIRS = [
+    'routes/firewall',  # 防火墙已完整下沉 services/firewall/，路由仅保留 routes/admin/firewall
+]
+
+
+def _remove_obsolete_dirs(app_root: str):
+    """清理旧版本残留的废弃目录（在模块导入检查之前执行）。"""
+    for rel in _OBSOLETE_DIRS:
+        full = os.path.join(app_root, rel)
+        if os.path.isdir(full):
+            shutil.rmtree(full, ignore_errors=True)
+            log('INFO', 'Startup', f'  - 清理废弃目录: {rel}')
 
 
 def run_startup_checks(app_root: str):
@@ -26,6 +45,7 @@ def run_startup_checks(app_root: str):
     log('INFO', 'Startup', '║     开始服务器健康检查...            ║')
     log('INFO', 'Startup', '╚══════════════════════════════════════╝')
 
+    _remove_obsolete_dirs(app_root)
     _check_module_imports()
     _check_database()
     _check_directories(app_root)
@@ -123,7 +143,6 @@ _REQUIRED_DIRS = [
     'uploads',
     'uploads/sitemap',
     'uploads/backgrounds',
-    'backups',
     'ssl',
     'logs',
     'scripts/build',

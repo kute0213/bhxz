@@ -840,6 +840,11 @@ workspace/
 
 ## 最近更新
 
+* **修复备份报错与启动残留问题**：
+  * **备份跳过被锁定的 DuckDB 文件**：`services/backup/manager` 新增备份跳过规则（`.duckdb` / `.duckdb.wal` / `.duckdb.tmp` 及 SQLite 的 `-wal` / `-shm` / `-journal`）。DuckDB 运行期对主库文件持有独占锁，Windows 下读取会 `Permission denied (Errno 13)`；现改为备份前统一跳过并汇总为一条 INFO 日志，不再报 WARNING。
+  * **启动自愈清理废弃目录**：`core/system/startup_checks.py` 在模块导入检查前清理旧版本残留的 `routes/firewall/` 目录，修复「`cannot import name 'record_spam'`」导入误报（在线更新为覆盖式，不会删除上游已移除的旧文件）。
+  * **不再自动创建 `./backups`**：从启动检查的必需目录中移除 `backups`，备份目录统一由可配置项 `BACKUP_DIR`（默认 `../bhxz_backups`）决定。
+
 * **删除「发布频率限制」功能 + 修复配置表自增 ID 空耗**：
   * **删除发布频率限制**：移除 `services/firewall/protection/spam.py`（内存计数 + 超限自动封禁）及全部调用点——公共建筑发布、建筑评论、服务器指南发布/编辑、大喇叭音频上传、背景图片上传、后台邮件广播；防火墙设置页移除「发布频率限制」板块，`FIREWALL_CONFIG_KEYS` 与保存接口同步移除全部 `SPAM_LIMIT_*` 配置项。同时清理底层残留：`services/firewall/service/core.py` 移除已无调用方的 `record_spam` / `get_spam_log` / `get_user_spam_count` / `clear_spam_log`，`services/firewall/service/database.py` 移除 `firewall_spam_log` 表与 `seq_firewall_spam_log` 序列。
   * **修复配置表自增 ID 空耗**：`settings` 表原先用 `INSERT ... ON CONFLICT(key) DO UPDATE` 保存，SQLite 在走「更新」分支时仍会消耗一个 `AUTOINCREMENT` ID（实测 23 行配置把计数器推到 500）。改为「先 UPDATE，未命中再 INSERT」，重复保存不再消耗 ID。
