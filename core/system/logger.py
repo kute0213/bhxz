@@ -155,11 +155,10 @@ def is_console_enabled() -> bool:
 # 控制台彩色高亮
 # ---------------------------------------------------------------------------
 
-# 仅给 [等级] 标签上色（不整行着色），配色与网页日志页（templates/admin/logs.html
-# 的 LEVEL_COLORS）保持一致：DEBUG 灰 / INFO 蓝 / WARNING 黄 / ERROR 红 / CRITICAL 加粗红。
+# 仅给 [等级] 标签上色（不整行着色）：INFO 绿 / WARNING 黄 / ERROR 红 / CRITICAL 加粗红。
+# DEBUG 不着色——保持终端默认前景色（深色终端下即白色），即「原色」显示。
 _LEVEL_ANSI = {
-    'DEBUG': '\033[90m',
-    'INFO': '\033[94m',
+    'INFO': '\033[92m',
     'WARNING': '\033[93m',
     'ERROR': '\033[91m',
     'CRITICAL': '\033[1;91m',

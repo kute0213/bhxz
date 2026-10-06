@@ -44,10 +44,12 @@ python scripts/build/build_static.py
 
 * **JetBrains Mono** — 编程字体（代码编辑器 / 时间码）
 
-* **LXGW WenKai（霞鹜文楷）** — 正文中文字体，本地子集化 woff2（按 `unicode-range` 分片）
+* **ZCOOL QingKe HuangYou（站酷庆科黄油体）** — 正文中文字体，本地子集化 woff2（按 `unicode-range` 分片）
 
-> 中文字体现使用自带字体 **LXGW WenKai**（本地分片子集，浏览器只按需下载用到的子集），
-> 相比系统字体栈观感更统一、更有书卷气；字体文件随静态资源预构建提交，**零外部 CDN 依赖**。
+* **ZCOOL KuaiLe（站酷快乐体）** — 标题中文字体，同为本地子集化 woff2
+
+> 中文字体使用自带字体：正文 **站酷庆科黄油体**（圆润活泼、笔画简洁），标题 **站酷快乐体**（更俏皮有活力），
+> 均为本地分片子集，浏览器只按需下载用到的子集；字体文件随静态资源预构建提交，**零外部 CDN 依赖**。
 > 静态资源（含 Tailwind 构建产物 `templates/static/css/tailwind.css`）已预构建并随代码提交，一键更新无需额外构建步骤。
 
 ### 打包发布 zip
@@ -582,7 +584,7 @@ export ENABLE_SSL=1 && python app.py
 
 * **零外部依赖**：所有 CDN 资源（Lucide、Marked.js）下载到本地，无外部网络请求
 
-* **本地自定义字体（LXGW WenKai）**：正文使用本地子集化 woff2（`lib/fonts/lxgwwenkai-*-subset-*.woff2`），按 `unicode-range` 分片 + `font-display: swap`，浏览器只下载页面实际用到的子集，无外部 CDN 请求；字体缺失时自动回退系统字体栈
+* **本地自定义字体（站酷庆科黄油体 + 站酷快乐体）**：正文与标题分别使用本地子集化 woff2（`lib/fonts/zcool-*-*.woff2`），按 `unicode-range` 分片 + `font-display: swap`，浏览器只下载页面实际用到的子集，无外部 CDN 请求；字体缺失时自动回退系统字体栈
 
 * **分段列表滚动自动加载**：所有分段加载列表（公共建筑 / 公共建筑评论 / 大喇叭音频 / 服务器指南 / 后台各列表）的「加载更多」按钮带 `data-autoload-more` 属性，`base.js` 用 `IntersectionObserver` 监听——按钮进入视口即自动点击加载下一页；按钮隐藏 / 禁用时不触发，加载后按钮被新内容推出视口，滚动到底再次自动加载，始终只自动加载后面的内容
 
@@ -843,6 +845,10 @@ workspace/
 详见 [docs/CHANGELOG.md](docs/CHANGELOG.md)。
 
 ## 最近更新
+
+* **字体换成站酷活泼字体 + 终端日志配色调整**：
+  * **正文改用站酷庆科黄油体、标题改用站酷快乐体**：替换此前的霞鹜文楷——正文（含导航、按钮）改用 **ZCOOL QingKe HuangYou（站酷庆科黄油体）**，圆润活泼且笔画简洁；`h1/h2/h3`（及 `.font-display` / `.font-title`）改用 **ZCOOL KuaiLe（站酷快乐体）**，更俏皮有活力。两者均取自 npm 包 `@fontsource/*`（本地镜像），`scripts/build/build_static.py` 下载后按 `unicode-range` 展开约 93 个子集，仍为本地零 CDN；构建脚本新增**废弃字体文件自动清理**（本轮清掉 194 个旧霞鹜文楷子集），避免换字体后旧文件长期残留。
+  * **终端日志配色调整**（`core/system/logger.py`）：`[INFO]` 改为**绿色**（`\033[92m`），`[DEBUG]` 恢复**原色**（终端默认前景色，不再着色）；`WARNING` / `ERROR` / `CRITICAL` 维持黄 / 红 / 加粗红不变，仍只给等级标签着色、不整行着色。
 
 * **音频播放 404 自愈 + 自定义字体 + 终端日志彩色标签**：
   * **HLS 播放改为「点击才加载」+ 错误退避重试**（`static/js/pages/music_player.js`）：hls.js 设置 `autoStartLoad: false`，页面加载不再预取分片，避免列表页一次性发起大量分片请求而出现成片瞬时 404；新增致命错误分级处理——媒体错误走 `recoverMediaError()`，网络类错误（清单/分片加载失败）按 700ms×次数退避自动重试（最多 3 次），瞬时 404 可自愈；**修复「一次报错就永久锁死播放按钮」的问题**，重试耗尽后仅提示错误态，用户再次点击播放会重新加载清单，不再始终无法播放。分片缺失时后端 `routes/main/music/__init__.py` 记录 WARNING（含音频 ID / 分片名 / 标题 / IP）便于定位磁盘上确实缺失的文件。

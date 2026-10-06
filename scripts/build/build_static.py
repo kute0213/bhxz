@@ -10,11 +10,12 @@
     lib/lucide/        - Lucide 图标库
     lib/marked/        - Marked.js Markdown 渲染
     lib/hls/           - hls.js HLS 播放支持（自定义音频播放器）
-    lib/fonts/         - Google Fonts 字体文件（Noto Sans SC + JetBrains Mono）
+    lib/fonts/         - 中文字体（站酷庆科黄油体 + 站酷快乐体）+ JetBrains Mono
     lib/monaco/        - Monaco Editor 代码编辑器（HTTP 下载，无需 npm）
 """
 
 import os
+import re
 import json
 import shutil
 import tarfile
@@ -162,22 +163,24 @@ def download_marked():
 # ---------------------------------------------------------------------------
 # 3. 字体处理
 # ---------------------------------------------------------------------------
-# 正文中文字体：LXGW WenKai（霞鹜文楷）
-#   从 npm 包 lxgw-wenkai-webfont 下载，仅展开 Regular(400) / Bold(700) 两档字重。
-#   官方已把每个字重切成 ~97 个 unicode-range 子集（woff2），浏览器只下载页面
-#   实际用到的子集：中文全覆盖的同时，首屏无需加载完整字体，也不再依赖外部 CDN。
+# 正文中文字体：ZCOOL QingKe HuangYou（站酷庆科黄油体）—— 圆润活泼、笔画简洁
+# 标题中文字体：ZCOOL KuaiLe（站酷快乐体）—— 更俏皮有活力
+#   两者均取自 npm 包 @fontsource/<slug>（Google Fonts 的本地镜像），包内已把中文
+#   按 unicode-range 切成 ~93 个子集（woff2），浏览器只下载页面实际用到的子集：
+#   中文全覆盖的同时，首屏无需加载完整字体，也不再依赖外部 CDN。
 # 等宽字体：JetBrains Mono（GitHub Releases 完整 woff2），用于代码编辑器与时间码。
 
-LXGW_WENKAI_VERSION = '1.7.0'
-LXGW_WENKAI_TGZ_URL = (
-    'https://registry.npmjs.org/lxgw-wenkai-webfont/-/'
-    f'lxgw-wenkai-webfont-{LXGW_WENKAI_VERSION}.tgz'
-)
-# 需要展开的字重：包内 CSS 文件 -> 该字重分片子集的文件名前缀
-LXGW_WENKAI_CSS = {
-    'package/lxgwwenkai-regular.css': 'lxgwwenkai-regular-subset-',
-    'package/lxgwwenkai-bold.css': 'lxgwwenkai-bold-subset-',
-}
+FONTSOURCE_VERSION = '5.3.0'
+# (fontsource 包名, CSS font-family 名)
+CJK_FONTS = [
+    ('zcool-qingke-huangyou', 'ZCOOL QingKe HuangYou'),
+    ('zcool-kuaile', 'ZCOOL KuaiLe'),
+]
+_FONTSOURCE_TGZ_URL = 'https://registry.npmjs.org/@fontsource/{slug}/-/{slug}-{ver}.tgz'
+
+# 包内 CSS 的 src 带 .woff 回退项；本地只展开 woff2，直接删掉该回退，
+# 避免极老浏览器请求不存在的 .woff 文件产生 404（现代浏览器均支持 woff2）。
+_WOFF_FALLBACK_RE = re.compile(r",\s*url\([^)]*\.woff\)\s*format\(['\"]woff['\"]\)")
 
 JETBRAINS_MONO_VERSION = '2.304'
 JETBRAINS_MONO_URL = (
@@ -193,50 +196,51 @@ _SYSTEM_FONT_STACK = (
 )
 
 
-def _download_lxgw_wenkai(fonts_dir, css_lines):
-    """下载 LXGW WenKai 字体包，展开指定字重的 woff2 子集并追加 @font-face 规则。
+def _download_cjk_font(fonts_dir, css_lines, slug, family):
+    """下载 @fontsource 中文字体包，展开 woff2 子集并追加带 unicode-range 的 @font-face。
 
-    包内 CSS 的 ``url('./files/xxx.woff2')`` 会被改写为站点绝对路径
+    包内 ``index.css`` 的 ``url(./files/xxx.woff2)`` 会被改写为站点绝对路径
     ``url('/static/lib/fonts/xxx.woff2')``，与展平后的字体文件位置保持一致。
+
+    Returns:
+        展开出的 woff2 文件名集合；下载/解压失败返回 None。
     """
-    import tarfile as _tarfile
-
-    tgz_path = os.path.join(fonts_dir, '_lxgw-wenkai.tgz')
-    print(f'  正在下载 LXGW WenKai v{LXGW_WENKAI_VERSION}...')
-    if not _download_with_redirect(LXGW_WENKAI_TGZ_URL, tgz_path,
-                                   f'lxgw-wenkai-webfont-{LXGW_WENKAI_VERSION}.tgz'):
-        css_lines.append('/* LXGW WenKai 下载失败，正文回退系统字体 */')
+    url = _FONTSOURCE_TGZ_URL.format(slug=slug, ver=FONTSOURCE_VERSION)
+    tgz_path = os.path.join(fonts_dir, f'_{slug}.tgz')
+    print(f'  正在下载 {family}（@fontsource/{slug} v{FONTSOURCE_VERSION}）...')
+    if not _download_with_redirect(url, tgz_path, f'{slug}-{FONTSOURCE_VERSION}.tgz'):
+        css_lines.append(f'/* {family} 下载失败，回退系统字体 */')
         css_lines.append('')
-        return
+        return None
 
-    extracted = 0
+    extracted = set()
     try:
-        with _tarfile.open(tgz_path, 'r:gz') as tar:
-            prefixes = tuple(LXGW_WENKAI_CSS.values())
+        with tarfile.open(tgz_path, 'r:gz') as tar:
             for name in tar.getnames():
                 if not name.endswith('.woff2'):
                     continue
                 basename = os.path.basename(name)
-                if not basename.startswith(prefixes):
+                if not basename.startswith(slug):
                     continue
                 member = tar.extractfile(name)
                 if member is None:
                     continue
                 with open(os.path.join(fonts_dir, basename), 'wb') as f:
                     shutil.copyfileobj(member, f)
-                extracted += 1
+                extracted.add(basename)
 
-            for css_name in LXGW_WENKAI_CSS:
-                member = tar.extractfile(css_name)
-                if member is None:
-                    continue
+            member = tar.extractfile('package/index.css')
+            if member is not None:
                 css_text = member.read().decode('utf-8')
-                css_text = css_text.replace("url('./files/", "url('/static/lib/fonts/")
+                css_text = css_text.replace("url(./files/", "url('/static/lib/fonts/")
+                css_text = _WOFF_FALLBACK_RE.sub('', css_text)
                 css_lines.append(css_text.strip())
                 css_lines.append('')
-        print(f'  [OK] 展开 {extracted} 个 LXGW WenKai woff2 子集（Regular + Bold）')
+        print(f'  [OK] 展开 {len(extracted)} 个 {family} woff2 子集')
+        return extracted
     except Exception as e:
-        print(f'  [FAIL] 解压 LXGW WenKai 失败: {e}')
+        print(f'  [FAIL] 解压 {family} 失败: {e}')
+        return None
     finally:
         try:
             os.remove(tgz_path)
@@ -245,7 +249,7 @@ def _download_lxgw_wenkai(fonts_dir, css_lines):
 
 
 def download_fonts():
-    """生成本地字体 CSS：LXGW WenKai 中文子集 + JetBrains Mono，零 CDN 依赖。"""
+    """生成本地字体 CSS：站酷中文子集（正文 + 标题）+ JetBrains Mono，零 CDN 依赖。"""
     print('\n=== 字体 ===', flush=True)
 
     fonts_dir = os.path.join(LIB_DIR, 'fonts')
@@ -255,20 +259,34 @@ def download_fonts():
         '/*',
         ' * 自动生成的字体定义 — 由 scripts/build/build_static.py 生成',
         ' *',
-        ' * 正文：LXGW WenKai（霞鹜文楷），本地子集化 woff2，按 unicode-range 分片，',
-        ' *       浏览器只下载页面实际用到的子集，不依赖任何外部 CDN。',
+        ' * 正文：ZCOOL QingKe HuangYou（站酷庆科黄油体），本地子集化 woff2，',
+        ' *       按 unicode-range 分片，浏览器只下载页面实际用到的子集。',
+        ' * 标题：ZCOOL KuaiLe（站酷快乐体），同为本地子集化 woff2。',
         ' * 等宽：JetBrains Mono，本地完整 woff2（代码编辑器 / 时间码）。',
+        ' * 全部字体均随静态资源本地提供，不依赖任何外部 CDN。',
         ' */',
         '',
     ]
 
-    # ---- LXGW WenKai 中文字体子集 ----
-    _download_lxgw_wenkai(fonts_dir, css_lines)
+    # ---- 中文字体子集（正文 + 标题）----
+    # expected：本轮实际展开出的 woff2 文件名，用于最后清理上一版遗留的字体文件
+    expected = set()
+    all_ok = True
+    for slug, family in CJK_FONTS:
+        got = _download_cjk_font(fonts_dir, css_lines, slug, family)
+        if got is None:
+            all_ok = False
+        else:
+            expected |= got
 
-    # ---- 正文与系统字体栈 ----
+    # ---- 正文 / 标题 / 系统字体栈 ----
     css_lines += [
         'body, .font-body {',
-        f"  font-family: 'LXGW WenKai', {_SYSTEM_FONT_STACK};",
+        f"  font-family: 'ZCOOL QingKe HuangYou', {_SYSTEM_FONT_STACK};",
+        '}',
+        '',
+        '.font-display, .font-title {',
+        f"  font-family: 'ZCOOL KuaiLe', {_SYSTEM_FONT_STACK};",
         '}',
         '',
         '.font-system {',
@@ -298,6 +316,7 @@ def download_fonts():
                     with zf.open(name) as src, open(dest, 'wb') as dst:
                         dst.write(src.read())
                     extracted += 1
+                    expected.add(basename)
                 print(f'  [OK] 解压 {extracted} 个 JetBrains Mono woff2 文件')
 
                 # 添加 @font-face 到 fonts.css
@@ -351,6 +370,19 @@ def download_fonts():
         print('  [WARN] JetBrains Mono 下载失败，使用系统等宽字体')
         css_lines.append('/* JetBrains Mono 下载失败，使用系统字体 */')
         css_lines.append('')
+
+    # ---- 清理上一版遗留、当前已不再使用的字体文件（如更换字体后的旧子集）----
+    if all_ok and success:
+        stale = 0
+        for filename in os.listdir(fonts_dir):
+            if filename.endswith('.woff2') and filename not in expected:
+                try:
+                    os.remove(os.path.join(fonts_dir, filename))
+                    stale += 1
+                except OSError:
+                    pass
+        if stale:
+            print(f'  [OK] 清理 {stale} 个已废弃的字体文件')
 
     # 写入 fonts.css
     fonts_css_path = os.path.join(fonts_dir, 'fonts.css')
