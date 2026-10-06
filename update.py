@@ -58,6 +58,13 @@ EXCLUDE_ROOT = {
 SKIP_NAMES = {'__pycache__', '.pytest_cache', '.DS_Store', 'Thumbs.db'}
 SKIP_SUFFIX = ('.pyc', '.pyo', '.zip', '.db', '.db-wal', '.db-shm', '.duckdb')
 
+# 构建产物目录（相对项目根）：覆盖后按新版内容精确同步，删除新版已不再包含的文件。
+# 例如更换字体后，旧字体的 woff2 子集不会再被 fonts.css 引用，需要一并清掉，
+# 否则会长期残留在服务器上（合并覆盖不会删除目标目录里多余的文件）。
+PRUNE_DIRS = (
+    'templates/static/lib/fonts',
+)
+
 # ── 镜像源（URL 模板） ────────────────────────────────────────────────
 # 官方归档地址：github.com 会 302 到 codeload.github.com
 _GH_ARCHIVE = 'https://github.com/{repo}/archive/refs/heads/{branch}.zip'
@@ -331,6 +338,31 @@ def _merge_copy(src, dst):
             shutil.copy2(s, d)
 
 
+def _prune_orphans(src_dir, rel_dir):
+    """删除目标目录中「新版已不再包含」的文件（构建产物精确同步）。
+
+    仅用于 PRUNE_DIRS 这类纯构建产物目录，不影响运行期数据。
+    """
+    src = os.path.join(src_dir, rel_dir)
+    dst = os.path.join(PROJECT_ROOT, rel_dir)
+    if not (os.path.isdir(src) and os.path.isdir(dst)):
+        return 0
+    removed = 0
+    for name in os.listdir(dst):
+        if _skip(name) or os.path.exists(os.path.join(src, name)):
+            continue
+        full = os.path.join(dst, name)
+        try:
+            if os.path.isdir(full):
+                shutil.rmtree(full, ignore_errors=True)
+            else:
+                os.remove(full)
+            removed += 1
+        except OSError:
+            continue
+    return removed
+
+
 def apply_update(src_dir):
     """把新代码合并覆盖到项目目录（保留运行期数据）。"""
     log('正在覆盖项目文件...', CYAN)
@@ -346,6 +378,12 @@ def apply_update(src_dir):
             shutil.copy2(s, d)
         count += 1
     log(f'覆盖完成，共处理 {count} 项', GREEN)
+
+    # 清理新版已移除的构建产物（如更换字体后残留的旧字体文件）
+    for rel in PRUNE_DIRS:
+        n = _prune_orphans(src_dir, rel)
+        if n:
+            log(f'已清理 {n} 个过时的静态资源文件（{rel}）', GREEN)
 
 
 # ── 依赖安装 ──────────────────────────────────────────────────────────
