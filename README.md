@@ -804,12 +804,17 @@ workspace/
 1. 运行 `python update.py`（可选 `--branch dev` 指定分支，默认 `main`，失败自动回退 `master`）
 2. 脚本**多线程同时测速**全部镜像源（24 个：官方直连 / codeload / 前缀型代理 / 主机替换型镜像），单个镜像 2 秒超时，**整个测速环节最多 2 秒**；优先选取能返回合法 ZIP 且速度最快的镜像
 3. 自动下载最新源码 ZIP（含 PK 魔数与 CRC 完整性校验，可识别镜像返回的 HTML 错误页），逐个镜像 × 逐个分支回退重试
-4. 解压后**合并覆盖**项目代码，保留 `uploads/`、`db`、`backups`、`.env`、`ssl/`、`node_modules` 等运行期数据与本地文件
-5. 校验并同步**静态构建产物**（`templates/static/lib/fonts/` 等）：合并覆盖只会新增/覆盖文件，捕获不到「新版已删除」的内容，故覆盖后按新版清单**清理过时文件**——例如更换字体后，旧字体的 woff2 子集会被一并删除，不会长期残留
+4. 解压后**合并覆盖**项目代码（`_merge_copy`：同名覆盖、目标多余文件保留），随后进入第 5 步统一清理
+5. **清理「GitHub 上已被删除」的文件与目录**：合并覆盖只会新增/覆盖，反映不了「新版删除」，故覆盖完成后按最新 ZIP 的文件清单递归清理——被移除的文件会删除、被移除的目录会整棵删除（例如更换字体后，旧字体的 woff2 子集一并清掉，不再残留）。`PROTECTED_PATHS` 中的路径**强制跳过、绝不删除**，包括：
+   - 用户数据：`uploads/`（音频、背景图、sitemap，数据库也在 `uploads/db/`）
+   - 运行期数据 / 本地配置：`db`、`backups`、`logs`、`ssl`、`release`、`.env`、`.env.local`、`.git`、`.venv`、`node_modules`
+   - 本地生成物：`templates/static/lib/monaco`、`scripts/ffmpeg`（运行期下载，`.gitignore` 已排除）
+   - 任意层级：`__pycache__`、`.pytest_cache`、`node_modules`、`.DS_Store`、`Thumbs.db`
 6. 自动安装/更新 Python 依赖
 7. **更新完成后提示手动重启服务器，不会自动启动**
 
 > 字体等静态资源已随代码提交进仓库（`templates/static/lib/fonts/`），因此一键更新即可同步字体，服务器无需联网构建、也无需额外步骤。
+> ⚠️ 清理以「最新 ZIP 里的文件清单」为准：**既未提交到仓库、又不在保护名单内**的本地文件会被当作「已删除」而移除。请勿把自建脚本/资源直接放在项目目录下，放到 `uploads/` 等受保护目录即可。
 > 镜像路径按各源格式正确拼接：前缀型代理为 `<代理前缀>https://github.com/<repo>/archive/refs/heads/<branch>.zip`，主机替换型为 `https://<镜像域名>/<repo>/archive/refs/heads/<branch>.zip`。
 > 如果遇到依赖变化，更新后执行 `pip install -r requirements.txt`。
 
@@ -848,7 +853,7 @@ workspace/
 
 ## 最近更新
 
-* **一键更新同步静态构建产物**（`update.py`）：合并覆盖只会新增/覆盖文件，无法反映「新版已删除」，导致更换字体后服务器上旧字体的 woff2 子集长期残留。现新增 `PRUNE_DIRS`（当前为 `templates/static/lib/fonts`），覆盖完成后按新版清单删除过时文件并打印清理数量；字体等静态资源本就随代码提交，一键更新即可同步字体，无需在服务器上构建。
+* **一键更新自动清理已删除文件（`update.py`）**：合并覆盖只会新增/覆盖文件，无法反映「GitHub 上已删除」，导致换字体后服务器上旧字体的 woff2 子集长期残留。现覆盖完成后按最新 ZIP 清单**递归清理**过时文件与整个被移除的目录；`PROTECTED_PATHS` 中的路径强制跳过、绝不删除——`uploads/`（含数据库）、`db`、`backups`、`logs`、`ssl`、`release`、`.env`、`.git`、`.venv`、`node_modules`、`templates/static/lib/monaco`、`scripts/ffmpeg` 等运行期数据与本地生成物都在保护名单内。同时移除了上一版针对字体目录的临时清理代码。
 
 * **字体换成站酷活泼字体 + 终端日志配色调整**：
   * **正文改用站酷庆科黄油体、标题改用站酷快乐体**：替换此前的霞鹜文楷——正文（含导航、按钮）改用 **ZCOOL QingKe HuangYou（站酷庆科黄油体）**，圆润活泼且笔画简洁；`h1/h2/h3`（及 `.font-display` / `.font-title`）改用 **ZCOOL KuaiLe（站酷快乐体）**，更俏皮有活力。两者均取自 npm 包 `@fontsource/*`（本地镜像），`scripts/build/build_static.py` 下载后按 `unicode-range` 展开约 93 个子集（**只落地 CSS 实际引用的子集**，包内自带的 2.4MB 整包文件不会写入仓库），仍为本地零 CDN；构建脚本新增**废弃字体文件自动清理**（本轮清掉 194 个旧霞鹜文楷子集），避免换字体后旧文件长期残留。

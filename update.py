@@ -7,6 +7,8 @@
     Windows / macOS / Linux 双击或 `python update.py` 均可直接运行。
   - **只走下载覆盖**：不使用 git，直接把 GitHub 最新源码 ZIP 解压后覆盖到项目，
     保留数据库、上传文件、备份、`.env` 等运行期数据。
+  - **自动清理已删除文件**：覆盖只会新增/覆盖，随后按新版清单删除「GitHub 上已
+    删除」的文件与目录；`uploads/` 等运行期数据在保护名单中，强制跳过、绝不删除。
   - **多线程同时测速**：所有镜像同时发起探测，单个镜像 2 秒超时，
     整个测速环节最大 2 秒（用屏障同步起跑 + 统一截止时间收敛）。
   - **镜像路径正确拼接**：每个镜像声明自己的 URL 模板（前缀型代理 / 主机替换型 /
@@ -56,14 +58,30 @@ EXCLUDE_ROOT = {
 }
 # 覆盖时跳过的不需要的文件 / 目录名（任意层级）
 SKIP_NAMES = {'__pycache__', '.pytest_cache', '.DS_Store', 'Thumbs.db'}
-SKIP_SUFFIX = ('.pyc', '.pyo', '.zip', '.db', '.db-wal', '.db-shm', '.duckdb')
-
-# 构建产物目录（相对项目根）：覆盖后按新版内容精确同步，删除新版已不再包含的文件。
-# 例如更换字体后，旧字体的 woff2 子集不会再被 fonts.css 引用，需要一并清掉，
-# 否则会长期残留在服务器上（合并覆盖不会删除目标目录里多余的文件）。
-PRUNE_DIRS = (
-    'templates/static/lib/fonts',
+SKIP_SUFFIX = (
+    '.pyc', '.pyo', '.zip', '.log', '.so', '.swp', '.swo',
+    '.db', '.db-journal', '.db-wal', '.db-shm',
+    '.sqlite', '.sqlite3', '.duckdb', '.duckdb.wal', '.duckdb.bak',
 )
+
+# 清理「GitHub 上已删除的文件」时**绝不删除**的路径（相对项目根，posix 风格）。
+# 这些都是运行期数据或本地生成物（与 .gitignore 的忽略项保持一致），
+# 它们本来就不在仓库里，不能被当成「新版已删除」而误删。
+PROTECTED_PATHS = {
+    # 用户数据：强制跳过，任何情况下都不删除
+    'uploads',
+    # 运行期数据 / 本地配置 / 生成物（见 .gitignore）
+    'backups', 'logs', 'ssl', 'db', 'release', 'dist', 'build',
+    '.git', '.venv', 'venv', 'env', 'ENV', '.env', '.env.local',
+    '.trae', '.trae-html-share-packages', '.vscode', '.idea',
+    # 本地下载的构建产物（.gitignore 排除，服务器上必须保留）
+    'templates/static/lib/monaco',
+    # 运行期下载的 ffmpeg 可执行文件
+    'scripts/ffmpeg',
+    'scripts/build/node_modules',
+}
+# 任意层级都不删除的目录 / 文件名
+PROTECTED_NAMES = {'__pycache__', '.pytest_cache', 'node_modules', '.DS_Store', 'Thumbs.db'}
 
 # ── 镜像源（URL 模板） ────────────────────────────────────────────────
 # 官方归档地址：github.com 会 302 到 codeload.github.com
@@ -338,33 +356,69 @@ def _merge_copy(src, dst):
             shutil.copy2(s, d)
 
 
-def _prune_orphans(src_dir, rel_dir):
-    """删除目标目录中「新版已不再包含」的文件（构建产物精确同步）。
+def _protected(rel):
+    """判断相对路径（posix 风格）是否受保护、绝不参与清理。"""
+    if rel in PROTECTED_PATHS:
+        return True
+    parts = rel.split('/')
+    if parts[0] in PROTECTED_PATHS:
+        return True
+    return parts[-1] in PROTECTED_NAMES
 
-    仅用于 PRUNE_DIRS 这类纯构建产物目录，不影响运行期数据。
-    """
-    src = os.path.join(src_dir, rel_dir)
-    dst = os.path.join(PROJECT_ROOT, rel_dir)
-    if not (os.path.isdir(src) and os.path.isdir(dst)):
+
+def _has_protected_child(rel):
+    """rel 之下是否存在受保护路径（用于避免整目录删除时误删保护内容）。"""
+    prefix = rel + '/'
+    return any(p.startswith(prefix) for p in PROTECTED_PATHS)
+
+
+def _rm_path(path):
+    """删除文件或目录，返回删除的文件数（失败返回 0）。"""
+    try:
+        if os.path.isdir(path):
+            n = sum(len(files) for _, _, files in os.walk(path))
+            shutil.rmtree(path, ignore_errors=True)
+            return n
+        os.remove(path)
+        return 1
+    except OSError:
         return 0
+
+
+def _prune_tree(src_dir, dst_dir, rel=''):
+    """递归清理 dst_dir 中「新版 src_dir 已不存在」的文件与目录，返回删除的文件数。
+
+    合并覆盖只会新增/覆盖，无法反映「GitHub 上已删除」，此函数负责补齐：
+      - `/uploads` 等运行期数据在 PROTECTED_PATHS 中被强制跳过，绝不触碰
+      - 任意层级的 SKIP_NAMES / SKIP_SUFFIX 命中项同样跳过
+      - 新版已移除的目录会被整棵删除；但若其下仍有受保护路径，
+        则改为递归清理，保证保护内容不被连带删除
+    """
+    try:
+        names = os.listdir(dst_dir)
+    except OSError:
+        return 0
+
     removed = 0
-    for name in os.listdir(dst):
-        if _skip(name) or os.path.exists(os.path.join(src, name)):
+    for name in names:
+        child_rel = f'{rel}/{name}' if rel else name
+        if _skip(name) or _protected(child_rel):
             continue
-        full = os.path.join(dst, name)
-        try:
-            if os.path.isdir(full):
-                shutil.rmtree(full, ignore_errors=True)
+        d = os.path.join(dst_dir, name)
+        s = os.path.join(src_dir, name)
+        if os.path.isdir(d):
+            if os.path.isdir(s) or _has_protected_child(child_rel):
+                # 新版无此目录但目录内有需保护的内容：递归清理，保留保护项
+                removed += _prune_tree(s, d, child_rel)
             else:
-                os.remove(full)
-            removed += 1
-        except OSError:
-            continue
+                removed += _rm_path(d)
+        elif not os.path.exists(s):
+            removed += _rm_path(d)
     return removed
 
 
 def apply_update(src_dir):
-    """把新代码合并覆盖到项目目录（保留运行期数据）。"""
+    """把新代码合并覆盖到项目目录（保留运行期数据），并清理已在 GitHub 删除的文件。"""
     log('正在覆盖项目文件...', CYAN)
     count = 0
     for entry in os.listdir(src_dir):
@@ -379,11 +433,13 @@ def apply_update(src_dir):
         count += 1
     log(f'覆盖完成，共处理 {count} 项', GREEN)
 
-    # 清理新版已移除的构建产物（如更换字体后残留的旧字体文件）
-    for rel in PRUNE_DIRS:
-        n = _prune_orphans(src_dir, rel)
-        if n:
-            log(f'已清理 {n} 个过时的静态资源文件（{rel}）', GREEN)
+    # 清理新版已删除的文件（uploads 等运行期数据强制跳过）
+    removed = _prune_tree(src_dir, PROJECT_ROOT)
+    if removed:
+        log(f'已清理 {removed} 个 GitHub 上已被删除的文件', GREEN)
+    else:
+        log('无过时文件需要清理', GREEN)
+    return removed
 
 
 # ── 依赖安装 ──────────────────────────────────────────────────────────
