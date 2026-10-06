@@ -57,6 +57,37 @@
             <div class="mt-3 text-xs text-cream/50 text-center" id="status-memory-detail"></div>
         </div>
 
+        <!-- ====== 网络 ====== -->
+        <div class="pixel-card rounded-xl p-6 mb-5">
+            <div class="flex items-center gap-3 mb-4">
+                <div class="w-10 h-10 bg-gold-400/20 rounded-xl flex items-center justify-center">
+                    <i data-lucide="activity" class="w-5 h-5 text-gold-400"></i>
+                </div>
+                <div>
+                    <div class="text-base font-bold text-cream/90">网络</div>
+                    <div class="text-xs text-cream/50">实时上行 / 下行速率</div>
+                </div>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                <div class="bg-forest-900/40 rounded-lg p-4">
+                    <div class="flex items-center gap-1.5 text-xs text-cream/50 mb-1">
+                        <i data-lucide="arrow-up" class="w-3.5 h-3.5 text-green-400"></i>
+                        上行
+                    </div>
+                    <div class="text-xl font-bold text-green-400" id="status-net-up">-</div>
+                    <div class="text-xs text-cream/40 mt-1">累计 <span id="status-net-up-total">-</span></div>
+                </div>
+                <div class="bg-forest-900/40 rounded-lg p-4">
+                    <div class="flex items-center gap-1.5 text-xs text-cream/50 mb-1">
+                        <i data-lucide="arrow-down" class="w-3.5 h-3.5 text-blue-400"></i>
+                        下行
+                    </div>
+                    <div class="text-xl font-bold text-blue-400" id="status-net-down">-</div>
+                    <div class="text-xs text-cream/40 mt-1">累计 <span id="status-net-down-total">-</span></div>
+                </div>
+            </div>
+        </div>
+
         <!-- ====== 在线玩家列表（含在线/最大/服务器状态） ====== -->
         <div class="pixel-card rounded-xl p-6">
             <div class="flex flex-wrap items-center justify-between gap-3 mb-4">
@@ -88,13 +119,18 @@
 <script>
 (function() {
     var POLL_INTERVAL = 5000;
+    var prevNet = null;   // 上一次网络计数采样 { sent, recv, ts }，用于换算速率
 
     function formatBytes(bytes) {
         if (bytes === 0) return '0 B';
-        var units = ['B', 'KB', 'MB', 'GB'];
+        var units = ['B', 'KB', 'MB', 'GB', 'TB'];
         var i = Math.floor(Math.log(bytes) / Math.log(1024));
         if (i >= units.length) i = units.length - 1;
         return (bytes / Math.pow(1024, i)).toFixed(1) + ' ' + units[i];
+    }
+
+    function formatSpeed(bytesPerSec) {
+        return formatBytes(bytesPerSec) + '/s';
     }
 
     function updateStatus() {
@@ -112,6 +148,25 @@
                     document.getElementById('mem-bar').style.width = Math.min(d.memory_percent, 100) + '%';
                     document.getElementById('status-memory-detail').textContent =
                         '已用 ' + formatBytes(d.memory_used) + ' / 总计 ' + formatBytes(d.memory_total);
+                }
+
+                // 网络：累计收发量 + 上行/下行速率（由两次轮询差值换算）
+                if (d.net_sent !== undefined && d.net_recv !== undefined) {
+                    var nowTs = Date.now();
+                    if (prevNet) {
+                        var dt = (nowTs - prevNet.ts) / 1000;
+                        if (dt > 0) {
+                            var upBps = (d.net_sent - prevNet.sent) / dt;
+                            var downBps = (d.net_recv - prevNet.recv) / dt;
+                            if (upBps < 0) upBps = 0;     // 计数器回绕保护
+                            if (downBps < 0) downBps = 0;
+                            document.getElementById('status-net-up').textContent = formatSpeed(upBps);
+                            document.getElementById('status-net-down').textContent = formatSpeed(downBps);
+                        }
+                    }
+                    prevNet = { sent: d.net_sent, recv: d.net_recv, ts: nowTs };
+                    document.getElementById('status-net-up-total').textContent = formatBytes(d.net_sent);
+                    document.getElementById('status-net-down-total').textContent = formatBytes(d.net_recv);
                 }
 
                 // 玩家概览

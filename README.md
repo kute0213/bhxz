@@ -282,7 +282,7 @@ python scripts/build/package.py
 
 ### 服务器性能监控
 
-* CPU 使用率、内存占用、运行时间
+* CPU 使用率、内存占用、网络上下行速率、运行时间
 
 * 公开页面，无需登录即可查看
 
@@ -451,7 +451,7 @@ export ENABLE_SSL=1 && python app.py
 | 端点                             | 说明                        |
 | ------------------------------ | ------------------------- |
 | `GET /api/stats`               | 网站统计数据                    |
-| `GET /api/server-status`       | 服务器实时状态（在线玩家/CPU/内存）      |
+| `GET /api/server-status`       | 服务器实时状态（在线玩家/CPU/内存/网络）      |
 | `GET /api/captcha/generate`    | 生成图形验证码                   |
 | `POST /api/captcha/verify`     | 验证图形验证码                   |
 | `POST /api/email/send-code`    | 发送邮箱验证码                   |
@@ -853,6 +853,8 @@ workspace/
 详见 [docs/CHANGELOG.md](docs/CHANGELOG.md)。
 
 ## 最近更新
+
+* **服务器状态页新增网络监控（`routes/api/public/__init__.py`、`templates/site/server_status.html`）**：`/api/server-status` 新增 `net_sent` / `net_recv` 两个累计收发字节字段（取自 `psutil.net_io_counters()`，平台不支持时兜底为 0）；服务器状态页在「内存使用率」下方新增「网络」卡片，以「上行 / 下行」双栏展示**实时速率**与**累计流量**，速率由前端对相邻两次轮询的差值换算（服务端不保存跨请求状态，多客户端互不干扰），首次轮询仅显示累计量、第二次起显示速率；`formatBytes` 单位补充 `TB`，以正确显示长期累计流量。
 
 * **修复 DDoS 防护失效与攻击后报错（防火墙真实 IP / 白名单 / SQLite 并发 / 模板空值）**：
   * **穿透环境下 DDoS 统计与封禁失效**（`services/firewall/transport/wrappers.py`、`core/shared/ip.py`）：网站经 natfrp 内网穿透对外服务，外部请求的 `REMOTE_ADDR` 恒为本机回环地址，而 WSGI 门禁此前硬编码放行回环 IP，导致攻击请求既不计入 DDoS 窗口也不被黑名单拦截。现于 WSGI 层解析真实客户端 IP：仅当直连来源为可信代理（回环 / 内网地址，或 `config.py` 的 `TRUSTED_PROXIES`）时才采信 `X-Forwarded-For` / `X-Real-IP` 等头部，取链路中**最右侧公网 IP**；公网直连一律忽略代理头，防止伪造头部绕过防护。

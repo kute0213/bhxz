@@ -4,6 +4,12 @@
 
 ### 变更
 
+* **服务器状态页新增网络监控（`routes/api/public/__init__.py`、`templates/site/server_status.html`）**：
+  * **接口**：`GET /api/server-status` 新增 `net_sent` / `net_recv` 两个字段，返回自开机以来的累计发送 / 接收字节数（`psutil.net_io_counters()`；部分平台无该计数器时用 `getattr` 兜底为 0，不影响 CPU / 内存 / 玩家数据）。
+  * **页面**：服务器状态页在「内存使用率」下方新增「网络」卡片，采用与 CPU / 内存一致的 `pixel-card` 视觉，以「上行（绿）/ 下行（蓝）」双栏展示**实时速率**与**累计流量**。
+  * **速率换算**：上行 / 下行速率由**前端**对相邻两次轮询的累计字节数做差值换算（除以实际间隔秒数），服务端不保存任何跨请求状态——多客户端 / 多标签页同时轮询互不干扰；首次轮询仅有累计量（速率显示 `-`），第二次起显示速率；对计数器回绕做了负值保护（置 0）。
+  * **单位**：`formatBytes` 单位补充 `TB`，避免长期运行的累计流量被截断在 GB 档；速率以 `xxx/s` 展示。
+
 * **修复 DDoS 防护失效与攻击后报错（防火墙真实 IP / 白名单 / SQLite 并发 / 模板空值）**：
   * **穿透环境下 DDoS 统计与封禁全部失效**（`services/firewall/transport/wrappers.py`、`core/shared/ip.py`）：网站经 natfrp 内网穿透对外服务，所有外部请求的 `REMOTE_ADDR` 恒为本机回环地址，而 WSGI 门禁此前**硬编码放行回环 IP**，导致攻击请求既不计入 DDoS 窗口、也不会被黑名单拦截。现改为在 WSGI 层用 `resolve_ip_from_environ()` 解析真实客户端 IP——仅当直连来源为**可信代理**（回环 / 内网地址，或 `TRUSTED_PROXIES` 中配置的 IP）时才采信 `X-Forwarded-For` / `X-Real-IP` / `CF-Connecting-IP` 等头部，并取链路中**最右侧的公网 IP**（该值由最近的可信代理写入，客户端无法伪造）；公网直连时一律忽略代理头部，防止伪造 `X-Forwarded-For` 绕过防护。只有解析结果确为本机回环时才跳过 DDoS 计数。
   * **删光白名单后默认 IP 仍被永久放行**（`services/firewall/service/database.py`、`services/firewall/service/core.py`）：白名单内存缓存此前直接读取 `config.py` 的 `FIREWALL_WHITELIST` **模块常量**（硬编码默认 `112.82.136.172`），而管理后台「封禁白名单」保存的是 settings 表配置，二者互不相通——在白名单页面点「移除」只删 DuckDB `firewall_whitelist` 表，下一秒缓存同步又把该 IP 从常量加回，表现为「白名单点移除却删不掉、删光白名单后攻击依旧无反应」。现改为读取**设置值**，并严格区分两种情况：settings 表无该键（从未配置）→ 回退 `config.py` 默认值以保证开箱可用的安全基线；已保存为空字符串（管理员主动清空）→ 返回空集合、清空真正生效。同时白名单页面的「移除」会**同步从设置中删除**对应 IP，删除即时生效、不再被加回。

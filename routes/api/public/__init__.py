@@ -44,6 +44,11 @@ def api_server_status():
     # CPU 使用率：interval=0.1 确保首次调用返回真实值而非 0
     cpu_percent = psutil.cpu_percent(interval=0.1)
     mem = psutil.virtual_memory()
+    # 网络：返回自开机以来的累计收发字节数（getattr 兜底，部分平台无该计数器），
+    # 上行/下行速率由前端按两次轮询的差值自行换算，服务端不保存跨请求状态。
+    net = getattr(psutil, 'net_io_counters', lambda: None)()
+    net_sent = net.bytes_sent if net else 0
+    net_recv = net.bytes_recv if net else 0
 
     return jsonify({
         'online': pl.online,
@@ -54,4 +59,6 @@ def api_server_status():
         'memory_percent': mem.percent,
         'memory_used': mem.used,
         'memory_total': mem.total,
+        'net_sent': net_sent,
+        'net_recv': net_recv,
     })
