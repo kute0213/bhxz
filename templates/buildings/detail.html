@@ -16,7 +16,7 @@
                     <h1 class="text-2xl sm:text-3xl font-bold mb-2">{{ building.title }}</h1>
                     <div class="flex items-center gap-3 text-sm text-cream/60 flex-wrap">
                         <span class="flex items-center gap-1"><i data-lucide="user" class="w-4 h-4"></i>{{ building.author_name or '未知' }}</span>
-                        <span class="flex items-center gap-1"><i data-lucide="calendar" class="w-4 h-4"></i>{{ (building.published_at or building.created_at)[:10] }}</span>
+                        <span class="flex items-center gap-1"><i data-lucide="calendar" class="w-4 h-4"></i>{{ (building.published_at or building.created_at or '')[:10] }}</span>
                         <span class="flex items-center gap-1"><i data-lucide="eye" class="w-4 h-4"></i>{{ building.view_count or 0 }} 次浏览</span>
                         <span class="flex items-center gap-1"><i data-lucide="message-circle" class="w-4 h-4"></i>{{ building.comment_count }} 条评论</span>
                     </div>

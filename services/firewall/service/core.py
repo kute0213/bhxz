@@ -24,6 +24,7 @@ from services.firewall.service.database import (
     is_ip_banned_cache,
     is_account_banned_cache,
     is_whitelisted_cache,
+    remove_from_config_whitelist,   # 白名单移除时同步清理设置里的启动基线
     push_expiry,
     record_ban_detail,     # 自动记录封禁详情
     push_ban_context,      # 从 WSGI/DDOS 层传递上下文
@@ -149,6 +150,9 @@ def whitelist_remove(ip_address):
         )
     except Exception as exc:
         return False, f'移除白名单失败: {exc}'
+    # 同步从「封禁白名单」设置中移除：config 白名单是启动基线，只删 DuckDB 表
+    # 会在下一轮缓存同步时被设置里的默认值重新加回，导致「移除」点了也不生效
+    remove_from_config_whitelist(ip)
     invalidate_whitelist_cache()
     log_firewall('DEBUG', 'Firewall', '白名单移除', ip=ip)
     return True, f'已将 {ip} 移出白名单'

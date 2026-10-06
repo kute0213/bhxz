@@ -854,6 +854,14 @@ workspace/
 
 ## 最近更新
 
+* **修复 DDoS 防护失效与攻击后报错（防火墙真实 IP / 白名单 / SQLite 并发 / 模板空值）**：
+  * **穿透环境下 DDoS 统计与封禁失效**（`services/firewall/transport/wrappers.py`、`core/shared/ip.py`）：网站经 natfrp 内网穿透对外服务，外部请求的 `REMOTE_ADDR` 恒为本机回环地址，而 WSGI 门禁此前硬编码放行回环 IP，导致攻击请求既不计入 DDoS 窗口也不被黑名单拦截。现于 WSGI 层解析真实客户端 IP：仅当直连来源为可信代理（回环 / 内网地址，或 `config.py` 的 `TRUSTED_PROXIES`）时才采信 `X-Forwarded-For` / `X-Real-IP` 等头部，取链路中**最右侧公网 IP**；公网直连一律忽略代理头，防止伪造头部绕过防护。
+  * **删光白名单后默认 IP 仍被永久放行**（`services/firewall/service/database.py`、`services/firewall/service/core.py`）：白名单缓存此前读取 `config.py` 的常量而非设置，且「移除」只删 DuckDB 表——硬编码默认 `112.82.136.172` 被缓存同步反复加回，删不掉、删光后攻击仍不被拦截。现改为读取设置值并区分「未配置」（回退默认基线）与「清空」（真正清空），白名单页面的「移除」同步清理设置，删除即时生效。
+  * **攻击后报 `sqlite3.InterfaceError: bad parameter or other API misuse`**（`core/db/connection.py`）：跨线程共享的单连接 + SQLite 预处理语句缓存，并发执行相同 SQL 时相互 `reset` 触发该错误并导致全站 500。现关闭语句缓存（`cached_statements=0`），24 线程 × 4000 次查询压测 0 错误。
+  * **建筑详情页报 `TypeError: 'NoneType' object is not subscriptable`**（`templates/buildings/detail.html`）：日期字段为 `None` 时取切片报错，补 `or ''` 兜底。
+
+* **修复背景图不按屏幕大小取图（`templates/base.html`）**：此前用 `max(视口宽, 视口高) × devicePixelRatio` 计算目标像素再取「不小于它的最小档位」，导致手机（390×844@3x → 2532）、平板（2360）、1366 笔记本（1366）等**几乎所有设备都被算成 1920 档**，768 / 1280 两档形同虚设——任何设备拿到的都是同一张主图；且尺寸只在页面解析时计算一次，缩放窗口、手机旋屏后永不重新取图。现改为按**屏幕 CSS 长边**取「不小于它的最小档位」（全屏背景由半透明遮罩覆盖，无需按物理像素取图），并监听 `resize` / `orientationchange`（300ms 防抖）在视口变化后自动改取当前最合适的档位与裁剪比例。实测：iPhone SE → 768、iPhone 14 → 1280（竖屏 ratio 0.46 / 横屏 2.16）、iPad → 1280、1366 及以上桌面 → 1920。
+
 * **一键更新自动清理已删除文件（`update.py`）**：合并覆盖只会新增/覆盖文件，无法反映「GitHub 上已删除」，导致换字体后服务器上旧字体的 woff2 子集长期残留。现覆盖完成后按最新 ZIP 清单**递归清理**过时文件与整个被移除的目录；`PROTECTED_PATHS` 中的路径强制跳过、绝不删除——`uploads/`（含数据库）、`db`、`backups`、`logs`、`ssl`、`release`、`.env`、`.git`、`.venv`、`node_modules`、`templates/static/lib/monaco`、`scripts/ffmpeg` 等运行期数据与本地生成物都在保护名单内。同时移除了上一版针对字体目录的临时清理代码。`start.bat` 等本地自建启动脚本也加入保护名单，不会被误删。
 
 * **字体换成站酷活泼字体 + 终端日志配色调整**：

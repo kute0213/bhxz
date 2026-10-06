@@ -4,6 +4,13 @@
 
 ### 变更
 
+* **修复 DDoS 防护失效与攻击后报错（防火墙真实 IP / 白名单 / SQLite 并发 / 模板空值）**：
+  * **穿透环境下 DDoS 统计与封禁全部失效**（`services/firewall/transport/wrappers.py`、`core/shared/ip.py`）：网站经 natfrp 内网穿透对外服务，所有外部请求的 `REMOTE_ADDR` 恒为本机回环地址，而 WSGI 门禁此前**硬编码放行回环 IP**，导致攻击请求既不计入 DDoS 窗口、也不会被黑名单拦截。现改为在 WSGI 层用 `resolve_ip_from_environ()` 解析真实客户端 IP——仅当直连来源为**可信代理**（回环 / 内网地址，或 `TRUSTED_PROXIES` 中配置的 IP）时才采信 `X-Forwarded-For` / `X-Real-IP` / `CF-Connecting-IP` 等头部，并取链路中**最右侧的公网 IP**（该值由最近的可信代理写入，客户端无法伪造）；公网直连时一律忽略代理头部，防止伪造 `X-Forwarded-For` 绕过防护。只有解析结果确为本机回环时才跳过 DDoS 计数。
+  * **删光白名单后默认 IP 仍被永久放行**（`services/firewall/service/database.py`、`services/firewall/service/core.py`）：白名单内存缓存此前直接读取 `config.py` 的 `FIREWALL_WHITELIST` **模块常量**（硬编码默认 `112.82.136.172`），而管理后台「封禁白名单」保存的是 settings 表配置，二者互不相通——在白名单页面点「移除」只删 DuckDB `firewall_whitelist` 表，下一秒缓存同步又把该 IP 从常量加回，表现为「白名单点移除却删不掉、删光白名单后攻击依旧无反应」。现改为读取**设置值**，并严格区分两种情况：settings 表无该键（从未配置）→ 回退 `config.py` 默认值以保证开箱可用的安全基线；已保存为空字符串（管理员主动清空）→ 返回空集合、清空真正生效。同时白名单页面的「移除」会**同步从设置中删除**对应 IP，删除即时生效、不再被加回。
+  * **攻击后访问报 `sqlite3.InterfaceError: bad parameter or other API misuse`**（`core/db/connection.py`）：主站为跨线程共享的单连接，SQLite 默认启用**预处理语句缓存**，多线程并发执行相同 SQL 时后一个线程会 `reset` 前一个仍在读取的语句，触发该错误并导致全站 500、无法访问。现创建连接时设置 `cached_statements=0` 关闭语句缓存，每次 `execute` 使用独立语句，从根本上消除并发冲突（24 线程 × 4000 次查询压测 0 错误）。
+  * **建筑详情页报 `TypeError: 'NoneType' object is not subscriptable`**（`templates/buildings/detail.html`）：`(building.published_at or building.created_at)[:10]` 在两者均为 `None` 时对 `None` 取切片；补 `or ''` 兜底，日期缺失时安全渲染为空。
+  * **配置说明**：真实 IP 解析依赖 `config.py` 的 `TRUSTED_PROXIES`——回环与内网地址默认已视为可信代理（本地反向代理、内网穿透客户端都从本机/内网发起连接），因此**通常无需配置**；若在公网 IP 的反向代理后部署，需将该代理 IP 填入 `TRUSTED_PROXIES`。
+
 * **就地搜索框交互优化（SiteSearch v8）**：
   * **点击搜索框任意位置即可展开**：展开触发由原来只监听折叠态按钮改为监听整个容器（`templates/static/js/core/search.js`），点击图标、文字或四周留白都能展开。
   * **展开动画改为纯水平伸缩**：`.site-search` 改用固定 `height: 44px` + 无上下 `padding`（`templates/static/css/base.css`），折叠态与展开态上下长度完全一致，展开仅左右伸缩，消除上下抖动。

@@ -53,6 +53,12 @@ def _create_connection():
         timeout=30,
         check_same_thread=False,
         isolation_level=None,  # 自动提交模式
+        # 关闭 sqlite3 预处理语句缓存。本连接跨线程共享，而缓存会按 SQL 复用
+        # 同一条 sqlite3_stmt；当两个线程并发执行相同 SQL 时（如高并发访问同一
+        # 路由），后一个会 reset 前一个仍在 fetch 的语句，触发
+        # sqlite3.InterfaceError: bad parameter or other API misuse。
+        # 关闭缓存后每次 execute 都使用独立语句，从根本上消除该并发冲突。
+        cached_statements=0,
     )
     conn.row_factory = sqlite3.Row
     conn.execute('PRAGMA journal_mode=WAL')

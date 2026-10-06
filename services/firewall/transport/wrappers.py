@@ -13,7 +13,12 @@
 
 import weakref
 
+from core.shared.ip import resolve_ip_from_environ
 from services.firewall.service.database import push_ban_context
+
+# 本机回环地址：只有确实来自本机（且无代理头部）的请求才会解析为此值，
+# 这类请求不做 DDoS 计数，避免健康检查 / 本机监控被误判。
+_LOCAL_IPS = frozenset({'127.0.0.1', '::1', 'localhost', '::ffff:127.0.0.1'})
 
 
 class FirewallWSGIWrapper:
@@ -41,12 +46,11 @@ class FirewallWSGIWrapper:
         return self._ddos_detector
 
     def __call__(self, environ, start_response):
-        ip = environ.get('REMOTE_ADDR') or ''
+        # 解析真实客户端 IP：内网穿透 / 反向代理下 REMOTE_ADDR 恒为回环地址，
+        # 必须从可信代理头部还原攻击者真实 IP，否则封禁与 DDoS 统计全部失效。
+        ip = resolve_ip_from_environ(environ)
 
-        if ip:
-            if ip in ('127.0.0.1', '::1', 'localhost'):
-                return self._app(environ, start_response)
-
+        if ip and ip not in _LOCAL_IPS:
             # 黑名单拦截：直接断开连接，不返回任何 HTTP 响应
             if self._fw.is_banned(ip):
                 self._close_connection(environ)

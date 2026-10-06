@@ -271,13 +271,65 @@ def sync_account_bans_to_cache():
         log_firewall('WARNING', 'FirewallDB', f'同步账号封禁缓存失败: {exc}')
 
 
-def sync_whitelist_to_cache():
-    """从 config.py 和 DuckDB 同步白名单到内存缓存。"""
+def read_config_whitelist():
+    """读取「封禁白名单」设置的当前值，返回 {ip, ...}。
+
+    必须区分「从未配置」与「配置为空」两种情况，否则会出现
+    「管理员删光白名单后默认 IP 仍被永久放行」：
+      - settings 表无该键（从未保存过）→ 回退到 config.py 的
+        FIREWALL_WHITELIST 默认值，保证开箱即用的安全基线
+      - 已保存为空字符串（管理员主动清空）→ 返回空集合，清空必须真正生效
+
+    不能直接用 config.get_config_value()：它把空字符串视为「未设置」而回退到
+    默认值，导致清空操作被静默忽略，DDoS / 自动封禁对默认白名单 IP 完全失效。
+    """
+    stored = None
     try:
-        from config import FIREWALL_WHITELIST as CONFIG_WHITELIST
+        from core.db import get_db as _main_get_db
+        with _main_get_db() as conn:
+            row = conn.execute(
+                "SELECT value FROM settings WHERE key = 'FIREWALL_WHITELIST'"
+            ).fetchone()
+        if row is not None:
+            try:
+                stored = row['value']
+            except (TypeError, IndexError):
+                stored = row[0]
+    except Exception:
+        stored = None
+
+    if stored is None:
+        from config import FIREWALL_WHITELIST as DEFAULT_WHITELIST
+        return {ip.strip() for ip in (DEFAULT_WHITELIST or ()) if ip and ip.strip()}
+    return {ip.strip() for ip in str(stored).split(',') if ip.strip()}
+
+
+def remove_from_config_whitelist(ip_address):
+    """从「封禁白名单」设置中移除指定 IP（供白名单页面的「移除」按钮调用）。
+
+    config 白名单是启动基线，若不从设置中同步删除，下一轮缓存同步会把它重新
+    加回内存白名单，表现为「点了移除却删不掉；删光白名单后攻击仍不被拦截」。
+    """
+    ip = (ip_address or '').strip()
+    if not ip:
+        return
+    try:
+        current = read_config_whitelist()
+        if ip not in current:
+            return
+        current.discard(ip)
+        from services.settings_manager import settings_manager
+        settings_manager.set('FIREWALL_WHITELIST', ','.join(sorted(current)))
+    except Exception as exc:
+        log_firewall('WARNING', 'Firewall', f'同步移除白名单设置失败 ip={ip}: {exc}')
+
+
+def sync_whitelist_to_cache():
+    """从「封禁白名单」设置与 DuckDB 白名单表同步到内存缓存。"""
+    try:
         safe = {'127.0.0.1', '::1', 'localhost'}
         whitelist = set(safe)
-        whitelist.update(CONFIG_WHITELIST)
+        whitelist.update(read_config_whitelist())
         with get_db() as conn:
             rows = conn.execute(
                 "SELECT ip_address FROM firewall_whitelist"
