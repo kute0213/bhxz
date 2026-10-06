@@ -33,6 +33,7 @@
 
 import os
 import re
+import sys
 import threading
 from datetime import datetime
 
@@ -148,6 +149,80 @@ def set_console_enabled(enabled: bool) -> None:
 def is_console_enabled() -> bool:
     """返回当前控制台打印开关状态。"""
     return _console_enabled
+
+
+# ---------------------------------------------------------------------------
+# 控制台彩色高亮
+# ---------------------------------------------------------------------------
+
+# 仅给 [等级] 标签上色（不整行着色），配色与网页日志页（templates/admin/logs.html
+# 的 LEVEL_COLORS）保持一致：DEBUG 灰 / INFO 蓝 / WARNING 黄 / ERROR 红 / CRITICAL 加粗红。
+_LEVEL_ANSI = {
+    'DEBUG': '\033[90m',
+    'INFO': '\033[94m',
+    'WARNING': '\033[93m',
+    'ERROR': '\033[91m',
+    'CRITICAL': '\033[1;91m',
+}
+_ANSI_RESET = '\033[0m'
+
+_color_cache = None
+
+
+def _enable_windows_ansi() -> bool:
+    """在 Windows 控制台启用 ANSI 转义支持（Win10 1511+），失败返回 False。"""
+    try:
+        import ctypes
+        kernel32 = ctypes.windll.kernel32
+        handle = kernel32.GetStdHandle(-11)  # STD_OUTPUT_HANDLE
+        mode = ctypes.c_uint32()
+        if not kernel32.GetConsoleMode(handle, ctypes.byref(mode)):
+            return False
+        enable_vt = 0x0004  # ENABLE_VIRTUAL_TERMINAL_PROCESSING
+        if mode.value & enable_vt:
+            return True
+        return bool(kernel32.SetConsoleMode(handle, mode.value | enable_vt))
+    except Exception:
+        return False
+
+
+def _detect_color() -> bool:
+    """判断控制台是否支持彩色：NO_COLOR/FORCE_COLOR 优先，其次要求是交互式终端。"""
+    if os.environ.get('NO_COLOR'):
+        return False
+    force = os.environ.get('FORCE_COLOR')
+    if force:
+        return force.strip().lower() not in ('0', 'false', 'no', 'off')
+    try:
+        if not sys.stdout.isatty():
+            return False
+    except Exception:
+        return False
+    if os.name == 'nt':
+        return _enable_windows_ansi()
+    return True
+
+
+def _color_enabled() -> bool:
+    """彩色开关（只探测一次并缓存）。"""
+    global _color_cache
+    if _color_cache is None:
+        _color_cache = _detect_color()
+    return _color_cache
+
+
+def _colorize(line: str, level: str) -> str:
+    """仅把行内的 ``[等级]`` 标签着色，其余内容保持原样。
+
+    只作用于控制台输出；写入文件与内存缓冲的始终是无颜色的纯文本。
+    """
+    color = _LEVEL_ANSI.get(str(level).upper())
+    if not color or not _color_enabled():
+        return line
+    tag = f'[{level}]'
+    if tag not in line:
+        return line
+    return line.replace(tag, f'{color}{tag}{_ANSI_RESET}', 1)
 
 
 def refresh_console_enabled():
@@ -424,7 +499,7 @@ def _emit(category: str, level: str, event: str, detail: str, kwargs: dict,
 
     if category == CATEGORY_GLOBAL:
         if console and _console_enabled:
-            print(line, flush=True)
+            print(_colorize(line, level), flush=True)
         _write_line_to(LOG_FILE, line)
         entry = _make_entry(now, thread, line, level, event, detail, kwargs)
         with _log_buffer_lock:
@@ -437,7 +512,7 @@ def _emit(category: str, level: str, event: str, detail: str, kwargs: dict,
     if category == CATEGORY_FATAL:
         # 严重错误：覆盖写入（只保留最后一次）+ 始终打印
         _write_overwrite(FATAL_LOG_FILE, line)
-        print(line, flush=True)
+        print(_colorize(line, level), flush=True)
         return
 
     if category == CATEGORY_MODULE:
@@ -459,7 +534,7 @@ def _emit(category: str, level: str, event: str, detail: str, kwargs: dict,
         # ③ 按需并入全局日志（控制台 + logs/app.log + 全局缓冲 + SSE）
         if logger.global_enabled:
             if console and _console_enabled:
-                print(line, flush=True)
+                print(_colorize(line, level), flush=True)
             _write_line_to(LOG_FILE, line)
             with _log_buffer_lock:
                 _log_buffer.append(entry)

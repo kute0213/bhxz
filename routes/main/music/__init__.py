@@ -21,6 +21,7 @@ from flask import (
 
 from core.auth import login_required, get_current_user
 from core.helpers import render_page
+from core.system.logger import log
 from config import UPLOAD_MUSIC_DIR
 from routes.main import main_bp
 import services.music as music_service
@@ -280,6 +281,14 @@ def serve_music_segment(music_id, filename):
     if not (target == base_dir or target.startswith(base_dir + os.sep)):
         abort(404)
     if not os.path.isfile(target):
+        # 分片确实不在磁盘上：常见于历史音频的文件被清理/未随部署迁移，
+        # 播放器会持续报 404. 记一条日志便于定位是哪个音频缺文件
+        # （代码无法凭空恢复已丢失的分片文件）。
+        log('WARNING', 'Music', 'HLS 分片文件缺失', music_id=music_id,
+            segment=safe, title=(music or {}).get('title', ''), ip=get_client_ip())
         abort(404)
 
-    return send_file(target, mimetype='video/mp2t')
+    resp = send_file(target, mimetype='video/mp2t')
+    # 分片内容不可变（同一音频的分片命名固定），可长期缓存，减少重复请求
+    resp.headers['Cache-Control'] = 'public, max-age=86400'
+    return resp

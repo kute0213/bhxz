@@ -46,7 +46,7 @@
 
 /* 基础页面样式 */
 body {
-    font-family: "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
+    font-family: "LXGW WenKai", "Segoe UI", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", sans-serif;
     color: var(--text-primary);
     background: var(--bg-primary);
     min-height: 100vh;
@@ -56,7 +56,7 @@ body {
 }
 
 h1, h2, h3, .glass-nav, .btn-primary, .btn-secondary, .btn-danger {
-    font-family: "JetBrains Mono", "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
+    font-family: "JetBrains Mono", "LXGW WenKai", "Segoe UI", "Microsoft YaHei", "PingFang SC", sans-serif;
 }
 h1 { letter-spacing: 0.035em; }
 h2, h3 { letter-spacing: 0.02em; }

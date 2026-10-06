@@ -7,6 +7,8 @@
  *   - 倍速：0.5x ~ 2.0x
  *   - 音量：按钮静音/取消静音，滑块调节（音量记忆在 localStorage）
  *   - HLS 播放：优先使用本地 hls.js，不支持时回退原生播放
+ *     · 点击播放才开始加载（页面加载不预取分片），避免列表页请求风暴
+ *     · 网络类致命错误自动退避重试，瞬时 404 可自愈，不会永久锁死播放
  *
  * 依赖：hls.js（static/lib/hls/hls.min.js，可选）、Lucide（可选）
  */
@@ -15,6 +17,7 @@
 
     var RATES = [0.5, 0.75, 1, 1.25, 1.5, 2];
     var VOLUME_KEY = 'bhxz:mp:volume';
+    var RETRY_MAX = 3;              // 网络类致命错误的最大自动重试次数
     var players = [];
 
     function $(root, sel) { return root.querySelector(sel); }
@@ -62,8 +65,104 @@
 
         this.hls = null;
         this.dragging = false;
+        this.retries = 0;             // 网络类致命错误的已重试次数
+        this.pendingPlay = false;     // 已点击播放、正在等待清单就绪
+        this.manifestReady = false;   // HLS 清单是否已成功解析
+        this.lastFatal = null;        // 最近一次致命错误，用于恢复时决定是否重载清单
         this.setup();
     }
+
+    /* 初始化 hls.js。
+     * autoStartLoad=false：页面加载时不预取任何分片，只有用户点击播放才开始加载，
+     * 避免列表页一次性发起大量分片请求（网络抖动时会成片报 404）。
+     * 同时监听致命错误：网络类错误自动退避重试，瞬时 404 可自愈，
+     * 不再一次失败就永久置为错误态、导致该音频始终无法播放。 */
+    MusicPlayer.prototype.initHls = function () {
+        var self = this;
+        self.hls = new window.Hls({
+            lowLatencyMode: false,
+            autoStartLoad: false,
+            manifestLoadingMaxRetry: 4,
+            levelLoadingMaxRetry: 4,
+            fragLoadingMaxRetry: 6,
+        });
+        // 清单解析完成：拿到总时长；若用户已点击播放则正式开始播放
+        self.hls.on(window.Hls.Events.MANIFEST_PARSED, function () {
+            self.manifestReady = true;
+            self.lastFatal = null;
+            self.retries = 0;
+            if (!self.pendingPlay) return;
+            self.pendingPlay = false;
+            self.el.play.classList.remove('is-loading');
+            var p = self.audio.play();
+            if (p && p.catch) p.catch(function () { self.showError(); });
+        });
+        // 清单加载完成即可拿到总时长，无需等用户点击播放
+        self.hls.on(window.Hls.Events.LEVEL_LOADED, function (_e, data) {
+            var total = data && data.details && data.details.totalduration;
+            if (total && isFinite(total) && self.el.duration) {
+                self.el.duration.textContent = formatTime(total);
+            }
+        });
+        self.hls.on(window.Hls.Events.ERROR, function (_e, data) {
+            if (!data || !data.fatal) return;
+            if (data.type === window.Hls.ErrorTypes.MEDIA_ERROR) {
+                try { self.hls.recoverMediaError(); } catch (_) {}
+                return;
+            }
+            self.retryNetwork(data.details);
+        });
+        self.hls.loadSource(self.src);
+        self.hls.attachMedia(self.audio);
+    };
+
+    /* 网络类致命错误：退避重试，超过 RETRY_MAX 次才置为错误态。
+     * 瞬时 404 / 连接抖动可自愈，不再一次失败就永久失效。 */
+    MusicPlayer.prototype.retryNetwork = function (details) {
+        var self = this;
+        self.lastFatal = details;
+        if (self.retries >= RETRY_MAX) { self.showError(); return; }
+        self.retries++;
+        var delay = 700 * self.retries;
+        setTimeout(function () {
+            if (!self.hls) return;
+            try {
+                // 清单本身加载失败时需重新 loadSource，分片失败只需继续加载
+                if (details === 'manifestLoadError') self.hls.loadSource(self.src);
+                self.hls.startLoad();
+            } catch (_) {}
+        }, delay);
+    };
+
+    /* 开始播放：清除此前的错误态并重新加载（瞬时失败可自愈）。 */
+    MusicPlayer.prototype.startPlayback = function () {
+        var self = this;
+        self.root.classList.remove('is-error');
+        self.retries = 0;
+        self.el.play.classList.add('is-loading');
+
+        // 不支持 HLS（如 Safari 原生播放）：直接交给 audio 元素
+        if (!self.hls) {
+            var p = self.audio.play();
+            if (p && p.catch) p.catch(function () { self.showError(); });
+            return;
+        }
+
+        try {
+            if (!self.manifestReady) {
+                // 清单尚未成功解析：重新加载清单，等 MANIFEST_PARSED 后再正式播放
+                self.pendingPlay = true;
+                self.hls.loadSource(self.src);
+                self.hls.startLoad();
+            } else {
+                self.hls.startLoad();
+                var q = self.audio.play();
+                if (q && q.catch) q.catch(function () { self.showError(); });
+            }
+        } catch (_) {
+            self.showError();
+        }
+    };
 
     MusicPlayer.prototype.setup = function () {
         var self = this;
@@ -72,9 +171,7 @@
         if (self.src) {
             var isHls = /\.m3u8(\?|$)/i.test(self.src);
             if (isHls && typeof window.Hls !== 'undefined' && window.Hls.isSupported()) {
-                self.hls = new window.Hls({ lowLatencyMode: false });
-                self.hls.loadSource(self.src);
-                self.hls.attachMedia(self.audio);
+                self.initHls();
             } else {
                 self.audio.src = self.src;
             }
@@ -82,15 +179,15 @@
 
         // ---- 播放/暂停 ----
         self.el.play.addEventListener('click', function () {
-            if (self.root.classList.contains('is-error')) return;
             if (self.audio.paused) {
                 pauseAll(self);
-                self.audio.play().catch(function () { self.showError(); });
+                self.startPlayback();
             } else {
                 self.audio.pause();
             }
         });
         self.audio.addEventListener('play', function () {
+            self.retries = 0;
             self.root.classList.add('is-playing');
             self.el.play.classList.remove('is-loading');
         });
@@ -111,7 +208,12 @@
         self.audio.addEventListener('durationchange', function () {
             if (self.el.duration) self.el.duration.textContent = formatTime(self.audio.duration);
         });
-        self.audio.addEventListener('error', function () { self.showError(); });
+        // hls.js 托管媒体时由 Hls 的 ERROR 事件统一处理并可恢复；
+        // 这里只处理无 hls.js（原生播放）的媒体错误，避免一次瞬时错误永久置错。
+        self.audio.addEventListener('error', function () {
+            if (self.hls) return;
+            self.showError();
+        });
 
         // ---- 进度条 ----
         function setFill() {
@@ -256,11 +358,15 @@
         if (this.el.volBtn) this.el.volBtn.classList.toggle('is-muted', muted);
     };
 
+    /* 播放失败：仅在自动重试耗尽后调用。
+     * 只做状态提示，不再永久锁死播放按钮——用户再次点击播放会重新发起加载。 */
     MusicPlayer.prototype.showError = function () {
+        this.pendingPlay = false;
         this.root.classList.add('is-error');
         this.root.classList.remove('is-playing');
         this.el.play.classList.remove('is-loading');
-        this.audio.pause();
+        try { this.audio.pause(); } catch (_) {}
+        if (this.hls) { try { this.hls.stopLoad(); } catch (_) {} }
     };
 
     // ---- 初始化 ----

@@ -162,11 +162,22 @@ def download_marked():
 # ---------------------------------------------------------------------------
 # 3. 字体处理
 # ---------------------------------------------------------------------------
-# 注意：Noto Sans SC（CJK 字体）在 Google Fonts 中被拆分为大量
-# unicode-range 子集（~50+ 文件/字重），下载全部子集不现实。
-# 改用系统字体栈，各平台已有预装中文字体，零下载、零延迟。
-#
-# JetBrains Mono 从 GitHub Releases 下载完整 woff2 文件。
+# 正文中文字体：LXGW WenKai（霞鹜文楷）
+#   从 npm 包 lxgw-wenkai-webfont 下载，仅展开 Regular(400) / Bold(700) 两档字重。
+#   官方已把每个字重切成 ~97 个 unicode-range 子集（woff2），浏览器只下载页面
+#   实际用到的子集：中文全覆盖的同时，首屏无需加载完整字体，也不再依赖外部 CDN。
+# 等宽字体：JetBrains Mono（GitHub Releases 完整 woff2），用于代码编辑器与时间码。
+
+LXGW_WENKAI_VERSION = '1.7.0'
+LXGW_WENKAI_TGZ_URL = (
+    'https://registry.npmjs.org/lxgw-wenkai-webfont/-/'
+    f'lxgw-wenkai-webfont-{LXGW_WENKAI_VERSION}.tgz'
+)
+# 需要展开的字重：包内 CSS 文件 -> 该字重分片子集的文件名前缀
+LXGW_WENKAI_CSS = {
+    'package/lxgwwenkai-regular.css': 'lxgwwenkai-regular-subset-',
+    'package/lxgwwenkai-bold.css': 'lxgwwenkai-bold-subset-',
+}
 
 JETBRAINS_MONO_VERSION = '2.304'
 JETBRAINS_MONO_URL = (
@@ -174,42 +185,94 @@ JETBRAINS_MONO_URL = (
     'JetBrainsMono-2.304.zip'
 )
 
+# 系统字体栈兜底：自定义字体未覆盖的字符（或下载失败时）回退各平台预装字体
+_SYSTEM_FONT_STACK = (
+    '-apple-system, BlinkMacSystemFont, "Segoe UI",\n'
+    '               "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC",\n'
+    '               "WenQuanYi Micro Hei", "Helvetica Neue", Arial, sans-serif'
+)
+
+
+def _download_lxgw_wenkai(fonts_dir, css_lines):
+    """下载 LXGW WenKai 字体包，展开指定字重的 woff2 子集并追加 @font-face 规则。
+
+    包内 CSS 的 ``url('./files/xxx.woff2')`` 会被改写为站点绝对路径
+    ``url('/static/lib/fonts/xxx.woff2')``，与展平后的字体文件位置保持一致。
+    """
+    import tarfile as _tarfile
+
+    tgz_path = os.path.join(fonts_dir, '_lxgw-wenkai.tgz')
+    print(f'  正在下载 LXGW WenKai v{LXGW_WENKAI_VERSION}...')
+    if not _download_with_redirect(LXGW_WENKAI_TGZ_URL, tgz_path,
+                                   f'lxgw-wenkai-webfont-{LXGW_WENKAI_VERSION}.tgz'):
+        css_lines.append('/* LXGW WenKai 下载失败，正文回退系统字体 */')
+        css_lines.append('')
+        return
+
+    extracted = 0
+    try:
+        with _tarfile.open(tgz_path, 'r:gz') as tar:
+            prefixes = tuple(LXGW_WENKAI_CSS.values())
+            for name in tar.getnames():
+                if not name.endswith('.woff2'):
+                    continue
+                basename = os.path.basename(name)
+                if not basename.startswith(prefixes):
+                    continue
+                member = tar.extractfile(name)
+                if member is None:
+                    continue
+                with open(os.path.join(fonts_dir, basename), 'wb') as f:
+                    shutil.copyfileobj(member, f)
+                extracted += 1
+
+            for css_name in LXGW_WENKAI_CSS:
+                member = tar.extractfile(css_name)
+                if member is None:
+                    continue
+                css_text = member.read().decode('utf-8')
+                css_text = css_text.replace("url('./files/", "url('/static/lib/fonts/")
+                css_lines.append(css_text.strip())
+                css_lines.append('')
+        print(f'  [OK] 展开 {extracted} 个 LXGW WenKai woff2 子集（Regular + Bold）')
+    except Exception as e:
+        print(f'  [FAIL] 解压 LXGW WenKai 失败: {e}')
+    finally:
+        try:
+            os.remove(tgz_path)
+        except Exception:
+            pass
+
 
 def download_fonts():
-    """生成字体 CSS（使用系统字体栈），下载 JetBrains Mono 编程字体。"""
+    """生成本地字体 CSS：LXGW WenKai 中文子集 + JetBrains Mono，零 CDN 依赖。"""
     print('\n=== 字体 ===', flush=True)
 
     fonts_dir = os.path.join(LIB_DIR, 'fonts')
     os.makedirs(fonts_dir, exist_ok=True)
 
-    # ---- 生成 fonts.css：使用系统字体栈 ----
-    # 各平台中文字体:
-    #   Windows: Microsoft YaHei, SimHei
-    #   macOS: PingFang SC, Hiragino Sans GB
-    #   Linux: Noto Sans CJK SC, WenQuanYi Micro Hei
-    # 英文字体: -apple-system, BlinkMacSystemFont, Segoe UI, Helvetica Neue, Arial
     css_lines = [
         '/*',
         ' * 自动生成的字体定义 — 由 scripts/build/build_static.py 生成',
         ' *',
-        ' * 使用系统字体栈，无需下载任何字体文件：',
-        ' *   - Windows: Microsoft YaHei, SimHei',
-        ' *   - macOS:   PingFang SC, Hiragino Sans GB',
-        ' *   - Linux:   Noto Sans CJK SC, WenQuanYi Micro Hei',
-        ' *',
-        ' * JetBrains Mono 用于代码编辑器，下载自 GitHub Releases。',
+        ' * 正文：LXGW WenKai（霞鹜文楷），本地子集化 woff2，按 unicode-range 分片，',
+        ' *       浏览器只下载页面实际用到的子集，不依赖任何外部 CDN。',
+        ' * 等宽：JetBrains Mono，本地完整 woff2（代码编辑器 / 时间码）。',
         ' */',
         '',
-        '.font-system {',
-        '  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",',
-        '               "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC",',
-        '               "WenQuanYi Micro Hei", "Helvetica Neue", Arial, sans-serif;',
+    ]
+
+    # ---- LXGW WenKai 中文字体子集 ----
+    _download_lxgw_wenkai(fonts_dir, css_lines)
+
+    # ---- 正文与系统字体栈 ----
+    css_lines += [
+        'body, .font-body {',
+        f"  font-family: 'LXGW WenKai', {_SYSTEM_FONT_STACK};",
         '}',
         '',
-        'body, .font-body {',
-        '  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI",',
-        '               "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC",',
-        '               "WenQuanYi Micro Hei", "Helvetica Neue", Arial, sans-serif;',
+        '.font-system {',
+        f'  font-family: {_SYSTEM_FONT_STACK};',
         '}',
         '',
     ]
