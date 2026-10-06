@@ -79,6 +79,8 @@ PROTECTED_PATHS = {
     # 运行期下载的 ffmpeg 可执行文件
     'scripts/ffmpeg',
     'scripts/build/node_modules',
+    # 本地启动脚本（未提交到仓库，本地自建，必须保留）
+    'start.bat',
 }
 # 任意层级都不删除的目录 / 文件名
 PROTECTED_NAMES = {'__pycache__', '.pytest_cache', 'node_modules', '.DS_Store', 'Thumbs.db'}

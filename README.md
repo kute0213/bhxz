@@ -809,6 +809,7 @@ workspace/
    - 用户数据：`uploads/`（音频、背景图、sitemap，数据库也在 `uploads/db/`）
    - 运行期数据 / 本地配置：`db`、`backups`、`logs`、`ssl`、`release`、`.env`、`.env.local`、`.git`、`.venv`、`node_modules`
    - 本地生成物：`templates/static/lib/monaco`、`scripts/ffmpeg`（运行期下载，`.gitignore` 已排除）
+   - 本地启动脚本：`start.bat`（未提交到仓库，本地自建）
    - 任意层级：`__pycache__`、`.pytest_cache`、`node_modules`、`.DS_Store`、`Thumbs.db`
 6. 自动安装/更新 Python 依赖
 7. **更新完成后提示手动重启服务器，不会自动启动**
@@ -853,7 +854,7 @@ workspace/
 
 ## 最近更新
 
-* **一键更新自动清理已删除文件（`update.py`）**：合并覆盖只会新增/覆盖文件，无法反映「GitHub 上已删除」，导致换字体后服务器上旧字体的 woff2 子集长期残留。现覆盖完成后按最新 ZIP 清单**递归清理**过时文件与整个被移除的目录；`PROTECTED_PATHS` 中的路径强制跳过、绝不删除——`uploads/`（含数据库）、`db`、`backups`、`logs`、`ssl`、`release`、`.env`、`.git`、`.venv`、`node_modules`、`templates/static/lib/monaco`、`scripts/ffmpeg` 等运行期数据与本地生成物都在保护名单内。同时移除了上一版针对字体目录的临时清理代码。
+* **一键更新自动清理已删除文件（`update.py`）**：合并覆盖只会新增/覆盖文件，无法反映「GitHub 上已删除」，导致换字体后服务器上旧字体的 woff2 子集长期残留。现覆盖完成后按最新 ZIP 清单**递归清理**过时文件与整个被移除的目录；`PROTECTED_PATHS` 中的路径强制跳过、绝不删除——`uploads/`（含数据库）、`db`、`backups`、`logs`、`ssl`、`release`、`.env`、`.git`、`.venv`、`node_modules`、`templates/static/lib/monaco`、`scripts/ffmpeg` 等运行期数据与本地生成物都在保护名单内。同时移除了上一版针对字体目录的临时清理代码。`start.bat` 等本地自建启动脚本也加入保护名单，不会被误删。
 
 * **字体换成站酷活泼字体 + 终端日志配色调整**：
   * **正文改用站酷庆科黄油体、标题改用站酷快乐体**：替换此前的霞鹜文楷——正文（含导航、按钮）改用 **ZCOOL QingKe HuangYou（站酷庆科黄油体）**，圆润活泼且笔画简洁；`h1/h2/h3`（及 `.font-display` / `.font-title`）改用 **ZCOOL KuaiLe（站酷快乐体）**，更俏皮有活力。两者均取自 npm 包 `@fontsource/*`（本地镜像），`scripts/build/build_static.py` 下载后按 `unicode-range` 展开约 93 个子集（**只落地 CSS 实际引用的子集**，包内自带的 2.4MB 整包文件不会写入仓库），仍为本地零 CDN；构建脚本新增**废弃字体文件自动清理**（本轮清掉 194 个旧霞鹜文楷子集），避免换字体后旧文件长期残留。
