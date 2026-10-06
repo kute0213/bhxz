@@ -216,11 +216,19 @@ def _download_cjk_font(fonts_dir, css_lines, slug, family):
     extracted = set()
     try:
         with tarfile.open(tgz_path, 'r:gz') as tar:
+            member = tar.extractfile('package/index.css')
+            if member is None:
+                print(f'  [FAIL] {family} 包内缺少 index.css')
+                return None
+            css_text = member.read().decode('utf-8')
+
+            # 只展开 index.css 实际引用的 woff2 子集：包内还带有整包
+            # （xxx-chinese-simplified-400-normal.woff2）等更大且用不到的文件，
+            # 展开它们只会白白把仓库撑大，浏览器根本不会请求。
+            needed = set(re.findall(r'url\(\./files/([^)]+\.woff2)\)', css_text))
             for name in tar.getnames():
-                if not name.endswith('.woff2'):
-                    continue
                 basename = os.path.basename(name)
-                if not basename.startswith(slug):
+                if basename not in needed:
                     continue
                 member = tar.extractfile(name)
                 if member is None:
@@ -229,13 +237,10 @@ def _download_cjk_font(fonts_dir, css_lines, slug, family):
                     shutil.copyfileobj(member, f)
                 extracted.add(basename)
 
-            member = tar.extractfile('package/index.css')
-            if member is not None:
-                css_text = member.read().decode('utf-8')
-                css_text = css_text.replace("url(./files/", "url('/static/lib/fonts/")
-                css_text = _WOFF_FALLBACK_RE.sub('', css_text)
-                css_lines.append(css_text.strip())
-                css_lines.append('')
+            css_text = css_text.replace("url(./files/", "url('/static/lib/fonts/")
+            css_text = _WOFF_FALLBACK_RE.sub('', css_text)
+            css_lines.append(css_text.strip())
+            css_lines.append('')
         print(f'  [OK] 展开 {len(extracted)} 个 {family} woff2 子集')
         return extracted
     except Exception as e:
