@@ -134,7 +134,9 @@ def register_hooks(app, try_serve_public):
         ip = get_client_ip()
         banned, _reason = is_banned(ip)
         if banned:
-            return '', 403, {'Connection': 'close'}
+            # 不能带 Connection: close —— 逐跳标头被 PEP 3333 禁止，Waitress 会
+            # 抛 AssertionError。返回空 403 即可，不产生任何页面内容。
+            return '', 403
 
     @app.before_request
     def suspicious_request_check_hook():

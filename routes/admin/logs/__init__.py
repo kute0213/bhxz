@@ -193,7 +193,10 @@ def api_log_stream():
         mimetype='text/event-stream',
         headers={
             'Cache-Control': 'no-cache',
-            'Connection': 'keep-alive',
+            # 注意：不能设置 Connection 等「逐跳（hop-by-hop）」标头。
+            # PEP 3333 禁止 WSGI 应用下发逐跳标头，Waitress 会直接抛
+            # AssertionError（Cheroot 此前容忍该写法）。HTTP/1.1 默认即为
+            # 持久连接，长连接由服务器自行维护，无需应用声明 keep-alive。
             'X-Accel-Buffering': 'no',
         },
     )

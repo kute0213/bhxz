@@ -148,7 +148,7 @@ python scripts/build/package.py
 │   ├── music/          # 大喇叭音频（每个音频一个 ID 目录，含 m3u8、ts 分片与唱片 MP3）
 │   └── db/             # 数据库文件（site.db + firewall.duckdb）
 ├── backups/      # 数据备份（默认 ../bhxz_backups，支持自定义路径与运行时热改）
-│   └── uploads/        # /uploads/ 全量 zip 极限压缩备份
+│   └── uploads/        # /uploads/ 全量 zip 极限压缩备份（含 SQLite / DuckDB 一致快照）
 └── ssl/          # HTTPS 证书（可选）
 ```
 
@@ -790,6 +790,7 @@ workspace/
 每日凌晨 3:00（可配置）自动执行：
 
 1. 扫描 `/uploads/` 目录下所有文件 → 极限压缩打包为 zip（ZIP_DEFLATED, level 9）→ 校验 zip 完整性 → 清理旧备份
+2. **数据库以「一致快照」写入 zip**（`uploads/db/`）：主站 SQLite（`site.db`）用在线备份 API 导出，WAL 中「已提交但未 checkpoint」的数据会一并合并进快照；防火墙 DuckDB（`firewall.duckdb`）用引擎级导出（`ATTACH` + `COPY FROM DATABASE`）。运行期的 `-wal` / `-shm` / 原始 `.duckdb` 文件不直接复制（正被独占锁定且状态不一致），其数据已全部包含在快照里，恢复时单文件即可独立使用。
 
 管理后台可手动触发，显示实时进度条；备份目录（`BACKUP_DIR`）支持在「系统设置」或「数据备份」面板设置**绝对路径或相对路径**（相对路径基于网站根目录解析，默认 `../bhxz_backups`），更改后新备份将写入新目录，旧备份自动迁移。已取消一键解压恢复功能，历史备份仅作留存与下载。
 
@@ -849,6 +850,10 @@ workspace/
 详见 [docs/CHANGELOG.md](docs/CHANGELOG.md)。
 
 ## 最近更新
+
+* **修复 Waitress 下「逐跳标头」导致的 500（实时日志流 + 封禁响应）**（`routes/admin/logs/__init__.py`、`core/middleware.py`）：日志页 `/admin/api/logs/stream`（SSE 实时日志）反复报 `AssertionError: Connection is a "hop-by-hop" header; it cannot be used by a WSGI application (see PEP 3333)`、实时日志无法推送。原因是 `Connection` 属 PEP 3333 禁止 WSGI **应用**下发的逐跳标头，旧版 Cheroot 容忍、Waitress 会直接抛错（SSE 此前写 `Connection: keep-alive`、封禁响应写 `Connection: close`）。现移除这两处 `Connection` 标头——HTTP/1.1 默认即持久连接，长连接由服务器维护，无需应用声明。
+
+* **数据备份纳入数据库完整快照 + DuckDB 关键索引自愈**（`services/backup/manager/__init__.py`、`services/firewall/service/database.py`）：`/uploads/` 全量 zip 备份原先跳过 `-wal` / `-shm` / `.duckdb`（运行期独占锁定），导致备份里**没有可用数据库**。现改为备份时生成**一致快照**写入 zip：主站 SQLite 用**在线备份 API**（WAL 中已提交数据一并合并，单文件即可独立恢复）、防火墙 DuckDB 用**引擎级导出**（`ATTACH` + `COPY FROM DATABASE`，规避文件锁定）。另修复 DuckDB ART 索引在异常退出后可能与数据行不一致、导致「解封静默失败」的问题——初始化时自动重建 `firewall_bans(ip_address)` 与 `firewall_account_bans(user_id)` 两个关键索引实现自愈。
 
 * **修复 Waitress 剥离代理头导致的「DDoS 防火墙再次失效」**（`core/server.py`、`core/shared/ip.py`）：Waitress 3.x 默认 `clear_untrusted_proxy_headers=True`，会在请求进入应用前**剥离来自非可信来源的 `X-Forwarded-For` / `X-Forwarded-Proto` / `X-Real-IP` 等代理头**。内网穿透 / 反向代理正是靠这些头传递客户端真实 IP，被剥离后 `REMOTE_ADDR` 恒为回环地址，防火墙会把所有外部请求当作本机访问而跳过 DDoS 计数与黑名单拦截（Session Cookie 的 `Secure` 判断同样失效）。现于 `create_server()` 显式设置 `clear_untrusted_proxy_headers=False`，把代理头的可信性判断交回应用自身（`is_trusted_proxy` 只采信回环 / 内网 / `TRUSTED_PROXIES` 转发的头，公网直连伪造的头一律忽略）。同时修正 `is_public_ip()` 对 IPv4-mapped IPv6（`::ffff:1.2.3.4`）的误判——此前首字符为 `:` 会被当成内网地址，进而被当作可信代理采信其伪造的代理头。实测：真实 Waitress 服务下第 151 次请求（10 秒内超过 150 次）即触发封禁，后续连接被直接断开（0 字节响应）。
 

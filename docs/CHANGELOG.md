@@ -4,6 +4,18 @@
 
 ### 变更
 
+* **修复 Waitress 下「逐跳标头」导致的 500（实时日志流 + 封禁响应）**（`routes/admin/logs/__init__.py`、`core/middleware.py`）：
+  * **现象**：日志页 `/admin/api/logs/stream`（SSE 实时日志）持续报错，服务端日志反复打印 `AssertionError: Connection is a "hop-by-hop" header; it cannot be used by a WSGI application (see PEP 3333)`，实时日志无法推送；被封 IP 的空 403 响应同样受影响。
+  * **根因**：`Connection` 属 PEP 3333 明令禁止由 WSGI **应用**下发的「逐跳（hop-by-hop）」标头。旧版 Cheroot 对此容忍，迁移到 Waitress 后 `start_response()` 会直接抛 `AssertionError`，请求在写出响应头前即失败。此前 SSE 流写了 `Connection: keep-alive`、封禁响应写了 `Connection: close`。
+  * **修复**：两处均移除 `Connection` 标头（HTTP/1.1 默认即持久连接，长连接由服务器自行维护，无需应用声明）；SSE 保留 `Cache-Control: no-cache` 与 `X-Accel-Buffering: no`，封禁响应改为返回空 `403`。
+
+* **数据备份纳入数据库完整快照 + DuckDB 关键索引自愈**（`services/backup/manager/__init__.py`、`services/firewall/service/database.py`）：
+  * **备份包含所有文件与数据库**：`/uploads/` 全量 zip 备份原先跳过 SQLite / DuckDB 的 `-wal` / `-shm` / `.duckdb` 等文件（运行期被独占锁定、且状态不一致），导致备份里**没有可用的数据库**。现改为：普通文件照常压缩，数据库**不再直接复制运行期文件**，而在备份时生成**一致快照**写入 zip——
+    * 主站 SQLite（`uploads/db/site.db`）：用 SQLite **在线备份 API**（`backup_to`）导出，WAL 中「已提交但尚未 checkpoint」的数据会一并合并进快照，恢复时单文件即可独立使用；
+    * 防火墙 DuckDB（`uploads/db/firewall.duckdb`）：用 DuckDB **引擎级导出**（`ATTACH` + `COPY FROM DATABASE`）生成完整副本，规避 Windows 下文件被独占锁定无法复制的问题。
+    * 快照统一写入备份 zip 的 `uploads/db/` 路径下，单库失败只记 WARNING、不影响其余数据备份。
+  * **DuckDB 关键索引自愈**：DuckDB 的 ART 索引在极端情况（异常退出、断电）下可能与数据行不一致——数据行仍在，但按该列等值查询查不到，表现为「**解封静默失败**」（`DELETE ... WHERE ip_address = ?` 影响 0 行）与封禁去重失效。现于数据库初始化时**重建** `firewall_bans(ip_address)` 与 `firewall_account_bans(user_id)` 两个只服务小表的关键索引，自动修复历史上已损坏的索引。
+
 * **修复 Waitress 剥离代理头导致的「DDoS 防火墙再次失效」**（`core/server.py`、`core/shared/ip.py`）：
   * **根因**：Waitress 3.x 默认 `clear_untrusted_proxy_headers=True`，会在请求进入应用前剥离来自「非可信来源」的 `X-Forwarded-For` / `X-Forwarded-Proto` / `X-Real-IP` 等代理头。网站经内网穿透 / 反向代理对外服务，真实客户端 IP 与原始协议**只存在于这些头部**；被剥离后 `REMOTE_ADDR` 恒为本机回环地址，WSGI 门禁据此把**所有外部请求都判定为本机访问**，于是 DDoS 计数与黑名单拦截整体失效（Session Cookie 的 `Secure` 判断同样取不到 `X-Forwarded-Proto`）。端到端复现：400 次带 `X-Forwarded-For` 的请求，`environ` 中该头为 `None`、`record()` 调用 0 次、无任何封禁。
   * **修复**：`core/server.py` 的 `create_server()` 显式传入 `clear_untrusted_proxy_headers=False`，把代理头的可信性判断交回应用自身——`core/shared/ip.py` 的 `is_trusted_proxy()` 只采信回环 / 内网地址或 `TRUSTED_PROXIES` 中配置的代理所转发的头部，公网直连伪造的头部一律忽略，安全性不受影响。

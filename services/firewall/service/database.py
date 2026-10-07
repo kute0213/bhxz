@@ -559,8 +559,39 @@ def get_db():
                             _conn.execute(stmt + ';')
                         except Exception as e:
                             log_firewall('WARNING', 'FirewallDB', f'建表警告: {e}')
+                _rebuild_critical_indexes(_conn)
                 log_firewall('INFO', 'FirewallDB', '防火墙数据库初始化完成', path=DB_PATH)
     return _DuckDBConnection(_conn, _conn_lock)
+
+
+# 决定「封禁 / 解封」正确性的关键索引：(表名, 索引名, 列名)
+#
+# DuckDB 的 ART 索引在极端情况下（异常退出、断电）可能与数据行不一致：
+# 数据行仍在表里，但按该列等值查询（WHERE ip_address = ?）查不到它。
+# 后果是「解封」静默失败（DELETE ... WHERE ip_address = ? 影响 0 行）以及
+# 封禁去重失效（重复插入同 IP）。这两个索引只服务于行数很少的封禁表，
+# 初始化时重建一次代价可忽略，同时可自动修复历史上已经损坏的索引。
+_CRITICAL_INDEXES = (
+    ('firewall_bans', 'idx_firewall_bans_ip', 'ip_address'),
+    ('firewall_account_bans', 'idx_firewall_account_bans_user', 'user_id'),
+)
+
+
+def _rebuild_critical_indexes(conn):
+    """初始化时重建关键索引，自愈「索引缺项导致等值查询查不到已有行」。"""
+    rebuilt = 0
+    for table, index_name, column in _CRITICAL_INDEXES:
+        try:
+            conn.execute(f'DROP INDEX IF EXISTS {index_name}')
+            conn.execute(
+                f'CREATE INDEX IF NOT EXISTS {index_name} ON {table}({column})'
+            )
+            rebuilt += 1
+        except Exception as e:
+            log_firewall('WARNING', 'FirewallDB',
+                         f'索引重建失败 {index_name}: {e}')
+    if rebuilt:
+        log_firewall('INFO', 'FirewallDB', f'关键索引已重建 {rebuilt} 个')
 
 
 def close_db():

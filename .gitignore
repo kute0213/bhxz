@@ -28,6 +28,8 @@ dist/
 # 备份与上传
 backups/
 uploads/
+# 外部工具（如 IDE / 沙箱）暂存上传文件的隐藏目录
+.uploads/
 
 # 日志（仅忽略根目录 logs/，保留 routes/admin/logs/ 源码包）
 /logs/
