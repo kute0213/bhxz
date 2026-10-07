@@ -7,7 +7,7 @@ import os
 from flask import send_from_directory
 from core.helpers import render_page
 from core.db import get_db
-from config import get_config_value, APP_ROOT
+from config import get_config_value, APP_ROOT, MAP_URL, QQ_GROUP_URL
 from routes.main import main_bp
 
 
@@ -36,8 +36,8 @@ def home():
 
     return render_page(
         'index.html', mod_intros=mod_intros,
-        map_url=get_config_value('MAP_URL', 'https://map.bhxz.tw.kg'),
-        qq_group_url=get_config_value('QQ_GROUP_URL', ''),
+        map_url=get_config_value('MAP_URL', MAP_URL),
+        qq_group_url=get_config_value('QQ_GROUP_URL', QQ_GROUP_URL),
         online_players=online_players,
         max_players=max_players,
     )

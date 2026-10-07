@@ -29,6 +29,7 @@ from config import (
     DDOS_GUARD_BAN_MINUTES, DDOS_GUARD_PERMANENT_AFTER,
     DDOS_GUARD_OFFENSE_WINDOW_HOURS,
     IPV6_BLOCK_ENABLED,
+    WAITRESS_THREADS,
     get_config_value,
 )
 from routes.admin import admin_bp
@@ -154,6 +155,8 @@ def admin_firewall_settings_page():
         max_pending_guide=get_config_value('MAX_PENDING_GUIDE', 0),
         max_pending_music=get_config_value('MAX_PENDING_MUSIC', 0),
         max_pending_background=get_config_value('MAX_PENDING_BACKGROUND', 0),
+        # 服务器工作线程数（与「系统设置」修改的是同一个配置，热加载）
+        waitress_threads=get_config_value('WAITRESS_THREADS', WAITRESS_THREADS),
     )
 
 
@@ -198,6 +201,8 @@ FIREWALL_CONFIG_KEYS = {
     # 待审核数量限制
     'MAX_PENDING_CONTENT', 'MAX_PENDING_BUILDING', 'MAX_PENDING_GUIDE',
     'MAX_PENDING_MUSIC', 'MAX_PENDING_BACKGROUND',
+    # 服务器工作线程数（与「系统设置」同一配置，热加载）
+    'WAITRESS_THREADS',
 }
 
 # ===========================================================================
@@ -265,6 +270,7 @@ def admin_firewall_settings_save():
         'DDOS_GUARD_OFFENSE_WINDOW_HOURS',
         'MAX_PENDING_CONTENT', 'MAX_PENDING_BUILDING', 'MAX_PENDING_GUIDE',
         'MAX_PENDING_MUSIC', 'MAX_PENDING_BACKGROUND',
+        'WAITRESS_THREADS',
     }
     for item in items:
         key = item.get('key')
@@ -289,6 +295,12 @@ def admin_firewall_settings_save():
         except Exception as e:
             errors.append({'key': key, 'message': str(e)})
     settings_manager.invalidate_cache()
+
+    # 工作线程数热重载（修改后即时生效，无需重启）
+    if 'WAITRESS_THREADS' in saved:
+        from core.server import apply_thread_count
+        apply_thread_count()
+
     return jsonify({
         'success': len(errors) == 0,
         'saved': saved, 'errors': errors,

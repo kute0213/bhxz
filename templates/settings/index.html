@@ -98,7 +98,7 @@
                         <i data-lucide="user" class="w-5 h-5 text-gold-400"></i>修改用户名
                     </h2>
                     <p class="text-cream/60 text-sm mb-6">更改你的显示名称，修改后需要重新登录才能完全生效。</p>
-                    <form method="POST" action="{{ url_for('main.change_username') }}" class="space-y-5">
+                    <form id="change-username-form" method="POST" action="{{ url_for('main.change_username') }}" class="space-y-5">
                         {{ csrf_field() }}
                         <div>
                             <label class="block text-sm font-medium mb-2 text-cream/80">当前用户名</label>
@@ -106,13 +106,14 @@
                         </div>
                         <div>
                             <label class="block text-sm font-medium mb-2 text-cream/80">新用户名</label>
-                            <input type="text" name="new_username" required maxlength="20" class="input-field w-full px-4 py-3 rounded-lg" placeholder="2-20 个字符">
+                            <input type="text" id="settings-new-username" name="new_username" required maxlength="20" autocomplete="off" class="input-field w-full px-4 py-3 rounded-lg" placeholder="2-20 个字符">
+                            <div id="settings-username-availability" class="mt-2 text-xs min-h-[1rem] text-cream/50"></div>
                         </div>
                         <div>
                             <label class="block text-sm font-medium mb-2 text-cream/80">当前密码</label>
                             <input type="password" name="current_password" required class="input-field w-full px-4 py-3 rounded-lg" placeholder="请输入当前密码确认身份">
                         </div>
-                        <button type="submit" class="btn-primary w-full py-3 rounded-lg font-bold">
+                        <button type="submit" id="settings-username-submit" class="btn-primary w-full py-3 rounded-lg font-bold">
                             确认修改
                         </button>
                     </form>
@@ -225,6 +226,82 @@
 {% endblock %}
 {% block extra_script %}
     <script>
+        // 修改用户名 - 用户名可用性实时检测（与注册页一致，服务端写入时仍会再次校验）
+        (function() {
+            const form = document.getElementById('change-username-form');
+            const input = document.getElementById('settings-new-username');
+            const status = document.getElementById('settings-username-availability');
+            const submitBtn = document.getElementById('settings-username-submit');
+            if (!form || !input || !status || !submitBtn) return;
+
+            const currentUsername = {{ user.username|tojson }};
+            let availability = 'unknown';
+            let timer = null;
+            let requestVersion = 0;
+
+            function show(message, state) {
+                status.textContent = message;
+                status.className = 'mt-2 text-xs min-h-[1rem] ' + (
+                    state === 'available' ? 'text-green-400' :
+                    state === 'unavailable' ? 'text-red-400' : 'text-cream/50'
+                );
+            }
+
+            function checkUsername() {
+                const username = input.value.trim();
+                const version = ++requestVersion;
+                // 与当前用户名相同：视为可用（服务端按 exclude_self 处理）
+                if (username && username === currentUsername) {
+                    availability = 'available';
+                    submitBtn.disabled = false;
+                    show('该用户名可用', 'available');
+                    return;
+                }
+                if (username.length < 2 || username.length > 20) {
+                    availability = 'unavailable';
+                    submitBtn.disabled = true;
+                    show(username ? '用户名长度应为 2-20 个字符' : '', 'unavailable');
+                    return;
+                }
+
+                availability = 'checking';
+                submitBtn.disabled = true;
+                show('正在检查用户名...', 'checking');
+                fetch({{ url_for('main.check_username')|tojson }} + '?exclude_self=1&username=' + encodeURIComponent(username))
+                    .then(function(res) { return res.json(); })
+                    .then(function(data) {
+                        if (version !== requestVersion) return;
+                        availability = data.available ? 'available' : 'unavailable';
+                        submitBtn.disabled = !data.available;
+                        show(data.message || (data.available ? '该用户名可用' : '该用户名不可用'), availability);
+                    })
+                    .catch(function() {
+                        if (version !== requestVersion) return;
+                        availability = 'unavailable';
+                        submitBtn.disabled = true;
+                        show('暂时无法检查用户名，请稍后重试', 'unavailable');
+                    });
+            }
+
+            input.addEventListener('input', function() {
+                availability = 'unknown';
+                submitBtn.disabled = true;
+                clearTimeout(timer);
+                timer = setTimeout(checkUsername, 300);
+            });
+
+            // 未通过可用性检查时阻止提交；服务端写入时仍会再次校验
+            form.addEventListener('submit', function(e) {
+                if (availability !== 'available') {
+                    e.preventDefault();
+                    e.stopImmediatePropagation();
+                    Toast.warning(availability === 'checking' ? '请等待用户名检查完成' : '请先使用可用的用户名');
+                    input.focus();
+                    return;
+                }
+            });
+        })();
+
         const tabBtns = document.querySelectorAll('.tab-btn');
         const tabContents = document.querySelectorAll('.tab-content');
 

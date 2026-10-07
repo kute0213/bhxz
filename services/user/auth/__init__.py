@@ -28,8 +28,13 @@ def _get_ua():
         return ''
 
 
-def check_username_available(username):
-    """按不区分大小写的规则检查用户名是否可以注册。"""
+def check_username_available(username, exclude_user_id=None):
+    """按不区分大小写的规则检查用户名是否可用。
+
+    Args:
+        username: 待检查的用户名。
+        exclude_user_id: 命中该用户 ID 的账号不算占用（修改用户名时排除自己）。
+    """
     username = (username or '').strip()
 
     from core.shared.validation import validate_website_username
@@ -39,10 +44,17 @@ def check_username_available(username):
 
     try:
         with get_db() as conn:
-            existing = conn.execute(
-                "SELECT id FROM users WHERE lower(username) = lower(?) LIMIT 1",
-                (username,)
-            ).fetchone()
+            if exclude_user_id:
+                existing = conn.execute(
+                    "SELECT id FROM users WHERE lower(username) = lower(?) "
+                    "AND id != ? LIMIT 1",
+                    (username, exclude_user_id)
+                ).fetchone()
+            else:
+                existing = conn.execute(
+                    "SELECT id FROM users WHERE lower(username) = lower(?) LIMIT 1",
+                    (username,)
+                ).fetchone()
     except Exception as exc:
         log_module('register', 'ERROR', 'Register', '用户名可用性查询失败', username=username, error=str(exc))
         return False, '暂时无法检查用户名，请稍后重试'

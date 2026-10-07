@@ -57,6 +57,10 @@
     </div>
 </section>
 {% endblock %}
+{% block page_scripts %}
+{# 无刷新表单提交（AjaxForm） #}
+<script src="{{ url_for('static', filename='js/core/uploader.js', v='1') }}"></script>
+{% endblock %}
 {% block extra_script %}
 <script>
 // 无刷新提交：图形验证码 + AjaxForm（统一 API 提交，含身份/CSRF 处理）

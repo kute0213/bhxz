@@ -178,6 +178,10 @@
 </section>
 {% endblock %}
 
+{% block page_scripts %}
+{# 就地搜索框（SiteSearch） #}
+<script src="{{ url_for('static', filename='js/core/search.js', v='9') }}"></script>
+{% endblock %}
 {% block extra_script %}
 <script>
 (function () {

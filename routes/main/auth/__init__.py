@@ -99,8 +99,19 @@ def register_view():
 
 @main_bp.route('/api/username/check')
 def check_username():
-    """供注册页实时查询用户名是否可用，最终仍以注册写入校验为准。"""
-    available, message = check_username_available(request.args.get('username', ''))
+    """供注册页与修改用户名页实时查询用户名是否可用，最终仍以写入校验为准。
+
+    带 ``exclude_self=1`` 时排除当前登录账号自身（修改用户名场景下，
+    填成自己现在的用户名不算被占用）。排除对象取自会话，不信任客户端传参。
+    """
+    exclude_user_id = None
+    if request.args.get('exclude_self') == '1':
+        user = get_current_user()
+        if user:
+            exclude_user_id = user['id']
+    available, message = check_username_available(
+        request.args.get('username', ''), exclude_user_id=exclude_user_id
+    )
     return jsonify({'available': available, 'message': message})
 
 

@@ -154,10 +154,11 @@ def do_something(user_id, value, ip_address):
   | 模块名 | 注册位置 | 覆盖内容 | 默认落盘 | 默认并入全局 |
   |--------|----------|----------|----------|--------------|
   | `firewall` | `services/firewall/__init__.py` | 防火墙拦截、403 授权拒绝、自动封禁 | 否 | 否 |
-  | `captcha` | `routes/api/captcha/__init__.py` | 图形验证码生成 / 校验 | 是 | 否 |
+  | `captcha` | `routes/api/captcha/__init__.py` | 图形验证码生成 / 校验、过期验证码清理 | 是 | 否 |
   | `email_code` | `routes/api/email_code/__init__.py` | 邮箱验证码发送 / 校验 | 是 | 否 |
   | `register` | `services/user/auth/__init__.py` | 注册账号全流程 | 是 | 否 |
   | `login` | `services/user/auth/__init__.py` | 登录账号全流程 | 是 | 否 |
+  | `waitress` | `core/system/logger.py`（`install_waitress_logging()`） | Waitress 内部日志（`Task queue depth is xx` 等） | 否 | 否 |
 
   默认值集中定义在 `core/system/logger.py` 的 `MODULE_LOG_DEFAULTS`（仅作设置缺失时的兜底）。新增模块单独日志时，只需在所属模块 import 处调用 `register_module_log('<名称>')`，日志一律通过 `log_module(name, level, event, detail, **kwargs)` 输出，**不得**调用全局 `log()`；如需自定义默认落盘行为，在 `MODULE_LOG_DEFAULTS` 中补一条即可（**不要**新增 `SETTINGS_REGISTRY` 设置项，模块日志配置统一在日志页面维护）。
 

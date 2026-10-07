@@ -132,6 +132,10 @@
 </section>
 {% endblock %}
 
+{% block page_scripts %}
+{# 就地搜索框（SiteSearch） #}
+<script src="{{ url_for('static', filename='js/core/search.js', v='9') }}"></script>
+{% endblock %}
 {% block extra_script %}
 <script>
 // 指南列表：每页条数由系统设置决定，点击加载更多（API，无刷新）；搜索框就地过滤列表

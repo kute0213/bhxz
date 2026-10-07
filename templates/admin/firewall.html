@@ -227,6 +227,20 @@
         </label>
       </div>
 
+      <!-- 服务器工作线程数 -->
+      <div class="pixel-card rounded-xl p-6">
+        <h3 class="font-bold text-base mb-3 flex items-center gap-2">
+          <i data-lucide="server" class="w-4 h-4 text-rose-400"></i>
+          服务器工作线程数
+        </h3>
+        <p class="text-xs text-cream/50 mb-3">Waitress 处理请求的工作线程数上限。修改后即时热加载，无需重启服务器；与「系统设置」中的工作线程数为同一项配置</p>
+        <div>
+          <label class="block text-sm text-cream/80 mb-2">工作线程数</label>
+          <input type="number" min="0" id="cfg-WAITRESS_THREADS" value="{{ waitress_threads }}" class="input-field w-full px-4 py-2 rounded-lg md:w-64">
+          <p class="text-xs text-cream/50 mt-1">推荐 100；设为 0 表示不限制，按 CPU 核数与可用内存智能推算（32 ~ 512）</p>
+        </div>
+      </div>
+
       <!-- 自动 IP 封禁 -->
       <div class="pixel-card rounded-xl p-6">
         <h3 class="font-bold text-base mb-3 flex items-center gap-2">

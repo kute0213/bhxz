@@ -1,6 +1,9 @@
 {% extends "base.html" %}
 {% from "macros/markdown_editor.html" import markdown_editor %}
 {% block title %}{{ '编辑指南' if guide else '新建指南' }}{% endblock %}
+{% block extra_head %}
+<script src="{{ url_for('static', filename='lib/purify/purify.min.js', v='1') }}"></script>
+{% endblock %}
 {% block content %}
 <section class="page-container py-12">
     <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">

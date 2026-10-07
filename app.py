@@ -53,14 +53,49 @@ _is_child = _is_mp_spawn_child()
 
 from datetime import timedelta
 
+from flask.sessions import SecureCookieSessionInterface
+
+
+class _ProxyAwareSessionInterface(SecureCookieSessionInterface):
+    """Session Cookie 的 Secure 标志按「客户端原始协议」动态决定。
+
+    当前 HTTPS 由内网穿透 / 反向代理在进入 Flask 之前终结，应用自身始终以
+    HTTP 对外监听，Flask 侧看到的协议恒为 http（request.is_secure 恒为
+    False）。因此既不能把 Secure 写死为 True（纯 HTTP 直连会因浏览器不回传
+    Secure Cookie 而丢失登录态），也不能直接依赖 request.is_secure。
+    这里改为读取可信代理写入的 X-Forwarded-Proto：原始协议是 https 时
+    才给 Session Cookie 加 Secure。
+    """
+
+    @staticmethod
+    def _original_proto():
+        from flask import request
+        from core.shared.ip import is_trusted_proxy
+        # 仅采信可信代理（回环 / 内网 / TRUSTED_PROXIES）写入的协议头，
+        # 公网直连忽略，避免伪造 X-Forwarded-Proto 影响 Cookie 属性
+        if not is_trusted_proxy(request.remote_addr):
+            return ''
+        proto = (request.headers.get('X-Forwarded-Proto') or '').strip()
+        # 形如 "https,http" 的链路取最左侧（最靠近客户端）的协议
+        return proto.split(',')[0].strip().lower()
+
+    def get_cookie_secure(self, app):
+        proto = self._original_proto()
+        if proto:
+            return proto == 'https'
+        from flask import request
+        return bool(request.is_secure)
+
+
 app = Flask(__name__, static_folder='templates/static')
 app.secret_key = config.SECRET_KEY
 app.config['MAX_CONTENT_LENGTH'] = config.MAX_CONTENT_LENGTH
 app.config['TEMPLATES_AUTO_RELOAD'] = os.environ.get('FLASK_ENV') == 'development'
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
-# SSL 由内网穿透 / 反向代理层终结，应用自身始终以 HTTP 对外提供服务
-app.config['SESSION_COOKIE_SECURE'] = False
+# Session Cookie 的 Secure 由 _ProxyAwareSessionInterface 按原始协议动态决定：
+# 穿透 / 反代以 HTTPS 对外时自动开启，本地 HTTP 直连时自动关闭
+app.session_interface = _ProxyAwareSessionInterface()
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(seconds=config.SESSION_LIFETIME)
 
 

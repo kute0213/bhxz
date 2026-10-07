@@ -42,7 +42,7 @@ def _client_ip_from_header(header_value: str) -> str:
     return ips[-1] if ips else ''
 
 
-def _is_trusted_proxy(ip, trusted_proxies=None):
+def is_trusted_proxy(ip, trusted_proxies=None):
     """判断直连来源 IP 是否为可信代理（只有可信代理转发的头部才会被采信）。
 
     - 配置在 TRUSTED_PROXIES 中的 IP 视为可信代理
@@ -87,7 +87,7 @@ def get_client_ip():
     remote = (request.remote_addr or '').strip()
     if not remote:
         return _read_client_ip(lambda h: request.headers.get(h, '')) or '127.0.0.1'
-    if not _is_trusted_proxy(remote, TRUSTED_PROXIES):
+    if not is_trusted_proxy(remote, TRUSTED_PROXIES):
         return remote
     return _read_client_ip(lambda h: request.headers.get(h, '')) or remote
 
@@ -103,7 +103,7 @@ def resolve_ip_from_environ(environ, trusted_proxies=None):
     remote = (environ.get('REMOTE_ADDR') or '').strip()
     if not remote:
         return ''
-    if not _is_trusted_proxy(remote, trusted_proxies):
+    if not is_trusted_proxy(remote, trusted_proxies):
         return remote
     ip = _read_client_ip(
         lambda h: environ.get('HTTP_' + h.upper().replace('-', '_'), '')
@@ -112,6 +112,13 @@ def resolve_ip_from_environ(environ, trusted_proxies=None):
 
 
 def is_public_ip(ip):
+    ip = (ip or '').strip()
+    # IPv4-mapped IPv6（::ffff:1.2.3.4）按内层 IPv4 判断：否则首字符为 ':' 会被
+    # 误判成内网地址，进而被当作「可信代理」采信其伪造的代理头，绕过 DDoS 统计。
+    if ip.lower().startswith('::ffff:'):
+        ip = ip[7:]
+    if not ip:
+        return False
     if ip in ('::1', '::ffff:127.0.0.1', 'localhost'):
         return False
     if ip == '127.0.0.1' or ip.startswith('127.'):
@@ -132,7 +139,7 @@ def is_public_ip(ip):
         return False
     if ip.startswith('0.'):
         return False
-    if not ip or not ip[0].isdigit():
+    if not ip[0].isdigit():
         return False
     return True
 

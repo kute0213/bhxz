@@ -20,7 +20,7 @@ import uuid
 import threading
 from typing import Tuple
 
-from core.system.logger import log
+from core.system.logger import log, log_module
 from core.shared.scheduler import register_task
 
 # 延迟导入 Pillow，避免不必要的依赖检查
@@ -335,7 +335,10 @@ class CaptchaService:
         """后台任务：定期清理过期验证码，避免内存泄漏。"""
         expired_count = self.cleanup_expired()
         if expired_count > 0:
-            log('INFO', 'CaptchaService', f'清理过期验证码 {expired_count} 个', remaining=len(self._captchas))
+            # 走「captcha」模块单独日志：默认只落独立文件，不刷全局日志
+            log_module('captcha', 'INFO', 'CaptchaService',
+                       f'清理过期验证码 {expired_count} 个',
+                       remaining=len(self._captchas))
 
     def generate(self) -> Tuple[str, str, str]:
         """生成验证码。

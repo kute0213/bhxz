@@ -88,10 +88,21 @@ function initMouseGlow() {
     }
 
     if (window.matchMedia('(hover: none)').matches) {
+        // 触屏：光晕跟随手指。用 rAF 合并写入，避免每个 touchmove 都触发一次
+        // 合成（mix-blend-mode + 大尺寸光晕会与导航栏 backdrop-filter 抢合成，
+        // 导致滚动时导航栏动画卡顿）。视觉表现与直接写入一致。
+        var touchX = -250, touchY = -250, touchRaf = null;
         document.addEventListener('touchmove', function(e) {
             if (e.touches.length > 0) {
                 var t = e.touches[0];
-                glow.style.transform = 'translate3d(' + (t.clientX - 250) + 'px, ' + (t.clientY - 250) + 'px, 0)';
+                touchX = t.clientX - 250;
+                touchY = t.clientY - 250;
+                if (!touchRaf) {
+                    touchRaf = requestAnimationFrame(function() {
+                        touchRaf = null;
+                        glow.style.transform = 'translate3d(' + touchX + 'px, ' + touchY + 'px, 0)';
+                    });
+                }
             }
         }, { passive: true });
         return;

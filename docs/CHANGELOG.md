@@ -4,10 +4,39 @@
 
 ### 变更
 
+* **修复 Waitress 剥离代理头导致的「DDoS 防火墙再次失效」**（`core/server.py`、`core/shared/ip.py`）：
+  * **根因**：Waitress 3.x 默认 `clear_untrusted_proxy_headers=True`，会在请求进入应用前剥离来自「非可信来源」的 `X-Forwarded-For` / `X-Forwarded-Proto` / `X-Real-IP` 等代理头。网站经内网穿透 / 反向代理对外服务，真实客户端 IP 与原始协议**只存在于这些头部**；被剥离后 `REMOTE_ADDR` 恒为本机回环地址，WSGI 门禁据此把**所有外部请求都判定为本机访问**，于是 DDoS 计数与黑名单拦截整体失效（Session Cookie 的 `Secure` 判断同样取不到 `X-Forwarded-Proto`）。端到端复现：400 次带 `X-Forwarded-For` 的请求，`environ` 中该头为 `None`、`record()` 调用 0 次、无任何封禁。
+  * **修复**：`core/server.py` 的 `create_server()` 显式传入 `clear_untrusted_proxy_headers=False`，把代理头的可信性判断交回应用自身——`core/shared/ip.py` 的 `is_trusted_proxy()` 只采信回环 / 内网地址或 `TRUSTED_PROXIES` 中配置的代理所转发的头部，公网直连伪造的头部一律忽略，安全性不受影响。
+  * **附带修复**：`is_public_ip()` 此前对 IPv4-mapped IPv6（`::ffff:1.2.3.4`）误判——首字符为 `:` 会命中「非数字开头 → 内网」，使该类来源被当作可信代理并采信其伪造的代理头；现先剥离 `::ffff:` 前缀再按内层 IPv4 判断。
+  * **验证**：真实 Waitress 服务（`python app.py`）下第 151 次请求（10 秒内超过 150 次，中等强度）即触发封禁，之后连接被直接断开（0 字节响应）；`is_banned()` 返回封禁原因，测试数据随后清理。
+
+* **服务器工作线程数可配置 + 热加载**（`core/server.py`、`config.py`、`routes/admin/settings/__init__.py`、`routes/admin/firewall/__init__.py`、`templates/admin/firewall.html`）：
+  * `config.py` 的 `WORKER_THREADS=4` 改为 `WAITRESS_THREADS=100`，作为 Waitress 实际工作线程数上限；`0` 表示不限制，由 `resolve_thread_count()` 按 CPU 核数与可用内存智能推算（下限 32、上限 512）。
+  * 「系统设置」与「防火墙设置」修改的是**同一项配置**；保存后调用 `core.server.apply_thread_count()` → `server.task_dispatcher.set_thread_count()` **即时热加载**，无需重启服务器。
+
+* **Waitress 内部日志改写到「waitress」模块单独日志**（`core/system/logger.py`）：
+  * 新增 `waitress` 模块日志注册与 `_WaitressLogHandler`，接管 waitress 的 `logging` 日志器（`propagate=False`，避免继续向 root / lastResort 传播造成 stderr 刷屏），把 `Task queue depth is xx` 等内部记录转发进模块独立缓冲；默认不落盘、不并入全局日志（可在「日志页面 → 日志设置」开启），`ERROR` 及以上额外并入全局日志。
+  * 验证码清理日志（`清理过期验证码 N 个 remaining=0`）由全局日志改走 `log_module('captcha', ...)`，进入「captcha」模块单独日志。
+
+* **修改用户名支持实时可用性检测**（`routes/main/auth/__init__.py`、`services/user/auth/__init__.py`、`templates/settings/index.html`）：
+  * `check_username_available()` 新增 `exclude_user_id` 参数，`/api/username/check` 支持 `exclude_self=1`——排除对象取自会话（不信任客户端传参），填成自己当前的用户名不算被占用。
+  * 设置页交互与注册页一致：输入防抖 300ms 查询、可用 / 不可用 / 检查中状态提示、未通过检查时阻止提交并 Toast 提示；服务端写入时仍会再次校验。
+
+* **前端资源按需加载与去重**（`templates/base.html` 及各列表 / 详情页）：
+  * `uploader.js`（建筑创建页）、`search.js`（建筑 / 指南 / 音乐列表页）、`purify.min.js`（指南详情页）由全站加载改为通过新增的 `page_scripts` / `extra_head` 模板块**仅在实际用到的页面加载**。
+  * 移除重复的 favicon `rel="alternate icon"` 链接，避免浏览器一次请求取两遍服务器图标。
+
+* **修复触屏设备导航栏动画卡顿**（`templates/static/js/pages/main.js`、`templates/static/css/base.css`）：
+  * 触屏端的鼠标光晕改用 `requestAnimationFrame` 合并 DOM 写入——原实现每个 `touchmove` 都直接改 `transform`，高频事件下与导航栏的 `backdrop-filter` 抢占合成资源，导致滚动 / 展开动画卡顿；改动后视觉表现与动画时长完全不变。
+  * `.mobile-menu` 增加 `will-change: transform, opacity` 与 `backface-visibility: hidden`，使其成为独立合成层，避免带 `backdrop-filter` 的面板在 `transform` 动画时逐帧重绘。
+
+* **修复加入 QQ 群链接始终指向当前页**（`routes/main/pages/__init__.py`）：首页 `qq_group_url` 的默认值由空串改为读取 `QQ_GROUP_URL` 配置，不再因默认值为空而回落到当前页面地址。
+
 * **全面改用 Waitress 生产服务器 + 移除应用层 SSL**（`core/server.py`、`requirements.txt`、`app.py`、`core/middleware.py`、`core/system/startup_checks.py`、`config.py`、`update.py`、`.gitignore`、`scripts/build/package.py`）：
-  * **WSGI 服务器 Cheroot → Waitress**：`run_server()` 改用 `waitress.create_server()`（`threads=20` / `connection_limit=1000` / `channel_timeout=300` / `asyncore_use_poll=True`），关闭时调用 `server.close()`；`requirements.txt` 将 `cheroot` 替换为 `waitress>=3.0.0`。启动方式、对外端口（`0.0.0.0:5000`）与所有业务功能保持不变。未安装 waitress 时退化为 werkzeug `run_simple`（WSGI 防火墙仍生效）。
-  * **删除应用层 SSL 功能**（SSL 改由内网穿透 / 反向代理层终结）：`core/server.py` 移除 `import ssl`、`ENABLE_SSL` 判断、证书加载与 Cheroot `BuiltinSSLAdapter`；`app.py` 的 `SESSION_COOKIE_SECURE` 固定为 `False`；`core/middleware.py` 删除 `_ssl_redirect()` 及其 `after_request` 注册；`core/system/startup_checks.py` 从必需目录移除 `ssl/`、从默认设置移除 `ENABLE_SSL`；`config.py` / `startup_checks.py` / `update.py` / `scripts/build/package.py` / `.gitignore` 同步移除 `ssl` 相关排除项。
+  * **WSGI 服务器 Cheroot → Waitress**：`run_server()` 改用 `waitress.create_server()`（工作线程数由 `WAITRESS_THREADS` 决定，默认 100 / `connection_limit=1000` / `channel_timeout=300` / `asyncore_use_poll=True`），关闭时调用 `server.close()`；`requirements.txt` 将 `cheroot` 替换为 `waitress>=3.0.0`。启动方式、对外端口（`0.0.0.0:5000`）与所有业务功能保持不变。未安装 waitress 时退化为 werkzeug `run_simple`（WSGI 防火墙仍生效）。
+  * **删除应用层 SSL 功能**（SSL 改由内网穿透 / 反向代理层终结）：`core/server.py` 移除 `import ssl`、`ENABLE_SSL` 判断、证书加载与 Cheroot `BuiltinSSLAdapter`；`app.py` 的 `SESSION_COOKIE_SECURE` 改由 `_ProxyAwareSessionInterface` 按可信代理下发的 `X-Forwarded-Proto` 动态决定（HTTPS 访问自动开启、本地 HTTP 直连自动关闭）；`core/middleware.py` 删除 `_ssl_redirect()` 及其 `after_request` 注册；`core/system/startup_checks.py` 从必需目录移除 `ssl/`、从默认设置移除 `ENABLE_SSL`；`config.py` / `startup_checks.py` / `update.py` / `scripts/build/package.py` / `.gitignore` 同步移除 `ssl` 相关排除项。
   * **删除 Cheroot 专用连接拦截层**：删除 `services/firewall/transport/connection_filter.py`（`FirewallServer` / `BanFilterConnection`）；`services/firewall/__init__.py` 移除 `attach_server()`，`Firewall` 单例仅保留 WSGI 门禁 + 后台监控。
+
 
 * **服务器状态页网络监控改为「服务端采样缓存」**（`services/system_metrics/`、`routes/api/public/__init__.py`、`templates/site/server_status.html`、`core/system/init.py`）：
   * **背景**：上行 / 下行速率必须由两次采样求差才能得到。此前换算放在**前端**，用户打开状态页要等到第二次轮询（约 5 秒后）才看得到速率，首次只显示累计量。

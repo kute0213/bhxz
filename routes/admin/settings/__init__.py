@@ -155,6 +155,11 @@ def api_save_settings():
     from core.system.logger import refresh_log_settings
     refresh_log_settings()
 
+    # 服务器工作线程数热重载（修改后即时生效，无需重启）
+    if 'WAITRESS_THREADS' in saved:
+        from core.server import apply_thread_count
+        apply_thread_count()
+
     return jsonify({
         'success': len(errors) == 0,
         'saved': saved,

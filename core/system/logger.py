@@ -92,6 +92,9 @@ MODULE_LOG_DEFAULTS = {
     'email_code': {'store': True, 'global': False},
     'register': {'store': True, 'global': False},
     'login': {'store': True, 'global': False},
+    # WSGI 服务器（Waitress）内部日志：任务队列深度等，默认只进独立缓冲，
+    # 不落盘、不并入全局日志，避免刷屏（可在「日志页面 → 日志设置」开启）。
+    'waitress': {'store': False, 'global': False},
 }
 
 
@@ -575,6 +578,75 @@ def log_module(name: str, level: str, event: str, detail: str = '', **kwargs):
     if logger is None:
         logger = register_module_log(name)
     logger.log(level, event, detail, **kwargs)
+
+
+# ---------------------------------------------------------------------------
+# Waitress 服务器内部日志 → 「waitress」模块单独日志
+# ---------------------------------------------------------------------------
+
+WAITRESS_MODULE = 'waitress'
+
+_waitress_logging_installed = False
+
+
+class _WaitressLogHandler:
+    """把 Waitress 内部 ``logging`` 记录转发到「waitress」模块单独日志。
+
+    Waitress 会在请求排队（队列深度大于空闲线程）时以 WARNING 级别输出
+    ``Task queue depth is N``，并由标准库的 lastResort 处理器直接打印到 stderr。
+    通过接管 ``waitress`` 日志器，把这类记录改写到模块单独日志（默认不打印、
+    不落盘、不进全局），需要时可在「日志页面 → 日志设置」中开启。
+    """
+
+    def __init__(self):
+        import logging as _logging
+        self._logging = _logging
+        self.level = _logging.NOTSET
+        self._formatter = None
+
+    def setFormatter(self, formatter):  # 兼容 logging.Handler 接口
+        self._formatter = formatter
+
+    def handle(self, record):
+        import logging as _logging
+        if record.levelno < self.level:
+            return False
+        self.emit(record)
+        return True
+
+    def emit(self, record):
+        try:
+            detail = record.getMessage()
+        except Exception:
+            return
+        level = str(record.levelname or 'INFO').upper()
+        if level not in LOG_LEVELS:
+            level = 'INFO'
+        # 进入「waitress」模块独立缓冲（是否落盘 / 并入全局由设置决定）
+        log_module(WAITRESS_MODULE, level, 'Waitress', detail, source=record.name)
+        # 严重错误额外并入全局日志，避免被模块日志开关遮蔽
+        if record.levelno >= self._logging.ERROR:
+            log(level, 'Waitress', detail, source=record.name)
+
+
+def install_waitress_logging():
+    """接管 Waitress 内部日志，改写进「waitress」模块单独日志（幂等）。"""
+    global _waitress_logging_installed
+    if _waitress_logging_installed:
+        return
+    import logging as _logging
+
+    register_module_log(WAITRESS_MODULE)
+
+    logger = _logging.getLogger('waitress')
+    handler = _WaitressLogHandler()
+    logger.addHandler(handler)
+    # 阻止继续向 root / lastResort 传播，避免 stderr 刷屏与重复输出
+    logger.propagate = False
+    if logger.level == _logging.NOTSET:
+        logger.setLevel(_logging.INFO)
+
+    _waitress_logging_installed = True
 
 
 def read_fatal_log() -> str:
