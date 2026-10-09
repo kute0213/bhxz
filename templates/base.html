@@ -42,7 +42,7 @@
     <!-- 入场动画见 base.css：纯 CSS animation，不依赖 JS，避免白屏 -->
     <noscript><style>.page-content{opacity:1!important;transform:none!important}</style></noscript>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/tailwind.css', v='4') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css', v='46') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css', v='47') }}">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <script>
     // 全站 AJAX CSRF 防护：自动为所有 fetch/XHR 请求添加 X-CSRF-Token 请求头
@@ -439,11 +439,26 @@
     {# 页面级弹窗挂载点（在 body 下，不受 .page-content 的 transform 影响） #}
     {% block page_modals %}{% endblock %}
 
-    <!-- 图形验证码弹窗（全局共享） -->
-    {% from 'macros/modal.html' import modal_captcha %}
-    {{ modal_captcha() }}
+    <!-- 图形验证码弹窗：按需加载——仅在需要验证码的页面通过 captcha_modal 块引入（见 macros/modal.html）。
+         不再全站渲染，避免每个页面都加载用不到的模板。 -->
+    {% block captcha_modal %}{% endblock %}
 
-    <script src="{{ url_for('static', filename='js/core/base.js', v='26') }}"></script>
+    {# 全局「编辑标签」弹窗：音频标签编辑等场景复用（标签输入框见 macros/forms.html 的 tags_field） #}
+    {% from 'macros/modal.html' import modal_shell %}
+    {% from 'macros/forms.html' import tags_field %}
+    {% call modal_shell('tag-edit-modal', size='sm', title='编辑标签', icon='tags', icon_color='blue', close_on_overlay='false') %}
+        <div class="modal-body">
+            {{ tags_field('modal_tags',
+                          placeholder='输入标签后回车添加',
+                          help_text='输入一项后按回车或点「添加」即可新增；点击标签上的叉号可删除。最多 10 个，每个不超过 12 字。') }}
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn-secondary" onclick="closeModal('tag-edit-modal')">取消</button>
+            <button type="button" class="btn-primary" data-tag-save>保存</button>
+        </div>
+    {% endcall %}
+
+    <script src="{{ url_for('static', filename='js/core/base.js', v='27') }}"></script>
     {# 页面按需加载的公共组件（如 uploader.js / search.js），避免全站加载 #}
     {% block page_scripts %}{% endblock %}
 

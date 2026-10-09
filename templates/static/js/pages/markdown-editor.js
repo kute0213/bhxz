@@ -623,11 +623,24 @@
         this.textarea = root.querySelector('textarea');
         this.preview = root.querySelector('[data-md-preview]');
         this.counts = root.querySelectorAll('[data-md-count]');
+        this.panels = root.querySelectorAll('[data-mre-panel]');
+        // 链接标签页表单
+        this.linkUrl = root.querySelector('[data-mre-link-url]');
+        this.linkText = root.querySelector('[data-mre-link-text]');
+        this.linkTitle = root.querySelector('[data-mre-link-title]');
+        this.linkBlank = root.querySelector('[data-mre-link-blank]');
+        this.linkUnlink = root.querySelector('[data-mre-link-unlink]');
         this.mode = 'rich';
+        this.tab = 'basic';
         this.activeTable = null;
         this.savedRange = null;
         this.syncTimer = null;
-        this.pop = null;
+        // 上下文：光标是否在链接 / 表格中
+        this.linkAnchor = null;
+        this.mdLink = null;
+        this.tableEl = null;
+        // 「插入链接」按钮点击后固定显示链接标签页（即使光标不在链接中）
+        this.linkPinned = false;
     }
 
     Editor.prototype.init = function () {
@@ -646,7 +659,7 @@
         // 编辑区输入
         this.rich.addEventListener('input', function () { self.scheduleSync(); self.updateToolbar(); self.refreshActiveTable(); });
         this.rich.addEventListener('keyup', function () { self.updateToolbar(); });
-        this.rich.addEventListener('mouseup', function () { self.updateToolbar(); self.refreshActiveTable(); });
+        this.rich.addEventListener('mouseup', function () { self.linkPinned = false; self.updateToolbar(); self.refreshActiveTable(); });
         this.rich.addEventListener('blur', function () { self.syncNow(); });
         this.rich.addEventListener('change', function (e) {
             var t = e.target;
@@ -658,14 +671,15 @@
         });
         this.rich.addEventListener('mouseleave', function () { self.setActiveTable(null); });
         this.rich.addEventListener('mousedown', function (e) {
+            self.linkPinned = false;
             if (!closestTag(e.target, 'TABLE')) self.setActiveTable(null);
         });
 
         // Markdown 源码区
         this.textarea.addEventListener('input', function () { self.onMdChange(); });
         this.textarea.addEventListener('keyup', function () { self.updateToolbar(); });
-        this.textarea.addEventListener('click', function () { self.updateToolbar(); });
-        this.textarea.addEventListener('mouseup', function () { self.updateToolbar(); });
+        this.textarea.addEventListener('click', function () { self.linkPinned = false; self.updateToolbar(); });
+        this.textarea.addEventListener('mouseup', function () { self.linkPinned = false; self.updateToolbar(); });
         this.textarea.addEventListener('select', function () { self.updateToolbar(); });
 
         // 标签页
@@ -677,9 +691,27 @@
             btn.addEventListener('click', function () { self.setMode(btn.getAttribute('data-mre-mode')); });
         });
         // 工具栏：mousedown 阻止默认，保持编辑区选区不丢
-        this.root.querySelectorAll('.mre-btn').forEach(function (btn) {
+        this.root.querySelectorAll('.mre-btn[data-mre-cmd]').forEach(function (btn) {
             btn.addEventListener('mousedown', function (e) { e.preventDefault(); });
             btn.addEventListener('click', function () { self.runCommand(btn.getAttribute('data-mre-cmd')); });
+        });
+
+        // 链接标签页：应用 / 取消链接 / 回车提交
+        var applyBtn = this.root.querySelector('[data-mre-link-apply]');
+        if (applyBtn) {
+            applyBtn.addEventListener('mousedown', function (e) { e.preventDefault(); });
+            applyBtn.addEventListener('click', function () { self.applyLinkFromTab(); });
+        }
+        if (this.linkUnlink) {
+            this.linkUnlink.addEventListener('mousedown', function (e) { e.preventDefault(); });
+            this.linkUnlink.addEventListener('click', function () { self.removeLink(); });
+        }
+        [this.linkUrl, this.linkText, this.linkTitle].forEach(function (input) {
+            if (!input) return;
+            input.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter') { e.preventDefault(); self.applyLinkFromTab(); }
+                else if (e.key === 'Escape') { self.linkPinned = false; self.rich.focus(); self.updateToolbar(); }
+            });
         });
 
         // 全局选区变化
@@ -713,6 +745,7 @@
 
     Editor.prototype.applyMode = function (mode) {
         this.mode = mode;
+        this.linkPinned = false;
         var richOn = mode === 'rich';
         if (this.richWrap) this.richWrap.hidden = !richOn;
         if (this.mdWrap) this.mdWrap.hidden = richOn;
@@ -746,12 +779,69 @@
     };
 
     Editor.prototype.selectTab = function (name) {
-        this.root.querySelectorAll('[data-mre-tab]').forEach(function (btn) {
-            btn.classList.toggle('is-active', btn.getAttribute('data-mre-tab') === name);
+        var btn = this.root.querySelector('[data-mre-tab="' + name + '"]');
+        if (btn && btn.hidden) return; // 上下文标签页未激活时不可选中
+        if (name !== 'link') this.linkPinned = false;
+        this.tab = name;
+        this.root.querySelectorAll('[data-mre-tab]').forEach(function (b) {
+            b.classList.toggle('is-active', b.getAttribute('data-mre-tab') === name);
         });
         this.root.querySelectorAll('[data-mre-panel]').forEach(function (p) {
             p.hidden = p.getAttribute('data-mre-panel') !== name;
         });
+    };
+
+    // 上下文标签页：链接 / 表格只在光标位于其中（或主动打开链接页）时出现
+    Editor.prototype.updateContextTabs = function (autoSwitch) {
+        var linkVisible = !!this.linkAnchor || !!this.mdLink || this.linkPinned;
+        var tableVisible = !!this.tableEl;
+        var prevLink = !!(this._prevLinkVisible);
+        var prevTable = !!(this._prevTableVisible);
+
+        var linkBtn = this.root.querySelector('[data-mre-tab="link"]');
+        var tableBtn = this.root.querySelector('[data-mre-tab="table"]');
+        if (linkBtn) linkBtn.hidden = !linkVisible;
+        if (tableBtn) tableBtn.hidden = !tableVisible;
+        this._prevLinkVisible = linkVisible;
+        this._prevTableVisible = tableVisible;
+
+        // 当前标签页被隐藏时，自动切回仍可见的标签页
+        var cur = this.tab;
+        var curBtn = this.root.querySelector('[data-mre-tab="' + cur + '"]');
+        if (!curBtn || curBtn.hidden) {
+            if (linkVisible) this.selectTab('link');
+            else if (tableVisible) this.selectTab('table');
+            else this.selectTab('basic');
+            return;
+        }
+        if (!autoSwitch) return;
+        // 进入链接 / 表格上下文时自动切换过去，实现「点击表格即出现并切到表格标签页」
+        if (linkVisible && !prevLink && cur !== 'link') this.selectTab('link');
+        else if (!linkVisible && tableVisible && !prevTable && cur !== 'table') this.selectTab('table');
+    };
+
+    // 把链接标签页表单填充为当前链接的信息（用户正在输入时不覆盖）
+    Editor.prototype.syncLinkForm = function () {
+        var active = document.activeElement;
+        if (active === this.linkUrl || active === this.linkText || active === this.linkTitle || active === this.linkBlank) return;
+
+        var url = '', text = '', title = '', blank = false;
+        if (this.mode === 'rich' && this.linkAnchor) {
+            url = this.linkAnchor.getAttribute('href') || '';
+            text = this.linkAnchor.textContent || '';
+            title = this.linkAnchor.getAttribute('title') || '';
+            blank = this.linkAnchor.getAttribute('target') === '_blank';
+        } else if (this.mode === 'markdown' && this.mdLink) {
+            url = this.mdLink.url;
+            text = this.mdLink.text;
+            title = this.mdLink.title;
+            blank = false;
+        }
+        if (this.linkUrl) this.linkUrl.value = url;
+        if (this.linkText) this.linkText.value = text;
+        if (this.linkTitle) this.linkTitle.value = title;
+        if (this.linkBlank) this.linkBlank.checked = blank;
+        if (this.linkUnlink) this.linkUnlink.disabled = !(this.linkAnchor || this.mdLink);
     };
 
     /* ---------- 内容同步 ---------- */
@@ -871,22 +961,59 @@
 
     /* ---------- 工具栏可用态 / 激活态 ---------- */
 
+    // 在 Markdown 源码中定位光标所在的链接 [文字](地址 "标题")
+    function mdLinkAt(text, pos) {
+        var v = String(text == null ? '' : text);
+        var open = v.lastIndexOf('[', pos);
+        while (open !== -1) {
+            if (open > 0 && v.charAt(open - 1) === '!') { open = v.lastIndexOf('[', open - 1); continue; }
+            var sep = v.indexOf('](', open);
+            if (sep === -1) { open = v.lastIndexOf('[', open - 1); continue; }
+            var end = v.indexOf(')', sep + 2);
+            if (end === -1) { open = v.lastIndexOf('[', open - 1); continue; }
+            if (sep <= pos && pos <= end) {
+                var inner = v.slice(sep + 2, end);
+                var title = '', url = inner;
+                var tm = inner.match(/\s+"([^"]*)"\s*$/);
+                if (tm) { url = inner.slice(0, tm.index).trim(); title = tm[1]; }
+                return { start: open, end: end + 1, text: v.slice(open + 1, sep), url: url, title: title };
+            }
+            open = v.lastIndexOf('[', open - 1);
+        }
+        return null;
+    }
+
     Editor.prototype.updateToolbar = function () {
         var mode = this.mode;
-        var focusedRich = this.rich && (document.activeElement === this.rich || this.rich.contains(document.activeElement));
+        var focusedRich = !!(this.rich && (document.activeElement === this.rich || this.rich.contains(document.activeElement)));
+        var focusedMd = document.activeElement === this.textarea;
         var range = mode === 'rich' ? this.getRichRange() : null;
         var cell = mode === 'rich' ? closestTag(range ? range.startContainer : null, 'TD TH') : null;
+
+        var active = document.activeElement;
+        var inLinkForm = active === this.linkUrl || active === this.linkText ||
+            active === this.linkTitle || active === this.linkBlank;
 
         var caret, sel, inTable;
         if (mode === 'rich') {
             caret = focusedRich || !!range;
             sel = !!range && !range.collapsed;
             inTable = !!cell;
+            if (range) {
+                this.linkAnchor = closestTag(range.startContainer, 'A');
+            } else if (!(this.linkPinned && inLinkForm)) {
+                // 光标离开编辑区且不在链接表单内时，视为不再处于链接上下文
+                this.linkAnchor = null;
+            }
+            this.tableEl = cell ? closestTag(cell, 'TABLE') : null;
         } else {
-            caret = document.activeElement === this.textarea;
-            sel = caret && this.textarea.selectionStart !== this.textarea.selectionEnd;
-            inTable = caret && !!readMdTableAt(this.textarea.value, this.textarea.selectionStart);
+            caret = focusedMd;
+            sel = focusedMd && this.textarea.selectionStart !== this.textarea.selectionEnd;
+            inTable = !!readMdTableAt(this.textarea.value, this.textarea.selectionStart);
+            this.tableEl = inTable ? {} : null;
+            this.mdLink = mdLinkAt(this.textarea.value, this.textarea.selectionStart);
         }
+        if (this.linkAnchor || this.mdLink) this.linkPinned = true;
 
         var btns = this.root.querySelectorAll('[data-mre-need]');
         for (var i = 0; i < btns.length; i++) {
@@ -897,6 +1024,9 @@
             else ok = caret;
             btns[i].disabled = !ok;
         }
+
+        this.updateContextTabs(mode === 'rich' ? focusedRich : focusedMd);
+        this.syncLinkForm();
         this.updateActiveStates(cell);
     };
 
@@ -919,7 +1049,6 @@
             state.quote = !!closestTag(node, 'BLOCKQUOTE');
             state.code = !!closestTag(node, 'CODE');
             state.link = !!closestTag(node, 'A');
-            state.image = !!closestTag(node, 'IMG');
             var li = closestTag(node, 'LI');
             state.task = !!(li && directCheckbox(li));
             if (cell) {
@@ -959,6 +1088,7 @@
         st.ol = /^\d+\.\s/.test(line);
         st.task = /^[-*+]\s\[[ xX]\]/.test(line);
         st.hr = /^---+\s*$/.test(line);
+        st.link = !!mdLinkAt(v, pos);
         return st;
     };
 
@@ -992,7 +1122,7 @@
             case 'quote': this.toggleBlock('BLOCKQUOTE'); break;
             case 'ul': document.execCommand('insertUnorderedList'); break;
             case 'ol': document.execCommand('insertOrderedList'); break;
-            case 'task': this.insertTaskList(); break;
+            case 'task': this.toggleTaskList(); break;
             case 'hr': {
                 var hr = document.createElement('hr');
                 this.insertBlock(hr);
@@ -1000,8 +1130,7 @@
             }
             case 'indent': document.execCommand('indent'); break;
             case 'outdent': document.execCommand('outdent'); break;
-            case 'link': this.askUrl('link'); return;
-            case 'image': this.askUrl('image'); return;
+            case 'link': this.openLinkEditor(); return;
             case 'codeblock': this.insertCodeBlock(); break;
             case 'table-create': this.insertTable(3, 3); break;
             case 'row-above': case 'row-below': case 'row-delete':
@@ -1031,7 +1160,8 @@
 
     Editor.prototype.toggleInlineCode = function () {
         var r = this.getRichRange();
-        if (!r || r.collapsed) return;
+        if (!r) return;
+        // 已在行内代码中：再次点击取消该样式（包裹 → 解包）
         var code = closestTag(r.startContainer, 'CODE');
         if (code && !closestTag(code, 'PRE')) {
             var parent = code.parentNode;
@@ -1039,6 +1169,7 @@
             parent.removeChild(code);
             return;
         }
+        if (r.collapsed) return;
         var el = document.createElement('code');
         try {
             r.surroundContents(el);
@@ -1061,18 +1192,55 @@
         }
     };
 
-    Editor.prototype.insertTaskList = function () {
+    // 任务列表：可在「普通列表 ↔ 任务列表」之间切换（再次点击取消任务样式）
+    Editor.prototype.toggleTaskList = function () {
+        var r = this.getRichRange();
+        var li = r ? closestTag(r.startContainer, 'LI') : null;
+        var list = li ? closestTag(li, 'UL OL') : null;
+
+        if (li && directCheckbox(li)) {
+            // 已是任务列表 → 取消复选框，恢复普通无序列表
+            var items = list ? list.children : [];
+            for (var k = 0; k < items.length; k++) {
+                if (items[k].tagName !== 'LI') continue;
+                var cb = directCheckbox(items[k]);
+                if (cb) cb.parentNode.removeChild(cb);
+                items[k].classList.remove('mre-task-item');
+                var txt = items[k].firstChild;
+                if (txt && txt.nodeType === 3) txt.nodeValue = txt.nodeValue.replace(/^\s+/, '');
+            }
+            if (list) list.classList.remove('mre-task-list');
+            return;
+        }
+
+        if (list) {
+            // 普通列表 → 转为任务列表（每一项前插入复选框）
+            var lis = list.children;
+            for (var i = 0; i < lis.length; i++) {
+                if (lis[i].tagName !== 'LI' || directCheckbox(lis[i])) continue;
+                var box = document.createElement('input');
+                box.type = 'checkbox';
+                box.setAttribute('contenteditable', 'false');
+                lis[i].insertBefore(box, lis[i].firstChild);
+                lis[i].insertBefore(document.createTextNode(' '), box.nextSibling);
+                lis[i].classList.add('mre-task-item');
+            }
+            list.classList.add('mre-task-list');
+            return;
+        }
+
+        // 不在列表中：插入一个新的任务列表
         var ul = document.createElement('ul');
         ul.className = 'mre-task-list';
-        for (var i = 0; i < 2; i++) {
-            var li = document.createElement('li');
-            li.className = 'mre-task-item';
-            var cb = document.createElement('input');
-            cb.type = 'checkbox';
-            cb.setAttribute('contenteditable', 'false');
-            li.appendChild(cb);
-            li.appendChild(document.createTextNode(' 任务' + (i + 1)));
-            ul.appendChild(li);
+        for (var j = 0; j < 2; j++) {
+            var item = document.createElement('li');
+            item.className = 'mre-task-item';
+            var box2 = document.createElement('input');
+            box2.type = 'checkbox';
+            box2.setAttribute('contenteditable', 'false');
+            item.appendChild(box2);
+            item.appendChild(document.createTextNode(' 任务' + (j + 1)));
+            ul.appendChild(item);
         }
         this.insertBlock(ul);
     };
@@ -1119,6 +1287,10 @@
         this.insertBlock(table);
         var firstTh = table.rows[0] ? table.rows[0].cells[0] : null;
         if (firstTh) placeCaretAtStart(firstTh);
+        // 插入后直接进入表格上下文：显示并切换到「表格」标签页
+        this.tableEl = table;
+        this.setActiveTable(table);
+        this.updateContextTabs(true);
     };
 
     // 在光标处插入块级元素（自动与上下文段落分离）
@@ -1251,31 +1423,50 @@
         var n = columnCount(table);
         if (n < 2 || !table.rows.length) { this.overlay.classList.remove('is-on'); return; }
 
-        var scrollRect = this.scroll.getBoundingClientRect();
-        var tableRect = table.getBoundingClientRect();
-        var firstRow = table.rows[0];
-
+        // 每列右边界放一个拖拽手柄（最后一列除外）
         for (var i = 0; i < n - 1; i++) {
-            var cell = firstRow.cells[i];
-            if (!cell) continue;
-            var rect = cell.getBoundingClientRect();
             var grip = document.createElement('div');
             grip.className = 'mre-grip';
-            grip.style.left = (rect.right - scrollRect.left + this.scroll.scrollLeft - 4) + 'px';
-            grip.style.top = (tableRect.top - scrollRect.top + this.scroll.scrollTop) + 'px';
-            grip.style.height = Math.min(tableRect.height, 26) + 'px';
             grip.setAttribute('data-index', String(i));
             this.bindGrip(grip, table, i);
             this.overlay.appendChild(grip);
         }
         this.overlay.classList.add('is-on');
+        this.positionGrips();
+    };
+
+    // 只更新手柄位置，不重建节点（拖拽过程中调用，避免拖到一半元素被移除）
+    Editor.prototype.positionGrips = function () {
+        if (!this.overlay) return;
+        var table = this.activeTable;
+        if (!table || !table.rows.length) return;
+        var grips = this.overlay.querySelectorAll('.mre-grip');
+        if (!grips.length) return;
+
+        var scrollRect = this.scroll.getBoundingClientRect();
+        var tableRect = table.getBoundingClientRect();
+        var firstRow = table.rows[0];
+
+        for (var i = 0; i < grips.length; i++) {
+            var idx = parseInt(grips[i].getAttribute('data-index'), 10);
+            var cell = firstRow.cells[idx];
+            if (!cell) continue;
+            var rect = cell.getBoundingClientRect();
+            grips[i].style.left = (rect.right - scrollRect.left + this.scroll.scrollLeft) + 'px';
+            grips[i].style.top = (tableRect.top - scrollRect.top + this.scroll.scrollTop) + 'px';
+            grips[i].style.height = Math.min(tableRect.height, 26) + 'px';
+        }
     };
 
     Editor.prototype.bindGrip = function (grip, table, index) {
         var self = this;
-        grip.addEventListener('mousedown', function (e) {
+        // 使用 Pointer Events：鼠标与触屏统一处理（移动端此前用 mousedown/mousemove 收不到事件）
+        grip.addEventListener('pointerdown', function (e) {
             e.preventDefault();
             e.stopPropagation();
+            if (e.pointerType === 'touch' && grip.setPointerCapture) {
+                try { grip.setPointerCapture(e.pointerId); } catch (err) { /* 忽略 */ }
+            }
             var cols = table.querySelectorAll('colgroup > col');
             var firstRow = table.rows[0];
             if (!cols.length || !firstRow || !firstRow.cells[index] || !firstRow.cells[index + 1]) return;
@@ -1285,8 +1476,10 @@
             var wL = firstRow.cells[index].getBoundingClientRect().width;
             var wR = firstRow.cells[index + 1].getBoundingClientRect().width;
             var minPx = totalPx * COL_MIN_PERCENT / 100;
+            var dragging = true;
 
             function onMove(ev) {
+                if (!dragging) return;
                 var delta = ev.clientX - startX;
                 var nl = wL + delta;
                 var nr = wR - delta;
@@ -1294,16 +1487,23 @@
                 if (nr < minPx) { nl -= (minPx - nr); nr = minPx; }
                 cols[index].style.width = (nl / totalPx * 100) + '%';
                 cols[index + 1].style.width = (nr / totalPx * 100) + '%';
-                self.updateGrips();
+                self.positionGrips();
             }
             function onUp() {
-                document.removeEventListener('mousemove', onMove);
-                document.removeEventListener('mouseup', onUp);
+                if (!dragging) return;
+                dragging = false;
+                document.removeEventListener('pointermove', onMove);
+                document.removeEventListener('pointerup', onUp);
+                document.removeEventListener('pointercancel', onUp);
                 document.body.classList.remove('mre-resizing');
+                if (grip.releasePointerCapture) {
+                    try { grip.releasePointerCapture(e.pointerId); } catch (err) { /* 忽略 */ }
+                }
                 self.commitColWidths(table);
             }
-            document.addEventListener('mousemove', onMove);
-            document.addEventListener('mouseup', onUp);
+            document.addEventListener('pointermove', onMove);
+            document.addEventListener('pointerup', onUp);
+            document.addEventListener('pointercancel', onUp);
             document.body.classList.add('mre-resizing');
         });
     };
@@ -1333,102 +1533,149 @@
         this.afterRichChange();
     };
 
-    /* ---------- 链接 / 图片浮层 ---------- */
+    /* ---------- 链接标签页 ---------- */
 
-    Editor.prototype.askUrl = function (kind) {
+    // 打开链接标签页（「插入」标签页里的链接按钮调用）
+    Editor.prototype.openLinkEditor = function () {
         var self = this;
-        this.closePop();
-
+        this.linkPinned = true;
         if (this.mode === 'rich') {
             var r = this.getRichRange();
             this.savedRange = r ? r.cloneRange() : null;
+            var a = r ? closestTag(r.startContainer, 'A') : null;
+            this.linkAnchor = a || null;
         }
-
-        var pop = document.createElement('div');
-        pop.className = 'mre-pop';
-        var input = document.createElement('input');
-        input.type = 'text';
-        input.placeholder = kind === 'link' ? 'https://链接地址' : 'https://图片地址';
-        var ok = document.createElement('button');
-        ok.type = 'button';
-        ok.textContent = '确定';
-        pop.appendChild(input);
-        pop.appendChild(ok);
-        document.body.appendChild(pop);
-        this.pop = pop;
-
-        var anchor = this.root.querySelector('[data-mre-cmd="' + kind + '"]');
-        var rect = anchor ? anchor.getBoundingClientRect() : { left: 40, bottom: 120, width: 0 };
-        var left = Math.max(8, Math.min(rect.left, window.innerWidth - pop.offsetWidth - 8));
-        pop.style.left = left + 'px';
-        pop.style.top = (rect.bottom + 4) + 'px';
-        input.focus();
-
-        function close() {
-            document.removeEventListener('mousedown', onDoc, true);
-            document.removeEventListener('keydown', onKey, true);
-            if (pop.parentNode) pop.parentNode.removeChild(pop);
-            self.pop = null;
+        this.updateContextTabs(false);
+        this.selectTab('link');
+        this.syncLinkForm();
+        if (this.linkUrl) {
+            setTimeout(function () {
+                try { self.linkUrl.focus(); self.linkUrl.select(); } catch (e) { /* 忽略 */ }
+            }, 0);
         }
-        function commit() {
-            var url = input.value.trim();
-            close();
-            if (!url) return;
-            self.applyUrl(kind, url);
-        }
-        function onDoc(ev) {
-            if (!pop.contains(ev.target)) close();
-        }
-        function onKey(ev) {
-            if (ev.key === 'Escape') close();
-            else if (ev.key === 'Enter') { ev.preventDefault(); commit(); }
-        }
-        ok.addEventListener('click', commit);
-        document.addEventListener('mousedown', onDoc, true);
-        document.addEventListener('keydown', onKey, true);
     };
 
-    Editor.prototype.closePop = function () {
-        if (this.pop && this.pop.parentNode) this.pop.parentNode.removeChild(this.pop);
-        this.pop = null;
+    // 应用链接标签页里的设置
+    Editor.prototype.applyLinkFromTab = function () {
+        var url = this.linkUrl ? this.linkUrl.value.trim() : '';
+        var text = this.linkText ? this.linkText.value.trim() : '';
+        var title = this.linkTitle ? this.linkTitle.value.trim() : '';
+        var blank = !!(this.linkBlank && this.linkBlank.checked);
+        if (!url) {
+            if (this.linkUrl) this.linkUrl.focus();
+            return;
+        }
+        if (this.mode === 'rich') this.applyRichLink(url, text, title, blank);
+        else this.applyMdLink(url, text, title);
+        this.linkPinned = false;
+        this.updateToolbar();
     };
 
-    Editor.prototype.applyUrl = function (kind, url) {
-        if (this.mode === 'rich') {
-            this.rich.focus();
+    Editor.prototype.applyRichLink = function (url, text, title, blank) {
+        this.rich.focus();
+        var anchor = this.linkAnchor;
+
+        if (anchor) {
+            // 编辑已有链接
+            anchor.setAttribute('href', url);
+            if (title) anchor.setAttribute('title', title);
+            else anchor.removeAttribute('title');
+            applyTarget(anchor, blank);
+            if (text && text !== anchor.textContent) anchor.textContent = text;
+            placeCaretAfter(anchor);
+        } else {
+            // 新建链接：无选中文字时自动插入默认文字
             var sel = window.getSelection();
-            var range = this.savedRange;
-            if (range) {
-                try { sel.removeAllRanges(); sel.addRange(range); } catch (e) { /* 忽略 */ }
+            if (this.savedRange) {
+                try { sel.removeAllRanges(); sel.addRange(this.savedRange); } catch (e) { /* 忽略 */ }
             }
             var r = this.getRichRange();
-            if (!r) return;
-            if (kind === 'link') {
-                var a = document.createElement('a');
-                a.setAttribute('href', url);
-                if (r.collapsed) {
-                    a.textContent = url;
-                    r.insertNode(a);
-                    placeCaretAfter(a);
-                } else {
-                    this.wrapRange(r, a);
-                }
+            var a = document.createElement('a');
+            a.setAttribute('href', url);
+            if (title) a.setAttribute('title', title);
+            applyTarget(a, blank);
+            if (r && !r.collapsed) {
+                this.wrapRange(r, a);
+                if (text) a.textContent = text;
             } else {
-                var img = document.createElement('img');
-                img.setAttribute('src', url);
-                img.setAttribute('alt', '');
-                r.deleteContents();
-                r.insertNode(img);
-                placeCaretAfter(img);
+                a.textContent = text || '链接文字';
+                if (r) { r.deleteContents(); r.insertNode(a); }
+                else this.rich.appendChild(a);
+                selectNodeText(a);
+            }
+        }
+        this.savedRange = null;
+        this.linkAnchor = null;
+        this.afterRichChange();
+    };
+
+    Editor.prototype.applyMdLink = function (url, text, title) {
+        var ta = this.textarea;
+        var v = ta.value;
+        var link = this.mdLink;
+        var suffix = title ? ' "' + title + '"' : '';
+        var md;
+        if (link) {
+            md = '[' + (text || link.text || '链接文字') + '](' + url + suffix + ')';
+            ta.value = v.slice(0, link.start) + md + v.slice(link.end);
+            var caret = link.start + md.length;
+            ta.setSelectionRange(caret, caret);
+        } else {
+            var s = ta.selectionStart, e = ta.selectionEnd;
+            var selText = v.slice(s, e);
+            md = '[' + (selText || text || '链接文字') + '](' + url + suffix + ')';
+            ta.value = v.slice(0, s) + md + v.slice(e);
+            ta.setSelectionRange(s + md.length, s + md.length);
+        }
+        ta.focus();
+        this.mdLink = null;
+        this.onMdChange();
+    };
+
+    // 取消链接（保留文字）
+    Editor.prototype.removeLink = function () {
+        if (this.mode === 'rich') {
+            var a = this.linkAnchor;
+            if (a && a.parentNode) {
+                var parent = a.parentNode;
+                while (a.firstChild) parent.insertBefore(a.firstChild, a);
+                parent.removeChild(a);
             }
             this.afterRichChange();
-        } else {
-            if (kind === 'link') this.mdWrap('[' + this.selectedMdText() + '](' + url + ')', '');
-            else this.mdInsert('![' + this.selectedMdText() + '](' + url + ')');
+        } else if (this.mdLink) {
+            var ta = this.textarea;
+            var v = ta.value;
+            ta.value = v.slice(0, this.mdLink.start) + this.mdLink.text + v.slice(this.mdLink.end);
+            var caret = this.mdLink.start + this.mdLink.text.length;
+            ta.setSelectionRange(caret, caret);
+            ta.focus();
             this.onMdChange();
-            this.updateToolbar();
         }
+        this.linkAnchor = null;
+        this.mdLink = null;
+        this.linkPinned = false;
+        this.updateToolbar();
     };
+
+    function applyTarget(a, blank) {
+        if (blank) {
+            a.setAttribute('target', '_blank');
+            a.setAttribute('rel', 'noopener');
+        } else {
+            a.removeAttribute('target');
+            a.removeAttribute('rel');
+        }
+    }
+
+    function selectNodeText(el) {
+        try {
+            var r = document.createRange();
+            r.selectNodeContents(el);
+            var sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(r);
+        } catch (e) { /* 忽略 */ }
+    }
 
     Editor.prototype.wrapRange = function (range, el) {
         try {
@@ -1549,8 +1796,7 @@
             case 'hr': this.mdInsert('\n\n---\n\n'); break;
             case 'indent': this.mdIndent(1); break;
             case 'outdent': this.mdIndent(-1); break;
-            case 'link': this.askUrl('link'); return;
-            case 'image': this.askUrl('image'); return;
+            case 'link': this.openLinkEditor(); return;
             case 'codeblock': this.mdCodeBlock(); break;
             case 'table-create': this.mdInsertTable(); break;
             case 'row-above': case 'row-below': case 'row-delete':
@@ -1717,6 +1963,7 @@
         delimLine: delimLine,
         defaultCols: defaultCols,
         readMdTableAt: readMdTableAt,
-        renderMdTable: renderMdTable
+        renderMdTable: renderMdTable,
+        mdLinkAt: mdLinkAt
     };
 })();

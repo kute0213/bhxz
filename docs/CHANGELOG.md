@@ -4,9 +4,21 @@
 
 ### 变更
 
+* **统一编辑器交互优化 + 新增统一标签输入框 + 前端资源进一步按需加载**（`templates/macros/markdown_editor.html`、`templates/static/js/pages/markdown-editor.js`、`templates/macros/forms.html`、`templates/static/js/core/base.js`、`templates/static/css/base.css`、`templates/base.html` 等）：
+  * **编辑器界面精简**：删除编辑器下方的「所见即所得」提示文案；删除「插入图片」功能（工具栏「插入」页仅保留链接 / 代码块 / 表格）。
+  * **链接改为上下文标签页**：点击链接按钮或光标进入已有链接时，工具栏自动出现「链接」标签页并切过去，可设置链接地址 / 显示文字 / 悬停标题 / 新窗口打开，并提供独立的「取消链接」（仅移除链接、保留文字）；离开链接上下文后该标签页自动隐藏。**未选中文字时点击链接按钮会直接插入默认文字**（无需先选中文字）。
+  * **表格改为上下文标签页**：点击表格按钮插入表格后自动切到「表格」标签页，光标离开表格后自动隐藏并切回基础页；「链接」「表格」两个上下文标签页互斥显示。
+  * **可切换样式（再次点击取消）**：加粗 / 斜体 / 删除线 / 行内代码 / H1–H4 / 引用 / 任务列表等按钮均支持「点一次应用、再点一次取消」，激活态高亮。
+  * **修复移动端表格列宽拖拽无反应**：拖拽手柄改用 **Pointer Events + `setPointerCapture` + `touch-action:none`**（此前用 `mousedown/mousemove`，触屏收不到事件），列宽拖拽映射 Markdown 分隔行破折号数量的逻辑不变。
+  * **新增统一标签列表输入框**：`templates/macros/forms.html` 新增 `tags_field()` 宏（`value/label/placeholder/max_tags/max_len/required/help_text/input_id`），`base.js` 新增 `TagInput` 模块（回车 / 逗号 / 粘贴自动拆分为多标签，胶囊叉号删除，`setValue()/getValue()` 读写，`reset` 自动还原）；`base.css` 新增 `.tag-input` 全套样式。**建筑发布、建筑详情编辑标签、音频上传、音频标签编辑**等所有列表类输入统一改用该控件，用户不再需要手输逗号分隔；底层仍以隐藏 input 保存逗号分隔字符串，后端与提交逻辑零改动。
+  * **全局「编辑标签」弹窗**：`base.html` 内置 `#tag-edit-modal`（复用 `tags_field`），音频标签编辑（我的音频 / 后台音频）统一走该弹窗，移除原先的 `CustomModal.prompt` 单行输入。
+  * **前端资源进一步按需加载**：图形验证码弹窗由全站固定渲染改为 `captcha_modal` 块（仅注册 / 找回密码 / 建筑发布 / 指南投稿 / 账号申请页加载）；`purify.min.js` 从 `<head>` 移至页面底部且仅在 Markdown 渲染页引入（不再阻塞首屏）；移除 `admin/broadcast.html` 中重复引入的 `base.js`（`base.html` 已全局加载）。
+  * **修复建筑详情保存标签后标签重复**：`renderTags()` 改为清空容器（保留「编辑标签」按钮）后重绘，此前仅移除 `.tag-pill` 节点、服务端渲染的标签未带该类导致叠加。
+  * **验证**：全部 57 个 Jinja 模板编译通过、`markdown-editor.js` / `base.js` 通过 `node --check`、pytest 204 项全部通过、`app.py` 导入启动正常。
+
 * **富文本 / Markdown 统一编辑器（默认可视化编辑，底层始终保存 Markdown）**（`templates/macros/markdown_editor.html`、`templates/static/js/pages/markdown-editor.js`、`templates/guides/form.html`、`templates/admin/guide_form.html`）：
   * **双模式无缝切换**：默认「富文本（所见即所得）」模式，底层数据与表单提交内容**始终是 Markdown**，可视化界面只是渲染层；切换到「Markdown 源码 + 实时预览」模式时通过序列化 / 反序列化保留内容与大致光标位置，返回时同样还原。指南投稿页与后台指南编辑页共用同一套组件。
-  * **4 标签页工具栏**：基础（加粗 / 斜体 / 删除线 / 行内代码 / 清除格式）、段落（H1–H4 / 引用 / 无序 / 有序 / 任务列表 / 分割线 / 减少·增加缩进）、插入（链接 / 图片 / 代码块 / 表格）、表格（上方·下方插行 / 删除行 / 左侧·右侧插列 / 删除列 / 删除表格 / 左·中·右对齐）。
+  * **标签页工具栏**：基础（加粗 / 斜体 / 删除线 / 行内代码 / 清除格式）、段落（H1–H4 / 引用 / 无序 / 有序 / 任务列表 / 分割线 / 减少·增加缩进）、插入（链接 / 代码块 / 表格），另有「链接」「表格」两个**上下文标签页**（仅光标进入链接 / 表格时出现，详见本日志顶部「统一编辑器交互优化」条目）。
   * **按钮条件启用（选中才亮起）**：按钮带 `data-mre-need` 条件——`sel`（需选中文字）、`caret`（有光标即可）、`table`（光标在表格内）；富文本与 Markdown 两种模式均实时计算启用态，未满足条件时置灰不可点，并通过 `queryCommandState` / 行首语法检测高亮激活态（如已加粗、当前列居中）。
   * **表格列宽拖拽映射到 Markdown**：拖拽表头列之间的手柄调整列宽，结果编码进 Markdown 表格**分隔行每列的破折号数量**（列越宽破折号越多，解析时反解回列宽），拖拽手柄为独立浮层、不污染正文；对齐（左 / 中 / 右）同样映射到分隔行的 `:`。
   * **全语法可视化支持**：标题、强调、删除线、行内代码、代码块（含语言标识）、引用、有序 / 无序 / 任务列表（复选框可直接勾选）、链接、图片、分割线、表格；Markdown 无对应的常见内联语义（`<sub>` / `<sup>` / `<mark>` / `<u>` / `<kbd>` / `<abbr>` / `<small>`）以原始内联 HTML 原样保留。

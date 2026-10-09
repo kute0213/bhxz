@@ -1,8 +1,5 @@
 {% extends "base.html" %}
 {% block title %}文档中心{% endblock %}
-{% block extra_head %}
-<script src="{{ url_for('static', filename='lib/purify/purify.min.js', v='1') }}"></script>
-{% endblock %}
 {% block content %}
 <section class="page-container py-12">
     <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -36,6 +33,7 @@
 
 
 
+<script src="{{ url_for('static', filename='lib/purify/purify.min.js', v='1') }}"></script>
 <script src="{{ url_for('static', filename='lib/marked/marked.min.js', v='1') }}"></script>
 <script>
 (function () {

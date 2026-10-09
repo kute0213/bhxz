@@ -1,9 +1,6 @@
 {% extends "base.html" %}
 {% from "macros/markdown_editor.html" import markdown_editor %}
 {% block title %}{{ '编辑指南' if guide else '新建指南' }}{% endblock %}
-{% block extra_head %}
-<script src="{{ url_for('static', filename='lib/purify/purify.min.js', v='1') }}"></script>
-{% endblock %}
 {% block content %}
 <section class="page-container py-12">
     <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -66,8 +63,9 @@
     </div>
 </section>
 
+<script src="{{ url_for('static', filename='lib/purify/purify.min.js', v='1') }}"></script>
 <script src="{{ url_for('static', filename='lib/marked/marked.min.js', v='1') }}"></script>
-<script src="{{ url_for('static', filename='js/pages/markdown-editor.js', v='2') }}"></script>
+<script src="{{ url_for('static', filename='js/pages/markdown-editor.js', v='3') }}"></script>
 <script>
 // 指南创建/编辑：JSON 提交，无需刷新页面
 (function () {

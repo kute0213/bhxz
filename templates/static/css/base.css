@@ -1413,3 +1413,70 @@ pre::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.24); }
         transition: none;
     }
 }
+
+/* ============================================
+   统一标签列表输入框（TagInput）
+   DOM 结构见 templates/macros/forms.html 的 tags_field 宏；
+   交互逻辑见 static/js/core/base.js 的 TagInput。
+   全站所有「列表类」输入（建筑标签、音频标签等）统一使用本控件。
+   ============================================ */
+.tag-input { display: flex; flex-direction: column; gap: 8px; }
+.tag-input-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.tag-input-list:empty { display: none; }
+.tag-input-row { display: flex; align-items: center; gap: 8px; }
+.tag-input-entry {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: 10px 14px;
+    font-size: 14px;
+}
+.tag-input-add {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 16px;
+    font-size: 14px;
+    border-radius: 12px;
+}
+.tag-input-add svg, .tag-input-add i { width: 16px; height: 16px; }
+
+.tag-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 6px 4px 12px;
+    border-radius: 9999px;
+    font-size: 13px;
+    font-weight: 600;
+    max-width: 100%;
+    background: var(--accent-blue-dim);
+    color: var(--accent-blue);
+    border: 1px solid rgba(2, 132, 199, 0.22);
+}
+.tag-pill-label {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 220px;
+}
+.tag-pill-remove {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: none;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+    opacity: 0.55;
+    transition: opacity 0.15s, background-color 0.15s;
+}
+.tag-pill-remove:hover { opacity: 1; background: rgba(2, 132, 199, 0.18); }
+.tag-pill-remove svg, .tag-pill-remove i { width: 12px; height: 12px; }
+
+@media (max-width: 640px) {
+    .tag-input-add { padding: 10px 12px; }
+}

@@ -1211,7 +1211,166 @@ document.addEventListener('click', function (e) {
     });
 })();
 
-// 大喇叭音频标签编辑
+/* ============================================================
+   统一标签列表输入框（TagInput）
+   配合 macros/forms.html 的 tags_field 宏使用：
+       <div class="tag-input" data-tag-input data-max-tags="10" data-max-len="12">
+           <div class="tag-input-list" data-tag-list></div>
+           <div class="tag-input-row">
+               <input class="input-field tag-input-entry" data-tag-entry>
+               <button type="button" class="btn-secondary tag-input-add" data-tag-add>添加</button>
+           </div>
+           <input type="hidden" name="tags" data-tag-value value="">
+       </div>
+   交互：输入一项后回车 / 点「添加」→ 新增；标签可点叉删除；
+   隐藏 input 始终同步为「逗号分隔」字符串，兼容原有表单提交与后端解析。
+   ============================================================ */
+var TagInput = (function () {
+    function parse(value) {
+        return (value || '').split(',').map(function (t) { return t.trim(); }).filter(Boolean);
+    }
+
+    function refreshIcons(scope) {
+        if (typeof lucide !== 'undefined' && lucide.createIcons) {
+            try { lucide.createIcons(scope ? { root: scope } : undefined); } catch (_) {}
+        }
+    }
+
+    function create(root) {
+        var list = root.querySelector('[data-tag-list]');
+        var entry = root.querySelector('[data-tag-entry]');
+        var addBtn = root.querySelector('[data-tag-add]');
+        var hidden = root.querySelector('[data-tag-value]');
+        var maxTags = parseInt(root.getAttribute('data-max-tags'), 10) || 0;
+        var maxLen = parseInt(root.getAttribute('data-max-len'), 10) || 0;
+        var tags = [];
+
+        function syncHidden() {
+            if (hidden) hidden.value = tags.join(',');
+        }
+
+        function render() {
+            if (!list) return;
+            list.innerHTML = '';
+            tags.forEach(function (tag, idx) {
+                var pill = document.createElement('span');
+                pill.className = 'tag-pill';
+                var label = document.createElement('span');
+                label.className = 'tag-pill-label';
+                label.textContent = tag;
+                var rm = document.createElement('button');
+                rm.type = 'button';
+                rm.className = 'tag-pill-remove';
+                rm.setAttribute('data-tag-remove', String(idx));
+                rm.setAttribute('aria-label', '删除标签 ' + tag);
+                rm.innerHTML = '<i data-lucide="x"></i>';
+                pill.appendChild(label);
+                pill.appendChild(rm);
+                list.appendChild(pill);
+            });
+            refreshIcons(list);
+        }
+
+        function add() {
+            if (!entry || !entry.value) return;
+            // 支持一次输入/粘贴多个（逗号、顿号、分号分隔）
+            var parts = entry.value.split(/[,，、;；]+/);
+            var added = false;
+            parts.forEach(function (part) {
+                var t = (part || '').trim();
+                if (!t) return;
+                if (maxLen && t.length > maxLen) t = t.slice(0, maxLen);
+                if (tags.indexOf(t) !== -1) return;
+                if (maxTags && tags.length >= maxTags) {
+                    if (typeof Toast !== 'undefined') Toast.warning('最多添加 ' + maxTags + ' 个标签');
+                    return;
+                }
+                tags.push(t);
+                added = true;
+            });
+            entry.value = '';
+            if (added) { render(); syncHidden(); }
+        }
+
+        function remove(idx) {
+            if (idx < 0 || idx >= tags.length) return;
+            tags.splice(idx, 1);
+            render(); syncHidden();
+        }
+
+        function setValue(value) {
+            tags = parse(value);
+            if (maxTags && tags.length > maxTags) tags = tags.slice(0, maxTags);
+            render(); syncHidden();
+        }
+
+        function getValue() { return tags.join(','); }
+
+        if (entry) {
+            entry.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter' || e.key === ',' || e.key === '，') {
+                    e.preventDefault();
+                    add();
+                }
+            });
+            entry.addEventListener('paste', function (e) {
+                var text = e.clipboardData && e.clipboardData.getData('text');
+                if (text && /[,，、;；]/.test(text)) {
+                    e.preventDefault();
+                    entry.value = (entry.value || '') + text;
+                    add();
+                }
+            });
+        }
+        if (addBtn) addBtn.addEventListener('click', add);
+        if (list) {
+            list.addEventListener('click', function (e) {
+                var btn = e.target && e.target.closest ? e.target.closest('[data-tag-remove]') : null;
+                if (!btn) return;
+                remove(parseInt(btn.getAttribute('data-tag-remove'), 10));
+            });
+        }
+        // 表单 reset 后按初始值恢复可视化标签
+        var form = root.closest('form');
+        if (form) {
+            form.addEventListener('reset', function () {
+                setTimeout(function () {
+                    setValue(hidden ? (hidden.getAttribute('value') || '') : '');
+                }, 0);
+            });
+        }
+
+        var api = { setValue: setValue, getValue: getValue, add: add, remove: remove, root: root };
+        root.__tagInput = api;
+        setValue(hidden ? hidden.value : '');
+        return api;
+    }
+
+    function initAll(scope) {
+        (scope || document).querySelectorAll('[data-tag-input]').forEach(function (root) {
+            if (!root.__tagInput) create(root);
+        });
+    }
+
+    function get(el) {
+        if (!el) return null;
+        var root = (el.hasAttribute && el.hasAttribute('data-tag-input'))
+            ? el
+            : (el.closest ? el.closest('[data-tag-input]') : null);
+        if (!root) return null;
+        return root.__tagInput || create(root);
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', function () { initAll(document); });
+    } else {
+        initAll(document);
+    }
+
+    return { initAll: initAll, get: get, parse: parse };
+})();
+
+// 大喇叭音频标签编辑（统一走全局「编辑标签」弹窗 + TagInput 标签输入框）
 (function () {
     function renderTags(container, tags) {
         container.innerHTML = '';
@@ -1242,8 +1401,12 @@ document.addEventListener('click', function (e) {
                 if (typeof Toast !== 'undefined') Toast.error((data && data.message) || '保存失败');
                 return;
             }
-            btn.setAttribute('data-tags', (next || '').trim());
+            if (typeof closeModal === 'function') closeModal('tag-edit-modal');
             var wrap = btn.closest('.music-card') || btn.closest('tr');
+            // 更新该行「编辑标签」按钮缓存的标签值，供下次打开弹窗回填
+            document.querySelectorAll('.edit-tags-btn[data-id="' + musicId + '"]').forEach(function (b) {
+                b.setAttribute('data-tags', (next || '').trim());
+            });
             if (wrap) {
                 var container = wrap.querySelector('.tags-display');
                 if (container) renderTags(container, next);
@@ -1261,18 +1424,14 @@ document.addEventListener('click', function (e) {
         if (!btn) return;
         var musicId = btn.getAttribute('data-id');
         if (!musicId) return;
-        var current = btn.getAttribute('data-tags') || '';
-
-        CustomModal.prompt('编辑标签（逗号分隔，最多 10 个，每个 ≤12 字）：', {
-            title: '编辑标签',
-            defaultValue: current,
-            placeholder: '例如：BGM, 开服, 活动曲',
-            trigger: btn,
-            callback: function (value) {
-                if (value === null) return;
-                saveTags(btn, musicId, value);
-            }
-        });
+        var modal = document.getElementById('tag-edit-modal');
+        if (!modal || typeof TagInput === 'undefined') return;
+        var saveBtn = modal.querySelector('[data-tag-save]');
+        var inst = TagInput.get(modal.querySelector('[data-tag-input]'));
+        if (!saveBtn || !inst) return;
+        inst.setValue(btn.getAttribute('data-tags') || '');
+        saveBtn.onclick = function () { saveTags(saveBtn, musicId, inst.getValue()); };
+        if (typeof openModal === 'function') openModal('tag-edit-modal');
     });
 })();
 

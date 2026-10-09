@@ -1,9 +1,6 @@
 {% extends "base.html" %}
 {% from 'macros/modal.html' import modal_shell %}
 {% block title %}指南管理{% endblock %}
-{% block extra_head %}
-<script src="{{ url_for('static', filename='lib/purify/purify.min.js', v='1') }}"></script>
-{% endblock %}
 {% block extra_style %}
 <style>
 .status-pending { background: rgba(234, 179, 8, 0.15); color: #facc15; border: 1px solid rgba(234, 179, 8, 0.25); }
@@ -124,6 +121,7 @@
     </div>
 </section>
 
+<script src="{{ url_for('static', filename='lib/purify/purify.min.js', v='1') }}"></script>
 <script src="{{ url_for('static', filename='lib/marked/marked.min.js', v='1') }}"></script>
 <script>
 var guidePreviewData = {

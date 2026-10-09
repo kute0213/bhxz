@@ -5,7 +5,9 @@
      1. input_field()    — 标准文本/数字/密码/隐藏/文件等输入
      2. textarea_field() — 多行文本输入
      3. select_field()   — 下拉选择
-     4. form_actions()   — 表单操作按钮组（提交+取消）
+     4. custom_select()  — 完全自绘下拉框
+     5. custom_switch()  — 完全自绘开关
+     6. tags_field()     — 统一标签列表输入（回车/点按钮添加，标签可叉删）
    
    所有控件使用全局统一的 `.input-field` CSS 类（白色磨砂玻璃背景、
    深色文字、蓝色聚焦光环），与全站设计语言一致。
@@ -193,5 +195,60 @@
     <div class="switch {{ 'is-on' if checked else '' }} {{ class }}" role="switch" aria-checked="{{ 'true' if checked else 'false' }}" tabindex="0" data-switch>
         <input type="hidden" id="{{ input_id }}" name="{{ name }}" value="{{ '1' if checked else '0' }}">
     </div>
+</div>
+{%- endmacro %}
+
+{## 6. 统一标签列表输入框（tags_field）
+ #
+ # 交互（由 base.js 的 TagInput 自动初始化，见 static/js/core/base.js）：
+ #   - 在输入框输入一项后按回车，或点「添加」按钮 → 新增一个标签
+ #   - 下方已添加标签以胶囊展示，点右侧叉号即可删除
+ #   - 支持直接粘贴「a, b, c」自动拆分为多个标签
+ #   - 底层用一个隐藏 input 保存「逗号分隔」字符串，与后端 / 表单提交完全兼容
+ #
+ # 参数：
+ #   name        — 隐藏 input 的 name（提交字段名，必填）
+ #   value       — 初始值（逗号分隔字符串）
+ #   label       — 标签文字（默认 None = 不显示）
+ #   placeholder — 输入框占位文字
+ #   max_tags    — 最多标签数（默认 10，0 = 不限制）
+ #   max_len     — 单个标签最大字数（默认 12，0 = 不限制）
+ #   required    — 是否必填
+ #   help_text   — 帮助提示文字
+ #   input_id    — 隐藏 input 的 id（默认由 name 推导，供 JS 以 id 取值时使用）
+ #
+ # 用法示例：
+ #   {% from 'macros/forms.html' import tags_field %}
+ #   {{ tags_field('tags', label='标签', help_text='最多 10 个，每个不超过 12 字') }}
+ #
+ # 注：在动态弹窗内使用时，可通过 TagInput.get(el).setValue('a,b') / getValue() 读写。
+ ##}
+{% macro tags_field(name, value='', label=None, placeholder='输入标签后回车添加',
+                    max_tags=10, max_len=12, required=False, help_text=None,
+                    input_id=None) -%}
+{% set hid = input_id or (name | replace('.', '_') | replace('[', '_') | replace(']', '')) %}
+<div class="form-group space-y-1.5">
+    {% if label %}
+    <label class="block text-sm font-medium text-cream/80">
+        {{ label }}{% if required %}<span class="text-red-400 ml-0.5">*</span>{% endif %}
+    </label>
+    {% endif %}
+    <div class="tag-input" data-tag-input
+         data-max-tags="{{ max_tags }}" data-max-len="{{ max_len }}"
+         data-placeholder="{{ placeholder }}">
+        <div class="tag-input-list" data-tag-list></div>
+        <div class="tag-input-row">
+            <input type="text" class="input-field tag-input-entry" data-tag-entry
+                   placeholder="{{ placeholder }}" autocomplete="off" spellcheck="false"
+                   {% if max_len %}maxlength="{{ max_len }}"{% endif %}>
+            <button type="button" class="btn-secondary tag-input-add" data-tag-add>
+                <i data-lucide="plus" class="w-4 h-4"></i>添加
+            </button>
+        </div>
+        <input type="hidden" id="{{ hid }}" name="{{ name }}" data-tag-value value="{{ value }}">
+    </div>
+    {% if help_text %}
+    <p class="text-xs text-cream/40 mt-1">{{ help_text }}</p>
+    {% endif %}
 </div>
 {%- endmacro %}

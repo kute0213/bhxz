@@ -1,9 +1,8 @@
 {% extends "base.html" %}
 {% from "macros/markdown_editor.html" import markdown_editor %}
 {% block title %}{{ '编辑指南' if guide else '新建指南' }}{% endblock %}
-{% block extra_head %}
-<script src="{{ url_for('static', filename='lib/purify/purify.min.js', v='1') }}"></script>
-{% endblock %}
+{# 按需加载：本页需要图形验证码弹窗，通过 base.html 的 captcha_modal 块引入 #}
+{% block captcha_modal %}{% from 'macros/modal.html' import modal_captcha %}{{ modal_captcha() }}{% endblock %}
 {% block content %}
 <section class="page-container py-12">
     <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -45,8 +44,9 @@
     </div>
 </section>
 
+<script src="{{ url_for('static', filename='lib/purify/purify.min.js', v='1') }}"></script>
 <script src="{{ url_for('static', filename='lib/marked/marked.min.js', v='1') }}"></script>
-<script src="{{ url_for('static', filename='js/pages/markdown-editor.js', v='2') }}"></script>
+<script src="{{ url_for('static', filename='js/pages/markdown-editor.js', v='3') }}"></script>
 <script>
 // 提交指南：点击“提交审核”按钮后弹出图形验证码弹窗，
 // 验证通过后才提交表单；验证码出错时弹窗内直接刷新验证码，不刷新页面，保留已填内容。

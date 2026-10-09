@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from 'macros/forms.html' import tags_field %}
 {% block title %}上传音频{% endblock %}
 {% block content %}
 <section class="page-container py-12">
@@ -22,10 +23,8 @@
                            class="input-field w-full px-4 py-3 rounded-lg">
                 </div>
                 <div>
-                    <label class="block text-sm font-medium mb-2 text-cream/80">标签 <span class="text-cream/40 font-normal">（可选，逗号分隔，最多 10 个）</span></label>
-                    <input type="text" id="tags-input" name="tags" maxlength="100" placeholder="例如：BGM, 钢琴, 开服"
-                           class="input-field w-full px-4 py-3 rounded-lg">
-                    <p class="text-cream/50 text-xs mt-1">给音频打标签，方便其他用户按标签搜索到这首歌（搜索支持匹配标签）</p>
+                    {{ tags_field('tags', input_id='tags-input', label='标签', placeholder='输入标签后回车添加',
+                                  help_text='给音频打标签，方便其他用户按标签搜索到这首歌（搜索支持匹配标签）。最多 10 个，每个不超过 12 字。') }}
                 </div>
                 <div>
                     <label class="block text-sm font-medium mb-2 text-cream/80">音频文件</label>

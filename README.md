@@ -225,10 +225,14 @@ python scripts/build/package.py
 
 * **富文本 / Markdown 统一编辑器**（全站唯一宏 `templates/macros/markdown_editor.html` + 引擎 `templates/static/js/pages/markdown-editor.js`）：
   * 默认「富文本（所见即所得）」模式，底层数据与保存内容**始终是 Markdown**，可视化界面只是渲染层；可一键无缝切换到「Markdown 源码 + 实时预览」模式，切换时内容与光标位置保留。
-  * 工具栏按 **4 个标签页**分类：基础（加粗/斜体/删除线/行内代码/清除格式）、段落（H1–H4/引用/无序/有序/任务列表/分割线/缩进）、插入（链接/图片/代码块/表格）、表格（增删行列/删除表格/列对齐）。
-  * **按钮条件启用**：需选中文字的按钮（加粗等）仅在选中文字时亮起，表格按钮仅在光标位于表格内时亮起，否则置灰不可点；激活态（如已加粗、当前列居中）高亮显示。
-  * **表格列宽拖拽**：拖拽表头列之间的手柄调整列宽，结果**直接编码进 Markdown 表格分隔行的破折号数量**（列越宽该列破折号越多），往返编辑不丢失；表格对齐（左/中/右）同样映射到分隔行的 `:` 标记。
-  * 支持全部标准 Markdown 语法的可视化编辑：标题、强调、行内代码、代码块（含语言）、引用、有序/无序/任务列表、链接、图片、分割线、表格；Markdown 不支持的常见内联语义（`<sub>`/`<sup>`/`<mark>`/`<u>`/`<kbd>` 等）以原始内联 HTML 保留。
+  * 工具栏按 **基础 / 段落 / 插入 三个常驻标签页**分类：基础（加粗/斜体/删除线/行内代码/清除格式）、段落（H1–H4/引用/无序/有序/任务列表/分割线/缩进）、插入（链接/代码块/表格）。
+  * **上下文标签页**：另有「链接」「表格」两个标签页，仅在光标位于链接内、表格内（或刚点了「插入链接/表格」）时自动出现，离开对应上下文后自动隐藏并切回基础页。
+  * **链接标签页**：可直接填写链接地址、显示文字、悬停标题与「新窗口打开」；**未选中文字时点击链接按钮会自动插入默认文字**（无需先选中文字）；提供独立「取消链接」按钮（仅保留文字、移除链接）。图片插入功能已移除。
+  * **表格标签页**：增删行列 / 删除表格 / 当前列左中右对齐；插入表格后自动切到表格标签页，光标离开表格后自动收起。
+  * **可切换样式**：再次点击已激活的样式按钮即**取消该样式**（加粗、斜体、删除线、行内代码、H1–H4、引用、任务列表等均支持「点一次加、再点一次取消」）；激活态高亮显示。
+  * **按钮条件启用**：需选中文字的按钮（加粗等）仅在选中文字时亮起，表格按钮仅在光标位于表格内时亮起，否则置灰不可点。
+  * **表格列宽拖拽（含移动端）**：拖拽表头列之间的手柄调整列宽，采用 Pointer Events 统一处理鼠标与触屏（`touch-action:none` + 指针捕获），移动端可正常拖动；结果**直接编码进 Markdown 表格分隔行的破折号数量**（列越宽该列破折号越多），往返编辑不丢失；表格对齐（左/中/右）同样映射到分隔行的 `:` 标记。
+  * 支持全部标准 Markdown 语法的可视化编辑：标题、强调、行内代码、代码块（含语言）、引用、有序/无序/任务列表、链接、分割线、表格；Markdown 不支持的常见内联语义（`<sub>`/`<sup>`/`<mark>`/`<u>`/`<kbd>` 等）以原始内联 HTML 保留。
   * 与模板风格完全统一（白色磨砂玻璃、站点配色与字体），不引入任何第三方编辑器库或外部风格。
 
 * 成员提交需审核，管理员直接发布
@@ -569,7 +573,9 @@ python scripts/build/package.py
 
 * **模板宏复用**：`templates/macros/music_macros.html` 提取音频状态徽章、复制广播 m3u 链接按钮、复制唱片 MP3 按钮、复制时长（秒）按钮、自定义播放器（`music_audio_player`）与播放器脚本（`music_player_assets`）为公共宏，`music/list.html`、`music/my.html` 与 `admin/admin_music.html` 统一调用，消除重复代码
 
-* **统一弹窗模板系统**：`templates/macros/modal.html` 提供 `modal_overlay`（CustomModal 骨架）、`modal_shell`（页面级弹窗容器，支持尺寸/图标/颜色自定义）、`modal_captcha`（图形验证码弹窗）、`modal_close_script`（全局 `openModal`/`closeModal` 控制器）四组宏，配合 `base.js` 的 `CustomModal`（alert/confirm/prompt）统一全站所有弹窗样式，取代全部原生 `alert`/`confirm`/`prompt` 及手写弹窗
+* **统一弹窗模板系统**：`templates/macros/modal.html` 提供 `modal_overlay`（CustomModal 骨架）、`modal_shell`（页面级弹窗容器，支持尺寸/图标/颜色自定义）、`modal_captcha`（图形验证码弹窗）、`modal_close_script`（全局 `openModal`/`closeModal` 控制器）四组宏，配合 `base.js` 的 `CustomModal`（alert/confirm/prompt）统一全站所有弹窗样式，取代全部原生 `alert`/`confirm`/`prompt` 及手写弹窗；图形验证码弹窗改为**按需加载**（见下文「前端资源按需加载」）
+
+* **统一标签列表输入框**：`templates/macros/forms.html` 的 `tags_field()` 宏 + `base.js` 的 `TagInput` 模块，提供全站统一的「列表类」输入体验——输入一项后回车或点「添加」即新增一个标签，已添加标签以胶囊展示、点叉号即可删除，支持粘贴「a, b, c」自动拆分；底层始终用一个隐藏 input 保存**逗号分隔字符串**，与后端解析、表单提交完全兼容（零迁移成本）。建筑发布 / 建筑详情编辑标签 / 音频上传 / 音频标签编辑等所有列表输入均已统一使用该控件，用户无需再手动输入逗号分隔；全局「编辑标签」弹窗（`#tag-edit-modal`）复用同一控件供各场景调用
 
 ### 交互效果
 
@@ -585,6 +591,12 @@ python scripts/build/package.py
 ### 性能优化
 
 * **零外部依赖**：所有 CDN 资源（Lucide、Marked.js）下载到本地，无外部网络请求
+
+* **前端资源按需加载**：页面级内容通过 `base.html` 的独立块按需引入，避免每个页面都加载用不到的资源——
+  * 图形验证码弹窗（`modal_captcha`）由全站固定渲染改为 `captcha_modal` 块，**仅注册 / 找回密码 / 建筑发布 / 指南投稿 / 账号申请等需要验证码的页面加载**；
+  * `purify.min.js` 由 `<head>` 移至页面底部脚本，且**仅在 Markdown 渲染页引入**（不再阻塞首屏）；
+  * `uploader.js` / `search.js` 通过 `page_scripts` 块仅在实际上传页 / 搜索页加载；
+  * 移除 `admin/broadcast.html` 中重复引入的 `base.js`（已在 `base.html` 全局加载），避免重复执行与拉取旧版本。
 
 * **本地自定义字体（站酷庆科黄油体 + 站酷快乐体）**：正文与标题分别使用本地子集化 woff2（`lib/fonts/zcool-*-*.woff2`），按 `unicode-range` 分片 + `font-display: swap`，浏览器只下载页面实际用到的子集，无外部 CDN 请求；字体缺失时自动回退系统字体栈
 
@@ -858,6 +870,11 @@ workspace/
 详见 [docs/CHANGELOG.md](docs/CHANGELOG.md)。
 
 ## 最近更新
+
+* **统一编辑器交互优化 + 统一标签输入框 + 前端资源按需加载**（`templates/macros/markdown_editor.html`、`templates/static/js/pages/markdown-editor.js`、`templates/macros/forms.html`、`templates/static/js/core/base.js`、`templates/base.html` 等）：
+  * **编辑器**：移除编辑器下方的「所见即所得」提示与「插入图片」功能；工具栏改为「基础 / 段落 / 插入」三个常驻标签页 + 「链接」「表格」两个**上下文标签页**（点击链接/表格按钮或光标进入链接/表格时出现，离开即隐藏）。链接改为独立标签页，可直接设置地址、显示文字、悬停标题、新窗口打开，并新增**取消链接**；**未选中文字时点链接按钮自动插入默认文字**。表格插入后自动切到表格页、离开自动收起。**再次点击已激活的样式按钮即取消该样式**（加粗/斜体/删除线/行内代码/标题/引用/任务列表等）。表格列宽拖拽改用 **Pointer Events + 指针捕获**（`touch-action:none`），**修复移动端无法拖动列宽的问题**。
+  * **统一标签输入框**：新增 `tags_field()` 宏与 `base.js` 的 `TagInput` 模块，所有列表类输入（建筑标签、音频标签、音频标签编辑等）统一改为「回车/点添加新增、胶囊叉号删除」，不再需要用户手动以逗号分隔；底层仍保存逗号分隔字符串，后端零改动。
+  * **前端资源按需加载**：图形验证码弹窗改为 `captcha_modal` 按需块（仅验证码页面加载）、`purify.min.js` 移出 `<head>` 且仅在 Markdown 页加载、移除 `admin/broadcast.html` 重复引入的 `base.js`。
 
 * **修复 Waitress 下「逐跳标头」导致的 500（实时日志流 + 封禁响应）**（`routes/admin/logs/__init__.py`、`core/middleware.py`）：日志页 `/admin/api/logs/stream`（SSE 实时日志）反复报 `AssertionError: Connection is a "hop-by-hop" header; it cannot be used by a WSGI application (see PEP 3333)`、实时日志无法推送。原因是 `Connection` 属 PEP 3333 禁止 WSGI **应用**下发的逐跳标头，旧版 Cheroot 容忍、Waitress 会直接抛错（SSE 此前写 `Connection: keep-alive`、封禁响应写 `Connection: close`）。现移除这两处 `Connection` 标头——HTTP/1.1 默认即持久连接，长连接由服务器维护，无需应用声明。
 

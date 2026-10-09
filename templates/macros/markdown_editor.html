@@ -14,7 +14,7 @@
    并在页面末尾引入共享脚本（缺一不可）：
        <script src="{{ url_for('static', filename='lib/marked/marked.min.js', v='1') }}"></script>
        <script src="{{ url_for('static', filename='lib/purify/purify.min.js', v='1') }}"></script>
-       <script src="{{ url_for('static', filename='js/pages/markdown-editor.js', v='2') }}"></script>
+       <script src="{{ url_for('static', filename='js/pages/markdown-editor.js', v='3') }}"></script>
 
    可选参数：
        name          - 表单提交字段名（textarea 的 name）
@@ -24,6 +24,10 @@
        show_count    - 是否显示实时字数统计
        toolbar_extra - 额外工具栏按钮 HTML（追加到「插入」标签页，|safe 注入）
        extra_attrs   - 添加到 textarea 的额外属性（如 required）
+#
+#   说明：工具栏中的「链接」「表格」两个标签页是上下文标签页——
+#   只有当光标/选区位于链接内、表格内（或刚点击了「插入链接」）时才会出现，
+#   离开对应上下文后自动隐藏并切回「基础」标签页。
 #}
 {% macro markdown_editor(name='', value='', editor_id='md-editor', placeholder='', show_count=false, toolbar_extra='', extra_attrs='') %}
 <style>
@@ -160,15 +164,27 @@ body.mre-resizing, body.mre-resizing * { cursor: col-resize !important; user-sel
 }
 .mre-grip {
     position: absolute;
-    width: 9px;
+    width: 11px;
     height: 24px;
+    margin-left: -5px;
     border-radius: 3px;
     background: rgba(2, 132, 199, 0.5);
     box-shadow: 0 1px 3px rgba(15, 23, 42, 0.2);
     cursor: col-resize;
     pointer-events: auto;
+    /* 触屏：禁用浏览器默认手势，pointer 事件才能持续收到拖动 */
+    touch-action: none;
     opacity: 0;
     transition: opacity 0.12s ease;
+}
+/* 扩大的透明命中区，便于手指/鼠标抓取 */
+.mre-grip::before {
+    content: '';
+    position: absolute;
+    top: -8px;
+    bottom: -8px;
+    left: -7px;
+    right: -7px;
 }
 .mre-grip::after {
     content: '';
@@ -259,35 +275,52 @@ body.mre-resizing, body.mre-resizing * { cursor: col-resize !important; user-sel
 .prose-docs strong { color: var(--text-primary); font-weight: 600; }
 .prose-docs img { max-width: 100%; border-radius: 0.5rem; }
 
-/* ---------- 链接 / 图片 输入浮层 ---------- */
-.mre-pop {
-    position: absolute;
-    z-index: 60;
-    display: flex;
-    gap: 0.35rem;
-    padding: 0.4rem;
-    border-radius: 0.6rem;
-    background: #fff;
-    border: 1px solid var(--border-card);
-    box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
+/* ---------- 链接标签页（上下文面板） ---------- */
+.mre-panel-link {
+    align-items: flex-end;
+    gap: 0.4rem 0.6rem;
 }
-.mre-pop input {
-    width: 15rem;
-    padding: 0.3rem 0.5rem;
+.mre-field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    font-size: 0.68rem;
+    color: var(--text-muted);
+}
+.mre-field > span { padding-left: 0.15rem; }
+.mre-field input {
+    width: 12rem;
+    padding: 0.28rem 0.5rem;
     border: 1px solid var(--border-card);
     border-radius: 0.4rem;
-    font-size: 0.78rem;
+    background: rgba(255, 255, 255, 0.85);
+    color: var(--text-primary);
+    font-size: 0.76rem;
     outline: none;
 }
-.mre-pop input:focus { border-color: var(--accent-blue); }
-.mre-pop button {
-    padding: 0.3rem 0.7rem;
-    border: none;
-    border-radius: 0.4rem;
+.mre-field input:focus { border-color: var(--accent-blue); }
+.mre-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.32rem 0.2rem;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    white-space: nowrap;
+}
+.mre-check input { accent-color: var(--accent-blue); }
+.mre-btn-solid {
     background: var(--accent-blue);
     color: #fff;
-    font-size: 0.78rem;
-    cursor: pointer;
+}
+.mre-btn-solid:not(:disabled):hover { background: #0369a1; color: #fff; }
+.mre-btn-danger { color: var(--accent-rose); }
+.mre-btn-danger:not(:disabled):hover { background: rgba(225, 29, 72, 0.1); color: var(--accent-rose); }
+.mre-btn-danger:disabled { opacity: 0.32; }
+@media (max-width: 640px) {
+    .mre-field input { width: 100%; }
+    .mre-panel-link { flex-direction: column; align-items: stretch; }
 }
 </style>
 
@@ -298,7 +331,9 @@ body.mre-resizing, body.mre-resizing * { cursor: col-resize !important; user-sel
         <button type="button" class="mre-tab is-active" data-mre-tab="basic"><i data-lucide="type"></i>基础</button>
         <button type="button" class="mre-tab" data-mre-tab="block"><i data-lucide="pilcrow"></i>段落</button>
         <button type="button" class="mre-tab" data-mre-tab="insert"><i data-lucide="plus"></i>插入</button>
-        <button type="button" class="mre-tab" data-mre-tab="table"><i data-lucide="table"></i>表格</button>
+        {# 上下文标签页：仅在链接 / 表格上下文出现，见下方脚本 updateContextTabs() #}
+        <button type="button" class="mre-tab" data-mre-tab="link" hidden><i data-lucide="link"></i>链接</button>
+        <button type="button" class="mre-tab" data-mre-tab="table" hidden><i data-lucide="table"></i>表格</button>
         <span class="mre-spacer"></span>
         <div class="mre-modes">
             <button type="button" class="mre-mode is-active" data-mre-mode="rich"><i data-lucide="pencil-line"></i>富文本</button>
@@ -333,16 +368,30 @@ body.mre-resizing, body.mre-resizing * { cursor: col-resize !important; user-sel
 
         {# ---------- 工具栏面板（标签页 3：插入） ---------- #}
         <div class="mre-panel" data-mre-panel="insert" hidden>
-            <button type="button" class="mre-btn" data-mre-cmd="link" data-mre-need="sel" title="插入链接"><i data-lucide="link"></i>链接</button>
-            <button type="button" class="mre-btn" data-mre-cmd="image" data-mre-need="caret" title="插入图片"><i data-lucide="image"></i>图片</button>
+            <button type="button" class="mre-btn" data-mre-cmd="link" data-mre-need="caret" title="插入/编辑链接"><i data-lucide="link"></i>链接</button>
             <button type="button" class="mre-btn" data-mre-cmd="codeblock" data-mre-need="caret" title="插入代码块"><i data-lucide="square-code"></i>代码块</button>
             <button type="button" class="mre-btn" data-mre-cmd="table-create" data-mre-need="caret" title="插入 3×3 表格"><i data-lucide="table"></i>表格</button>
             {{ toolbar_extra | safe }}
         </div>
 
-        {# ---------- 工具栏面板（标签页 4：表格） ---------- #}
+        {# ---------- 工具栏面板（标签页 4：链接，上下文标签页） ---------- #}
+        <div class="mre-panel mre-panel-link" data-mre-panel="link" hidden>
+            <label class="mre-field"><span>链接地址</span>
+                <input type="text" data-mre-link-url placeholder="https://example.com" autocomplete="off" spellcheck="false">
+            </label>
+            <label class="mre-field"><span>显示文字</span>
+                <input type="text" data-mre-link-text placeholder="留空则使用默认文字" autocomplete="off">
+            </label>
+            <label class="mre-field"><span>标题</span>
+                <input type="text" data-mre-link-title placeholder="鼠标悬停提示（可选）" autocomplete="off">
+            </label>
+            <label class="mre-check"><input type="checkbox" data-mre-link-blank><span>新窗口打开</span></label>
+            <button type="button" class="mre-btn mre-btn-solid" data-mre-link-apply><i data-lucide="check"></i>应用</button>
+            <button type="button" class="mre-btn mre-btn-danger" data-mre-link-unlink title="移除当前链接，保留文字"><i data-lucide="unlink"></i>取消链接</button>
+        </div>
+
+        {# ---------- 工具栏面板（标签页 5：表格，上下文标签页） ---------- #}
         <div class="mre-panel" data-mre-panel="table" hidden>
-            <button type="button" class="mre-btn" data-mre-cmd="table-create" data-mre-need="caret" title="插入 3×3 表格"><i data-lucide="table"></i>插入表格</button>
             <button type="button" class="mre-btn" data-mre-cmd="row-above" data-mre-need="table" title="在当前行上方插入一行"><i data-lucide="rows-3"></i>上方插行</button>
             <button type="button" class="mre-btn" data-mre-cmd="row-below" data-mre-need="table" title="在当前行下方插入一行"><i data-lucide="rows-3"></i>下方插行</button>
             <button type="button" class="mre-btn" data-mre-cmd="row-delete" data-mre-need="table" title="删除当前行"><i data-lucide="trash-2"></i>删除行</button>
@@ -366,11 +415,12 @@ body.mre-resizing, body.mre-resizing * { cursor: col-resize !important; user-sel
                  data-placeholder="{{ placeholder or '在此输入内容…' }}"></div>
             <div class="mre-overlay" data-mre-overlay></div>
         </div>
+        {% if show_count %}
         <div class="pane-header">
-            <i data-lucide="pencil-line" class="w-3.5 h-3.5"></i> 所见即所得（内容以 Markdown 保存）
             <span class="mre-spacer"></span>
-            {% if show_count %}<span data-md-count="{{ editor_id }}">0 字</span>{% endif %}
+            <span data-md-count="{{ editor_id }}">0 字</span>
         </div>
+        {% endif %}
     </div>
 
     {# ---------- 模式 2：Markdown 源码 + 实时预览 ---------- #}

@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from 'macros/modal.html' import modal_shell, modal_close_script %}
+{% from 'macros/forms.html' import tags_field %}
 {% block title %}{{ building.title }} - 公共建筑{% endblock %}
 {% block content %}
 <section class="page-container py-12">
@@ -143,9 +144,9 @@
 
 {% call modal_shell('edit-tags-modal', size='sm', title='编辑标签', icon='tag', icon_color='blue', close_on_overlay='false') %}
     <div class="modal-body">
-        <p class="text-sm text-[var(--text-secondary)] mb-3">用逗号分隔，最多 10 个，每个不超过 12 字。</p>
-        <input type="text" id="edit-tags-input" maxlength="150" class="input-field w-full px-4 py-3 rounded-lg"
-               value="{{ building.tags or '' }}" placeholder="例如: 城堡, 红石, 打卡点">
+        {{ tags_field('tags', input_id='edit-tags-input', value=building.tags or '',
+                      placeholder='输入标签后回车添加',
+                      help_text='最多 10 个，每个不超过 12 字。') }}
     </div>
     <div class="modal-footer">
         <button type="button" class="btn-secondary" onclick="closeModal('edit-tags-modal')">取消</button>
@@ -251,12 +252,15 @@ function fallbackCopy(text) {
     function renderTags(tags) {
         var wrap = document.getElementById('building-tags-display');
         if (!wrap) return;
-        wrap.querySelectorAll('.tag-pill').forEach(function (n) { n.remove(); });
         var editBtn = document.getElementById('edit-tags-btn');
+        // 清空已有标签（保留「编辑标签」按钮再重建），避免保存后标签重复
+        Array.prototype.slice.call(wrap.children).forEach(function (n) {
+            if (n !== editBtn) n.remove();
+        });
         (tags ? tags.split(',') : []).forEach(function (t) {
             if (!t.trim()) return;
             var span = document.createElement('span');
-            span.className = 'tag-pill inline-block px-2 py-0.5 rounded-full text-xs bg-[var(--accent-blue)]/10 text-[var(--accent-blue)] border border-[var(--accent-blue)]/20';
+            span.className = 'inline-block px-2 py-0.5 rounded-full text-xs bg-[var(--accent-blue)]/10 text-[var(--accent-blue)] border border-[var(--accent-blue)]/20';
             span.textContent = '#' + t.trim();
             wrap.insertBefore(span, editBtn || null);
         });
