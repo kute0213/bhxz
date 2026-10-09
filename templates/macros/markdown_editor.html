@@ -1,20 +1,188 @@
-{# 统一 Markdown 编辑器组件（样式 + 结构）
+{# 统一 Markdown / 富文本编辑器组件（样式 + 结构）—— 全站唯一实现，禁止各页面自行复制。
+
+   设计要点：
+     - 默认「富文本（所见即所得）」模式，底层数据始终是 Markdown；
+       可视化界面只是渲染层，保存到数据库的永远是 Markdown 文本。
+     - 可无缝切换到「Markdown 源码 + 实时预览」模式，切换保留全部内容。
+     - 顶部工具栏按 4 个标签页分类（基础 / 段落 / 插入 / 表格）。
+     - 按钮在「未满足可用条件」时置灰不可点：文字类需选中文字、表格类需光标在表格中。
+
    用法：
        {% from "macros/markdown_editor.html" import markdown_editor %}
        {{ markdown_editor(name='content', value=guide.content if guide else '', editor_id='md-editor') }}
-   并在页面末尾引入共享脚本：
-       <script src="{{ url_for('static', filename='js/pages/markdown-editor.js', v='1') }}"></script>
+
+   并在页面末尾引入共享脚本（缺一不可）：
+       <script src="{{ url_for('static', filename='lib/marked/marked.min.js', v='1') }}"></script>
+       <script src="{{ url_for('static', filename='lib/purify/purify.min.js', v='1') }}"></script>
+       <script src="{{ url_for('static', filename='js/pages/markdown-editor.js', v='2') }}"></script>
+
    可选参数：
-       name         - textarea 的 name 属性（表单提交字段名）
-       value        - 初始内容
-       editor_id    - textarea 的 id（默认 md-editor）
-       placeholder  - 占位提示
-       show_count   - 是否显示实时字数统计
-       toolbar_extra- 额外工具栏按钮的 HTML（使用|safe）
-       extra_attrs  - 添加到 textarea 的额外属性（如 required）
- #}
+       name          - 表单提交字段名（textarea 的 name）
+       value         - 初始 Markdown 内容
+       editor_id     - textarea 的 id（默认 md-editor）
+       placeholder   - 空内容占位提示
+       show_count    - 是否显示实时字数统计
+       toolbar_extra - 额外工具栏按钮 HTML（追加到「插入」标签页，|safe 注入）
+       extra_attrs   - 添加到 textarea 的额外属性（如 required）
+#}
 {% macro markdown_editor(name='', value='', editor_id='md-editor', placeholder='', show_count=false, toolbar_extra='', extra_attrs='') %}
 <style>
+/* ================= 统一编辑器容器 ================= */
+.mre {
+    border: 1px solid var(--border-card);
+    border-radius: 16px;
+    background: rgba(255, 255, 255, 0.6);
+    backdrop-filter: blur(22px) saturate(120%);
+    -webkit-backdrop-filter: blur(22px) saturate(120%);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.6), 0 8px 24px rgba(15,23,42,0.06);
+    overflow: hidden;
+}
+.mre [hidden] { display: none !important; }
+
+/* ---------- 顶部：标签页 + 模式切换 ---------- */
+.mre-tabs {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.4rem 0.5rem;
+    border-bottom: 1px solid var(--border-subtle);
+    background: rgba(255, 255, 255, 0.5);
+    flex-wrap: wrap;
+}
+.mre-tab, .mre-mode {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.3rem 0.7rem;
+    border: none;
+    border-radius: 0.5rem;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 0.78rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+.mre-tab:hover, .mre-mode:hover { background: rgba(2, 132, 199, 0.08); color: var(--accent-blue); }
+.mre-tab.is-active, .mre-mode.is-active {
+    background: rgba(2, 132, 199, 0.14);
+    color: var(--accent-blue);
+    font-weight: 600;
+}
+.mre-spacer { flex: 1 1 auto; }
+.mre-modes {
+    display: inline-flex;
+    gap: 0.15rem;
+    padding: 0.15rem;
+    border-radius: 0.6rem;
+    background: rgba(15, 23, 42, 0.05);
+}
+.mre-modes .mre-mode svg { width: 0.85rem; height: 0.85rem; }
+
+/* ---------- 工具栏按钮 ---------- */
+.mre-panels {
+    padding: 0.35rem 0.5rem;
+    border-bottom: 1px solid var(--border-subtle);
+    background: rgba(255, 255, 255, 0.35);
+}
+.mre-panel { display: flex; flex-wrap: wrap; gap: 0.2rem; }
+.mre-panel[hidden] { display: none !important; }
+.mre-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.28rem;
+    padding: 0.28rem 0.55rem;
+    border: none;
+    border-radius: 0.4rem;
+    background: transparent;
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    line-height: 1.2;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.15s ease, color 0.15s ease;
+}
+.mre-btn svg { width: 0.9rem; height: 0.9rem; flex-shrink: 0; }
+.mre-btn:disabled { opacity: 0.32; cursor: not-allowed; }
+.mre-btn:not(:disabled):hover { background: rgba(2, 132, 199, 0.1); color: var(--accent-blue); }
+.mre-btn.is-active {
+    background: rgba(2, 132, 199, 0.16);
+    color: var(--accent-blue);
+}
+
+/* ---------- 富文本（所见即所得）模式 ---------- */
+.mre-rich-scroll {
+    position: relative;
+    min-height: 500px;
+    max-height: 70vh;
+    overflow: auto;
+}
+.mre-rich {
+    padding: 1rem 1.1rem;
+    min-height: 100%;
+    outline: none;
+    overflow-wrap: break-word;
+}
+.mre-rich:empty::before {
+    content: attr(data-placeholder);
+    color: var(--text-muted);
+    pointer-events: none;
+}
+/* 编辑态下的表格：固定布局 + 显式列宽，便于拖拽调整列宽
+   （提高选择器优先级，避免被下方共用的 .prose-docs 表格样式覆盖边框/内距） */
+.mre-rich.prose-docs table {
+    width: 100%;
+    table-layout: fixed;
+    border-collapse: collapse;
+}
+.mre-rich.prose-docs th, .mre-rich.prose-docs td {
+    border: 1px solid var(--border-card);
+    padding: 0.4rem 0.6rem;
+    vertical-align: top;
+}
+.mre-rich.prose-docs th { background: rgba(2, 132, 199, 0.06); }
+.mre-rich input[type="checkbox"] { margin-right: 0.35rem; vertical-align: middle; }
+.mre-rich li > input[type="checkbox"] { margin-left: -1.1rem; }
+.mre-rich ul:has(> li > input[type="checkbox"]) { list-style: none; padding-left: 1.4rem; }
+/* 任务列表（类名由 JS 注入，兼容不支持 :has 的浏览器） */
+.mre-rich ul.mre-task-list, .mre-rich ol.mre-task-list { list-style: none; padding-left: 1.4rem; }
+.mre-rich li.mre-task-item { list-style: none; }
+.mre-rich li.mre-task-item > input[type="checkbox"] { margin-left: -1.1rem; }
+
+/* 拖拽调整列宽时的全局态：列宽光标 + 禁止选中文字 */
+body.mre-resizing, body.mre-resizing * { cursor: col-resize !important; user-select: none !important; }
+
+/* 列宽拖拽手柄（浮层，位于可编辑区之外，避免污染内容） */
+.mre-overlay {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+}
+.mre-grip {
+    position: absolute;
+    width: 9px;
+    height: 24px;
+    border-radius: 3px;
+    background: rgba(2, 132, 199, 0.5);
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.2);
+    cursor: col-resize;
+    pointer-events: auto;
+    opacity: 0;
+    transition: opacity 0.12s ease;
+}
+.mre-grip::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 4px;
+    bottom: 4px;
+    width: 1px;
+    background: rgba(255, 255, 255, 0.85);
+}
+.mre-overlay.is-on .mre-grip { opacity: 1; }
+.mre-grip:hover { background: var(--accent-blue); }
+
+/* ---------- Markdown 源码模式（沿用原双栏样式） ---------- */
 .markdown-editor {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -70,25 +238,8 @@
     overflow-y: auto;
     min-height: 0;
 }
-.editor-toolbar {
-    display: flex;
-    gap: 0.25rem;
-    padding: 0.25rem;
-    background: rgba(255, 255, 255, 0.5);
-    border-bottom: 1px solid var(--border-subtle);
-    flex-shrink: 0;
-    flex-wrap: wrap;
-}
-.editor-toolbar button {
-    padding: 0.25rem 0.5rem;
-    border-radius: 0.375rem;
-    font-size: 0.75rem;
-    color: var(--text-secondary);
-    background: transparent;
-    border: none;
-    cursor: pointer;
-}
-.editor-toolbar button:hover { background: rgba(2, 132, 199, 0.08); color: var(--accent-blue); }
+
+/* ---------- 正文排版（编辑器预览与富文本编辑区共用） ---------- */
 .prose-docs h1 { font-size: 1.75rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border-card); }
 .prose-docs h2 { font-size: 1.4rem; font-weight: 600; color: var(--text-primary); margin-top: 2rem; margin-bottom: 0.75rem; }
 .prose-docs h3 { font-size: 1.15rem; font-weight: 600; color: var(--accent-indigo); margin-top: 1.5rem; margin-bottom: 0.5rem; }
@@ -106,31 +257,139 @@
 .prose-docs a { color: var(--accent-blue); text-decoration: underline; }
 .prose-docs hr { border: none; border-top: 1px solid var(--border-card); margin: 2rem 0; }
 .prose-docs strong { color: var(--text-primary); font-weight: 600; }
+.prose-docs img { max-width: 100%; border-radius: 0.5rem; }
+
+/* ---------- 链接 / 图片 输入浮层 ---------- */
+.mre-pop {
+    position: absolute;
+    z-index: 60;
+    display: flex;
+    gap: 0.35rem;
+    padding: 0.4rem;
+    border-radius: 0.6rem;
+    background: #fff;
+    border: 1px solid var(--border-card);
+    box-shadow: 0 12px 32px rgba(15, 23, 42, 0.18);
+}
+.mre-pop input {
+    width: 15rem;
+    padding: 0.3rem 0.5rem;
+    border: 1px solid var(--border-card);
+    border-radius: 0.4rem;
+    font-size: 0.78rem;
+    outline: none;
+}
+.mre-pop input:focus { border-color: var(--accent-blue); }
+.mre-pop button {
+    padding: 0.3rem 0.7rem;
+    border: none;
+    border-radius: 0.4rem;
+    background: var(--accent-blue);
+    color: #fff;
+    font-size: 0.78rem;
+    cursor: pointer;
+}
 </style>
-<div class="markdown-editor">
-    <div class="editor-pane">
-        <div class="editor-toolbar">
-            <button type="button" data-md-before="**" data-md-after="**">加粗</button>
-            <button type="button" data-md-before="*" data-md-after="*">斜体</button>
-            <button type="button" data-md-before="# " data-md-after="">标题</button>
-            <button type="button" data-md-before="- " data-md-after="">列表</button>
-            <button type="button" data-md-before="```&#10;" data-md-after="&#10;```">代码</button>
-            <button type="button" data-md-before="[" data-md-after="](url)">链接</button>
-            <button type="button" data-md-before="> " data-md-after="">引用</button>
+
+<div class="mre" data-mre data-editor-id="{{ editor_id }}">
+
+    {# ---------- 顶部：标签页分类 + 模式切换 ---------- #}
+    <div class="mre-tabs" role="tablist">
+        <button type="button" class="mre-tab is-active" data-mre-tab="basic"><i data-lucide="type"></i>基础</button>
+        <button type="button" class="mre-tab" data-mre-tab="block"><i data-lucide="pilcrow"></i>段落</button>
+        <button type="button" class="mre-tab" data-mre-tab="insert"><i data-lucide="plus"></i>插入</button>
+        <button type="button" class="mre-tab" data-mre-tab="table"><i data-lucide="table"></i>表格</button>
+        <span class="mre-spacer"></span>
+        <div class="mre-modes">
+            <button type="button" class="mre-mode is-active" data-mre-mode="rich"><i data-lucide="pencil-line"></i>富文本</button>
+            <button type="button" class="mre-mode" data-mre-mode="markdown"><i data-lucide="code"></i>Markdown</button>
+        </div>
+    </div>
+
+    {# ---------- 工具栏面板（标签页 1：基础） ---------- #}
+    <div class="mre-panels">
+        <div class="mre-panel is-active" data-mre-panel="basic">
+            <button type="button" class="mre-btn" data-mre-cmd="bold" data-mre-need="sel" title="加粗"><i data-lucide="bold"></i>加粗</button>
+            <button type="button" class="mre-btn" data-mre-cmd="italic" data-mre-need="sel" title="斜体"><i data-lucide="italic"></i>斜体</button>
+            <button type="button" class="mre-btn" data-mre-cmd="strike" data-mre-need="sel" title="删除线"><i data-lucide="strikethrough"></i>删除线</button>
+            <button type="button" class="mre-btn" data-mre-cmd="code" data-mre-need="sel" title="行内代码"><i data-lucide="code"></i>行内代码</button>
+            <button type="button" class="mre-btn" data-mre-cmd="clear" data-mre-need="sel" title="清除格式"><i data-lucide="remove-formatting"></i>清除格式</button>
+        </div>
+
+        {# ---------- 工具栏面板（标签页 2：段落） ---------- #}
+        <div class="mre-panel" data-mre-panel="block" hidden>
+            <button type="button" class="mre-btn" data-mre-cmd="h1" data-mre-need="caret" title="一级标题"><i data-lucide="heading-1"></i>H1</button>
+            <button type="button" class="mre-btn" data-mre-cmd="h2" data-mre-need="caret" title="二级标题"><i data-lucide="heading-2"></i>H2</button>
+            <button type="button" class="mre-btn" data-mre-cmd="h3" data-mre-need="caret" title="三级标题"><i data-lucide="heading-3"></i>H3</button>
+            <button type="button" class="mre-btn" data-mre-cmd="h4" data-mre-need="caret" title="四级标题"><i data-lucide="heading-4"></i>H4</button>
+            <button type="button" class="mre-btn" data-mre-cmd="quote" data-mre-need="caret" title="引用块"><i data-lucide="quote"></i>引用</button>
+            <button type="button" class="mre-btn" data-mre-cmd="ul" data-mre-need="caret" title="无序列表"><i data-lucide="list"></i>无序列表</button>
+            <button type="button" class="mre-btn" data-mre-cmd="ol" data-mre-need="caret" title="有序列表"><i data-lucide="list-ordered"></i>有序列表</button>
+            <button type="button" class="mre-btn" data-mre-cmd="task" data-mre-need="caret" title="任务列表"><i data-lucide="list-checks"></i>任务列表</button>
+            <button type="button" class="mre-btn" data-mre-cmd="hr" data-mre-need="caret" title="分割线"><i data-lucide="minus"></i>分割线</button>
+            <button type="button" class="mre-btn" data-mre-cmd="outdent" data-mre-need="caret" title="减少缩进"><i data-lucide="indent-decrease"></i>减少缩进</button>
+            <button type="button" class="mre-btn" data-mre-cmd="indent" data-mre-need="caret" title="增加缩进"><i data-lucide="indent-increase"></i>增加缩进</button>
+        </div>
+
+        {# ---------- 工具栏面板（标签页 3：插入） ---------- #}
+        <div class="mre-panel" data-mre-panel="insert" hidden>
+            <button type="button" class="mre-btn" data-mre-cmd="link" data-mre-need="sel" title="插入链接"><i data-lucide="link"></i>链接</button>
+            <button type="button" class="mre-btn" data-mre-cmd="image" data-mre-need="caret" title="插入图片"><i data-lucide="image"></i>图片</button>
+            <button type="button" class="mre-btn" data-mre-cmd="codeblock" data-mre-need="caret" title="插入代码块"><i data-lucide="square-code"></i>代码块</button>
+            <button type="button" class="mre-btn" data-mre-cmd="table-create" data-mre-need="caret" title="插入 3×3 表格"><i data-lucide="table"></i>表格</button>
             {{ toolbar_extra | safe }}
         </div>
-        {% if name %}
-        <textarea name="{{ name }}" id="{{ editor_id }}" placeholder="{{ placeholder }}" {{ extra_attrs | safe }}>{{ value }}</textarea>
-        {% else %}
-        <textarea id="{{ editor_id }}" placeholder="{{ placeholder }}" {{ extra_attrs | safe }}>{{ value }}</textarea>
-        {% endif %}
-    </div>
-    <div class="preview-pane">
-        <div class="pane-header">
-            <i data-lucide="eye" class="w-3.5 h-3.5"></i> 实时预览
-            {% if show_count %}<span class="ml-auto text-cream/30" data-md-count="{{ editor_id }}">0 字</span>{% endif %}
+
+        {# ---------- 工具栏面板（标签页 4：表格） ---------- #}
+        <div class="mre-panel" data-mre-panel="table" hidden>
+            <button type="button" class="mre-btn" data-mre-cmd="table-create" data-mre-need="caret" title="插入 3×3 表格"><i data-lucide="table"></i>插入表格</button>
+            <button type="button" class="mre-btn" data-mre-cmd="row-above" data-mre-need="table" title="在当前行上方插入一行"><i data-lucide="rows-3"></i>上方插行</button>
+            <button type="button" class="mre-btn" data-mre-cmd="row-below" data-mre-need="table" title="在当前行下方插入一行"><i data-lucide="rows-3"></i>下方插行</button>
+            <button type="button" class="mre-btn" data-mre-cmd="row-delete" data-mre-need="table" title="删除当前行"><i data-lucide="trash-2"></i>删除行</button>
+            <button type="button" class="mre-btn" data-mre-cmd="col-left" data-mre-need="table" title="在当前列左侧插入一列"><i data-lucide="columns-3"></i>左侧插列</button>
+            <button type="button" class="mre-btn" data-mre-cmd="col-right" data-mre-need="table" title="在当前列右侧插入一列"><i data-lucide="columns-3"></i>右侧插列</button>
+            <button type="button" class="mre-btn" data-mre-cmd="col-delete" data-mre-need="table" title="删除当前列"><i data-lucide="trash-2"></i>删除列</button>
+            <button type="button" class="mre-btn" data-mre-cmd="table-delete" data-mre-need="table" title="删除整个表格"><i data-lucide="trash-2"></i>删除表格</button>
+            <button type="button" class="mre-btn" data-mre-cmd="align-left" data-mre-need="table" title="当前列左对齐"><i data-lucide="align-left"></i>左对齐</button>
+            <button type="button" class="mre-btn" data-mre-cmd="align-center" data-mre-need="table" title="当前列居中"><i data-lucide="align-center"></i>居中</button>
+            <button type="button" class="mre-btn" data-mre-cmd="align-right" data-mre-need="table" title="当前列右对齐"><i data-lucide="align-right"></i>右对齐</button>
         </div>
-        <div class="pane-body prose-docs" data-md-preview="{{ editor_id }}"></div>
+    </div>
+
+    {# ---------- 模式 1：富文本（所见即所得，默认） ---------- #}
+    <div class="mre-rich-wrap" data-mre-rich-wrap>
+        <div class="mre-rich-scroll" data-mre-scroll>
+            <div class="mre-rich prose-docs"
+                 contenteditable="true"
+                 spellcheck="false"
+                 data-mre-rich
+                 data-placeholder="{{ placeholder or '在此输入内容…' }}"></div>
+            <div class="mre-overlay" data-mre-overlay></div>
+        </div>
+        <div class="pane-header">
+            <i data-lucide="pencil-line" class="w-3.5 h-3.5"></i> 所见即所得（内容以 Markdown 保存）
+            <span class="mre-spacer"></span>
+            {% if show_count %}<span data-md-count="{{ editor_id }}">0 字</span>{% endif %}
+        </div>
+    </div>
+
+    {# ---------- 模式 2：Markdown 源码 + 实时预览 ---------- #}
+    <div class="markdown-editor mre-md" data-mre-md hidden>
+        <div class="editor-pane">
+            <div class="pane-header"><i data-lucide="code" class="w-3.5 h-3.5"></i> Markdown 源码</div>
+            {% if name %}
+            <textarea name="{{ name }}" id="{{ editor_id }}" placeholder="{{ placeholder }}" {{ extra_attrs | safe }}>{{ value }}</textarea>
+            {% else %}
+            <textarea id="{{ editor_id }}" placeholder="{{ placeholder }}" {{ extra_attrs | safe }}>{{ value }}</textarea>
+            {% endif %}
+        </div>
+        <div class="preview-pane">
+            <div class="pane-header">
+                <i data-lucide="eye" class="w-3.5 h-3.5"></i> 实时预览
+                {% if show_count %}<span class="ml-auto text-cream/30" data-md-count="{{ editor_id }}">0 字</span>{% endif %}
+            </div>
+            <div class="pane-body prose-docs" data-md-preview="{{ editor_id }}"></div>
+        </div>
     </div>
 </div>
 {% endmacro %}

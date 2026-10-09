@@ -4,6 +4,15 @@
 
 ### 变更
 
+* **富文本 / Markdown 统一编辑器（默认可视化编辑，底层始终保存 Markdown）**（`templates/macros/markdown_editor.html`、`templates/static/js/pages/markdown-editor.js`、`templates/guides/form.html`、`templates/admin/guide_form.html`）：
+  * **双模式无缝切换**：默认「富文本（所见即所得）」模式，底层数据与表单提交内容**始终是 Markdown**，可视化界面只是渲染层；切换到「Markdown 源码 + 实时预览」模式时通过序列化 / 反序列化保留内容与大致光标位置，返回时同样还原。指南投稿页与后台指南编辑页共用同一套组件。
+  * **4 标签页工具栏**：基础（加粗 / 斜体 / 删除线 / 行内代码 / 清除格式）、段落（H1–H4 / 引用 / 无序 / 有序 / 任务列表 / 分割线 / 减少·增加缩进）、插入（链接 / 图片 / 代码块 / 表格）、表格（上方·下方插行 / 删除行 / 左侧·右侧插列 / 删除列 / 删除表格 / 左·中·右对齐）。
+  * **按钮条件启用（选中才亮起）**：按钮带 `data-mre-need` 条件——`sel`（需选中文字）、`caret`（有光标即可）、`table`（光标在表格内）；富文本与 Markdown 两种模式均实时计算启用态，未满足条件时置灰不可点，并通过 `queryCommandState` / 行首语法检测高亮激活态（如已加粗、当前列居中）。
+  * **表格列宽拖拽映射到 Markdown**：拖拽表头列之间的手柄调整列宽，结果编码进 Markdown 表格**分隔行每列的破折号数量**（列越宽破折号越多，解析时反解回列宽），拖拽手柄为独立浮层、不污染正文；对齐（左 / 中 / 右）同样映射到分隔行的 `:`。
+  * **全语法可视化支持**：标题、强调、删除线、行内代码、代码块（含语言标识）、引用、有序 / 无序 / 任务列表（复选框可直接勾选）、链接、图片、分割线、表格；Markdown 无对应的常见内联语义（`<sub>` / `<sup>` / `<mark>` / `<u>` / `<kbd>` / `<abbr>` / `<small>`）以原始内联 HTML 原样保留。
+  * **实现方式**：复用站点已本地化的 marked v15 做 Markdown → HTML，自研轻量 HTML → Markdown 序列化（不引入 Vditor / Toast UI 等第三方编辑器库），全程 `DOMPurify` 清洗；样式 100% 沿用站点模板（白色磨砂玻璃、站点配色与字体），零外部 CDN。
+  * **验证**：jsdom 跑通 34 项语法转换往返 + 34 项 DOM 交互用例（含表格插入 / 增删行列 / 对齐 / 列宽拖拽映射破折号、模式切换内容保留、按钮启用态），全部通过。
+
 * **修复 Waitress 下「逐跳标头」导致的 500（实时日志流 + 封禁响应）**（`routes/admin/logs/__init__.py`、`core/middleware.py`）：
   * **现象**：日志页 `/admin/api/logs/stream`（SSE 实时日志）持续报错，服务端日志反复打印 `AssertionError: Connection is a "hop-by-hop" header; it cannot be used by a WSGI application (see PEP 3333)`，实时日志无法推送；被封 IP 的空 403 响应同样受影响。
   * **根因**：`Connection` 属 PEP 3333 明令禁止由 WSGI **应用**下发的「逐跳（hop-by-hop）」标头。旧版 Cheroot 对此容忍，迁移到 Waitress 后 `start_response()` 会直接抛 `AssertionError`，请求在写出响应头前即失败。此前 SSE 流写了 `Connection: keep-alive`、封禁响应写了 `Connection: close`。
