@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% from 'macros/modal.html' import modal_shell %}
+{% from "macros/markdown_editor.html" import markdown_editor %}
 {% block title %}广播邮件{% endblock %}
 
 {% block content %}
@@ -22,7 +23,7 @@
                 </div>
             </div>
 
-            <!-- 主体：富文本编辑器 -->
+            <!-- 主体：统一编辑器（富文本 / Markdown） -->
             <div class="mb-6">
                 <div class="space-y-4">
                     <div>
@@ -31,63 +32,8 @@
                                class="w-full px-4 py-2 rounded-lg bg-forest-900/60 border border-forest-700/50 text-cream focus:border-gold-400/50 focus:outline-none">
                     </div>
                     <div>
-                        <label class="block text-sm text-cream/70 mb-2">广播内容（富文本）</label>
-                        <style>
-                            .rich-toolbar {
-                                display: flex; flex-wrap: wrap; gap: 4px; padding: 6px;
-                                background: rgba(255, 255, 255, 0.55);
-                                backdrop-filter: blur(22px) saturate(120%);
-                                -webkit-backdrop-filter: blur(22px) saturate(120%);
-                                border: 1px solid var(--border-card); border-bottom: none;
-                                border-radius: 12px 12px 0 0;
-                            }
-                            .rich-toolbar button {
-                                display: inline-flex; align-items: center; justify-content: center;
-                                width: 32px; height: 32px; border-radius: 8px;
-                                color: var(--text-secondary); background: transparent;
-                                border: 1px solid transparent; cursor: pointer;
-                            }
-                            .rich-toolbar button:hover { background: rgba(2, 132, 199, 0.08); color: var(--accent-blue); }
-                            .rich-toolbar button.active { background: rgba(2, 132, 199, 0.12); color: #0369a1; border-color: rgba(2, 132, 199, 0.35); }
-                            .rich-toolbar .sep { width: 1px; align-self: center; height: 20px; background: var(--border-card); margin: 0 4px; }
-                            #rich-editor {
-                                min-height: 260px; max-height: 60vh; overflow-y: auto;
-                                background: rgba(255, 255, 255, 0.55);
-                                backdrop-filter: blur(22px) saturate(120%);
-                                -webkit-backdrop-filter: blur(22px) saturate(120%);
-                                border: 1px solid var(--border-card);
-                                border-radius: 0 0 12px 12px;
-                                padding: 14px 16px; color: var(--text-primary); font-size: 0.9rem; line-height: 1.8;
-                                outline: none;
-                            }
-                            #rich-editor:empty::before { content: attr(data-placeholder); color: var(--text-muted); pointer-events: none; }
-                            #rich-editor h1, #rich-editor h2, #rich-editor h3, #rich-editor h4 { color: var(--text-primary); margin: 0.75rem 0 0.4rem; font-weight: 600; }
-                            #rich-editor h1 { font-size: 1.5rem; }
-                            #rich-editor h2 { font-size: 1.25rem; }
-                            #rich-editor h3 { font-size: 1.1rem; }
-                            #rich-editor a { color: var(--accent-blue); text-decoration: underline; }
-                            #rich-editor ul, #rich-editor ol { padding-left: 1.4rem; margin: 0.4rem 0; }
-                            #rich-editor blockquote { border-left: 3px solid rgba(96, 165, 250, 0.4); padding-left: 0.8rem; margin: 0.6rem 0; color: var(--text-muted); }
-                            #rich-editor pre { background: #101826; border-radius: 8px; padding: 0.6rem 0.8rem; overflow-x: auto; margin: 0.4rem 0; }
-                            #rich-editor code { font-family: 'Courier New', Courier, monospace; font-size: 0.85em; color: #a5c8e8; }
-                        </style>
-                        <div class="rich-toolbar">
-                            <button type="button" data-cmd="bold" title="加粗"><i data-lucide="bold" class="w-4 h-4"></i></button>
-                            <button type="button" data-cmd="italic" title="斜体"><i data-lucide="italic" class="w-4 h-4"></i></button>
-                            <button type="button" data-cmd="underline" title="下划线"><i data-lucide="underline" class="w-4 h-4"></i></button>
-                            <button type="button" data-cmd="strikeThrough" title="删除线"><i data-lucide="strikethrough" class="w-4 h-4"></i></button>
-                            <span class="sep"></span>
-                            <button type="button" data-cmd="formatBlock" data-value="H2" title="二级标题"><i data-lucide="heading-2" class="w-4 h-4"></i></button>
-                            <button type="button" data-cmd="formatBlock" data-value="H3" title="三级标题"><i data-lucide="heading-3" class="w-4 h-4"></i></button>
-                            <span class="sep"></span>
-                            <button type="button" data-cmd="insertUnorderedList" title="无序列表"><i data-lucide="list" class="w-4 h-4"></i></button>
-                            <button type="button" data-cmd="insertOrderedList" title="有序列表"><i data-lucide="list-ordered" class="w-4 h-4"></i></button>
-                            <button type="button" data-cmd="formatBlock" data-value="BLOCKQUOTE" title="引用"><i data-lucide="quote" class="w-4 h-4"></i></button>
-                            <button type="button" data-cmd="createLink" title="插入链接"><i data-lucide="link" class="w-4 h-4"></i></button>
-                            <button type="button" data-cmd="removeFormat" title="清除格式"><i data-lucide="eraser" class="w-4 h-4"></i></button>
-                        </div>
-                        <div id="rich-editor" contenteditable="true" data-placeholder="输入广播内容，可加粗、斜体、标题、列表、链接…"></div>
-                        <div class="text-right text-xs text-cream/40 mt-1"><span id="rich-count">0</span> 字</div>
+                        <label class="block text-sm text-cream/70 mb-2">广播内容</label>
+                        {{ markdown_editor(name='content', editor_id='md-editor', placeholder='输入广播内容，可加粗、斜体、标题、列表、链接…', show_count=true) }}
                     </div>
                     <div class="flex flex-wrap gap-2 pt-2">
                         <button id="btn-send" class="btn-primary px-6 py-2.5 rounded-lg font-bold text-sm">
@@ -135,83 +81,77 @@
 {% endblock %}
 
 {% block extra_script %}
+<script src="{{ url_for('static', filename='lib/marked/marked.min.js', v='1') }}"></script>
+<script src="{{ url_for('static', filename='lib/purify/purify.min.js', v='1') }}"></script>
+<script src="{{ url_for('static', filename='js/pages/markdown-editor.js', v='5') }}"></script>
 <script>
 (function() {
     'use strict';
 
     var $ = function(id) { return document.getElementById(id); };
     var subject = $('subject');
-    var editor = $('rich-editor');
     var userCount = $('user-count');
     var confirmOk = $('confirm-ok');
     var confirmCancel = $('confirm-cancel');
-    var richCount = $('rich-count');
 
-    if (!editor) {
-        console.error('广播页面：编辑器未找到');
-        return;
+    // --- 统一编辑器访问（脚本在 DOMContentLoaded 时挂载，故延迟解析） ---
+    function getMre() {
+        var el = document.querySelector('[data-mre]');
+        return el && el.__mre ? el.__mre : null;
     }
 
-    // --- 富文本编辑器字数统计 ---
-    function updateCount() {
-        var text = editor.innerText || editor.textContent || '';
-        richCount.textContent = text.replace(/\s/g, '').length;
+    function getMarkdown() {
+        var mre = getMre();
+        if (mre) {
+            if (mre.mode === 'rich') mre.syncNow();
+            return mre.textarea.value || '';
+        }
+        var ta = $('md-editor');
+        return ta ? (ta.value || '') : '';
     }
-    editor.addEventListener('input', updateCount);
-    updateCount();
 
-    // --- 富文本工具栏 ---
-    document.querySelectorAll('.rich-toolbar [data-cmd]').forEach(function(btn) {
-        btn.addEventListener('mousedown', function(e) { e.preventDefault(); });
-        btn.addEventListener('click', function() {
-            var cmd = btn.getAttribute('data-cmd');
-            var value = btn.getAttribute('data-value') || null;
-            editor.focus();
-            if (cmd === 'createLink') {
-                CustomModal.prompt('请输入链接地址（http/https/mailto，或站内相对路径）：', {
-                    title: '插入链接',
-                    defaultValue: 'https://',
-                    placeholder: 'https://…',
-                    callback: function (url) {
-                        if (!url) return;
-                        url = url.trim();
-                        if (!url) return;
-                        document.execCommand('createLink', false, url);
-                        updateCount();
-                    }
-                });
-                return;
-            }
-            document.execCommand(cmd, false, value);
-            updateCount();
-        });
-    });
+    function markdownToHtml(md) {
+        if (window.MarkdownEditor && MarkdownEditor.markdownToHtml) {
+            try { return MarkdownEditor.markdownToHtml(md); } catch (e) { /* 忽略 */ }
+        }
+        return '';
+    }
+
+    function setMarkdown(md) {
+        md = md || '';
+        var mre = getMre();
+        if (mre) {
+            mre.textarea.value = md;
+            mre.lastSaved = null;
+            if (mre.mode === 'rich') mre.renderRich(md);
+            mre.onMdChange();
+        } else {
+            var ta = $('md-editor');
+            if (ta) ta.value = md;
+        }
+    }
 
     // --- 加载用户数量 ---
     fetch('/api/stats', { headers: { 'Accept': 'application/json' } })
         .then(function(r) { return r.json(); })
-        .then(function(data) {
-            userCount.textContent = data.total_users || 0;
-        })
+        .then(function(data) { userCount.textContent = data.total_users || 0; })
         .catch(function() { userCount.textContent = '未知'; });
 
-    // --- 插入示例（富文本 HTML） ---
+    // --- 插入示例 ---
     $('btn-sample').addEventListener('click', function() {
         subject.value = '【重要】服务器维护通知';
-        editor.innerHTML =
-            '<p>各位玩家好：</p>' +
-            '<p>服务器将于 <b>本周六凌晨 2:00</b> 进行例行维护，预计持续 <b>2 小时</b>。</p>' +
-            '<h2>维护内容</h2>' +
-            '<ul>' +
-            '<li>修复已知 Bug</li>' +
-            '<li>优化数据库性能</li>' +
-            '<li>更新模组版本</li>' +
-            '</ul>' +
-            '<h2>注意事项</h2>' +
-            '<blockquote>维护期间无法登录服务器，请提前保存好游戏进度。</blockquote>' +
-            '<p>如有疑问，请联系管理员。</p>' +
-            '<p>祝游戏愉快！</p>';
-        updateCount();
+        setMarkdown(
+            '各位玩家好：\n\n' +
+            '服务器将于 **本周六凌晨 2:00** 进行例行维护，预计持续 **2 小时**。\n\n' +
+            '## 维护内容\n\n' +
+            '- 修复已知 Bug\n' +
+            '- 优化数据库性能\n' +
+            '- 更新模组版本\n\n' +
+            '## 注意事项\n\n' +
+            '> 维护期间无法登录服务器，请提前保存好游戏进度。\n\n' +
+            '如有疑问，请联系管理员。\n\n' +
+            '祝游戏愉快！'
+        );
     });
 
     // --- 清空 ---
@@ -219,8 +159,9 @@
         CustomModal.confirm('确定要清空所有内容吗？', '确认清空').then(function(ok) {
             if (ok) {
                 subject.value = '';
-                editor.innerHTML = '';
-                updateCount();
+                setMarkdown('');
+                var mre = getMre();
+                if (mre) mre.clearDraft();
             }
         });
     });
@@ -268,7 +209,8 @@
             Toast.show('请输入广播标题', 'error');
             return;
         }
-        if (!(editor.innerText || '').trim()) {
+        var md = getMarkdown();
+        if (!md.replace(/\s/g, '')) {
             Toast.show('请输入广播内容', 'error');
             return;
         }
@@ -285,17 +227,18 @@
 
     confirmOk.addEventListener('click', function() {
         var btn = confirmOk;
+        var md = getMarkdown();
+        var html = markdownToHtml(md) || md;
         btn.disabled = true;
         btn.textContent = '发送中...';
-        var formData = {
-            subject: subject.value.trim(),
-            html: editor.innerHTML,
-            confirm: 'CONFIRM'
-        };
         fetch('/admin/broadcast/send', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-            body: JSON.stringify(formData)
+            body: JSON.stringify({
+                subject: subject.value.trim(),
+                html: html,
+                confirm: 'CONFIRM'
+            })
         })
         .then(function(r) {
             if (!r.ok) {
@@ -310,8 +253,9 @@
             if (data.success) {
                 Toast.show(data.message, 'success');
                 subject.value = '';
-                editor.innerHTML = '';
-                updateCount();
+                setMarkdown('');
+                var mre = getMre();
+                if (mre) mre.clearDraft();
                 loadHistory();
             } else {
                 Toast.show(data.message || '发送失败', 'error');

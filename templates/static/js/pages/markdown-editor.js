@@ -1,6 +1,6 @@
 // 统一 Markdown / 富文本编辑器引擎
 // —— 默认「富文本（所见即所得）」模式，底层数据与保存内容始终是 Markdown；
-//    可无缝切换到「Markdown 源码 + 实时预览」模式。
+//    可无缝切换到「Markdown 源码」模式（单栏，无实时预览）。
 // 依赖：lib/marked/marked.min.js、lib/purify/purify.min.js
 // 结构见 templates/macros/markdown_editor.html（全站唯一实现）
 (function () {
@@ -621,7 +621,6 @@
         this.richWrap = root.querySelector('[data-mre-rich-wrap]');
         this.mdWrap = root.querySelector('[data-mre-md]');
         this.textarea = root.querySelector('textarea');
-        this.preview = root.querySelector('[data-md-preview]');
         this.counts = root.querySelectorAll('[data-md-count]');
         this.panels = root.querySelectorAll('[data-mre-panel]');
         // 链接标签页表单
@@ -641,6 +640,16 @@
         this.tableEl = null;
         // 「插入链接」按钮点击后固定显示链接标签页（即使光标不在链接中）
         this.linkPinned = false;
+        // 本地静默草稿（localStorage，仅存本机，不上传）
+        this.autosave = root.getAttribute('data-mre-autosave') !== 'false';
+        this.editorId = root.getAttribute('data-editor-id') ||
+            (this.textarea && this.textarea.id) || 'md-editor';
+        this.storageKey = 'mre-draft::' + this.editorId + '::' + location.pathname;
+        this.draftTimer = null;
+        this.lastSaved = null;
+        // 性能：工具栏刷新合并到一帧、选区去重
+        this._toolbarRaf = null;
+        this._selState = null;
     }
 
     Editor.prototype.init = function () {
@@ -653,13 +662,14 @@
         } catch (e) { /* 忽略 */ }
 
         ensureMarked();
+        this.restoreDraft();
         this.renderRich(this.textarea.value || '');
         this.applyMode('rich');
 
         // 编辑区输入
-        this.rich.addEventListener('input', function () { self.scheduleSync(); self.updateToolbar(); self.refreshActiveTable(); });
-        this.rich.addEventListener('keyup', function () { self.updateToolbar(); });
-        this.rich.addEventListener('mouseup', function () { self.linkPinned = false; self.updateToolbar(); self.refreshActiveTable(); });
+        this.rich.addEventListener('input', function () { self.scheduleSync(); self.scheduleToolbar(); });
+        this.rich.addEventListener('keyup', function () { self.scheduleToolbar(); });
+        this.rich.addEventListener('mouseup', function () { self.linkPinned = false; self.scheduleToolbar(); });
         this.rich.addEventListener('blur', function () { self.syncNow(); });
         this.rich.addEventListener('change', function (e) {
             var t = e.target;
@@ -676,11 +686,11 @@
         });
 
         // Markdown 源码区
-        this.textarea.addEventListener('input', function () { self.onMdChange(); });
-        this.textarea.addEventListener('keyup', function () { self.updateToolbar(); });
-        this.textarea.addEventListener('click', function () { self.linkPinned = false; self.updateToolbar(); });
-        this.textarea.addEventListener('mouseup', function () { self.linkPinned = false; self.updateToolbar(); });
-        this.textarea.addEventListener('select', function () { self.updateToolbar(); });
+        this.textarea.addEventListener('input', function () { self.onMdChange(); self.scheduleToolbar(); });
+        this.textarea.addEventListener('keyup', function () { self.scheduleToolbar(); });
+        this.textarea.addEventListener('click', function () { self.linkPinned = false; self.scheduleToolbar(); });
+        this.textarea.addEventListener('mouseup', function () { self.linkPinned = false; self.scheduleToolbar(); });
+        this.textarea.addEventListener('select', function () { self.scheduleToolbar(); });
 
         // 标签页
         this.root.querySelectorAll('[data-mre-tab]').forEach(function (btn) {
@@ -714,25 +724,94 @@
             });
         });
 
-        // 全局选区变化
+        // 全局选区变化：浏览器会高频触发，先去重再合并到同一帧刷新，避免卡顿
         document.addEventListener('selectionchange', function () {
-            if (self.mode === 'rich') { self.updateToolbar(); self.refreshActiveTable(); }
-            else self.updateToolbar();
+            if (!self.selectionChanged()) return;
+            self.scheduleToolbar();
         });
 
         // 滚动 / 尺寸变化时刷新拖拽手柄
-        if (this.scroll) this.scroll.addEventListener('scroll', function () { self.updateGrips(); });
-        window.addEventListener('resize', function () { self.updateGrips(); });
+        if (this.scroll) this.scroll.addEventListener('scroll', function () { self.positionGrips(); });
+        window.addEventListener('resize', function () { self.positionGrips(); });
 
-        // 表单提交前强制把富文本同步为 Markdown
+        // 表单提交前强制把富文本同步为 Markdown，并清除本地草稿
         var form = this.root.closest('form');
         if (form) {
-            form.addEventListener('submit', function () { self.syncNow(); }, true);
+            form.addEventListener('submit', function () { self.syncNow(); self.clearDraft(); }, true);
         }
 
+        this.lastSaved = this.textarea.value || '';
         this.onMdChange();
         this.updateToolbar();
         this.refreshIcons();
+    };
+
+    // 选区签名去重：只有真正的选区变化才触发工具栏刷新
+    Editor.prototype.selectionChanged = function () {
+        if (this.mode === 'rich') {
+            var sel = window.getSelection();
+            var n = sel ? sel.anchorNode : null;
+            var o = sel ? sel.anchorOffset : -1;
+            var f = sel ? sel.focusNode : null;
+            var fo = sel ? sel.focusOffset : -1;
+            var s = this._selState;
+            if (s && s.mode === 'rich' && s.n === n && s.o === o && s.f === f && s.fo === fo) return false;
+            this._selState = { mode: 'rich', n: n, o: o, f: f, fo: fo };
+            return true;
+        }
+        var st = this.textarea.selectionStart, en = this.textarea.selectionEnd;
+        var s2 = this._selState;
+        if (s2 && s2.mode === 'markdown' && s2.st === st && s2.en === en) return false;
+        this._selState = { mode: 'markdown', st: st, en: en };
+        return true;
+    };
+
+    // 把高频事件（选区 / 输入）触发的工具栏刷新合并到一帧内执行，避免主线程阻塞
+    Editor.prototype.scheduleToolbar = function () {
+        var self = this;
+        if (this._toolbarRaf) return;
+        var run = function () {
+            self._toolbarRaf = null;
+            if (self.mode === 'rich') self.refreshActiveTable();
+            self.updateToolbar();
+        };
+        if (window.requestAnimationFrame) this._toolbarRaf = window.requestAnimationFrame(run);
+        else this._toolbarRaf = setTimeout(run, 16);
+    };
+
+    /* ---------- 本地静默草稿（localStorage，不上传） ---------- */
+
+    Editor.prototype.restoreDraft = function () {
+        if (!this.autosave) return;
+        var saved = null;
+        try { saved = window.localStorage.getItem(this.storageKey); } catch (e) { return; }
+        if (saved == null) return;
+        if (saved === (this.textarea.value || '')) return;
+        this.textarea.value = saved;
+    };
+
+    Editor.prototype.scheduleDraftSave = function () {
+        if (!this.autosave) return;
+        var self = this;
+        clearTimeout(this.draftTimer);
+        this.draftTimer = setTimeout(function () { self.saveDraft(); }, 400);
+    };
+
+    Editor.prototype.saveDraft = function () {
+        if (!this.autosave) return;
+        var val = this.textarea.value || '';
+        if (val === this.lastSaved) return;
+        this.lastSaved = val;
+        try {
+            if (val) window.localStorage.setItem(this.storageKey, val);
+            else window.localStorage.removeItem(this.storageKey);
+        } catch (e) { /* 隐私模式 / 超限时忽略 */ }
+    };
+
+    Editor.prototype.clearDraft = function () {
+        if (!this.autosave) return;
+        clearTimeout(this.draftTimer);
+        try { window.localStorage.removeItem(this.storageKey); } catch (e) { /* 忽略 */ }
     };
 
     Editor.prototype.refreshIcons = function () {
@@ -800,8 +879,9 @@
 
         var linkBtn = this.root.querySelector('[data-mre-tab="link"]');
         var tableBtn = this.root.querySelector('[data-mre-tab="table"]');
-        if (linkBtn) linkBtn.hidden = !linkVisible;
-        if (tableBtn) tableBtn.hidden = !tableVisible;
+        // 仅在可见性真正变化时才写 DOM，避免高频刷新时反复触发样式/布局计算
+        if (linkBtn && linkBtn.hidden !== !linkVisible) linkBtn.hidden = !linkVisible;
+        if (tableBtn && tableBtn.hidden !== !tableVisible) tableBtn.hidden = !tableVisible;
         this._prevLinkVisible = linkVisible;
         this._prevTableVisible = tableVisible;
 
@@ -869,22 +949,18 @@
         this.textarea.value = md;
         this.updateCount();
         this.updateGrips();
+        this.scheduleDraftSave();
     };
 
     Editor.prototype.onMdChange = function () {
         this.updateCount();
-        this.updatePreview();
         this.updateGrips();
+        this.scheduleDraftSave();
     };
 
     Editor.prototype.updateCount = function () {
         var n = (this.textarea.value || '').length;
         for (var i = 0; i < this.counts.length; i++) this.counts[i].textContent = n + ' 字';
-    };
-
-    Editor.prototype.updatePreview = function () {
-        if (!this.preview) return;
-        this.preview.innerHTML = mdToHtml(this.textarea.value || '');
     };
 
     /* ---------- 光标工具 ---------- */
@@ -1009,7 +1085,16 @@
         } else {
             caret = focusedMd;
             sel = focusedMd && this.textarea.selectionStart !== this.textarea.selectionEnd;
-            inTable = !!readMdTableAt(this.textarea.value, this.textarea.selectionStart);
+            // 仅当光标所在行含「|」时才做整篇表格解析，避免大文档下每次刷新都全量扫描
+            inTable = false;
+            if (caret) {
+                var v = this.textarea.value || '';
+                var p = this.textarea.selectionStart;
+                var ls = v.lastIndexOf('\n', p - 1) + 1;
+                var le = v.indexOf('\n', p);
+                if (le === -1) le = v.length;
+                if (v.slice(ls, le).indexOf('|') !== -1) inTable = !!readMdTableAt(v, p);
+            }
             this.tableEl = inTable ? {} : null;
             this.mdLink = mdLinkAt(this.textarea.value, this.textarea.selectionStart);
         }
@@ -1397,7 +1482,7 @@
     /* ---------- 列宽拖拽 ---------- */
 
     Editor.prototype.setActiveTable = function (table) {
-        if (this.activeTable === table) { this.updateGrips(); return; }
+        if (this.activeTable === table) { this.positionGrips(); return; }
         this.activeTable = table;
         this.updateGrips();
     };
@@ -1406,7 +1491,7 @@
         var cell = this.currentCell();
         if (cell) {
             var table = closestTag(cell, 'TABLE');
-            if (table) { this.activeTable = table; this.updateGrips(); }
+            if (table) this.setActiveTable(table);
         }
     };
 

@@ -3,9 +3,11 @@
    设计要点：
      - 默认「富文本（所见即所得）」模式，底层数据始终是 Markdown；
        可视化界面只是渲染层，保存到数据库的永远是 Markdown 文本。
-     - 可无缝切换到「Markdown 源码 + 实时预览」模式，切换保留全部内容。
-     - 顶部工具栏按 4 个标签页分类（基础 / 段落 / 插入 / 表格）。
+     - 可无缝切换到「Markdown 源码」模式（单栏，无实时预览），切换保留全部内容。
+     - 顶部工具栏按 3 个常驻标签页分类（基础 / 段落 / 插入），另有
+       「链接」「表格」两个上下文标签页（仅在光标位于链接 / 表格时出现）。
      - 按钮在「未满足可用条件」时置灰不可点：文字类需选中文字、表格类需光标在表格中。
+     - 内容实时静默保存到浏览器 localStorage（本地，不上传），刷新 / 误关闭后可恢复。
 
    用法：
        {% from "macros/markdown_editor.html" import markdown_editor %}
@@ -14,7 +16,7 @@
    并在页面末尾引入共享脚本（缺一不可）：
        <script src="{{ url_for('static', filename='lib/marked/marked.min.js', v='1') }}"></script>
        <script src="{{ url_for('static', filename='lib/purify/purify.min.js', v='1') }}"></script>
-       <script src="{{ url_for('static', filename='js/pages/markdown-editor.js', v='3') }}"></script>
+       <script src="{{ url_for('static', filename='js/pages/markdown-editor.js', v='5') }}"></script>
 
    可选参数：
        name          - 表单提交字段名（textarea 的 name）
@@ -22,6 +24,7 @@
        editor_id     - textarea 的 id（默认 md-editor）
        placeholder   - 空内容占位提示
        show_count    - 是否显示实时字数统计
+       autosave      - 是否启用本地静默草稿（默认 true）
        toolbar_extra - 额外工具栏按钮 HTML（追加到「插入」标签页，|safe 注入）
        extra_attrs   - 添加到 textarea 的额外属性（如 required）
 #
@@ -29,7 +32,7 @@
 #   只有当光标/选区位于链接内、表格内（或刚点击了「插入链接」）时才会出现，
 #   离开对应上下文后自动隐藏并切回「基础」标签页。
 #}
-{% macro markdown_editor(name='', value='', editor_id='md-editor', placeholder='', show_count=false, toolbar_extra='', extra_attrs='') %}
+{% macro markdown_editor(name='', value='', editor_id='md-editor', placeholder='', show_count=false, autosave=true, toolbar_extra='', extra_attrs='') %}
 <style>
 /* ================= 统一编辑器容器 ================= */
 .mre {
@@ -198,20 +201,16 @@ body.mre-resizing, body.mre-resizing * { cursor: col-resize !important; user-sel
 .mre-overlay.is-on .mre-grip { opacity: 1; }
 .mre-grip:hover { background: var(--accent-blue); }
 
-/* ---------- Markdown 源码模式（沿用原双栏样式） ---------- */
+/* ---------- Markdown 源码模式（单栏，无实时预览） ---------- */
 .markdown-editor {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
     grid-template-rows: 1fr;
-    gap: 1rem;
     min-height: 500px;
     max-height: 70vh;
     overflow: hidden;
 }
-@media (max-width: 1024px) {
-    .markdown-editor { grid-template-columns: 1fr; grid-template-rows: auto; max-height: none; }
-}
-.editor-pane, .preview-pane {
+.editor-pane {
     background: rgba(255, 255, 255, 0.6);
     backdrop-filter: blur(22px) saturate(120%);
     -webkit-backdrop-filter: blur(22px) saturate(120%);
@@ -237,7 +236,7 @@ body.mre-resizing, body.mre-resizing * { cursor: col-resize !important; user-sel
     outline: none;
     overflow-y: auto;
 }
-.preview-pane .pane-header, .editor-pane .pane-header {
+.editor-pane .pane-header {
     padding: 0.5rem 1rem;
     background: rgba(255, 255, 255, 0.5);
     border-bottom: 1px solid var(--border-subtle);
@@ -248,14 +247,8 @@ body.mre-resizing, body.mre-resizing * { cursor: col-resize !important; user-sel
     gap: 0.5rem;
     flex-shrink: 0;
 }
-.preview-pane .pane-body {
-    flex: 1;
-    padding: 1rem;
-    overflow-y: auto;
-    min-height: 0;
-}
 
-/* ---------- 正文排版（编辑器预览与富文本编辑区共用） ---------- */
+/* ---------- 正文排版（富文本编辑区） ---------- */
 .prose-docs h1 { font-size: 1.75rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border-card); }
 .prose-docs h2 { font-size: 1.4rem; font-weight: 600; color: var(--text-primary); margin-top: 2rem; margin-bottom: 0.75rem; }
 .prose-docs h3 { font-size: 1.15rem; font-weight: 600; color: var(--accent-indigo); margin-top: 1.5rem; margin-bottom: 0.5rem; }
@@ -324,7 +317,7 @@ body.mre-resizing, body.mre-resizing * { cursor: col-resize !important; user-sel
 }
 </style>
 
-<div class="mre" data-mre data-editor-id="{{ editor_id }}">
+<div class="mre" data-mre data-editor-id="{{ editor_id }}" data-mre-autosave="{{ 'true' if autosave else 'false' }}">
 
     {# ---------- 顶部：标签页分类 + 模式切换 ---------- #}
     <div class="mre-tabs" role="tablist">
@@ -423,22 +416,18 @@ body.mre-resizing, body.mre-resizing * { cursor: col-resize !important; user-sel
         {% endif %}
     </div>
 
-    {# ---------- 模式 2：Markdown 源码 + 实时预览 ---------- #}
+    {# ---------- 模式 2：Markdown 源码（单栏，无实时预览） ---------- #}
     <div class="markdown-editor mre-md" data-mre-md hidden>
         <div class="editor-pane">
-            <div class="pane-header"><i data-lucide="code" class="w-3.5 h-3.5"></i> Markdown 源码</div>
+            <div class="pane-header">
+                <i data-lucide="code" class="w-3.5 h-3.5"></i> Markdown 源码
+                {% if show_count %}<span class="ml-auto" data-md-count="{{ editor_id }}">0 字</span>{% endif %}
+            </div>
             {% if name %}
             <textarea name="{{ name }}" id="{{ editor_id }}" placeholder="{{ placeholder }}" {{ extra_attrs | safe }}>{{ value }}</textarea>
             {% else %}
             <textarea id="{{ editor_id }}" placeholder="{{ placeholder }}" {{ extra_attrs | safe }}>{{ value }}</textarea>
             {% endif %}
-        </div>
-        <div class="preview-pane">
-            <div class="pane-header">
-                <i data-lucide="eye" class="w-3.5 h-3.5"></i> 实时预览
-                {% if show_count %}<span class="ml-auto text-cream/30" data-md-count="{{ editor_id }}">0 字</span>{% endif %}
-            </div>
-            <div class="pane-body prose-docs" data-md-preview="{{ editor_id }}"></div>
         </div>
     </div>
 </div>

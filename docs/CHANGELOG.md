@@ -4,6 +4,14 @@
 
 ### 变更
 
+* **统一编辑器：移除 Markdown 预览 + 本地静默草稿 + 修复卡死 + 广播邮件改用统一编辑器**（`templates/macros/markdown_editor.html`、`templates/static/js/pages/markdown-editor.js`、`templates/admin/broadcast.html`、`templates/guides/form.html`、`templates/admin/guide_form.html`）：
+  * **移除 Markdown 实时预览**：Markdown 模式改为单栏纯源码编辑（删除 `.preview-pane` 面板与 `updatePreview` 方法），不再做 `mdToHtml` 重渲染，切换模式更轻快。
+  * **本地静默草稿**：编辑内容防抖（400ms）写入浏览器 `localStorage`，键为 `mre-draft::<editor_id>::<pathname>`；**仅存本机、不上传云端**；刷新 / 误关闭后自动恢复；表单提交时清除草稿，避免旧草稿覆盖服务端新内容。
+  * **修复编辑器极易卡死**：`selectionchange` 高频触发此前每次都做全量工具栏刷新 + 表格解析 + 浮层 DOM 重建（插入链接后切到 Markdown 模式时尤甚），主线程被阻塞。现改为：选区签名去重 + `requestAnimationFrame` 合并到一帧刷新；上下文标签页可见性只在真正变化时写 DOM；`updateGrips` 在表格未变时只重定位、不重建；Markdown 模式表格检测先按「当前行是否含 `|`」预判，避免整篇 `split('\n')` 全量扫描。
+  * **广播邮件改用统一编辑器**：`admin/broadcast.html` 删除自建 contenteditable 编辑器，改用 `markdown_editor` 宏；发送时取编辑器 Markdown 经 `MarkdownEditor.markdownToHtml()` 转 HTML 再交后端白名单清洗，示例 / 清空 / 草稿行为与全站一致。
+  * **版本号**：`markdown-editor.js` 引用由 `v='3'` 统一 bump 至 `v='5'`。
+  * **验证**：`node --check` 通过、全部模板编译与渲染通过、pytest 204 项全部通过。
+
 * **统一编辑器交互优化 + 新增统一标签输入框 + 前端资源进一步按需加载**（`templates/macros/markdown_editor.html`、`templates/static/js/pages/markdown-editor.js`、`templates/macros/forms.html`、`templates/static/js/core/base.js`、`templates/static/css/base.css`、`templates/base.html` 等）：
   * **编辑器界面精简**：删除编辑器下方的「所见即所得」提示文案；删除「插入图片」功能（工具栏「插入」页仅保留链接 / 代码块 / 表格）。
   * **链接改为上下文标签页**：点击链接按钮或光标进入已有链接时，工具栏自动出现「链接」标签页并切过去，可设置链接地址 / 显示文字 / 悬停标题 / 新窗口打开，并提供独立的「取消链接」（仅移除链接、保留文字）；离开链接上下文后该标签页自动隐藏。**未选中文字时点击链接按钮会直接插入默认文字**（无需先选中文字）。
