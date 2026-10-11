@@ -581,37 +581,72 @@ body::after {
 .password-strength[data-level="4"] .password-strength-label { color: #5b21b6; }
 @media (max-width: 420px) { .password-strength-meta { flex-direction: column; gap: 3px; } .password-strength-hint { text-align: left; } }
 
-/* 导航栏 - 白色磨砂玻璃效果 */
-.glass-nav { position: sticky; top: 0; z-index: 40; background: transparent; transition: padding var(--transition-bounce); }
+/* 导航栏 - 白色磨砂玻璃效果
+   —— 性能要点：外层容器几何尺寸恒定，「收缩」动画全部交给内层的
+   transform / width / 透明度完成。
+   原实现同时过渡 width + box-shadow + background，且外层 padding 也在过渡：
+   每帧都会「整页重排 + 大范围阴影与渐变重绘 + backdrop 重新模糊」三件事叠加，
+   于是高性能电脑和手机都会掉帧。 */
+.glass-nav { position: sticky; top: 0; z-index: 40; background: transparent; padding: 14px 0 0; pointer-events: none; }
 .glass-nav-inner {
     position: relative; width: 100%; margin-left: 50%;
-    transform: translate3d(-50%,0,0);
-    -webkit-transform: translate3d(-50%,0,0);
-    will-change: transform, backdrop-filter;
+    /* 折叠态：整体上移 14px 贴住页面顶端；收缩态回到 0 悬空。
+       位移交给 transform（只走合成器），不再靠外层 padding 过渡，避免整页重排。 */
+    transform: translate3d(-50%, -14px, 0);
+    -webkit-transform: translate3d(-50%, -14px, 0);
+    /* backdrop-filter 不写进 will-change：它属于「需要重绘」的属性，
+       写进去会诱导浏览器频繁重建图层，而不是复用合成层。 */
+    will-change: transform;
     backface-visibility: hidden;
-    background: linear-gradient(180deg, rgba(255,255,255,0.9) 0%, rgba(246,249,253,0.86) 100%);
     backdrop-filter: blur(40px) saturate(140%);
     -webkit-backdrop-filter: blur(40px) saturate(140%);
     border-bottom: 1px solid var(--border-card);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.7), inset 0 -1px 0 rgba(15,23,42,0.05), 0 4px 20px rgba(15,23,42,0.06);
-    transition: width var(--transition-bounce), border-radius var(--transition-bounce), border-color var(--transition-normal), box-shadow var(--transition-bounce), background var(--transition-normal);
-}
-.glass-nav-inner::before {
-    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 1px;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.9) 30%, rgba(255,255,255,1) 50%, rgba(255,255,255,0.9) 70%, transparent);
-    pointer-events: none;
-}
-.glass-nav.scrolled { padding: 14px 16px 0; pointer-events: none; }
-.glass-nav.scrolled .glass-nav-inner {
-    width: min(68rem, calc(100% - 2rem));
-    border-radius: 999px; border: 1px solid var(--border-card);
-    background: linear-gradient(180deg, rgba(255,255,255,0.97) 0%, rgba(248,250,254,0.97) 100%);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.8), 0 14px 36px rgba(15,23,42,0.1), 0 4px 14px rgba(15,23,42,0.06);
     pointer-events: auto;
+    /* 只过渡 transform / 形状属性；背景与阴影改由两层伪元素做 opacity 交叉淡化 */
+    transition: transform var(--transition-bounce), width var(--transition-bounce), border-radius var(--transition-bounce), border-color var(--transition-normal);
 }
+/* 导航内容容器：置于皮肤层之上（皮肤 z-index:0，内容 z-index:1）。
+   刻意不用负 z-index——部分浏览器在 backdrop-filter 父级下会把它压到模糊层之后。 */
+.glass-nav-content { position: relative; z-index: 1; }
+/* 折叠态皮肤：柔和渐变 + 轻阴影 */
+.glass-nav-inner::after {
+    content: ''; position: absolute; inset: 0; z-index: 0;
+    border-radius: inherit; pointer-events: none;
+    background:
+        linear-gradient(90deg, transparent, rgba(255,255,255,0.9) 30%, rgba(255,255,255,1) 50%, rgba(255,255,255,0.9) 70%, transparent) top / 100% 1px no-repeat,
+        linear-gradient(180deg, rgba(255,255,255,0.9) 0%, rgba(246,249,253,0.86) 100%);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.7), inset 0 -1px 0 rgba(15,23,42,0.05), 0 4px 20px rgba(15,23,42,0.06);
+    opacity: 1;
+    transition: opacity var(--transition-bounce);
+    will-change: opacity;
+}
+/* 收缩态皮肤：更亮渐变 + 更大悬浮阴影。
+   两层叠加、只淡化 opacity —— opacity 走合成器，不触发重排与重绘。 */
+.glass-nav-inner::before {
+    content: ''; position: absolute; inset: 0; z-index: 0;
+    border-radius: inherit; pointer-events: none;
+    background:
+        linear-gradient(90deg, transparent, rgba(255,255,255,0.9) 30%, rgba(255,255,255,1) 50%, rgba(255,255,255,0.9) 70%, transparent) top / 100% 1px no-repeat,
+        linear-gradient(180deg, rgba(255,255,255,0.97) 0%, rgba(248,250,254,0.97) 100%);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.8), 0 14px 36px rgba(15,23,42,0.1), 0 4px 14px rgba(15,23,42,0.06);
+    opacity: 0;
+    transition: opacity var(--transition-bounce);
+    will-change: opacity;
+}
+.glass-nav.scrolled .glass-nav-inner {
+    transform: translate3d(-50%, 0, 0);
+    -webkit-transform: translate3d(-50%, 0, 0);
+    /* 外层左右不再有 padding，故这里用 -4rem 还原「距视口左右各 32px」的原观感 */
+    width: min(68rem, calc(100% - 4rem));
+    border-radius: 999px; border: 1px solid var(--border-card);
+}
+.glass-nav.scrolled .glass-nav-inner::before { opacity: 1; }
+.glass-nav.scrolled .glass-nav-inner::after { opacity: 0; }
 .glass-nav.scrolled .glass-nav-inner a:hover { text-shadow: 0 0 12px rgba(2,132,199,0.25); }
 .glass-nav.scrolled .glass-nav-inner .border-t { border-top-color: var(--border-subtle); }
-@media (prefers-reduced-motion: reduce) { .glass-nav, .glass-nav-inner { transition: none !important; } }
+@media (prefers-reduced-motion: reduce) {
+    .glass-nav-inner, .glass-nav-inner::before, .glass-nav-inner::after { transition: none !important; }
+}
 
 /* 响应式主导航：大屏端为「首页 / 导航 / 互动 / 账号」，后三项为悬停下拉；小屏端统一进入侧栏。 */
 .desktop-nav {

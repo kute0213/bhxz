@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block content %}
+<p>{{ greeting }}</p>
+<p>您发布的公共建筑：</p>
+<div class="mail-highlight">{{ building_title }}</div>
+{% if approved %}
+<div class="mail-status mail-status-success">
+    <span class="mail-status-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+    </span>
+    <div class="mail-status-text">
+        <div class="mail-status-title">审核通过</div>
+        <div class="mail-status-desc">该公共建筑已发布，所有玩家均可在公共建筑板块查看和收藏。</div>
+    </div>
+</div>
+{% else %}
+<div class="mail-status mail-status-fail">
+    <span class="mail-status-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+    </span>
+    <div class="mail-status-text">
+        <div class="mail-status-title">审核未通过</div>
+        <div class="mail-status-desc">{% if reason %}拒绝原因：{{ reason }}{% else %}您的公共建筑未通过审核。{% endif %}</div>
+    </div>
+</div>
+<p class="mail-muted">您可以修改后重新提交。</p>
+{% endif %}
+{% endblock %}

@@ -37,6 +37,19 @@ def _now():
     return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
 
+def notify_admins_pending_music(title, username):
+    """异步通知所有管理员有新的音频公开申请待审核（不阻塞上传线程）。"""
+    from services.mail import notify_admins, review_pending as build_pending_html
+    subject = f'[音频审核] {username} 申请公开「{title}」'
+    body = (
+        f'管理员您好，\n\n'
+        f'用户 {username} 提交了一条大喇叭音频公开申请「{title}」。\n'
+        f'请尽快前往管理后台审核。\n'
+    )
+    html = build_pending_html(title, username, '一条大喇叭音频公开申请')
+    notify_admins(subject, body, html)
+
+
 # 内存中的上传任务进度表：task_id -> {task_id, status, percent, message, ...}
 _upload_tasks = {}
 _upload_tasks_lock = threading.Lock()
@@ -420,6 +433,8 @@ def _run_upload_task(task_id, user_id, username, title, is_public,
 
         log('INFO', 'Music', '上传大喇叭音频', music_id=music_id, user_id=user_id,
             username=username, title=title, status=status, tags=parse_tags(tags), ip=ip_address)
+        if is_public:
+            notify_admins_pending_music(title, username)
         _set_task(task_id, status='done', percent=100, message='转码完成', music_id=music_id)
     except Exception as e:
         shutil.rmtree(work_dir, ignore_errors=True)

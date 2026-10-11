@@ -679,7 +679,11 @@
             var t = closestTag(e.target, 'TABLE');
             if (t && self.rich.contains(t)) self.setActiveTable(t);
         });
-        this.rich.addEventListener('mouseleave', function () { self.setActiveTable(null); });
+        // 鼠标移出整个富文本区域（含手柄浮层）才清除拖拽手柄。
+        // 注意：不能绑定在 this.rich 上——手柄浮层是 rich 的兄弟节点，
+        // 鼠标移到手柄上会触发 rich 的 mouseleave → 手柄被清空 → 又重新出现，造成闪烁。
+        var leaveTarget = this.richWrap || this.rich;
+        leaveTarget.addEventListener('mouseleave', function () { self.setActiveTable(null); });
         this.rich.addEventListener('mousedown', function (e) {
             self.linkPinned = false;
             if (!closestTag(e.target, 'TABLE')) self.setActiveTable(null);
@@ -1038,15 +1042,21 @@
     /* ---------- 工具栏可用态 / 激活态 ---------- */
 
     // 在 Markdown 源码中定位光标所在的链接 [文字](地址 "标题")
+    // 向前查找上一个 '['：注意 lastIndexOf 在 fromIndex < 0 时会从 0 开始匹配，
+    // 若首个字符恰为 '[' 会让游标卡在 0 造成死循环，故此处显式处理 0 的情况。
+    function prevOpenBracket(v, open) {
+        return open > 0 ? v.lastIndexOf('[', open - 1) : -1;
+    }
+
     function mdLinkAt(text, pos) {
         var v = String(text == null ? '' : text);
         var open = v.lastIndexOf('[', pos);
         while (open !== -1) {
-            if (open > 0 && v.charAt(open - 1) === '!') { open = v.lastIndexOf('[', open - 1); continue; }
+            if (open > 0 && v.charAt(open - 1) === '!') { open = prevOpenBracket(v, open); continue; }
             var sep = v.indexOf('](', open);
-            if (sep === -1) { open = v.lastIndexOf('[', open - 1); continue; }
+            if (sep === -1) { open = prevOpenBracket(v, open); continue; }
             var end = v.indexOf(')', sep + 2);
-            if (end === -1) { open = v.lastIndexOf('[', open - 1); continue; }
+            if (end === -1) { open = prevOpenBracket(v, open); continue; }
             if (sep <= pos && pos <= end) {
                 var inner = v.slice(sep + 2, end);
                 var title = '', url = inner;
@@ -1054,7 +1064,7 @@
                 if (tm) { url = inner.slice(0, tm.index).trim(); title = tm[1]; }
                 return { start: open, end: end + 1, text: v.slice(open + 1, sep), url: url, title: title };
             }
-            open = v.lastIndexOf('[', open - 1);
+            open = prevOpenBracket(v, open);
         }
         return null;
     }
@@ -1497,17 +1507,36 @@
 
     Editor.prototype.updateGrips = function () {
         if (!this.overlay) return;
-        this.overlay.innerHTML = '';
-        if (this.mode !== 'rich') { this.overlay.classList.remove('is-on'); return; }
+        if (this.mode !== 'rich') {
+            if (this.overlay.classList.contains('is-on')) this.overlay.classList.remove('is-on');
+            this._gripTable = null;
+            return;
+        }
         var table = this.activeTable;
         if (!table || !this.rich.contains(table)) {
-            this.overlay.classList.remove('is-on');
+            if (this.overlay.classList.contains('is-on')) this.overlay.classList.remove('is-on');
+            if (this.overlay.firstChild) this.overlay.innerHTML = '';
             this.activeTable = null;
+            this._gripTable = null;
             return;
         }
         var n = columnCount(table);
-        if (n < 2 || !table.rows.length) { this.overlay.classList.remove('is-on'); return; }
+        if (n < 2 || !table.rows.length) {
+            if (this.overlay.classList.contains('is-on')) this.overlay.classList.remove('is-on');
+            this._gripTable = null;
+            return;
+        }
 
+        // 表格与列数都没变时（如鼠标在表格内移动触发的高频 mouseover），
+        // 只重定位、不重建手柄节点，避免节点反复增删导致手柄闪烁。
+        var existing = this.overlay.querySelectorAll('.mre-grip').length;
+        if (this._gripTable === table && existing === n - 1) {
+            this.overlay.classList.add('is-on');
+            this.positionGrips();
+            return;
+        }
+
+        this.overlay.innerHTML = '';
         // 每列右边界放一个拖拽手柄（最后一列除外）
         for (var i = 0; i < n - 1; i++) {
             var grip = document.createElement('div');
@@ -1516,6 +1545,7 @@
             this.bindGrip(grip, table, i);
             this.overlay.appendChild(grip);
         }
+        this._gripTable = table;
         this.overlay.classList.add('is-on');
         this.positionGrips();
     };

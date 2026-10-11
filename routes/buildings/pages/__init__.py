@@ -12,6 +12,19 @@ from core.shared.ip import get_client_ip
 from routes.buildings import buildings_bp
 from routes.community.helpers import _respond, _is_ajax
 from services import buildings as buildings_service
+from services.mail import notify_admins, review_pending as build_pending_html
+
+
+def _notify_admins_new_building(title, author_name):
+    """异步通知所有管理员有新公共建筑待审核（不阻塞请求）。"""
+    subject = f'[建筑审核] {author_name} 发布了「{title}」'
+    body = (
+        f'管理员您好，\n\n'
+        f'用户 {author_name} 提交了一个公共建筑「{title}」。\n'
+        f'请尽快前往管理后台审核。\n'
+    )
+    html = build_pending_html(title, author_name, '一个公共建筑')
+    notify_admins(subject, body, html)
 
 
 @buildings_bp.route('/buildings')
@@ -32,39 +45,13 @@ def building_list():
     query = (request.args.get('q') or '').strip()
     active_tag = (request.args.get('tag') or '').strip()
 
-    if fav_mode:
-        items, has_more = buildings_service.list_favorite_buildings(
-            user_id=user['id'],
-            search=query,
-            page=1,
-        )
-    else:
-        items, has_more = buildings_service.list_buildings(
-            search=query,
-            tag=active_tag,
-            page=1,
-            author_id=user['id'] if user else None,
-            my_mode=my_mode,
-        )
-
-    favorite_ids = set()
-    if fav_mode:
-        favorite_ids = {b['id'] for b in items}
-    elif user:
-        favorite_ids = buildings_service.get_favorite_ids(
-            user['id'], [b['id'] for b in items]
-        )
-
     return render_page(
         'buildings/index.html',
-        buildings=items,
-        has_more=has_more,
         my_mode=my_mode,
         fav_mode=fav_mode,
         search_query=query,
         active_tag=active_tag,
         all_tags=buildings_service.get_all_tags(),
-        favorite_ids=favorite_ids,
     )
 
 
@@ -129,6 +116,7 @@ def building_create():
                 (title, warp_name, description, usage_info, notes, tags, user['id'], now, now),
             )
             conn.commit()
+            _notify_admins_new_building(title, user['username'])
             return _respond('公共建筑已提交，等待管理员审核', 'success',
                             redirect_to=url_for('buildings.building_list', my=1))
         except Exception as e:

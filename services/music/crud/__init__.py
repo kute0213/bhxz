@@ -10,6 +10,22 @@ from core.db import get_db
 from core.system.logger import log
 from services.music.constants import STATUS_PRIVATE, STATUS_PENDING, STATUS_PUBLIC
 from services.music.queries import get_music, _music_dir, parse_tags
+from services.music.upload import notify_admins_pending_music
+
+
+def _username_of(user_id):
+    """查询用户名（用于审核通知），查询失败返回空串。"""
+    try:
+        conn = get_db()
+        try:
+            row = conn.execute(
+                "SELECT username FROM users WHERE id = ?", (user_id,)
+            ).fetchone()
+        finally:
+            conn.close()
+    except Exception:
+        return ''
+    return row['username'] if row else ''
 
 
 def delete_music(music_id, user_id, is_admin, ip_address):
@@ -95,6 +111,7 @@ def toggle_music_public(music_id, user_id, is_admin, ip_address):
         status=new_status, ip=ip_address)
     if new_status == STATUS_PRIVATE:
         return True, '已转为私有，仅自己可见'
+    notify_admins_pending_music(music.get('title') or '', _username_of(music['user_id']))
     return True, '已申请公开，审核通过后将展示在游戏内大喇叭音频列表'
 
 

@@ -42,7 +42,7 @@
     <!-- 入场动画见 base.css：纯 CSS animation，不依赖 JS，避免白屏 -->
     <noscript><style>.page-content{opacity:1!important;transform:none!important}</style></noscript>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/tailwind.css', v='4') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css', v='47') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css', v='48') }}">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <script>
     // 全站 AJAX CSRF 防护：自动为所有 fetch/XHR 请求添加 X-CSRF-Token 请求头
@@ -301,7 +301,7 @@
     <!-- 主导航栏 -->
     <nav class="glass-nav sticky top-0 z-40" id="glass-nav">
         <div class="glass-nav-inner">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="glass-nav-content max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div class="flex items-center justify-between h-16 md:h-20">
                 <!-- Logo 区域 -->
                 <a href="{{ url_for('main.home') }}" class="flex items-center gap-2 sm:gap-3 flex-shrink-0">
@@ -466,7 +466,7 @@
     {% from 'macros/modal.html' import modal_close_script %}
     {{ modal_close_script() }}
 
-    <script src="{{ url_for('static', filename='js/pages/main.js', v='12') }}"></script>
+    <script src="{{ url_for('static', filename='js/pages/main.js', v='13') }}"></script>
     {% if login_welcome_username %}
     <script>
         Toast.success({{ ('欢迎来到滨海小镇，' ~ login_welcome_username)|tojson }});

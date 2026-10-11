@@ -215,24 +215,38 @@ function initParallax() {
     var layers = [];
     document.querySelectorAll('.parallax-layer').forEach(function(el) {
         var speed = parseFloat(el.getAttribute('data-parallax-speed')) || 0.1;
-        layers.push({ el: el, speed: speed, top: 0 });
+        layers.push({ el: el, speed: speed, docTop: 0, height: 0 });
     });
 
     if (layers.length === 0) return;
 
+    // 只测量一次元素在文档中的位置，滚动帧内纯计算，不再调用 getBoundingClientRect。
+    // 原实现每帧对每个元素「先读 rect 再写 transform」，读写交替会强制同步布局
+    //（layout thrash），是滚动掉帧的主要原因之一。
+    function measure() {
+        var scrollY = window.pageYOffset;
+        layers.forEach(function(layer) {
+            // 先清除视差位移，避免把当前位移量计入文档位置
+            layer.el.style.transform = 'none';
+        });
+        layers.forEach(function(layer) {
+            var rect = layer.el.getBoundingClientRect();
+            layer.docTop = rect.top + scrollY;
+            layer.height = rect.height;
+        });
+    }
+
     var ticking = false;
     function updateParallax() {
         var scrollY = window.pageYOffset;
-        var winHeight = window.innerHeight;
+        var viewCenter = window.innerHeight / 2;
 
-        layers.forEach(function(layer) {
-            var rect = layer.el.getBoundingClientRect();
-            var elCenter = rect.top + rect.height / 2;
-            var viewCenter = winHeight / 2;
+        for (var i = 0; i < layers.length; i++) {
+            var layer = layers[i];
+            var elCenter = (layer.docTop - scrollY) + layer.height / 2;
             var offset = (elCenter - viewCenter) * layer.speed;
-
             layer.el.style.transform = 'translate3d(0, ' + (offset * -1) + 'px, 0)';
-        });
+        }
 
         ticking = false;
     }
@@ -244,6 +258,17 @@ function initParallax() {
         }
     }, { passive: true });
 
+    // 视口尺寸变化后重新测量（宽高变化会改变元素的文档位置与高度）
+    var resizeTimer = null;
+    window.addEventListener('resize', function() {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(function() {
+            measure();
+            updateParallax();
+        }, 200);
+    });
+
+    measure();
     updateParallax();
 }
 
@@ -254,9 +279,13 @@ function initNavShrink() {
 
     var threshold = 32;              // 滚动超过 32px 触发收缩
     var prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    var isScrolled = null;
 
     function update() {
         var scrolled = window.scrollY > threshold;
+        // 状态未变化时不写 DOM：滚动期间每帧都 toggle 会产生无意义的样式失效
+        if (scrolled === isScrolled) return;
+        isScrolled = scrolled;
         nav.classList.toggle('scrolled', scrolled);
     }
 

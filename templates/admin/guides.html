@@ -168,32 +168,6 @@ function rejectFromPreview() {
     showRejectModal(id);
 }
 
-// 捕获阶段先写入拒绝原因，再交由通用 admin-action 处理器提交
-document.getElementById('rejectConfirmBtn').addEventListener('click', function () {
-    this.setAttribute('data-action-payload', JSON.stringify({ reason: document.getElementById('reject-reason-input').value || '' }));
-}, true);
-
-// 审核结果局部更新（无需刷新页面）
-document.addEventListener('admin:action', function (e) {
-    var m = /\/admin\/guides\/(\d+)\/(approve|reject)/.exec(e.detail.url || '');
-    if (!m) return;
-    var id = m[1], action = m[2];
-    if (action === 'reject') closeModal('reject-modal');
-    if (action === 'approve') closeModal('preview-modal');
-
-    var cell = document.querySelector('[data-guide-status="' + id + '"]');
-    if (cell) {
-        cell.innerHTML = action === 'approve'
-            ? '<span class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full status-approved">已通过</span>'
-            : '<span class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full status-rejected">已拒绝</span>';
-    }
-    var row = document.querySelector('[data-guide-row="' + id + '"]');
-    if (row) {
-        [row.querySelector('[data-guide-id]'),
-         row.querySelector('[data-action-url$="/approve"]'),
-         row.querySelector('[onclick^="showRejectModal"]')].forEach(function (b) { if (b) b.remove(); });
-    }
-});
 </script>
 {% endblock %}
 
@@ -209,7 +183,7 @@ document.addEventListener('admin:action', function (e) {
     </div>
     <div class="modal-footer">
         <button type="button" class="btn-secondary" onclick="closeModal('reject-modal')">取消</button>
-        <button type="button" id="rejectConfirmBtn" class="admin-action btn-primary" style="background:var(--accent-red, #be123c);border-color:var(--accent-red, #be123c);">确认拒绝</button>
+        <button type="button" id="rejectConfirmBtn" class="admin-action btn-primary bg-red-500">确认拒绝</button>
     </div>
 {% endcall %}
 
@@ -222,14 +196,50 @@ document.addEventListener('admin:action', function (e) {
     </div>
     <div class="modal-footer">
         <button type="button" class="btn-secondary" onclick="closeModal('preview-modal')">关闭</button>
-        <button type="button" id="previewApproveBtn" class="admin-action btn-primary" data-action-success="指南已通过审核" style="background:var(--accent-green, #059669);border-color:var(--accent-green, #059669);">通过审核</button>
-        <button type="button" class="btn-primary" style="background:var(--accent-red, #be123c);border-color:var(--accent-red, #be123c);" onclick="rejectFromPreview()">拒绝</button>
+        <button type="button" id="previewApproveBtn" class="admin-action btn-primary bg-green-500" data-action-success="指南已通过审核">通过审核</button>
+        <button type="button" class="btn-primary bg-red-500" onclick="rejectFromPreview()">拒绝</button>
     </div>
 {% endcall %}
 {% endblock %}
 
 {% block extra_script %}
 <script>
+// 拒绝原因写入 + 审核结果局部更新
+// 注意：必须放在 page_modals 之后执行（extra_script 渲染顺序在 page_modals 之后），
+// 否则弹窗 DOM 尚未生成，getElementById 取到 null 会中断后续监听注册。
+(function () {
+    var rejectBtn = document.getElementById('rejectConfirmBtn');
+    if (rejectBtn) {
+        // 捕获阶段先写入拒绝原因，再交由通用 admin-action 处理器提交
+        rejectBtn.addEventListener('click', function () {
+            var input = document.getElementById('reject-reason-input');
+            this.setAttribute('data-action-payload', JSON.stringify({ reason: input ? input.value || '' : '' }));
+        }, true);
+    }
+
+    // 审核结果局部更新（无需刷新页面）
+    document.addEventListener('admin:action', function (e) {
+        var m = /\/admin\/guides\/(\d+)\/(approve|reject)/.exec((e.detail && e.detail.url) || '');
+        if (!m) return;
+        var id = m[1], action = m[2];
+        if (action === 'reject') closeModal('reject-modal');
+        if (action === 'approve') closeModal('preview-modal');
+
+        var cell = document.querySelector('[data-guide-status="' + id + '"]');
+        if (cell) {
+            cell.innerHTML = action === 'approve'
+                ? '<span class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full status-approved">已通过</span>'
+                : '<span class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full status-rejected">已拒绝</span>';
+        }
+        var row = document.querySelector('[data-guide-row="' + id + '"]');
+        if (row) {
+            [row.querySelector('[data-guide-id]'),
+             row.querySelector('[data-action-url$="/approve"]'),
+             row.querySelector('[onclick^="showRejectModal"]')].forEach(function (b) { if (b) b.remove(); });
+        }
+    });
+})();
+
 // 指南列表：每次 10 条，点击加载更多（API，无刷新）
 (function () {
     var btn = document.getElementById('guides-load-more');

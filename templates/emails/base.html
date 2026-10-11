@@ -5,18 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ title }}</title>
     <style>
-        /* 配色与官网一致：暗灰蓝磨砂玻璃 + 金色点缀（见 static/css/base.css） */
+        /* 配色与官网一致：白色磨砂玻璃 + 蓝色主色 + 金色点缀（见 static/css/base.css） */
         body {
             margin: 0;
             padding: 0;
-            background: linear-gradient(145deg, #424b5d 0%, #384152 48%, #303747 100%);
+            background: linear-gradient(165deg, #f6f9fc 0%, #eef2f7 48%, #e9eef6 100%);
             background-attachment: fixed;
             background-image:
-                radial-gradient(ellipse 55% 45% at 12% 5%, rgba(103, 232, 249, 0.11) 0%, transparent 65%),
-                radial-gradient(ellipse 60% 55% at 92% 92%, rgba(139, 92, 246, 0.10) 0%, transparent 65%),
-                radial-gradient(ellipse 40% 40% at 60% 100%, rgba(251, 191, 36, 0.05) 0%, transparent 70%);
+                radial-gradient(ellipse 60% 45% at 10% 4%, rgba(54, 240, 208, 0.10) 0%, transparent 62%),
+                radial-gradient(ellipse 62% 55% at 94% 94%, rgba(53, 185, 255, 0.12) 0%, transparent 64%),
+                radial-gradient(ellipse 45% 45% at 55% 100%, rgba(112, 104, 255, 0.07) 0%, transparent 68%);
             background-repeat: no-repeat;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', Arial, sans-serif;
         }
         .mail-wrap {
             max-width: 520px;
@@ -24,26 +24,27 @@
             margin: 0 auto;
             padding: 24px;
             box-sizing: border-box;
-            color: #f3f6fb;
+            color: #1a2230;
         }
         .mail-card {
             position: relative;
-            background: linear-gradient(145deg, rgba(67, 77, 97, 0.95) 0%, rgba(52, 61, 79, 0.95) 100%);
-            border: 1px solid rgba(255, 255, 255, 0.12);
+            background: linear-gradient(150deg, rgba(255, 255, 255, 0.97) 0%, rgba(255, 255, 255, 0.88) 100%);
+            border: 1px solid rgba(15, 23, 42, 0.08);
             border-radius: 20px;
             padding: 28px;
             overflow: hidden;
             box-shadow:
-                0 18px 48px rgba(19, 23, 32, 0.35),
-                inset 0 1px 0 rgba(255, 255, 255, 0.07);
+                0 18px 48px rgba(15, 23, 42, 0.10),
+                0 2px 8px rgba(15, 23, 42, 0.05),
+                inset 0 1px 0 rgba(255, 255, 255, 0.9);
         }
         /* 磨砂玻璃顶部高光描边 */
         .mail-card::before {
             content: '';
             position: absolute;
-            top: 0; left: 12%; right: 12%;
+            top: 0; left: 10%; right: 10%;
             height: 1px;
-            background: linear-gradient(90deg, transparent, rgba(251, 191, 36, 0.45), transparent);
+            background: linear-gradient(90deg, transparent, rgba(2, 132, 199, 0.4), transparent);
             pointer-events: none;
         }
         /* 光线散射层 —— 模拟磨砂玻璃漫射光线 */
@@ -51,14 +52,14 @@
             position: absolute;
             inset: 0;
             pointer-events: none;
-            background: radial-gradient(ellipse 60% 35% at 22% 0%, rgba(255, 255, 255, 0.07) 0%, transparent 60%);
+            background: radial-gradient(ellipse 60% 35% at 22% 0%, rgba(2, 132, 199, 0.06) 0%, transparent 60%);
         }
         /* 细微噪点纹理 —— 模拟磨砂玻璃蚀刻表面微观散射 */
         .mail-card-noise {
             position: absolute;
             inset: 0;
             pointer-events: none;
-            opacity: 0.045;
+            opacity: 0.03;
             background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
             background-repeat: repeat;
             background-size: 200px 200px;
@@ -68,28 +69,28 @@
             text-align: center;
             margin-bottom: 20px;
             padding-bottom: 16px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+            border-bottom: 1px solid rgba(15, 23, 42, 0.08);
         }
         .mail-logo {
             width: 48px;
             height: 48px;
-            background: linear-gradient(145deg, rgba(251, 191, 36, 0.20), rgba(251, 191, 36, 0.08));
+            background: linear-gradient(145deg, #e0f2fe, #bae6fd);
             border-radius: 14px;
             display: inline-flex;
             align-items: center;
             justify-content: center;
             margin-bottom: 12px;
-            border: 1px solid rgba(251, 191, 36, 0.26);
-            box-shadow: 0 6px 18px rgba(251, 191, 36, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+            border: 1px solid rgba(2, 132, 199, 0.22);
+            box-shadow: 0 6px 16px rgba(2, 132, 199, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.9);
         }
         .mail-logo svg {
             width: 24px;
             height: 24px;
-            color: #fbbf24;
+            color: #0284c7;
         }
         .mail-title {
             position: relative;
-            color: {{ title_color | default('#fbbf24') }};
+            color: {{ title_color | default('#0f172a') }};
             font-size: 22px;
             font-weight: bold;
             margin: 0;
@@ -98,40 +99,40 @@
         .mail-body {
             position: relative;
             font-size: 15px;
-            line-height: 1.7;
-            color: #f3f6fb;
+            line-height: 1.75;
+            color: #334155;
         }
         .mail-body p {
             margin: 8px 0;
         }
-        /* 高亮引用块（音频/指南标题等） */
+        /* 高亮引用块（音频/指南/文件标题等） */
         .mail-highlight {
             font-size: 17px;
             font-weight: bold;
             padding: 14px;
-            background: linear-gradient(145deg, rgba(251, 191, 36, 0.12), rgba(251, 191, 36, 0.05));
-            color: #fbbf24;
+            background: linear-gradient(145deg, rgba(2, 132, 199, 0.09), rgba(2, 132, 199, 0.04));
+            color: #0369a1;
             border-radius: 12px;
             margin: 14px 0;
             word-break: break-all;
-            border: 1px solid rgba(251, 191, 36, 0.18);
+            border: 1px solid rgba(2, 132, 199, 0.18);
             text-align: center;
-            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
         }
         /* 验证码 */
         .mail-code {
             font-size: 32px;
             font-weight: bold;
-            color: #fbbf24;
+            color: #b45309;
             letter-spacing: 8px;
-            background: linear-gradient(145deg, rgba(251, 191, 36, 0.12), rgba(251, 191, 36, 0.05));
+            background: linear-gradient(145deg, rgba(217, 119, 6, 0.10), rgba(217, 119, 6, 0.04));
             padding: 18px;
             border-radius: 12px;
             text-align: center;
             margin: 16px 0;
             word-break: break-all;
-            border: 1px solid rgba(251, 191, 36, 0.22);
-            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(217, 119, 6, 0.22);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
         }
         /* 审核结果状态卡 */
         .mail-status {
@@ -142,19 +143,19 @@
             padding: 16px;
             border-radius: 12px;
             border: 1px solid;
-            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
         }
         .mail-status-success {
-            background: linear-gradient(145deg, rgba(74, 222, 128, 0.12), rgba(74, 222, 128, 0.04));
-            border-color: rgba(74, 222, 128, 0.28);
+            background: linear-gradient(145deg, rgba(22, 163, 74, 0.10), rgba(22, 163, 74, 0.03));
+            border-color: rgba(22, 163, 74, 0.24);
         }
         .mail-status-fail {
-            background: linear-gradient(145deg, rgba(248, 113, 113, 0.12), rgba(248, 113, 113, 0.04));
-            border-color: rgba(248, 113, 113, 0.28);
+            background: linear-gradient(145deg, rgba(225, 29, 72, 0.08), rgba(225, 29, 72, 0.03));
+            border-color: rgba(225, 29, 72, 0.22);
         }
         .mail-status-pending {
-            background: linear-gradient(145deg, rgba(251, 191, 36, 0.12), rgba(251, 191, 36, 0.04));
-            border-color: rgba(251, 191, 36, 0.28);
+            background: linear-gradient(145deg, rgba(217, 119, 6, 0.10), rgba(217, 119, 6, 0.03));
+            border-color: rgba(217, 119, 6, 0.24);
         }
         .mail-status-icon {
             width: 34px;
@@ -166,77 +167,78 @@
             flex-shrink: 0;
         }
         .mail-status-icon svg { width: 18px; height: 18px; }
-        .mail-status-success .mail-status-icon { background: rgba(74, 222, 128, 0.18); color: #4ade80; }
-        .mail-status-fail .mail-status-icon { background: rgba(248, 113, 113, 0.18); color: #f87171; }
-        .mail-status-pending .mail-status-icon { background: rgba(251, 191, 36, 0.18); color: #fbbf24; }
+        .mail-status-success .mail-status-icon { background: rgba(22, 163, 74, 0.14); color: #16a34a; }
+        .mail-status-fail .mail-status-icon { background: rgba(225, 29, 72, 0.12); color: #e11d48; }
+        .mail-status-pending .mail-status-icon { background: rgba(217, 119, 6, 0.14); color: #d97706; }
         .mail-status-title {
             font-size: 15px;
             font-weight: bold;
             margin-bottom: 3px;
         }
-        .mail-status-success .mail-status-title { color: #4ade80; }
-        .mail-status-fail .mail-status-title { color: #f87171; }
-        .mail-status-pending .mail-status-title { color: #fbbf24; }
+        .mail-status-success .mail-status-title { color: #15803d; }
+        .mail-status-fail .mail-status-title { color: #be123c; }
+        .mail-status-pending .mail-status-title { color: #b45309; }
         .mail-status-desc {
             font-size: 13px;
             line-height: 1.6;
-            color: rgba(243, 246, 251, 0.6);
+            color: rgba(26, 34, 48, 0.62);
         }
         /* 正文中的高亮名称（作者 / 发送者），复用模板类代替内联样式 */
-        .mail-name { color: #fbbf24; font-weight: bold; }
+        .mail-name { color: #0369a1; font-weight: bold; }
         .mail-muted {
-            color: rgba(243, 246, 251, 0.5);
+            color: rgba(26, 34, 48, 0.52);
             font-size: 13px;
-            line-height: 1.6;
+            line-height: 1.7;
             margin: 12px 0 0 0;
         }
         .mail-footer {
             position: relative;
             margin-top: 20px;
             padding-top: 16px;
-            border-top: 1px solid rgba(255, 255, 255, 0.08);
+            border-top: 1px solid rgba(15, 23, 42, 0.08);
             text-align: center;
-            color: rgba(243, 246, 251, 0.45);
+            color: rgba(26, 34, 48, 0.45);
             font-size: 12px;
         }
-        .mail-content h1 { font-size: 20px; font-weight: bold; margin: 18px 0 10px; color: #fbbf24; }
-        .mail-content h2 { font-size: 18px; font-weight: bold; margin: 16px 0 8px; color: #fbbf24; }
-        .mail-content h3 { font-size: 16px; font-weight: bold; margin: 14px 0 6px; color: #fbbf24; }
-        .mail-content p { margin: 8px 0; line-height: 1.7; color: #e5e7eb; }
-        .mail-content div, .mail-content span, .mail-content li { color: #e5e7eb; }
+        /* 广播富文本正文（浅色主题适配） */
+        .mail-content h1 { font-size: 20px; font-weight: bold; margin: 18px 0 10px; color: #0f172a; }
+        .mail-content h2 { font-size: 18px; font-weight: bold; margin: 16px 0 8px; color: #0f172a; }
+        .mail-content h3 { font-size: 16px; font-weight: bold; margin: 14px 0 6px; color: #0369a1; }
+        .mail-content p { margin: 8px 0; line-height: 1.75; color: #334155; }
+        .mail-content div, .mail-content span, .mail-content li { color: #334155; }
         .mail-content ul, .mail-content ol { margin: 8px 0; padding-left: 24px; }
-        .mail-content li { margin: 4px 0; line-height: 1.6; }
-        .mail-content strong { color: #fbbf24; }
-        .mail-content a { color: #fbbf24; text-decoration: underline; }
+        .mail-content li { margin: 4px 0; line-height: 1.7; }
+        .mail-content strong { color: #0f172a; }
+        .mail-content a { color: #0284c7; text-decoration: underline; }
         .mail-content blockquote {
-            border-left: 3px solid #fbbf24;
+            border-left: 3px solid rgba(2, 132, 199, 0.45);
             margin: 12px 0;
             padding: 8px 16px;
-            color: rgba(243, 246, 251, 0.55);
-            background: rgba(251, 191, 36, 0.04);
+            color: rgba(26, 34, 48, 0.66);
+            background: rgba(2, 132, 199, 0.05);
             border-radius: 0 8px 8px 0;
         }
         .mail-content code {
             font-family: 'Courier New', Courier, monospace;
-            background: rgba(251, 191, 36, 0.08);
-            color: #fbbf24;
+            background: rgba(2, 132, 199, 0.09);
+            color: #0369a1;
             padding: 2px 6px;
             border-radius: 4px;
             font-size: 0.9em;
         }
         .mail-content pre {
-            background: rgba(0, 0, 0, 0.3);
-            color: #e5e9f0;
+            background: #0f172a;
+            color: #e2e8f0;
             padding: 12px 16px;
             border-radius: 8px;
             overflow-x: auto;
             margin: 12px 0;
         }
         .mail-content pre code { background: none; color: inherit; padding: 0; font-size: 0.85em; line-height: 1.5; }
-        .mail-content hr { border: none; border-top: 1px solid rgba(251, 191, 36, 0.15); margin: 20px 0; }
+        .mail-content hr { border: none; border-top: 1px solid rgba(15, 23, 42, 0.1); margin: 20px 0; }
         .mail-content table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 14px; }
-        .mail-content th, .mail-content td { border: 1px solid rgba(255, 255, 255, 0.16); padding: 8px 12px; text-align: left; }
-        .mail-content th { background: rgba(251, 191, 36, 0.08); color: #fbbf24; font-weight: bold; }
+        .mail-content th, .mail-content td { border: 1px solid rgba(15, 23, 42, 0.12); padding: 8px 12px; text-align: left; }
+        .mail-content th { background: rgba(2, 132, 199, 0.08); color: #0369a1; font-weight: bold; }
         .mail-content img { max-width: 100%; height: auto; border-radius: 4px; }
 
         @media only screen and (max-width: 480px) {
@@ -261,7 +263,7 @@
             <div class="mail-card-noise"></div>
             <div class="mail-header">
                 <div class="mail-logo">
-                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76"></polygon></svg>
                 </div>
                 <h2 class="mail-title">{{ title }}</h2>
             </div>

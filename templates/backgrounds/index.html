@@ -179,73 +179,26 @@
             {% endif %}
         </div>
 
-        {% if active_bgs %}
-        <h2 class="text-xl font-bold text-gold-400 mb-4">当前启用</h2>
-        <div class="background-grid">
-            {% for bg in active_bgs %}
-            <div class="pixel-card background-card">
-                <div class="background-preview">
-                    <img data-bg-id="{{ bg.id }}" src="{{ url_for('backgrounds.serve_background', bg_id=bg.id, size=768) }}" alt="{{ bg.filename }}" loading="lazy">
-                </div>
-                <div class="background-info">
-                    <div class="flex items-center justify-between gap-2 mb-2">
-                        <span class="background-name">{{ bg.filename }}</span>
-                        <span class="status-badge is-active-badge">当前显示</span>
-                    </div>
-                    <div class="flex items-center justify-between">
-                        <span class="background-author">by {{ bg.username }}</span>
-                    </div>
-                </div>
-            </div>
-            {% endfor %}
+        {# 列表数据由前端调用 /api/backgrounds/list 无刷新获取并渲染 #}
+        <div id="bg-loading" class="py-16 text-center">
+            <i data-lucide="loader-2" class="w-8 h-8 mx-auto text-cream/40 animate-spin"></i>
+            <p class="text-muted mt-3">加载中…</p>
         </div>
-        {% else %}
-        <div class="pixel-card rounded-xl p-8 text-center">
-            <p class="text-muted">暂无已启用的背景图片</p>
-        </div>
-        {% endif %}
 
-        {% if user and my_bgs %}
-        <h2 class="text-xl font-bold text-gold-400 mt-8 mb-4">我的上传</h2>
-        <div class="background-grid">
-            {% for bg in my_bgs %}
-            <div class="pixel-card background-card">
-                {% if bg.status != 1 %}
-                <form method="post" action="{{ url_for('backgrounds.delete_background', bg_id=bg.id) }}" class="delete-form" onsubmit="return confirm('确定要删除这张背景图片吗？');">
-                    {{ csrf_field() }}
-                    <button type="button" class="btn-delete" onclick="this.closest('form').submit()">删除</button>
-                </form>
-                {% endif %}
-                <div class="background-preview">
-                    <img data-bg-id="{{ bg.id }}" src="{{ url_for('backgrounds.serve_background', bg_id=bg.id, size=768) }}" alt="{{ bg.filename }}" loading="lazy">
-                    {% if bg.status != 1 %}
-                    <span class="status-badge {% if bg.status == 0 %}status-pending{% else %}status-rejected{% endif %}" style="position: absolute; top: 0.5rem; left: 0.5rem; backdrop-filter: blur(8px);">
-                        {% if bg.status == 0 %}待审核{% else %}已驳回{% endif %}
-                    </span>
-                    {% endif %}
-                </div>
-                <div class="background-info">
-                    <div class="flex items-center justify-between gap-2 mb-2">
-                        <span class="background-name">{{ bg.filename }}</span>
-                        {% if bg.status == 0 %}
-                        <span class="status-badge status-pending">待审核</span>
-                        {% elif bg.status == 1 %}
-                        <span class="status-badge status-approved">已通过</span>
-                        {% else %}
-                        <span class="status-badge status-rejected">已驳回</span>
-                        {% endif %}
-                    </div>
-                    <div class="flex items-center justify-between">
-                        <span class="background-author">{{ bg.created_at }}</span>
-                    </div>
-                </div>
+        <div id="bg-active-section" class="hidden">
+            <h2 class="text-xl font-bold text-gold-400 mb-4">当前启用</h2>
+            <div id="bg-active-grid" class="background-grid"></div>
+            <div id="bg-active-empty" class="pixel-card rounded-xl p-8 text-center hidden">
+                <p class="text-muted">暂无已启用的背景图片</p>
             </div>
-            {% endfor %}
         </div>
-        {% endif %}
 
-        {% if not active_bgs and (not user or not my_bgs) %}
-        <div class="empty-state">
+        <div id="bg-my-section" class="hidden">
+            <h2 class="text-xl font-bold text-gold-400 mt-8 mb-4">我的上传</h2>
+            <div id="bg-my-grid" class="background-grid"></div>
+        </div>
+
+        <div id="bg-empty" class="empty-state hidden">
             <i data-lucide="image" class="w-12 h-12 mx-auto text-gold-400/50"></i>
             <h3>暂无背景图片</h3>
             <p>成为第一个上传背景图片的用户吧！</p>
@@ -255,16 +208,21 @@
             </a>
             {% endif %}
         </div>
-        {% endif %}
     </div>
 </div>
 {% endblock %}
 
 {% block extra_script %}
 <script>
-// 按设备屏幕宽度（含 DPR）选择最合适的背景图片档位，替换 img 的 src。
-// 档位与后端一致：768 / 1280 / 1920。
 (function() {
+    var CFG = {
+        apiUrl: "{{ url_for('backgrounds.api_backgrounds_list') }}",
+        serveBase: "{{ url_for('backgrounds.serve_background', bg_id=0) }}",
+        deleteBase: "{{ url_for('backgrounds.delete_background', bg_id=0) }}",
+        loggedIn: {{ 'true' if user else 'false' }}
+    };
+
+    // 按设备屏幕宽度（含 DPR）选择最合适的背景图片档位：768 / 1280 / 1920。
     function bestSize() {
         var width = Math.ceil((window.innerWidth || document.documentElement.clientWidth) * (window.devicePixelRatio || 1));
         if (width >= 1920) return 1920;
@@ -272,13 +230,133 @@
         return 768;
     }
 
-    var size = bestSize();
-    document.querySelectorAll('img[data-bg-id]').forEach(function(img) {
-        // 已按需加载的图片不重复替换
-        if (img.dataset.resolved) return;
-        img.dataset.resolved = '1';
-        // 当前 src 已含 ?size=768，替换为最合适的档位
-        img.src = img.src.replace(/size=\d+/, 'size=' + size);
+    function escapeHtml(text) {
+        var d = document.createElement('div');
+        d.textContent = text == null ? '' : String(text);
+        return d.innerHTML;
+    }
+
+    function imgUrl(id) {
+        return CFG.serveBase.replace(/\/0$/, '/' + id) + '?size=' + bestSize();
+    }
+
+    function refreshIcons() {
+        if (typeof lucide !== 'undefined' && lucide.createIcons) {
+            try { lucide.createIcons(); } catch (_) {}
+        }
+    }
+
+    function activeCard(bg) {
+        return '<div class="pixel-card background-card">' +
+            '<div class="background-preview">' +
+                '<img src="' + imgUrl(bg.id) + '" alt="' + escapeHtml(bg.filename) + '" loading="lazy">' +
+            '</div>' +
+            '<div class="background-info">' +
+                '<div class="flex items-center justify-between gap-2 mb-2">' +
+                    '<span class="background-name">' + escapeHtml(bg.filename) + '</span>' +
+                    '<span class="status-badge is-active-badge">当前显示</span>' +
+                '</div>' +
+                '<div class="flex items-center justify-between">' +
+                    '<span class="background-author">by ' + escapeHtml(bg.username) + '</span>' +
+                '</div>' +
+            '</div>' +
+        '</div>';
+    }
+
+    function statusBadge(status) {
+        if (status === 0) return '<span class="status-badge status-pending">待审核</span>';
+        if (status === 1) return '<span class="status-badge status-approved">已通过</span>';
+        return '<span class="status-badge status-rejected">已驳回</span>';
+    }
+
+    function myCard(bg) {
+        var canDelete = bg.status !== 1;
+        var overlay = '';
+        if (bg.status !== 1) {
+            var cls = bg.status === 0 ? 'status-pending' : 'status-rejected';
+            var text = bg.status === 0 ? '待审核' : '已驳回';
+            overlay = '<span class="status-badge ' + cls + '" style="position: absolute; top: 0.5rem; left: 0.5rem; backdrop-filter: blur(8px);">' +
+                text + '</span>';
+        }
+        return '<div class="pixel-card background-card" data-bg-card="' + bg.id + '">' +
+            (canDelete ? '<button type="button" class="btn-delete" data-delete-id="' + bg.id + '">删除</button>' : '') +
+            '<div class="background-preview">' +
+                '<img src="' + imgUrl(bg.id) + '" alt="' + escapeHtml(bg.filename) + '" loading="lazy">' +
+                overlay +
+            '</div>' +
+            '<div class="background-info">' +
+                '<div class="flex items-center justify-between gap-2 mb-2">' +
+                    '<span class="background-name">' + escapeHtml(bg.filename) + '</span>' +
+                    statusBadge(bg.status) +
+                '</div>' +
+                '<div class="flex items-center justify-between">' +
+                    '<span class="background-author">' + escapeHtml(bg.created_at) + '</span>' +
+                '</div>' +
+            '</div>' +
+        '</div>';
+    }
+
+    var loading = document.getElementById('bg-loading');
+    var activeSection = document.getElementById('bg-active-section');
+    var activeGrid = document.getElementById('bg-active-grid');
+    var activeEmpty = document.getElementById('bg-active-empty');
+    var mySection = document.getElementById('bg-my-section');
+    var myGrid = document.getElementById('bg-my-grid');
+    var emptyBox = document.getElementById('bg-empty');
+
+    function render(data) {
+        var active = data.active || [];
+        var my = data.my || [];
+
+        activeGrid.innerHTML = active.map(activeCard).join('');
+        activeEmpty.classList.toggle('hidden', active.length > 0);
+        activeSection.classList.remove('hidden');
+
+        if (CFG.loggedIn) {
+            myGrid.innerHTML = my.map(myCard).join('');
+            mySection.classList.remove('hidden');
+        }
+
+        var hasAny = active.length > 0 || my.length > 0;
+        emptyBox.classList.toggle('hidden', hasAny);
+
+        loading.classList.add('hidden');
+        refreshIcons();
+    }
+
+    fetch(CFG.apiUrl, { headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' } })
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            if (!data.success) throw new Error('load failed');
+            render(data);
+        })
+        .catch(function() {
+            loading.classList.add('hidden');
+            emptyBox.classList.remove('hidden');
+            if (typeof Toast !== 'undefined') Toast.error('加载失败，请刷新重试');
+        });
+
+    // 删除我的上传（事件委托）
+    myGrid.addEventListener('click', function(e) {
+        var btn = e.target.closest('.btn-delete');
+        if (!btn) return;
+        if (!confirm('确定要删除这张背景图片吗？')) return;
+        var id = btn.getAttribute('data-delete-id');
+        btn.disabled = true;
+        fetch(CFG.deleteBase.replace(/\/0\//, '/' + id + '/'), {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (!data.success) { Toast && Toast.error(data.message || '删除失败'); btn.disabled = false; return; }
+                Toast && Toast.success(data.message || '已删除');
+                var card = myGrid.querySelector('[data-bg-card="' + id + '"]');
+                if (card) card.remove();
+                if (!myGrid.children.length) mySection.classList.add('hidden');
+                if (!activeGrid.children.length && !myGrid.children.length) emptyBox.classList.remove('hidden');
+            })
+            .catch(function() { Toast && Toast.error('删除失败，请重试'); btn.disabled = false; });
     });
 })();
 </script>

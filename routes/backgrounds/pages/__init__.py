@@ -16,19 +16,35 @@ from core.shared.ip import get_client_ip
 
 @backgrounds_bp.route('/backgrounds')
 def background_list_page():
-    """背景图片列表页：展示所有已通过且活跃的背景图片。"""
+    """背景图片列表页：列表数据由前端调用 /api/backgrounds/list 无刷新获取。"""
+    return render_page('backgrounds/index.html')
+
+
+@backgrounds_bp.route('/api/backgrounds/list')
+def api_backgrounds_list():
+    """背景图片列表 API（JSON，供 /backgrounds 页面前端无刷新获取）。
+
+    返回当前启用（已通过且活跃）的背景图片，以及登录用户自己上传的全部背景图片。
+    """
     user = get_current_user()
-    # 已通过、活跃的背景图片
     active_bgs = background_service.get_active_backgrounds()
-    # 如果用户已登录，显示该用户上传的所有背景
-    my_bgs = []
-    if user:
-        my_bgs = background_service.get_backgrounds(user_id=user['id'])
-    return render_page(
-        'backgrounds/index.html',
-        active_bgs=active_bgs,
-        my_bgs=my_bgs,
-    )
+    my_bgs = background_service.get_backgrounds(user_id=user['id']) if user else []
+
+    def _public(bg):
+        return {
+            'id': bg['id'],
+            'filename': bg['filename'],
+            'username': bg.get('username', ''),
+            'status': bg['status'],
+            'created_at': bg.get('created_at', ''),
+        }
+
+    return jsonify({
+        'success': True,
+        'logged_in': bool(user),
+        'active': [_public(b) for b in active_bgs],
+        'my': [_public(b) for b in my_bgs],
+    })
 
 
 @backgrounds_bp.route('/backgrounds/upload')

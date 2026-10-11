@@ -8,6 +8,32 @@ from core.auth import admin_required
 from core.helpers import render_page
 from core.db import get_db
 from routes.admin import admin_bp
+from services.mail import email_service, buildings_review_result as build_result_html
+
+
+def _notify_author_building_result(title, author_email, approved, reason=''):
+    """异步通知公共建筑作者审核结果（不阻塞请求）。"""
+    if not email_service.is_enabled() or not author_email:
+        return
+
+    if approved:
+        subject = f'[建筑审核通过] 「{title}」已发布'
+        body = (
+            f'您好！\n\n'
+            f'您发布的公共建筑「{title}」已通过审核，现已发布。\n'
+        )
+    else:
+        subject = f'[建筑审核未通过] 「{title}」被拒绝'
+        body = (
+            f'您好！\n\n'
+            f'很遗憾，您发布的公共建筑「{title}」未通过审核。\n'
+        )
+        if reason:
+            body += f'拒绝原因：{reason}\n'
+        body += '您可以修改后重新提交。\n'
+
+    html = build_result_html(title, approved, reason=reason or '')
+    email_service.send(author_email, subject, body, html)
 
 
 @admin_bp.route('/admin/buildings')
@@ -59,6 +85,11 @@ def admin_building_approve(building_id):
     conn = get_db()
     try:
         now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        building = conn.execute(
+            "SELECT b.title, u.email FROM public_buildings b "
+            "LEFT JOIN users u ON b.author_id = u.id WHERE b.id = ?",
+            (building_id,),
+        ).fetchone()
         cur = conn.execute(
             """
             UPDATE public_buildings
@@ -83,6 +114,8 @@ def admin_building_approve(building_id):
             "SELECT status FROM public_buildings WHERE id = ?", (building_id,)
         ).fetchone()
         log('INFO', 'Buildings', f'公共建筑 id={building_id} 审核通过持久化确认: status={row[0] if row else "N/A"}')
+        if building:
+            _notify_author_building_result(building['title'], building['email'] or '', approved=True)
         return jsonify({'success': True, 'message': '建筑已通过审核', 'status': 'approved'})
     except Exception:
         conn.rollback()
@@ -101,6 +134,11 @@ def admin_building_reject(building_id):
     conn = get_db()
     try:
         now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        building = conn.execute(
+            "SELECT b.title, u.email FROM public_buildings b "
+            "LEFT JOIN users u ON b.author_id = u.id WHERE b.id = ?",
+            (building_id,),
+        ).fetchone()
         cur = conn.execute(
             """
             UPDATE public_buildings
@@ -112,6 +150,8 @@ def admin_building_reject(building_id):
         conn.commit()
         if cur.rowcount == 0:
             return jsonify({'success': False, 'message': '建筑不存在或已处理'}), 404
+        if building:
+            _notify_author_building_result(building['title'], building['email'] or '', approved=False, reason=reason)
         return jsonify({'success': True, 'message': '建筑已拒绝', 'status': 'rejected'})
     except Exception:
         conn.rollback()

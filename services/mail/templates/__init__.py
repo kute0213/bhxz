@@ -1,18 +1,24 @@
 """邮件 HTML 模板模块 —— 使用 Jinja2 模板渲染符合滨海小镇风格的邮件内容。
 
 所有邮件模板存放在 templates/emails/ 目录下：
-- base.html              公共外层容器 + 样式（暗灰蓝金黄磨砂玻璃风格，与官网一致）
+- base.html              公共外层容器 + 样式（白色磨砂玻璃风格，与官网一致）
 - verification_code.html 验证码邮件
 - guide_review_pending.html 新指南待审核通知
 - guide_review_result.html  指南审核结果通知
 - music_review_result.html  音频公开审核结果通知
+- background_review_result.html 背景图片审核结果通知
+- buildings_review_result.html  公共建筑审核结果通知
+- review_pending.html       通用待审核通知（音频 / 公共建筑等，通知管理员）
 - broadcast_message.html    管理员广播消息（富文本 HTML 正文）
 
-对外暴露五个构建函数，保持与原接口完全兼容：
+对外暴露以下构建函数，保持与原接口完全兼容：
 - verification_code(code, purpose, expire_minutes)        验证码邮件
 - guide_review_pending(title, author_name, is_edit)       新指南待审核通知
 - guide_review_result(title, approved, reason='')         指南审核结果通知
 - music_review_result(title, approved)                    音频公开审核结果通知
+- background_review_result(filename, approved)            背景图片审核结果通知
+- buildings_review_result(title, approved, reason='')     公共建筑审核结果通知
+- review_pending(item_title, author_name, category, action) 通用待审核通知
 - broadcast_message(subject, html_body, sender_name)  管理员广播消息（富文本 HTML）
 """
 
@@ -192,4 +198,56 @@ def background_review_result(filename: str, approved: bool) -> str:
         filename=filename,
         approved=approved,
         status=status,
+    )
+
+
+def buildings_review_result(title: str, approved: bool, reason: str = '') -> str:
+    """构建公共建筑审核结果通知邮件 HTML。
+
+    Args:
+        title: 公共建筑标题
+        approved: 是否通过
+        reason: 拒绝原因（仅 approved=False 时有效）
+
+    Returns:
+        邮件 HTML 字符串
+    """
+    if approved:
+        title_text = '公共建筑审核通过'
+        color = '#4ade80'
+        greeting = '恭喜！'
+    else:
+        title_text = '公共建筑审核未通过'
+        color = '#f87171'
+        greeting = '很遗憾，'
+
+    return _render(
+        'buildings_review_result.html',
+        title=title_text,
+        title_color=color,
+        building_title=title,
+        approved=approved,
+        greeting=greeting,
+        reason=reason,
+    )
+
+
+def review_pending(item_title: str, author_name: str, category: str, action: str = '提交了') -> str:
+    """构建通用待审核通知邮件 HTML（通知管理员）。
+
+    Args:
+        item_title: 待审核内容的标题（如音频标题、建筑标题）
+        author_name: 提交者用户名
+        category: 内容类别描述（如 "一条大喇叭音频公开申请"）
+        action: 行为动词，默认 "提交了"
+
+    Returns:
+        邮件 HTML 字符串
+    """
+    return _render(
+        'review_pending.html',
+        title='新的待审核申请',
+        title_color='#fbbf24',
+        item_title=item_title,
+        desc=f'用户 {author_name} {action}{category}。',
     )

@@ -122,44 +122,9 @@
 
         <p class="text-sm text-cream/50 mb-4 hidden" id="building-result-hint"></p>
 
-        <div id="buildings-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-            {% for b in buildings %}
-            <div class="building-card block p-6 search-fade-in" data-id="{{ b.id }}">
-                <div class="relative z-10">
-                    <div class="flex items-start justify-between gap-2 mb-1.5">
-                        <a href="{{ url_for('buildings.building_detail', building_id=b.id) }}" class="flex-1 min-w-0 hover:no-underline">
-                            <h3 class="text-lg font-bold text-cream truncate">{{ b.title }}</h3>
-                        </a>
-                        <button type="button" class="building-fav-btn{% if b.id in favorite_ids %} is-fav{% endif %}"
-                                data-fav-id="{{ b.id }}" title="{{ '取消收藏' if b.id in favorite_ids else '收藏' }}">
-                            <i data-lucide="heart" class="w-3.5 h-3.5"></i>
-                            <span class="fav-count">{{ b.favorite_count or 0 }}</span>
-                        </button>
-                    </div>
-                    <div class="inline-flex items-center gap-1 text-xs text-[var(--accent-blue)] bg-[var(--accent-blue)]/10 px-2 py-0.5 rounded-full mb-2">
-                        <i data-lucide="map-pin" class="w-3 h-3"></i>
-                        <span class="font-mono">/res tp {{ b.warp_name }}</span>
-                    </div>
-                    {% if b.tags %}
-                    <div class="flex flex-wrap gap-1.5 mb-2">
-                        {% for t in b.tags.split(',') if t %}
-                        <span class="building-tag">#{{ t }}</span>
-                        {% endfor %}
-                    </div>
-                    {% endif %}
-                    <div class="flex items-center justify-between text-xs text-cream/40">
-                        <span class="flex items-center gap-1"><i data-lucide="user" class="w-3 h-3"></i>{{ b.author_name or '未知' }}</span>
-                        <span class="flex items-center gap-3">
-                            <span class="flex items-center gap-1"><i data-lucide="heart" class="w-3 h-3"></i>{{ b.favorite_count or 0 }}</span>
-                            <span class="flex items-center gap-1"><i data-lucide="eye" class="w-3 h-3"></i>{{ b.view_count or 0 }}</span>
-                        </span>
-                    </div>
-                </div>
-            </div>
-            {% endfor %}
-        </div>
+        <div id="buildings-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6"></div>
 
-        <div id="buildings-empty" class="text-center py-16{% if buildings %} hidden{% endif %}">
+        <div id="buildings-empty" class="text-center py-16 hidden">
             <div class="pixel-card rounded-xl p-8 sm:p-12 max-w-lg mx-auto">
                 <i data-lucide="building-2" class="w-12 h-12 text-cream/30 mx-auto mb-4"></i>
                 <p class="text-cream/60 text-lg mb-2" id="buildings-empty-title">{{ '还没有收藏任何建筑' if fav_mode else '暂无公共建筑' }}</p>
@@ -169,10 +134,10 @@
 
         <div class="mt-8 text-center">
             <button type="button" id="load-more-btn" data-autoload-more
-                    class="btn-secondary px-6 py-2.5 rounded-lg text-sm inline-flex items-center gap-2{% if not has_more %} hidden{% endif %}">
+                    class="btn-secondary px-6 py-2.5 rounded-lg text-sm inline-flex items-center gap-2 hidden">
                 <i data-lucide="chevron-down" class="w-4 h-4"></i>加载更多
             </button>
-            <p id="load-more-end" class="text-xs text-cream/40 mt-2{% if has_more %} hidden{% endif %}">没有更多了</p>
+            <p id="load-more-end" class="text-xs text-cream/40 mt-2 hidden">没有更多了</p>
         </div>
     </div>
 </section>
@@ -405,6 +370,9 @@
             .catch(function () { Toast && Toast.error('操作失败，请重试'); })
             .finally(function () { btn.disabled = false; });
     });
+
+    // 首屏列表由前端通过 API 获取
+    fetchPage(1, false);
 })();
 </script>
 {% endblock %}

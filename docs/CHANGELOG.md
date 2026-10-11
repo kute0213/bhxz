@@ -4,6 +4,49 @@
 
 ### 变更
 
+* **全站邮件模板改为白色磨砂玻璃风格**（`templates/emails/base.html`）：
+  * 邮件外层由旧版「暗绿金黄玻璃卡片」重做为与官网一致的**白色磨砂玻璃**主题：浅灰白渐变背景 + 蓝色主色 `#0284c7` + 金色点缀，保留光晕、噪点纹理、光线散射层、顶部高光描边与「通过 / 失败 / 待审核」状态卡；正文、高亮块、验证码、富文本（广播）等区域同步改为浅色可读配色。
+  * 兼容既有类名（`.mail-highlight` / `.mail-code` / `.mail-status*` / `.mail-content*` / `.mail-muted` / `.mail-name` 等），所有现有邮件模板无需改动即可套用新样式。
+  * **验证**：独立 Jinja2 环境渲染全部邮件模板通过，pytest 204 项全部通过。
+
+* **新增公共建筑审核结果邮件 + 音频 / 公共建筑待审核提醒**（`services/mail/`、`templates/emails/`、`routes/admin/buildings/`、`routes/buildings/pages/`、`services/music/`）：
+  * **公共建筑审核结果通知**：新增 `templates/emails/buildings_review_result.html` 与 `buildings_review_result(title, approved, reason)` 构建函数；后台通过 / 拒绝公共建筑审核后自动向作者邮箱发送结果邮件（拒绝含原因），复用与指南 / 音频审核一致的磨砂玻璃状态卡样式。
+  * **通用待审核提醒**：新增 `templates/emails/review_pending.html`、`review_pending(item_title, author_name, category, action)` 构建函数，及 `services.mail.notify_admins(subject, body, html)` 统一「通知所有配置邮箱的管理员」入口（异步、失败静默）。
+  * **音频审核提醒**：用户首次上传申请公开（`services/music/upload`）、或将私有音频重新申请公开（`services/music/crud`）时，自动向所有管理员发送待审核提醒。
+  * **公共建筑审核提醒**：用户发布新公共建筑后（`routes/buildings/pages`）自动向所有管理员发送待审核提醒。
+  * **验证**：邮件模块导入与渲染通过、Flask test client 渲染相关页面返回 200、pytest 204 项全部通过。
+
+* **/backgrounds 与 /buildings 页面改用 API 获取列表**（`routes/backgrounds/pages/`、`routes/buildings/pages/`、`templates/backgrounds/index.html`、`templates/buildings/index.html`）：
+  * **背景图片列表 API 化**：新增 `GET /api/backgrounds/list`（返回当前启用背景 + 登录用户上传列表 + 是否登录）；`/backgrounds` 页面首屏改由前端 fetch 该接口渲染，「我的上传」删除改为无刷新 AJAX（带确认弹窗），页面路由不再做服务端列表查询。
+  * **公共建筑列表 API 化**：`/buildings` 页面首屏列表改由前端调用已有 `GET /api/buildings/list` 渲染（搜索 / 标签筛选 / 「加载更多」/ 收藏均走同一接口），页面路由不再做服务端列表查询（与音频 / 指南列表一致）。
+  * **验证**：`/backgrounds`、`/api/backgrounds/list`、`/buildings`、`/api/buildings/list` 经 Flask test client 均返回 200。
+
+* **富文本编辑器：修复表格拖拽手柄闪烁 + 链接功能无响应 / 卡死**（`templates/static/js/pages/markdown-editor.js`、`templates/macros/markdown_editor.html`、`templates/guides/form.html`、`templates/admin/guide_form.html`、`templates/admin/broadcast.html`）：
+  * **表格列宽拖拽手柄闪烁**：鼠标移到手柄浮层时会触发正文元素的 `mouseleave` 导致手柄被清空又重建，且每次 `updateGrips` 无条件重建全部手柄节点。修复：`mouseleave` 监听移至编辑器正文外层容器（`richWrap`）；新增 `_gripTable` 缓存，表格引用与列数均未变时只调用 `positionGrips()` 重定位、不再重建节点。
+  * **链接功能点击「应用」无响应 / 切换 Markdown 源码卡死**：`mdLinkAt` 在光标位于以 `[` 开头的行末尾时，`lastIndexOf('[', -1)` 返回 0 使游标卡在 0 形成死循环。修复：新增 `prevOpenBracket` 辅助函数显式处理游标到达 0 的情况并终止回退循环。
+  * **版本号**：`markdown-editor.js` 引用由 `v='5'` 统一 bump 至 `v='6'`。
+  * **验证**：jsdom 纯逻辑测试（无浏览器）跑通链接识别与序列化路径，`node --check` 通过。
+
+* **/admin/guides 审核交互统一**（`templates/admin/guides.html`）：
+  * **预览 / 拒绝弹窗按钮样式统一**：原先硬编码内联样式的「通过审核」等按钮改用站点标准按钮类（`.btn-primary.bg-green-500` / `.btn-primary.bg-red-500`），与全站风格一致。
+  * **审核后状态自动刷新**：通过 / 拒绝后在列表内就地更新状态徽章并移除已处理行的操作按钮（无需手动刷新），局部更新脚本置于 `extra_script` 块，避免在弹窗 DOM 生成前执行导致监听注册中断。
+
+* **导航栏滚动收缩动画性能优化（不减弱动画）**（`templates/static/css/base.css`、`templates/static/js/pages/main.js`、`templates/base.html`）：
+  * **问题**：高性能电脑与手机滚动时导航栏收缩动画依旧掉帧。根因是动画同时改动了多个「会触发重排/重绘」的属性，且与外层布局耦合——
+    1. `.glass-nav-inner` 同时过渡 `width` + **`box-shadow`** + **`background`**，每帧都要重绘大范围阴影与渐变；
+    2. 外层 `.glass-nav` 还在过渡 **`padding`**，导致每帧**整页重排**（sticky 在文档流中，高度变化会推动其后所有内容）；
+    3. `will-change: transform, backdrop-filter` 把 `backdrop-filter` 也写进合成层提示，诱导浏览器为「需要重绘的模糊属性」频繁重建图层；
+    4. `initParallax` 每帧对每个视差元素「先 `getBoundingClientRect` 再写 `transform`」，读写交替触发强制同步布局（layout thrash）。
+  * **修复**：
+    * **只动画合成器友好属性**：外层容器尺寸恒定；收缩位移改由内层 `transform` 完成，消除整页重排；`width` / `border-radius` 仍照常过渡。
+    * **背景与阴影改为交叉淡化**：两份「皮肤」放在 `.glass-nav-inner::before`（收缩态）/ `::after`（折叠态），只过渡 `opacity`（走合成器，不重排/重绘）；导航内容容器加 `.glass-nav-content`（`z-index:1`）位于皮肤之上（皮肤刻意用 `z-index:0` 而非负值，避免部分浏览器在 `backdrop-filter` 父级下把负 z-index 子层压到模糊层之后）。
+    * **`will-change` 只留 `transform`**；保留 `backdrop-filter` 与磨砂观感不变。
+    * **视差滚动**：初始化时缓存元素文档位置，滚动帧内纯计算，不再逐帧调用 `getBoundingClientRect`；窗口尺寸变化后再重测。
+    * **滚动收缩状态未变时不写 DOM**（此前每帧 `classList.toggle`）。
+    * **版本号**：`base.css` `v=47→48`、`pages/main.js` `v=12→13`。
+  * **不变式**：动画时长（`--transition-bounce` / `--transition-normal`）、缓动曲线、收缩形态与磨砂外观完全不变（仅修复性能问题，不减弱动画）。
+  * **验证**：`node --check templates/static/js/pages/main.js` 通过、CSS 花括号配平、Flask test client 渲染 `/`、`/login`、`/register` 均 200、pytest 204 项全部通过。
+
 * **统一编辑器：移除 Markdown 预览 + 本地静默草稿 + 修复卡死 + 广播邮件改用统一编辑器**（`templates/macros/markdown_editor.html`、`templates/static/js/pages/markdown-editor.js`、`templates/admin/broadcast.html`、`templates/guides/form.html`、`templates/admin/guide_form.html`）：
   * **移除 Markdown 实时预览**：Markdown 模式改为单栏纯源码编辑（删除 `.preview-pane` 面板与 `updatePreview` 方法），不再做 `mdToHtml` 重渲染，切换模式更轻快。
   * **本地静默草稿**：编辑内容防抖（400ms）写入浏览器 `localStorage`，键为 `mre-draft::<editor_id>::<pathname>`；**仅存本机、不上传云端**；刷新 / 误关闭后自动恢复；表单提交时清除草稿，避免旧草稿覆盖服务端新内容。
