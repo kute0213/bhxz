@@ -3,6 +3,9 @@
 设计原则：所有请求钩子在此模块集中管理，避免在 app.py 中散落。
 """
 
+import threading
+from urllib.parse import urlparse
+
 from flask import request
 from werkzeug.exceptions import HTTPException
 
@@ -54,6 +57,52 @@ PERMISSIONS_POLICY = (
     "magnetometer=(), gyroscope=(), accelerometer=(), clipboard-write=(self)"
 )
 
+# ---------------------------------------------------------------------------
+# 网页地图内嵌放行（frame-src 动态扩展）
+# ---------------------------------------------------------------------------
+# 「外部链接 → 卫星地图地址」(MAP_URL) 可在系统设置面板中热改，网页地图页会把它
+# 内嵌到 iframe 中展示。基础 CSP 的 frame-src 仅放行 'self'，会拦截外部地图，
+# 故这里按需把该地址的源（scheme://host[:port]）追加进 frame-src。
+# 编译结果按源缓存，设置值变化（源不同）时才重新拼接，避免每次请求重复字符串处理。
+_csp_frame_cache = {}
+_csp_frame_cache_lock = threading.Lock()
+
+
+def _map_frame_origin() -> str:
+    """返回「卫星地图地址」的源，用于放行 iframe 内嵌；非法/为空时返回空串。"""
+    try:
+        from config import get_config_value, MAP_URL
+        url = (get_config_value('MAP_URL', MAP_URL) or '').strip()
+    except Exception:
+        return ''
+    if not url:
+        return ''
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return ''
+    if parsed.scheme not in ('http', 'https') or not parsed.netloc:
+        return ''
+    return f'{parsed.scheme}://{parsed.netloc}'
+
+
+def _csp_with_map_frame() -> str:
+    """返回放行了网页地图源的 CSP；无需放行时直接返回基础策略。"""
+    origin = _map_frame_origin()
+    if not origin:
+        return CSP_POLICY
+    with _csp_frame_cache_lock:
+        cached = _csp_frame_cache.get(origin)
+    if cached:
+        return cached
+    # 同时更新 frame-src 与 child-src（后者是老浏览器不支持 frame-src 时的回退）
+    policy = CSP_POLICY.replace("child-src 'self' blob:;", f"child-src 'self' blob: {origin};")
+    policy = policy.replace("frame-src 'self';", f"frame-src 'self' {origin};")
+    with _csp_frame_cache_lock:
+        _csp_frame_cache[origin] = policy
+    return policy
+
+
 # HSTS：一年 + 含子域。preload 需要官方站点登记，故不写入以免难以撤销。
 HSTS_POLICY = "max-age=31536000; includeSubDomains"
 
@@ -75,8 +124,8 @@ def _set_security_headers(response):
     # ---- 跨源隔离 ----
     response.headers.setdefault('Cross-Origin-Opener-Policy', 'same-origin')
 
-    # ---- 内容安全策略 ----
-    response.headers.setdefault('Content-Security-Policy', CSP_POLICY)
+    # ---- 内容安全策略（frame-src 按配置的网页地图地址动态放行） ----
+    response.headers.setdefault('Content-Security-Policy', _csp_with_map_frame())
 
     # ---- HTML 页面禁用缓存：避免浏览器 / 反向代理返回旧页面，
     #      导致「浏览量、状态等刷新后不变化」的假象（静态资源不受影响） ----

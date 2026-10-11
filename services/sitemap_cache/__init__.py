@@ -233,6 +233,7 @@ def _get_default_base_url() -> str:
 _STATIC_PAGES = [
     ('/', 'monthly', '1.0'),
     ('/server-status', 'weekly', '0.8'),
+    ('/map', 'weekly', '0.6'),
     ('/docs', 'monthly', '0.7'),
     ('/guides', 'weekly', '0.8'),
     ('/apply', 'monthly', '0.5'),

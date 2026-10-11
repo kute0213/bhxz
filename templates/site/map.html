@@ -1,0 +1,261 @@
+{% extends "base.html" %}
+{% block title %}网页地图{% endblock %}
+
+{% block extra_style %}
+<style>
+    /* 网页地图页：整屏自适应，地图区域尽量占满可视高度 */
+    .map-page {
+        min-height: calc(100vh - 80px);
+        display: flex;
+        flex-direction: column;
+    }
+    .map-shell {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+    }
+    .map-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px;
+    }
+    .map-stage {
+        position: relative;
+        flex: 1;
+        min-height: 62vh;
+        border-radius: 16px;
+        overflow: hidden;
+        border: 1px solid var(--border-card);
+        background: rgba(255, 255, 255, 0.6);
+        box-shadow: 0 10px 34px rgba(15, 23, 42, 0.07);
+    }
+    .map-stage::before {
+        /* 顶部细微高光，与全站磨砂玻璃卡片保持一致的质感 */
+        content: '';
+        position: absolute;
+        inset: 0 0 auto 0;
+        height: 1px;
+        background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.9), transparent);
+        z-index: 3;
+        pointer-events: none;
+    }
+    .map-frame {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        border: 0;
+        display: block;
+        background: #eef3f9;
+    }
+    /* 加载遮罩：iframe 载入完成后淡出 */
+    .map-loading {
+        position: absolute;
+        inset: 0;
+        z-index: 2;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+        background: linear-gradient(180deg, rgba(248, 250, 252, 0.94), rgba(243, 246, 250, 0.9));
+        transition: opacity 0.35s ease, visibility 0.35s ease;
+    }
+    .map-stage.is-ready .map-loading {
+        opacity: 0;
+        visibility: hidden;
+    }
+    .map-spinner {
+        width: 34px;
+        height: 34px;
+        border-radius: 50%;
+        border: 3px solid rgba(2, 132, 199, 0.18);
+        border-top-color: #0284c7;
+        animation: map-spin 0.9s linear infinite;
+    }
+    @keyframes map-spin { to { transform: rotate(360deg); } }
+    /* 加载超时提示（载入慢或被对端限制内嵌时给出兜底出口） */
+    .map-fallback {
+        display: none;
+        text-align: center;
+        padding: 0 20px;
+    }
+    .map-stage.is-slow .map-fallback { display: block; }
+    .map-stage.is-slow .map-spinner { display: none; }
+    /* 全屏：铺满并去掉圆角（兼容各内核前缀） */
+    .map-stage:fullscreen { border-radius: 0; border: 0; }
+    .map-stage:-webkit-full-screen { border-radius: 0; border: 0; }
+    .map-stage:-moz-full-screen { border-radius: 0; border: 0; }
+    .map-stage:-ms-fullscreen { border-radius: 0; border: 0; }
+    .map-stage:fullscreen .map-frame { border-radius: 0; }
+    @media (max-width: 640px) {
+        .map-stage { min-height: 58vh; border-radius: 12px; }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="map-page page-container py-8 sm:py-12">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 w-full flex flex-col flex-1">
+        <div class="map-shell">
+            <div class="flex flex-wrap items-end justify-between gap-4">
+                <div>
+                    <h1 class="text-xl sm:text-2xl font-bold flex items-center gap-2">
+                        <i data-lucide="map" class="w-6 h-6 text-sky-600"></i>
+                        网页地图
+                    </h1>
+                    <p class="text-cream/60 text-sm mt-1">实时查看服务器地图，支持全屏浏览</p>
+                </div>
+                {% if map_url %}
+                <div class="map-toolbar">
+                    <button type="button" id="map-refresh" class="btn-secondary flex items-center gap-2 px-4 py-2 text-sm">
+                        <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                        <span>刷新</span>
+                    </button>
+                    <button type="button" id="map-fullscreen" class="btn-secondary flex items-center gap-2 px-4 py-2 text-sm">
+                        <i data-lucide="maximize" class="w-4 h-4"></i>
+                        <span>全屏</span>
+                    </button>
+                    <a href="{{ map_url }}" target="_blank" rel="noopener noreferrer"
+                       class="btn-primary flex items-center gap-2 px-4 py-2 text-sm">
+                        <i data-lucide="external-link" class="w-4 h-4"></i>
+                        <span>新标签打开</span>
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+
+            {% if map_url %}
+            <div class="map-stage" id="map-stage">
+                <div class="map-loading" id="map-loading">
+                    <div class="map-spinner" aria-hidden="true"></div>
+                    <div class="text-cream/60 text-sm" id="map-loading-text">地图加载中…</div>
+                    <div class="map-fallback">
+                        <p class="text-cream/70 text-sm mb-3">
+                            地图加载较慢，或该地图限制了被内嵌展示。
+                        </p>
+                        <a href="{{ map_url }}" target="_blank" rel="noopener noreferrer"
+                           class="btn-primary inline-flex items-center gap-2 px-4 py-2 text-sm">
+                            <i data-lucide="external-link" class="w-4 h-4"></i>
+                            <span>在新标签页打开地图</span>
+                        </a>
+                    </div>
+                </div>
+                <iframe
+                    id="map-frame"
+                    class="map-frame"
+                    data-src="{{ map_url }}"
+                    src="{{ map_url }}"
+                    title="网页地图"
+                    loading="eager"
+                    allowfullscreen
+                    allow="fullscreen"
+                    referrerpolicy="strict-origin-when-cross-origin"></iframe>
+            </div>
+            {% else %}
+            <div class="pixel-card rounded-xl p-10 text-center">
+                <i data-lucide="map-pin-off" class="w-10 h-10 mx-auto text-cream/40 mb-4"></i>
+                <div class="text-base font-bold text-cream/90 mb-2">尚未配置网页地图地址</div>
+                <p class="text-cream/60 text-sm">
+                    请前往「管理中心 → 系统设置 → 外部链接」，填写「卫星地图地址」后刷新本页。
+                </p>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_script %}
+{% if map_url %}
+<script>
+(function () {
+    var stage = document.getElementById('map-stage');
+    var frame = document.getElementById('map-frame');
+    var loadingText = document.getElementById('map-loading-text');
+    var fsBtn = document.getElementById('map-fullscreen');
+    var refreshBtn = document.getElementById('map-refresh');
+    var fsBtnLabel = fsBtn ? fsBtn.querySelector('span') : null;
+    var fsBtnIcon = fsBtn ? fsBtn.querySelector('i') : null;
+
+    if (!stage || !frame) return;
+
+    var slowTimer = null;
+
+    function markReady() {
+        if (slowTimer) { clearTimeout(slowTimer); slowTimer = null; }
+        stage.classList.remove('is-slow');
+        stage.classList.add('is-ready');
+    }
+
+    // iframe 载入完成即淡出遮罩。跨域下无法读取内容，故只依赖 load 事件，
+    // 并用定时器兜底：长时间未完成则提示可能被对端限制内嵌。
+    frame.addEventListener('load', function () {
+        // about:blank 的中转不视为加载完成
+        try {
+            if (frame.contentWindow && frame.contentWindow.location.href === 'about:blank') return;
+        } catch (e) { /* 跨域读取抛错属正常，说明已载入真实页面 */ }
+        markReady();
+    });
+
+    slowTimer = setTimeout(function () {
+        stage.classList.add('is-slow');
+        if (loadingText) loadingText.textContent = '地图加载中…';
+    }, 12000);
+
+    // 刷新：优先就地重载（同源），跨域时退回重建 iframe 源
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', function () {
+            var src = frame.getAttribute('data-src');
+            if (!src) return;
+            stage.classList.remove('is-ready', 'is-slow');
+            if (slowTimer) clearTimeout(slowTimer);
+            slowTimer = setTimeout(function () { stage.classList.add('is-slow'); }, 12000);
+            try {
+                frame.contentWindow.location.reload();
+                return;
+            } catch (e) { /* 跨域：走重建 */ }
+            frame.src = 'about:blank';
+            setTimeout(function () { frame.src = src; }, 60);
+        });
+    }
+
+    // ---- 全屏：覆盖各内核前缀，兼容所有主流浏览器 ----
+    function fullscreenElement() {
+        return document.fullscreenElement ||
+               document.webkitFullscreenElement ||
+               document.mozFullScreenElement ||
+               document.msFullscreenElement || null;
+    }
+    function requestFs(el) {
+        var fn = el.requestFullscreen || el.webkitRequestFullscreen ||
+                 el.mozRequestFullScreen || el.msRequestFullscreen;
+        if (fn) { fn.call(el); }
+    }
+    function exitFs() {
+        var fn = document.exitFullscreen || document.webkitExitFullscreen ||
+                 document.mozCancelFullScreen || document.msExitFullscreen;
+        if (fn) { fn.call(document); }
+    }
+    function syncFsButton() {
+        var on = !!fullscreenElement();
+        if (fsBtnLabel) fsBtnLabel.textContent = on ? '退出全屏' : '全屏';
+        if (fsBtnIcon) fsBtnIcon.setAttribute('data-lucide', on ? 'minimize' : 'maximize');
+        if (typeof lucide !== 'undefined' && lucide.createIcons && fsBtn) {
+            try { lucide.createIcons({ root: fsBtn }); } catch (e) { /* 忽略 */ }
+        }
+    }
+
+    if (fsBtn) {
+        fsBtn.addEventListener('click', function () {
+            if (fullscreenElement()) { exitFs(); } else { requestFs(stage); }
+        });
+    }
+    ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange']
+        .forEach(function (evt) { document.addEventListener(evt, syncFsButton); });
+})();
+</script>
+{% endif %}
+{% endblock %}

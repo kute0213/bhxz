@@ -1480,8 +1480,16 @@ document.addEventListener('keydown', function (e) {
         document.querySelectorAll('[data-custom-select].is-open').forEach(closeSelect);
     }
 });
+// 抬升下拉所在卡片：.pixel-card 的 contain: paint 会创建层叠上下文并裁剪溢出内容，
+// 若不抬升，展开的下拉会被相邻卡片压住 / 截断
+function toggleSelectCard(cs, open) {
+    var card = cs.closest('.pixel-card');
+    if (!card) return;
+    card.classList.toggle('select-open', !!open);
+}
 function openSelect(cs) {
     cs.classList.add('is-open');
+    toggleSelectCard(cs, true);
     var trigger = cs.querySelector('[data-trigger]');
     if (trigger) trigger.setAttribute('aria-expanded', 'true');
     // 选中当前值对应的 option
@@ -1498,6 +1506,7 @@ function openSelect(cs) {
 }
 function closeSelect(cs) {
     cs.classList.remove('is-open');
+    toggleSelectCard(cs, false);
     var trigger = cs.querySelector('[data-trigger]');
     if (trigger) trigger.setAttribute('aria-expanded', 'false');
 }

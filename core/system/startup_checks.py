@@ -185,9 +185,6 @@ _DEFAULT_SETTINGS = {
     'RCON_PASSWORD': '',
     'SESSION_LIFETIME': '86400',
     'MAX_CONTENT_LENGTH': '16777216',
-    'UPDATE_EXCLUDED_FILES': 'db,backups,uploads,.env,__pycache__',
-    'GITHUB_PROXIES': '',
-    'BUILD_STATIC_ON_UPDATE': '0',
     'MAIL_SERVER': '',
     'MAIL_PORT': '587',
     'MAIL_USE_TLS': '1',
@@ -201,7 +198,7 @@ def _check_config():
     """检查关键系统设置是否存在，缺失时自动写入默认值。
 
     只补充缺失项，不修改已有值。判断依据是数据库是否存在该键，
-    空字符串是合法值（如留空的 MAIL_* / GITHUB_PROXIES），不算缺失。
+    空字符串是合法值（如留空的 MAIL_*），不算缺失。
     """
     log('INFO', 'Startup', '[4/5] 检查系统配置完整性...')
     try:

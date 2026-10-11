@@ -237,15 +237,19 @@
                     <i data-lucide="book-open" class="w-5 h-5"></i>
                     <span>服务器指南</span>
                 </a>
-                <a href="{{ url_for('buildings.building_list') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors{% if request.endpoint and request.endpoint.startswith('buildings.') %} active{% endif %}">
-                    <i data-lucide="building-2" class="w-5 h-5"></i>
-                    <span>公共建筑</span>
+                <a href="{{ url_for('main.map_page') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors{% if request.endpoint == 'main.map_page' %} active{% endif %}">
+                    <i data-lucide="map" class="w-5 h-5"></i>
+                    <span>网页地图</span>
                 </a>
 
                 <div class="text-xs text-cream/40 font-medium uppercase tracking-wider px-4 mb-2 mt-6">社区</div>
                 <a href="{{ url_for('main.music_page') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors{% if request.endpoint and request.endpoint.startswith('main.music') %} active{% endif %}">
                     <i data-lucide="music" class="w-5 h-5"></i>
                     <span>大喇叭音频</span>
+                </a>
+                <a href="{{ url_for('buildings.building_list') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors{% if request.endpoint and request.endpoint.startswith('buildings.') %} active{% endif %}">
+                    <i data-lucide="building-2" class="w-5 h-5"></i>
+                    <span>公共建筑</span>
                 </a>
                 <a href="{{ url_for('backgrounds.background_list_page') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors{% if request.endpoint and request.endpoint.startswith('backgrounds.') %} active{% endif %}">
                     <i data-lucide="image" class="w-5 h-5"></i>
@@ -329,8 +333,8 @@
                             <a href="{{ url_for('guides.guide_list') }}" class="desktop-nav-dropdown-link{% if request.endpoint and request.endpoint.startswith('guides.') %} active{% endif %}" role="menuitem">
                                 <i data-lucide="book-open"></i><span>服务器指南</span>
                             </a>
-                            <a href="{{ url_for('buildings.building_list') }}" class="desktop-nav-dropdown-link{% if request.endpoint and request.endpoint.startswith('buildings.') %} active{% endif %}" role="menuitem">
-                                <i data-lucide="building-2"></i><span>公共建筑</span>
+                            <a href="{{ url_for('main.map_page') }}" class="desktop-nav-dropdown-link{% if request.endpoint == 'main.map_page' %} active{% endif %}" role="menuitem">
+                                <i data-lucide="map"></i><span>网页地图</span>
                             </a>
                         </div>
                     </div>
@@ -343,6 +347,9 @@
                         <div class="desktop-nav-dropdown" role="menu">
                             <a href="{{ url_for('main.music_page') }}" class="desktop-nav-dropdown-link{% if request.endpoint and request.endpoint.startswith('main.music') %} active{% endif %}" role="menuitem">
                                 <i data-lucide="music"></i><span>大喇叭音频</span>
+                            </a>
+                            <a href="{{ url_for('buildings.building_list') }}" class="desktop-nav-dropdown-link{% if request.endpoint and request.endpoint.startswith('buildings.') %} active{% endif %}" role="menuitem">
+                                <i data-lucide="building-2"></i><span>公共建筑</span>
                             </a>
                             <a href="{{ url_for('backgrounds.background_list_page') }}" class="desktop-nav-dropdown-link{% if request.endpoint and request.endpoint.startswith('backgrounds.') %} active{% endif %}" role="menuitem">
                                 <i data-lucide="image"></i><span>官网背景图片</span>

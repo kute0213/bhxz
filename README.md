@@ -131,7 +131,7 @@ python scripts/build/package.py
 │   ├── admin/          # 管理后台页面（如 users.html、settings.html，无 admin_ 前缀）
 │   ├── auth/           # 登录 / 注册 / 找回密码
 │   ├── settings/       # 用户个人设置
-│   ├── site/           # 站点级信息页（站点文档、服务器状态）
+│   ├── site/           # 站点级信息页（站点文档、服务器状态、网页地图）
 │   ├── backgrounds/    # 背景图片页面（index / upload）
 │   ├── emails/         # 邮件模板（独立 Jinja2 loader）
 │   ├── game_accounts/  # 游戏账号页面（apply / ban_apply）
@@ -236,6 +236,7 @@ python scripts/build/package.py
   * **表格列宽拖拽（含移动端）**：拖拽表头列之间的手柄调整列宽，采用 Pointer Events 统一处理鼠标与触屏（`touch-action:none` + 指针捕获），移动端可正常拖动；结果**直接编码进 Markdown 表格分隔行的破折号数量**（列越宽该列破折号越多），往返编辑不丢失；表格对齐（左/中/右）同样映射到分隔行的 `:` 标记。
   * 支持全部标准 Markdown 语法的可视化编辑：标题、强调、行内代码、代码块（含语言）、引用、有序/无序/任务列表、链接、分割线、表格；Markdown 不支持的常见内联语义（`<sub>`/`<sup>`/`<mark>`/`<u>`/`<kbd>` 等）以原始内联 HTML 保留。
   * 与模板风格完全统一（白色磨砂玻璃、站点配色与字体），不引入任何第三方编辑器库或外部风格。
+  * **自带文本选择样式**：编辑器（富文本区与 Markdown 源码区）定义独立的 `::selection` 配色（更贴近站点主色的蓝色选区），不被全站默认选区样式覆盖；同时富文本区禁用移动端长按弹出的「复制 / 粘贴 / 全选」原生选择菜单（`-webkit-touch-callout: none`），选区交互完全由编辑器自身样式与工具栏承载。
 
 * 成员提交需审核，管理员直接发布
 
@@ -342,6 +343,16 @@ python scripts/build/package.py
 
 * **被驳回内容 24 小时自动删除**：被驳回超过 24 小时的服务器指南、背景图片等自动清理（删除数据库记录与关联本地文件，含背景主图与响应式变体）
 
+### 网页地图
+
+* 导航栏「服务器 → 网页地图」进入 `/map` 页面，**自动内嵌展示**在「管理中心 → 系统设置 → 外部链接 → 卫星地图地址」（`MAP_URL`，亦是 `config.py` 中的默认值）里配置的网页地图链接，改设置后刷新页面即生效，无需重启
+
+* **CSP 自动放行**：基础 CSP 的 `frame-src` 仅允许 `'self'`，会拦截外部地图 iframe；中间件会按 `MAP_URL` 的源（`scheme://host[:port]`）动态加入 `frame-src` 与 `child-src`（兼容不支持 `frame-src` 的老浏览器），保证地图正常内嵌
+
+* **跨浏览器兼容**：地图区自适应铺满可视高度；工具栏提供「刷新 / 全屏 / 新标签打开」；全屏使用带 `webkit / moz / ms` 前缀的 Fullscreen API 并监听各前缀的 `fullscreenchange` 事件；iframe 带 `allowfullscreen`、`allow="fullscreen"` 与 `title`（无障碍）
+
+* **加载兜底**：iframe 载入完成自动淡出加载遮罩；超过 12 秒仍未完成则提示「可能被对端限制内嵌」并给出「在新标签页打开」出口；若 `MAP_URL` 为空则显示配置引导
+
 ### 文档系统
 
 * Markdown 文档渲染（marked.js）
@@ -418,7 +429,7 @@ python scripts/build/package.py
 | `LOG_LEVEL`                   | 日志输出等级（DEBUG/INFO/WARNING/ERROR/CRITICAL） | `INFO`                                      |
 | `LOG_CONSOLE_ENABLED`         | 是否将全局日志打印到终端（模块单独日志默认不打印，仅在「全局」开关打开时随此开关打印） | `1`（开启）                                    |
 | `FAVICON_ICON`                | 网站图标（可选 compass/mountain/star/heart）      | `compass`                                   |
-| `MAP_URL`                     | 卫星地图地址                                    | `https://map.bhxz.tw.kg`                    |
+| `MAP_URL`                     | 卫星地图地址（首页按钮跳转 + 网页地图页内嵌）              | `https://map.bhxz.tw.kg`                    |
 | `QQ_GROUP_URL`                | QQ 群链接                                    | 空                                           |
 | `FIREWALL_WHITELIST`          | 封禁白名单（逗号分隔），白名单 IP 不会被封禁                    | `112.82.136.172`                            |
 | `AUTO_BAN_ENABLED`            | 自动 IP 封禁总开关                                 | `1`（开启）                                    |
@@ -579,7 +590,9 @@ python scripts/build/package.py
 
 * 全局细微噪点纹理（SVG `feTurbulence`），模拟蚀刻玻璃表面微观散射
 
-* **桌面端悬停下拉导航栏**：大屏端（≥1024px）主导航为「首页 / 导航 / 服务器互动 / 账号」，其中「导航 / 服务器互动 / 账号」为悬停下拉菜单（CSS 过渡动画，`cubic-bezier` 弹性曲线流畅展开）；小屏端保持右侧滑出菜单不变
+* **桌面端悬停下拉导航栏**：大屏端（≥1024px）主导航为「主页 / 服务器 / 社区 / 我的」，其中「服务器 / 社区 / 我的」为悬停下拉菜单（CSS 过渡动画，`cubic-bezier` 弹性曲线流畅展开）；小屏端保持右侧滑出菜单不变。分组内容：服务器（服务器状态 / 服务器指南 / 网页地图）、社区（大喇叭音频 / 公共建筑 / 官网背景图片）、我的（账户设置 / 申请封禁玩家 / 申请服务器账号 / 管理中心 / 退出登录）；**公共建筑归入「社区」分组**
+
+* **自绘下拉菜单层级修复**：`.pixel-card` 的 `contain: paint` 会创建层叠上下文并裁剪溢出内容，导致卡片内展开的自绘下拉（`.custom-select-dropdown`）被相邻卡片压住 / 截断。现展开时由 `base.js` 给所在卡片加 `select-open` 类，CSS 临时去掉 paint 包含（保留 layout/style，不改布局）并把卡片抬到同层卡片之上（`z-index: 30`，仍低于导航栏），收起时还原
 
 * **首页首屏磨砂玻璃背景铺满整屏**：`templates/index.html` 的 `.home-hero` 以负外边距（`--nav-offset`，移动端 80px / ≥768px 96px）抵消粘性导航栏在文档流中的占位高度，并用等量 `padding-top` 补回内容位置，使首页首屏的磨砂玻璃背景从**页面最顶端**开始连续覆盖——顶部不再出现空条、导航栏后方也一并被铺到；`min-height: 100vh` 保证首屏始终铺满一屏
 
@@ -762,7 +775,7 @@ workspace/
 │   ├── admin/                #   管理后台页面（无 admin_ 前缀）
 │   ├── auth/                 #   登录 / 注册 / 找回密码
 │   ├── settings/             #   用户个人设置
-│   ├── site/                 #   站点级信息页（站点文档、服务器状态）
+│   ├── site/                 #   站点级信息页（站点文档、服务器状态、网页地图）
 │   ├── backgrounds/          #   背景图片页面（index / upload）
 │   ├── emails/               #   邮件模板（独立 loader）
 │   ├── game_accounts/        #   游戏账号页面（apply / ban_apply）
@@ -871,7 +884,7 @@ workspace/
 7. IP 频率限制（注册/登录）
 8. **全站安全响应标头**（`core/web/middleware.py` 集中下发，覆盖 HTML/API/SSE/静态资源）：
 
-   * `Content-Security-Policy`：仅允许本站脚本/样式/资源，禁用 `object`，限制 `form-action`/`frame-ancestors` 等（已放行内联脚本/样式与 HLS blob worker，避免误伤自身功能）
+   * `Content-Security-Policy`：仅允许本站脚本/样式/资源，禁用 `object`，限制 `form-action`/`frame-ancestors` 等（已放行内联脚本/样式与 HLS blob worker，避免误伤自身功能）；`frame-src`/`child-src` 会按配置的「卫星地图地址」动态追加其源，供「网页地图」页内嵌外部地图
 
    * `X-Content-Type-Options: nosniff`、`X-Frame-Options: SAMEORIGIN`（防点击劫持）
 

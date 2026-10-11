@@ -403,13 +403,8 @@ SETTINGS_REGISTRY = [
     ('BACKGROUNDS_PER_PAGE', 5, 'int', '后台背景图片每页数量', '管理后台背景图片列表每次加载的条数，用户调用接口传入的参数一律被忽略', '列表分页'),
     ('GAME_ACCOUNTS_PER_PAGE', 5, 'int', '后台账号申请每页数量', '管理后台游戏账号申请列表每次加载的条数，用户调用接口传入的参数一律被忽略', '列表分页'),
 
-    # 一键更新
-    ('BUILD_STATIC_ON_UPDATE', False, 'bool', '更新时构建静态资源', '开启后每次更新都会重新下载外部 CDN 资源（Monaco、hls.js 等），关闭则仅同步代码', '一键更新'),
-    ('UPDATE_EXCLUDED_FILES', 'db,backups,uploads,.env,.git,__pycache__', 'str', '不替换的文件/文件夹', '逗号分隔，更新时不会被删除或覆盖', '一键更新'),
-    ('GITHUB_PROXIES', '', 'str', '自定义 GitHub 代理', '每行一个，格式：名称=URL。留空使用默认代理列表', '一键更新'),
-
     # 外部链接
-    ('MAP_URL', 'https://map.bhxz.tw.kg', 'str', '卫星地图地址', '首页卫星地图按钮的链接地址', '外部链接'),
+    ('MAP_URL', 'https://map.bhxz.tw.kg', 'str', '卫星地图地址', '首页「卫星地图」按钮跳转、导航栏「服务器 → 网页地图」页内嵌展示的链接地址（需为 http/https 网页地址，该站点需允许被 iframe 内嵌）', '外部链接'),
     ('QQ_GROUP_URL', 'https://qun.qq.com/...', 'str', 'QQ 群链接', '首页加入 QQ 群按钮的链接地址', '外部链接'),
 
     # 背景图片

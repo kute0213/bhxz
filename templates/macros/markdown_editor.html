@@ -129,11 +129,40 @@
     min-height: 100%;
     outline: none;
     overflow-wrap: break-word;
+    /* 禁用移动端长按弹出的「复制 / 粘贴 / 全选」原生选择菜单，
+       让选区交互完全由编辑器自身样式与工具栏承载 */
+    -webkit-touch-callout: none;
 }
 .mre-rich:empty::before {
     content: attr(data-placeholder);
     color: var(--text-muted);
     pointer-events: none;
+}
+/* 编辑器自带文本选择样式（独立于全站 ::selection，覆盖其规则） */
+.mre-rich::selection,
+.mre-rich *::selection {
+    background: rgba(2, 132, 199, 0.26);
+    color: inherit;
+    text-shadow: none;
+}
+.mre-md textarea::selection {
+    background: rgba(2, 132, 199, 0.26);
+    color: inherit;
+}
+.mre-rich::-moz-selection,
+.mre-rich *::-moz-selection {
+    background: rgba(2, 132, 199, 0.26);
+    color: inherit;
+    text-shadow: none;
+}
+.mre-md textarea::-moz-selection {
+    background: rgba(2, 132, 199, 0.26);
+    color: inherit;
+}
+/* 富文本区禁用移动端长按弹出的「复制 / 粘贴 / 全选」原生选择菜单，
+   让选区交互完全由编辑器自身样式与工具栏承载 */
+.mre-rich {
+    -webkit-touch-callout: none;
 }
 /* 编辑态下的表格：固定布局 + 显式列宽，便于拖拽调整列宽
    （提高选择器优先级，避免被下方共用的 .prose-docs 表格样式覆盖边框/内距） */

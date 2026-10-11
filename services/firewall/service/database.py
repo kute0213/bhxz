@@ -19,7 +19,7 @@ from config import APP_ROOT
 from core.system.logger import log_firewall
 
 # 防火墙数据库固定存放在项目根目录的 uploads/db/ 下（与主站 SQLite 同目录），
-# 随站点一起被备份、且在更新时受 UPDATE_EXCLUDED_FILES 保护，重启不丢。
+# 随站点一起被备份，重启不丢。
 DB_DIR = os.path.join(APP_ROOT, 'uploads', 'db')
 DB_PATH = os.path.join(DB_DIR, 'firewall.duckdb')
 

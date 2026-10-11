@@ -4,6 +4,27 @@
 
 ### 变更
 
+* **导航栏分组调整：公共建筑移入「社区」**（`templates/base.html`）：
+  * 桌面端悬停下拉与移动端滑出菜单同步调整：「公共建筑」从「服务器」分组移至「社区」分组，社区顺序为「大喇叭音频 → 公共建筑 → 官网背景图片」；「服务器」分组保留「服务器状态 / 服务器指南 / 网页地图」。两端分组与顺序保持一致。
+
+* **修复系统设置页自绘下拉被相邻卡片遮挡**（`templates/static/js/core/base.js`、`templates/static/css/base.css`）：
+  * **问题**：`.pixel-card` 的 `contain: paint` 会创建层叠上下文并裁剪溢出内容，导致卡片内展开的自绘下拉（`.custom-select-dropdown`）被相邻卡片压住 / 截断。
+  * **修复**：展开时由 `base.js` 新增的 `toggleSelectCard()` 给下拉所在卡片加 `select-open` 类（`openSelect` 加、`closeSelect` 移）；CSS 对 `.pixel-card.select-open` 临时去掉 paint 包含（保留 `layout style`，不改变布局）并设 `z-index: 30`，把卡片抬到同层卡片之上、导航栏之下，收起后自动还原。
+
+* **清理一键更新相关配置项**（`config.py`、`core/system/startup_checks.py`、`services/firewall/service/database.py`）：
+  * 一键更新功能已移除，同步删除遗留配置：`SETTINGS_REGISTRY` 中的「一键更新」分类及 `BUILD_STATIC_ON_UPDATE`、`UPDATE_EXCLUDED_FILES`、`GITHUB_PROXIES` 三项；`startup_checks.py` 默认值补齐字典中的对应键一并删除；`services/firewall/service/database.py` 注释中「受 UPDATE_EXCLUDED_FILES 保护」的过时说明更新。
+
+* **富文本编辑器使用自带文本选择样式并抑制原生复制 / 粘贴菜单**（`templates/macros/markdown_editor.html`）：
+  * 编辑器（富文本区与 Markdown 源码区）新增独立 `::selection` / `::-moz-selection` 配色（`rgba(2, 132, 199, 0.26)`），优先级高于全站默认选区样式；富文本区加 `-webkit-touch-callout: none`，禁用移动端长按弹出的「复制 / 粘贴 / 全选」原生选择菜单，选区交互完全由编辑器自身样式与工具栏承载。
+
+* **新增导航栏「服务器 → 网页地图」功能**（`routes/main/pages/`、`templates/site/map.html`、`templates/base.html`、`core/middleware.py`、`config.py`、`services/sitemap_cache/`）：
+  * **页面与入口**：新增 `/map` 路由（端点 `main.map_page`）与 `templates/site/map.html`；导航栏「服务器」分组（移动端滑出菜单 + 桌面端下拉）新增「网页地图」入口，进入后**自动内嵌展示**在「外部链接 → 卫星地图地址」（`MAP_URL`，`config.py` 中为默认值）里配置的网页地图链接。
+  * **CSP 放行**：基础 CSP 的 `frame-src` 仅放行 `'self'`，会拦截外部地图 iframe。`core/middleware.py` 新增 `_map_frame_origin()` / `_csp_with_map_frame()`，按 `MAP_URL` 的源（`scheme://host[:port]`）动态把该源追加进 `frame-src` 与 `child-src`（后者作为不支持 `frame-src` 的老浏览器回退），并按源缓存编译结果，仅在源变化时重新拼接；非法/空地址自动跳过，不影响其他页面。
+  * **跨浏览器兼容**：地图区 flex 铺满可视高度（`min-height: 62vh`，移动端 58vh）；工具栏提供「刷新 / 全屏 / 新标签打开」；全屏走带 `webkit / moz / ms` 前缀的 Fullscreen API，并监听各前缀 `fullscreenchange` 同步按钮状态；iframe 带 `allowfullscreen`、`allow="fullscreen"`、`title` 与 `referrerpolicy`。
+  * **加载兜底**：iframe `load` 后淡出加载遮罩（过滤 `about:blank` 中转）；12 秒未完成显示「可能被对端限制内嵌」并给出「在新标签页打开」出口；`MAP_URL` 为空时显示配置引导卡片。
+  * **其他**：`MAP_URL` 设置项描述更新（说明同时用于首页按钮跳转与网页地图内嵌）；`/map` 加入 `services/sitemap_cache` 的静态页面列表；`templates/base.html` 导航 active 判定 `request.endpoint == 'main.map_page'`。
+  * **验证**：Flask test client 请求 `/map` 返回 200 且响应头 `frame-src` / `child-src` 含 `https://map.bhxz.tw.kg`；空 `MAP_URL` 与正常 URL 两种分支模板渲染通过；`_build_url_entries()` 含 `/map`；pytest 204 项全部通过。
+
 * **首页首屏磨砂玻璃背景铺满整屏**（`templates/index.html`）：
   * **问题**：首页首屏磨砂玻璃背景上方有一条空带，且导航栏后方未被铺到。根因是 `.home-hero` 原用 `min-height: calc(100vh - 80px)` 起步于粘性导航栏之后，加上导航栏外层 `padding-top: 14px` 与内容高度差异，使首屏磨砂背景无法覆盖页面最顶端。
   * **修复**：`.home-hero` 改为 `min-height: 100vh`，并以负外边距 `margin-top: calc(-1 * var(--nav-offset))` 抵消导航栏在文档流中的占位高度，同时用等量 `padding-top` 补回内容位置——首屏磨砂玻璃背景自页面最顶端连续覆盖，顶部空条消失、导航栏后方一并铺到（`--nav-offset`：移动端 80px、≥768px 96px，取整略大于导航实际占位高度以确保不留缝）。移动端 `@media (max-width: 680px)` 的 `min-height` 同步改为 `100vh`。

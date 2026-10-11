@@ -70,3 +70,14 @@ def favicon_ico():
 def server_status():
     """服务器状态页面：展示在线玩家列表、人数等实时信息。"""
     return render_page('site/server_status.html')
+
+
+@main_bp.route('/map')
+def map_page():
+    """网页地图页面：把「外部链接 → 卫星地图地址」中配置的链接内嵌展示。
+
+    地图地址在 config.py 的 MAP_URL 中定义默认值，可在管理后台「系统设置 →
+    外部链接」中热改。对应的源会由中间件动态加入 CSP 的 frame-src 放行，
+    内嵌的 iframe 才能正常加载。
+    """
+    return render_page('site/map.html', map_url=get_config_value('MAP_URL', MAP_URL))

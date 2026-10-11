@@ -523,6 +523,14 @@ body::after {
     font-weight: 600;
     background: rgba(2,132,199,0.06);
 }
+/* 自绘下拉展开时抬升所在卡片：.pixel-card 的 contain: paint 会创建层叠上下文
+   并裁剪溢出内容，导致下拉被相邻卡片压住 / 截断；这里临时去掉 paint 包含
+   （保留 layout/style，不改变布局），并把卡片提到同层卡片之上、导航栏之下 */
+.pixel-card.select-open {
+    position: relative;
+    z-index: 30;
+    contain: layout style;
+}
 
 /* 输入框 - 白色磨砂玻璃控件（深色文字） */
 .input-field {
