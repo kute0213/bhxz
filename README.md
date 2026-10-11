@@ -581,6 +581,8 @@ python scripts/build/package.py
 
 * **桌面端悬停下拉导航栏**：大屏端（≥1024px）主导航为「首页 / 导航 / 服务器互动 / 账号」，其中「导航 / 服务器互动 / 账号」为悬停下拉菜单（CSS 过渡动画，`cubic-bezier` 弹性曲线流畅展开）；小屏端保持右侧滑出菜单不变
 
+* **首页首屏磨砂玻璃背景铺满整屏**：`templates/index.html` 的 `.home-hero` 以负外边距（`--nav-offset`，移动端 80px / ≥768px 96px）抵消粘性导航栏在文档流中的占位高度，并用等量 `padding-top` 补回内容位置，使首页首屏的磨砂玻璃背景从**页面最顶端**开始连续覆盖——顶部不再出现空条、导航栏后方也一并被铺到；`min-height: 100vh` 保证首屏始终铺满一屏
+
 * **邮件模板同款磨砂玻璃**：`templates/emails/base.html` 统一白色磨砂玻璃卡片（浅灰白渐变 + 蓝色主色 `#0284c7` + 背景光晕 + 噪点纹理 + 光线散射层 + 顶部高光描边 + 状态卡），验证码 / 指南审核 / 音频审核 / 背景图片审核 / 公共建筑审核 / 通用待审核提醒 / 广播邮件共用同一外层与样式；`services/mail/notify_admins()` 为统一的「通知所有管理员」入口
 
 * **自定义音频播放器（磨砂玻璃风格）**：大喇叭音频列表（`/music`）、我的音频（`/music/my`）、管理员审核页（`admin/admin_music.html`）均使用自研播放器替代浏览器默认控件，含进度条（点击/拖动 seek、缓冲显示，**圆点（thumb）跟随进度实时移动**）、倍速（0.5x~2x）、音量（按钮+滑块弹层，音量记忆在 localStorage）与播放/暂停，窄屏（≤480px）自动占满整行，且倍速/音量弹层窄屏时改为右对齐，避免超出卡片/视口被裁切；每个 `.music-player` 独立实例化并拥有独立的 HLS 实例与 `Audio` 元素，同一时间只允许一个播放器出声，列表内多个音频均可独立播放；样式见 `static/css/base.css` 的 `.music-player`（倍速/音量弹层 `z-index:100` 向上展开；内含播放器的卡片使用 `.pixel-card.music-card` 显式解除 `contain:paint`/`content-visibility` 的溢出裁切，弹层不被遮挡/裁切），逻辑见 `static/js/pages/music_player.js`，HLS 播放依赖本地 `static/lib/hls/hls.min.js`（构建脚本 `scripts/build/build_static.py` 自动下载）

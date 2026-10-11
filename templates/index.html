@@ -5,12 +5,23 @@
 <style>
     /* ============ 首页 - 白色浅蓝磨砂玻璃风格（与全站主题统一） ============ */
     .home-hero {
-        min-height: calc(100vh - 80px);
+        /* 首屏铺满整屏并向上延伸到粘性导航栏之后：
+           负外边距抵消导航栏在文档流中占用的高度，使磨砂玻璃背景从页面最顶端
+           开始连续覆盖——不再出现顶部空条，导航栏后方也被铺到。
+           --nav-offset 为导航栏实际占位高度（14px 上内边距 + 内容高度 + 1px 下边框），
+           取整略大于实际值，确保上方不留缝。 */
+        --nav-offset: 80px;
+        min-height: 100vh;
+        margin-top: calc(-1 * var(--nav-offset));
+        padding-top: var(--nav-offset);
         display: flex;
         align-items: center;
         position: relative;
         overflow: hidden;
         isolation: isolate;
+    }
+    @media (min-width: 768px) {
+        .home-hero { --nav-offset: 96px; }
     }
     .home-hero::before {
         content: "";
@@ -416,7 +427,7 @@
         .contact-actions { grid-template-columns: 1fr 1fr; min-width: 0; }
     }
     @media (max-width: 680px) {
-        .home-hero { min-height: calc(100vh - 64px); align-items: end; }
+        .home-hero { min-height: 100vh; align-items: end; }
         .home-hero::before {
             background:
                 linear-gradient(0deg, rgba(248, 250, 252, 0.9) 0%, rgba(248, 250, 252, 0.55) 54%, rgba(248, 250, 252, 0.25) 100%),
