@@ -1459,7 +1459,7 @@ pre::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.24); }
 
 /* ============================================
    统一标签列表输入框（TagInput）
-   DOM 结构见 templates/macros/forms.html 的 tags_field 宏；
+   DOM 结构见 web/macros/forms.html 的 tags_field 宏；
    交互逻辑见 static/js/core/base.js 的 TagInput。
    全站所有「列表类」输入（建筑标签、音频标签等）统一使用本控件。
    ============================================ */

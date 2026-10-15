@@ -2,7 +2,7 @@
 // —— 默认「富文本（所见即所得）」模式，底层数据与保存内容始终是 Markdown；
 //    可无缝切换到「Markdown 源码」模式（单栏，无实时预览）。
 // 依赖：lib/marked/marked.min.js、lib/purify/purify.min.js
-// 结构见 templates/macros/markdown_editor.html（全站唯一实现）
+// 结构见 web/macros/markdown_editor.html（全站唯一实现）
 (function () {
     'use strict';
 
