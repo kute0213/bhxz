@@ -135,7 +135,7 @@ def upload_music():
 
     # 待审核数量上限（仅「申请公开」时进入待审核，先查再上传，避免白传大文件）
     if is_public:
-        from core.helpers import check_pending_limit
+        from services.content_limits import check_pending_limit
         allowed, msg = check_pending_limit(user, 'music')
         if not allowed:
             return jsonify({'error': msg}), 400

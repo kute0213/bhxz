@@ -6,6 +6,7 @@ from datetime import datetime
 from core.auth import get_current_user, login_required
 from core.helpers import render_page
 from core.db import get_db
+from core.shared.snowflake import next_id
 from core.shared.captcha import captcha_service
 from core.shared.ip import get_client_ip
 from config import get_page_size
@@ -169,7 +170,7 @@ def guide_create():
 
     if request.method == 'POST':
         # 检查待审核数量上限（总量 + 服务器指南单类）
-        from core.helpers import check_pending_limit
+        from services.content_limits import check_pending_limit
         allowed, msg = check_pending_limit(user, 'guide')
         if not allowed:
             flash(msg, 'error')
@@ -209,10 +210,10 @@ def guide_create():
             conn.execute(
                 """
                 INSERT INTO server_guides
-                (title, slug, summary, content, author_id, status, is_pinned, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, 'pending', 0, ?, ?)
+                (id, title, slug, summary, content, author_id, status, is_pinned, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, 'pending', 0, ?, ?)
                 """,
-                (title, slug, summary, content, user['id'], now, now),
+                (next_id(), title, slug, summary, content, user['id'], now, now),
             )
             conn.commit()
             flash('指南已提交，等待管理员审核', 'success')

@@ -7,6 +7,7 @@
 from datetime import datetime
 
 from core.db import get_db
+from core.shared.snowflake import next_id
 from config import get_page_size
 
 # 标签限制：最多 10 个，每个不超过 12 字
@@ -298,8 +299,8 @@ def toggle_favorite(user_id, building_id):
             message = '已取消收藏'
         else:
             conn.execute(
-                "INSERT INTO building_favorites (building_id, user_id, created_at) VALUES (?, ?, ?)",
-                (building_id, user_id, _now()),
+                "INSERT INTO building_favorites (id, building_id, user_id, created_at) VALUES (?, ?, ?, ?)",
+                (next_id(), building_id, user_id, _now()),
             )
             is_fav = True
             message = '已收藏'

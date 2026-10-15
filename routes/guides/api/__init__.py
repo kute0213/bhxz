@@ -7,6 +7,7 @@ from flask import request, jsonify
 
 from core.auth import login_required, get_current_user
 from core.db import get_db
+from core.shared.snowflake import next_id
 from core.shared.captcha import captcha_service
 from config import get_page_size
 from services.mail import email_service, guide_review_pending as build_pending_html
@@ -259,8 +260,8 @@ def toggle_guide_favorite(guide_id):
             is_favorited = False
         else:
             conn.execute(
-                "INSERT INTO guide_favorites (guide_id, user_id, created_at) VALUES (?, ?, CURRENT_TIMESTAMP)",
-                (guide_id, user['id']),
+                "INSERT INTO guide_favorites (id, guide_id, user_id, created_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)",
+                (next_id(), guide_id, user['id']),
             )
             is_favorited = True
         conn.commit()

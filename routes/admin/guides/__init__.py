@@ -7,6 +7,7 @@ from flask import redirect, url_for, flash, abort, request, jsonify
 from core.auth import admin_required, get_current_user
 from core.helpers import render_page
 from core.db import get_db
+from core.shared.snowflake import next_id
 from services.mail import email_service, guide_review_result as build_result_html
 from routes.admin import admin_bp
 
@@ -138,21 +139,22 @@ def admin_guide_create():
             now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             slug = _ensure_unique_slug(conn, _slugify(title))
             published_at = now if status == 'approved' else None
-            cur = conn.execute(
+            guide_id = next_id()
+            conn.execute(
                 """
                 INSERT INTO server_guides
-                (title, slug, summary, content, cover_image, author_id, status,
+                (id, title, slug, summary, content, cover_image, author_id, status,
                  is_pinned, created_at, updated_at, published_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (title, slug, summary, content, cover_image, user['id'],
+                (guide_id, title, slug, summary, content, cover_image, user['id'],
                  status, is_pinned, now, now, published_at),
             )
             conn.commit()
             return jsonify({
                 'success': True,
                 'message': '指南已创建',
-                'guide_id': cur.lastrowid,
+                'guide_id': guide_id,
                 'redirect': url_for('admin.admin_guides'),
             })
         except Exception as e:

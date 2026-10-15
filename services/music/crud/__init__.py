@@ -89,7 +89,7 @@ def toggle_music_public(music_id, user_id, is_admin, ip_address):
 
     # 申请公开进入待审核：校验待审核数量上限（总量 + 音频单类）
     if new_status == STATUS_PENDING:
-        from core.helpers import check_pending_limit
+        from services.content_limits import check_pending_limit
         allowed, message = check_pending_limit({'id': user_id, 'is_admin': is_admin}, 'music')
         if not allowed:
             return False, message

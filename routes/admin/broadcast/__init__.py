@@ -11,6 +11,7 @@ from flask import request, jsonify
 from core.auth import admin_required, get_current_user
 from core.helpers import render_page
 from core.db import get_db
+from core.shared.snowflake import next_id
 from services.mail import email_service, broadcast_message
 from services.mail.sanitize import sanitize_email_html, html_to_plain_text
 from routes.admin import admin_bp
@@ -93,9 +94,9 @@ def admin_broadcast_send():
         try:
             log_conn.execute(
                 "INSERT INTO broadcast_logs "
-                "(subject, body, sender_id, sender_name, recipient_count, created_at) "
-                "VALUES (?, ?, ?, ?, ?, ?)",
-                (subject, plain_text, user['id'], user['username'], sent_count,
+                "(id, subject, body, sender_id, sender_name, recipient_count, created_at) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (next_id(), subject, plain_text, user['id'], user['username'], sent_count,
                  datetime.now().strftime('%Y-%m-%d %H:%M:%S')),
             )
             log_conn.commit()

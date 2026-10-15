@@ -12,6 +12,7 @@ import time
 from datetime import datetime
 
 from core.db import get_db
+from core.shared.snowflake import next_id
 from core.system.logger import log
 
 
@@ -118,10 +119,9 @@ class SettingsManager:
     def _save_to_db(self, key: str, value):
         """保存单个设置到数据库。
 
-        注意：不能用 `INSERT ... ON CONFLICT(key) DO UPDATE`。settings 表使用
-        `INTEGER PRIMARY KEY AUTOINCREMENT`，而保险的 upsert 在「走 UPDATE 分支」时
-        仍会先分配、消耗一个自增 ID（sqlite_sequence 每次 +1），导致 ID 无意义地飞涨。
-        这里改为「先 UPDATE，未命中再 INSERT」，避免消耗自增 ID。
+        主键 id 由雪花算法统一生成（见 core/shared/snowflake.py）。这里采用
+        「先 UPDATE，未命中再 INSERT」：已存在的 key 只更新 value/updated_at，
+        不会新建行、不会浪费 ID。
         """
         str_value = _value_to_string(value)
         now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -133,8 +133,8 @@ class SettingsManager:
                 )
                 if cur.rowcount == 0:
                     conn.execute(
-                        "INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)",
-                        (key, str_value, now),
+                        "INSERT INTO settings (id, key, value, updated_at) VALUES (?, ?, ?, ?)",
+                        (next_id(), key, str_value, now),
                     )
 
             # 更新缓存
@@ -166,7 +166,7 @@ class SettingsManager:
         self._save_to_db(key, value)
 
     def bulk_set(self, items: dict):
-        """批量设置多个设置值（同一连接内完成，避免消耗多余自增 ID）。"""
+        """批量设置多个设置值（同一事务内完成，整体原子提交）。"""
         now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         with get_db() as conn:
             for key, value in items.items():
@@ -177,8 +177,8 @@ class SettingsManager:
                 )
                 if cur.rowcount == 0:
                     conn.execute(
-                        "INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)",
-                        (key, str_value, now),
+                        "INSERT INTO settings (id, key, value, updated_at) VALUES (?, ?, ?, ?)",
+                        (next_id(), key, str_value, now),
                     )
 
         # 更新缓存

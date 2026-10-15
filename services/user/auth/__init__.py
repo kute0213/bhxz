@@ -47,12 +47,13 @@ def check_username_available(username, exclude_user_id=None):
             if exclude_user_id:
                 existing = conn.execute(
                     "SELECT id FROM users WHERE lower(username) = lower(?) "
-                    "AND id != ? LIMIT 1",
+                    "AND is_deleted = 0 AND id != ? LIMIT 1",
                     (username, exclude_user_id)
                 ).fetchone()
             else:
                 existing = conn.execute(
-                    "SELECT id FROM users WHERE lower(username) = lower(?) LIMIT 1",
+                    "SELECT id FROM users WHERE lower(username) = lower(?) "
+                    "AND is_deleted = 0 LIMIT 1",
                     (username,)
                 ).fetchone()
     except Exception as exc:
@@ -110,7 +111,8 @@ def register(username, password, confirm, verify_code, captcha_input, captcha_id
     try:
         with get_db() as conn:
             existing = conn.execute(
-                "SELECT id FROM users WHERE lower(username) = lower(?) LIMIT 1",
+                "SELECT id FROM users WHERE lower(username) = lower(?) "
+                "AND is_deleted = 0 LIMIT 1",
                 (username,)
             ).fetchone()
             if existing:
@@ -190,7 +192,7 @@ def login(username, password, captcha_input, captcha_id, ip_address,
             user = conn.execute(
                 "SELECT id, username, password_hash, is_admin, "
                 "login_attempts, locked_until FROM users "
-                "WHERE lower(username) = lower(?) LIMIT 1",
+                "WHERE lower(username) = lower(?) AND is_deleted = 0 LIMIT 1",
                 (username,)
             ).fetchone()
 
@@ -284,7 +286,8 @@ def forgot_password(username, email, captcha_input, captcha_id, email_code,
     conn = get_db()
     try:
         user = conn.execute(
-            "SELECT id, email FROM users WHERE lower(username) = lower(?) LIMIT 1",
+            "SELECT id, email FROM users WHERE lower(username) = lower(?) "
+            "AND is_deleted = 0 LIMIT 1",
             (username,)
         ).fetchone()
     finally:

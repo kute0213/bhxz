@@ -134,6 +134,13 @@ def _check_database():
     except Exception as e:
         log('ERROR', 'Startup', f'  ✗ 数据库检查失败: {e}')
 
+    # 历史自增 ID → 雪花 ID 迁移（幂等；已迁移过则直接跳过）
+    try:
+        from core.db.snowflake_migration import migrate_legacy_ids
+        migrate_legacy_ids()
+    except Exception as e:
+        log('ERROR', 'Startup', f'  ✗ 雪花 ID 迁移失败: {e}')
+
 
 # ---------------------------------------------------------------------------
 # 3. 文件结构完整性检查

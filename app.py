@@ -87,7 +87,8 @@ class _ProxyAwareSessionInterface(SecureCookieSessionInterface):
         return bool(request.is_secure)
 
 
-app = Flask(__name__, static_folder='templates/static')
+# 单一前端根目录：web/（页面模板直接在 web/ 下、静态资源在 web/static/）
+app = Flask(__name__, template_folder='web', static_folder='web/static')
 app.secret_key = config.SECRET_KEY
 app.config['MAX_CONTENT_LENGTH'] = config.MAX_CONTENT_LENGTH
 app.config['TEMPLATES_AUTO_RELOAD'] = os.environ.get('FLASK_ENV') == 'development'

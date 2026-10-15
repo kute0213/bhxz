@@ -75,14 +75,9 @@
             {% endif %}
 
             {% if building.notes %}
-            <div class="bg-yellow-500/5 border border-yellow-500/20 rounded-xl p-4">
-                <div class="flex items-start gap-2">
-                    <i data-lucide="alert-triangle" class="w-5 h-5 text-yellow-400 flex-shrink-0 mt-0.5"></i>
-                    <div>
-                        <h3 class="text-sm font-semibold text-yellow-400 mb-1">注意事项</h3>
-                        <div class="text-yellow-300/70 text-sm whitespace-pre-wrap">{{ building.notes }}</div>
-                    </div>
-                </div>
+            <div class="mb-6">
+                <h2 class="text-lg font-semibold mb-3 text-cream/80">注意事项</h2>
+                <div class="text-cream/70 text-sm leading-relaxed whitespace-pre-wrap">{{ building.notes }}</div>
             </div>
             {% endif %}
         </div>

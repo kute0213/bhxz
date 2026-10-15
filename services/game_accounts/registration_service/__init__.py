@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import List, Optional, Tuple
 
 from core.db import get_db
+from core.shared.snowflake import next_id
 
 # 列表分页大小：每次加载 10 条，前端点击「加载更多」再取下一页
 PAGE_SIZE = 5
@@ -54,9 +55,9 @@ def create_application(user_id: int, mc_username: str) -> Tuple[bool, str]:
         now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         conn.execute(
             """INSERT INTO game_account_registrations
-               (user_id, mc_username, encrypted_password, status, created_at)
-               VALUES (?, ?, '', 'pending', ?)""",
-            (user_id, mc_username, now),
+               (id, user_id, mc_username, encrypted_password, status, created_at)
+               VALUES (?, ?, ?, '', 'pending', ?)""",
+            (next_id(), user_id, mc_username, now),
         )
         conn.commit()
         return True, '注册申请已提交，等待管理员审核'
@@ -240,8 +241,8 @@ def ban_account(mc_username: str, reason: str, created_by: int) -> Tuple[bool, s
 
         now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         conn.execute(
-            "INSERT INTO game_account_bans (mc_username, reason, created_at, created_by, user_id) VALUES (?, ?, ?, ?, NULL)",
-            (mc_username, reason, now, created_by),
+            "INSERT INTO game_account_bans (id, mc_username, reason, created_at, created_by, user_id) VALUES (?, ?, ?, ?, ?, NULL)",
+            (next_id(), mc_username, reason, now, created_by),
         )
         conn.commit()
 

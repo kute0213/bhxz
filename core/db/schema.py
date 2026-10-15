@@ -38,14 +38,16 @@ def init_db():
         ('users', '''
             CREATE TABLE IF NOT EXISTS users (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT UNIQUE NOT NULL,
+                username TEXT NOT NULL,
                 password_hash TEXT NOT NULL,
                 email TEXT DEFAULT '',
                 avatar_key TEXT DEFAULT '',
                 is_admin INTEGER DEFAULT 0,
                 login_attempts INTEGER DEFAULT 0,
                 locked_until TEXT DEFAULT '',
-                created_at TEXT NOT NULL
+                created_at TEXT NOT NULL,
+                is_deleted INTEGER DEFAULT 0,
+                deleted_at TEXT DEFAULT ''
             )
         '''),
         ('mod_intros', '''
@@ -296,6 +298,53 @@ def init_db():
 
     conn.commit()
 
+    # ---- 用户表软注销迁移 ----
+    # 注销账号不再物理删除用户行（保留行与 ID，内容不删除、发布者显示为「账号已注销」），
+    # 因此 username 不能再是全局唯一（多个已注销账号共用展示名）。
+    # 唯一性改为「仅活跃账号唯一」：部分唯一索引 lower(username) WHERE is_deleted = 0。
+    # 旧库的 users 表带内联 UNIQUE 约束，需重建表才能去掉（SQLite 无法直接删除约束）。
+    try:
+        user_cols = {row[1] for row in cursor.execute("PRAGMA table_info(users)").fetchall()}
+        if user_cols and 'is_deleted' not in user_cols:
+            log('INFO', 'DB', 'users 表缺少软注销字段，正在重建以移除 username 全局唯一约束')
+            cursor.execute("ALTER TABLE users RENAME TO users_legacy")
+            cursor.execute('''
+                CREATE TABLE users (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    username TEXT NOT NULL,
+                    password_hash TEXT NOT NULL,
+                    email TEXT DEFAULT '',
+                    avatar_key TEXT DEFAULT '',
+                    is_admin INTEGER DEFAULT 0,
+                    login_attempts INTEGER DEFAULT 0,
+                    locked_until TEXT DEFAULT '',
+                    created_at TEXT NOT NULL,
+                    is_deleted INTEGER DEFAULT 0,
+                    deleted_at TEXT DEFAULT ''
+                )
+            ''')
+            cursor.execute('''
+                INSERT INTO users (id, username, password_hash, email, avatar_key,
+                                   is_admin, login_attempts, locked_until, created_at)
+                SELECT id, username, password_hash, email, avatar_key,
+                       is_admin, login_attempts, locked_until, created_at
+                FROM users_legacy
+            ''')
+            cursor.execute("DROP TABLE users_legacy")
+            conn.commit()
+            log('INFO', 'DB', 'users 表重建完成')
+    except Exception as e:
+        log('ERROR', 'DB', f'users 表软注销迁移失败: {e}')
+
+    # 仅活跃账号的用户名唯一（已注销账号可共用「账号已注销」展示名）
+    try:
+        cursor.execute(
+            "CREATE UNIQUE INDEX IF NOT EXISTS idx_users_username_active "
+            "ON users (lower(username)) WHERE is_deleted = 0"
+        )
+    except Exception as e:
+        log('ERROR', 'DB', f'创建 users 活跃用户名唯一索引失败: {e}')
+
     # ---- 索引 ----
     # 游戏服务器封禁申请：自动解封查询索引（status + expires_at，避免全表扫描）
     try:
@@ -379,10 +428,11 @@ def init_db():
             ('backpack', 'TravelersBackpack', '大容量背包，收纳方便，冒险轻装上阵。'),
         ]
         now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        from core.shared.snowflake import next_id
         for icon, title, content in default_intros:
             cursor.execute(
-                "INSERT OR IGNORE INTO mod_intros (icon, title, content, created_at) VALUES (?, ?, ?, ?)",
-                (icon, title, content, now)
+                "INSERT OR IGNORE INTO mod_intros (id, icon, title, content, created_at) VALUES (?, ?, ?, ?, ?)",
+                (next_id(), icon, title, content, now)
             )
         conn.commit()
 

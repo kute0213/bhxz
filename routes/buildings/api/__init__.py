@@ -6,6 +6,7 @@ from flask import request, jsonify
 
 from core.auth import login_required, get_current_user
 from core.db import get_db
+from core.shared.snowflake import next_id
 from core.shared.ip import get_client_ip
 from routes.buildings import buildings_bp
 from services import buildings as buildings_service
@@ -180,11 +181,11 @@ def add_comment(building_id):
             return jsonify({'success': False, 'message': '该建筑尚未审核通过'})
 
         now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        cursor = conn.execute(
-            "INSERT INTO building_comments (building_id, user_id, content, created_at) VALUES (?, ?, ?, ?)",
-            (building_id, user['id'], content, now),
+        comment_id = next_id()
+        conn.execute(
+            "INSERT INTO building_comments (id, building_id, user_id, content, created_at) VALUES (?, ?, ?, ?, ?)",
+            (comment_id, building_id, user['id'], content, now),
         )
-        comment_id = cursor.lastrowid
         conn.commit()
 
         return jsonify({
@@ -271,8 +272,8 @@ def report_building(building_id):
 
         now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         conn.execute(
-            "INSERT INTO building_reports (building_id, reporter_id, reason, status, created_at) VALUES (?, ?, ?, 'pending', ?)",
-            (building_id, user['id'], reason, now),
+            "INSERT INTO building_reports (id, building_id, reporter_id, reason, status, created_at) VALUES (?, ?, ?, ?, 'pending', ?)",
+            (next_id(), building_id, user['id'], reason, now),
         )
         conn.commit()
         return jsonify({'success': True, 'message': '举报已提交，管理员会尽快处理'})

@@ -7,6 +7,10 @@
 import re
 import unicodedata
 
+# 已注销账号的展示占位名：账号注销后发布者名统一显示为该名字。
+# 该名字属系统保留名，禁止注册 / 改名占用（否则会与注销流程冲突）。
+DELETED_USER_DISPLAY_NAME = '账号已注销'
+
 # ---------------------------------------------------------------------------
 # 弱密码库（常见易猜密码，不区分大小写匹配）
 # ---------------------------------------------------------------------------
@@ -199,6 +203,10 @@ def validate_website_username(username: str) -> tuple:
         return False, '用户名至少 2 个字符'
     if len(raw) > 20:
         return False, '用户名不能超过 20 个字符'
+
+    # 系统保留名：注销账号展示占位名，禁止占用
+    if raw == DELETED_USER_DISPLAY_NAME:
+        return False, '该名字为系统保留名，不可使用'
 
     # 检查是否有空白字符
     if ' ' in raw or '\t' in raw:

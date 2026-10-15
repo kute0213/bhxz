@@ -3,8 +3,8 @@ const path = require('path');
 
 module.exports = {
   content: [
-    path.join(__dirname, '../../templates/**/*.html'),
-    path.join(__dirname, '../../static/js/**/*.js'),
+    path.join(__dirname, '../../web/**/*.html'),
+    path.join(__dirname, '../../web/static/js/**/*.js'),
   ],
   theme: {
     extend: {

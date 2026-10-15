@@ -71,10 +71,12 @@ def login_required(f):
 
     - 普通 GET 请求：未登录时重定向到登录页（带 next 参数）
     - JSON/AJAX 请求：未登录时返回 401 JSON，避免前端解析 HTML 报错
+    - 账号已注销 / 不存在的会话：get_current_user() 会立即清空会话，
+      因此旧 Cookie 在账号注销后立刻失去访问权限（无需等待 Cookie 过期）
     """
     @wraps(f)
     def decorated(*args, **kwargs):
-        if 'user_id' not in session:
+        if 'user_id' not in session or get_current_user() is None:
             if _is_json_request():
                 return jsonify({'success': False, 'message': '请先登录'}), 401
             return redirect(url_for('main.login', next=request.path))
@@ -108,7 +110,11 @@ def admin_required(f):
 # ---------------------------------------------------------------------------
 
 def get_current_user():
-    """获取当前登录用户信息（单次请求内缓存，避免重复 DB 查询）。"""
+    """获取当前登录用户信息（单次请求内缓存，避免重复 DB 查询）。
+
+    账号已注销（is_deleted=1）或用户行不存在时，立即失效当前会话
+    （清空 session 中的 user_id）并返回 None，保证注销后即时无法访问。
+    """
     if 'user_id' not in session:
         return None
 
@@ -119,13 +125,20 @@ def get_current_user():
     conn = get_db()
     try:
         user = conn.execute(
-            "SELECT id, username, email, avatar_key, is_admin "
+            "SELECT id, username, email, avatar_key, is_admin, is_deleted "
             "FROM users WHERE id = ?",
             (session['user_id'],),
         ).fetchone()
     finally:
         conn.close()
 
-    user_dict = {k: user[k] for k in user.keys()} if user else None
+    if not user or user['is_deleted']:
+        # 账号不存在或已注销：立即失效会话
+        session.pop('user_id', None)
+        session.pop('username', None)
+        g._current_user = None
+        return None
+
+    user_dict = {k: user[k] for k in user.keys() if k != 'is_deleted'}
     g._current_user = user_dict
     return user_dict

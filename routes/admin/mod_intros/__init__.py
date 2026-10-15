@@ -10,6 +10,7 @@ from flask import request, jsonify, abort
 from core.auth import admin_required, get_current_user
 from core.helpers import render_page
 from core.db import get_db
+from core.shared.snowflake import next_id
 from routes.admin import admin_bp
 
 
@@ -62,16 +63,17 @@ def add_mod_intro():
     conn = get_db()
     try:
         now = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        cur = conn.execute(
-            "INSERT INTO mod_intros (icon, title, content, link, created_at) VALUES (?, ?, ?, ?, ?)",
-            (fields['icon'], fields['title'], fields['content'], fields['link'], now)
+        intro_id = next_id()
+        conn.execute(
+            "INSERT INTO mod_intros (id, icon, title, content, link, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+            (intro_id, fields['icon'], fields['title'], fields['content'], fields['link'], now)
         )
         conn.commit()
         return jsonify({
             'success': True,
             'message': '模组介绍已添加',
             'intro': {
-                'id': cur.lastrowid,
+                'id': intro_id,
                 'icon': fields['icon'],
                 'title': fields['title'],
                 'content': fields['content'],

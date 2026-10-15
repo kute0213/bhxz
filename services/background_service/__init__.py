@@ -17,6 +17,7 @@ from io import BytesIO
 from PIL import Image, ImageOps, UnidentifiedImageError
 
 from core.db import get_db
+from core.shared.snowflake import next_id
 from config import UPLOAD_BACKGROUNDS_DIR, USER_IMAGE_MAX_BYTES, get_page_size
 from core.system.logger import log
 from services.mail import email_service, background_review_result
@@ -259,13 +260,12 @@ def start_upload(user_id, username, upload_file, ip_address):
             with get_db() as conn:
                 filename = original_filename
                 now = _now()
-                cursor = conn.execute(
-                    "INSERT INTO backgrounds (user_id, username, filename, file_path, status, is_active, ratio, created_at) "
-                    "VALUES (?, ?, ?, '', ?, 0, ?, ?)",
-                    (user_id, username, filename, STATUS_PENDING, RATIO_DEFAULT, now),
+                bg_id = next_id()
+                conn.execute(
+                    "INSERT INTO backgrounds (id, user_id, username, filename, file_path, status, is_active, ratio, created_at) "
+                    "VALUES (?, ?, ?, ?, '', ?, 0, ?, ?)",
+                    (bg_id, user_id, username, filename, STATUS_PENDING, RATIO_DEFAULT, now),
                 )
-                bg_id = cursor.lastrowid
-                conn.commit()
 
             with _upload_tasks_lock:
                 _upload_tasks[task_id]['percent'] = 60

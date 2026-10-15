@@ -4,6 +4,35 @@
 
 ### 变更
 
+* **账号注销改为「内容保留、发布者匿名化、点击即生效」的软注销**（`services/user/profiles/__init__.py`、`services/user/admin/__init__.py`、`core/db/schema.py`、`core/auth.py`、`core/shared/validation.py`）：
+  * **内容不删除**：注销不再物理删除 `users` 行，用户行与其 `id` 完整保留；该账号发布过的公共建筑 / 服务器指南 / 评论 / 音频 / 背景图 / 收藏等一律不删除，`author_id` / `user_id` 关联保持不变。
+  * **发布者名变为「账号已注销」**：注销时在同一事务内把 `username` 替换为系统保留展示名「账号已注销」（`DELETED_USER_DISPLAY_NAME`），所有内容列表 / 详情页 JOIN `users` 取到的展示名随之变化；该名字禁止被注册或改名占用，避免与注销流程冲突。
+  * **点击即生效、即时无法登录**：同一事务内清空密码哈希、邮箱、头像等登录凭据并置 `is_deleted = 1`、`deleted_at`；登录接口立即拒绝该账号，已登录会话在下一次请求由 `get_current_user()` 立即失效，无需等待 Cookie 过期。
+  * **唯一索引调整**：`username` 唯一性由「全局唯一」改为「仅活跃账号唯一」（部分唯一索引 `lower(username) WHERE is_deleted = 0`），使多个已注销账号可共用「账号已注销」展示名；旧库带内联 `UNIQUE` 约束的 `users` 表在自检时自动重建以去除。
+  * **管理员删除用户**与用户自助注销行为一致（同样软注销、内容保留）。
+
+* **全站非用户表主键改为统一雪花算法 ID**（`core/shared/snowflake.py`、`core/db/snowflake_migration.py`、`core/system/startup_checks.py` 及所有写入点）：
+  * **统一入口**：新增 `core/shared/snowflake.py`，`next_id()` 为全站唯一 ID 生成入口，所有非用户表（16 张）主键一律通过它生成，不再依赖 SQLite 自增 / `lastrowid`。
+  * **53 位变体**：采用「41 bit 毫秒时间戳（纪元 2024-01-01 UTC）+ 12 bit 序列号」的 53 位雪花算法，生成的 ID 恒 ≤ `2^53-1`，在 JS `Number` 安全整数范围内，从根源避免前后端 ID 精度丢失；单调递增（`ORDER BY id` 与创建顺序一致）、线程安全（锁内生成）。
+  * **历史 ID 迁移（服务器自检触发）**：`core/db/snowflake_migration.py` 在启动自检中幂等执行——按旧 `id` 升序逐条 `next_id()` 重分配，使既有记录「等同于当前时刻按顺序同时发布」；父子表外键（评论/举报/收藏 → 建筑，收藏 → 音频，收藏 → 指南）同步重映射，排序与关联关系不变；整段在单事务内完成，要么整体成功要么回滚，不会出现半迁移状态。用户表 `users` 保持自增 ID 不变，其它表引用用户的外键列不受影响。
+
+* **数据库并发从根源修复：每线程一条独立连接**（`core/db/connection.py`、`core/server.py`）：
+  * **问题根源**：原实现为「单条全局连接 + 可重入锁」。同一连接被多线程并发使用会触发 `sqlite3.InterfaceError` / `Recursive use of cursors not allowed`；且一条连接上的多条语句会在不同线程间交错，导致事务边界错乱（甲线程的 `COMMIT` 会把乙线程尚未提交的语句一并提交）。
+  * **修复方案（无降级、无曲线救国）**：改为 `threading.local` **每线程一条独立连接**，各线程的语句与事务天然隔离，互不干扰；SQLite WAL 的「多读 + 单写」特性得以正常发挥，配合 `busy_timeout=30000` 处理写锁争用，高并发读写正确排队重试，而不是退化成全局串行。
+  * **真实延迟事务**：`with get_db() as conn:` 进入最外层时执行 `BEGIN` 开启真实事务，块内多条语句要么整体提交、要么整体回滚（嵌套使用时只在最外层提交/回滚）。
+  * **优雅退出**：`core/server.py` 关闭流程改用 `flush_and_close_all()` 统一关闭全部连接并执行 `PRAGMA wal_checkpoint(TRUNCATE)`，确保已提交数据全部合并进主库；`reset_connection()` 用于数据库恢复后重建连接。
+
+* **core 层业务逻辑下沉到业务层**（`services/content_limits/`、`core/helpers.py`）：
+  * 待审核内容上限属于业务规则而非基础设施，`check_pending_limit(user, content_type=None)` 及其 `_PENDING_TYPES` 统计规则从 `core/helpers.py` 下沉到新业务模块 `services/content_limits/`；`core/helpers.py` 仅保留 `render_page` / `admin_page` / `redirect_with_flash` 等纯路由辅助。5 个调用点（公共建筑 / 指南 / 音频两处 / 背景图）统一改为从 `services.content_limits` 导入，逻辑与行为完全不变。
+
+* **前端目录合并为唯一文件夹 `web/`**（`app.py`、`scripts/build/tailwind.config.js` 及全部模板路径引用）：
+  * 原 `templates/` 重命名为 `web/`，静态资源目录 `static/` 与模板同处 `web/` 之内，全站**只有一个前端文件夹**，更符合规范。`app.py` 配置 `template_folder='web'`、`static_folder='web/static'`；Tailwind 内容扫描路径同步改为 `web/**/*.html` 与 `web/static/js/**/*.js`。
+  * 邮箱模板改为 `web/emails/`（`services/mail/templates/` 模块内的 loader 路径同步更新）；公开文件服务的敏感目录校验表移除已不存在的 `templates`。
+  * **说明**：本文件此前条目中的 `templates/...` 路径为该次改动之前的历史记录，当前实际目录为 `web/...`（邮件模块子包 `services/mail/templates/` 不受影响）。
+
+* **公共建筑详情页：注意事项与建筑介绍平级、去掉强调框**（`web/buildings/detail.html`）：
+  * 「注意事项」由原黄色警示框改为与「建筑介绍 / 使用方式」完全一致的普通小节样式（同级标题 + 正文），不再被框住、视觉层级与其他介绍信息平齐。
+
 * **导航栏分组调整：公共建筑移入「社区」**（`templates/base.html`）：
   * 桌面端悬停下拉与移动端滑出菜单同步调整：「公共建筑」从「服务器」分组移至「社区」分组，社区顺序为「大喇叭音频 → 公共建筑 → 官网背景图片」；「服务器」分组保留「服务器状态 / 服务器指南 / 网页地图」。两端分组与顺序保持一致。
 

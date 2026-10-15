@@ -222,7 +222,7 @@ if not ok:
 
 ## Jinja2 模板命名规范
 
-模板统一存放于 `templates/`，遵循「**功能目录 + 语义化页面名**」规则。命名务必清晰、简洁、符合 Flask/Jinja2 通用约定，避免模板找不到导致的 500。
+模板统一存放于 `web/`（**唯一前端文件夹**，静态资源同处 `web/static/`，不再单独设模板目录），遵循「**功能目录 + 语义化页面名**」规则。命名务必清晰、简洁、符合 Flask/Jinja2 通用约定，避免模板找不到导致的 500。
 
 ### 1. 目录划分
 
@@ -230,14 +230,15 @@ if not ok:
 
 | 目录 | 存放内容 |
 |------|----------|
-| `templates/` 根 | 全站通用：`base.html`（布局）、`index.html`（首页）、`error_simple.html`（精简错误页） |
-| `templates/auth/` | 登录、注册、找回密码 |
-| `templates/settings/` | 用户个人设置 |
-| `templates/admin/` | 管理后台所有页面 |
-| `templates/buildings/`、`guides/`、`music/`、`backgrounds/`、`game_accounts/` | 对应功能模块页面 |
-| `templates/site/` | 站点级信息页（站点文档、服务器状态） |
-| `templates/macros/` | 可复用 Jinja2 宏（`data_table`、`modal` 等） |
-| `templates/emails/` | 邮件 HTML 模板（独立 Jinja2 loader，`templates/emails/base.html` 为其专用布局） |
+| `web/` 根 | 全站通用：`base.html`（布局）、`index.html`（首页）、`error_simple.html`（精简错误页） |
+| `web/auth/` | 登录、注册、找回密码 |
+| `web/settings/` | 用户个人设置 |
+| `web/admin/` | 管理后台所有页面 |
+| `web/buildings/`、`guides/`、`music/`、`backgrounds/`、`game_accounts/` | 对应功能模块页面 |
+| `web/site/` | 站点级信息页（站点文档、服务器状态） |
+| `web/macros/` | 可复用 Jinja2 宏（`data_table`、`modal` 等） |
+| `web/emails/` | 邮件 HTML 模板（独立 Jinja2 loader，`web/emails/base.html` 为其专用布局） |
+| `web/static/` | 静态资源（CSS / JS / 本地化第三方库），与模板同处一个前端目录 |
 
 ### 2. 页面类型后缀
 
@@ -253,11 +254,11 @@ if not ok:
 
 ### 3. 禁止冗余前缀
 
-目录名已表达功能，文件名**不得重复**功能名。管理后台位于 `templates/admin/`，其下文件名直接是 `users.html`、`settings.html`，**禁止**写成 `admin/admin_users.html` 这类双重前缀。
+目录名已表达功能，文件名**不得重复**功能名。管理后台位于 `web/admin/`，其下文件名直接是 `users.html`、`settings.html`，**禁止**写成 `admin/admin_users.html` 这类双重前缀。
 
 ### 4. 引用方式
 
-带渲染一律使用相对 `templates/` 的路径字符串：
+带渲染一律使用相对 `web/`（Flask `template_folder`）的路径字符串：
 
 ```python
 render_page('admin/users.html', users=users)   # ✅
@@ -270,7 +271,7 @@ render_page('admin/admin_users.html')          # ❌ 双重前缀
 
 ### 5. 宏导入方式（`import` 而非 `include`）
 
-使用 `templates/macros/` 下的宏时，**必须**用 `{% from ... import ... %}` 显式导入，**禁止**用 `{% include %}`。`include` 只渲染模板文件，不会把宏注入当前命名空间，调用时会抛 `UndefinedError: 'xxx' is undefined` 导致 500。
+使用 `web/macros/` 下的宏时，**必须**用 `{% from ... import ... %}` 显式导入，**禁止**用 `{% include %}`。`include` 只渲染模板文件，不会把宏注入当前命名空间，调用时会抛 `UndefinedError: 'xxx' is undefined` 导致 500。
 
 导入语句统一放在 `{% extends %}` 之后、第一个 `{% block %}` 之前：
 
@@ -290,7 +291,7 @@ render_page('admin/admin_users.html')          # ❌ 双重前缀
 {% endblock %}
 ```
 
-> 真实事故：`templates/buildings/detail.html` 用 `{% include 'macros/modal.html' %}` 引入弹窗宏，访问 `/buildings/<id>` 时 `modal_shell is undefined` 直接 500。
+> 真实事故：`web/buildings/detail.html` 用 `{% include 'macros/modal.html' %}` 引入弹窗宏，访问 `/buildings/<id>` 时 `modal_shell is undefined` 直接 500。
 
 ## 测试规范
 
@@ -409,7 +410,7 @@ body.page-leaving .page-content {
 
 * [ ] `body.page-leaving` 时用 `animation: none` 取消入场动画，避免与离场过渡冲突
 
-* [ ] 修改 `base.css` 后必须同步 bump `templates/base.html` 中的版本号（`v='15'`）
+* [ ] 修改 `base.css` 后必须同步 bump `web/base.html` 中的版本号（`v='15'`）
 
 ### 5. 弹窗与模态框的放置位置
 
@@ -620,11 +621,11 @@ server {
 python scripts/build/build_static.py
 ```
 
-* 下载 Lucide、marked、字体及 Monaco Editor（约 12MB）到 `templates/static/lib/`
+* 下载 Lucide、marked、字体及 Monaco Editor（约 12MB）到 `web/static/lib/`
 
-* 结果写入 `templates/static/lib/lib-version.json`
+* 结果写入 `web/static/lib/lib-version.json`
 
-* `templates/static/lib/monaco/`（~12MB）被 `.gitignore` 排除，**不提交到 Git**
+* `web/static/lib/monaco/`（~12MB）被 `.gitignore` 排除，**不提交到 Git**
 
 * 用户通过一键更新或从 GitHub 下载 ZIP 后，都需要运行此命令以补齐 Monaco
 

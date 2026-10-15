@@ -12,7 +12,9 @@ def admin_page():
     conn = get_db()
     try:
         stats = {
-            'total_users': conn.execute("SELECT COUNT(*) AS c FROM users").fetchone()['c'],
+            'total_users': conn.execute(
+                "SELECT COUNT(*) AS c FROM users WHERE is_deleted = 0"
+            ).fetchone()['c'],
             'total_music': conn.execute("SELECT COUNT(*) AS c FROM music").fetchone()['c'],
             'pending_music': conn.execute("SELECT COUNT(*) AS c FROM music WHERE status = 1").fetchone()['c'],
             'total_mod_intros': conn.execute("SELECT COUNT(*) AS c FROM mod_intros").fetchone()['c'],

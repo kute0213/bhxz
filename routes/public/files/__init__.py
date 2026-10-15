@@ -20,11 +20,12 @@ from config import APP_ROOT
 from core.auth import login_required, get_current_user
 from core.helpers import render_page
 from core.db import get_db
+from core.shared.snowflake import next_id
 from routes.public import public_bp
 
 # 项目内部禁止公开的敏感目录/文件（相对路径时检查）
 FORBIDDEN_LOCAL_PARTS = {
-    'core', 'services', 'routes', 'templates', '__pycache__',
+    'core', 'services', 'routes', 'web', '__pycache__',
     '.git', 'backups', '.env', 'config.py', 'app.py',
     'requirements.txt', 'db', 'db-backup'
 }
@@ -326,9 +327,10 @@ def admin_public_files_add():
     now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     conn = get_db()
     try:
-        cur = conn.execute(
-            "INSERT INTO public_paths (url_path, local_path, is_directory, is_active, created_at) VALUES (?, ?, ?, 1, ?)",
-            (url_path, local_path.replace('\\', '/'), 1 if is_directory else 0, now)
+        path_id = next_id()
+        conn.execute(
+            "INSERT INTO public_paths (id, url_path, local_path, is_directory, is_active, created_at) VALUES (?, ?, ?, ?, 1, ?)",
+            (path_id, url_path, local_path.replace('\\', '/'), 1 if is_directory else 0, now)
         )
         conn.commit()
         return jsonify({
@@ -336,7 +338,7 @@ def admin_public_files_add():
             'message': warning or '公开路径已添加',
             'warning': warning,
             'path': {
-                'id': cur.lastrowid,
+                'id': path_id,
                 'url_path': url_path,
                 'local_path': local_path.replace('\\', '/'),
                 'is_directory': is_directory,

@@ -10,6 +10,7 @@ from flask import request, jsonify
 from core.auth import admin_required, get_current_user
 from core.helpers import render_page
 from core.db import get_db
+from core.shared.snowflake import next_id
 from routes.admin import admin_bp
 
 
@@ -87,15 +88,15 @@ def admin_guide_ban_create():
     conn = get_db()
     try:
         now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        cur = conn.execute(
+        ban_id = next_id()
+        conn.execute(
             """
-            INSERT INTO guide_edit_bans (user_id, ip_address, banned_by, reason, created_at, expires_at)
-            VALUES (?, ?, ?, ?, ?, ?)
+            INSERT INTO guide_edit_bans (id, user_id, ip_address, banned_by, reason, created_at, expires_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (user_id, ip_address, user['id'], reason, now, expires_at),
+            (ban_id, user_id, ip_address, user['id'], reason, now, expires_at),
         )
         conn.commit()
-        ban_id = cur.lastrowid
         return jsonify({
             'success': True,
             'message': '封禁已创建',

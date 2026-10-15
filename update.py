@@ -75,7 +75,7 @@ PROTECTED_PATHS = {
     '.git', '.venv', 'venv', 'env', 'ENV', '.env', '.env.local',
     '.trae', '.trae-html-share-packages', '.vscode', '.idea',
     # 本地下载的构建产物（.gitignore 排除，服务器上必须保留）
-    'templates/static/lib/monaco',
+    'web/static/lib/monaco',
     # 运行期下载的 ffmpeg 可执行文件
     'scripts/ffmpeg',
     'scripts/build/node_modules',

@@ -1,9 +1,11 @@
 """用户业务服务 - 个人资料管理（修改用户名、密码、邮箱、注销账号）。"""
 
 import os
+from datetime import datetime
 
 from core.auth import hash_password, validate_password, verify_password
 from core.db import get_db
+from core.shared.validation import DELETED_USER_DISPLAY_NAME
 from config import get_config_value
 from services.mail import email_code_service
 from core.system.logger import log
@@ -50,7 +52,8 @@ def change_username(user_id, current_username, new_username, current_password, i
             return False, '当前密码错误'
 
         existing = conn.execute(
-            "SELECT id FROM users WHERE lower(username) = lower(?) LIMIT 1",
+            "SELECT id FROM users WHERE lower(username) = lower(?) "
+            "AND is_deleted = 0 LIMIT 1",
             (new_username,)
         ).fetchone()
         if existing and existing['id'] != user_id:
@@ -148,7 +151,17 @@ def change_email(user_id, username, new_email, email_code, current_password, ip_
 
 
 def delete_account(user_id, username, confirm_username, ip_address):
-    """注销用户，级联清理所有关联数据。返回 (success, message)。"""
+    """注销账号（软删除）。返回 (success, message)。
+
+    保留用户行与 ID，发布过的内容一律不删除、关联关系不变；
+    - 用户名替换为「账号已注销」（发布者展示名随之变化，用户行仍存在，
+      buildings/guides 的 author_id 关联因此依然有效）；
+    - 清空密码哈希、邮箱、头像等登录凭据；
+    - 置 is_deleted = 1：登录接口立即拒绝该账号，
+      已登录会话在下一次请求由 get_current_user() 立即失效（无需等待 Cookie 过期）。
+
+    整段在单个事务内完成，注销「点击即生效」。
+    """
 
     if confirm_username != username:
         return False, '用户名确认不匹配'
@@ -156,10 +169,17 @@ def delete_account(user_id, username, confirm_username, ip_address):
     conn = get_db()
     try:
         media_keys = _get_user_media_keys(conn, user_id)
-        conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+        now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        conn.execute(
+            "UPDATE users SET username = ?, password_hash = '', email = '', "
+            "avatar_key = '', login_attempts = 0, locked_until = '', "
+            "is_deleted = 1, deleted_at = ? WHERE id = ?",
+            (DELETED_USER_DISPLAY_NAME, now, user_id),
+        )
         conn.commit()
         _clean_user_media(media_keys, user_id)
-        log('INFO', 'DeleteAccount', '账号注销成功', user_id=user_id, username=username, ip=ip_address)
+        log('INFO', 'DeleteAccount', '账号注销成功（内容保留、ID 不变）',
+            user_id=user_id, username=username, ip=ip_address)
         return True, '账号已注销'
     except Exception:
         conn.rollback()

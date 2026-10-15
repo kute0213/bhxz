@@ -15,6 +15,7 @@
 from datetime import datetime, timedelta
 
 from core.db import get_db
+from core.shared.snowflake import next_id
 from core.system.logger import log
 from core.shared.scheduler import register_task
 from core.shared.validation import validate_mc_username, sanitize_rcon_username
@@ -135,9 +136,9 @@ def create_application(applicant_id: int, player_name: str, qq_name: str, reason
         now = _now_str()
         conn.execute(
             """INSERT INTO game_server_ban_applications
-               (applicant_id, player_name, qq_name, reason, status, created_at)
-               VALUES (?, ?, ?, ?, 'pending', ?)""",
-            (applicant_id, player_name, qq_name, reason, now),
+               (id, applicant_id, player_name, qq_name, reason, status, created_at)
+               VALUES (?, ?, ?, ?, ?, 'pending', ?)""",
+            (next_id(), applicant_id, player_name, qq_name, reason, now),
         )
         conn.commit()
         log('INFO', 'GameBan', '收到游戏服务器封禁申请',

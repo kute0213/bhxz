@@ -6,6 +6,7 @@ from flask import abort, request, redirect, url_for, flash, jsonify
 
 from core.auth import get_current_user, login_required
 from core.db import get_db
+from core.shared.snowflake import next_id
 from core.helpers import render_page
 from core.shared.captcha import captcha_service
 from core.shared.ip import get_client_ip
@@ -70,7 +71,7 @@ def building_create():
             return render_page('buildings/create.html', building=None)
 
         # 检查待审核数量上限（总量 + 公共建筑单类）
-        from core.helpers import check_pending_limit
+        from services.content_limits import check_pending_limit
         allowed, msg = check_pending_limit(user, 'building')
         if not allowed:
             return fail(msg)
@@ -109,11 +110,12 @@ def building_create():
             conn.execute(
                 """
                 INSERT INTO public_buildings
-                (title, warp_name, description, usage_info, notes, tags, author_id,
+                (id, title, warp_name, description, usage_info, notes, tags, author_id,
                  status, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
                 """,
-                (title, warp_name, description, usage_info, notes, tags, user['id'], now, now),
+                (next_id(), title, warp_name, description, usage_info, notes, tags,
+                 user['id'], now, now),
             )
             conn.commit()
             _notify_admins_new_building(title, user['username'])

@@ -14,6 +14,7 @@ import uuid
 from datetime import datetime
 
 from core.db import get_db
+from core.shared.snowflake import next_id
 from config import (
     UPLOAD_MUSIC_DIR,
     MUSIC_ALLOWED_EXTENSIONS,
@@ -190,27 +191,20 @@ def _read_transcode_percent(progress_file, playlist_path, duration):
 
 
 def _insert_music_record(user_id, username, title, status, tags='', music_id=None):
-    """插入音频记录并返回可靠 ID（并发安全）；失败抛异常。"""
+    """插入音频记录并返回 ID（并发安全）；失败抛异常。
+
+    主键 id 由雪花算法统一生成（不再依赖自增），因此并发插入天然不会冲突。
+    """
     try:
+        if music_id is None:
+            music_id = next_id()
         with get_db() as conn:
-            if music_id is not None:
-                conn.execute(
-                    "INSERT INTO music (id, user_id, username, title, file_path, status, tags, created_at) "
-                    "VALUES (?, ?, ?, ?, '', ?, ?, ?)",
-                    (music_id, user_id, username, title, status, parse_tags(tags), _now()),
-                )
-                return music_id
-            cursor = conn.execute(
-                "INSERT INTO music (user_id, username, title, file_path, status, tags, created_at) "
-                "VALUES (?, ?, ?, '', ?, ?, ?)",
-                (user_id, username, title, status, parse_tags(tags), _now()),
+            conn.execute(
+                "INSERT INTO music (id, user_id, username, title, file_path, status, tags, created_at) "
+                "VALUES (?, ?, ?, ?, '', ?, ?, ?)",
+                (music_id, user_id, username, title, status, parse_tags(tags), _now()),
             )
-            music_id = cursor.lastrowid
-            if not music_id:
-                raise RuntimeError('音频记录创建失败')
-            return int(music_id)
-    except RuntimeError:
-        raise
+        return int(music_id)
     except Exception as e:
         raise RuntimeError(f'插入音频记录失败: {str(e)}')
 

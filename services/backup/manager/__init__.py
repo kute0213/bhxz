@@ -29,6 +29,7 @@ from config import (
     get_config_value,
     get_uploads_backup_dir,
 )
+from core.shared.snowflake import next_id
 from core.system.logger import log
 
 
@@ -180,18 +181,15 @@ class BackupManager:
 
         conn = get_db()
         try:
+            backup_id = next_id()
             conn.execute(
                 "INSERT INTO db_backups "
-                "(backup_name, backup_path, backup_type, status, started_at) "
-                "VALUES (?, ?, ?, 'running', ?)",
-                (backup_name, backup_path, backup_type, now),
+                "(id, backup_name, backup_path, backup_type, status, started_at) "
+                "VALUES (?, ?, ?, ?, 'running', ?)",
+                (backup_id, backup_name, backup_path, backup_type, now),
             )
             conn.commit()
-            # 获取 ID
-            row = conn.execute(
-                "SELECT MAX(id) AS id FROM db_backups"
-            ).fetchone()
-            return row[0] if row else None
+            return backup_id
         finally:
             conn.close()
 

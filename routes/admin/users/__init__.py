@@ -23,10 +23,12 @@ def _fetch_users_page(page, page_size=PAGE_SIZE):
 
     conn = get_db()
     try:
-        total = conn.execute("SELECT COUNT(*) AS c FROM users").fetchone()['c']
+        total = conn.execute(
+            "SELECT COUNT(*) AS c FROM users WHERE is_deleted = 0"
+        ).fetchone()['c']
         rows = conn.execute(
             "SELECT id, username, avatar_key, is_admin, created_at FROM users "
-            "ORDER BY id DESC LIMIT ? OFFSET ?",
+            "WHERE is_deleted = 0 ORDER BY id DESC LIMIT ? OFFSET ?",
             (page_size, offset),
         ).fetchall()
         users = [dict(u) for u in rows]

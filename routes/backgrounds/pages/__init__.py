@@ -69,7 +69,7 @@ def upload_background():
         return jsonify({'error': '请选择图片'}), 400
 
     # 待审核数量上限（背景图片上传后进入待审核，总量 + 背景单类）
-    from core.helpers import check_pending_limit
+    from services.content_limits import check_pending_limit
     allowed, msg = check_pending_limit(user, 'background')
     if not allowed:
         return jsonify({'error': msg}), 400
