@@ -7,7 +7,7 @@ from flask import abort, flash, redirect, request, send_file, url_for
 
 from config import UPLOAD_DIR, USER_IMAGE_MAX_BYTES
 from core.auth import get_current_user, login_required
-from core.db import get_db
+from core.db import get_db, transaction
 from routes.main import main_bp
 from core.system.logger import log
 from PIL import Image, ImageOps, UnidentifiedImageError
@@ -31,7 +31,7 @@ def _media_path(user_id, kind):
 def _update_user_object_key(user_id, column, object_key):
     if column not in ('avatar_key',):
         raise ValueError('非法的用户图片字段')
-    with get_db() as conn:
+    with transaction() as conn:
         conn.execute(f'UPDATE users SET {column} = ? WHERE id = ?', (object_key, user_id))
 
 
@@ -51,7 +51,7 @@ def _serve_local_image(filepath, filename):
 
 @main_bp.route('/media/avatar/<int:user_id>')
 def user_avatar(user_id):
-    with get_db() as conn:
+    with transaction() as conn:
         row = conn.execute('SELECT avatar_key FROM users WHERE id = ?', (user_id,)).fetchone()
     if not row or not row['avatar_key']:
         abort(404)

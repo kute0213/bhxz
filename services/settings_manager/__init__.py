@@ -11,7 +11,7 @@ import threading
 import time
 from datetime import datetime
 
-from core.db import get_db
+from core.db import get_db, transaction
 from core.shared.snowflake import next_id
 from core.system.logger import log
 
@@ -126,7 +126,7 @@ class SettingsManager:
         str_value = _value_to_string(value)
         now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         try:
-            with get_db() as conn:
+            with transaction() as conn:
                 cur = conn.execute(
                     "UPDATE settings SET value = ?, updated_at = ? WHERE key = ?",
                     (str_value, now, key),
@@ -168,7 +168,7 @@ class SettingsManager:
     def bulk_set(self, items: dict):
         """批量设置多个设置值（同一事务内完成，整体原子提交）。"""
         now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        with get_db() as conn:
+        with transaction() as conn:
             for key, value in items.items():
                 str_value = _value_to_string(value)
                 cur = conn.execute(

@@ -5,7 +5,7 @@ from datetime import datetime
 from flask import abort, request, redirect, url_for, flash, jsonify
 
 from core.auth import get_current_user, login_required
-from core.db import get_db
+from core.db import get_db, transaction
 from core.shared.snowflake import next_id
 from core.helpers import render_page
 from core.shared.captcha import captcha_service
@@ -191,9 +191,9 @@ def building_detail(building_id):
         conn.close()
 
     # 增加浏览次数：任何访问都计数（含作者本人与管理员的查看）
-    # with get_db() 退出时自动 commit，避免计数丢失；失败时记录日志而非静默吞掉
+    # transaction() 退出时自动 commit，避免计数丢失；失败时记录日志而非静默吞掉
     try:
-        with get_db() as conn:
+        with transaction() as conn:
             conn.execute(
                 "UPDATE public_buildings SET view_count = view_count + 1 WHERE id = ?",
                 (building_id,),

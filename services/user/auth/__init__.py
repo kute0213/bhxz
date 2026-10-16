@@ -6,7 +6,7 @@ from datetime import datetime
 from flask import request
 
 from core.auth import hash_password, verify_password
-from core.db import get_db
+from core.db import get_db, transaction
 from config import REGISTER_VERIFY_CODE, MAX_LOGIN_ATTEMPTS, LOGIN_LOCKOUT_TIME
 from core.shared.captcha import captcha_service
 from services.mail import email_code_service
@@ -43,7 +43,7 @@ def check_username_available(username, exclude_user_id=None):
         return False, err
 
     try:
-        with get_db() as conn:
+        with transaction() as conn:
             if exclude_user_id:
                 existing = conn.execute(
                     "SELECT id FROM users WHERE lower(username) = lower(?) "
@@ -109,7 +109,7 @@ def register(username, password, confirm, verify_code, captcha_input, captcha_id
         return False, '验证码错误或已过期'
 
     try:
-        with get_db() as conn:
+        with transaction() as conn:
             existing = conn.execute(
                 "SELECT id FROM users WHERE lower(username) = lower(?) "
                 "AND is_deleted = 0 LIMIT 1",
@@ -188,7 +188,7 @@ def login(username, password, captcha_input, captcha_id, ip_address,
     now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
     try:
-        with get_db() as conn:
+        with transaction() as conn:
             user = conn.execute(
                 "SELECT id, username, password_hash, is_admin, "
                 "login_attempts, locked_until FROM users "

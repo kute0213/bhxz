@@ -13,7 +13,7 @@ import time
 import uuid
 from datetime import datetime
 
-from core.db import get_db
+from core.db import get_db, transaction
 from core.shared.snowflake import next_id
 from config import (
     UPLOAD_MUSIC_DIR,
@@ -198,7 +198,7 @@ def _insert_music_record(user_id, username, title, status, tags='', music_id=Non
     try:
         if music_id is None:
             music_id = next_id()
-        with get_db() as conn:
+        with transaction() as conn:
             conn.execute(
                 "INSERT INTO music (id, user_id, username, title, file_path, status, tags, created_at) "
                 "VALUES (?, ?, ?, ?, '', ?, ?, ?)",

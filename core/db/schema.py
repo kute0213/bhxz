@@ -33,7 +33,9 @@ def init_db():
 
     cursor = conn.cursor()
 
-    # SQLite 自增主键统一使用 INTEGER PRIMARY KEY AUTOINCREMENT
+    # 仅 users 表使用自增主键（INTEGER PRIMARY KEY AUTOINCREMENT）；
+    # 其余表主键一律为雪花 ID，由 core/shared/snowflake.next_id() 生成，
+    # 插入时显式传值，故建表语句不带 AUTOINCREMENT（仅 INTEGER PRIMARY KEY）。
     tables = [
         ('users', '''
             CREATE TABLE IF NOT EXISTS users (
@@ -52,7 +54,7 @@ def init_db():
         '''),
         ('mod_intros', '''
             CREATE TABLE IF NOT EXISTS mod_intros (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id INTEGER PRIMARY KEY,
                 icon TEXT NOT NULL DEFAULT 'box',
                 title TEXT NOT NULL,
                 content TEXT NOT NULL,
@@ -64,7 +66,7 @@ def init_db():
         # 数据库备份记录表
         ('db_backups', '''
             CREATE TABLE IF NOT EXISTS db_backups (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id INTEGER PRIMARY KEY,
                 backup_name TEXT NOT NULL,
                 backup_path TEXT NOT NULL,
                 backup_type TEXT NOT NULL DEFAULT 'scheduled',
@@ -79,7 +81,7 @@ def init_db():
         # 系统设置表（用于管理后台在线编辑配置）
         ('settings', '''
             CREATE TABLE IF NOT EXISTS settings (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id INTEGER PRIMARY KEY,
                 key TEXT UNIQUE NOT NULL,
                 value TEXT DEFAULT '',
                 description TEXT DEFAULT '',
@@ -89,7 +91,7 @@ def init_db():
         # 公开文件/目录映射表
         ('public_paths', '''
             CREATE TABLE IF NOT EXISTS public_paths (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id INTEGER PRIMARY KEY,
                 url_path TEXT UNIQUE NOT NULL,
                 local_path TEXT NOT NULL,
                 is_directory INTEGER DEFAULT 0,
@@ -100,7 +102,7 @@ def init_db():
         # 服务器指南表
         ('server_guides', '''
             CREATE TABLE IF NOT EXISTS server_guides (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id INTEGER PRIMARY KEY,
                 title TEXT NOT NULL,
                 slug TEXT UNIQUE NOT NULL,
                 summary TEXT DEFAULT '',
@@ -120,7 +122,7 @@ def init_db():
         # 指南编辑封禁表
         ('guide_edit_bans', '''
             CREATE TABLE IF NOT EXISTS guide_edit_bans (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id INTEGER PRIMARY KEY,
                 user_id INTEGER DEFAULT NULL,
                 ip_address TEXT DEFAULT NULL,
                 banned_by INTEGER NOT NULL,
@@ -135,7 +137,7 @@ def init_db():
         # 广播邮件日志表
         ('broadcast_logs', '''
             CREATE TABLE IF NOT EXISTS broadcast_logs (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id INTEGER PRIMARY KEY,
                 subject TEXT NOT NULL,
                 body TEXT NOT NULL,
                 sender_id INTEGER NOT NULL,
@@ -148,7 +150,7 @@ def init_db():
         # status: 0=私有 1=待审核 2=已公开（3=已驳回，仅遗留老数据保留，新驳回直接转为私有）
         ('music', '''
             CREATE TABLE IF NOT EXISTS music (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id INTEGER PRIMARY KEY,
                 user_id INTEGER NOT NULL,
                 username TEXT DEFAULT '',
                 title TEXT NOT NULL,
@@ -170,7 +172,7 @@ def init_db():
         # 背景图片表（status: 0=待审核 1=已通过 2=已驳回）
         ('backgrounds', '''
             CREATE TABLE IF NOT EXISTS backgrounds (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id INTEGER PRIMARY KEY,
                 user_id INTEGER NOT NULL,
                 username TEXT NOT NULL,
                 filename TEXT NOT NULL,
@@ -185,7 +187,7 @@ def init_db():
         # 游戏账号注册申请表
         ('game_account_registrations', '''
             CREATE TABLE IF NOT EXISTS game_account_registrations (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id INTEGER PRIMARY KEY,
                 user_id INTEGER NOT NULL,
                 mc_username TEXT NOT NULL,
                 encrypted_password TEXT NOT NULL,
@@ -199,7 +201,7 @@ def init_db():
         # 游戏账号封禁表
         ('game_account_bans', '''
             CREATE TABLE IF NOT EXISTS game_account_bans (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id INTEGER PRIMARY KEY,
                 mc_username TEXT NOT NULL UNIQUE,
                 reason TEXT DEFAULT '',
                 user_id INTEGER DEFAULT NULL,
@@ -211,7 +213,7 @@ def init_db():
         # status: pending=待审批 approved=已封禁 rejected=已驳回 expired=已到期自动解封
         ('game_server_ban_applications', '''
             CREATE TABLE IF NOT EXISTS game_server_ban_applications (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id INTEGER PRIMARY KEY,
                 applicant_id INTEGER NOT NULL,       -- 申请人（网站用户 ID）
                 player_name TEXT NOT NULL,           -- 封禁玩家名（MC 游戏名）
                 qq_name TEXT DEFAULT '',             -- 封禁玩家QQ名
@@ -229,7 +231,7 @@ def init_db():
         # 公共建筑表
         ('public_buildings', '''
             CREATE TABLE IF NOT EXISTS public_buildings (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id INTEGER PRIMARY KEY,
                 title TEXT NOT NULL,
                 warp_name TEXT NOT NULL,
                 description TEXT NOT NULL,
@@ -249,7 +251,7 @@ def init_db():
         # 建筑评论表
         ('building_comments', '''
             CREATE TABLE IF NOT EXISTS building_comments (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id INTEGER PRIMARY KEY,
                 building_id INTEGER NOT NULL,
                 user_id INTEGER NOT NULL,
                 content TEXT NOT NULL,
@@ -259,7 +261,7 @@ def init_db():
         # 建筑举报表
         ('building_reports', '''
             CREATE TABLE IF NOT EXISTS building_reports (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id INTEGER PRIMARY KEY,
                 building_id INTEGER NOT NULL,
                 reporter_id INTEGER NOT NULL,
                 reason TEXT NOT NULL,
@@ -271,7 +273,7 @@ def init_db():
         # 建筑收藏表（用户与建筑多对多，用于收藏功能与按收藏数排序）
         ('building_favorites', '''
             CREATE TABLE IF NOT EXISTS building_favorites (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id INTEGER PRIMARY KEY,
                 building_id INTEGER NOT NULL,
                 user_id INTEGER NOT NULL,
                 created_at TEXT NOT NULL,
@@ -281,7 +283,7 @@ def init_db():
         # 服务器指南收藏表（用户与指南多对多）
         ('guide_favorites', '''
             CREATE TABLE IF NOT EXISTS guide_favorites (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                id INTEGER PRIMARY KEY,
                 guide_id INTEGER NOT NULL,
                 user_id INTEGER NOT NULL,
                 created_at TEXT NOT NULL,

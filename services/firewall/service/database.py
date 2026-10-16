@@ -17,6 +17,7 @@ import duckdb
 
 from config import APP_ROOT
 from core.system.logger import log_firewall
+from core.shared.snowflake import next_id
 
 # 防火墙数据库固定存放在项目根目录的 uploads/db/ 下（与主站 SQLite 同目录），
 # 随站点一起被备份，重启不丢。
@@ -286,10 +287,13 @@ def read_config_whitelist():
     stored = None
     try:
         from core.db import get_db as _main_get_db
-        with _main_get_db() as conn:
+        conn = _main_get_db()
+        try:
             row = conn.execute(
                 "SELECT value FROM settings WHERE key = 'FIREWALL_WHITELIST'"
             ).fetchone()
+        finally:
+            conn.close()
         if row is not None:
             try:
                 stored = row['value']
@@ -394,15 +398,8 @@ def is_whitelisted_cache(ip: str) -> bool:
 # ---------------------------------------------------------------------------
 
 CREATE_TABLES_SQL = r"""
-CREATE SEQUENCE IF NOT EXISTS seq_firewall_bans START 1;
-CREATE SEQUENCE IF NOT EXISTS seq_firewall_account_bans START 1;
-CREATE SEQUENCE IF NOT EXISTS seq_firewall_warnings START 1;
-CREATE SEQUENCE IF NOT EXISTS seq_firewall_ddos_log START 1;
-CREATE SEQUENCE IF NOT EXISTS seq_firewall_ban_details START 1;
-CREATE SEQUENCE IF NOT EXISTS seq_firewall_content_injections START 1;
-
 CREATE TABLE IF NOT EXISTS firewall_bans (
-    id INTEGER PRIMARY KEY DEFAULT nextval('seq_firewall_bans'),
+    id BIGINT PRIMARY KEY,
     ip_address VARCHAR NOT NULL,
     reason VARCHAR DEFAULT '',
     banned_by INTEGER NOT NULL,
@@ -413,7 +410,7 @@ CREATE INDEX IF NOT EXISTS idx_firewall_bans_ip ON firewall_bans(ip_address);
 CREATE INDEX IF NOT EXISTS idx_firewall_bans_expires ON firewall_bans(expires_at);
 
 CREATE TABLE IF NOT EXISTS firewall_account_bans (
-    id INTEGER PRIMARY KEY DEFAULT nextval('seq_firewall_account_bans'),
+    id BIGINT PRIMARY KEY,
     user_id INTEGER NOT NULL,
     reason VARCHAR DEFAULT '',
     banned_by INTEGER NOT NULL,
@@ -435,8 +432,8 @@ CREATE TABLE IF NOT EXISTS firewall_account_whitelist (
 );
 
 CREATE TABLE IF NOT EXISTS firewall_ban_details (
-    id INTEGER PRIMARY KEY DEFAULT nextval('seq_firewall_ban_details'),
-    ban_id INTEGER NOT NULL,
+    id BIGINT PRIMARY KEY,
+    ban_id BIGINT NOT NULL,
     ban_type VARCHAR NOT NULL DEFAULT 'ip',
     ip_address VARCHAR DEFAULT '',
     reason TEXT DEFAULT '',
@@ -461,7 +458,7 @@ CREATE INDEX IF NOT EXISTS idx_ban_details_ban_id ON firewall_ban_details(ban_id
 CREATE INDEX IF NOT EXISTS idx_ban_details_created ON firewall_ban_details(created_at);
 
 CREATE TABLE IF NOT EXISTS firewall_warnings (
-    id INTEGER PRIMARY KEY DEFAULT nextval('seq_firewall_warnings'),
+    id BIGINT PRIMARY KEY,
     ip_address VARCHAR NOT NULL,
     warning TEXT DEFAULT '',
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -470,7 +467,7 @@ CREATE INDEX IF NOT EXISTS idx_firewall_warnings_ip ON firewall_warnings(ip_addr
 CREATE INDEX IF NOT EXISTS idx_firewall_warnings_time ON firewall_warnings(created_at);
 
 CREATE TABLE IF NOT EXISTS firewall_ddos_log (
-    id INTEGER PRIMARY KEY DEFAULT nextval('seq_firewall_ddos_log'),
+    id BIGINT PRIMARY KEY,
     ip_address VARCHAR NOT NULL,
     action VARCHAR NOT NULL,
     threshold INTEGER DEFAULT 0,
@@ -486,7 +483,7 @@ CREATE TABLE IF NOT EXISTS firewall_config (
 );
 
 CREATE TABLE IF NOT EXISTS firewall_content_injections (
-    id INTEGER PRIMARY KEY DEFAULT nextval('seq_firewall_content_injections'),
+    id BIGINT PRIMARY KEY,
     user_id INTEGER NOT NULL,
     content_type VARCHAR NOT NULL DEFAULT '',
     injection_type VARCHAR NOT NULL DEFAULT '',
@@ -502,6 +499,130 @@ CREATE INDEX IF NOT EXISTS idx_content_inj_time ON firewall_content_injections(c
 
 def _ensure_dir():
     os.makedirs(DB_DIR, exist_ok=True)
+
+
+# 带自身主键（雪花 ID）的防火墙表
+_ID_TABLES = (
+    'firewall_bans',
+    'firewall_account_bans',
+    'firewall_warnings',
+    'firewall_ddos_log',
+    'firewall_content_injections',
+    'firewall_ban_details',
+)
+
+# 需要清理的旧自增序列（历史版本遗留）
+_LEGACY_SEQUENCES = (
+    'seq_firewall_bans',
+    'seq_firewall_account_bans',
+    'seq_firewall_warnings',
+    'seq_firewall_ddos_log',
+    'seq_firewall_ban_details',
+    'seq_firewall_content_injections',
+)
+
+
+def _migrate_legacy_ids(conn):
+    """把防火墙表的历史自增 ID 迁移为雪花 ID（幂等，仅在检测到旧结构时执行）。
+
+    旧结构：id 列为 INTEGER + DEFAULT nextval(seq)，值域仅 int32，无法容纳
+    雪花 ID（~2.3e14）。因此迁移会重建这些表为 BIGINT 主键（无默认值），
+    行数据按原 id 升序重分配雪花 ID，且 firewall_ban_details.ban_id 随父表
+    同步重映射，保证关联关系不变。
+    """
+    from core.shared.snowflake import next_id
+
+    # 检测：任一表 id 列类型不是 BIGINT，即视为旧结构，需迁移
+    need_migrate = False
+    for table in _ID_TABLES:
+        row = conn.execute(
+            "SELECT data_type FROM information_schema.columns "
+            "WHERE table_name = ? AND column_name = 'id'",
+            (table,),
+        ).fetchone()
+        if row is None:
+            continue  # 表尚不存在
+        if str(row[0]).upper() != 'BIGINT':
+            need_migrate = True
+            break
+
+    if not need_migrate:
+        return
+
+    log_firewall('INFO', 'FirewallDB', '检测到历史自增 ID，开始迁移为雪花 ID')
+
+    # 1. 快照所有旧表数据
+    snapshots = {}
+    for table in _ID_TABLES:
+        try:
+            cur = conn.execute(f'SELECT * FROM {table}')
+            cols = [d[0] for d in cur.description]
+            rows = cur.fetchall()
+            snapshots[table] = (cols, rows)
+        except Exception:
+            pass
+
+    # 2. 删除旧表（连同其索引）并重建为新结构
+    for table in _ID_TABLES:
+        try:
+            conn.execute(f'DROP TABLE IF EXISTS {table}')
+        except Exception:
+            pass
+    for stmt in CREATE_TABLES_SQL.split(';'):
+        stmt = stmt.strip()
+        if stmt:
+            try:
+                conn.execute(stmt + ';')
+            except Exception as e:
+                log_firewall('WARNING', 'FirewallDB', f'迁移建表警告: {e}')
+    # 清理旧序列
+    for seq in _LEGACY_SEQUENCES:
+        try:
+            conn.execute(f'DROP SEQUENCE IF EXISTS {seq}')
+        except Exception:
+            pass
+
+    # 3. 逐表重建数据：id 重分配为雪花 ID，ban_details.ban_id 同步重映射
+    ban_map, acc_map = {}, {}
+    # 已被删除的封禁（详情仍作为审计日志保留）按旧 ban_id 分组分配雪花 ID，
+    # 保证同一封禁的多条详情仍共享同一 ban_id，且不残留任何历史小 ID。
+    orphan_map = {}
+    restored = 0
+    # ban_details 依赖父表映射，放到最后处理
+    for table in _ID_TABLES:
+        snapshot = snapshots.get(table)
+        if not snapshot:
+            continue
+        cols, rows = snapshot
+        if not rows:
+            continue
+        id_idx = cols.index('id')
+        type_idx = cols.index('ban_type') if 'ban_type' in cols else None
+        bid_idx = cols.index('ban_id') if 'ban_id' in cols else None
+        col_list = ', '.join(cols)
+        placeholders = ', '.join(['?'] * len(cols))
+        for row in rows:
+            row = list(row)
+            old_id = row[id_idx]
+            new_id = next_id()
+            row[id_idx] = new_id
+            if bid_idx is not None:
+                parent = ban_map if row[type_idx] == 'ip' else acc_map
+                old_bid = row[bid_idx]
+                if old_bid in parent:
+                    row[bid_idx] = parent[old_bid]
+                else:
+                    row[bid_idx] = orphan_map.setdefault(old_bid, next_id())
+            conn.execute(
+                f'INSERT INTO {table} ({col_list}) VALUES ({placeholders})', row
+            )
+            restored += 1
+            if table == 'firewall_bans':
+                ban_map[old_id] = new_id
+            elif table == 'firewall_account_bans':
+                acc_map[old_id] = new_id
+
+    log_firewall('INFO', 'FirewallDB', f'防火墙历史 ID 迁移完成：共重分配 {restored} 条记录')
 
 
 class _DuckDBConnection:
@@ -559,6 +680,7 @@ def get_db():
                             _conn.execute(stmt + ';')
                         except Exception as e:
                             log_firewall('WARNING', 'FirewallDB', f'建表警告: {e}')
+                _migrate_legacy_ids(_conn)
                 _rebuild_critical_indexes(_conn)
                 log_firewall('INFO', 'FirewallDB', '防火墙数据库初始化完成', path=DB_PATH)
     return _DuckDBConnection(_conn, _conn_lock)
@@ -815,14 +937,15 @@ def record_ban_detail(
     try:
         submit_write(
             "INSERT INTO firewall_ban_details "
-            "(ban_id, ban_type, ip_address, reason, banned_by, "
+            "(id, ban_id, ban_type, ip_address, reason, banned_by, "
             " created_at, expires_at, "
             " user_agent, request_path, request_method, referer, "
             " attack_type, matched_text, action_source, "
             " request_headers, query_string, request_body_preview, "
             " action_ip, action_username, additional_info) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             (
+                next_id(),
                 detail_kwargs['ban_id'],
                 detail_kwargs['ban_type'],
                 detail_kwargs['ip_address'],
@@ -961,9 +1084,9 @@ def record_content_injection(user_id, content_type, injection_type, content_prev
     try:
         execute_write(
             "INSERT INTO firewall_content_injections "
-            "(user_id, content_type, injection_type, content_preview, ip_address, matched_pattern, created_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)",
-            (user_id, content_type, injection_type, content_preview[:200], ip_address, matched_pattern),
+            "(id, user_id, content_type, injection_type, content_preview, ip_address, matched_pattern, created_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)",
+            (next_id(), user_id, content_type, injection_type, content_preview[:200], ip_address, matched_pattern),
         )
     except Exception as exc:
         log_firewall('WARNING', 'FirewallDB', f'记录内容注入警告失败: {exc}', user_id=user_id)

@@ -25,7 +25,7 @@ from routes.public import public_bp
 
 # 项目内部禁止公开的敏感目录/文件（相对路径时检查）
 FORBIDDEN_LOCAL_PARTS = {
-    'core', 'services', 'routes', 'web', '__pycache__',
+    'core', 'services', 'routes', 'static', 'templates', '__pycache__',
     '.git', 'backups', '.env', 'config.py', 'app.py',
     'requirements.txt', 'db', 'db-backup'
 }

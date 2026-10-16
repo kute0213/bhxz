@@ -37,6 +37,7 @@ from services.firewall.service.database import (
     unwhitelist_account_db,
 )
 from core.system.logger import log_firewall
+from core.shared.snowflake import next_id
 
 # 系统自动封禁操作人的标记 ID（users 表中不存在该用户，显示为「系统」）
 SYSTEM_BANNER_ID = 0
@@ -202,13 +203,13 @@ def ban_ip(ip_address, reason, banned_by=SYSTEM_BANNER_ID, duration_minutes=None
         now = _now_str()
         # 原子写入：仅当不存在有效封禁时插入（单写入线程串行执行，避免并发重复）
         row = execute_write(
-            "INSERT INTO firewall_bans (ip_address, reason, banned_by, created_at, expires_at) "
-            "SELECT ?, ?, ?, ?, ? "
+            "INSERT INTO firewall_bans (id, ip_address, reason, banned_by, created_at, expires_at) "
+            "SELECT ?, ?, ?, ?, ?, ? "
             "WHERE NOT EXISTS ("
             "  SELECT 1 FROM firewall_bans WHERE ip_address = ? "
             "  AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)"
             ") RETURNING id",
-            (ip, reason, banned_by, now, expires_at, ip),
+            (next_id(), ip, reason, banned_by, now, expires_at, ip),
             fetch='one',
         )
         if not row:
@@ -403,13 +404,13 @@ def ban_account(user_id, reason, banned_by=SYSTEM_BANNER_ID, duration_minutes=No
         # 原子写入：仅当不存在有效封禁时插入（单写入线程串行执行）
         row = execute_write(
             "INSERT INTO firewall_account_bans "
-            "(user_id, reason, banned_by, created_at, expires_at) "
-            "SELECT ?, ?, ?, ?, ? "
+            "(id, user_id, reason, banned_by, created_at, expires_at) "
+            "SELECT ?, ?, ?, ?, ?, ? "
             "WHERE NOT EXISTS ("
             "  SELECT 1 FROM firewall_account_bans WHERE user_id = ? "
             "  AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)"
             ") RETURNING id",
-            (user_id, reason, banned_by, now, expires_at, user_id),
+            (next_id(), user_id, reason, banned_by, now, expires_at, user_id),
             fetch='one',
         )
         if not row:
@@ -822,9 +823,9 @@ def add_warning(ip_address, warning_text):
         return 0
     try:
         execute_write(
-            "INSERT INTO firewall_warnings (ip_address, warning, created_at) "
-            "VALUES (?, ?, CURRENT_TIMESTAMP)",
-            (ip, warning_text),
+            "INSERT INTO firewall_warnings (id, ip_address, warning, created_at) "
+            "VALUES (?, ?, ?, CURRENT_TIMESTAMP)",
+            (next_id(), ip, warning_text),
         )
         return get_warning_count(ip, hours=24)
     except Exception as exc:

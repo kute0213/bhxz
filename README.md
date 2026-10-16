@@ -36,7 +36,7 @@ python app.py
 python scripts/build/build_static.py
 ```
 
-这会下载以下资源到 `web/static/lib/`：
+这会下载以下资源到 `static/lib/`：
 
 * **Lucide Icons** — 图标库
 
@@ -50,7 +50,7 @@ python scripts/build/build_static.py
 
 > 中文字体使用自带字体：正文 **站酷庆科黄油体**（圆润活泼、笔画简洁），标题 **站酷快乐体**（更俏皮有活力），
 > 均为本地分片子集，浏览器只按需下载用到的子集；字体文件随静态资源预构建提交，**零外部 CDN 依赖**。
-> 静态资源（含 Tailwind 构建产物 `web/static/css/tailwind.css`）已预构建并随代码提交，一键更新无需额外构建步骤。
+> 静态资源（含 Tailwind 构建产物 `static/css/tailwind.css`）已预构建并随代码提交，一键更新无需额外构建步骤。
 
 ### 打包发布 zip
 
@@ -79,10 +79,11 @@ python scripts/build/package.py
 ├── app.py / config.py / requirements.txt   # 入口、配置、依赖
 ├── core/         # 基础设施层（DB/认证/中间件/错误页/共享工具）——不含业务逻辑
 │   ├── db/                   #   数据库连接与 schema
-│   │   └── connection.py, schema.py
+│   │   └── connection.py, schema.py, snowflake_migration.py
 │   ├── system/               #   系统层：日志、启动检查、应用初始化
 │   │   └── init.py, logger.py, startup_checks.py
 │   ├── shared/               #   共享工具（无业务逻辑，原 utils 收敛于此）
+│   │   ├── snowflake.py      #   全站统一雪花 ID 生成器（非用户表主键唯一入口）
 │   │   ├── ip.py, captcha.py, ratelimit.py, validation.py
 │   │   ├── process_utils.py
 │   │   └── scheduler/        #   统一任务注册表（task / executors / registry）
@@ -127,20 +128,24 @@ python scripts/build/package.py
 │   ├── main/           # 主站（登录/注册/设置/音乐）
 │   ├── public/         # 公开文件服务
 │   └── sitemap/        # Sitemap & robots.txt（自动添加 Crawl-delay 防防火墙误判）
-├── web/          # 唯一的前端文件夹：Jinja2 模板 + 静态资源（命名规范见 docs/DEVELOPMENT.md）
-│   ├── admin/          # 管理后台页面（如 users.html、settings.html，无 admin_ 前缀）
-│   ├── auth/           # 登录 / 注册 / 找回密码
-│   ├── settings/       # 用户个人设置
-│   ├── site/           # 站点级信息页（站点文档、服务器状态、网页地图）
-│   ├── backgrounds/    # 背景图片页面（index / upload）
-│   ├── emails/         # 邮件模板（独立 Jinja2 loader）
-│   ├── game_accounts/  # 游戏账号页面（apply / ban_apply）
-│   ├── guides/         # 服务器指南页面（index / detail / form）
-│   ├── buildings/      # 公共建筑（index / create / detail）
-│   ├── music/          # 大喇叭音频页面（index / my / favorites / upload）
-│   ├── macros/         # 通用模板宏（模态框/编辑器/进度条/音乐/页面内搜索）
-│   ├── static/         # 静态资源（CSS/JS/本地化第三方库，与模板同处 web/ 前端目录）
-│   └── ...             # 根级通用页面（base.html 布局、index.html 首页、error_simple.html 精简错误页）
+├── static/       # 唯一的前端文件夹：静态资源 + Jinja2 模板（命名规范见 docs/DEVELOPMENT.md）
+│   ├── css/            #   样式（base.css / tailwind.css 构建产物）
+│   ├── js/             #   前端脚本（core/ 通用组件、pages/ 页面脚本）
+│   ├── favicons/       #   站点图标（可配置）
+│   ├── lib/            #   本地化第三方库与字体（构建生成，含 lib-version.json）
+│   └── templates/      #   Jinja2 模板（Flask template_folder）
+│       ├── admin/          #     管理后台页面（如 users.html、settings.html，无 admin_ 前缀）
+│       ├── auth/           #     登录 / 注册 / 找回密码
+│       ├── settings/       #     用户个人设置
+│       ├── site/           #     站点级信息页（站点文档、服务器状态、网页地图）
+│       ├── backgrounds/    #     背景图片页面（index / upload）
+│       ├── emails/         #     邮件模板（独立 Jinja2 loader）
+│       ├── game_accounts/  #     游戏账号页面（apply / ban_apply）
+│       ├── guides/         #     服务器指南页面（index / detail / form）
+│       ├── buildings/      #     公共建筑（index / create / detail）
+│       ├── music/          #     大喇叭音频页面（index / my / favorites / upload）
+│       ├── macros/         #     通用模板宏（模态框/编辑器/进度条/音乐/页面内搜索）
+│       └── ...             #     根级通用页面（base.html 布局、index.html 首页、error_simple.html 精简错误页）
 ├── docs/         # 项目文档
 ├── scripts/      # 构建脚本（build/）与测试（tests/）
 ├── uploads/      # 运行期上传数据
@@ -208,7 +213,7 @@ python scripts/build/package.py
 
 ### 页面内搜索
 
-* **就地搜索框（SiteSearch v8）**：**每个列表页使用自己的搜索框**（由 `web/macros/search.html` 的 `inline_search()` 宏渲染），导航栏**不再放置**搜索输入框
+* **就地搜索框（SiteSearch v8）**：**每个列表页使用自己的搜索框**（由 `static/templates/macros/search.html` 的 `inline_search()` 宏渲染），导航栏**不再放置**搜索输入框
 * **点击搜索框即可展开**：点击搜索框任意位置（图标、文字或四周留白）都会展开，无需精准点中「搜索」文字
 * **纯水平展开动画**：容器固定高度、无上下内边距，折叠态与展开态上下长度完全一致，展开只做左右伸缩，不会上下抖动
 * **保持展开规则**：输入框内有文字 **或** 光标在输入框内 → 保持展开；无文字 **且** 失焦（点击外部）→ 平滑收起；Esc 一键清空并收起
@@ -223,7 +228,7 @@ python scripts/build/package.py
 
 * Markdown 详情页（标题锚点、代码一键复制）
 
-* **富文本 / Markdown 统一编辑器**（全站唯一宏 `web/macros/markdown_editor.html` + 引擎 `web/static/js/pages/markdown-editor.js`）：
+* **富文本 / Markdown 统一编辑器**（全站唯一宏 `static/templates/macros/markdown_editor.html` + 引擎 `static/js/pages/markdown-editor.js`）：
   * 默认「富文本（所见即所得）」模式，底层数据与保存内容**始终是 Markdown**，可视化界面只是渲染层；可一键无缝切换到「Markdown 源码」模式（单栏，无实时预览），切换时内容与光标位置保留。
   * **本地静默草稿**：编辑内容实时防抖写入浏览器 `localStorage`（按编辑器 id + 页面路径区分），**仅存本机、不上传云端**；刷新或误关闭后自动恢复，表单成功提交后自动清除，避免残留旧草稿。
   * **高频交互不卡顿**：选区变化经签名去重后合并到同一帧刷新工具栏，表格检测按当前行预判，避免大文档下反复全量重排 / 重建 DOM。
@@ -279,7 +284,7 @@ python scripts/build/package.py
 
 * 音频状态：私有 / 待审核 / 已公开（历史遗留的「已驳回」数据归并为私有），用户可在独立的「我的音频」页（`/music/my`）中查看并管理（播放链接、申请公开/转为私有、删除）
 
-* **独立上传页与详细进度条**：上传入口跳转独立页面 `/music/upload`（`web/music/upload.html` + `static/js/pages/music_upload.js`），异步上传并分两阶段展示进度条——文件上传百分比 + ffmpeg 转码进度条：`ffprobe` 探测音频时长，后台线程结合 ffmpeg `-progress` 文件输出（`out_time_us`）与 m3u8 已生成分片累计时长**双源计算真实百分比**并填充进度条（取两者较大值，避免快速转码时进度条跟不上；真实百分比未知时显示不确定态滑动动画，不再只有文字），成功后展示播放链接与唱片 MP3 链接，失败可一键重试
+* **独立上传页与详细进度条**：上传入口跳转独立页面 `/music/upload`（`static/templates/music/upload.html` + `static/js/pages/music_upload.js`），异步上传并分两阶段展示进度条——文件上传百分比 + ffmpeg 转码进度条：`ffprobe` 探测音频时长，后台线程结合 ffmpeg `-progress` 文件输出（`out_time_us`）与 m3u8 已生成分片累计时长**双源计算真实百分比**并填充进度条（取两者较大值，避免快速转码时进度条跟不上；真实百分比未知时显示不确定态滑动动画，不再只有文字），成功后展示播放链接与唱片 MP3 链接，失败可一键重试
 
 * **唱片 MP3 与源文件清理**：转码时一次生成 HLS 流与 192kbps 唱片 MP3（`libmp3lame` + ID3 标签），转码完成后**自动删除原上传音频源文件**与临时日志，目录内仅保留播放所需的 `index.m3u8`、`seg_*.ts` 与唱片 `index.mp3`；MP3 链接访问权限与 m3u8 播放链接一致（所有音频均可凭链接访问，私有仅表示不出现在公开列表）
 
@@ -594,19 +599,19 @@ python scripts/build/package.py
 
 * **自绘下拉菜单层级修复**：`.pixel-card` 的 `contain: paint` 会创建层叠上下文并裁剪溢出内容，导致卡片内展开的自绘下拉（`.custom-select-dropdown`）被相邻卡片压住 / 截断。现展开时由 `base.js` 给所在卡片加 `select-open` 类，CSS 临时去掉 paint 包含（保留 layout/style，不改布局）并把卡片抬到同层卡片之上（`z-index: 30`，仍低于导航栏），收起时还原
 
-* **首页首屏磨砂玻璃背景铺满整屏**：`web/index.html` 的 `.home-hero` 以负外边距（`--nav-offset`，移动端 80px / ≥768px 96px）抵消粘性导航栏在文档流中的占位高度，并用等量 `padding-top` 补回内容位置，使首页首屏的磨砂玻璃背景从**页面最顶端**开始连续覆盖——顶部不再出现空条、导航栏后方也一并被铺到；`min-height: 100vh` 保证首屏始终铺满一屏
+* **首页首屏磨砂玻璃背景铺满整屏**：`static/templates/index.html` 的 `.home-hero` 以负外边距（`--nav-offset`，移动端 80px / ≥768px 96px）抵消粘性导航栏在文档流中的占位高度，并用等量 `padding-top` 补回内容位置，使首页首屏的磨砂玻璃背景从**页面最顶端**开始连续覆盖——顶部不再出现空条、导航栏后方也一并被铺到；`min-height: 100vh` 保证首屏始终铺满一屏
 
-* **邮件模板同款磨砂玻璃**：`web/emails/base.html` 统一白色磨砂玻璃卡片（浅灰白渐变 + 蓝色主色 `#0284c7` + 背景光晕 + 噪点纹理 + 光线散射层 + 顶部高光描边 + 状态卡），验证码 / 指南审核 / 音频审核 / 背景图片审核 / 公共建筑审核 / 通用待审核提醒 / 广播邮件共用同一外层与样式；`services/mail/notify_admins()` 为统一的「通知所有管理员」入口
+* **邮件模板同款磨砂玻璃**：`static/templates/emails/base.html` 统一白色磨砂玻璃卡片（浅灰白渐变 + 蓝色主色 `#0284c7` + 背景光晕 + 噪点纹理 + 光线散射层 + 顶部高光描边 + 状态卡），验证码 / 指南审核 / 音频审核 / 背景图片审核 / 公共建筑审核 / 通用待审核提醒 / 广播邮件共用同一外层与样式；`services/mail/notify_admins()` 为统一的「通知所有管理员」入口
 
 * **自定义音频播放器（磨砂玻璃风格）**：大喇叭音频列表（`/music`）、我的音频（`/music/my`）、管理员审核页（`admin/admin_music.html`）均使用自研播放器替代浏览器默认控件，含进度条（点击/拖动 seek、缓冲显示，**圆点（thumb）跟随进度实时移动**）、倍速（0.5x~2x）、音量（按钮+滑块弹层，音量记忆在 localStorage）与播放/暂停，窄屏（≤480px）自动占满整行，且倍速/音量弹层窄屏时改为右对齐，避免超出卡片/视口被裁切；每个 `.music-player` 独立实例化并拥有独立的 HLS 实例与 `Audio` 元素，同一时间只允许一个播放器出声，列表内多个音频均可独立播放；样式见 `static/css/base.css` 的 `.music-player`（倍速/音量弹层 `z-index:100` 向上展开；内含播放器的卡片使用 `.pixel-card.music-card` 显式解除 `contain:paint`/`content-visibility` 的溢出裁切，弹层不被遮挡/裁切），逻辑见 `static/js/pages/music_player.js`，HLS 播放依赖本地 `static/lib/hls/hls.min.js`（构建脚本 `scripts/build/build_static.py` 自动下载）
 
 * **全站响应式适配所有屏幕**：竖屏/窄屏（≤640px）下音频卡片操作按钮组（复制广播 m3u / 唱片 MP3 / 时长 Ns / 审核操作）通过 `.music-card-actions` 自动占满整行并换行排列，不再横向溢出被裁切导致「穿模」、无法点击；全局 `body` 增加 `overflow-wrap: break-word` 兜底长文本换行，配合 `overflow-x: clip` 杜绝横向滚动；小屏端导航使用右侧滑出菜单，大屏端使用悬停下拉导航，管理员数据表格统一 `overflow-x-auto` 横向滚动、指南/文档 `pre/table` 自带横向滚动，全站各页面均可适配任意屏幕尺寸
 
-* **模板宏复用**：`web/macros/music_macros.html` 提取音频状态徽章、复制广播 m3u 链接按钮、复制唱片 MP3 按钮、复制时长（秒）按钮、自定义播放器（`music_audio_player`）与播放器脚本（`music_player_assets`）为公共宏，`music/list.html`、`music/my.html` 与 `admin/admin_music.html` 统一调用，消除重复代码
+* **模板宏复用**：`static/templates/macros/music_macros.html` 提取音频状态徽章、复制广播 m3u 链接按钮、复制唱片 MP3 按钮、复制时长（秒）按钮、自定义播放器（`music_audio_player`）与播放器脚本（`music_player_assets`）为公共宏，`music/list.html`、`music/my.html` 与 `admin/admin_music.html` 统一调用，消除重复代码
 
-* **统一弹窗模板系统**：`web/macros/modal.html` 提供 `modal_overlay`（CustomModal 骨架）、`modal_shell`（页面级弹窗容器，支持尺寸/图标/颜色自定义）、`modal_captcha`（图形验证码弹窗）、`modal_close_script`（全局 `openModal`/`closeModal` 控制器）四组宏，配合 `base.js` 的 `CustomModal`（alert/confirm/prompt）统一全站所有弹窗样式，取代全部原生 `alert`/`confirm`/`prompt` 及手写弹窗；图形验证码弹窗改为**按需加载**（见下文「前端资源按需加载」）
+* **统一弹窗模板系统**：`static/templates/macros/modal.html` 提供 `modal_overlay`（CustomModal 骨架）、`modal_shell`（页面级弹窗容器，支持尺寸/图标/颜色自定义）、`modal_captcha`（图形验证码弹窗）、`modal_close_script`（全局 `openModal`/`closeModal` 控制器）四组宏，配合 `base.js` 的 `CustomModal`（alert/confirm/prompt）统一全站所有弹窗样式，取代全部原生 `alert`/`confirm`/`prompt` 及手写弹窗；图形验证码弹窗改为**按需加载**（见下文「前端资源按需加载」）
 
-* **统一标签列表输入框**：`web/macros/forms.html` 的 `tags_field()` 宏 + `base.js` 的 `TagInput` 模块，提供全站统一的「列表类」输入体验——输入一项后回车或点「添加」即新增一个标签，已添加标签以胶囊展示、点叉号即可删除，支持粘贴「a, b, c」自动拆分；底层始终用一个隐藏 input 保存**逗号分隔字符串**，与后端解析、表单提交完全兼容（零迁移成本）。建筑发布 / 建筑详情编辑标签 / 音频上传 / 音频标签编辑等所有列表输入均已统一使用该控件，用户无需再手动输入逗号分隔；全局「编辑标签」弹窗（`#tag-edit-modal`）复用同一控件供各场景调用
+* **统一标签列表输入框**：`static/templates/macros/forms.html` 的 `tags_field()` 宏 + `base.js` 的 `TagInput` 模块，提供全站统一的「列表类」输入体验——输入一项后回车或点「添加」即新增一个标签，已添加标签以胶囊展示、点叉号即可删除，支持粘贴「a, b, c」自动拆分；底层始终用一个隐藏 input 保存**逗号分隔字符串**，与后端解析、表单提交完全兼容（零迁移成本）。建筑发布 / 建筑详情编辑标签 / 音频上传 / 音频标签编辑等所有列表输入均已统一使用该控件，用户无需再手动输入逗号分隔；全局「编辑标签」弹窗（`#tag-edit-modal`）复用同一控件供各场景调用
 
 ### 交互效果
 
@@ -655,7 +660,7 @@ python scripts/build/package.py
 
 1. 修改 `scripts/build/build_static.py` 中的版本号
 2. 运行 `python scripts/build/build_static.py` 重新下载
-3. 提交 `web/static/lib/` 目录到 Git（`web/static/lib/monaco/` 除外）
+3. 提交 `static/lib/` 目录到 Git（`static/lib/monaco/` 除外）
 
 #### 添加新的外部资源
 
@@ -726,7 +731,7 @@ workspace/
 ├── requirements.txt          # Python 依赖
 ├── update.py                 # 一键更新脚本
 ├── core/                     # 核心基础设施层（含共享工具，不含业务逻辑）
-│   ├── db/                   #   数据库连接（每线程一条连接）与 schema、雪花 ID 迁移
+│   ├── db/                   #   数据库连接（原生 sqlite3，每次调用新建连接）与 schema、雪花 ID 迁移
 │   ├── system/               #   系统层：日志、启动检查、应用初始化
 │   │   ├── init.py, logger.py, startup_checks.py
 │   ├── shared/               #   共享工具（原 utils 收敛于此）
@@ -773,20 +778,25 @@ workspace/
 │   ├── guides/               #   服务器指南（页面+API）
 │   ├── public/               #   公开文件服务
 │   └── sitemap/              #   站点地图 & robots.txt
-├── web/                # 唯一前端文件夹：Jinja2 模板 + 静态资源（命名规范见 docs/DEVELOPMENT.md）
-│   ├── admin/                #   管理后台页面（无 admin_ 前缀）
-│   ├── auth/                 #   登录 / 注册 / 找回密码
-│   ├── settings/             #   用户个人设置
-│   ├── site/                 #   站点级信息页（站点文档、服务器状态、网页地图）
-│   ├── backgrounds/          #   背景图片页面（index / upload）
-│   ├── emails/               #   邮件模板（独立 loader）
-│   ├── game_accounts/        #   游戏账号页面（apply / ban_apply）
-│   ├── guides/               #   服务器指南页面（index / detail / form）
-│   ├── buildings/            #   公共建筑（index / create / detail）
-│   ├── music/                #   大喇叭音频页面（index / my / favorites / upload）
-│   ├── macros/               #   通用模板宏（模态框/编辑器/进度条/音乐/页面内搜索）
-│   ├── static/               #   静态资源（CSS/JS/本地化第三方库，构建生成 lib/；与模板同处 web/ 前端目录）
-│   └── ...                   #   根级：base.html / index.html / error_simple.html
+├── static/                   # 唯一前端文件夹：静态资源 + Jinja2 模板（命名规范见 docs/DEVELOPMENT.md）
+│   ├── css/                  #   样式（base.css 手写样式 + tailwind.css 构建产物）
+│   ├── js/                   #   前端脚本（core/ 通用组件、pages/ 页面脚本）
+│   ├── favicons/             #   站点图标（可配置）
+│   ├── lib/                  #   本地化第三方库与字体（构建生成）
+│   ├── favicon.svg           #   站点默认图标
+│   └── templates/            #   Jinja2 模板
+│       ├── admin/                #     管理后台页面（无 admin_ 前缀）
+│       ├── auth/                 #     登录 / 注册 / 找回密码
+│       ├── settings/             #     用户个人设置
+│       ├── site/                 #     站点级信息页（站点文档、服务器状态、网页地图）
+│       ├── backgrounds/          #     背景图片页面（index / upload）
+│       ├── emails/               #     邮件模板（独立 loader）
+│       ├── game_accounts/        #     游戏账号页面（apply / ban_apply）
+│       ├── guides/               #     服务器指南页面（index / detail / form）
+│       ├── buildings/            #     公共建筑（index / create / detail）
+│       ├── music/                #     大喇叭音频页面（index / my / favorites / upload）
+│       ├── macros/               #     通用模板宏（模态框/编辑器/进度条/音乐/页面内搜索）
+│       └── ...                   #     根级：base.html / index.html / error_simple.html
 ├── docs/                     # 项目文档
 └── scripts/
     ├── build/                #   构建脚本
@@ -864,13 +874,13 @@ workspace/
 5. **清理「GitHub 上已被删除」的文件与目录**：合并覆盖只会新增/覆盖，反映不了「新版删除」，故覆盖完成后按最新 ZIP 的文件清单递归清理——被移除的文件会删除、被移除的目录会整棵删除（例如更换字体后，旧字体的 woff2 子集一并清掉，不再残留）。`PROTECTED_PATHS` 中的路径**强制跳过、绝不删除**，包括：
    - 用户数据：`uploads/`（音频、背景图、sitemap，数据库也在 `uploads/db/`）
    - 运行期数据 / 本地配置：`db`、`backups`、`logs`、`ssl`、`release`、`.env`、`.env.local`、`.git`、`.venv`、`node_modules`
-   - 本地生成物：`web/static/lib/monaco`、`scripts/ffmpeg`（运行期下载，`.gitignore` 已排除）
+   - 本地生成物：`static/lib/monaco`、`scripts/ffmpeg`（运行期下载，`.gitignore` 已排除）
    - 本地启动脚本：`start.bat`（未提交到仓库，本地自建）
    - 任意层级：`__pycache__`、`.pytest_cache`、`node_modules`、`.DS_Store`、`Thumbs.db`
 6. 自动安装/更新 Python 依赖
 7. **更新完成后提示手动重启服务器，不会自动启动**
 
-> 字体等静态资源已随代码提交进仓库（`web/static/lib/fonts/`），因此一键更新即可同步字体，服务器无需联网构建、也无需额外步骤。
+> 字体等静态资源已随代码提交进仓库（`static/lib/fonts/`），因此一键更新即可同步字体，服务器无需联网构建、也无需额外步骤。
 > ⚠️ 清理以「最新 ZIP 里的文件清单」为准：**既未提交到仓库、又不在保护名单内**的本地文件会被当作「已删除」而移除。请勿把自建脚本/资源直接放在项目目录下，放到 `uploads/` 等受保护目录即可。
 > 镜像路径按各源格式正确拼接：前缀型代理为 `<代理前缀>https://github.com/<repo>/archive/refs/heads/<branch>.zip`，主机替换型为 `https://<镜像域名>/<repo>/archive/refs/heads/<branch>.zip`。
 > 如果遇到依赖变化，更新后执行 `pip install -r requirements.txt`。
@@ -884,7 +894,7 @@ workspace/
 5. Session Cookie 启用 `HttpOnly` + `SameSite=Lax`（HTTPS 下自动加 `Secure`）
 6. 邮箱唯一性检查（一个邮箱仅可注册一个账号）
 7. IP 频率限制（注册/登录）
-8. **全站安全响应标头**（`core/web/middleware.py` 集中下发，覆盖 HTML/API/SSE/静态资源）：
+8. **全站安全响应标头**（`core/middleware.py` 集中下发，覆盖 HTML/API/SSE/静态资源）：
 
    * `Content-Security-Policy`：仅允许本站脚本/样式/资源，禁用 `object`，限制 `form-action`/`frame-ancestors` 等（已放行内联脚本/样式与 HLS blob worker，避免误伤自身功能）；`frame-src`/`child-src` 会按配置的「卫星地图地址」动态追加其源，供「网页地图」页内嵌外部地图
 
@@ -910,7 +920,7 @@ workspace/
 
 ## 最近更新
 
-* **统一编辑器交互优化 + 统一标签输入框 + 前端资源按需加载**（`web/macros/markdown_editor.html`、`web/static/js/pages/markdown-editor.js`、`web/macros/forms.html`、`web/static/js/core/base.js`、`web/base.html` 等）：
+* **统一编辑器交互优化 + 统一标签输入框 + 前端资源按需加载**（`static/templates/macros/markdown_editor.html`、`static/js/pages/markdown-editor.js`、`static/templates/macros/forms.html`、`static/js/core/base.js`、`static/templates/base.html` 等）：
   * **编辑器**：移除编辑器下方的「所见即所得」提示与「插入图片」功能；工具栏改为「基础 / 段落 / 插入」三个常驻标签页 + 「链接」「表格」两个**上下文标签页**（点击链接/表格按钮或光标进入链接/表格时出现，离开即隐藏）。链接改为独立标签页，可直接设置地址、显示文字、悬停标题、新窗口打开，并新增**取消链接**；**未选中文字时点链接按钮自动插入默认文字**。表格插入后自动切到表格页、离开自动收起。**再次点击已激活的样式按钮即取消该样式**（加粗/斜体/删除线/行内代码/标题/引用/任务列表等）。表格列宽拖拽改用 **Pointer Events + 指针捕获**（`touch-action:none`），**修复移动端无法拖动列宽的问题**。
   * **统一标签输入框**：新增 `tags_field()` 宏与 `base.js` 的 `TagInput` 模块，所有列表类输入（建筑标签、音频标签、音频标签编辑等）统一改为「回车/点添加新增、胶囊叉号删除」，不再需要用户手动以逗号分隔；底层仍保存逗号分隔字符串，后端零改动。
   * **前端资源按需加载**：图形验证码弹窗改为 `captcha_modal` 按需块（仅验证码页面加载）、`purify.min.js` 移出 `<head>` 且仅在 Markdown 页加载、移除 `admin/broadcast.html` 重复引入的 `base.js`。
@@ -921,31 +931,31 @@ workspace/
 
 * **修复 Waitress 剥离代理头导致的「DDoS 防火墙再次失效」**（`core/server.py`、`core/shared/ip.py`）：Waitress 3.x 默认 `clear_untrusted_proxy_headers=True`，会在请求进入应用前**剥离来自非可信来源的 `X-Forwarded-For` / `X-Forwarded-Proto` / `X-Real-IP` 等代理头**。内网穿透 / 反向代理正是靠这些头传递客户端真实 IP，被剥离后 `REMOTE_ADDR` 恒为回环地址，防火墙会把所有外部请求当作本机访问而跳过 DDoS 计数与黑名单拦截（Session Cookie 的 `Secure` 判断同样失效）。现于 `create_server()` 显式设置 `clear_untrusted_proxy_headers=False`，把代理头的可信性判断交回应用自身（`is_trusted_proxy` 只采信回环 / 内网 / `TRUSTED_PROXIES` 转发的头，公网直连伪造的头一律忽略）。同时修正 `is_public_ip()` 对 IPv4-mapped IPv6（`::ffff:1.2.3.4`）的误判——此前首字符为 `:` 会被当成内网地址，进而被当作可信代理采信其伪造的代理头。实测：真实 Waitress 服务下第 151 次请求（10 秒内超过 150 次）即触发封禁，后续连接被直接断开（0 字节响应）。
 
-* **服务器工作线程数可配置 + 热加载**（`core/server.py`、`config.py`、`routes/admin/firewall/__init__.py`、`web/admin/firewall.html`）：原 `WORKER_THREADS=4` 改为 `WAITRESS_THREADS=100`（Waitress 实际工作线程数上限，`0` 表示不限制，按 CPU 核数与可用内存智能推算 32~512）；「系统设置」与「防火墙设置」修改的是同一项配置，保存后通过 `apply_thread_count()` 调 `task_dispatcher.set_thread_count()` **即时热加载**，无需重启服务器。
+* **服务器工作线程数可配置 + 热加载**（`core/server.py`、`config.py`、`routes/admin/firewall/__init__.py`、`static/templates/admin/firewall.html`）：原 `WORKER_THREADS=4` 改为 `WAITRESS_THREADS=100`（Waitress 实际工作线程数上限，`0` 表示不限制，按 CPU 核数与可用内存智能推算 32~512）；「系统设置」与「防火墙设置」修改的是同一项配置，保存后通过 `apply_thread_count()` 调 `task_dispatcher.set_thread_count()` **即时热加载**，无需重启服务器。
 
 * **Waitress 内部日志改写到「waitress」模块单独日志**（`core/system/logger.py`）：接管 waitress 的 `logging` 日志器，把 `Task queue depth is xx` 等内部记录转发进「waitress」模块独立缓冲（默认不落盘、不并入全局日志，可在「日志页面 → 日志设置」开启），不再刷屏。验证码清理日志（`清理过期验证码 N 个`）同样改走「captcha」模块单独日志。
 
-* **修改用户名支持实时可用性检测**（`routes/main/auth/__init__.py`、`services/user/auth/__init__.py`、`web/settings/index.html`）：新增 `exclude_self=1` 参数，检查时排除当前登录账号自身（填成自己现在的用户名不算被占用），前端交互与注册页一致（防抖查询、可用/不可用状态提示、未通过检查时阻止提交），服务端写入时仍会再次校验。
+* **修改用户名支持实时可用性检测**（`routes/main/auth/__init__.py`、`services/user/auth/__init__.py`、`static/templates/settings/index.html`）：新增 `exclude_self=1` 参数，检查时排除当前登录账号自身（填成自己现在的用户名不算被占用），前端交互与注册页一致（防抖查询、可用/不可用状态提示、未通过检查时阻止提交），服务端写入时仍会再次校验。
 
-* **前端资源按需加载**（`web/base.html` 及列表页 / 详情页）：`uploader.js`、`search.js`、`purify.min.js` 由全站加载改为通过 `page_scripts` / `extra_head` 块**仅在实际用到的页面加载**；移除重复的 favicon `rel="alternate icon"` 链接，避免一次请求取两遍服务器图标。
+* **前端资源按需加载**（`static/templates/base.html` 及列表页 / 详情页）：`uploader.js`、`search.js`、`purify.min.js` 由全站加载改为通过 `page_scripts` / `extra_head` 块**仅在实际用到的页面加载**；移除重复的 favicon `rel="alternate icon"` 链接，避免一次请求取两遍服务器图标。
 
-* **修复触屏设备导航栏动画卡顿**（`web/static/js/pages/main.js`、`web/static/css/base.css`）：触屏端的鼠标光晕改用 `requestAnimationFrame` 合并 DOM 写入（避免每个 `touchmove` 都触发一次合成，与导航栏 `backdrop-filter` 抢占合成资源）；移动菜单增加 `will-change: transform, opacity` 与 `backface-visibility: hidden` 独立合成层。动画外观与时长完全不变。
+* **修复触屏设备导航栏动画卡顿**（`static/js/pages/main.js`、`static/css/base.css`）：触屏端的鼠标光晕改用 `requestAnimationFrame` 合并 DOM 写入（避免每个 `touchmove` 都触发一次合成，与导航栏 `backdrop-filter` 抢占合成资源）；移动菜单增加 `will-change: transform, opacity` 与 `backface-visibility: hidden` 独立合成层。动画外观与时长完全不变。
 
 * **修复加入 QQ 群链接始终指向当前页**（`routes/main/pages/__init__.py`）：首页 `qq_group_url` 默认值改为读取 `QQ_GROUP_URL` 配置，不再因默认空串而回落到当前页面地址。
 
 * **全面改用 Waitress 生产服务器 + 移除应用层 SSL**（`core/server.py`、`requirements.txt`、`app.py`、`core/middleware.py`、`startup_checks.py`）：WSGI 服务器由 Cheroot 迁移到 **Waitress**（生产级多线程，工作线程数由 `WAITRESS_THREADS` 配置、默认 100，其余 `connection_limit=1000` / `channel_timeout=300`），启动方式与对外端口不变；**删除应用层全部 SSL 功能**（`ENABLE_SSL` 环境变量、`ssl/` 证书目录、Cheroot `BuiltinSSLAdapter`、HTTPS 强制跳转与相关启动检查），HTTPS 改由内网穿透 / 反向代理层统一终结，应用仅监听 HTTP；防火墙不再依赖服务器私有连接对象，被拦截请求通过抛出 `waitress.channel.ClientDisconnected` 由 Waitress 关闭连接、**不写任何响应字节**。Session Cookie 的 `Secure` 标志改由 `_ProxyAwareSessionInterface` 按可信代理下发的 `X-Forwarded-Proto` 动态决定（HTTPS 访问自动开启、本地 HTTP 直连自动关闭）。
 
-* **服务器状态页网络监控改为「服务端采样缓存」**（`services/system_metrics/`、`routes/api/public/__init__.py`、`web/site/server_status.html`）：新增后台采样服务（每 5 秒采样 `psutil` 的 CPU / 内存 / `net_io_counters()`），在服务端用相邻两次采样的累计字节差换算上行 / 下行速率并写入内存缓存；`/api/server-status` 新增 `net_up` / `net_down` 速率字段，页面**打开即显示速率**（不再需要等一两次刷新），`formatBytes` 单位补充 `TB`。
+* **服务器状态页网络监控改为「服务端采样缓存」**（`services/system_metrics/`、`routes/api/public/__init__.py`、`static/templates/site/server_status.html`）：新增后台采样服务（每 5 秒采样 `psutil` 的 CPU / 内存 / `net_io_counters()`），在服务端用相邻两次采样的累计字节差换算上行 / 下行速率并写入内存缓存；`/api/server-status` 新增 `net_up` / `net_down` 速率字段，页面**打开即显示速率**（不再需要等一两次刷新），`formatBytes` 单位补充 `TB`。
 
 * **修复 DDoS 防护失效与攻击后报错（防火墙真实 IP / 白名单 / SQLite 并发 / 模板空值）**：
   * **穿透环境下 DDoS 统计与封禁失效**（`services/firewall/transport/wrappers.py`、`core/shared/ip.py`）：网站经 natfrp 内网穿透对外服务，外部请求的 `REMOTE_ADDR` 恒为本机回环地址，而 WSGI 门禁此前硬编码放行回环 IP，导致攻击请求既不计入 DDoS 窗口也不被黑名单拦截。现于 WSGI 层解析真实客户端 IP：仅当直连来源为可信代理（回环 / 内网地址，或 `config.py` 的 `TRUSTED_PROXIES`）时才采信 `X-Forwarded-For` / `X-Real-IP` 等头部，取链路中**最右侧公网 IP**；公网直连一律忽略代理头，防止伪造头部绕过防护。
   * **删光白名单后默认 IP 仍被永久放行**（`services/firewall/service/database.py`、`services/firewall/service/core.py`）：白名单缓存此前读取 `config.py` 的常量而非设置，且「移除」只删 DuckDB 表——硬编码默认 `112.82.136.172` 被缓存同步反复加回，删不掉、删光后攻击仍不被拦截。现改为读取设置值并区分「未配置」（回退默认基线）与「清空」（真正清空），白名单页面的「移除」同步清理设置，删除即时生效。
   * **攻击后报 `sqlite3.InterfaceError: bad parameter or other API misuse`**（`core/db/connection.py`）：跨线程共享的单连接 + SQLite 预处理语句缓存，并发执行相同 SQL 时相互 `reset` 触发该错误并导致全站 500。现关闭语句缓存（`cached_statements=0`），24 线程 × 4000 次查询压测 0 错误。
-  * **建筑详情页报 `TypeError: 'NoneType' object is not subscriptable`**（`web/buildings/detail.html`）：日期字段为 `None` 时取切片报错，补 `or ''` 兜底。
+  * **建筑详情页报 `TypeError: 'NoneType' object is not subscriptable`**（`static/templates/buildings/detail.html`）：日期字段为 `None` 时取切片报错，补 `or ''` 兜底。
 
-* **修复背景图不按屏幕大小取图（`web/base.html`）**：此前用 `max(视口宽, 视口高) × devicePixelRatio` 计算目标像素再取「不小于它的最小档位」，导致手机（390×844@3x → 2532）、平板（2360）、1366 笔记本（1366）等**几乎所有设备都被算成 1920 档**，768 / 1280 两档形同虚设——任何设备拿到的都是同一张主图；且尺寸只在页面解析时计算一次，缩放窗口、手机旋屏后永不重新取图。现改为按**屏幕 CSS 长边**取「不小于它的最小档位」（全屏背景由半透明遮罩覆盖，无需按物理像素取图），并监听 `resize` / `orientationchange`（300ms 防抖）在视口变化后自动改取当前最合适的档位与裁剪比例。实测：iPhone SE → 768、iPhone 14 → 1280（竖屏 ratio 0.46 / 横屏 2.16）、iPad → 1280、1366 及以上桌面 → 1920。
+* **修复背景图不按屏幕大小取图（`static/templates/base.html`）**：此前用 `max(视口宽, 视口高) × devicePixelRatio` 计算目标像素再取「不小于它的最小档位」，导致手机（390×844@3x → 2532）、平板（2360）、1366 笔记本（1366）等**几乎所有设备都被算成 1920 档**，768 / 1280 两档形同虚设——任何设备拿到的都是同一张主图；且尺寸只在页面解析时计算一次，缩放窗口、手机旋屏后永不重新取图。现改为按**屏幕 CSS 长边**取「不小于它的最小档位」（全屏背景由半透明遮罩覆盖，无需按物理像素取图），并监听 `resize` / `orientationchange`（300ms 防抖）在视口变化后自动改取当前最合适的档位与裁剪比例。实测：iPhone SE → 768、iPhone 14 → 1280（竖屏 ratio 0.46 / 横屏 2.16）、iPad → 1280、1366 及以上桌面 → 1920。
 
-* **一键更新自动清理已删除文件（`update.py`）**：合并覆盖只会新增/覆盖文件，无法反映「GitHub 上已删除」，导致换字体后服务器上旧字体的 woff2 子集长期残留。现覆盖完成后按最新 ZIP 清单**递归清理**过时文件与整个被移除的目录；`PROTECTED_PATHS` 中的路径强制跳过、绝不删除——`uploads/`（含数据库）、`db`、`backups`、`logs`、`ssl`、`release`、`.env`、`.git`、`.venv`、`node_modules`、`web/static/lib/monaco`、`scripts/ffmpeg` 等运行期数据与本地生成物都在保护名单内。同时移除了上一版针对字体目录的临时清理代码。`start.bat` 等本地自建启动脚本也加入保护名单，不会被误删。
+* **一键更新自动清理已删除文件（`update.py`）**：合并覆盖只会新增/覆盖文件，无法反映「GitHub 上已删除」，导致换字体后服务器上旧字体的 woff2 子集长期残留。现覆盖完成后按最新 ZIP 清单**递归清理**过时文件与整个被移除的目录；`PROTECTED_PATHS` 中的路径强制跳过、绝不删除——`uploads/`（含数据库）、`db`、`backups`、`logs`、`ssl`、`release`、`.env`、`.git`、`.venv`、`node_modules`、`static/lib/monaco`、`scripts/ffmpeg` 等运行期数据与本地生成物都在保护名单内。同时移除了上一版针对字体目录的临时清理代码。`start.bat` 等本地自建启动脚本也加入保护名单，不会被误删。
 
 * **字体换成站酷活泼字体 + 终端日志配色调整**：
   * **正文改用站酷庆科黄油体、标题改用站酷快乐体**：替换此前的霞鹜文楷——正文（含导航、按钮）改用 **ZCOOL QingKe HuangYou（站酷庆科黄油体）**，圆润活泼且笔画简洁；`h1/h2/h3`（及 `.font-display` / `.font-title`）改用 **ZCOOL KuaiLe（站酷快乐体）**，更俏皮有活力。两者均取自 npm 包 `@fontsource/*`（本地镜像），`scripts/build/build_static.py` 下载后按 `unicode-range` 展开约 93 个子集（**只落地 CSS 实际引用的子集**，包内自带的 2.4MB 整包文件不会写入仓库），仍为本地零 CDN；构建脚本新增**废弃字体文件自动清理**（本轮清掉 194 个旧霞鹜文楷子集），避免换字体后旧文件长期残留。
@@ -987,16 +997,16 @@ workspace/
   * **修复防火墙数据库重启后全部丢失**：`services/firewall/service/database.py` 数据库路径原先经多层 `os.path.dirname` 计算，迁移后层级变深导致实际写入 `services/uploads/db/`（代码目录，不在备份范围、更新时被覆盖）。现改为基于 `APP_ROOT` 直接指向 `uploads/db/firewall.duckdb`（与主站 SQLite 同目录，随站点备份并受更新排除保护）。
   * **项目结构分层优化**：跨业务的基础能力统一放入 `core/`（日志 `core/system/logger.py`、监控 `services/firewall/service/monitor.py`、调度 `core/shared/scheduler/`）；有业务语义的模块放入 `services/`——安全扫描从 `core/shared/security_scanner.py` 迁至 `services/security/`，防火墙完整下沉至 `services/firewall/`（`service/` 业务层、`protection/` 防护策略、`transport/` 连接层、`api_guard.py`），`routes/firewall/` 只保留 HTTP 路由入口、实际逻辑全部调用服务层，全站导入同步更新。
   * **修复部分模块单独日志仍打印到全局日志**：排查确认各模块统一走 `log_module()` 接口、模块设置 `LOG_MODULE_*_GLOBAL` 均关闭后，确保模块单独日志仅写入独立缓冲与文件，不混入全局日志（控制台 / `logs/app.log` / SSE）。
-  * **日志设置改为独立页面**：从日志查看页弹窗重构为独立页面 `/admin/logs/settings`（`web/admin/log_settings.html`），按模块展示「存储 / 全局」开关并即时保存，日志查看页改为链接跳转。
+  * **日志设置改为独立页面**：从日志查看页弹窗重构为独立页面 `/admin/logs/settings`（`static/templates/admin/log_settings.html`），按模块展示「存储 / 全局」开关并即时保存，日志查看页改为链接跳转。
 
 * **修复启动时「9 个模块导入失败」误报（废弃模块残留一次性清理）**：现象是启动日志出现 `routes.admin.discussion`、`routes.discussion`、`services.discussion`、`services.attachment_service` 等模块 `cannot import name 'UPLOAD_ATTACHMENTS_DIR' from 'config'`。这些功能已在上一版彻底删除，报错源自**文件同步只覆盖不删除**在本地遗留的旧模块目录（`.py` 已被删除但目录仍在，启动扫描时被导入）。`core/system/startup_checks.py` 曾新增一次性的 `_cleanup_obsolete_modules()`：按精确路径（`routes/discussion`、`routes/admin/discussion`、`routes/community/pages`、`services/discussion`、`services/attachment_service`）幂等删除废弃残留目录（含 `__pycache__`）；**该一次性清理步骤已在后续版本移除**。
 
 * **彻底删除讨论区功能 + 建筑评论改分段加载 + 分段列表滚动自动加载**：
-  * **删除讨论区**：移除 `routes/discussion/`、`services/discussion/`、`web/discussion/`、`routes/admin/discussion/`、`web/admin/discussion.html` 与 `discussion_categories.html`，以及数据库表 `discussion_categories` / `discussion_topics` / `discussion_replies`（旧库的一次性 `DROP` 已随后移除）；同步清理导航栏讨论入口、系统设置「讨论区配置」及 `DISCUSSION_REFRESH_INTERVAL` / `DISCUSSION_TOPICS_PER_PAGE` / `REPLIES_PER_PAGE` 配置项、`web/macros/upload.html` 与 `services/attachment_service/`；并删除仅供讨论附件使用的死代码——社区蓝图与其 `/uploads/<filename>` 附件下载路由、`UPLOAD_ATTACHMENTS_DIR` / `UPLOAD_COMMUNITY_DIR` 配置与 `uploads/attachments`、`uploads/community` 遗留目录，无残留。
+  * **删除讨论区**：移除 `routes/discussion/`、`services/discussion/`、`static/templates/discussion/`、`routes/admin/discussion/`、`static/templates/admin/discussion.html` 与 `discussion_categories.html`，以及数据库表 `discussion_categories` / `discussion_topics` / `discussion_replies`（旧库的一次性 `DROP` 已随后移除）；同步清理导航栏讨论入口、系统设置「讨论区配置」及 `DISCUSSION_REFRESH_INTERVAL` / `DISCUSSION_TOPICS_PER_PAGE` / `REPLIES_PER_PAGE` 配置项、`static/templates/macros/upload.html` 与 `services/attachment_service/`；并删除仅供讨论附件使用的死代码——社区蓝图与其 `/uploads/<filename>` 附件下载路由、`UPLOAD_ATTACHMENTS_DIR` / `UPLOAD_COMMUNITY_DIR` 配置与 `uploads/attachments`、`uploads/community` 遗留目录，无残留。
   * **建筑评论分段加载**：新增 `GET /api/buildings/<id>/comments`（分页由 `BUILDING_COMMENTS_PER_PAGE` 控制，返回 `has_more` / `total`），详情页评论区改为 API 分段加载，删除原实时刷新逻辑。
   * **分段列表滚动自动加载**：`base.js` 新增 `initAutoLoadMore`——任何带 `data-autoload-more` 的「加载更多」按钮进入视口即自动点击一次加载下一页（隐藏 / 禁用时不触发，加载后按钮被新内容推出视口，滚动到底继续加载）。
 
-* **修复大喇叭音频管理页「待审核公开申请」标题后原样显示 HTML 文本**：`web/macros/page_header.html` 的 `section_title` 宏以 `{{ extra }}` 输出 `extra` 参数，在 Jinja 自动转义下把 `web/admin/music.html` 传入的 `<span data-pending-count ...>` 标签当成纯文本渲染，页面出现「待审核公开申请 `<span ...>0</span>`」。现改为 `{{ extra | safe }}` 按 HTML 渲染（`extra` 由模板开发者提供、非用户输入，且仅此一处使用），待审核数量角标正常显示。
+* **修复大喇叭音频管理页「待审核公开申请」标题后原样显示 HTML 文本**：`static/templates/macros/page_header.html` 的 `section_title` 宏以 `{{ extra }}` 输出 `extra` 参数，在 Jinja 自动转义下把 `static/templates/admin/music.html` 传入的 `<span data-pending-count ...>` 标签当成纯文本渲染，页面出现「待审核公开申请 `<span ...>0</span>`」。现改为 `{{ extra | safe }}` 按 HTML 渲染（`extra` 由模板开发者提供、非用户输入，且仅此一处使用），待审核数量角标正常显示。
 
 * **防火墙拦截与授权拒绝的 403 均不写入防火墙模块日志**：`ip_ban_check_hook`（IP 封禁兜底）与 `suspicious_request_check_hook`（可疑访问拦截）返回 403 时**直接不调用日志函数**（删除原通用 `after_request` 钩子 `log_403_response`，不再需要任何布尔标记）；授权拒绝类 403（权限不足 / CSRF 校验失败等）同样不写防火墙日志。仅保留 IP 封禁 / 自动封禁等封禁动作日志（`可疑访问自动封禁生效` / `自动封禁生效`），被封 IP 反复请求不再刷屏。
 
@@ -1004,17 +1014,17 @@ workspace/
 
 * **图形验证码 / 邮箱验证码 / 注册账号 / 登录账号改为模块单独日志**：这四类日志不再进入全局日志（控制台 / `logs/app.log` / 全局缓冲 / SSE），改为在各自模块启动时注册独立日志器（`register_module_log`），并用统一入口 `log_module(name, level, event, detail, **kwargs)` 输出到独立内存缓冲并默认落盘到 `logs/modules/{captcha,email_code,register,login}.log`。注册位置：图形验证码 [routes/api/captcha/\_\_init\_\_.py](file:///workspace/routes/api/captcha/__init__.py)、邮箱验证码 [routes/api/email_code/\_\_init\_\_.py](file:///workspace/routes/api/email_code/__init__.py)、注册与登录 [services/user/auth/\_\_init\_\_.py](file:///workspace/services/user/auth/__init__.py)（「找回密码」仍为全局日志）。新增设置项 `LOG_MODULE_CAPTCHA_STORE` / `LOG_MODULE_EMAIL_CODE_STORE` / `LOG_MODULE_REGISTER_STORE` / `LOG_MODULE_LOGIN_STORE`，均默认开启、可在系统设置热切换并即时生效。
 
-* **修复系统设置页下拉选择框被裁切 + 开关无法切换**：`web/admin/settings.html` 动态生成的分类卡片带有 `overflow-hidden`，会把自绘下拉 `.custom-select-dropdown`（绝对定位，`z-index:2000`）裁掉，导致选项被遮挡/看不全；同时开关容器缺少全局开关脚本依赖的 `data-switch` 属性（`base.js` 只对 `[data-switch]` 生效），点击与键盘都无法切换。现移除卡片 `overflow-hidden`（标题栏补 `rounded-t-2xl` 保持顶部圆角），并为开关补上 `data-switch`，下拉可完整展开、开关可正常切换并触发自动保存。
+* **修复系统设置页下拉选择框被裁切 + 开关无法切换**：`static/templates/admin/settings.html` 动态生成的分类卡片带有 `overflow-hidden`，会把自绘下拉 `.custom-select-dropdown`（绝对定位，`z-index:2000`）裁掉，导致选项被遮挡/看不全；同时开关容器缺少全局开关脚本依赖的 `data-switch` 属性（`base.js` 只对 `[data-switch]` 生效），点击与键盘都无法切换。现移除卡片 `overflow-hidden`（标题栏补 `rounded-t-2xl` 保持顶部圆角），并为开关补上 `data-switch`，下拉可完整展开、开关可正常切换并触发自动保存。
 
-* **修复防火墙设置页所有开关显示为关闭且无法点击切换**：`web/admin/firewall.html` 设置区 15 个开关的 Jinja 表达式被误写成 `{ { ... } }`（多一个空格，Jinja 不识别而原样输出为文本），导致 `is-on` 类与 `aria-checked` 从未正确渲染，无论实际配置为何一律显示为关闭；同时这些开关缺少全局开关脚本依赖的 `data-switch` 属性（`base.js` 只对 `[data-switch]` 生效），点击/键盘均无法切换。现已全部改为标准 `{{ ... }}` 并补上 `data-switch`（并修掉内容注入拦截开关 `else '' else ''` 的语法错误），开关按实际配置正确回显、可正常切换；`/admin/firewall/settings/save` 的布尔键集合补入 `CONTENT_INJECTION_BAN_ENABLED`。
+* **修复防火墙设置页所有开关显示为关闭且无法点击切换**：`static/templates/admin/firewall.html` 设置区 15 个开关的 Jinja 表达式被误写成 `{ { ... } }`（多一个空格，Jinja 不识别而原样输出为文本），导致 `is-on` 类与 `aria-checked` 从未正确渲染，无论实际配置为何一律显示为关闭；同时这些开关缺少全局开关脚本依赖的 `data-switch` 属性（`base.js` 只对 `[data-switch]` 生效），点击/键盘均无法切换。现已全部改为标准 `{{ ... }}` 并补上 `data-switch`（并修掉内容注入拦截开关 `else '' else ''` 的语法错误），开关按实际配置正确回显、可正常切换；`/admin/firewall/settings/save` 的布尔键集合补入 `CONTENT_INJECTION_BAN_ENABLED`。
 
 * **防火墙从路由层迁至服务层 + 修复「服务器正常启动但完全无法访问」**：防火墙模块由 `routes/firewall/` 迁至 `services/firewall/`（`service/` 业务层、`protection/` 防护策略、`transport/` 连接层；原路径保留 shim 转发，所有外部 `from routes.firewall.xxx import` 零改动）。迁移中 `BanFilterConnection.communicate()` 误把返回 `(banned, reason)` **元组**的 `is_banned(ip)` 当布尔判断——非空元组恒为真，导致**每个 TCP 连接都被判定为黑名单并在请求解析前强制断开**，表现为进程/端口正常监听、日志无任何报错但所有请求均无响应；已改为显式解包 `banned, _reason = is_banned(ip)` 后再判断，实测 `/`、`/favicon`、`/api/stats`、`/login` 全部返回 200。
 
-* **修复 robots.txt 的 Sitemap 域名错误 + 邮件模板路径 + 指南编辑 500**：`/robots.txt` 的 `Sitemap:` 原先写死站点配置域名（`https://bhxz.tw.kg/sitemap.xml`），访问 `https://binhai.cloud/robots.txt` 时地址不一致。`routes/sitemap/__init__.py` 新增 `_robots_base_url()`：优先匹配与当前 `Host` 一致的已配置域名（`SITE_URL` / `SITEMAP_DOMAINS`），未匹配则直接反映当前访问域名，确保 Sitemap 始终指向当前域名下的 `/sitemap.xml`（`services/sitemap_cache` 同步新增 `base_url_for_host()`）。修复邮件发送 `TemplateNotFound: 'verification_code.html'`——`services/mail/web/__init__.py` 的模板目录层级少算一级，指向了不存在的 `services/web/emails`，已修正为项目根 `web/emails`。修复 `/guides/<id>/edit` 提交 500（`NameError: get_client_ip`）——`routes/guides/pages/__init__.py` 漏导入 `get_client_ip`，已补上并全站排查同类漏导入。
+* **修复 robots.txt 的 Sitemap 域名错误 + 邮件模板路径 + 指南编辑 500**：`/robots.txt` 的 `Sitemap:` 原先写死站点配置域名（`https://bhxz.tw.kg/sitemap.xml`），访问 `https://binhai.cloud/robots.txt` 时地址不一致。`routes/sitemap/__init__.py` 新增 `_robots_base_url()`：优先匹配与当前 `Host` 一致的已配置域名（`SITE_URL` / `SITEMAP_DOMAINS`），未匹配则直接反映当前访问域名，确保 Sitemap 始终指向当前域名下的 `/sitemap.xml`（`services/sitemap_cache` 同步新增 `base_url_for_host()`）。修复邮件发送 `TemplateNotFound: 'verification_code.html'`——`services/mail/static/templates/__init__.py` 的模板目录层级少算一级，指向了不存在的 `services/static/templates/emails`，已修正为项目根 `static/templates/emails`。修复 `/guides/<id>/edit` 提交 500（`NameError: get_client_ip`）——`routes/guides/pages/__init__.py` 漏导入 `get_client_ip`，已补上并全站排查同类漏导入。
 
-* **评论与发布全面 API 化 + 上传进度统一**：删除评论确认改为网页内弹窗（`CustomModal.confirm`，替代原生 `confirm`）；**发布评论不再需要图形验证码**；公共建筑发布/评论等发布操作统一走无刷新 `AjaxForm`（自动携带身份与 CSRF）；新增统一上传组件 [`uploader.js`](web/static/js/core/uploader.js)（`FilePicker` / `UploadProgress` / `AjaxForm`），所有文件上传均带进度条。
+* **评论与发布全面 API 化 + 上传进度统一**：删除评论确认改为网页内弹窗（`CustomModal.confirm`，替代原生 `confirm`）；**发布评论不再需要图形验证码**；公共建筑发布/评论等发布操作统一走无刷新 `AjaxForm`（自动携带身份与 CSRF）；新增统一上传组件 [`uploader.js`](static/js/core/uploader.js)（`FilePicker` / `UploadProgress` / `AjaxForm`），所有文件上传均带进度条。
 
-* **修复 `/buildings/<id>` 页面 500（`modal_shell is undefined`）+ 规范 Jinja2 宏导入**：`web/buildings/detail.html` 原先用 `{% include 'macros/modal.html' %}` 引入弹窗宏，而 `include` 只渲染模板文件、**不会把宏注入当前命名空间**，导致访问公共建筑详情页时 `modal_shell is undefined` 直接 500。改用 `{% from 'macros/modal.html' import modal_shell, modal_close_script %}` 显式导入，并统一放在 `{% extends %}` 之后、第一个 `{% block %}` 之前；同步修正 `admin/guides.html`、`admin/firewall.html`、`admin/broadcast.html`、`admin/guide_form.html`、`auth/register.html`、`guides/form.html` 的宏导入位置，并修正 `admin/buildings.html` 拒绝弹窗把标题误传为 `size` 参数的问题。开发准则（`docs/DEVELOPMENT.md`）新增「宏导入方式（`import` 而非 `include`）」章节，并已用脚本对全站模板做语法编译 + 宏调用/导入一致性校验（0 处未导入）。
+* **修复 `/buildings/<id>` 页面 500（`modal_shell is undefined`）+ 规范 Jinja2 宏导入**：`static/templates/buildings/detail.html` 原先用 `{% include 'macros/modal.html' %}` 引入弹窗宏，而 `include` 只渲染模板文件、**不会把宏注入当前命名空间**，导致访问公共建筑详情页时 `modal_shell is undefined` 直接 500。改用 `{% from 'macros/modal.html' import modal_shell, modal_close_script %}` 显式导入，并统一放在 `{% extends %}` 之后、第一个 `{% block %}` 之前；同步修正 `admin/guides.html`、`admin/firewall.html`、`admin/broadcast.html`、`admin/guide_form.html`、`auth/register.html`、`guides/form.html` 的宏导入位置，并修正 `admin/buildings.html` 拒绝弹窗把标题误传为 `size` 参数的问题。开发准则（`docs/DEVELOPMENT.md`）新增「宏导入方式（`import` 而非 `include`）」章节，并已用脚本对全站模板做语法编译 + 宏调用/导入一致性校验（0 处未导入）。
 
 * **修复管理员删除用户失败 + 清理废弃代码**：修复管理后台删除用户时因引用已删除的 `poll_votes`、`board_topics`、`board_replies` 表导致数据库操作失败的问题，改为级联清理相关业务表；同步修复用户注销功能的相同问题，修复 `_clean_user_attachments` 函数引用废弃表的问题；优化 `routes/admin/mod_intros/__init__.py` 中三处嵌套 try-except 屎山代码为单层。
 
@@ -1028,7 +1038,7 @@ workspace/
 
 * **新增 DDoS 攻击防护与极高性能多线程防火墙**：`core/firewall/` 在 WSGI 入口（先于一切 Flask 逻辑）拦截黑名单 IP，命中即返回最小 403 并利用 Cheroot 连接特性（`linger=False` + `close()`）强制关闭其现存连接（含 keep-alive 空闲与处理中的请求），客户端表现为连接被重置而非收到页面；后台监控线程每 0.5 秒从数据库同步黑名单镜像并扫描关闭黑名单连接；内置 DDoS 检测按强度（low=300/medium=150/high=80 次每 10 秒）统计单位窗口内请求数，超阈值自动封禁来源 IP（首次限时封禁、时长可配，违规记录时间窗口内屡教不改自动升级永久封禁），检测强度/封禁时长/触发次数等配置在线热更新；管理后台 → 系统设置新增「DDoS 防护」分类，白名单 IP 不受影响。
 
-* **移除 CPU 温度检测功能**：`routes/api/public.py` 删除跨平台温度采集（WMI/PowerShell/sysctl/psutil 传感器）与 `/api/server-status` 的 `cpu_temp` 字段，`web/server_status.html` 移除 CPU 温度展示板块与刷新逻辑。
+* **移除 CPU 温度检测功能**：`routes/api/public.py` 删除跨平台温度采集（WMI/PowerShell/sysctl/psutil 传感器）与 `/api/server-status` 的 `cpu_temp` 字段，`static/templates/server_status.html` 移除 CPU 温度展示板块与刷新逻辑。
 
 * **「申请账号」调整**：从导航栏「互动」分类移至「导航」分类，并更名为「申请服务器账号」（桌面端主导航与移动端侧栏同步调整）。
 

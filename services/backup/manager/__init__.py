@@ -66,8 +66,8 @@ def _snapshot_sqlite(dest_path: str) -> None:
     不再单独存放 site.db-wal / site.db-shm —— 那是运行期临时文件，与主库
     版本不匹配时会被 SQLite 回放，反而损坏恢复出来的数据。
     """
-    from core.db import get_db
-    get_db().backup_to(dest_path)
+    from core.db import backup_to
+    backup_to(dest_path)
 
 
 def _snapshot_duckdb(dest_path: str) -> None:

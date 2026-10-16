@@ -1,15 +1,17 @@
-"""数据库访问层包 —— 基于 SQLite 实现，开启 WAL 模式。
+"""数据库访问层包 —— 基于原生 sqlite3 实现，开启 WAL 模式。
 
-主要改动：
-- 使用 Python 内置 sqlite3，开启 WAL 模式 + 外键约束，并发读写与崩溃恢复更优
-- 保持原有接口不变：get_db() 返回线程安全的连接对象，
-  行对象支持 keys() 与 ['列名'] 访问
-- 单例共享连接 + 可重入锁，保证多线程读写安全
+对外接口：
+- get_db()：每次返回一条全新的原生连接，调用方用完 close()，不做任何连接复用
+- transaction()：事务上下文管理器，块内多条语句原子提交/回滚，退出时关闭连接
+- backup_to(path)：SQLite 在线备份
+- init_db()：建表与默认数据（幂等）
 """
 
 from core.db.connection import (
     get_db,
+    transaction,
+    backup_to,
 )
 from core.db.schema import init_db
 
-__all__ = ['get_db', 'init_db']
+__all__ = ['get_db', 'transaction', 'backup_to', 'init_db']

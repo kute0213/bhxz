@@ -16,6 +16,8 @@
 author_id / sender_id 等）无需改动。本模块只处理「非用户表主键」。
 """
 
+import os
+import shutil
 import sqlite3
 
 from core.db.connection import get_db
@@ -71,30 +73,58 @@ def _has_legacy_ids(conn, table):
     return m is not None and not is_snowflake_id(m)
 
 
+def _rename_music_dirs(mapping):
+    """把磁盘上的音频目录名从旧 ID 重命名为雪花 ID（与 music.id / file_path 对齐）。
+
+    music 表迁移只改了主键与 file_path，磁盘目录仍以旧 ID 命名，需同步重命名，
+    否则播放地址（/music/<新ID>/...）会 404。
+    """
+    if not mapping:
+        return
+    from config import UPLOAD_MUSIC_DIR
+    for old, new in mapping.items():
+        old_dir = os.path.join(UPLOAD_MUSIC_DIR, str(old))
+        new_dir = os.path.join(UPLOAD_MUSIC_DIR, str(new))
+        if not os.path.isdir(old_dir):
+            continue
+        try:
+            if os.path.isdir(new_dir):
+                shutil.rmtree(new_dir, ignore_errors=True)
+            os.rename(old_dir, new_dir)
+            log('INFO', 'DB', f'音频目录已重命名 {old} → {new}')
+        except OSError as e:
+            log('WARNING', 'DB', f'音频目录重命名失败 {old} → {new}: {e}')
+
+
 def migrate_legacy_ids():
     """执行雪花 ID 迁移（幂等）。返回实际迁移的记录数。"""
-    conn = get_db()
+    check = get_db()
+    try:
+        legacy_tables = [t for t in _OWN_ID_TABLES if _has_legacy_ids(check, t)]
+    finally:
+        check.close()
 
-    legacy_tables = [t for t in _OWN_ID_TABLES if _has_legacy_ids(conn, t)]
     if not legacy_tables:
         log('INFO', 'DB', '雪花 ID 自检：无历史自增 ID 需要迁移')
         return 0
 
     log('INFO', 'DB', f'雪花 ID 自检：检测到 {len(legacy_tables)} 张表含历史 ID，开始迁移')
 
-    # 迁移期间关闭外键约束（同一事务内先改父表 ID 再改子表外键，
-    # 若开启外键会因中间态不一致而报错）；迁移完成后恢复。
-    conn.execute('PRAGMA foreign_keys=OFF')
     migrated = 0
+    music_map = {}
+    # 迁移在一个事务内完成：先改父表 ID，再同步重映射子表外键，
+    # 保证关联关系不变；要么整体成功、要么整体回滚，不会出现半迁移状态。
+    # 迁移期间关闭外键约束（中间态会短暂不一致，若开启外键会报错），
+    # PRAGMA foreign_keys 只能在事务外切换，故先关、迁移完再恢复。
+    conn = get_db()
     try:
-        with get_db() as c:
+        conn.execute('PRAGMA foreign_keys=OFF')
+        conn.execute('BEGIN')
+        try:
             mappings = {}
             for table in _OWN_ID_TABLES:
-                rows = c.execute(f'SELECT id FROM {table} ORDER BY id').fetchall()
-                if not rows:
-                    mappings[table] = {}
-                    continue
-                if table not in legacy_tables:
+                rows = conn.execute(f'SELECT id FROM {table} ORDER BY id').fetchall()
+                if not rows or table not in legacy_tables:
                     mappings[table] = {}
                     continue
                 updates = []
@@ -104,9 +134,17 @@ def migrate_legacy_ids():
                     new = next_id()
                     mapping[old] = new
                     updates.append((new, old))
-                c.executemany(f'UPDATE {table} SET id = ? WHERE id = ?', updates)
+                conn.executemany(f'UPDATE {table} SET id = ? WHERE id = ?', updates)
                 mappings[table] = mapping
                 migrated += len(updates)
+
+            # music 的 file_path 内嵌音频 ID（music/<id>/index.m3u8），随主键同步改写
+            music_map = mappings.get('music') or {}
+            if music_map:
+                conn.executemany(
+                    'UPDATE music SET file_path = ? WHERE id = ?',
+                    [(f'music/{new}/index.m3u8', new) for new in music_map.values()],
+                )
 
             # 父表 ID 已重分配后，同步重映射子表外键，保证关联关系不变
             for child, col, parent in _FK_REMAPS:
@@ -115,13 +153,19 @@ def migrate_legacy_ids():
                     continue
                 updates = [(new, old) for old, new in mapping.items()]
                 if updates:
-                    c.executemany(
+                    conn.executemany(
                         f'UPDATE {child} SET {col} = ? WHERE {col} = ?', updates
                     )
-    except Exception:
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+    finally:
         conn.execute('PRAGMA foreign_keys=ON')
-        raise
-    conn.execute('PRAGMA foreign_keys=ON')
+        conn.close()
+
+    # 事务提交后重命名磁盘音频目录（文件系统操作无法回滚，放在最后执行）
+    _rename_music_dirs(music_map)
 
     log('INFO', 'DB', f'雪花 ID 迁移完成：共重分配 {migrated} 条记录')
     return migrated

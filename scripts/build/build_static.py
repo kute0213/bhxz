@@ -6,7 +6,7 @@
 使用方式：
     python scripts/build/build_static.py
 
-运行后会生成（web/static/ 目录下）：
+运行后会生成（static/ 目录下）：
     lib/lucide/        - Lucide 图标库
     lib/marked/        - Marked.js Markdown 渲染
     lib/hls/           - hls.js HLS 播放支持（自定义音频播放器）
@@ -28,7 +28,7 @@ from urllib.request import Request, urlopen, build_opener, HTTPRedirectHandler, 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 # 从 scripts/build/ 上溯两级得到项目根目录（/workspace）
 PROJECT_ROOT = os.path.abspath(os.path.join(SCRIPT_DIR, '..', '..'))
-STATIC_DIR = os.path.join(PROJECT_ROOT, 'web', 'static')
+STATIC_DIR = os.path.join(PROJECT_ROOT, 'static')
 LIB_DIR = os.path.join(STATIC_DIR, 'lib')
 
 DOWNLOAD_TIMEOUT = 30
@@ -451,7 +451,7 @@ def download_monaco():
                         size_mb += os.path.getsize(fp)
                     except Exception:
                         pass
-            print(f'  [OK] Monaco Editor 已复制到 web/static/lib/monaco/ ({size_mb / 1024 / 1024:.1f} MB)')
+            print(f'  [OK] Monaco Editor 已复制到 static/lib/monaco/ ({size_mb / 1024 / 1024:.1f} MB)')
         else:
             print(f'  [FAIL] 未找到 min/vs 目录: {src_vs}')
 

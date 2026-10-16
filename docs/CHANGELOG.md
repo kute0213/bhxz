@@ -4,6 +4,26 @@
 
 ### 变更
 
+* **数据库读写层重写为原生 sqlite3 极简写法**（`core/db/connection.py`、`core/db/__init__.py`、`core/server.py` 及全部调用点）：
+  * **删除自研连接层**：移除线程本地连接复用、`_DBConnection` 包装器、全局连接注册表与代次失效机制——原实现的「`close()` 是空操作、连接被跨线程复用、全局状态残留」这一整类问题从根源消除。
+  * **每次调用新建连接**：`get_db()` 每次返回一条**全新原生 sqlite3 连接**，调用方自己负责用完 `close()`；SQLite WAL（多读 + 单写）+ `busy_timeout=30000` 处理写锁争用，并发读写正确排队，无任何隐式状态。
+  * **事务上下文管理器**：新增 `with transaction() as conn:`——进入执行 `BEGIN`，正常退出 `commit`、异常 `rollback`，最后统一 `close()`；全站原 `with get_db() as conn:` 调用点已全部替换为 `transaction()`。
+  * **优雅退出**：`flush_and_close_all()` 仅执行 `PRAGMA wal_checkpoint(TRUNCATE)`；备份入口 `backup_to()` 改为模块级函数，备份模块直接调用。
+  * **保留 WAL 恢复语义**：不再删除异常退出残留的 `site.db-wal` / `site.db-shm`（其中含已提交但尚未合并进主库的数据），交由 SQLite 打开数据库时自动重放恢复。
+
+* **防火墙（DuckDB）全部 ID 改为雪花算法 ID**（`services/firewall/service/database.py`、`services/firewall/service/core.py`、`services/firewall/protection/ddos.py`）：
+  * 所有防火墙表（封禁 / 白名单 / 违规警告 / DDoS 日志等）主键由「序列 + `INTEGER`」改为 `BIGINT` 并移除序列定义；插入时显式传入 `core.shared.snowflake.next_id()`，与主站统一为雪花 ID。
+  * **历史数据迁移**：启动自检检测到旧结构时，**快照全表 → 重建为 `BIGINT` 主键表 → 按旧 ID 升序重分配雪花 ID → 关联字段（如 `firewall_ban_details.ban_id`）随父表同步重映射**，排序与关联关系保持不变，整段在单事务内完成。
+
+* **修复主站雪花 ID 迁移后音频文件夹名称未同步**（`core/db/snowflake_migration.py`）：
+  * 原迁移只重分配了数据库 `music.id`，磁盘上 `music/<旧ID>/index.m3u8` 目录名仍为旧 ID，迁移后音频播放 404。
+  * 迁移时同步把 `music.file_path` 改写为 `music/<新ID>/index.m3u8`，并在事务提交后把磁盘目录由旧 ID 重命名为新雪花 ID，数据库与文件系统保持一致。
+
+* **前端目录由 `web/` 更名为 `static/`**（`app.py`、`scripts/build/build_static.py`、`scripts/build/tailwind.config.js`、`scripts/build/package.py`、`update.py`、`services/mail/templates/`、`core/shared/captcha.py`、`routes/main/pages/`、`routes/public/files/` 及全部路径引用）：
+  * `static/` 成为**唯一前端根目录**：静态资源（`css/`、`js/`、`lib/`、`favicons/`、`favicon.svg`）直接位于 `static/` 下，页面模板统一在 `static/templates/`，邮件模板在 `static/templates/emails/`。
+  * `app.py` 配置 `template_folder='static/templates'`、`static_folder='static'`；Tailwind 扫描路径、静态资源构建输出、发布打包排除规则、一键更新保护路径、邮件模板 loader、验证码字体路径、favicon 路径、公开文件敏感目录校验表同步更新。
+  * 原 `web/` 目录整体迁移为 `static/`；本文件历史上以 `web/...` 表述的条目均为该次更名之前的记录（见下条说明）。
+
 * **账号注销改为「内容保留、发布者匿名化、点击即生效」的软注销**（`services/user/profiles/__init__.py`、`services/user/admin/__init__.py`、`core/db/schema.py`、`core/auth.py`、`core/shared/validation.py`）：
   * **内容不删除**：注销不再物理删除 `users` 行，用户行与其 `id` 完整保留；该账号发布过的公共建筑 / 服务器指南 / 评论 / 音频 / 背景图 / 收藏等一律不删除，`author_id` / `user_id` 关联保持不变。
   * **发布者名变为「账号已注销」**：注销时在同一事务内把 `username` 替换为系统保留展示名「账号已注销」（`DELETED_USER_DISPLAY_NAME`），所有内容列表 / 详情页 JOIN `users` 取到的展示名随之变化；该名字禁止被注册或改名占用，避免与注销流程冲突。
@@ -28,7 +48,7 @@
 * **前端目录合并为唯一文件夹 `web/`**（`app.py`、`scripts/build/tailwind.config.js` 及全部模板路径引用）：
   * 原 `templates/` 重命名为 `web/`，静态资源目录 `static/` 与模板同处 `web/` 之内，全站**只有一个前端文件夹**，更符合规范。`app.py` 配置 `template_folder='web'`、`static_folder='web/static'`；Tailwind 内容扫描路径同步改为 `web/**/*.html` 与 `web/static/js/**/*.js`。
   * 邮箱模板改为 `web/emails/`（`services/mail/templates/` 模块内的 loader 路径同步更新）；公开文件服务的敏感目录校验表移除已不存在的 `templates`。
-  * **说明**：本文件此前条目中的 `templates/...` 路径为该次改动之前的历史记录，当前实际目录为 `web/...`（邮件模块子包 `services/mail/templates/` 不受影响）。
+  * **说明**：本文件此前条目中的 `templates/...` 路径为「模板/静态目录合并为 `web/`」之前的历史记录；`web/...` 路径为「前端目录由 `web/` 更名为 `static/`」之前的历史记录。**当前实际目录**见本文件顶部条目——静态资源直接位于 `static/` 下、页面模板在 `static/templates/`（邮件模块子包 `services/mail/templates/` 不受影响）。
 
 * **公共建筑详情页：注意事项与建筑介绍平级、去掉强调框**（`web/buildings/detail.html`）：
   * 「注意事项」由原黄色警示框改为与「建筑介绍 / 使用方式」完全一致的普通小节样式（同级标题 + 正文），不再被框住、视觉层级与其他介绍信息平齐。

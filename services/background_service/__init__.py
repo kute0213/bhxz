@@ -16,7 +16,7 @@ from io import BytesIO
 
 from PIL import Image, ImageOps, UnidentifiedImageError
 
-from core.db import get_db
+from core.db import get_db, transaction
 from core.shared.snowflake import next_id
 from config import UPLOAD_BACKGROUNDS_DIR, USER_IMAGE_MAX_BYTES, get_page_size
 from core.system.logger import log
@@ -257,7 +257,7 @@ def start_upload(user_id, username, upload_file, ip_address):
                 _upload_tasks[task_id]['message'] = '正在转换格式...'
 
             # 写入数据库（先生成记录拿到 bg_id，再落盘，文件名依赖 bg_id）
-            with get_db() as conn:
+            with transaction() as conn:
                 filename = original_filename
                 now = _now()
                 bg_id = next_id()
@@ -274,7 +274,7 @@ def start_upload(user_id, username, upload_file, ip_address):
             # 生成主图 + 响应式变体并落盘（文件名统一为 bg_<id>_<hash>.webp，不使用原始文件名）
             save_path, main_name, ratio = _save_background_variants(bg_id, original_filename, raw)
 
-            with get_db() as conn:
+            with transaction() as conn:
                 conn.execute(
                     "UPDATE backgrounds SET file_path = ?, filename = ?, ratio = ? WHERE id = ?",
                     (save_path, main_name, ratio, bg_id),
@@ -320,7 +320,7 @@ def _cleanup_failed_upload(bg_id, save_path):
     """清理失败上传产生的数据库记录与文件。"""
     if bg_id:
         try:
-            with get_db() as conn:
+            with transaction() as conn:
                 conn.execute("DELETE FROM backgrounds WHERE id = ?", (bg_id,))
                 conn.commit()
         except Exception:
@@ -340,7 +340,7 @@ def get_upload_progress(task_id):
 
 def get_backgrounds(status=None, user_id=None):
     """获取背景图片列表。"""
-    with get_db() as conn:
+    with transaction() as conn:
         conditions = []
         params = []
         if status is not None:
@@ -371,7 +371,7 @@ def get_backgrounds_page(status=None, page=1, page_size=None):
         page_size = get_admin_page_size()
     else:
         page_size = max(1, min(int(page_size), 100))
-    with get_db() as conn:
+    with transaction() as conn:
         conditions = []
         params = []
         if status is not None:
@@ -391,7 +391,7 @@ def get_backgrounds_page(status=None, page=1, page_size=None):
 
 def get_active_backgrounds():
     """获取所有已通过且标记为活跃的背景图片（按上传时间排序，最新在前）。"""
-    with get_db() as conn:
+    with transaction() as conn:
         rows = conn.execute(
             "SELECT * FROM backgrounds WHERE status = ? AND is_active = 1 ORDER BY id DESC",
             (STATUS_APPROVED,),
@@ -401,7 +401,7 @@ def get_active_backgrounds():
 
 def get_background(bg_id):
     """获取单个背景图片信息。"""
-    with get_db() as conn:
+    with transaction() as conn:
         row = conn.execute("SELECT * FROM backgrounds WHERE id = ?", (bg_id,)).fetchone()
         return dict(row) if row else None
 
@@ -554,7 +554,7 @@ def _send_review_email(bg, approved: bool, admin_username: str):
     if not email_service.is_enabled():
         return
     try:
-        with get_db() as conn:
+        with transaction() as conn:
             user = conn.execute(
                 "SELECT email FROM users WHERE id = ?",
                 (bg['user_id'],),
@@ -572,7 +572,7 @@ def _send_review_email(bg, approved: bool, admin_username: str):
 
 def approve_background(bg_id, admin_id, admin_username, ip_address):
     """通过背景图片审核。"""
-    with get_db() as conn:
+    with transaction() as conn:
         bg = conn.execute("SELECT * FROM backgrounds WHERE id = ?", (bg_id,)).fetchone()
         if not bg:
             return False, '背景图片不存在'
@@ -621,7 +621,7 @@ def remove_background_files(bg):
 
 def reject_background(bg_id, admin_id, admin_username, ip_address):
     """驳回背景图片审核（记录驳回时间，24 小时后由清理服务自动删除）。"""
-    with get_db() as conn:
+    with transaction() as conn:
         bg = conn.execute("SELECT * FROM backgrounds WHERE id = ?", (bg_id,)).fetchone()
         if not bg:
             return False, '背景图片不存在'
@@ -644,7 +644,7 @@ def reject_background(bg_id, admin_id, admin_username, ip_address):
 
 def toggle_active(bg_id, admin_id, admin_username, ip_address):
     """切换背景图片的活跃状态（设为当前背景或取消）。"""
-    with get_db() as conn:
+    with transaction() as conn:
         bg = conn.execute("SELECT * FROM backgrounds WHERE id = ?", (bg_id,)).fetchone()
         if not bg:
             return False, '背景图片不存在'
@@ -670,7 +670,7 @@ def toggle_active(bg_id, admin_id, admin_username, ip_address):
 
 def delete_background(bg_id, user_id, is_admin, ip_address):
     """删除背景图片（主图与响应式变体一并删除）。"""
-    with get_db() as conn:
+    with transaction() as conn:
         bg = conn.execute("SELECT * FROM backgrounds WHERE id = ?", (bg_id,)).fetchone()
         if not bg:
             return False, '背景图片不存在'

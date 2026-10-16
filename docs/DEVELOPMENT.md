@@ -133,7 +133,7 @@ def do_something(user_id, value, ip_address):
 
 * `core/auth/` — 认证装饰器、密码哈希
 
-* `core/web/middleware.py` — 请求中间件
+* `core/middleware.py` — 请求中间件
 
 ### 日志规范（`core/system/logger.py`）
 
@@ -222,7 +222,7 @@ if not ok:
 
 ## Jinja2 模板命名规范
 
-模板统一存放于 `web/`（**唯一前端文件夹**，静态资源同处 `web/static/`，不再单独设模板目录），遵循「**功能目录 + 语义化页面名**」规则。命名务必清晰、简洁、符合 Flask/Jinja2 通用约定，避免模板找不到导致的 500。
+模板统一存放于 `static/templates/`（**唯一前端根目录 `static/`**：静态资源直接位于 `static/` 下、页面模板在 `static/templates/`，邮件模板在 `static/templates/emails/`），遵循「**功能目录 + 语义化页面名**」规则。命名务必清晰、简洁、符合 Flask/Jinja2 通用约定，避免模板找不到导致的 500。
 
 ### 1. 目录划分
 
@@ -230,15 +230,15 @@ if not ok:
 
 | 目录 | 存放内容 |
 |------|----------|
-| `web/` 根 | 全站通用：`base.html`（布局）、`index.html`（首页）、`error_simple.html`（精简错误页） |
-| `web/auth/` | 登录、注册、找回密码 |
-| `web/settings/` | 用户个人设置 |
-| `web/admin/` | 管理后台所有页面 |
-| `web/buildings/`、`guides/`、`music/`、`backgrounds/`、`game_accounts/` | 对应功能模块页面 |
-| `web/site/` | 站点级信息页（站点文档、服务器状态） |
-| `web/macros/` | 可复用 Jinja2 宏（`data_table`、`modal` 等） |
-| `web/emails/` | 邮件 HTML 模板（独立 Jinja2 loader，`web/emails/base.html` 为其专用布局） |
-| `web/static/` | 静态资源（CSS / JS / 本地化第三方库），与模板同处一个前端目录 |
+| `static/templates/` 根 | 全站通用：`base.html`（布局）、`index.html`（首页）、`error_simple.html`（精简错误页） |
+| `static/templates/auth/` | 登录、注册、找回密码 |
+| `static/templates/settings/` | 用户个人设置 |
+| `static/templates/admin/` | 管理后台所有页面 |
+| `static/templates/buildings/`、`guides/`、`music/`、`backgrounds/`、`game_accounts/` | 对应功能模块页面 |
+| `static/templates/site/` | 站点级信息页（站点文档、服务器状态） |
+| `static/templates/macros/` | 可复用 Jinja2 宏（`data_table`、`modal` 等） |
+| `static/templates/emails/` | 邮件 HTML 模板（独立 Jinja2 loader，`static/templates/emails/base.html` 为其专用布局） |
+| `static/` | 静态资源（CSS / JS / 本地化第三方库），与模板同处一个前端根目录 |
 
 ### 2. 页面类型后缀
 
@@ -254,11 +254,11 @@ if not ok:
 
 ### 3. 禁止冗余前缀
 
-目录名已表达功能，文件名**不得重复**功能名。管理后台位于 `web/admin/`，其下文件名直接是 `users.html`、`settings.html`，**禁止**写成 `admin/admin_users.html` 这类双重前缀。
+目录名已表达功能，文件名**不得重复**功能名。管理后台位于 `static/templates/admin/`，其下文件名直接是 `users.html`、`settings.html`，**禁止**写成 `admin/admin_users.html` 这类双重前缀。
 
 ### 4. 引用方式
 
-带渲染一律使用相对 `web/`（Flask `template_folder`）的路径字符串：
+带渲染一律使用相对 `static/templates/`（Flask `template_folder`）的路径字符串：
 
 ```python
 render_page('admin/users.html', users=users)   # ✅
@@ -271,7 +271,7 @@ render_page('admin/admin_users.html')          # ❌ 双重前缀
 
 ### 5. 宏导入方式（`import` 而非 `include`）
 
-使用 `web/macros/` 下的宏时，**必须**用 `{% from ... import ... %}` 显式导入，**禁止**用 `{% include %}`。`include` 只渲染模板文件，不会把宏注入当前命名空间，调用时会抛 `UndefinedError: 'xxx' is undefined` 导致 500。
+使用 `static/templates/macros/` 下的宏时，**必须**用 `{% from ... import ... %}` 显式导入，**禁止**用 `{% include %}`。`include` 只渲染模板文件，不会把宏注入当前命名空间，调用时会抛 `UndefinedError: 'xxx' is undefined` 导致 500。
 
 导入语句统一放在 `{% extends %}` 之后、第一个 `{% block %}` 之前：
 
@@ -291,20 +291,17 @@ render_page('admin/admin_users.html')          # ❌ 双重前缀
 {% endblock %}
 ```
 
-> 真实事故：`web/buildings/detail.html` 用 `{% include 'macros/modal.html' %}` 引入弹窗宏，访问 `/buildings/<id>` 时 `modal_shell is undefined` 直接 500。
+> 真实事故：`static/templates/buildings/detail.html` 用 `{% include 'macros/modal.html' %}` 引入弹窗宏，访问 `/buildings/<id>` 时 `modal_shell is undefined` 直接 500。
 
 ## 测试规范
 
-测试文件位于 `scripts/tests/`，运行：
+测试文件位于 `scripts/tests/`，使用 pytest 运行：
 
 ```bash
-python scripts/tests/run_all.py
+python -m pytest scripts/tests -q
 ```
 
-测试套件包含两类检查：
-
-1. **静态检查**（`check_undefined_names.py`）：扫描所有 Python 文件，找出"使用但未定义/未导入"的名字，防止 NameError 类运行时错误（如漏导入 `request`）
-2. **功能测试**：`test_*.py` 中的单元与集成测试
+测试套件为 `test_*.py` 中的单元与集成测试（当前覆盖图形验证码、IP 封禁、任务调度、安全扫描、输入校验等）。
 
 每个测试函数应：
 
@@ -332,7 +329,7 @@ Flask 默认以**函数名**作为端点名（`蓝图名.函数名`），模板�
 
 * [ ] 当路由函数名与 service 导入的函数名冲突时，用 `import ... as svc_xxx` 解决
 
-* [ ] 已运行 `python scripts/tests/run_all.py`，其中 `test_routes.py` 会自动校验模板中所有 `url_for` 端点均已注册，并验证登录后关键页面渲染返回 200（可捕获此类 500）
+* [ ] 已用 `app.test_client()` 逐页请求关键页面，确认返回 200（可捕获此类 500），并已运行 `python -m pytest scripts/tests -q`
 
 ### 2. 模板渲染必须端到端验证
 
@@ -362,13 +359,14 @@ curl -s -o /dev/null -w "%{http_code}" http://localhost:5000/buildings
 # 直接把新列写进 CREATE TABLE IF NOT EXISTS：
 ('表名', '''
     CREATE TABLE IF NOT EXISTS 表名 (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id INTEGER PRIMARY KEY,        -- 非用户表主键一律雪花 ID（写入时显式传 next_id()），禁止 AUTOINCREMENT
         ...
         新列名 类型 DEFAULT 默认值
     )
 '''),
 ```
 
+* **主键 ID 约定**：除 `users` 表保留自增 ID 外，所有表主键一律为**雪花算法 ID**——建表写 `id INTEGER PRIMARY KEY`（不带 `AUTOINCREMENT`），写入时通过 `from core.shared.snowflake import next_id` 显式传入 `next_id()`，不要依赖 `lastrowid`。
 * **新装库**：建表语句自带新列，无需额外处理。
 * **已有库**：`CREATE TABLE IF NOT EXISTS` 对已存在的表不生效，需部署方自行执行
   `ALTER TABLE 表名 ADD COLUMN 列名 类型 DEFAULT 默认值;` 后再部署（或重建库）。
@@ -410,7 +408,7 @@ body.page-leaving .page-content {
 
 * [ ] `body.page-leaving` 时用 `animation: none` 取消入场动画，避免与离场过渡冲突
 
-* [ ] 修改 `base.css` 后必须同步 bump `web/base.html` 中的版本号（`v='15'`）
+* [ ] 修改 `base.css` 后必须同步 bump `static/templates/base.html` 中的版本号（`v='15'`）
 
 ### 5. 弹窗与模态框的放置位置
 
@@ -434,57 +432,33 @@ body.page-leaving .page-content {
 
 * [ ] 验证码出错不应刷新整个页面（避免丢表单内容）
 
-## 路由检测配置
+## 路由检测与可达性验证
 
-### 1. 新增路由时必须同步更新检测脚本
+### 1. 新增路由后必须验证可达性
 
-所有路由必须注册到 `scripts/tests/test_routes.py` 的 `ROUTES` 列表中，否则路由检测将无法覆盖新增路由。
-
-**每次新增路由流程：**
-
-1. 在 `routes/` 中注册新路由
-2. 在 `scripts/tests/test_routes.py` 的 `ROUTES` 列表中添加对应条目
-3. 运行 `python scripts/tests/test_routes.py` 验证新路由可达
-4. 提交代码
-
-### 2. ROUTES 条目格式
+新增或修改路由后，必须用 `app.test_client()` 实际请求一次，确认公开页返回 200、受保护页在未登录时返回 302/401/403、POST 路由不返回 500：
 
 ```python
-# (路径, HTTP方法, 预期状态码列表, 认证要求, 备注)
-# 认证要求: False=公开, True=需登录, 'admin'=需管理员权限
-
-# 公开页面
-('/buildings', 'GET', [200], False, '公共建筑列表'),
-
-# 需登录（未登录预期 302 跳转）
-('/settings', 'GET', [302, 401], True, '设置页'),
-
-# 需管理员（未登录预期 302/403）
-('/admin', 'GET', [302, 401, 403], 'admin', '管理后台'),
-
-# 静态文件
-('/static/css/base.css', 'GET', [200, 304], False, 'CSS文件'),
+with app.test_client() as client:
+    resp = client.get('/buildings')          # 公开页 → 200
+    assert resp.status_code == 200
+    resp = client.get('/settings')           # 需登录 → 302 跳转
+    assert resp.status_code in (302, 401)
 ```
 
-### 3. 规则
+### 2. 检查清单
 
-* **新增路由后必须添加检测条目** — 这是硬性要求，否则路由检测覆盖不全
+* [ ] 新路由已实际请求验证（公开页 200）
 
-* 公开页面预期 `200`，认证页面预期 `302/401/403`（未登录）
+* [ ] 受保护路由在未登录时返回 302/401/403
 
-* POST 路由只需测试不返回 500（空表单请求应返回 400/302 等合理状态码）
+* [ ] POST 路由空表单请求不返回 500（返回 400/302 等合理状态码）
 
-* 如果有特殊参数或 Header 需求，在 `test_post_routes()` 函数中添加自定义测试逻辑
+* [ ] 静态文件请求返回 200 或 304
 
-* 静态文件预期 `200` 或 `304`
+* [ ] 模板中所有 `url_for` 端点名与路由函数名一致（见易错点 1）
 
-### 4. 检查清单
-
-* [ ] 新路由已在 `ROUTES` 列表中添加
-
-* [ ] 预期状态码正确（公开页面 200，认证页面 302/401/403）
-
-* [ ] 已运行 `python test_routes.py` 验证通过
+> 历史说明：曾用 `scripts/tests/test_routes.py` 的 `ROUTES` 清单集中检测路由，该脚本已随死代码清理移除；当前改为按上述方式在测试中逐个请求关键页面。
 
 ### 6. Markdown 渲染与代码复制
 
@@ -553,14 +527,14 @@ from flask import render_template, redirect, url_for, flash, abort, request
 > 真实事故：`routes/admin/users.py` 漏导入 `request`，导致「删除用户」接口对任何用户都返回 500。
 > 这类错误与具体数据无关，漏一行 import 就会全接口失效。
 
-**预防措施：** 静态检查脚本已集成进测试套件，会自动扫描"使用但未定义/未导入"的名字：
-`python scripts/tests/run_all.py`（内置 `check_undefined_names` 静态检查）。
+**预防措施：** 提交前运行测试套件并逐页请求关键页面：
+`python -m pytest scripts/tests -q`。
 
 **检查清单：**
 
 * [ ] 路由层用到的每个 Flask 对象都已在 `from flask import ...` 中导入
 
-* [ ] 已运行 `python scripts/tests/run_all.py`（含静态检查）确认通过
+* [ ] 已运行 `python -m pytest scripts/tests -q` 确认通过
 
 ## 构建与发布
 
@@ -621,11 +595,11 @@ server {
 python scripts/build/build_static.py
 ```
 
-* 下载 Lucide、marked、字体及 Monaco Editor（约 12MB）到 `web/static/lib/`
+* 下载 Lucide、marked、字体及 Monaco Editor（约 12MB）到 `static/lib/`
 
-* 结果写入 `web/static/lib/lib-version.json`
+* 结果写入 `static/lib/lib-version.json`
 
-* `web/static/lib/monaco/`（~12MB）被 `.gitignore` 排除，**不提交到 Git**
+* `static/lib/monaco/`（~12MB）被 `.gitignore` 排除，**不提交到 Git**
 
 * 用户通过一键更新或从 GitHub 下载 ZIP 后，都需要运行此命令以补齐 Monaco
 
@@ -651,7 +625,7 @@ git push
 
 ```bash
 cd /workspace
-python scripts/tests/run_all.py        # 1. 测试套件通过
+python -m pytest scripts/tests -q        # 1. 测试套件通过
 python scripts/build/build_static.py   # 2. 构建静态资源
 python scripts/build/package.py        # 3. 打包 zip
 git add -A                             # 4. 暂存（确认 .gitignore 生效）

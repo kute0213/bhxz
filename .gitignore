@@ -59,7 +59,7 @@ node_modules/
 scripts/build/node_modules/
 
 # 静态资源构建产物（大文件排除）
-web/static/lib/monaco/
+static/lib/monaco/
 
 # 发布打包产物
 release/

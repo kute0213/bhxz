@@ -243,11 +243,12 @@ class DDoSDetector:
         if success:
             try:
                 from services.firewall.service.database import submit_write
+                from core.shared.snowflake import next_id
                 submit_write(
                     "INSERT INTO firewall_ddos_log "
-                    "(ip_address, action, threshold, count) "
-                    "VALUES (?, ?, ?, ?)",
-                    (ip, 'banned', threshold, offense_count),
+                    "(id, ip_address, action, threshold, count) "
+                    "VALUES (?, ?, ?, ?, ?)",
+                    (next_id(), ip, 'banned', threshold, offense_count),
                 )
             except Exception:
                 pass

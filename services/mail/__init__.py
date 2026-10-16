@@ -28,8 +28,8 @@ def notify_admins(subject: str, body: str, html: str) -> None:
     if not email_service.is_enabled():
         return
     try:
-        from core.db import get_db
-        with get_db() as conn:
+        from core.db import transaction
+        with transaction() as conn:
             admins = conn.execute(
                 "SELECT email FROM users WHERE is_admin = 1 "
                 "AND email IS NOT NULL AND email != ''"

@@ -6,7 +6,7 @@
 
 from datetime import datetime
 
-from core.db import get_db
+from core.db import get_db, transaction
 from core.shared.snowflake import next_id
 from config import get_page_size
 
@@ -58,7 +58,7 @@ def normalize_tags(raw):
 
 def get_all_tags():
     """汇总所有已通过建筑的标签，按出现频次倒序返回（供筛选展示）。"""
-    with get_db() as conn:
+    with transaction() as conn:
         rows = conn.execute(
             "SELECT tags FROM public_buildings "
             "WHERE status = 'approved' AND tags IS NOT NULL AND tags != ''"
@@ -126,7 +126,7 @@ def list_buildings(search=None, tag=None, page=1, page_size=None,
     else:
         order = 'favorite_count DESC, b.published_at DESC, b.id DESC'
 
-    with get_db() as conn:
+    with transaction() as conn:
         rows = conn.execute(
             f"""
             SELECT b.id, b.title, b.warp_name, b.tags, b.author_id, b.status,
@@ -173,7 +173,7 @@ def list_favorite_buildings(user_id, search=None, page=1, page_size=None):
         params.extend([like, like])
 
     where = ' AND '.join(conditions)
-    with get_db() as conn:
+    with transaction() as conn:
         rows = conn.execute(
             f"""
             SELECT b.id, b.title, b.warp_name, b.tags, b.author_id, b.status,
@@ -199,7 +199,7 @@ def list_favorite_buildings(user_id, search=None, page=1, page_size=None):
 
 def get_building(building_id):
     """获取单个建筑（含作者名与收藏数）。"""
-    with get_db() as conn:
+    with transaction() as conn:
         row = conn.execute(
             """
             SELECT b.*, u.username AS author_name,
@@ -221,7 +221,7 @@ def get_building(building_id):
 
 def count_comments(building_id) -> int:
     """统计某建筑的评论总数。"""
-    with get_db() as conn:
+    with transaction() as conn:
         row = conn.execute(
             "SELECT COUNT(*) AS c FROM building_comments WHERE building_id = ?",
             (building_id,),
@@ -245,7 +245,7 @@ def list_comments(building_id, page=1, page_size=None):
     page_size = _comment_page_size() if page_size is None else max(1, min(int(page_size), 100))
     offset = (page - 1) * page_size
 
-    with get_db() as conn:
+    with transaction() as conn:
         total_row = conn.execute(
             "SELECT COUNT(*) AS c FROM building_comments WHERE building_id = ?",
             (building_id,),
@@ -285,7 +285,7 @@ def toggle_favorite(user_id, building_id):
     if building['status'] != 'approved':
         return False, '仅可收藏已审核通过的建筑', False, building.get('favorite_count', 0)
 
-    with get_db() as conn:
+    with transaction() as conn:
         row = conn.execute(
             "SELECT 1 FROM building_favorites WHERE user_id = ? AND building_id = ?",
             (user_id, building_id),
@@ -317,7 +317,7 @@ def get_favorite_ids(user_id, building_ids=None):
     """获取用户已收藏的建筑 ID 集合（列表页标记收藏状态用）。"""
     if not user_id:
         return set()
-    with get_db() as conn:
+    with transaction() as conn:
         if building_ids:
             placeholders = ','.join('?' for _ in building_ids)
             rows = conn.execute(
@@ -340,7 +340,7 @@ def get_favorite_ids(user_id, building_ids=None):
 
 def set_tags(building_id, user_id, is_admin, raw_tags):
     """设置建筑标签（作者本人或管理员可操作）。返回 (success, message, tags)。"""
-    with get_db() as conn:
+    with transaction() as conn:
         row = conn.execute(
             "SELECT author_id FROM public_buildings WHERE id = ?",
             (building_id,),

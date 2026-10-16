@@ -1,6 +1,6 @@
 """邮件 HTML 模板模块 —— 使用 Jinja2 模板渲染符合滨海小镇风格的邮件内容。
 
-所有邮件模板存放在 web/emails/ 目录下：
+所有邮件模板存放在 static/templates/emails/ 目录下：
 - base.html              公共外层容器 + 样式（白色磨砂玻璃风格，与官网一致）
 - verification_code.html 验证码邮件
 - guide_review_pending.html 新指南待审核通知
@@ -26,13 +26,13 @@ import os
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
-# 定位 web/emails/ 目录（当前文件位于 services/mail/templates/__init__.py，
+# 定位 static/templates/emails/ 目录（当前文件位于 services/mail/templates/__init__.py，
 # 需向上 4 层到达项目根目录：templates → mail → services → 项目根）
 _MODULE_DIR = os.path.dirname(os.path.abspath(__file__))        # services/mail/templates
 _MAIL_DIR = os.path.dirname(_MODULE_DIR)                        # services/mail
 _SERVICES_DIR = os.path.dirname(_MAIL_DIR)                      # services
 _PROJECT_ROOT = os.path.dirname(_SERVICES_DIR)                  # 项目根目录
-_EMAIL_TEMPLATES_DIR = os.path.join(_PROJECT_ROOT, 'web', 'emails')
+_EMAIL_TEMPLATES_DIR = os.path.join(_PROJECT_ROOT, 'static', 'templates', 'emails')
 
 # 独立 Jinja2 环境（不依赖 Flask app context，供后台线程安全使用）
 _jinja_env = Environment(
