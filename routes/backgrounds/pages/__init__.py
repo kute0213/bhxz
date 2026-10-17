@@ -5,7 +5,7 @@
 
 from io import BytesIO
 
-from flask import request, jsonify, send_file, abort
+from flask import request, jsonify, send_file, abort, Response
 
 from core.auth import get_current_user, login_required
 from core.helpers import render_page
@@ -114,14 +114,29 @@ def delete_background(bg_id):
     return jsonify({'success': success, 'message': message})
 
 
+@backgrounds_bp.route('/backgrounds/serve')
+def serve_active_background():
+    """全站背景图片入口（**不带 ID**）：返回当前启用的背景图片。
+
+    URL 形如 `/backgrounds/serve?size=1280&ratio=1.16`：
+      * `size`  —— 请求的尺寸档位，服务端只在内存里按长边缩放（不落盘）；
+      * `ratio` —— 屏幕宽高比，**服务端不再据此裁剪**，仅作为参数保留；
+                 裁切与最终缩放由浏览器完成（CSS `background-size: cover`）。
+
+    未启用任何背景时返回 404（前端回退到渐变色背景）。
+    """
+    backgrounds = background_service.get_active_backgrounds()
+    if not backgrounds:
+        abort(404)
+    return _send_background(backgrounds[0], long_cache=False)
+
+
 @backgrounds_bp.route('/backgrounds/serve/<int:bg_id>')
 def serve_background(bg_id):
-    """提供背景图片访问。
+    """按 ID 提供背景图片（后台缩略图、审核预览、用户查看自己上传的图片）。
 
-    支持 ?size= 参数：前端按设备屏幕尺寸请求最合适的档位（768 / 1280 / 1920），
-    服务端就近返回对应变体；支持 ?ratio= 参数：前端携带屏幕宽高比（宽/高），
-    服务端将所选档位中心裁剪到该比例后返回（结果缓存），实现按屏幕比例最适配取图。
     已通过的图片公开可访问；待审核/已驳回图片仅管理员与上传者可预览。
+    支持 `?size=` 档位（768 / 1280 / 1920），服务端在内存中按长边缩放后返回。
     """
     bg = background_service.get_background(bg_id)
     if not bg or not bg['file_path']:
@@ -133,28 +148,43 @@ def serve_background(bg_id):
         if not user or (not user.get('is_admin') and user['id'] != bg['user_id']):
             abort(404)
 
+    return _send_background(bg, long_cache=True)
+
+
+def _resolve_size():
+    """解析 ?size= 档位参数，收敛到 [1, PRIMARY_SIZE]。"""
     size = request.args.get('size', type=int)
-    if size is not None:
-        size = max(1, min(size, 1920))
+    if size is None:
+        return None
+    return max(1, min(size, background_service.PRIMARY_SIZE))
 
-    ratio = request.args.get('ratio', type=float)
-    if ratio is not None:
-        ratio = max(
-            background_service.RATIO_MIN,
-            min(ratio, background_service.RATIO_MAX),
-        )
 
+def _send_background(bg, long_cache):
+    """返回背景图片响应。
+
+    磁盘上每张背景只有一张主图；`size` 非空时在内存中缩放后返回（结果缓存）。
+    `ratio` 参数被忽略：裁切由浏览器完成。
+
+    long_cache=True（按 ID 取图，URL 稳定且内容不变）→ 浏览器可长期缓存；
+    long_cache=False（当前启用背景，URL 固定但内容会被管理员切换）→ 强制重新校验
+    （ETag），避免切换背景后浏览器仍展示旧图。
+    """
+    size = _resolve_size()
     try:
-        data = background_service.read_background_data(bg, size=size, ratio=ratio)
+        data = background_service.read_background_data(bg, size=size)
     except Exception:
         data = None
     if not data:
         abort(404)
 
-    response = send_file(
-        BytesIO(data),
-        mimetype='image/webp',
-        max_age=86400,
-    )
-    response.headers['Cache-Control'] = 'public, max-age=86400'
+    etag = background_service.background_etag(bg, size=size)
+    if not long_cache and request.if_none_match.contains(etag):
+        response = Response(status=304)
+    else:
+        response = send_file(BytesIO(data), mimetype='image/webp')
+    response.set_etag(etag)
+    if long_cache:
+        response.headers['Cache-Control'] = 'public, max-age=86400'
+    else:
+        response.headers['Cache-Control'] = 'no-cache, must-revalidate'
     return response

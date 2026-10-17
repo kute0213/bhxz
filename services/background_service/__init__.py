@@ -1,11 +1,11 @@
 """背景图片业务服务：上传、审核、列表查询。
 
 所有函数为 Flask 无关的纯业务逻辑，返回 (success, data_or_error) 元组。
-背景图片存储在 uploads/backgrounds/ 目录，自动转换为 WebP 格式，
-并为不同屏幕尺寸生成多档变体（768 / 1280 / 1920）：
-  - 保存时保持图片自然宽高比并写入 ratio 列（不再强制裁剪 16:9）
-  - 取图时客户端携带屏幕比例，服务端将所选档位中心裁剪到该比例后返回
-    （结果缓存），实现"上传即转换、按设备比例最适配取图"。
+背景图片存储在 uploads/backgrounds/ 目录，自动转换为 WebP 格式。
+
+磁盘上**每张背景只保留一个文件**（长边 ≤ 1920 的主图），不再生成 / 按需缓存
+任何尺寸变体；取图时若客户端带上 size，服务端仅在**内存**里按长边缩放一次
+（结果缓存、不落盘），裁切与最终缩放交给浏览器（CSS background-size: cover）。
 """
 
 import os
@@ -36,25 +36,21 @@ STATUS_LABELS = {
 # 支持的源图片格式
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'tiff'}
 
-# 响应式变体档位：键为前端请求的 size 参数，值为图片长边最大像素。
-# 上传时按此列表生成多档 WebP，serve 时按设备尺寸就近取用。
+# 前端请求的尺寸档位（serve 时用于就近取图；磁盘上不再预生成对应文件）
 RESPONSIVE_SIZES = [768, 1280, 1920]
-# 主图档位（全站背景默认使用）
+# 主图档位：磁盘上唯一文件的缩放上限（全站背景默认使用）
 PRIMARY_SIZE = 1920
 
 # 默认宽高比（旧数据 / 无比例参数时的回退值，对应 16:9）
 RATIO_DEFAULT = 16 / 9
-# 服务端接受的比例（宽/高）范围，超出收窄，避免极端裁剪造成画质损失
+# 自然宽高比的合理范围（宽/高），超出收窄，避免记录异常值
 RATIO_MIN = 0.4
 RATIO_MAX = 3.6
 
-# 按屏幕比例裁剪结果缓存（key: (文件路径, 比例保留 2 位)）
-_crop_cache = {}
-_crop_cache_lock = threading.Lock()
-_CROP_CACHE_MAX = 32
-
-# 按需生成响应式变体的互斥锁（避免并发重复生成同一档位）
-_variant_lock = threading.Lock()
+# 按请求尺寸缩放的结果缓存（key: (文件路径, 尺寸)，值: WebP 字节）
+_size_cache = {}
+_size_cache_lock = threading.Lock()
+_SIZE_CACHE_MAX = 16
 
 # 上传任务进度
 _upload_tasks = {}
@@ -106,43 +102,13 @@ def _get_natural_ratio(raw):
         return RATIO_DEFAULT
 
 
-def _smart_crop(image, target_ratio=16/9):
-    """智能裁剪图片到目标宽高比，从中心裁剪。
+def _convert_to_webp(raw):
+    """将图片转换为 WebP 格式，保持自然宽高比，按长边缩放到 PRIMARY_SIZE 以内。
 
-    Args:
-        image: PIL Image 对象
-        target_ratio: 目标宽高比（默认 16:9）
-
-    Returns:
-        裁剪后的 PIL Image 对象
-    """
-    w, h = image.size
-    current_ratio = w / h
-
-    if abs(current_ratio - target_ratio) < 0.01:
-        # 已经是目标比例，不需要裁剪
-        return image
-
-    if current_ratio > target_ratio:
-        # 图片太宽，裁剪宽度
-        new_w = int(h * target_ratio)
-        left = (w - new_w) // 2
-        return image.crop((left, 0, left + new_w, h))
-    else:
-        # 图片太高，裁剪高度
-        new_h = int(w / target_ratio)
-        top = (h - new_h) // 2
-        return image.crop((0, top, w, top + new_h))
-
-
-def _convert_to_webp(raw, target_size=PRIMARY_SIZE, crop_to_ratio=False):
-    """将图片转换为 WebP 格式，自动适配尺寸。
+    不做任何裁剪：裁切由浏览器按展示区域完成（CSS background-size: cover）。
 
     Args:
         raw: 原始图片字节数据
-        target_size: 目标长边最大像素（默认 1920px）
-        crop_to_ratio: 是否裁剪到 16:9（默认关闭；保存时保持自然宽高比，
-            裁剪推迟到取图时按屏幕比例进行）
 
     Returns:
         WebP 格式的字节数据
@@ -162,14 +128,10 @@ def _convert_to_webp(raw, target_size=PRIMARY_SIZE, crop_to_ratio=False):
     except (UnidentifiedImageError, OSError, ValueError) as exc:
         raise ValueError('文件不是有效的图片') from exc
 
-    # 智能裁剪到 16:9
-    if crop_to_ratio:
-        image = _smart_crop(image, 16/9)
-
     # 按长边缩放
     w, h = image.size
-    if max(w, h) > target_size:
-        ratio = target_size / max(w, h)
+    if max(w, h) > PRIMARY_SIZE:
+        ratio = PRIMARY_SIZE / max(w, h)
         new_size = (int(w * ratio), int(h * ratio))
         image = image.resize(new_size, Image.Resampling.LANCZOS)
 
@@ -191,40 +153,22 @@ def _background_filename(bg_id, original_filename):
     return f'bg_{bg_id}_{hash_suffix}.webp'
 
 
-def _save_background_variants(bg_id, filename, raw):
-    """生成并保存背景图片主图与各档响应式变体。
+def _save_background_master(bg_id, original_filename, raw):
+    """保存背景图片主图（磁盘上唯一的文件），返回 (主图绝对路径, 主文件名, 自然宽高比)。
 
-    保持图片自然宽高比（不再强制裁剪 16:9），裁剪推迟到取图时按屏幕比例进行。
+    保持自然宽高比，只按长边缩放到 PRIMARY_SIZE 以内；裁切与按屏幕缩放由客户端
+    完成，因此不再生成任何尺寸变体文件。
 
     Args:
         bg_id: 背景图片记录 ID
-        filename: 原始文件名（用于生成主文件名）
+        original_filename: 原始文件名（用于生成主文件名）
         raw: 原始图片字节
-
-    Returns:
-        (主图绝对路径, 统一主文件名, 自然宽高比)；任一档位处理失败时抛异常（由调用方回滚记录）
     """
     ratio = _get_natural_ratio(raw)
-    main_name = _background_filename(bg_id, filename)
-    # 主图（1920）优先生成，保证基础路径必然存在
+    main_name = _background_filename(bg_id, original_filename)
     main_path = os.path.join(UPLOAD_BACKGROUNDS_DIR, main_name)
     with open(main_path, 'wb') as f:
-        f.write(_convert_to_webp(raw, target_size=PRIMARY_SIZE, crop_to_ratio=False))
-
-    # 其余档位：失败不影响主图，仅记录日志
-    for size in RESPONSIVE_SIZES:
-        if size == PRIMARY_SIZE:
-            continue
-        variant_path = os.path.join(
-            UPLOAD_BACKGROUNDS_DIR, f'{main_name[:-5]}_{size}.webp'
-        )
-        try:
-            with open(variant_path, 'wb') as f:
-                f.write(_convert_to_webp(raw, target_size=size, crop_to_ratio=False))
-        except Exception as exc:
-            log('WARNING', 'BackgroundUpload', f'生成 {size}px 变体失败',
-                bg_id=bg_id, error=str(exc))
-
+        f.write(_convert_to_webp(raw))
     return main_path, main_name, ratio
 
 
@@ -271,8 +215,8 @@ def start_upload(user_id, username, upload_file, ip_address):
                 _upload_tasks[task_id]['percent'] = 60
                 _upload_tasks[task_id]['message'] = '正在保存...'
 
-            # 生成主图 + 响应式变体并落盘（文件名统一为 bg_<id>_<hash>.webp，不使用原始文件名）
-            save_path, main_name, ratio = _save_background_variants(bg_id, original_filename, raw)
+            # 生成主图并落盘（文件名统一为 bg_<id>_<hash>.webp，不使用原始文件名）
+            save_path, main_name, ratio = _save_background_master(bg_id, original_filename, raw)
 
             with transaction() as conn:
                 conn.execute(
@@ -406,97 +350,18 @@ def get_background(bg_id):
         return dict(row) if row else None
 
 
-def _variant_path(main_path, size):
-    """由主图路径推导指定档位变体文件路径（命名规则：<主名>_<size>.webp）。"""
-    return os.path.join(
-        os.path.dirname(main_path),
-        f'{os.path.splitext(os.path.basename(main_path))[0]}_{size}.webp',
-    )
-
-
-def _ensure_variant(main_path, size):
-    """确保指定档位变体存在；缺失时按需从主图生成并落盘。
-
-    历史背景（开启响应式变体前上传）或变体生成失败时，磁盘上只有 1920px 主图，
-    直接回退主图会导致「拿不到合适尺寸」的图片。此处按需把主图缩放到目标档位
-    （长边 ≤ size，不放大）并缓存为 WebP，使任意记录都能自动获取与屏幕匹配的档位。
-    生成失败或主图本就不大于目标档位时安全回退主图。
-    """
-    variant_path = _variant_path(main_path, size)
-    if os.path.isfile(variant_path):
-        return variant_path
-
-    with _variant_lock:
-        # 双重检查：并发请求下只生成一次
-        if os.path.isfile(variant_path):
-            return variant_path
-        try:
-            with open(main_path, 'rb') as file:
-                raw = file.read()
-            image = Image.open(BytesIO(raw))
-            image = ImageOps.exif_transpose(image)
-            image.load()
-            w, h = image.size
-            long_edge = max(w, h)
-            if long_edge <= size:
-                # 主图本身不大于目标档位，无需额外生成
-                return main_path
-            scale = size / long_edge
-            new_size = (max(1, int(w * scale)), max(1, int(h * scale)))
-            image = image.resize(new_size, Image.Resampling.LANCZOS)
-            if image.mode not in ('RGB', 'RGBA'):
-                image = image.convert('RGBA' if 'transparency' in image.info else 'RGB')
-            output = BytesIO()
-            image.save(output, format='WEBP', quality=85, method=6)
-            data = output.getvalue()
-            if not data:
-                return main_path
-            # 原子写入：先写临时文件再替换，避免读到半成品
-            tmp_path = variant_path + '.tmp'
-            with open(tmp_path, 'wb') as file:
-                file.write(data)
-            os.replace(tmp_path, variant_path)
-            log('INFO', 'Background', '按需生成背景变体',
-                variant=os.path.basename(variant_path), size=size)
-            return variant_path
-        except Exception as exc:
-            log('WARNING', 'Background', f'按需生成 {size}px 变体失败: {exc}')
-            return main_path
-
-
-def resolve_background_path(bg, size=None):
-    """按请求尺寸解析本地背景图片路径（缺失档位自动按需生成）。
-
-    规则：size 为空时返回主图；否则在响应式变体中取不小于目标的最小档位；
-    该档位文件缺失时按需从主图生成（见 _ensure_variant），
-    生成不可用时才回退主图。
-    """
+def resolve_background_path(bg):
+    """返回背景图片的主图本地路径（磁盘上唯一的文件）；不存在时返回 None。"""
     main_path = bg['file_path'] if bg else None
     if not main_path or not os.path.isfile(main_path):
         return None
-
-    if size is None:
-        return main_path
-
-    # 选取不小于目标长边的最小档位
-    chosen = None
-    for s in sorted(RESPONSIVE_SIZES):
-        if s >= size:
-            chosen = s
-            break
-    if chosen is None:
-        chosen = RESPONSIVE_SIZES[-1]
-
-    if chosen == PRIMARY_SIZE:
-        return main_path
-
-    return _ensure_variant(main_path, chosen)
+    return main_path
 
 
-def _crop_to_ratio(data, ratio):
-    """将 WebP 字节按目标宽高比中心裁剪，返回新的 WebP 字节。
+def _resize_to_size(data, size):
+    """把 WebP 字节按长边缩放到 ≤ size（不放大），返回新的 WebP 字节。
 
-    原图比例与目标一致（误差 < 0.01）或处理失败时直接返回原数据，避免重复编码。
+    主图本身不大于目标档位或处理失败时，直接返回原数据，避免无意义重编码。
     """
     try:
         image = Image.open(BytesIO(data))
@@ -504,22 +369,29 @@ def _crop_to_ratio(data, ratio):
         image.load()
     except Exception:
         return data
+
     w, h = image.size
-    if w and h and abs(w / h - ratio) < 0.01:
+    long_edge = max(w, h)
+    if not long_edge or long_edge <= size:
         return data
-    image = _smart_crop(image, ratio)
+
+    scale = size / long_edge
+    image = image.resize((max(1, int(w * scale)), max(1, int(h * scale))), Image.Resampling.LANCZOS)
+    if image.mode not in ('RGB', 'RGBA'):
+        image = image.convert('RGBA' if 'transparency' in image.info else 'RGB')
     output = BytesIO()
     image.save(output, format='WEBP', quality=85, method=6)
     return output.getvalue() or data
 
 
-def read_background_data(bg, size=None, ratio=None):
-    """读取背景图片字节（按设备尺寸就近取档，兼容历史本地路径）。
+def read_background_data(bg, size=None):
+    """读取背景图片字节（磁盘上取唯一主图）。
 
-    ratio 非空时，将所选档位图片按该宽高比中心裁剪后再返回（结果缓存），
-    使客户端拿到与其屏幕比例完全匹配的图片，避免多余像素传输。
+    size 非空时在**内存**里按长边缩放到该档位并缓存（不落盘），让移动端少下载
+    像素；裁切与最终缩放由浏览器完成（CSS background-size: cover），
+    服务端不再按屏幕比例裁剪。
     """
-    path = resolve_background_path(bg, size=size)
+    path = resolve_background_path(bg)
     if not path:
         return None
     try:
@@ -528,25 +400,39 @@ def read_background_data(bg, size=None, ratio=None):
     except OSError:
         return None
 
-    if ratio is None:
+    if size is None:
         return data
 
-    key = (path, round(ratio, 2))
-    with _crop_cache_lock:
-        cached = _crop_cache.get(key)
+    key = (path, size)
+    with _size_cache_lock:
+        cached = _size_cache.get(key)
     if cached is not None:
         return cached
 
-    cropped = _crop_to_ratio(data, ratio)
-    if cropped is data:
-        # 原图比例已匹配，无需裁剪也无需缓存（与直接取档结果一致）
+    resized = _resize_to_size(data, size)
+    if resized is data:
+        # 主图本身不大于目标档位：与直接取主图结果一致，无需缓存
         return data
 
-    with _crop_cache_lock:
-        if len(_crop_cache) >= _CROP_CACHE_MAX:
-            _crop_cache.clear()
-        _crop_cache[key] = cropped
-    return cropped
+    with _size_cache_lock:
+        if len(_size_cache) >= _SIZE_CACHE_MAX:
+            _size_cache.clear()
+        _size_cache[key] = resized
+    return resized
+
+
+def background_etag(bg, size=None):
+    """背景图片的缓存校验值：主图路径 + 修改时间 + 请求档位。
+
+    当前启用背景的 URL 固定（不带 ID），管理员切换背景后 URL 不变，
+    因此需要 ETag 让浏览器重新校验，避免长期缓存到旧图。
+    """
+    path = (bg or {}).get('file_path') or ''
+    try:
+        stamp = os.path.getmtime(path)
+    except OSError:
+        stamp = 0
+    return hashlib.md5(f'{path}:{stamp}:{size}'.encode()).hexdigest()
 
 
 def _send_review_email(bg, approved: bool, admin_username: str):
@@ -599,12 +485,14 @@ def approve_background(bg_id, admin_id, admin_username, ip_address):
 
 
 def remove_background_files(bg):
-    """删除背景图片本地文件（主图与全部响应式变体）。失败仅记日志。"""
+    """删除背景图片本地文件（主图；顺带清理历史遗留的尺寸变体文件）。失败仅记日志。"""
     main_path = bg['file_path'] if bg else None
     if not main_path or not os.path.isfile(main_path):
         return
     try:
         os.remove(main_path)
+        # 历史版本曾为每张图生成 <主名>_<size>.webp 变体，删除记录时一并清掉，
+        # 避免这些不再被使用的文件长期占盘
         base_name = os.path.splitext(os.path.basename(main_path))[0]
         for size in RESPONSIVE_SIZES:
             if size == PRIMARY_SIZE:

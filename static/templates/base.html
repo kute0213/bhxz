@@ -99,12 +99,14 @@
         <div class="bg-orb bg-orb-3"></div>
     </div>
 
-    <!-- 全站背景图片：解析到背景元素后立即预加载（不等动画与其他脚本），
-         携带屏幕比例 ratio 与所需尺寸 size，服务端返回比例最适配的图片；无 JS 时回退主图 -->
+    <!-- 全站背景图片：解析到背景元素后立即预加载（不等动画与其他脚本）。
+         请求不带 ID 的 /backgrounds/serve?size=&ratio=：服务端返回「当前启用」的背景，
+         按 size 在内存中缩放（不落盘），ratio 仅作为参数保留——
+         裁切与最终缩放由浏览器按 background-size 完成；无 JS 时直接取当前背景主图 -->
     {% if active_backgrounds %}
-    <div class="site-background" data-background-url="{{ url_for('backgrounds.serve_background', bg_id=active_backgrounds[0].id) }}" style="background-size: {{ background_image_size }};"></div>
+    <div class="site-background" data-background-url="{{ url_for('backgrounds.serve_active_background') }}" style="background-size: {{ background_image_size }};"></div>
     <div class="site-background-overlay"></div>
-    <noscript><style>.site-background{background-image:url('{{ url_for('backgrounds.serve_background', bg_id=active_backgrounds[0].id) }}');opacity:1!important}</style></noscript>
+    <noscript><style>.site-background{background-image:url('{{ url_for('backgrounds.serve_active_background') }}');opacity:1!important}</style></noscript>
     <script>
     (function () {
         var bg = document.querySelector('.site-background');
@@ -129,7 +131,8 @@
             return SIZES[SIZES.length - 1];
         }
 
-        // 屏幕宽高比，保留 2 位小数（横竖屏分别得到对应比例的裁剪图）
+        // 屏幕宽高比，保留 2 位小数。服务端不再据此裁切（裁切由浏览器按
+        // background-size 完成），此参数仅保留在 URL 中作为请求约定
         function bestRatio() {
             var w = window.innerWidth, h = window.innerHeight;
             return (w && h) ? Math.round((w / h) * 100) / 100 : 1.78;
@@ -153,7 +156,7 @@
                 bg.classList.add('bg-loaded');
             };
             img.onerror = function () {
-                // 比例裁剪不可用或档位缺失时回退自然比例主图
+                // 取图失败（如未启用背景）时回退到不带参数的当前背景主图
                 bg.style.backgroundImage = "url('" + baseUrl + "')";
                 bg.classList.add('bg-loaded');
             };

@@ -159,14 +159,14 @@ class TestReconcileBackgroundFiles:
         def close(self):
             pass
 
-    def test_registers_main_and_variants(self, tmp_path, monkeypatch):
+    def test_registers_main_name_only(self, tmp_path, monkeypatch):
+        """磁盘上每张背景只有主图一个文件，故只对齐主文件名。"""
         import config
         monkeypatch.setattr(config, 'UPLOAD_BACKGROUNDS_DIR', str(tmp_path))
         for fname in (
-            'bg_7_ab12cd99.webp',
-            'bg_7_ab12cd99_768.webp',
-            'bg_7_ab12cd99_1280.webp',
-            'bg_7_other99.webp',        # 库里查不到的指纹，保持原样
+            'bg_7_ab12cd99.webp',           # 主图，指纹命中 → 改名
+            'bg_7_ab12cd99_768.webp',       # 历史遗留变体，已不再被使用 → 不动
+            'bg_7_other99.webp',            # 库里查不到的指纹 → 不动
         ):
             (tmp_path / fname).write_bytes(b'x')
 
@@ -175,11 +175,10 @@ class TestReconcileBackgroundFiles:
              'file_path': str(tmp_path / 'bg_99_ab12cd99.webp')},
         ]))
 
-        assert mig._reconcile_background_files() == 3
+        assert mig._reconcile_background_files() == 1
         names = set(os.listdir(tmp_path))
         assert 'bg_99_ab12cd99.webp' in names
-        assert 'bg_99_ab12cd99_768.webp' in names
-        assert 'bg_99_ab12cd99_1280.webp' in names
+        assert 'bg_7_ab12cd99_768.webp' in names
         assert 'bg_7_other99.webp' in names
 
 

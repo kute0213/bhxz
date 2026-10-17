@@ -4,6 +4,15 @@
 
 ### 变更
 
+* **背景图片改为「磁盘单主图 + 内存缩图 + 客户端裁切」**（`services/background_service/__init__.py`、`routes/backgrounds/pages/__init__.py`、`static/templates/base.html`、`core/db/snowflake_migration.py`、`scripts/tests/test_background_service.py`、`scripts/tests/test_file_migration.py`）：
+  * **问题**：原实现上传时预生成 768 / 1280 / 1920 三档响应式变体，并对历史背景「缺失档位按需生成并落盘缓存」——每次请求一个新档位/比例就在磁盘上多留一张文件，`uploads/backgrounds/` 越用越臃肿。
+  * **磁盘单文件**：上传时只生成**一个主图文件**（保持自然宽高比，按长边缩放到 1920 以内）；移除 `_ensure_variant` / `_variant_path` / `_smart_crop` / `_crop_to_ratio` / `_save_background_variants` 等按尺寸生成变体的逻辑，磁盘上每张背景永远只有一张 `.webp`。
+  * **内存按需缩放**：新增 `read_background_data(bg, size=)`——从磁盘取主图，`size` 非空时**仅在内存**中按长边缩放（不放大、不裁剪），结果进内存缓存（上限 16 项、随主图路径+档位失效），**不落盘**；`background_etag(bg, size=)` 基于主图路径 + 修改时间 + 请求档位生成校验值。
+  * **裁切下移到客户端**：`ratio` 参数仅作为请求约定保留在 URL 中，服务端不再据此中心裁剪；最终裁切与缩放由浏览器按 CSS `background-size: cover` 完成。
+  * **无 ID 取图入口**：新增路由 `/backgrounds/serve`（`serve_active_background`），固定返回当前启用的背景，URL 形如 `/backgrounds/serve?size=1280&ratio=1.16`，**不再需要图片 ID**；响应带 ETag 并强制重新校验（`no-cache, must-revalidate`），管理员切换背景后浏览器立即拿到新图；按 ID 的 `/backgrounds/serve/<id>` 保留给后台缩略图 / 审核预览 / 用户查看自己上传，走 1 天长缓存。
+  * **历史兼容**：删除背景时顺带清理历史遗留的 `_<size>.webp` 变体文件；迁移与启动对账逻辑同步适配「单文件」模型（移除变体名推导，仅对齐主图文件名，仍会重命名目录内的历史变体文件）。
+  * 新增测试 `scripts/tests/test_background_service.py`：覆盖「上传后目录内仅 1 个文件且长边 ≤ 1920」「按 size 缩放仅在内存进行、磁盘文件数不变」「ETag 随档位与主图修改时间变化」。
+
 * **修复「数据库改了 ID、磁盘文件没改」——迁移同步改磁盘文件名与文件内容，并新增启动对账兜底**（`core/db/snowflake_migration.py`、`core/system/startup_checks.py`、`scripts/tests/test_file_migration.py`）：
   * **播放列表内容同步（本轮新修复的 404）**：HLS 播放列表 `music/<id>/index.m3u8` 里的分片绝对路径（`/music/<id>/<分片>.ts`）在上传时按当时的 ID 写死。此前迁移只改了主键与目录名，**没改播放列表内容**，播放器请求分片时仍命中旧 ID（库里已无此 ID）而 404。现迁移时随目录重命名一并改写为当前 ID。
   * **背景图片全档位覆盖**：迁移按精确映射重命名 `bg_<旧ID>_<hash>.webp` 主图与各档变体；对账侧从库里的 `filename` 推导出主图与 `_768` / `_1280` / `_1920` 变体名，确保**各档变体**也一并改名（此前对账只覆盖主图）。

@@ -10,7 +10,7 @@
 * **顺序不变**：按旧 ID 升序重分配，新 ID 单调递增，ORDER BY id 的语义不变；
 * **关联关系不变**：父子表外键（如评论 → 建筑、收藏 → 音频）随父表 ID 同步重映射；
 * **磁盘文件名同步**：文件名 / 目录名内嵌旧 ID 的记录（音频目录 `music/<id>/`、
-  背景图片 `bg_<id>_<hash>.webp` 及其各档响应式变体）在迁移后一并重命名，
+  背景图片 `bg_<id>_<hash>.webp`）在迁移后一并重命名，
   并同步改写库里的 `file_path` / `filename`，避免「库换了 ID、盘上还是旧名」导致 404；
 * **播放列表内容同步**：HLS 播放列表 `music/<id>/index.m3u8` 内的分片绝对路径
   （`/music/<id>/<分片>.ts`）内嵌上传当时的 ID，目录改名后内容必须一并改写，
@@ -37,10 +37,6 @@ from core.system.logger import log
 
 # 播放列表内嵌的音频 ID 绝对路径前缀：/music/<数字>/（上传时按当时的 ID 写死）
 _PLAYLIST_ID_RE = re.compile(r'/music/\d+/')
-
-# 背景图片响应式变体档位（与 services/background_service.RESPONSIVE_SIZES 一致）：
-# 库里只记主文件名 `bg_<id>_<hash>.webp`，各档变体由其推导为 `bg_<id>_<hash>_<size>.webp`
-_BG_VARIANT_SIZES = (768, 1280, 1920)
 
 # 需要迁移「自身主键」的非用户表（按父子依赖顺序排列，父表在前）
 _OWN_ID_TABLES = (
@@ -170,11 +166,11 @@ def _parse_background_id(filename):
 
 
 def _rename_background_files(mapping):
-    """把磁盘上的背景图片文件名从旧 ID 重命名为雪花 ID（含主图与全部响应式变体）。
+    """把磁盘上的背景图片文件名从旧 ID 重命名为雪花 ID。
 
     仅改文件名中内嵌的 ID，`_<hash>` / `_<size>` 等其余部分保持不变；
-    目录内所有以 `bg_<旧ID>...` 命名的文件会被一次性改写，因此主图与各档变体
-    始终与库里的 `filename` / `file_path` 保持一致。
+    目录内所有以 `bg_<旧ID>...` 命名的文件（主图与历史遗留的尺寸变体）
+    会被一次性改写，因此与库里的 `filename` / `file_path` 保持一致。
     """
     if not mapping:
         return
@@ -343,7 +339,7 @@ def _bg_tail(filename):
 
 
 def _apply_background_renames(targets):
-    """按 `tail → 目标文件名` 对照表把磁盘文件重命名为目标名（主图与各档变体一并覆盖）。
+    """按 `tail → 目标文件名` 对照表把磁盘文件重命名为目标名。
 
     仅改「tail 命中且名字不符」的文件；目标名已存在时不动源文件（避免误删），
     无关文件原样保留。返回实际改名数量。
@@ -383,20 +379,16 @@ def _reconcile_background_files():
     ambiguous = set()
     for row in rows:
         name = (row['filename'] or '').strip() or os.path.basename(row['file_path'] or '')
-        if not _bg_tail(name):
+        # 磁盘上每张背景只有主图一个文件，对齐主文件名即可
+        tail = _bg_tail(name)
+        if not tail:
             continue
-        # 主图与全部响应式变体都要登记：库里只存主文件名，变体名由其推导
-        stem = name[:-len('.webp')] if name.endswith('.webp') else name
-        for cand in [name] + [f'{stem}_{size}.webp' for size in _BG_VARIANT_SIZES]:
-            tail = _bg_tail(cand)
-            if not tail:
-                continue
-            existing = targets.get(tail)
-            if existing is not None and existing != cand:
-                # 同一指纹对应两个不同目标名（理论上不会发生）：放弃该指纹，避免误改
-                ambiguous.add(tail)
-                continue
-            targets[tail] = cand
+        existing = targets.get(tail)
+        if existing is not None and existing != name:
+            # 同一指纹对应两个不同目标名（理论上不会发生）：放弃该指纹，避免误改
+            ambiguous.add(tail)
+            continue
+        targets[tail] = name
     for tail in ambiguous:
         targets.pop(tail, None)
 
@@ -501,7 +493,7 @@ def reconcile_media_files():
     """对账磁盘文件与数据库 ID（幂等，每次启动自检调用）。返回修复项数量。
 
     修复「库里已改成新 ID、盘上还是旧 ID」的不一致：
-      * 背景图片：以文件名里稳定的 `<hash>[_<档位>]` 后缀为指纹改名；
+      * 背景图片：以文件名里稳定的 `<hash>` 后缀为指纹改名（磁盘上每张背景只有主图一个文件）；
       * 音频目录：按迁移时「新 ID 随旧 ID 升序分配」的顺序关系配对改名；
       * 播放列表：按库里的 ID 逐个改写 m3u8 内嵌的分片绝对路径。
     """
