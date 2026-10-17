@@ -100,9 +100,9 @@
     </div>
 
     <!-- 全站背景图片：解析到背景元素后立即预加载（不等动画与其他脚本）。
-         请求不带 ID 的 /backgrounds/serve?size=&ratio=：服务端返回「当前启用」的背景，
-         按 size 在内存中缩放（不落盘），ratio 仅作为参数保留——
-         裁切与最终缩放由浏览器按 background-size 完成；无 JS 时直接取当前背景主图 -->
+         请求不带 ID 的 /backgrounds/serve?ratio=：服务端按屏幕宽高比从已启用的
+         背景里挑选最接近的一张并原样返回（不缩放、不裁剪），
+         裁剪与铺满由浏览器按 background-size 完成；无 JS 时直接取任意启用背景主图 -->
     {% if active_backgrounds %}
     <div class="site-background" data-background-url="{{ url_for('backgrounds.serve_active_background') }}" style="background-size: {{ background_image_size }};"></div>
     <div class="site-background-overlay"></div>
@@ -114,41 +114,22 @@
         var baseUrl = bg.getAttribute('data-background-url');
         if (!baseUrl) return;
 
-        var SIZES = [768, 1280, 1920];
-
-        // 按屏幕长边（CSS 像素）取「不小于它的最小档位」。
-        // 注意：这里刻意不乘 devicePixelRatio——全屏背景由半透明遮罩覆盖，
-        // 按物理像素取图会让绝大多数设备（手机/平板/笔记本）都算成 1920，
-        // 768 / 1280 两档永远不会被用到，等于没有按屏幕取图。
-        function bestSize() {
-            var target = Math.max(
-                window.innerWidth || document.documentElement.clientWidth || 1280,
-                window.innerHeight || document.documentElement.clientHeight || 720
-            );
-            for (var i = 0; i < SIZES.length; i++) {
-                if (SIZES[i] >= target) return SIZES[i];
-            }
-            return SIZES[SIZES.length - 1];
-        }
-
-        // 屏幕宽高比，保留 2 位小数。服务端不再据此裁切（裁切由浏览器按
-        // background-size 完成），此参数仅保留在 URL 中作为请求约定
-        function bestRatio() {
+        // 屏幕宽高比（宽/高），保留 2 位小数。服务端据此挑选宽高比最接近的
+        // 背景图片原样返回，裁剪与铺满由浏览器按 background-size 完成。
+        function viewportRatio() {
             var w = window.innerWidth, h = window.innerHeight;
             return (w && h) ? Math.round((w / h) * 100) / 100 : 1.78;
         }
 
-        var loaded = null;  // 已加载的「档位@比例」，避免同参数重复请求
+        var loaded = null;  // 已加载的比例，避免同参数重复请求
 
         function applyBackground() {
-            var size = bestSize();
-            var ratio = bestRatio();
-            var key = size + '@' + ratio;
-            if (key === loaded) return;
-            loaded = key;
+            var ratio = viewportRatio();
+            if (ratio === loaded) return;
+            loaded = ratio;
 
             var sep = baseUrl.indexOf('?') === -1 ? '?' : '&';
-            var url = baseUrl + sep + 'size=' + size + '&ratio=' + ratio;
+            var url = baseUrl + sep + 'ratio=' + ratio;
 
             var img = new Image();
             img.onload = function () {
@@ -165,7 +146,7 @@
 
         applyBackground();
 
-        // 窗口尺寸变化（缩放窗口、手机旋屏）后自动改取当前屏幕最合适的档位
+        // 窗口尺寸变化（缩放窗口、手机旋屏）后自动改取最合适的比例
         var resizeTimer = null;
         function onViewportChange() {
             clearTimeout(resizeTimer);

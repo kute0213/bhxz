@@ -4,6 +4,14 @@
 
 ### 变更
 
+* **背景图片改为「按屏幕比例挑选 + 客户端裁剪」，服务端不再处理像素**（`services/background_service/__init__.py`、`routes/backgrounds/pages/__init__.py`、`static/templates/base.html`、`static/templates/admin/backgrounds.html`、`static/templates/backgrounds/index.html`、`scripts/tests/test_background_service.py`）：
+  * **问题**：全站背景始终用同一张图片；请求参数只有 `size`，且直接请求 `/backgrounds/serve?size=10` 也能拿到图片——说明服务端在做缩放 / 裁剪这类像素处理，且不会按屏幕比例换图。
+  * **请求参数改为 `ratio`**：客户端上报屏幕宽高比（宽/高，保留 2 位小数），形如 `/backgrounds/serve?ratio=1.78`；窗口缩放 / 手机旋屏后按新比例重新取图。
+  * **服务端只查询、不处理像素**：新增 `get_background_for_ratio(ratio)`——从已启用的背景里挑选宽高比最接近 `ratio` 的一张主图，**原样返回字节，不缩放、不裁剪**（裁剪与铺满由浏览器按 `background-size` 完成）；`ratio` 缺省时退回最新启用的一张。彻底删除 `_resize_to_size`、`_size_cache` / `_size_cache_lock` / `_SIZE_CACHE_MAX`、`read_background_data(size=)`、`background_etag(size=)` 及路由里的 `_resolve_size`；`read_background_data` / `background_etag` 现在只接受 `bg` 一个参数。
+  * **可同时启用多张背景**：`approve_background` 与 `toggle_active` 不再「取消其他背景的启用状态」，多张背景（各带自己的宽高比）可并存，构成「图片池」，按访问者屏幕比例从中挑选最合适的一张；因此横屏（16:9 / 21:9）与竖屏（9:16 / 3:4）会拿到各自最匹配的图片，不再始终同一张。
+  * **前端 / 后台同步**：`static/templates/base.html` 去掉 `SIZES` / `bestSize()` 档位计算，改为按屏幕宽高比请求；`static/templates/admin/backgrounds.html` 与 `static/templates/backgrounds/index.html` 去掉 `?size=768`（缩略图由浏览器按 CSS 尺寸缩放），`/backgrounds` 列表卡片徽章由「当前显示」改为「已启用」。
+  * 测试更新：`TestReadBackgroundData` 断言「原样返回主图、磁盘文件数不变」（不再缩放），新增 `TestPickForRatio` 覆盖「按比例挑最近」「ratio 为空取最新」「非法 ratio 回退默认 16:9」「空池返回 None」，`TestEtag` 移除按档位区分的用例；`python -m pytest scripts/tests -q` 全量通过。
+
 * **背景图片文件名改为「雪花 ID + 比例」**（`services/background_service/__init__.py`、`scripts/tests/test_background_service.py`、`README.md`）：
   * 上传背景主图文件名由原来的 `bg_<雪花ID>_<hash>.webp` 改为 `<雪花ID>_<比例>.webp`（如 `123456789_1.7778.webp`）：直接以背景记录的雪花 ID 作唯一标识，比例取图片自然宽高比（宽 / 高，保留 4 位小数并去掉尾随零），文件名本身即可读出该背景的宽高比；不再拼接随机 hash，也不再使用原始文件名。
   * 新增 `_format_ratio()` 负责比例格式化；`_background_filename(bg_id, ratio)` 与 `_save_background_master(bg_id, raw)` 相应简化（移除不再需要的原始文件名参数）。

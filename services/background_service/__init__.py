@@ -4,8 +4,9 @@
 背景图片存储在 uploads/backgrounds/ 目录，自动转换为 WebP 格式。
 
 磁盘上**每张背景只保留一个文件**（长边 ≤ 1920 的主图），不再生成 / 按需缓存
-任何尺寸变体；取图时若客户端带上 size，服务端仅在**内存**里按长边缩放一次
-（结果缓存、不落盘），裁切与最终缩放交给浏览器（CSS background-size: cover）。
+任何尺寸变体。取图时服务端**只做查询与返回**：按客户端上报的屏幕宽高比挑选一张
+最接近的已启用背景，原样返回主图字节（不缩放、不裁剪）；裁剪与铺满由浏览器按
+CSS `background-size` 完成。
 """
 
 import os
@@ -38,7 +39,7 @@ STATUS_LABELS = {
 # 支持的源图片格式
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'tiff'}
 
-# 前端请求的尺寸档位（serve 时用于就近取图；磁盘上不再预生成对应文件）
+# 历史遗留的尺寸变体档位（仅用于删除背景时清理旧文件，不再生成）
 RESPONSIVE_SIZES = [768, 1280, 1920]
 # 主图档位：磁盘上唯一文件的缩放上限（全站背景默认使用）
 PRIMARY_SIZE = 1920
@@ -48,11 +49,6 @@ RATIO_DEFAULT = 16 / 9
 # 自然宽高比的合理范围（宽/高），超出收窄，避免记录异常值
 RATIO_MIN = 0.4
 RATIO_MAX = 3.6
-
-# 按请求尺寸缩放的结果缓存（key: (文件路径, 尺寸)，值: WebP 字节）
-_size_cache = {}
-_size_cache_lock = threading.Lock()
-_SIZE_CACHE_MAX = 16
 
 # 上传任务进度
 _upload_tasks = {}
@@ -338,13 +334,45 @@ def get_backgrounds_page(status=None, page=1, page_size=None):
 
 
 def get_active_backgrounds():
-    """获取所有已通过且标记为活跃的背景图片（按上传时间排序，最新在前）。"""
+    """获取所有已通过且标记为活跃（启用）的背景图片。
+
+    这些图片共同构成「可用于全站背景」的图片池：多张可同时处于启用状态，
+    由 `get_background_for_ratio()` 按屏幕宽高比从中挑选最合适的一张。
+    """
     with transaction() as conn:
         rows = conn.execute(
             "SELECT * FROM backgrounds WHERE status = ? AND is_active = 1 ORDER BY id DESC",
             (STATUS_APPROVED,),
         ).fetchall()
         return [dict(r) for r in rows]
+
+
+def _bg_ratio(bg):
+    """读取背景记录的宽高比（宽/高）；缺失或非法时回退默认 16:9。"""
+    try:
+        ratio = float(bg.get('ratio') or 0)
+    except (TypeError, ValueError):
+        ratio = 0.0
+    if ratio <= 0:
+        return RATIO_DEFAULT
+    return ratio
+
+
+def get_background_for_ratio(ratio=None):
+    """从已启用的背景图片中挑选宽高比最接近 `ratio`（宽/高）的一张。
+
+    * `ratio` 为空或非法 —— 返回最新启用的一张（保持旧行为）；
+    * 未启用任何背景 —— 返回 None。
+
+    只做查询与挑选，不缩放、不裁剪；裁剪与铺满由浏览器完成。
+    """
+    actives = get_active_backgrounds()
+    if not actives:
+        return None
+    if ratio is None:
+        return actives[0]
+    target = max(RATIO_MIN, min(RATIO_MAX, float(ratio)))
+    return min(actives, key=lambda bg: abs(_bg_ratio(bg) - target))
 
 
 def get_background(bg_id):
@@ -362,81 +390,30 @@ def resolve_background_path(bg):
     return main_path
 
 
-def _resize_to_size(data, size):
-    """把 WebP 字节按长边缩放到 ≤ size（不放大），返回新的 WebP 字节。
-
-    主图本身不大于目标档位或处理失败时，直接返回原数据，避免无意义重编码。
-    """
-    try:
-        image = Image.open(BytesIO(data))
-        image = ImageOps.exif_transpose(image)
-        image.load()
-    except Exception:
-        return data
-
-    w, h = image.size
-    long_edge = max(w, h)
-    if not long_edge or long_edge <= size:
-        return data
-
-    scale = size / long_edge
-    image = image.resize((max(1, int(w * scale)), max(1, int(h * scale))), Image.Resampling.LANCZOS)
-    if image.mode not in ('RGB', 'RGBA'):
-        image = image.convert('RGBA' if 'transparency' in image.info else 'RGB')
-    output = BytesIO()
-    image.save(output, format='WEBP', quality=85, method=6)
-    return output.getvalue() or data
-
-
-def read_background_data(bg, size=None):
-    """读取背景图片字节（磁盘上取唯一主图）。
-
-    size 非空时在**内存**里按长边缩放到该档位并缓存（不落盘），让移动端少下载
-    像素；裁切与最终缩放由浏览器完成（CSS background-size: cover），
-    服务端不再按屏幕比例裁剪。
-    """
+def read_background_data(bg):
+    """读取背景图片字节（磁盘上取唯一主图，原样返回，不做任何处理）。"""
     path = resolve_background_path(bg)
     if not path:
         return None
     try:
         with open(path, 'rb') as file:
-            data = file.read()
+            return file.read()
     except OSError:
         return None
 
-    if size is None:
-        return data
 
-    key = (path, size)
-    with _size_cache_lock:
-        cached = _size_cache.get(key)
-    if cached is not None:
-        return cached
+def background_etag(bg):
+    """背景图片的缓存校验值：主图路径 + 修改时间。
 
-    resized = _resize_to_size(data, size)
-    if resized is data:
-        # 主图本身不大于目标档位：与直接取主图结果一致，无需缓存
-        return data
-
-    with _size_cache_lock:
-        if len(_size_cache) >= _SIZE_CACHE_MAX:
-            _size_cache.clear()
-        _size_cache[key] = resized
-    return resized
-
-
-def background_etag(bg, size=None):
-    """背景图片的缓存校验值：主图路径 + 修改时间 + 请求档位。
-
-    当前启用背景的 URL 固定（不带 ID），管理员切换背景后 URL 不变，
-    因此需要 ETag 让浏览器重新校验，避免长期缓存到旧图。
+    全站背景的 URL 固定（不带 ID，仅带 ratio 参数），管理员切换 / 启用背景后
+    内容可能变化，因此需要 ETag 让浏览器重新校验，避免长期缓存到旧图。
     """
     path = (bg or {}).get('file_path') or ''
     try:
         stamp = os.path.getmtime(path)
     except OSError:
         stamp = 0
-    return hashlib.md5(f'{path}:{stamp}:{size}'.encode()).hexdigest()
+    return hashlib.md5(f'{path}:{stamp}'.encode()).hexdigest()
 
 
 def _send_review_email(bg, approved: bool, admin_username: str):
@@ -461,7 +438,11 @@ def _send_review_email(bg, approved: bool, admin_username: str):
 
 
 def approve_background(bg_id, admin_id, admin_username, ip_address):
-    """通过背景图片审核。"""
+    """通过背景图片审核，并将其加入「可用于全站背景」的图片池。
+
+    不再取消其他背景的启用状态：多张背景可同时启用，由
+    `get_background_for_ratio()` 按访问者屏幕宽高比挑选最合适的一张。
+    """
     with transaction() as conn:
         bg = conn.execute("SELECT * FROM backgrounds WHERE id = ?", (bg_id,)).fetchone()
         if not bg:
@@ -472,11 +453,6 @@ def approve_background(bg_id, admin_id, admin_username, ip_address):
         conn.execute(
             "UPDATE backgrounds SET status = ?, is_active = 1 WHERE id = ?",
             (STATUS_APPROVED, bg_id),
-        )
-        # 审核通过即直接启用为当前背景，取消其他背景的启用状态
-        conn.execute(
-            "UPDATE backgrounds SET is_active = 0 WHERE id != ? AND is_active = 1",
-            (bg_id,),
         )
         conn.commit()
 
@@ -535,7 +511,11 @@ def reject_background(bg_id, admin_id, admin_username, ip_address):
 
 
 def toggle_active(bg_id, admin_id, admin_username, ip_address):
-    """切换背景图片的活跃状态（设为当前背景或取消）。"""
+    """切换单张背景图片的启用状态（加入 / 移出「可用于全站背景」的图片池）。
+
+    各张背景独立开关，不再互相影响：可同时启用多张，由
+    `get_background_for_ratio()` 按访问者屏幕宽高比挑选最合适的一张。
+    """
     with transaction() as conn:
         bg = conn.execute("SELECT * FROM backgrounds WHERE id = ?", (bg_id,)).fetchone()
         if not bg:
@@ -544,9 +524,6 @@ def toggle_active(bg_id, admin_id, admin_username, ip_address):
             return False, '只能对已通过的背景图片操作'
 
         new_active = 0 if bg['is_active'] else 1
-        if new_active:
-            # 取消所有其他背景的活跃状态
-            conn.execute("UPDATE backgrounds SET is_active = 0 WHERE is_active = 1")
         conn.execute(
             "UPDATE backgrounds SET is_active = ? WHERE id = ?",
             (new_active, bg_id),

@@ -106,7 +106,7 @@ python scripts/build/package.py
 │   ├── rcon/           # RCON 连接管理、玩家列表追踪、EasyAuth 指令
 │   ├── updater/        # 自动更新（配置/核心逻辑）
 │   ├── user/           # 用户（认证/资料/管理）
-│   ├── background_service/  #   背景图片业务（WebP 转换 + 内存按需缩放）
+│   ├── background_service/  #   背景图片业务（WebP 转换 + 按屏幕比例挑选）
 │   ├── cleanup_service/     #   被驳回内容自动清理
 │   ├── firewall/            #   高性能防火墙（DuckDB 引擎 + WSGI 门禁 + DDoS 防护）
 │   │   ├── api_guard.py     #     接口频率限制
@@ -332,21 +332,23 @@ python scripts/build/package.py
 
 * 上传图片自动转为 WebP 格式（保持自然宽高比，保存时写入数据库 `ratio` 列；LANCZOS 缩放）；**磁盘上每张背景只保留一个主图文件**（长边 ≤ 1920），不再预生成 / 按需缓存任何尺寸变体——彻底消除「请求一次别的尺寸就多一张磁盘文件」的堆积
 
-* **磁盘单文件 + 内存按需缩放**：取图时若客户端带上 `size`，服务端仅在**内存**中按长边缩放一次（结果缓存、不落盘，不放大、不裁剪），保证任意设备都能拿到匹配的尺寸，同时磁盘永远只有一张主图
+* **服务端只做查询，不做像素处理**：取图时服务端**不缩放、不裁剪**，一律原样返回主图字节；裁剪与铺满由浏览器按 `background-size` 完成，磁盘永远只有一张主图
 
-* **裁切在客户端进行**：页面解析到背景元素后立即预加载（不等动画与其他脚本），自动获取屏幕宽高比与物理像素长边，携带 `size` + `ratio` 请求图片；`ratio` 仅作为请求约定保留在 URL 中，**服务端不再据此裁剪**，最终裁切与缩放由浏览器按 `background-size: cover` 完成，横屏/竖屏均获得与屏幕完全匹配且像素充足的图片
+* **按屏幕宽高比挑选图片**：页面解析到背景元素后立即预加载（不等动画与其他脚本），自动获取屏幕宽高比并携带 `ratio`（宽/高）请求图片；服务端只查询已启用的背景、返回宽高比最接近的一张原样主图，最终裁切与铺满由浏览器按 `background-size: cover` 完成——横屏（如 16:9 / 21:9）与竖屏（如 9:16 / 3:4）会拿到各自最匹配的图片，不再始终同一张
 
-* **无 ID 取图入口**：全站背景统一从 `/backgrounds/serve?size=&ratio=` 获取（不带 ID），固定返回当前启用的背景；响应带 ETag（随主图修改时间与请求档位变化）并强制重新校验（`no-cache, must-revalidate`），管理员切换背景后浏览器立即拿到新图，不会长期缓存旧图；按 ID 的 `/backgrounds/serve/<id>` 仅用于后台缩略图、审核预览与用户查看自己上传的图片
+* **可同时启用多张背景**：审核通过即把该图加入「可用于全站背景」的图片池，且**不再取消其他背景的启用状态**；多张背景可并存（各带自己的宽高比），由服务端按访问者屏幕比例从池中挑选最合适的一张。启用 / 停用为单张独立开关，互不影响
+
+* **无 ID 取图入口**：全站背景统一从 `/backgrounds/serve?ratio=` 获取（不带 ID），按屏幕比例返回池中最匹配的启用背景；响应带 ETag（随主图修改时间变化）并强制重新校验（`no-cache, must-revalidate`），启用背景变化后浏览器立即拿到新图，不会长期缓存旧图；按 ID 的 `/backgrounds/serve/<id>` 仅用于后台缩略图、审核预览与用户查看自己上传的图片
 
 * **支持一次上传多个图片文件**：拖放/选择批量上传，逐文件校验格式与大小，每个文件独立上传任务并聚合展示整体进度
 
 * 上传文件统一命名为 `<雪花ID>_<比例>.webp`（如 `123456789_1.7778.webp`，比例为宽/高、保留 4 位小数并去掉尾随零），不再保留原始文件名，避免命名冲突
 
-* 审核通过后自动启用为「当前显示」背景（同时取消其他背景激活状态），无需手动再开启
+* 审核通过后自动启用该背景（加入图片池），无需手动再开启
 
 * 支持审核 / 驳回流程与审核结果邮件通知，管理员与上传者可预览未通过审核的图片
 
-* **列表整体走 API 获取**：`/backgrounds` 页面首屏列表由前端调用 `GET /api/backgrounds/list` 获取（返回「当前启用」+「我的上传」），「我的上传」删除改为无刷新 AJAX
+* **列表整体走 API 获取**：`/backgrounds` 页面首屏列表由前端调用 `GET /api/backgrounds/list` 获取（返回「已启用」+「我的上传」），「我的上传」删除改为无刷新 AJAX
 
 * **被驳回内容 24 小时自动删除**：被驳回超过 24 小时的服务器指南、背景图片等自动清理（删除数据库记录与关联本地文件；背景删除时顺带清理历史遗留的尺寸变体文件）
 
@@ -547,9 +549,9 @@ python scripts/build/package.py
 
 | 方法  | 路径                        | 说明                                                       |
 | --- | ------------------------- | -------------------------------------------------------- |
-| GET | `/api/backgrounds/list`   | 背景图片列表（返回 `active` 当前启用、`my` 登录用户上传、`logged_in`），供 `/backgrounds` 页面首屏渲染 |
-| GET | `/backgrounds/serve`      | 当前启用背景图片访问（**不带 ID**；`size` 仅用于内存缩放，`ratio` 仅作请求约定，裁切由浏览器完成）  |
-| GET | `/backgrounds/serve/<id>` | 按 ID 取图（后台缩略图 / 审核预览 / 查看自己上传；`size` 内存缩放）              |
+| GET | `/api/backgrounds/list`   | 背景图片列表（返回 `active` 已启用、`my` 登录用户上传、`logged_in`），供 `/backgrounds` 页面首屏渲染 |
+| GET | `/backgrounds/serve`      | 全站背景图片访问（**不带 ID**；`ratio`=屏幕宽/高，服务端只按比例挑选并原样返回，不缩放不裁剪）  |
+| GET | `/backgrounds/serve/<id>` | 按 ID 取图（后台缩略图 / 审核预览 / 查看自己上传；原样返回主图）              |
 | POST | `/backgrounds/<id>/delete` | 删除背景图片（上传者本人或管理员，AJAX）                                   |
 
 ### 页面内搜索 API
@@ -759,7 +761,7 @@ workspace/
 │   ├── rcon/                 #   RCON 连接管理、玩家列表追踪、EasyAuth 指令
 │   ├── updater/              #   自动更新（配置/核心逻辑）
 │   ├── user/                 #   用户（认证/资料/管理）
-│   ├── background_service/   #   背景图片业务（WebP 转换 + 内存按需缩放）
+│   ├── background_service/   #   背景图片业务（WebP 转换 + 按屏幕比例挑选）
 │   ├── cleanup_service/      #   被驳回内容自动清理（统一定时调度）
 │   ├── firewall/             #   高性能防火墙（DuckDB 引擎 + WSGI 门禁 + DDoS 防护）
 │   │   ├── __init__.py       #     公共 API re-export（ban_ip / firewall 单例等）
@@ -872,7 +874,7 @@ workspace/
 | `broadcast_logs`          | 广播邮件日志   | —                                                                                                               |
 | `music`                   | 大喇叭音频    | `status` 状态机（0=私有/1=待审核/2=已公开，驳回后自动转为私有；旧库 `gain` 列仅保留不再使用），`tags` 逗号分隔标签列，删除记录时同步删除 `uploads/music/<ID>/` 文件目录 |
 | `music_favorites`         | 大喇叭音频收藏  | 联合主键 `(user_id, music_id)`（同一用户对同一音频仅一条收藏）                                                                      |
-| `backgrounds`             | 背景图片     | `status` 审核状态，WebP 格式，磁盘单主图（取图时内存按需缩放），`rejected_at` 记录驳回时间（超 24h 自动删除）                                            |
+| `backgrounds`             | 背景图片     | `status` 审核状态，WebP 格式，磁盘单主图（取图按屏幕比例挑选、原样返回，不缩放不裁剪），多张可同时启用，`rejected_at` 记录驳回时间（超 24h 自动删除）                                            |
 | `game_account_registrations` | 游戏账号注册申请 | 申请注册 MC 账号，管理员审批                                                                                               |
 | `game_account_bans`       | 游戏账号封禁   | 封禁 MC 账号申请资格                                                                                                    |
 | `game_server_ban_applications` | 游戏服务器封禁申请 | 用户申请 → 管理员审批 → RCON ban，到期自动 pardon                                                                             |
@@ -947,6 +949,12 @@ workspace/
 详见 [docs/CHANGELOG.md](docs/CHANGELOG.md)。
 
 ## 最近更新
+
+* **背景图片改为「按屏幕比例挑选 + 客户端裁剪」，服务端不再处理像素**（`services/background_service/__init__.py`、`routes/backgrounds/pages/__init__.py`、`static/templates/base.html`、`static/templates/admin/backgrounds.html`、`static/templates/backgrounds/index.html`）：
+  * **问题**：全站背景始终用同一张图片，且请求参数只有 `size`、直接请求 `/backgrounds/serve?size=10` 也能返回图片——说明服务端在做缩放 / 裁剪这类像素处理，且不会按屏幕比例换图。
+  * **修复**：请求参数改为 `ratio`（屏幕宽/高）。服务端**只做查询与返回**：从已启用的背景里挑选宽高比最接近 `ratio` 的一张主图，**原样返回，不缩放、不裁剪**；裁剪与铺满由浏览器按 `background-size` 完成。彻底删除服务端的按 `size` 内存缩放逻辑（`_resize_to_size` / `_size_cache` / `read_background_data(size=)` / `background_etag(size=)` 一并移除），按 ID 取图同样原样返回。
+  * **可同时启用多张背景**：审核通过 / 启用不再取消其他背景的启用状态，多张背景（各带自己的宽高比）可并存，构成「图片池」，由 `get_background_for_ratio()` 按访问者屏幕比例挑选最合适的一张；横屏（16:9 / 21:9）与竖屏（9:16 / 3:4）因此会拿到各自最匹配的图片，不再始终同一张。
+  * 前端去掉 `size` 档位计算，改用屏幕宽高比（`ratio`，保留 2 位小数）请求；窗口缩放 / 手机旋屏后按新比例重新取图。后台缩略图与 `/backgrounds` 列表同步去掉 `?size=` 参数（缩略图由浏览器按 CSS 尺寸缩放）。新增 / 更新 `scripts/tests/test_background_service.py` 覆盖「原样返回」与「按比例挑选」。
 
 * **业务日志全面模块化——除 core 核心与启动自检外，全部改为模块单独日志**（`core/system/logger.py` 及 23 个业务 / 路由文件）：
   * 按开发准则约定，业务日志一律走模块单独日志（`register_module_log('<名称>')` + `log_module('<名称>', ...)`），**不再调用全局 `log()`**；只有 core 基础设施（应用初始化、数据库 schema / 连接、WSGI 服务器、任务注册表）与启动自检（`core/system/startup_checks.py`）保留全局日志。

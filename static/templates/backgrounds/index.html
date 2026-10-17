@@ -222,22 +222,15 @@
         loggedIn: {{ 'true' if user else 'false' }}
     };
 
-    // 按设备屏幕宽度（含 DPR）选择最合适的背景图片档位：768 / 1280 / 1920。
-    function bestSize() {
-        var width = Math.ceil((window.innerWidth || document.documentElement.clientWidth) * (window.devicePixelRatio || 1));
-        if (width >= 1920) return 1920;
-        if (width >= 1280) return 1280;
-        return 768;
-    }
-
     function escapeHtml(text) {
         var d = document.createElement('div');
         d.textContent = text == null ? '' : String(text);
         return d.innerHTML;
     }
 
+    // 原样取主图（服务端不缩放 / 不裁剪），缩略图由浏览器按 CSS 尺寸缩放。
     function imgUrl(id) {
-        return CFG.serveBase.replace(/\/0$/, '/' + id) + '?size=' + bestSize();
+        return CFG.serveBase.replace(/\/0$/, '/' + id);
     }
 
     function refreshIcons() {
@@ -254,7 +247,7 @@
             '<div class="background-info">' +
                 '<div class="flex items-center justify-between gap-2 mb-2">' +
                     '<span class="background-name">' + escapeHtml(bg.filename) + '</span>' +
-                    '<span class="status-badge is-active-badge">当前显示</span>' +
+                    '<span class="status-badge is-active-badge">已启用</span>' +
                 '</div>' +
                 '<div class="flex items-center justify-between">' +
                     '<span class="background-author">by ' + escapeHtml(bg.username) + '</span>' +

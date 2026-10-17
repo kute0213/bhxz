@@ -116,19 +116,20 @@ def delete_background(bg_id):
 
 @backgrounds_bp.route('/backgrounds/serve')
 def serve_active_background():
-    """全站背景图片入口（**不带 ID**）：返回当前启用的背景图片。
+    """全站背景图片入口（**不带 ID**）：按屏幕宽高比返回最合适的启用背景。
 
-    URL 形如 `/backgrounds/serve?size=1280&ratio=1.16`：
-      * `size`  —— 请求的尺寸档位，服务端只在内存里按长边缩放（不落盘）；
-      * `ratio` —— 屏幕宽高比，**服务端不再据此裁剪**，仅作为参数保留；
-                 裁切与最终缩放由浏览器完成（CSS `background-size: cover`）。
+    URL 形如 `/backgrounds/serve?ratio=1.78`：
+      * `ratio` —— 访问者屏幕的宽高比（宽/高）。服务端**只做查询与挑选**：
+                 从已启用的背景中返回宽高比最接近的一张主图字节，
+                 **不缩放、不裁剪**；裁剪与铺满由浏览器按 `background-size` 完成。
+                 `ratio` 缺省时退回最新启用的一张。
 
     未启用任何背景时返回 404（前端回退到渐变色背景）。
     """
-    backgrounds = background_service.get_active_backgrounds()
-    if not backgrounds:
+    bg = background_service.get_background_for_ratio(_resolve_ratio())
+    if not bg:
         abort(404)
-    return _send_background(backgrounds[0], long_cache=False)
+    return _send_background(bg, long_cache=False)
 
 
 @backgrounds_bp.route('/backgrounds/serve/<int:bg_id>')
@@ -136,7 +137,7 @@ def serve_background(bg_id):
     """按 ID 提供背景图片（后台缩略图、审核预览、用户查看自己上传的图片）。
 
     已通过的图片公开可访问；待审核/已驳回图片仅管理员与上传者可预览。
-    支持 `?size=` 档位（768 / 1280 / 1920），服务端在内存中按长边缩放后返回。
+    原样返回主图（不缩放、不裁剪），缩略图由浏览器按 CSS 尺寸缩放。
     """
     bg = background_service.get_background(bg_id)
     if not bg or not bg['file_path']:
@@ -151,33 +152,31 @@ def serve_background(bg_id):
     return _send_background(bg, long_cache=True)
 
 
-def _resolve_size():
-    """解析 ?size= 档位参数，收敛到 [1, PRIMARY_SIZE]。"""
-    size = request.args.get('size', type=int)
-    if size is None:
+def _resolve_ratio():
+    """解析 ?ratio= 宽高比参数，收敛到 [RATIO_MIN, RATIO_MAX]；非法时返回 None。"""
+    ratio = request.args.get('ratio', type=float)
+    if ratio is None or ratio <= 0:
         return None
-    return max(1, min(size, background_service.PRIMARY_SIZE))
+    return max(background_service.RATIO_MIN, min(ratio, background_service.RATIO_MAX))
 
 
 def _send_background(bg, long_cache):
-    """返回背景图片响应。
+    """返回背景图片响应（主图原样返回，不做任何缩放 / 裁切）。
 
-    磁盘上每张背景只有一张主图；`size` 非空时在内存中缩放后返回（结果缓存）。
-    `ratio` 参数被忽略：裁切由浏览器完成。
+    只有「查询 + 返回」：服务端不处理像素，裁切与最终缩放全部由浏览器完成。
 
     long_cache=True（按 ID 取图，URL 稳定且内容不变）→ 浏览器可长期缓存；
-    long_cache=False（当前启用背景，URL 固定但内容会被管理员切换）→ 强制重新校验
+    long_cache=False（全站背景 URL 固定但内容会随启用池变化）→ 强制重新校验
     （ETag），避免切换背景后浏览器仍展示旧图。
     """
-    size = _resolve_size()
     try:
-        data = background_service.read_background_data(bg, size=size)
+        data = background_service.read_background_data(bg)
     except Exception:
         data = None
     if not data:
         abort(404)
 
-    etag = background_service.background_etag(bg, size=size)
+    etag = background_service.background_etag(bg)
     if not long_cache and request.if_none_match.contains(etag):
         response = Response(status=304)
     else:

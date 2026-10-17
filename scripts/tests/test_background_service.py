@@ -1,7 +1,7 @@
-"""背景图片服务测试 —— 校验「每张只存一张主图 + 按需内存缩放」的新行为。
+"""背景图片服务测试 —— 校验「每张只存一张主图 + 按比例挑选、原样返回」的行为。
 
-覆盖：主图落盘后目录内只有 1 个文件（不再生成尺寸变体）、取图时按 size 在内存
-缩放且不落盘、ETag 随档位与文件变化。
+覆盖：主图落盘后目录内只有 1 个文件（不再生成尺寸变体）、取图时原样返回主图
+（服务端不缩放 / 不裁剪）、按屏幕宽高比挑选最接近的启用背景、ETag 随文件变化。
 """
 
 import os
@@ -23,14 +23,6 @@ def _png(width=3000, height=1500):
 def _long_edge(data):
     """读取 WebP 字节的长边像素。"""
     return max(Image.open(BytesIO(data)).size)
-
-
-@pytest.fixture(autouse=True)
-def _clean_size_cache():
-    """每个用例前后清空内存缩放缓存，避免用例间互相影响。"""
-    bg_service._size_cache.clear()
-    yield
-    bg_service._size_cache.clear()
 
 
 @pytest.fixture
@@ -59,27 +51,24 @@ class TestSaveMaster:
 
 
 class TestReadBackgroundData:
-    """取图：按 size 在内存缩放，不落盘。"""
+    """取图：原样返回主图，不做任何处理。"""
 
     @pytest.fixture
     def master(self, bg_dir):
         path, name, _ = bg_service._save_background_master(7, _png())
         return {'file_path': path, 'filename': name}
 
-    def test_size_none_returns_master(self, master):
+    def test_returns_master_bytes(self, master):
         with open(master['file_path'], 'rb') as f:
             assert bg_service.read_background_data(master) == f.read()
 
-    @pytest.mark.parametrize('size', [768, 1280])
-    def test_scales_in_memory_only(self, master, size):
+    def test_no_processing_on_disk(self, master):
         directory = os.path.dirname(master['file_path'])
         before = sorted(os.listdir(directory))
 
-        data = bg_service.read_background_data(master, size=size)
+        bg_service.read_background_data(master)
 
-        assert data is not None
-        assert _long_edge(data) <= size
-        # 关键：缩放只在内存里做，磁盘上仍然只有主图
+        # 取图不缩放、不落盘：磁盘仍是主图一个文件
         assert sorted(os.listdir(directory)) == before
 
     def test_missing_file_returns_none(self):
@@ -88,13 +77,40 @@ class TestReadBackgroundData:
         assert bg_service.read_background_data(missing) is None
 
 
-class TestEtag:
-    """当前启用背景 URL 固定，靠 ETag 让浏览器重新校验、避免缓存旧图。"""
+class TestPickForRatio:
+    """按屏幕宽高比挑选最接近的一张启用背景，只查询、不处理。"""
 
-    def test_differs_by_size(self, bg_dir):
-        path, _, _ = bg_service._save_background_master(7, _png())
-        bg = {'file_path': path}
-        assert bg_service.background_etag(bg, size=768) != bg_service.background_etag(bg, size=1280)
+    @pytest.fixture
+    def actives(self, monkeypatch):
+        pool = [
+            {'id': 1, 'ratio': 2.0},    # 宽屏 2:1
+            {'id': 2, 'ratio': 0.75},   # 竖屏 3:4
+            {'id': 3, 'ratio': 1.78},   # 16:9
+        ]
+        monkeypatch.setattr(bg_service, 'get_active_backgrounds', lambda: pool)
+        return pool
+
+    def test_picks_closest_ratio(self, actives):
+        assert bg_service.get_background_for_ratio(1.9)['id'] == 1
+        assert bg_service.get_background_for_ratio(0.8)['id'] == 2
+        assert bg_service.get_background_for_ratio(1.7)['id'] == 3
+
+    def test_none_ratio_returns_newest(self, actives):
+        assert bg_service.get_background_for_ratio(None)['id'] == 1
+
+    def test_invalid_ratio_falls_back_to_default(self, monkeypatch):
+        # 记录里 ratio 非法（0）时按默认 16:9 计距，1.78 的记录最接近
+        pool = [{'id': 9, 'ratio': 0}, {'id': 10, 'ratio': 2.0}]
+        monkeypatch.setattr(bg_service, 'get_active_backgrounds', lambda: pool)
+        assert bg_service.get_background_for_ratio(1.78)['id'] == 9
+
+    def test_empty_pool_returns_none(self, monkeypatch):
+        monkeypatch.setattr(bg_service, 'get_active_backgrounds', lambda: [])
+        assert bg_service.get_background_for_ratio(1.78) is None
+
+
+class TestEtag:
+    """全站背景 URL 固定，靠 ETag 让浏览器重新校验、避免缓存旧图。"""
 
     def test_differs_by_mtime(self, bg_dir):
         path, _, _ = bg_service._save_background_master(7, _png())
