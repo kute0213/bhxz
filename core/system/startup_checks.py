@@ -141,6 +141,15 @@ def _check_database():
     except Exception as e:
         log('ERROR', 'Startup', f'  ✗ 雪花 ID 迁移失败: {e}')
 
+    # 磁盘文件对账（幂等）：数据库改动是事务性的，但磁盘改名 / 改内容不是——
+    # 迁移中途失败或旧版本漏改都会留下「库里是新 ID、盘上还是旧名」的残留，
+    # 表现为音频播放 / 背景取图 404，这里每次启动都兜底对齐
+    try:
+        from core.db.snowflake_migration import reconcile_media_files
+        reconcile_media_files()
+    except Exception as e:
+        log('ERROR', 'Startup', f'  ✗ 磁盘文件对账失败: {e}')
+
 
 # ---------------------------------------------------------------------------
 # 3. 文件结构完整性检查
