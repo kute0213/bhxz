@@ -13,7 +13,9 @@ from core.helpers import render_page
 from core.db import get_db
 from config import DB_PATH, UPLOAD_DIR, get_config_value, get_backup_dir
 from routes.admin import admin_bp
-from core.system.logger import log
+from core.system.logger import log_module, register_module_log
+
+register_module_log('backup')
 
 
 @admin_bp.route('/admin/db-backup')
@@ -156,7 +158,7 @@ def api_db_backup_download(backup_id):
             mimetype='application/zip',
         )
     except Exception as e:
-        log('ERROR', 'BackupManager', f'下载备份失败: {e}')
+        log_module('backup', 'ERROR', 'BackupManager', f'下载备份失败: {e}')
         return jsonify({'success': False, 'message': f'下载失败: {e}'}), 500
     finally:
         conn.close()
@@ -185,7 +187,7 @@ def api_db_backup_delete(backup_id):
                 if os.path.exists(backup_path):
                     os.remove(backup_path)
             except Exception as e:
-                log('ERROR', 'BackupManager', f'删除备份文件失败 {backup_path}: {e}')
+                log_module('backup', 'ERROR', 'BackupManager', f'删除备份文件失败 {backup_path}: {e}')
 
         # 删除数据库记录
         conn.execute("DELETE FROM db_backups WHERE id = ?", (backup_id,))

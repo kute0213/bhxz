@@ -8,7 +8,9 @@ from core.db import get_db
 from core.shared.validation import DELETED_USER_DISPLAY_NAME
 from config import get_config_value
 from services.mail import email_code_service
-from core.system.logger import log
+from core.system.logger import log_module, register_module_log
+
+register_module_log('user')
 
 
 def _get_user_media_keys(conn, user_id):
@@ -28,7 +30,7 @@ def _clean_user_media(keys, user_id):
             if filepath and os.path.isfile(filepath):
                 os.remove(filepath)
         except Exception as exc:
-            log('ERROR', 'UserMedia', '账号图片清理失败', user_id=user_id,
+            log_module('user', 'ERROR', 'UserMedia', '账号图片清理失败', user_id=user_id,
                 filepath=filepath, error=str(exc))
 
 
@@ -61,12 +63,12 @@ def change_username(user_id, current_username, new_username, current_password, i
 
         conn.execute("UPDATE users SET username = ? WHERE id = ?", (new_username, user_id))
         conn.commit()
-        log('INFO', 'ChangeUsername', '用户名修改成功', user_id=user_id,
+        log_module('user', 'INFO', 'ChangeUsername', '用户名修改成功', user_id=user_id,
             old_username=current_username, new_username=new_username, ip=ip_address)
         return True, '用户名修改成功！'
     except Exception:
         conn.rollback()
-        log('ERROR', 'ChangeUsername', '用户名修改失败', user_id=user_id, username=current_username, ip=ip_address)
+        log_module('user', 'ERROR', 'ChangeUsername', '用户名修改失败', user_id=user_id, username=current_username, ip=ip_address)
         return False, '修改失败，请重试'
     finally:
         conn.close()
@@ -96,11 +98,11 @@ def change_password(user_id, username, current_password, new_password, confirm_p
         new_hash = hash_password(new_password)
         conn.execute("UPDATE users SET password_hash = ? WHERE id = ?", (new_hash, user_id))
         conn.commit()
-        log('INFO', 'ChangePassword', '密码修改成功', user_id=user_id, username=username, ip=ip_address)
+        log_module('user', 'INFO', 'ChangePassword', '密码修改成功', user_id=user_id, username=username, ip=ip_address)
         return True, '密码修改成功！'
     except Exception:
         conn.rollback()
-        log('ERROR', 'ChangePassword', '密码修改失败', user_id=user_id, username=username, ip=ip_address)
+        log_module('user', 'ERROR', 'ChangePassword', '密码修改失败', user_id=user_id, username=username, ip=ip_address)
         return False, '修改失败，请重试'
     finally:
         conn.close()
@@ -139,12 +141,12 @@ def change_email(user_id, username, new_email, email_code, current_password, ip_
 
         conn.execute("UPDATE users SET email = ? WHERE id = ?", (new_email, user_id))
         conn.commit()
-        log('INFO', 'ChangeEmail', '邮箱修改成功', user_id=user_id, username=username,
+        log_module('user', 'INFO', 'ChangeEmail', '邮箱修改成功', user_id=user_id, username=username,
             new_email=new_email, ip=ip_address)
         return True, '邮箱修改成功！'
     except Exception:
         conn.rollback()
-        log('ERROR', 'ChangeEmail', '邮箱修改失败', user_id=user_id, username=username, ip=ip_address)
+        log_module('user', 'ERROR', 'ChangeEmail', '邮箱修改失败', user_id=user_id, username=username, ip=ip_address)
         return False, '修改失败，请重试'
     finally:
         conn.close()
@@ -178,12 +180,12 @@ def delete_account(user_id, username, confirm_username, ip_address):
         )
         conn.commit()
         _clean_user_media(media_keys, user_id)
-        log('INFO', 'DeleteAccount', '账号注销成功（内容保留、ID 不变）',
+        log_module('user', 'INFO', 'DeleteAccount', '账号注销成功（内容保留、ID 不变）',
             user_id=user_id, username=username, ip=ip_address)
         return True, '账号已注销'
     except Exception:
         conn.rollback()
-        log('ERROR', 'DeleteAccount', '账号注销失败', user_id=user_id, username=username, ip=ip_address)
+        log_module('user', 'ERROR', 'DeleteAccount', '账号注销失败', user_id=user_id, username=username, ip=ip_address)
         return False, '注销失败，请重试'
     finally:
         conn.close()

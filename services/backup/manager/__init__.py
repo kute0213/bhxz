@@ -30,7 +30,9 @@ from config import (
     get_uploads_backup_dir,
 )
 from core.shared.snowflake import next_id
-from core.system.logger import log
+from core.system.logger import log_module, register_module_log
+
+register_module_log('backup')
 
 
 # 备份时需要跳过的文件后缀：
@@ -270,7 +272,7 @@ class BackupManager:
                         try:
                             zf.write(full_path, arcname)
                         except Exception as e:
-                            log('WARNING', 'BackupManager', f'压缩文件跳过 {full_path}: {e}')
+                            log_module('backup', 'WARNING', 'BackupManager', f'压缩文件跳过 {full_path}: {e}')
                         processed += 1
                         if processed % max(1, total_files // 5) == 0:
                             pct = 20 + int(processed / total_files * 55)
@@ -281,7 +283,7 @@ class BackupManager:
                 self._write_db_snapshots(zf, tmp_dir)
 
             if skipped:
-                log('INFO', 'BackupManager', f'已跳过 {skipped} 个使用中/临时文件（SQLite/DuckDB WAL 与 DuckDB 主库）')
+                log_module('backup', 'INFO', 'BackupManager', f'已跳过 {skipped} 个使用中/临时文件（SQLite/DuckDB WAL 与 DuckDB 主库）')
 
             size_bytes = os.path.getsize(backup_path)
 
@@ -301,7 +303,7 @@ class BackupManager:
         except Exception as e:
             error_msg = str(e)
             status = 'failed'
-            log('ERROR', 'BackupManager', f'备份失败: {e}')
+            log_module('backup', 'ERROR', 'BackupManager', f'备份失败: {e}')
             import traceback
             traceback.print_exc()
             # 清理不完整的 zip
@@ -356,7 +358,7 @@ class BackupManager:
             if os.path.exists(FW_DB_PATH):
                 targets.append((FW_DB_PATH, _snapshot_duckdb, 'DuckDB 防火墙库'))
         except Exception as e:
-            log('WARNING', 'BackupManager', f'防火墙数据库不可用，跳过其快照: {e}')
+            log_module('backup', 'WARNING', 'BackupManager', f'防火墙数据库不可用，跳过其快照: {e}')
 
         for src_path, snapshot, label in targets:
             arcname = _zip_arcname(src_path)
@@ -364,10 +366,10 @@ class BackupManager:
             try:
                 snapshot(tmp_path)
                 zf.write(tmp_path, arcname)
-                log('INFO', 'BackupManager',
+                log_module('backup', 'INFO', 'BackupManager',
                     f'已写入数据库快照 {label} {arcname}（{os.path.getsize(tmp_path)} 字节）')
             except Exception as e:
-                log('WARNING', 'BackupManager', f'数据库快照写入失败 {label} {arcname}: {e}')
+                log_module('backup', 'WARNING', 'BackupManager', f'数据库快照写入失败 {label} {arcname}: {e}')
 
     def _verify_backup(self, backup_path):
         """验证 zip 备份文件是否完整可读。"""
@@ -403,11 +405,11 @@ class BackupManager:
                     if os.path.exists(path):
                         os.remove(path)
                 except Exception as e:
-                    log('ERROR', 'BackupManager', f'删除旧备份文件失败 {path}: {e}')
+                    log_module('backup', 'ERROR', 'BackupManager', f'删除旧备份文件失败 {path}: {e}')
                 try:
                     conn.execute("DELETE FROM db_backups WHERE id = ?", (bid,))
                 except Exception as e:
-                    log('ERROR', 'BackupManager', f'删除旧备份记录失败 id={bid}: {e}')
+                    log_module('backup', 'ERROR', 'BackupManager', f'删除旧备份记录失败 id={bid}: {e}')
 
             conn.commit()
         finally:

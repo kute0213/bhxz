@@ -17,7 +17,9 @@ import threading
 import time
 
 from core.shared.scheduler import register_task
-from core.system.logger import log
+from core.system.logger import log_module, register_module_log
+
+register_module_log('metrics')
 
 # 采样间隔（秒）：与状态页轮询周期一致
 SAMPLE_INTERVAL = 5
@@ -96,7 +98,7 @@ def sample():
                 ready=True,
             )
     except Exception as exc:
-        log('WARNING', 'SystemMetrics', '采样系统指标失败', error=str(exc))
+        log_module('metrics', 'WARNING', 'SystemMetrics', '采样系统指标失败', error=str(exc))
 
 
 def get_metrics():

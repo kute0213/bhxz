@@ -19,8 +19,10 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 from core.db import get_db, transaction
 from core.shared.snowflake import next_id
 from config import UPLOAD_BACKGROUNDS_DIR, USER_IMAGE_MAX_BYTES, get_page_size
-from core.system.logger import log
+from core.system.logger import log_module, register_module_log
 from services.mail import email_service, background_review_result
+
+register_module_log('background')
 
 # 背景图片状态：0=待审核 1=已通过 2=已驳回
 STATUS_PENDING = 0
@@ -230,19 +232,19 @@ def start_upload(user_id, username, upload_file, ip_address):
                 _upload_tasks[task_id]['status'] = 'completed'
                 _upload_tasks[task_id]['message'] = '上传完成，等待管理员审核'
 
-            log('INFO', 'BackgroundUpload', '背景图片上传成功',
+            log_module('background', 'INFO', 'BackgroundUpload', '背景图片上传成功',
                 user_id=user_id, username=username, bg_id=bg_id,
                 ip_address=ip_address)
 
         except ValueError as exc:
             _fail_upload(task_id, str(exc))
-            log('ERROR', 'BackgroundUpload', '背景图片上传失败',
+            log_module('background', 'ERROR', 'BackgroundUpload', '背景图片上传失败',
                 user_id=user_id, username=username, error=str(exc),
                 ip_address=ip_address)
             _cleanup_failed_upload(bg_id, save_path)
         except Exception as exc:
             _fail_upload(task_id, '上传失败，请稍后重试')
-            log('ERROR', 'BackgroundUpload', '背景图片上传异常',
+            log_module('background', 'ERROR', 'BackgroundUpload', '背景图片上传异常',
                 user_id=user_id, username=username, error=str(exc),
                 ip_address=ip_address)
             _cleanup_failed_upload(bg_id, save_path)
@@ -451,9 +453,9 @@ def _send_review_email(bg, approved: bool, admin_username: str):
         subject = '背景图片审核通过' if approved else '背景图片审核未通过'
         html = background_review_result(bg['filename'], approved)
         email_service.send(to=user['email'], subject=subject, body=subject, html=html)
-        log('INFO', 'Email', f'已发送背景审核邮件: {user["email"]} <- {subject}')
+        log_module('background', 'INFO', 'Email', f'已发送背景审核邮件: {user["email"]} <- {subject}')
     except Exception as e:
-        log('WARNING', 'Email', f'发送背景审核邮件失败: {e}')
+        log_module('background', 'WARNING', 'Email', f'发送背景审核邮件失败: {e}')
 
 
 def approve_background(bg_id, admin_id, admin_username, ip_address):
@@ -478,7 +480,7 @@ def approve_background(bg_id, admin_id, admin_username, ip_address):
 
     _send_review_email(bg, True, admin_username)
 
-    log('INFO', 'BackgroundApprove', '背景图片审核通过',
+    log_module('background', 'INFO', 'BackgroundApprove', '背景图片审核通过',
         bg_id=bg_id, admin_id=admin_id, admin_username=admin_username,
         ip_address=ip_address)
     return True, '审核通过'
@@ -503,7 +505,7 @@ def remove_background_files(bg):
             if os.path.isfile(variant_path):
                 os.remove(variant_path)
     except Exception as exc:
-        log('WARNING', 'BackgroundDelete', '背景图片文件删除失败',
+        log_module('background', 'WARNING', 'BackgroundDelete', '背景图片文件删除失败',
             bg_id=bg['id'], error=str(exc))
 
 
@@ -524,7 +526,7 @@ def reject_background(bg_id, admin_id, admin_username, ip_address):
 
     _send_review_email(bg, False, admin_username)
 
-    log('INFO', 'BackgroundReject', '背景图片审核驳回',
+    log_module('background', 'INFO', 'BackgroundReject', '背景图片审核驳回',
         bg_id=bg_id, admin_id=admin_id, admin_username=admin_username,
         ip_address=ip_address)
     return True, '已驳回'
@@ -550,7 +552,7 @@ def toggle_active(bg_id, admin_id, admin_username, ip_address):
         conn.commit()
 
     action = '启用' if new_active else '停用'
-    log('INFO', 'BackgroundToggle', f'背景图片{action}',
+    log_module('background', 'INFO', 'BackgroundToggle', f'背景图片{action}',
         bg_id=bg_id, admin_id=admin_id, admin_username=admin_username,
         ip_address=ip_address)
     return True, f'背景图片已{action}'
@@ -571,7 +573,7 @@ def delete_background(bg_id, user_id, is_admin, ip_address):
         conn.execute("DELETE FROM backgrounds WHERE id = ?", (bg_id,))
         conn.commit()
 
-    log('INFO', 'BackgroundDelete', '背景图片删除',
+    log_module('background', 'INFO', 'BackgroundDelete', '背景图片删除',
         bg_id=bg_id, user_id=user_id, is_admin=is_admin,
         ip_address=ip_address)
     return True, '背景图片已删除'

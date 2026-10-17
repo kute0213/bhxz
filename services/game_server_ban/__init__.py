@@ -16,10 +16,12 @@ from datetime import datetime, timedelta
 
 from core.db import get_db
 from core.shared.snowflake import next_id
-from core.system.logger import log
+from core.system.logger import log_module, register_module_log
 from core.shared.scheduler import register_task
 from core.shared.validation import validate_mc_username, sanitize_rcon_username
 from services.rcon.client import execute_command
+
+register_module_log('gameban')
 
 # 自动解封检查间隔（秒）：封禁到期后 1 分钟内自动解封
 AUTO_PARDON_INTERVAL = 60
@@ -141,7 +143,7 @@ def create_application(applicant_id: int, player_name: str, qq_name: str, reason
             (next_id(), applicant_id, player_name, qq_name, reason, now),
         )
         conn.commit()
-        log('INFO', 'GameBan', '收到游戏服务器封禁申请',
+        log_module('gameban', 'INFO', 'GameBan', '收到游戏服务器封禁申请',
             player=player_name, applicant=applicant_id)
         return True, '封禁申请已提交，等待管理员审核'
     except Exception as e:
@@ -266,7 +268,7 @@ def approve_application(app_id: int, reviewer_id: int, duration_minutes=None):
             (reviewer_id, now, expires_at, now, app_id),
         )
         conn.commit()
-        log('INFO', 'GameBan', '封禁申请已批准并执行 RCON ban',
+        log_module('gameban', 'INFO', 'GameBan', '封禁申请已批准并执行 RCON ban',
             player=app['player_name'], reviewer=reviewer_id,
             expires=expires_at or '永久', resp=resp)
         return True, f'已批准，RCON 执行 ban {app["player_name"]}'
@@ -295,7 +297,7 @@ def reject_application(app_id: int, reviewer_id: int, reason: str = ''):
             (reviewer_id, now, reason, app_id),
         )
         conn.commit()
-        log('INFO', 'GameBan', '封禁申请被驳回', player=app['player_name'])
+        log_module('gameban', 'INFO', 'GameBan', '封禁申请被驳回', player=app['player_name'])
         return True, '已驳回该封禁申请'
     except Exception as e:
         return False, f'操作失败: {e}'
@@ -337,7 +339,7 @@ def pardon_player(app_id: int, operator_id: int = 0):
             (now, now, app_id),
         )
         conn.commit()
-        log('INFO', 'GameBan', '手动解除游戏服务器封禁',
+        log_module('gameban', 'INFO', 'GameBan', '手动解除游戏服务器封禁',
             player=app['player_name'], operator=operator_id, resp=resp)
         return True, f'已解封 {app["player_name"]}'
     except Exception as e:
@@ -381,7 +383,7 @@ def process_expired_bans():
                 continue
             resp = execute_command(cmd)
             if not _rcon_succeeded(resp):
-                log('WARNING', 'GameBan', '自动解封 RCON 执行失败，下个周期重试',
+                log_module('gameban', 'WARNING', 'GameBan', '自动解封 RCON 执行失败，下个周期重试',
                     player=row['player_name'], resp=resp)
                 continue
             conn.execute(
@@ -391,13 +393,13 @@ def process_expired_bans():
                 (now, row['id']),
             )
             pardoned += 1
-            log('INFO', 'GameBan', '封禁到期自动解封', player=row['player_name'], resp=resp)
+            log_module('gameban', 'INFO', 'GameBan', '封禁到期自动解封', player=row['player_name'], resp=resp)
 
         if pardoned:
             conn.commit()
         return pardoned
     except Exception as e:
-        log('ERROR', 'GameBan', '自动解封任务执行失败', error=str(e))
+        log_module('gameban', 'ERROR', 'GameBan', '自动解封任务执行失败', error=str(e))
         return 0
     finally:
         conn.close()

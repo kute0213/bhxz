@@ -23,7 +23,7 @@ from config import (
     FFMPEG_THREADS,
     AUDIO_MAX_BYTES,
 )
-from core.system.logger import log
+from core.system.logger import log_module, register_module_log
 from core.shared.process_utils import make_env, decode_output
 from services.music.constants import (
     HLS_SEGMENT_SECONDS,
@@ -32,6 +32,8 @@ from services.music.constants import (
     UPLOAD_TASK_TTL,
 )
 from services.music.queries import parse_tags, _music_dir
+
+register_module_log('music')
 
 
 def _now():
@@ -286,7 +288,7 @@ def upload_music(user_id, username, title, is_public, upload_file, ip_address, t
 
         _finalize_music_files(work_dir, music_id)
 
-        log('INFO', 'Music', '上传大喇叭音频', music_id=music_id, user_id=user_id,
+        log_module('music', 'INFO', 'Music', '上传大喇叭音频', music_id=music_id, user_id=user_id,
             username=username, title=title, status=status, tags=parse_tags(tags), ip=ip_address)
         return True, {'music_id': music_id, 'title': title}
     except Exception as e:
@@ -425,7 +427,7 @@ def _run_upload_task(task_id, user_id, username, title, is_public,
             raise RuntimeError('音频记录创建失败')
         _finalize_music_files(work_dir, music_id)
 
-        log('INFO', 'Music', '上传大喇叭音频', music_id=music_id, user_id=user_id,
+        log_module('music', 'INFO', 'Music', '上传大喇叭音频', music_id=music_id, user_id=user_id,
             username=username, title=title, status=status, tags=parse_tags(tags), ip=ip_address)
         if is_public:
             notify_admins_pending_music(title, username)
@@ -433,7 +435,7 @@ def _run_upload_task(task_id, user_id, username, title, is_public,
     except Exception as e:
         shutil.rmtree(work_dir, ignore_errors=True)
         _set_task(task_id, status='error', message='转码失败', error=str(e))
-        log('ERROR', 'Music', '上传大喇叭音频失败', user_id=user_id, title=title,
+        log_module('music', 'ERROR', 'Music', '上传大喇叭音频失败', user_id=user_id, title=title,
             error=str(e), ip=ip_address)
 
 

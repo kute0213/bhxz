@@ -12,12 +12,13 @@ from core.shared.captcha import captcha_service
 from services.mail import email_code_service
 from core.shared.ratelimit import register_limiter, login_limiter, forgot_password_limiter
 from services.firewall import auto_ban
-from core.system.logger import log, log_module, register_module_log
+from core.system.logger import log_module, register_module_log
 
-# 模块启动时向日志模块注册「注册账号」「登录账号」独立日志
+# 模块启动时向日志模块注册「注册账号」「登录账号」「找回密码」独立日志
 # （仅声明存在，是否落盘 / 是否并入全局日志由设置决定，可在「日志页面 → 日志设置」修改）
 register_module_log('register')
 register_module_log('login')
+register_module_log('password')
 
 
 def _get_ua():
@@ -267,20 +268,20 @@ def forgot_password(username, email, captcha_input, captcha_id, email_code,
     """找回密码。返回 (success, message)。"""
 
     if not forgot_password_limiter.check(ip_address or 'unknown', _get_ua()):
-        log('WARNING', 'ForgotPassword', '找回密码请求过于频繁，触发自动封禁', ip=ip_address, username=username)
+        log_module('password', 'WARNING', 'ForgotPassword', '找回密码请求过于频繁，触发自动封禁', ip=ip_address, username=username)
         auto_ban(ip_address or 'unknown', 'forgot_password')
         return False, '找回密码请求过于频繁，请稍后再试'
 
     if not captcha_service.verify(captcha_id, captcha_input):
-        log('WARNING', 'ForgotPassword', '图形验证码错误', username=username, ip=ip_address)
+        log_module('password', 'WARNING', 'ForgotPassword', '图形验证码错误', username=username, ip=ip_address)
         return False, '图形验证码错误或已过期'
 
     if not username:
-        log('WARNING', 'ForgotPassword', '用户名为空', ip=ip_address)
+        log_module('password', 'WARNING', 'ForgotPassword', '用户名为空', ip=ip_address)
         return False, '请输入用户名'
 
     if not email:
-        log('WARNING', 'ForgotPassword', '邮箱为空', username=username, ip=ip_address)
+        log_module('password', 'WARNING', 'ForgotPassword', '邮箱为空', username=username, ip=ip_address)
         return False, '请输入邮箱地址'
 
     conn = get_db()
@@ -294,33 +295,33 @@ def forgot_password(username, email, captcha_input, captcha_id, email_code,
         conn.close()
 
     if not user:
-        log('WARNING', 'ForgotPassword', '用户不存在', username=username, ip=ip_address)
+        log_module('password', 'WARNING', 'ForgotPassword', '用户不存在', username=username, ip=ip_address)
         return False, '用户不存在'
 
     if not user['email']:
-        log('WARNING', 'ForgotPassword', '用户未设置邮箱', username=username, ip=ip_address)
+        log_module('password', 'WARNING', 'ForgotPassword', '用户未设置邮箱', username=username, ip=ip_address)
         return False, '该用户未设置邮箱，无法找回密码'
 
     if user['email'] != email:
-        log('WARNING', 'ForgotPassword', '邮箱不匹配', username=username, ip=ip_address)
+        log_module('password', 'WARNING', 'ForgotPassword', '邮箱不匹配', username=username, ip=ip_address)
         return False, '邮箱与用户名不匹配'
 
     if not email_code:
-        log('WARNING', 'ForgotPassword', '邮箱验证码为空', username=username, ip=ip_address)
+        log_module('password', 'WARNING', 'ForgotPassword', '邮箱验证码为空', username=username, ip=ip_address)
         return False, '请输入邮箱验证码'
 
     if not email_code_service.verify(email, email_code, purpose='找回密码'):
-        log('WARNING', 'ForgotPassword', '邮箱验证码错误', username=username, email=email, ip=ip_address)
+        log_module('password', 'WARNING', 'ForgotPassword', '邮箱验证码错误', username=username, email=email, ip=ip_address)
         return False, '邮箱验证码错误或已过期'
 
     from core.shared.validation import validate_password_strength
     valid_pwd, pwd_err = validate_password_strength(new_password)
     if not valid_pwd:
-        log('WARNING', 'ForgotPassword', '新密码不符合要求', username=username, ip=ip_address)
+        log_module('password', 'WARNING', 'ForgotPassword', '新密码不符合要求', username=username, ip=ip_address)
         return False, pwd_err
 
     if new_password != confirm_password:
-        log('WARNING', 'ForgotPassword', '两次密码不一致', username=username, ip=ip_address)
+        log_module('password', 'WARNING', 'ForgotPassword', '两次密码不一致', username=username, ip=ip_address)
         return False, '两次输入的新密码不一致'
 
     conn = get_db()
@@ -329,11 +330,11 @@ def forgot_password(username, email, captcha_input, captcha_id, email_code,
         conn.execute("UPDATE users SET password_hash = ? WHERE id = ?", (new_hash, user['id']))
         conn.commit()
         captcha_service.consume(captcha_id)
-        log('INFO', 'ForgotPassword', '密码重置成功', username=username, user_id=user['id'], ip=ip_address)
+        log_module('password', 'INFO', 'ForgotPassword', '密码重置成功', username=username, user_id=user['id'], ip=ip_address)
         return True, '密码重置成功'
     except Exception:
         conn.rollback()
-        log('ERROR', 'ForgotPassword', '密码重置失败', username=username, user_id=user['id'], ip=ip_address)
+        log_module('password', 'ERROR', 'ForgotPassword', '密码重置失败', username=username, user_id=user['id'], ip=ip_address)
         return False, '密码重置失败，请稍后重试'
     finally:
         conn.close()

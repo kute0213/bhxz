@@ -376,7 +376,7 @@ python scripts/build/package.py
 
 支持编辑的配置分类：
 
-* **日志**：日志输出等级、是否打印日志到终端、是否存储防火墙模块日志
+* **日志**：日志输出等级、是否打印日志到终端；各模块单独日志是否落盘 / 是否并入全局日志，在「日志页面 → 日志设置」中逐模块配置（支持任意已注册模块）
 
 * **数据备份**：自动备份时间、保留份数、超时
 
@@ -947,6 +947,13 @@ workspace/
 详见 [docs/CHANGELOG.md](docs/CHANGELOG.md)。
 
 ## 最近更新
+
+* **业务日志全面模块化——除 core 核心与启动自检外，全部改为模块单独日志**（`core/system/logger.py` 及 23 个业务 / 路由文件）：
+  * 按开发准则约定，业务日志一律走模块单独日志（`register_module_log('<名称>')` + `log_module('<名称>', ...)`），**不再调用全局 `log()`**；只有 core 基础设施（应用初始化、数据库 schema / 连接、WSGI 服务器、任务注册表）与启动自检（`core/system/startup_checks.py`）保留全局日志。
+  * 新增 13 个模块：`background`（背景图片）、`buildings`（公共建筑）、`music`（大喇叭音频）、`email`（异步邮件）、`backup`（数据备份）、`gameban`（游戏服务器封禁）、`sitemap`（站点地图缓存）、`rcon`（RCON 与玩家追踪）、`user`（用户资料 / 管理 / 媒体）、`password`（找回密码）、`cleanup`（被驳回内容清理）、`metrics`（系统指标采集）、`settings`（系统设置管理）；连同既有的 `firewall` / `captcha` / `email_code` / `register` / `login` / `waitress`，共 **19 个模块单独日志**。
+  * 拆分细则：注册流程相关日志归 `register`（含 `routes/main/auth` 的群内验证码）、登录与登出归 `login`、找回密码归 `password`、用户资料与账号管理归 `user`、后台建筑审核与浏览计数归 `buildings`、后台备份与定时备份归 `backup`。
+  * 默认均「落盘到 `logs/modules/<名称>.log`、不并入全局日志」（兜底值集中在 `core/system/logger.py` 的 `MODULE_LOG_DEFAULTS`），可在「日志页面 → 日志设置」逐模块即时调整。
+  * 迁移仅为日志去向调整，不改变任何业务逻辑、文案与参数。
 
 * **数据库读写与 ID 生成机制重构（高并发写入 + ID 绝不重复）**（`core/shared/snowflake.py`、`core/db/connection.py`、`core/db/snowflake_migration.py`、`services/firewall/service/database.py`）：
   * **修复「数据库快照写入失败：DuckDB WAL 重放报 `Sequence with name "seq_firewall_bans" already exists!`」**：根因是旧版用 `CREATE SEQUENCE seq_firewall_bans` 作自增主键，迁移为雪花 ID 后序列被删，但残留在 WAL 里的建/删序列记录在下次打开重放时冲突，导致整个库打不开。现在从三处根治——① 每次打开库都**无条件幂等清理遗留序列**，从源头阻止相关 DDL 再进 WAL；② 初始化后与关闭前各**强制 `CHECKPOINT`**，把已提交数据合并进主库并清空 WAL；③ 打开失败时**自动自愈**（先隔离损坏的 `*.wal` 后重试，仍失败再隔离整库重建空库），保证防火墙功能不因单文件损坏而下线。实测备份的 DuckDB 快照恢复正常（9 张表、无遗留序列）。

@@ -154,11 +154,26 @@ def do_something(user_id, value, ip_address):
   | 模块名 | 注册位置 | 覆盖内容 | 默认落盘 | 默认并入全局 |
   |--------|----------|----------|----------|--------------|
   | `firewall` | `services/firewall/__init__.py` | 防火墙拦截、403 授权拒绝、自动封禁 | 否 | 否 |
-  | `captcha` | `routes/api/captcha/__init__.py` | 图形验证码生成 / 校验、过期验证码清理 | 是 | 否 |
+  | `captcha` | `core/shared/captcha.py` | 图形验证码生成 / 校验、过期验证码清理 | 是 | 否 |
   | `email_code` | `routes/api/email_code/__init__.py` | 邮箱验证码发送 / 校验 | 是 | 否 |
-  | `register` | `services/user/auth/__init__.py` | 注册账号全流程 | 是 | 否 |
-  | `login` | `services/user/auth/__init__.py` | 登录账号全流程 | 是 | 否 |
+  | `register` | `services/user/auth/__init__.py`、`routes/main/auth/__init__.py` | 注册账号全流程（含群内验证码） | 是 | 否 |
+  | `login` | `services/user/auth/__init__.py`、`routes/main/auth/__init__.py` | 登录 / 登出全流程 | 是 | 否 |
+  | `password` | `services/user/auth/__init__.py` | 找回密码全流程 | 是 | 否 |
+  | `user` | `services/user/{admin,profiles}/__init__.py`、`routes/main/media/__init__.py` | 用户资料修改、账号（软）删除、管理员权限、用户媒体 | 是 | 否 |
+  | `background` | `services/background_service/__init__.py` | 背景图片上传 / 审核 / 删除 / 启用切换 | 是 | 否 |
+  | `buildings` | `routes/admin/buildings/__init__.py`、`routes/buildings/pages/__init__.py` | 公共建筑审核、浏览次数更新 | 是 | 否 |
+  | `music` | `services/music/{crud,upload}/__init__.py`、`routes/main/music/__init__.py` | 大喇叭音频上传 / 编辑 / 审核 / 删除、HLS 分片 | 是 | 否 |
+  | `email` | `services/mail/service/__init__.py` | 异步邮件发送队列 | 是 | 否 |
+  | `backup` | `services/backup/{manager,scheduler}/__init__.py`、`routes/admin/backup/__init__.py` | 数据备份、定时备份、备份下载 / 删除 | 是 | 否 |
+  | `gameban` | `services/game_server_ban/__init__.py` | 游戏服务器封禁申请 / 批准 / 驳回 / 自动解封 | 是 | 否 |
+  | `sitemap` | `services/sitemap_cache/__init__.py` | 站点地图刷新与生成 | 是 | 否 |
+  | `rcon` | `services/rcon/{client,player_tracker}/__init__.py` | RCON 命令执行、玩家列表追踪 | 是 | 否 |
+  | `cleanup` | `services/cleanup_service/__init__.py` | 被驳回内容超时自动清理 | 是 | 否 |
+  | `metrics` | `services/system_metrics/__init__.py` | 系统指标采集 | 是 | 否 |
+  | `settings` | `services/settings_manager/__init__.py` | 系统设置读取 / 保存 / 删除 | 是 | 否 |
   | `waitress` | `core/system/logger.py`（`install_waitress_logging()`） | Waitress 内部日志（`Task queue depth is xx` 等） | 否 | 否 |
+
+  **总原则：除 core 基础设施（`core/`：应用初始化、数据库 schema / 连接、WSGI 服务器、任务注册表）与启动自检（`core/system/startup_checks.py`）保留全局 `log()` 外，业务侧日志一律走模块单独日志。**
 
   默认值集中定义在 `core/system/logger.py` 的 `MODULE_LOG_DEFAULTS`（仅作设置缺失时的兜底）。新增模块单独日志时，只需在所属模块 import 处调用 `register_module_log('<名称>')`，日志一律通过 `log_module(name, level, event, detail, **kwargs)` 输出，**不得**调用全局 `log()`；如需自定义默认落盘行为，在 `MODULE_LOG_DEFAULTS` 中补一条即可（**不要**新增 `SETTINGS_REGISTRY` 设置项，模块日志配置统一在日志页面维护）。
 

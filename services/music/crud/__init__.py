@@ -7,10 +7,12 @@ import shutil
 import os
 
 from core.db import get_db
-from core.system.logger import log
+from core.system.logger import log_module, register_module_log
 from services.music.constants import STATUS_PRIVATE, STATUS_PENDING, STATUS_PUBLIC
 from services.music.queries import get_music, _music_dir, parse_tags
 from services.music.upload import notify_admins_pending_music
+
+register_module_log('music')
 
 
 def _username_of(user_id):
@@ -61,7 +63,7 @@ def delete_music(music_id, user_id, is_admin, ip_address):
         except OSError:
             file_removed = False
 
-    log('INFO', 'Music', '删除大喇叭音频', music_id=music_id, user_id=user_id,
+    log_module('music', 'INFO', 'Music', '删除大喇叭音频', music_id=music_id, user_id=user_id,
         is_admin=is_admin, file_removed=file_removed, ip=ip_address)
     if not file_removed:
         return True, '音频已删除，但文件目录清理失败，请手动检查'
@@ -107,7 +109,7 @@ def toggle_music_public(music_id, user_id, is_admin, ip_address):
         return False, '修改失败'
     conn.close()
 
-    log('INFO', 'Music', '切换音频公开状态', music_id=music_id, user_id=user_id,
+    log_module('music', 'INFO', 'Music', '切换音频公开状态', music_id=music_id, user_id=user_id,
         status=new_status, ip=ip_address)
     if new_status == STATUS_PRIVATE:
         return True, '已转为私有，仅自己可见'
@@ -142,7 +144,7 @@ def review_music(music_id, approve, reviewer_username, ip_address):
         return False, '操作失败'
     conn.close()
 
-    log('INFO', 'Music', '审核公开音频', music_id=music_id, approve=approve,
+    log_module('music', 'INFO', 'Music', '审核公开音频', music_id=music_id, approve=approve,
         reviewer=reviewer_username, title=music['title'], ip=ip_address)
     if approve:
         return True, '已通过审核，音频已在游戏内大喇叭公开'
@@ -171,6 +173,6 @@ def set_music_tags(music_id, user_id, is_admin, tags, ip_address):
         return False, '保存标签失败'
     conn.close()
 
-    log('INFO', 'Music', '编辑音频标签', music_id=music_id, user_id=user_id,
+    log_module('music', 'INFO', 'Music', '编辑音频标签', music_id=music_id, user_id=user_id,
         is_admin=is_admin, tags=normalized, ip=ip_address)
     return True, '标签已保存'

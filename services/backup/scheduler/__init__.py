@@ -10,8 +10,10 @@ import datetime
 import threading
 
 from config import get_config_value
-from core.system.logger import log
+from core.system.logger import log_module, register_module_log
 from core.shared.scheduler import register_task, unregister_task
+
+register_module_log('backup')
 
 
 class BackupScheduler:
@@ -42,7 +44,7 @@ class BackupScheduler:
     def start(self):
         """任务已注册到统一注册表（start_task_scheduler 后自动生效）。"""
         scheduled_time = get_config_value('BACKUP_SCHEDULED_TIME', '03:00')
-        log('INFO', 'BackupScheduler', f'已启动，每日 {scheduled_time} 自动备份')
+        log_module('backup', 'INFO', 'BackupScheduler', f'已启动，每日 {scheduled_time} 自动备份')
 
     def stop(self):
         """从统一注册表注销定时任务。"""
@@ -75,10 +77,10 @@ class BackupScheduler:
     def _do_backup(self):
         """执行定时备份。"""
         from ..manager import BackupManager
-        log('INFO', 'BackupScheduler', '开始定时自动备份...')
+        log_module('backup', 'INFO', 'BackupScheduler', '开始定时自动备份...')
         backup_id, thread = BackupManager().start_backup(
             backup_type='scheduled',
             progress_callback=None,
         )
         if backup_id is None:
-            log('INFO', 'BackupScheduler', '已有备份在执行，跳过本次')
+            log_module('backup', 'INFO', 'BackupScheduler', '已有备份在执行，跳过本次')

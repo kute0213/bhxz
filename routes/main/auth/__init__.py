@@ -16,9 +16,12 @@ from services.mail import normalize_email
 from services.user import (
     register, login, forgot_password, check_username_available,
 )
-from core.system.logger import log
+from core.system.logger import log_module, register_module_log
 from core.shared.ip import get_client_ip
 from routes.main import main_bp
+
+register_module_log('register')
+register_module_log('login')
 
 
 def _is_safe_redirect_url(target: str) -> bool:
@@ -120,14 +123,14 @@ def verify_group_code():
     data = request.get_json(silent=True) or {}
     code = (data.get('code') or '').strip()
     if not code:
-        log('WARNING', 'VerifyGroupCode', '群内验证码为空', ip=get_client_ip())
+        log_module('register', 'WARNING', 'VerifyGroupCode', '群内验证码为空', ip=get_client_ip())
         return jsonify({'success': False, 'message': '请输入验证码'}), 400
     if code != REGISTER_VERIFY_CODE:
-        log('WARNING', 'VerifyGroupCode', '群内验证码错误', ip=get_client_ip())
+        log_module('register', 'WARNING', 'VerifyGroupCode', '群内验证码错误', ip=get_client_ip())
         return jsonify({'success': False, 'message': '验证码错误，请在QQ群公告中获取正确验证码'}), 400
     session['group_code_verified'] = True
     session.permanent = True
-    log('INFO', 'VerifyGroupCode', '群内验证码验证成功', ip=get_client_ip())
+    log_module('register', 'INFO', 'VerifyGroupCode', '群内验证码验证成功', ip=get_client_ip())
     return jsonify({'success': True, 'message': '验证成功'})
 
 
@@ -190,7 +193,7 @@ def logout():
         path=current_app.session_interface.get_cookie_path(current_app),
         domain=current_app.session_interface.get_cookie_domain(current_app),
     )
-    log('INFO', 'Logout', '用户登出', username=username, ip=get_client_ip())
+    log_module('login', 'INFO', 'Logout', '用户登出', username=username, ip=get_client_ip())
     return response
 
 

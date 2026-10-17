@@ -14,9 +14,11 @@ import time
 from dataclasses import dataclass, field
 from typing import List, Optional
 
-from core.system.logger import log
+from core.system.logger import log_module, register_module_log
 from core.shared.scheduler import register_task, unregister_task
 from services.rcon.client import execute_command
+
+register_module_log('rcon')
 
 
 @dataclass
@@ -114,12 +116,12 @@ class PlayerTracker:
 
     def start(self):
         """任务已注册到统一注册表（start_task_scheduler 后自动生效）。"""
-        log('INFO', 'RCON', '玩家列表追踪器已启动')
+        log_module('rcon', 'INFO', 'RCON', '玩家列表追踪器已启动')
 
     def stop(self):
         """从统一注册表注销追踪任务。"""
         unregister_task(self._name)
-        log('INFO', 'RCON', '玩家列表追踪器已停止')
+        log_module('rcon', 'INFO', 'RCON', '玩家列表追踪器已停止')
 
     def reset(self):
         """重置缓存（配置变更时调用）。"""

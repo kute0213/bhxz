@@ -4,8 +4,10 @@ from datetime import datetime
 
 from core.db import get_db
 from core.shared.validation import DELETED_USER_DISPLAY_NAME
-from core.system.logger import log
+from core.system.logger import log_module, register_module_log
 from services.user.profiles import _get_user_media_keys, _clean_user_media
+
+register_module_log('user')
 
 
 def admin_delete_user(admin_user, target_user_id, ip_address):
@@ -31,12 +33,12 @@ def admin_delete_user(admin_user, target_user_id, ip_address):
         )
         conn.commit()
         _clean_user_media(media_keys, target_user_id)
-        log('INFO', 'Admin', '删除用户（软删除，内容保留）', admin_user=admin_user['username'],
+        log_module('user', 'INFO', 'Admin', '删除用户（软删除，内容保留）', admin_user=admin_user['username'],
             target_user_id=target_user_id, ip=ip_address)
         return True, '用户已删除'
     except Exception:
         conn.rollback()
-        log('ERROR', 'Admin', '删除用户失败', admin_user=admin_user['username'],
+        log_module('user', 'ERROR', 'Admin', '删除用户失败', admin_user=admin_user['username'],
             target_user_id=target_user_id, ip=ip_address)
         return False, '删除失败，请重试'
     finally:
@@ -60,7 +62,7 @@ def admin_toggle_admin(admin_user, target_user_id, ip_address):
         new_status = 0 if target['is_admin'] else 1
         conn.execute("UPDATE users SET is_admin = ? WHERE id = ?", (new_status, target_user_id))
         conn.commit()
-        log('INFO', 'Admin', '切换管理员权限', admin_user=admin_user['username'],
+        log_module('user', 'INFO', 'Admin', '切换管理员权限', admin_user=admin_user['username'],
             target_user_id=target_user_id, new_status=new_status, ip=ip_address)
         return True, '管理员权限已更新'
     except Exception:

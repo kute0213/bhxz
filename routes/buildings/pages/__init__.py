@@ -200,8 +200,9 @@ def building_detail(building_id):
             )
         building['view_count'] = (building.get('view_count') or 0) + 1
     except Exception as e:
-        from core.system.logger import log
-        log('WARNING', 'Buildings', f'建筑浏览次数更新失败 id={building_id}: {e}')
+        from core.system.logger import log_module, register_module_log
+        register_module_log('buildings')
+        log_module('buildings', 'WARNING', 'Buildings', f'建筑浏览次数更新失败 id={building_id}: {e}')
 
     return render_page(
         'buildings/detail.html',

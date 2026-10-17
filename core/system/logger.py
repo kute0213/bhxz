@@ -95,6 +95,22 @@ MODULE_LOG_DEFAULTS = {
     # WSGI 服务器（Waitress）内部日志：任务队列深度等，默认只进独立缓冲，
     # 不落盘、不并入全局日志，避免刷屏（可在「日志页面 → 日志设置」开启）。
     'waitress': {'store': False, 'global': False},
+    # —— 业务模块单独日志（除 core 核心与启动自检外，业务日志一律走模块单独日志）——
+    # 默认均为「落盘到 logs/modules/<名称>.log、不并入全局日志」，
+    # 可在「日志页面 → 日志设置」逐模块改（任意模块均支持）。
+    'password': {'store': True, 'global': False},     # 找回密码
+    'user': {'store': True, 'global': False},         # 用户资料 / 管理 / 媒体
+    'background': {'store': True, 'global': False},   # 全站背景图片
+    'buildings': {'store': True, 'global': False},    # 公共建筑
+    'music': {'store': True, 'global': False},        # 大喇叭音频
+    'email': {'store': True, 'global': False},        # 异步邮件发送
+    'backup': {'store': True, 'global': False},       # 数据备份
+    'gameban': {'store': True, 'global': False},      # 游戏服务器封禁
+    'sitemap': {'store': True, 'global': False},      # 站点地图缓存
+    'rcon': {'store': True, 'global': False},         # RCON 连接与玩家追踪
+    'cleanup': {'store': True, 'global': False},      # 被驳回内容自动清理
+    'metrics': {'store': True, 'global': False},      # 系统指标采集
+    'settings': {'store': True, 'global': False},     # 系统设置管理
 }
 
 

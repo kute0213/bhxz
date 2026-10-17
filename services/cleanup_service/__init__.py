@@ -14,9 +14,11 @@
 from datetime import datetime, timedelta
 
 from core.db import get_db
-from core.system.logger import log
+from core.system.logger import log_module, register_module_log
 from core.shared.scheduler import register_task
 from services.background_service import remove_background_files
+
+register_module_log('cleanup')
 
 # 被驳回内容的保留时长（小时），超时自动删除
 REJECTED_KEEP_HOURS = 24
@@ -42,14 +44,14 @@ def cleanup_expired_rejected_guides():
         for row in rows:
             conn.execute("DELETE FROM server_guides WHERE id = ?", (row['id'],))
             deleted += 1
-            log('INFO', 'Cleanup', '被驳回指南超时自动删除',
+            log_module('cleanup', 'INFO', 'Cleanup', '被驳回指南超时自动删除',
                 guide_id=row['id'], title=row['title'])
         if deleted:
             conn.commit()
-            log('INFO', 'Cleanup', '自动清理过期被驳回指南', count=deleted)
+            log_module('cleanup', 'INFO', 'Cleanup', '自动清理过期被驳回指南', count=deleted)
         return deleted
     except Exception as e:
-        log('ERROR', 'Cleanup', '清理过期被驳回指南失败', error=str(e))
+        log_module('cleanup', 'ERROR', 'Cleanup', '清理过期被驳回指南失败', error=str(e))
         return 0
     finally:
         conn.close()
@@ -75,14 +77,14 @@ def cleanup_expired_rejected_backgrounds():
             _remove_background_files(bg)
             conn.execute("DELETE FROM backgrounds WHERE id = ?", (bg['id'],))
             deleted += 1
-            log('INFO', 'Cleanup', '被驳回背景图片超时自动删除',
+            log_module('cleanup', 'INFO', 'Cleanup', '被驳回背景图片超时自动删除',
                 bg_id=bg['id'], filename=bg.get('filename'))
         if deleted:
             conn.commit()
-            log('INFO', 'Cleanup', '自动清理过期被驳回背景图片', count=deleted)
+            log_module('cleanup', 'INFO', 'Cleanup', '自动清理过期被驳回背景图片', count=deleted)
         return deleted
     except Exception as e:
-        log('ERROR', 'Cleanup', '清理过期被驳回背景图片失败', error=str(e))
+        log_module('cleanup', 'ERROR', 'Cleanup', '清理过期被驳回背景图片失败', error=str(e))
         return 0
     finally:
         conn.close()

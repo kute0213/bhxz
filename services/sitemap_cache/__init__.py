@@ -13,8 +13,10 @@ import threading
 
 from config import get_config_value, UPLOAD_SITEMAP_DIR
 from core.db import get_db
-from core.system.logger import log
+from core.system.logger import log_module, register_module_log
 from core.shared.scheduler import register_task, unregister_task
+
+register_module_log('sitemap')
 
 
 class SitemapCache:
@@ -48,7 +50,7 @@ class SitemapCache:
 
     def start(self):
         """任务已注册到统一注册表（start_task_scheduler 后自动生效）。"""
-        log('INFO', 'SitemapCache', '已启动，每日自动刷新站点地图')
+        log_module('sitemap', 'INFO', 'SitemapCache', '已启动，每日自动刷新站点地图')
 
     def stop(self):
         """从统一注册表注销定时任务。"""
@@ -138,7 +140,7 @@ class SitemapCache:
         """手动立即刷新缓存（供管理面板调用），并标记当天已刷新避免重复。"""
         self._refresh()
         self._task.mark_done()
-        log('INFO', 'SitemapCache', '手动刷新完成')
+        log_module('sitemap', 'INFO', 'SitemapCache', '手动刷新完成')
 
     # ------------------------------------------------------------------
     # 生成缓存
@@ -149,7 +151,7 @@ class SitemapCache:
         self._refresh()
         now = datetime.datetime.now()
         refresh_time = get_config_value('SITEMAP_REFRESH_TIME', '03:00')
-        log('INFO', 'SitemapCache', f'站点地图已刷新 ({now.strftime("%Y-%m-%d")} {refresh_time})')
+        log_module('sitemap', 'INFO', 'SitemapCache', f'站点地图已刷新 ({now.strftime("%Y-%m-%d")} {refresh_time})')
 
     def _refresh(self):
         """为每个配置的域名生成 sitemap XML 并写入文件。"""
@@ -159,14 +161,14 @@ class SitemapCache:
         domains = _collect_domains()
 
         if not domains:
-            log('WARNING', 'SitemapCache', '未配置任何域名，跳过 sitemap 生成')
+            log_module('sitemap', 'WARNING', 'SitemapCache', '未配置任何域名，跳过 sitemap 生成')
             return
 
         # 生成 URL 列表（共享内容，仅 base_url 不同）
         url_entries = _build_url_entries()
 
         if not url_entries:
-            log('WARNING', 'SitemapCache', '无 URL 条目，跳过 sitemap 生成')
+            log_module('sitemap', 'WARNING', 'SitemapCache', '无 URL 条目，跳过 sitemap 生成')
             return
 
         # 为每个域名生成并写入文件
@@ -179,9 +181,9 @@ class SitemapCache:
                 os.makedirs(UPLOAD_SITEMAP_DIR, exist_ok=True)
                 with open(filepath, 'w', encoding='utf-8') as f:
                     f.write(xml_content)
-                log('INFO', 'SitemapCache', f'已生成: {filename} ({base_url})')
+                log_module('sitemap', 'INFO', 'SitemapCache', f'已生成: {filename} ({base_url})')
             except Exception as e:
-                log('ERROR', 'SitemapCache', f'写入 {filename} 失败: {e}')
+                log_module('sitemap', 'ERROR', 'SitemapCache', f'写入 {filename} 失败: {e}')
 
 
 # ---------------------------------------------------------------------------

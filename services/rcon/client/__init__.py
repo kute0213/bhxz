@@ -17,7 +17,9 @@ from typing import Optional
 from mcrcon import MCRcon
 
 from config import get_config_value
-from core.system.logger import log
+from core.system.logger import log_module, register_module_log
+
+register_module_log('rcon')
 
 
 def _get_rcon_config() -> tuple:
@@ -125,7 +127,7 @@ def rcon_connect(host: Optional[str] = None,
     except Exception as exc:
         # 连接可能已损坏，强制关闭
         pool.release(mcr, force_close=True)
-        log('WARNING', 'RCON', f'命令执行异常，连接已关闭: {exc}')
+        log_module('rcon', 'WARNING', 'RCON', f'命令执行异常，连接已关闭: {exc}')
         raise
     else:
         pool.release(mcr)

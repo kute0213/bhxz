@@ -13,7 +13,9 @@ from datetime import datetime
 
 from core.db import get_db, transaction
 from core.shared.snowflake import next_id
-from core.system.logger import log
+from core.system.logger import log_module, register_module_log
+
+register_module_log('settings')
 
 
 # ---------------------------------------------------------------------------
@@ -104,7 +106,7 @@ class SettingsManager:
                 # 表不存在是首次启动的正常现象，不刷 ERROR 日志
                 if 'Table with name settings does not exist' in err_str:
                     return default
-                log('WARNING', 'SettingsManager', f'加载设置 {key} 失败: {e}')
+                log_module('settings', 'WARNING', 'SettingsManager', f'加载设置 {key} 失败: {e}')
                 return default
             finally:
                 conn.close()
@@ -113,7 +115,7 @@ class SettingsManager:
                 raw_value = row['value'] if hasattr(row, '__getitem__') else row[0]
                 return _cast_value(raw_value, default)
         except Exception as e:
-            log('WARNING', 'SettingsManager', f'加载设置 {key} 失败: {e}')
+            log_module('settings', 'WARNING', 'SettingsManager', f'加载设置 {key} 失败: {e}')
         return default
 
     def _save_to_db(self, key: str, value):
@@ -142,7 +144,7 @@ class SettingsManager:
                 self._cache[key] = value
                 self._cache_ts[key] = time.time()
         except Exception as e:
-            log('ERROR', 'SettingsManager', f'保存设置 {key} 失败: {e}')
+            log_module('settings', 'ERROR', 'SettingsManager', f'保存设置 {key} 失败: {e}')
             raise
 
     # -------------------------------------------------------------------
@@ -195,7 +197,7 @@ class SettingsManager:
             conn.commit()
             conn.close()
         except Exception as e:
-            log('ERROR', 'SettingsManager', f'删除设置 {key} 失败: {e}')
+            log_module('settings', 'ERROR', 'SettingsManager', f'删除设置 {key} 失败: {e}')
             raise
 
         with self._cache_lock:
@@ -216,7 +218,7 @@ class SettingsManager:
                 'updated_at': row[3] if len(row) > 3 else ''
             } for row in rows]
         except Exception as e:
-            log('ERROR', 'SettingsManager', f'获取所有设置失败: {e}')
+            log_module('settings', 'ERROR', 'SettingsManager', f'获取所有设置失败: {e}')
             return []
 
     def invalidate_cache(self):

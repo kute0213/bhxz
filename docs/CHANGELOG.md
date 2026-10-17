@@ -4,6 +4,13 @@
 
 ### 变更
 
+* **业务日志全面模块化——除 core 核心与启动自检外，全部改为模块单独日志**（`core/system/logger.py` 及 23 个业务 / 路由文件）：
+  * **总原则**：按开发准则约定，业务日志一律走模块单独日志（`register_module_log('<名称>')` + `log_module('<名称>', ...)`），**不再调用全局 `log()`**。仅 core 基础设施（`core/`：应用初始化、数据库 schema / 连接、WSGI 服务器、任务注册表）与启动自检（`core/system/startup_checks.py`）保留全局日志。
+  * **新增 13 个模块**：`background`（背景图片）、`buildings`（公共建筑）、`music`（大喇叭音频）、`email`（异步邮件）、`backup`（数据备份）、`gameban`（游戏服务器封禁）、`sitemap`（站点地图缓存）、`rcon`（RCON 与玩家追踪）、`user`（用户资料 / 管理 / 媒体）、`password`（找回密码）、`cleanup`（被驳回内容清理）、`metrics`（系统指标采集）、`settings`（系统设置管理）；连同既有的 `firewall` / `captcha` / `email_code` / `register` / `login` / `waitress`，共 **19 个模块单独日志**。
+  * **迁移范围**：`core/shared/captcha.py`、`services/{settings_manager,system_metrics,music,mail,rcon,game_server_ban,sitemap_cache,background_service,user,backup,cleanup_service}/*`、`routes/{admin/backup,admin/buildings,buildings/pages,main/music,main/media,main/auth}/*` 共 23 个文件中的全局 `log()` 调用，全部改写为 `log_module()`，并在各自模块导入处 `register_module_log()`（幂等）。`services/user/auth` 的找回密码流程单独归入 `password` 模块，`routes/main/auth` 的群内验证码归 `register`、登出归 `login`。
+  * **默认行为**：新模块兜底默认均为「落盘到 `logs/modules/<名称>.log`、不并入全局日志」，集中定义在 `core/system/logger.py` 的 `MODULE_LOG_DEFAULTS`，可在「日志页面 → 日志设置」逐模块即时调整（`GET/POST /admin/api/logs/modules`）。
+  * 迁移仅为日志去向调整，不改变任何业务逻辑、文案与参数；`python -m pytest scripts/tests -q` 全量通过（220 项）。
+
 * **删除已完成的一次性迁移代码（历史 ID 迁移 + 磁盘文件名对账）**（删除 `core/db/snowflake_migration.py`、`scripts/tests/test_file_migration.py`，改 `core/system/startup_checks.py`、`services/firewall/service/database.py`）：
   * 全站历史自增 ID → 雪花 ID 的迁移已在最新版运行时完成，以下一次性代码不再需要，一并移除，让代码库保持精简：
     * 主站 `core/db/snowflake_migration.py` 整体删除（含 `migrate_legacy_ids()` 主键 / 外键重映射、音频目录与播放列表内容改名、背景图片改名，以及 `reconcile_media_files()` 启动对账）；`core/system/startup_checks.py` 中对应的两处启动调用与 `scripts/tests/test_file_migration.py` 同步移除。

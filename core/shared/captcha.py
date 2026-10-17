@@ -20,8 +20,10 @@ import uuid
 import threading
 from typing import Tuple
 
-from core.system.logger import log, log_module
+from core.system.logger import log_module, register_module_log
 from core.shared.scheduler import register_task
+
+register_module_log('captcha')
 
 # 延迟导入 Pillow，避免不必要的依赖检查
 _pil_available = None
@@ -388,16 +390,16 @@ class CaptchaService:
             是否正确
         """
         if not captcha_id or not user_input:
-            log('WARNING', 'CaptchaService', '参数为空', captcha_id=captcha_id)
+            log_module('captcha', 'WARNING', 'CaptchaService', '参数为空', captcha_id=captcha_id)
             return False
         with self._lock:
             entry = self._captchas.get(captcha_id)
             if not entry:
-                log('WARNING', 'CaptchaService', '验证码不存在或已消耗', captcha_id=captcha_id)
+                log_module('captcha', 'WARNING', 'CaptchaService', '验证码不存在或已消耗', captcha_id=captcha_id)
                 return False
             if time.time() > entry['expire']:
                 self._captchas.pop(captcha_id, None)
-                log('WARNING', 'CaptchaService', '验证码已过期', captcha_id=captcha_id)
+                log_module('captcha', 'WARNING', 'CaptchaService', '验证码已过期', captcha_id=captcha_id)
                 return False
             result = (
                 user_input.strip().casefold()
@@ -407,7 +409,7 @@ class CaptchaService:
                 entry['attempts'] = entry.get('attempts', 0) + 1
                 if entry['attempts'] >= self._max_attempts:
                     self._captchas.pop(captcha_id, None)
-                log('INFO', 'CaptchaService', '验证码答案错误', captcha_id=captcha_id)
+                log_module('captcha', 'INFO', 'CaptchaService', '验证码答案错误', captcha_id=captcha_id)
             return result
 
     def consume(self, captcha_id: str):
@@ -417,7 +419,7 @@ class CaptchaService:
         with self._lock:
             if captcha_id in self._captchas:
                 self._captchas.pop(captcha_id)
-                log('INFO', 'CaptchaService', '验证码已消耗', captcha_id=captcha_id)
+                log_module('captcha', 'INFO', 'CaptchaService', '验证码已消耗', captcha_id=captcha_id)
 
     def cleanup_expired(self) -> int:
         """清理过期的验证码。
