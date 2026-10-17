@@ -186,10 +186,10 @@
         </div>
 
         <div id="bg-active-section" class="hidden">
-            <h2 class="text-xl font-bold text-gold-400 mb-4">当前启用</h2>
+            <h2 class="text-xl font-bold text-gold-400 mb-4">全部背景</h2>
             <div id="bg-active-grid" class="background-grid"></div>
             <div id="bg-active-empty" class="pixel-card rounded-xl p-8 text-center hidden">
-                <p class="text-muted">暂无已启用的背景图片</p>
+                <p class="text-muted">暂无背景图片</p>
             </div>
         </div>
 
@@ -247,7 +247,7 @@
             '<div class="background-info">' +
                 '<div class="flex items-center justify-between gap-2 mb-2">' +
                     '<span class="background-name">' + escapeHtml(bg.filename) + '</span>' +
-                    '<span class="status-badge is-active-badge">已启用</span>' +
+                    '<span class="status-badge is-active-badge">已通过</span>' +
                 '</div>' +
                 '<div class="flex items-center justify-between">' +
                     '<span class="background-author">by ' + escapeHtml(bg.username) + '</span>' +
@@ -298,11 +298,11 @@
     var emptyBox = document.getElementById('bg-empty');
 
     function render(data) {
-        var active = data.active || [];
+        var approved = data.approved || [];
         var my = data.my || [];
 
-        activeGrid.innerHTML = active.map(activeCard).join('');
-        activeEmpty.classList.toggle('hidden', active.length > 0);
+        activeGrid.innerHTML = approved.map(activeCard).join('');
+        activeEmpty.classList.toggle('hidden', approved.length > 0);
         activeSection.classList.remove('hidden');
 
         if (CFG.loggedIn) {
@@ -310,7 +310,7 @@
             mySection.classList.remove('hidden');
         }
 
-        var hasAny = active.length > 0 || my.length > 0;
+        var hasAny = approved.length > 0 || my.length > 0;
         emptyBox.classList.toggle('hidden', hasAny);
 
         loading.classList.add('hidden');

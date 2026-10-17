@@ -24,10 +24,11 @@ def background_list_page():
 def api_backgrounds_list():
     """背景图片列表 API（JSON，供 /backgrounds 页面前端无刷新获取）。
 
-    返回当前启用（已通过且活跃）的背景图片，以及登录用户自己上传的全部背景图片。
+    返回全部已通过审核的背景图片（即全站背景可用图片池），
+    以及登录用户自己上传的全部背景图片。
     """
     user = get_current_user()
-    active_bgs = background_service.get_active_backgrounds()
+    approved_bgs = background_service.get_approved_backgrounds()
     my_bgs = background_service.get_backgrounds(user_id=user['id']) if user else []
 
     def _public(bg):
@@ -42,7 +43,7 @@ def api_backgrounds_list():
     return jsonify({
         'success': True,
         'logged_in': bool(user),
-        'active': [_public(b) for b in active_bgs],
+        'approved': [_public(b) for b in approved_bgs],
         'my': [_public(b) for b in my_bgs],
     })
 
@@ -115,16 +116,16 @@ def delete_background(bg_id):
 
 
 @backgrounds_bp.route('/backgrounds/serve')
-def serve_active_background():
-    """全站背景图片入口（**不带 ID**）：按屏幕宽高比返回最合适的启用背景。
+def serve_site_background():
+    """全站背景图片入口（**不带 ID**）：按屏幕宽高比返回最合适的已通过背景。
 
     URL 形如 `/backgrounds/serve?ratio=1.78`：
       * `ratio` —— 访问者屏幕的宽高比（宽/高）。服务端**只做查询与挑选**：
-                 从已启用的背景中返回宽高比最接近的一张主图字节，
+                 从全部已通过审核的背景中返回宽高比最接近的一张主图字节，
                  **不缩放、不裁剪**；裁剪与铺满由浏览器按 `background-size` 完成。
-                 `ratio` 缺省时退回最新启用的一张。
+                 `ratio` 缺省时退回最新通过的一张。
 
-    未启用任何背景时返回 404（前端回退到渐变色背景）。
+    无任何已通过背景时返回 404（前端回退到渐变色背景）。
     """
     bg = background_service.get_background_for_ratio(_resolve_ratio())
     if not bg:
@@ -166,8 +167,8 @@ def _send_background(bg, long_cache):
     只有「查询 + 返回」：服务端不处理像素，裁切与最终缩放全部由浏览器完成。
 
     long_cache=True（按 ID 取图，URL 稳定且内容不变）→ 浏览器可长期缓存；
-    long_cache=False（全站背景 URL 固定但内容会随启用池变化）→ 强制重新校验
-    （ETag），避免切换背景后浏览器仍展示旧图。
+    long_cache=False（全站背景 URL 固定但内容会随已通过图片池变化）→ 强制重新校验
+    （ETag），避免背景变化后浏览器仍展示旧图。
     """
     try:
         data = background_service.read_background_data(bg)

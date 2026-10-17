@@ -4,12 +4,13 @@
 背景图片存储在 uploads/backgrounds/ 目录，自动转换为 WebP 格式。
 
 磁盘上**每张背景只保留一个文件**（长边 ≤ 1920 的主图），不再生成 / 按需缓存
-任何尺寸变体。取图时服务端**只做查询与返回**：按客户端上报的屏幕宽高比挑选一张
-最接近的已启用背景，原样返回主图字节（不缩放、不裁剪）；裁剪与铺满由浏览器按
-CSS `background-size` 完成。
+任何尺寸变体。取图时服务端**只做查询与返回**：从所有已通过审核的背景中，按客户端
+上报的屏幕宽高比挑选宽高比最接近的一张，原样返回主图字节（不缩放、不裁剪）；
+裁剪与铺满由浏览器按 CSS `background-size` 完成。
 """
 
 import os
+import math
 import hashlib
 import threading
 from datetime import datetime
@@ -206,8 +207,8 @@ def start_upload(user_id, username, upload_file, ip_address):
                 now = _now()
                 bg_id = next_id()
                 conn.execute(
-                    "INSERT INTO backgrounds (id, user_id, username, filename, file_path, status, is_active, ratio, created_at) "
-                    "VALUES (?, ?, ?, ?, '', ?, 0, ?, ?)",
+                    "INSERT INTO backgrounds (id, user_id, username, filename, file_path, status, ratio, created_at) "
+                    "VALUES (?, ?, ?, ?, '', ?, ?, ?)",
                     (bg_id, user_id, username, filename, STATUS_PENDING, RATIO_DEFAULT, now),
                 )
 
@@ -333,15 +334,16 @@ def get_backgrounds_page(status=None, page=1, page_size=None):
         return [dict(r) for r in rows], total
 
 
-def get_active_backgrounds():
-    """获取所有已通过且标记为活跃（启用）的背景图片。
+def get_approved_backgrounds():
+    """获取所有已通过审核的背景图片（status=1）。
 
-    这些图片共同构成「可用于全站背景」的图片池：多张可同时处于启用状态，
-    由 `get_background_for_ratio()` 按屏幕宽高比从中挑选最合适的一张。
+    这些图片共同构成「可用于全站背景」的图片池：**所有审核通过的图片都可用**，
+    不再有单独的「启用 / 停用」开关；由 `get_background_for_ratio()` 按屏幕
+    宽高比从中挑选最合适的一张。
     """
     with transaction() as conn:
         rows = conn.execute(
-            "SELECT * FROM backgrounds WHERE status = ? AND is_active = 1 ORDER BY id DESC",
+            "SELECT * FROM backgrounds WHERE status = ? ORDER BY id DESC",
             (STATUS_APPROVED,),
         ).fetchall()
         return [dict(r) for r in rows]
@@ -359,20 +361,28 @@ def _bg_ratio(bg):
 
 
 def get_background_for_ratio(ratio=None):
-    """从已启用的背景图片中挑选宽高比最接近 `ratio`（宽/高）的一张。
+    """从已通过的背景图片中挑选宽高比最接近 `ratio`（宽/高）的一张。
 
-    * `ratio` 为空或非法 —— 返回最新启用的一张（保持旧行为）；
-    * 未启用任何背景 —— 返回 None。
+    * `ratio` 为空或非法 —— 返回最新通过的一张（保持旧行为）；
+    * 无任何已通过背景 —— 返回 None。
+
+    距离使用**对数（几何）距离** `|ln(图片比例) - ln(屏幕比例)|`：线性差值在
+    比例 1 附近并不对称，会让 1.1 的横屏请求错误地选到 0.5 的竖屏图；
+    对数距离保证「屏幕越宽 → 选越宽的图」，横屏挑横图、竖屏挑竖图。
 
     只做查询与挑选，不缩放、不裁剪；裁剪与铺满由浏览器完成。
     """
-    actives = get_active_backgrounds()
-    if not actives:
+    approved = get_approved_backgrounds()
+    if not approved:
         return None
     if ratio is None:
-        return actives[0]
+        return approved[0]
     target = max(RATIO_MIN, min(RATIO_MAX, float(ratio)))
-    return min(actives, key=lambda bg: abs(_bg_ratio(bg) - target))
+
+    def _distance(bg):
+        return abs(math.log(_bg_ratio(bg)) - math.log(target))
+
+    return min(approved, key=_distance)
 
 
 def get_background(bg_id):
@@ -440,8 +450,9 @@ def _send_review_email(bg, approved: bool, admin_username: str):
 def approve_background(bg_id, admin_id, admin_username, ip_address):
     """通过背景图片审核，并将其加入「可用于全站背景」的图片池。
 
-    不再取消其他背景的启用状态：多张背景可同时启用，由
-    `get_background_for_ratio()` 按访问者屏幕宽高比挑选最合适的一张。
+    审核通过即为可用，无需再手动启用（已移除「启用 / 停用」开关）；
+    由 `get_background_for_ratio()` 按访问者屏幕宽高比从所有已通过图片中
+    挑选最合适的一张。
     """
     with transaction() as conn:
         bg = conn.execute("SELECT * FROM backgrounds WHERE id = ?", (bg_id,)).fetchone()
@@ -451,7 +462,7 @@ def approve_background(bg_id, admin_id, admin_username, ip_address):
             return False, '该背景图片已处理'
 
         conn.execute(
-            "UPDATE backgrounds SET status = ?, is_active = 1 WHERE id = ?",
+            "UPDATE backgrounds SET status = ? WHERE id = ?",
             (STATUS_APPROVED, bg_id),
         )
         conn.commit()
@@ -508,33 +519,6 @@ def reject_background(bg_id, admin_id, admin_username, ip_address):
         bg_id=bg_id, admin_id=admin_id, admin_username=admin_username,
         ip_address=ip_address)
     return True, '已驳回'
-
-
-def toggle_active(bg_id, admin_id, admin_username, ip_address):
-    """切换单张背景图片的启用状态（加入 / 移出「可用于全站背景」的图片池）。
-
-    各张背景独立开关，不再互相影响：可同时启用多张，由
-    `get_background_for_ratio()` 按访问者屏幕宽高比挑选最合适的一张。
-    """
-    with transaction() as conn:
-        bg = conn.execute("SELECT * FROM backgrounds WHERE id = ?", (bg_id,)).fetchone()
-        if not bg:
-            return False, '背景图片不存在'
-        if bg['status'] != STATUS_APPROVED:
-            return False, '只能对已通过的背景图片操作'
-
-        new_active = 0 if bg['is_active'] else 1
-        conn.execute(
-            "UPDATE backgrounds SET is_active = ? WHERE id = ?",
-            (new_active, bg_id),
-        )
-        conn.commit()
-
-    action = '启用' if new_active else '停用'
-    log_module('background', 'INFO', 'BackgroundToggle', f'背景图片{action}',
-        bg_id=bg_id, admin_id=admin_id, admin_username=admin_username,
-        ip_address=ip_address)
-    return True, f'背景图片已{action}'
 
 
 def delete_background(bg_id, user_id, is_admin, ip_address):

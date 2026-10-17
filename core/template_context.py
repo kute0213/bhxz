@@ -13,8 +13,8 @@ def register_template_context(app):
 
     @app.context_processor
     def inject_global_config():
-        # 获取已启用的背景图片
-        active_bgs = background_service.get_active_backgrounds()
+        # 获取所有已通过审核的背景图片（全站背景可用图片池）
+        background_images = background_service.get_approved_backgrounds()
 
         # CSRF 模板辅助函数
         def csrf_field():
@@ -30,7 +30,7 @@ def register_template_context(app):
         return {
             # 登录欢迎语只展示一次，避免刷新页面后重复打扰用户。
             'login_welcome_username': session.pop('login_welcome_username', None),
-            'active_backgrounds': active_bgs if show_background else [],
+            'background_images': background_images if show_background else [],
             'background_image_size': bg_size,
             'csrf_field': csrf_field,
             'csrf_token': csrf_token_str,

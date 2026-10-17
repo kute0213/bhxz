@@ -178,7 +178,6 @@ def init_db():
                 filename TEXT NOT NULL,
                 file_path TEXT NOT NULL,
                 status INTEGER DEFAULT 0,
-                is_active INTEGER DEFAULT 0,
                 ratio REAL DEFAULT 1.7778,
                 rejected_at TEXT DEFAULT NULL,
                 created_at TEXT NOT NULL

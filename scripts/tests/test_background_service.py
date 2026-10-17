@@ -78,34 +78,42 @@ class TestReadBackgroundData:
 
 
 class TestPickForRatio:
-    """按屏幕宽高比挑选最接近的一张启用背景，只查询、不处理。"""
+    """按屏幕宽高比挑选最接近的一张已通过背景，只查询、不处理。"""
 
     @pytest.fixture
-    def actives(self, monkeypatch):
+    def approved(self, monkeypatch):
         pool = [
             {'id': 1, 'ratio': 2.0},    # 宽屏 2:1
-            {'id': 2, 'ratio': 0.75},   # 竖屏 3:4
+            {'id': 2, 'ratio': 0.5},    # 竖屏 1:2
             {'id': 3, 'ratio': 1.78},   # 16:9
         ]
-        monkeypatch.setattr(bg_service, 'get_active_backgrounds', lambda: pool)
+        monkeypatch.setattr(bg_service, 'get_approved_backgrounds', lambda: pool)
         return pool
 
-    def test_picks_closest_ratio(self, actives):
+    def test_picks_closest_ratio(self, approved):
         assert bg_service.get_background_for_ratio(1.9)['id'] == 1
-        assert bg_service.get_background_for_ratio(0.8)['id'] == 2
+        assert bg_service.get_background_for_ratio(0.4)['id'] == 2
         assert bg_service.get_background_for_ratio(1.7)['id'] == 3
 
-    def test_none_ratio_returns_newest(self, actives):
+    def test_ratio_above_one_prefers_landscape(self, approved):
+        # 回归：ratio=1.1（宽/高 > 1，即横屏）必须选到横屏图，而不是线性差值下
+        # 会误选到的 0.5 竖屏图——对数距离保证「越宽的屏幕选越宽的图」。
+        assert bg_service.get_background_for_ratio(1.1)['id'] == 3
+
+    def test_ratio_below_one_prefers_portrait(self, approved):
+        assert bg_service.get_background_for_ratio(0.9)['id'] == 2
+
+    def test_none_ratio_returns_newest(self, approved):
         assert bg_service.get_background_for_ratio(None)['id'] == 1
 
     def test_invalid_ratio_falls_back_to_default(self, monkeypatch):
         # 记录里 ratio 非法（0）时按默认 16:9 计距，1.78 的记录最接近
         pool = [{'id': 9, 'ratio': 0}, {'id': 10, 'ratio': 2.0}]
-        monkeypatch.setattr(bg_service, 'get_active_backgrounds', lambda: pool)
+        monkeypatch.setattr(bg_service, 'get_approved_backgrounds', lambda: pool)
         assert bg_service.get_background_for_ratio(1.78)['id'] == 9
 
     def test_empty_pool_returns_none(self, monkeypatch):
-        monkeypatch.setattr(bg_service, 'get_active_backgrounds', lambda: [])
+        monkeypatch.setattr(bg_service, 'get_approved_backgrounds', lambda: [])
         assert bg_service.get_background_for_ratio(1.78) is None
 
 

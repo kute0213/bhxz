@@ -99,21 +99,6 @@ def admin_reject_background(bg_id):
     return jsonify({'success': success, 'message': message})
 
 
-@admin_bp.route('/admin/backgrounds/<int:bg_id>/toggle', methods=['POST'])
-@admin_required
-def admin_toggle_background(bg_id):
-    """切换背景图片活跃状态。"""
-    user = get_current_user()
-
-    success, message = background_service.toggle_active(
-        bg_id=bg_id,
-        admin_id=user['id'],
-        admin_username=user['username'],
-        ip_address=get_client_ip(),
-    )
-    return jsonify({'success': success, 'message': message})
-
-
 @admin_bp.route('/admin/backgrounds/<int:bg_id>/delete', methods=['POST'])
 @admin_required
 def admin_delete_background(bg_id):

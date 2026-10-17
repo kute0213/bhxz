@@ -4,12 +4,19 @@
 
 ### 变更
 
+* **删除背景图片的「启用 / 停用」开关，并修正挑选距离为对数距离**（`services/background_service/__init__.py`、`routes/admin/backgrounds/__init__.py`、`core/db/schema.py`、`core/template_context.py`、`static/templates/base.html`、`static/templates/backgrounds/index.html`、`scripts/tests/test_background_service.py`）：
+  * **问题**：即使请求 `/backgrounds/serve?ratio=1.1`（宽/高 > 1，属横屏）仍返回竖屏图片，而数据库里明明有横屏图。根因有两处：① 残留的 `is_active`「启用 / 停用」开关（含 `/admin/backgrounds/<id>/toggle` 路由）会把未被启用的横屏图排除在图片池外；② 挑选用线性差值 `|图片比例 − 屏幕比例|`，在比例 1 附近不对称，`ratio=1.1` 会误选到 0.5 的竖屏图。
+  * **彻底删除开关**：移除 `backgrounds` 表的 `is_active` 字段（表定义、INSERT 写入、查询条件）、`background_service.toggle_active()` 服务函数与 `/admin/backgrounds/<id>/toggle` 路由，以及后台模板中已失效的启用/停用按钮分支；图片池由 `get_active_backgrounds()`（`status=1 AND is_active=1`）改为 `get_approved_backgrounds()`（`status=1`）——**所有审核通过的背景都可直接用作全站背景，不再需要任何开关**。
+  * **挑选距离改为对数（几何）距离**：`get_background_for_ratio()` 改用 `abs(ln(图片比例) − ln(屏幕比例))` 作为距离，保证「屏幕越宽 → 选越宽的图」：`ratio=1.1` / `1.9` 选横屏图，`ratio=0.9` / `0.4` 选竖屏图。新增回归用例 `test_ratio_above_one_prefers_landscape` / `test_ratio_below_one_prefers_portrait`。
+  * **前端 / 接口同步**：`core/template_context.py` 注入变量 `active_backgrounds` → `background_images`；`/api/backgrounds/list` 返回字段 `active` → `approved`；`/backgrounds` 页区块标题「当前启用」→「全部背景」、徽章「已启用」→「已通过」；全站背景取图路由函数 `serve_active_background` → `serve_site_background`。
+  * 验证：`python -m pytest scripts/tests -q` 224 项通过；Flask test client 端到端确认 `ratio=1.1` 返回横屏图、`ratio=0.9` 返回竖屏图、`/admin/backgrounds/<id>/toggle` 路由已不存在。
+
 * **背景图片改为「按屏幕比例挑选 + 客户端裁剪」，服务端不再处理像素**（`services/background_service/__init__.py`、`routes/backgrounds/pages/__init__.py`、`static/templates/base.html`、`static/templates/admin/backgrounds.html`、`static/templates/backgrounds/index.html`、`scripts/tests/test_background_service.py`）：
   * **问题**：全站背景始终用同一张图片；请求参数只有 `size`，且直接请求 `/backgrounds/serve?size=10` 也能拿到图片——说明服务端在做缩放 / 裁剪这类像素处理，且不会按屏幕比例换图。
   * **请求参数改为 `ratio`**：客户端上报屏幕宽高比（宽/高，保留 2 位小数），形如 `/backgrounds/serve?ratio=1.78`；窗口缩放 / 手机旋屏后按新比例重新取图。
-  * **服务端只查询、不处理像素**：新增 `get_background_for_ratio(ratio)`——从已启用的背景里挑选宽高比最接近 `ratio` 的一张主图，**原样返回字节，不缩放、不裁剪**（裁剪与铺满由浏览器按 `background-size` 完成）；`ratio` 缺省时退回最新启用的一张。彻底删除 `_resize_to_size`、`_size_cache` / `_size_cache_lock` / `_SIZE_CACHE_MAX`、`read_background_data(size=)`、`background_etag(size=)` 及路由里的 `_resolve_size`；`read_background_data` / `background_etag` 现在只接受 `bg` 一个参数。
-  * **可同时启用多张背景**：`approve_background` 与 `toggle_active` 不再「取消其他背景的启用状态」，多张背景（各带自己的宽高比）可并存，构成「图片池」，按访问者屏幕比例从中挑选最合适的一张；因此横屏（16:9 / 21:9）与竖屏（9:16 / 3:4）会拿到各自最匹配的图片，不再始终同一张。
-  * **前端 / 后台同步**：`static/templates/base.html` 去掉 `SIZES` / `bestSize()` 档位计算，改为按屏幕宽高比请求；`static/templates/admin/backgrounds.html` 与 `static/templates/backgrounds/index.html` 去掉 `?size=768`（缩略图由浏览器按 CSS 尺寸缩放），`/backgrounds` 列表卡片徽章由「当前显示」改为「已启用」。
+  * **服务端只查询、不处理像素**：新增 `get_background_for_ratio(ratio)`——从全部已通过审核的背景里挑选宽高比最接近 `ratio` 的一张主图，**原样返回字节，不缩放、不裁剪**（裁剪与铺满由浏览器按 `background-size` 完成）；`ratio` 缺省时退回最新通过的一张。彻底删除 `_resize_to_size`、`_size_cache` / `_size_cache_lock` / `_SIZE_CACHE_MAX`、`read_background_data(size=)`、`background_etag(size=)` 及路由里的 `_resolve_size`；`read_background_data` / `background_etag` 现在只接受 `bg` 一个参数。
+  * **图片池由所有已通过背景构成**：审核通过即自动加入全站背景图片池（后续进一步删除了单独的启用开关）。
+  * **前端 / 后台同步**：`static/templates/base.html` 去掉 `SIZES` / `bestSize()` 档位计算，改为按屏幕宽高比请求；`static/templates/admin/backgrounds.html` 与 `static/templates/backgrounds/index.html` 去掉 `?size=768`（缩略图由浏览器按 CSS 尺寸缩放）。
   * 测试更新：`TestReadBackgroundData` 断言「原样返回主图、磁盘文件数不变」（不再缩放），新增 `TestPickForRatio` 覆盖「按比例挑最近」「ratio 为空取最新」「非法 ratio 回退默认 16:9」「空池返回 None」，`TestEtag` 移除按档位区分的用例；`python -m pytest scripts/tests -q` 全量通过。
 
 * **背景图片文件名改为「雪花 ID + 比例」**（`services/background_service/__init__.py`、`scripts/tests/test_background_service.py`、`README.md`）：

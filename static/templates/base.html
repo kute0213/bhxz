@@ -100,13 +100,13 @@
     </div>
 
     <!-- 全站背景图片：解析到背景元素后立即预加载（不等动画与其他脚本）。
-         请求不带 ID 的 /backgrounds/serve?ratio=：服务端按屏幕宽高比从已启用的
+         请求不带 ID 的 /backgrounds/serve?ratio=：服务端按屏幕宽高比从所有已通过的
          背景里挑选最接近的一张并原样返回（不缩放、不裁剪），
-         裁剪与铺满由浏览器按 background-size 完成；无 JS 时直接取任意启用背景主图 -->
-    {% if active_backgrounds %}
-    <div class="site-background" data-background-url="{{ url_for('backgrounds.serve_active_background') }}" style="background-size: {{ background_image_size }};"></div>
+         裁剪与铺满由浏览器按 background-size 完成；无 JS 时直接取任意已通过背景主图 -->
+    {% if background_images %}
+    <div class="site-background" data-background-url="{{ url_for('backgrounds.serve_site_background') }}" style="background-size: {{ background_image_size }};"></div>
     <div class="site-background-overlay"></div>
-    <noscript><style>.site-background{background-image:url('{{ url_for('backgrounds.serve_active_background') }}');opacity:1!important}</style></noscript>
+    <noscript><style>.site-background{background-image:url('{{ url_for('backgrounds.serve_site_background') }}');opacity:1!important}</style></noscript>
     <script>
     (function () {
         var bg = document.querySelector('.site-background');
