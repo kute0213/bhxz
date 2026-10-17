@@ -9,6 +9,9 @@
   「刚刚同一时刻按顺序发布」的雪花 ID；
 * **顺序不变**：按旧 ID 升序重分配，新 ID 单调递增，ORDER BY id 的语义不变；
 * **关联关系不变**：父子表外键（如评论 → 建筑、收藏 → 音频）随父表 ID 同步重映射；
+* **磁盘文件名同步**：文件名 / 目录名内嵌旧 ID 的记录（音频目录 `music/<id>/`、
+  背景图片 `bg_<id>_<hash>.webp` 及其各档响应式变体）在迁移后一并重命名，
+  并同步改写库里的 `file_path` / `filename`，避免「库换了 ID、盘上还是旧名」导致 404；
 * **幂等**：通过比对是否存在历史 ID 判断是否已完成；迁移在单事务内完成，
   要么整体成功要么整体回滚，不会出现半迁移状态。
 
@@ -20,7 +23,7 @@ import os
 import shutil
 import sqlite3
 
-from core.db.connection import get_db
+from core.db.connection import get_db, checkpoint
 from core.shared.snowflake import is_snowflake_id, next_id
 from core.system.logger import log
 
@@ -96,6 +99,69 @@ def _rename_music_dirs(mapping):
             log('WARNING', 'DB', f'音频目录重命名失败 {old} → {new}: {e}')
 
 
+def _replace_bg_id(filename, old_id, new_id):
+    """把背景图片文件名中内嵌的旧 ID 替换为新 ID（保持其余部分不变）。
+
+    背景主图为 `bg_<id>_<hash>.webp`，各档响应式变体为 `bg_<id>_<hash>_<size>.webp`，
+    都以内嵌的 `<id>` 区分归属。文件名中解析出的 ID 与 old_id 不一致（或不符合
+    命名规则）时原样返回，避免误改无关文件。
+    """
+    if not filename or not filename.startswith('bg_'):
+        return filename
+    rest = filename[len('bg_'):]
+    idx = rest.find('_')
+    head = rest[:idx] if idx > 0 else rest.split('.', 1)[0]
+    if not head.isdigit() or head != str(old_id):
+        return filename
+    return f'bg_{new_id}{filename[len("bg_") + len(head):]}'
+
+
+def _parse_background_id(filename):
+    """从 `bg_<id>...` 文件名解析出 <id>；不符合命名规则返回 None。"""
+    if not filename or not filename.startswith('bg_'):
+        return None
+    rest = filename[len('bg_'):]
+    idx = rest.find('_')
+    head = rest[:idx] if idx > 0 else rest.split('.', 1)[0]
+    return int(head) if head.isdigit() else None
+
+
+def _rename_background_files(mapping):
+    """把磁盘上的背景图片文件名从旧 ID 重命名为雪花 ID（含主图与全部响应式变体）。
+
+    仅改文件名中内嵌的 ID，`_<hash>` / `_<size>` 等其余部分保持不变；
+    目录内所有以 `bg_<旧ID>...` 命名的文件会被一次性改写，因此主图与各档变体
+    始终与库里的 `filename` / `file_path` 保持一致。
+    """
+    if not mapping:
+        return
+    from config import UPLOAD_BACKGROUNDS_DIR
+    if not os.path.isdir(UPLOAD_BACKGROUNDS_DIR):
+        return
+    renamed = 0
+    for fname in os.listdir(UPLOAD_BACKGROUNDS_DIR):
+        old_id = _parse_background_id(fname)
+        if old_id is None:
+            continue
+        new_id = mapping.get(old_id)
+        if new_id is None:
+            continue
+        new_name = _replace_bg_id(fname, old_id, new_id)
+        if new_name == fname:
+            continue
+        src = os.path.join(UPLOAD_BACKGROUNDS_DIR, fname)
+        dst = os.path.join(UPLOAD_BACKGROUNDS_DIR, new_name)
+        try:
+            if os.path.exists(dst):
+                os.remove(dst)
+            os.rename(src, dst)
+            renamed += 1
+        except OSError as e:
+            log('WARNING', 'DB', f'背景图片重命名失败 {fname} → {new_name}: {e}')
+    if renamed:
+        log('INFO', 'DB', f'背景图片文件已重命名 {renamed} 个')
+
+
 def migrate_legacy_ids():
     """执行雪花 ID 迁移（幂等）。返回实际迁移的记录数。"""
     check = get_db()
@@ -112,6 +178,7 @@ def migrate_legacy_ids():
 
     migrated = 0
     music_map = {}
+    bg_map = {}
     # 迁移在一个事务内完成：先改父表 ID，再同步重映射子表外键，
     # 保证关联关系不变；要么整体成功、要么整体回滚，不会出现半迁移状态。
     # 迁移期间关闭外键约束（中间态会短暂不一致，若开启外键会报错），
@@ -119,7 +186,7 @@ def migrate_legacy_ids():
     conn = get_db()
     try:
         conn.execute('PRAGMA foreign_keys=OFF')
-        conn.execute('BEGIN')
+        conn.execute('BEGIN IMMEDIATE')
         try:
             mappings = {}
             for table in _OWN_ID_TABLES:
@@ -146,6 +213,27 @@ def migrate_legacy_ids():
                     [(f'music/{new}/index.m3u8', new) for new in music_map.values()],
                 )
 
+            # backgrounds 的 filename / file_path 内嵌背景 ID（bg_<id>_<hash>.webp），
+            # 随主键同步改写；磁盘文件在事务提交后统一重命名（见下）
+            bg_map = mappings.get('backgrounds') or {}
+            if bg_map:
+                for old, new in bg_map.items():
+                    row = conn.execute(
+                        'SELECT filename, file_path FROM backgrounds WHERE id = ?', (new,)
+                    ).fetchone()
+                    if not row:
+                        continue
+                    old_name = row['filename'] or ''
+                    new_name = _replace_bg_id(old_name, old, new)
+                    if new_name == old_name:
+                        continue
+                    base_dir = os.path.dirname(row['file_path'] or '')
+                    new_path = os.path.join(base_dir, new_name) if base_dir else new_name
+                    conn.execute(
+                        'UPDATE backgrounds SET filename = ?, file_path = ? WHERE id = ?',
+                        (new_name, new_path, new),
+                    )
+
             # 父表 ID 已重分配后，同步重映射子表外键，保证关联关系不变
             for child, col, parent in _FK_REMAPS:
                 mapping = mappings.get(parent) or {}
@@ -164,8 +252,11 @@ def migrate_legacy_ids():
         conn.execute('PRAGMA foreign_keys=ON')
         conn.close()
 
-    # 事务提交后重命名磁盘音频目录（文件系统操作无法回滚，放在最后执行）
+    # 事务提交后重命名磁盘文件 / 目录（文件系统操作无法回滚，放在最后执行）
     _rename_music_dirs(music_map)
+    _rename_background_files(bg_map)
+    # 大批量改写完成后合并 WAL，确保数据进入主库单文件
+    checkpoint()
 
     log('INFO', 'DB', f'雪花 ID 迁移完成：共重分配 {migrated} 条记录')
     return migrated

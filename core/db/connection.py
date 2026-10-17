@@ -27,6 +27,15 @@ SQLite 配置：
 - synchronous=NORMAL：WAL 下性能与安全的平衡点
 - foreign_keys=ON：开启外键约束
 - busy_timeout=30000：写锁争用时自动等待重试
+- 写事务用 BEGIN IMMEDIATE：见 transaction() 说明
+
+多线程写入时序说明（为什么不加应用层写队列也不会写乱）：
+    SQLite 本身就是「单写者」数据库——任意时刻只允许一个写事务，
+    由 SQLite 用文件锁统一排队。本层在此基础上用 BEGIN IMMEDIATE
+    让写事务一开始就独占写锁（而非 DEFERRED 的「先读锁、写时再升级」），
+    从而避免两个并发写事务同时持读锁、再抢写锁导致的 SQLITE_BUSY 升级冲突。
+    因此：并发写入天然串行、互不打断、不会出现事务边界错乱；
+    应用层无需再自建写队列（那反而会引入额外的阻塞与故障面）。
 """
 
 import os
@@ -111,13 +120,21 @@ def _fatal_connect_error(e):
 
 @contextmanager
 def transaction():
-    """事务块：全新连接 + 显式 BEGIN，正常退出提交、异常回滚、最后关闭。
+    """事务块：全新连接 + 显式 BEGIN IMMEDIATE，正常退出提交、异常回滚、最后关闭。
 
     块内的多条语句要么整体提交、要么整体回滚，保证原子性；
     无论正常结束、提前 return 还是抛异常，连接都会被关闭。
+
+    为什么用 IMMEDIATE 而不是默认的 DEFERRED：
+        默认 BEGIN 只先拿读锁，直到第一条写语句才尝试升级为写锁。
+        多线程并发写时，两个事务可能同时持读锁、再同时申请写锁，
+        其中一个会拿到 SQLITE_BUSY 而被迫回滚重试——这正是「多线程写入时序问题」的根源。
+        BEGIN IMMEDIATE 在事务开始时就申请写锁，由 SQLite 统一排队：
+        任意时刻只有一个写事务在推进，其余按 busy_timeout 等待，
+        从而做到并发写天然串行、互不打断、不会锁升级冲突。
     """
     conn = _create_connection()
-    conn.execute('BEGIN')
+    conn.execute('BEGIN IMMEDIATE')
     try:
         yield conn
         conn.commit()
@@ -153,12 +170,23 @@ def flush_and_close_all():
     此函数只需一条临时连接执行 `wal_checkpoint(TRUNCATE)`，确保
     「已 commit 但仍在 WAL 中」的数据全部落盘（避免进程被杀后 WAL 残留）。
     """
+    checkpoint()
+    log('INFO', 'DB', 'WAL 已合并落盘')
+
+
+def checkpoint():
+    """把 WAL 中「已提交但尚未合并进主库」的数据合并落盘（TRUNCATE 模式）。
+
+    可用于优雅退出前、或大批量数据迁移完成后，确保数据进入主库单文件，
+    避免长时间只停留在 WAL 中。返回是否成功。
+    """
     try:
         conn = _create_connection()
         try:
             conn.execute('PRAGMA wal_checkpoint(TRUNCATE)')
         finally:
             conn.close()
+        return True
     except sqlite3.Error as exc:
-        log('WARNING', 'DB', f'关闭前 WAL 检查点失败: {exc}')
-    log('INFO', 'DB', 'WAL 已合并落盘')
+        log('WARNING', 'DB', f'WAL 检查点失败: {exc}')
+        return False

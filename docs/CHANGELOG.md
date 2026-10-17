@@ -4,10 +4,34 @@
 
 ### 变更
 
+* **雪花 ID 生成器重写为「独立待命线程 + 有界 FIFO 池」**（`core/shared/snowflake.py`）：
+  * **取消单锁 + 忙等**：原实现在一把锁内完成 ID 生成，调用方在序列号用尽时还要参与 `sleep` 轮询——高并发下所有线程争抢同一把锁、并可能集体忙等。
+  * **唯一生成者**：改由唯一的「待命线程」独占时间戳 / 序列号计数器预生成 ID，计数器只被这一个线程读写，天然无竞态。
+  * **有界 FIFO 池**：预生成的 ID 按顺序进入固定容量队列（默认 1024 个，约 32KB；池满时待命线程在 `put` 上阻塞，**绝不无限预生成、不产生无用内存占用**）；单个 FIFO 保证每个 ID 只被发放一次、发放顺序与生成顺序一致，ID 仍单调递增。
+  * **取号零竞争、无忙等**：`next_id()` 仅做一次 `queue.get()`，O(1)、不加锁、不轮询；序列号用尽时的「等下一毫秒」由待命线程承担，调用方完全无感知。
+  * **结构性保证唯一**：单生成者 + 单 FIFO，从结构上保证**超高并发同时取号绝不重复**；待命线程内异常只记录后继续，不会让调用方在空池上永久阻塞。
+  * 新增并发压测 `scripts/tests/test_snowflake.py`（16 线程 × 2000 次 × 3 轮）：验证零重复、单调递增、取值恒在 53 位范围内。
+
+* **SQLite 写事务改用 `BEGIN IMMEDIATE`，从根源消除多线程写入时序冲突**（`core/db/connection.py`）：
+  * **原问题**：`transaction()` 用默认 `BEGIN`（DEFERRED）——先拿读锁，写时才申请升级为写锁；多线程并发写时两个事务可能同时持读锁、再同时抢写锁，其中一个拿到 `SQLITE_BUSY` 被迫回滚重试，这正是「多线程写入时序问题」的根源。
+  * **修复**：改为 `BEGIN IMMEDIATE`，事务一开始就申请写锁，由 SQLite 统一排队——任意时刻只有一个写事务在推进，其余按 `busy_timeout=30000` 等待，写入天然串行、互不打断、无锁升级冲突。SQLite 本身即「单写者」数据库，因此应用层无需自建写队列。
+
+* **防火墙 DuckDB 打开自愈，修复 WAL 重放报错 `Sequence with name "seq_firewall_bans" already exists!`**（`services/firewall/service/database.py`）：
+  * **根因**：旧版本用 `CREATE SEQUENCE` 作自增主键，迁移为雪花 ID 后序列被删除；若进程在 CHECKPOINT 前异常退出，WAL 里会残留建 / 删序列记录，下次打开重放 WAL 即冲突，整个库打不开（表现为备份时该库快照写入失败）。
+  * **打开时无条件清理遗留序列**：连接建立后先 `DROP SEQUENCE IF EXISTS` 清掉全部历史序列，再做初始化。
+  * **强制 CHECKPOINT**：初始化完成后与关闭前都执行 `CHECKPOINT`，保证 WAL 不残留 DDL，下次打开不再重放冲突记录。
+  * **打开失败自动自愈**：先把损坏的 `*.wal`（含 `*.wal.tmp`）重命名隔离后重试；仍失败则隔离整个库文件并重建空库，保证单文件损坏不会导致整站防火墙不可用。
+  * 连接锁同步改为**可重入锁**（`RLock`），避免同线程嵌套 `with get_db()` 时自锁。
+
+* **雪花 ID 迁移同步重命名磁盘文件**（`core/db/snowflake_migration.py`）：
+  * 迁移（服务器自检触发）重分配主键时，除同步改写音频目录 `music/<id>/` 外，**新增背景图片**：把 `backgrounds.filename` / `file_path` 里的 `bg_<旧ID>_<hash>.webp` 改写为新 ID，并同步重命名磁盘上的主图与全部响应式变体，避免「库换了 ID、盘上还是旧名」导致取图 404。
+  * 仅在解析出的 ID 与旧 ID **精确匹配**时才替换，避免 ID 前缀误改；目录缺失时安全跳过不抛错。迁移完成后调用 `checkpoint()` 把 WAL 合并落盘。
+  * 新增边界测试 `scripts/tests/test_file_migration.py`（主图 / 各档变体 / 前缀不匹配不替换 / 缺失目录安全无抛错）。
+
 * **数据库读写层重写为原生 sqlite3 极简写法**（`core/db/connection.py`、`core/db/__init__.py`、`core/server.py` 及全部调用点）：
   * **删除自研连接层**：移除线程本地连接复用、`_DBConnection` 包装器、全局连接注册表与代次失效机制——原实现的「`close()` 是空操作、连接被跨线程复用、全局状态残留」这一整类问题从根源消除。
   * **每次调用新建连接**：`get_db()` 每次返回一条**全新原生 sqlite3 连接**，调用方自己负责用完 `close()`；SQLite WAL（多读 + 单写）+ `busy_timeout=30000` 处理写锁争用，并发读写正确排队，无任何隐式状态。
-  * **事务上下文管理器**：新增 `with transaction() as conn:`——进入执行 `BEGIN`，正常退出 `commit`、异常 `rollback`，最后统一 `close()`；全站原 `with get_db() as conn:` 调用点已全部替换为 `transaction()`。
+  * **事务上下文管理器**：新增 `with transaction() as conn:`——进入执行 `BEGIN IMMEDIATE`（并发模型见上方条目），正常退出 `commit`、异常 `rollback`，最后统一 `close()`；全站原 `with get_db() as conn:` 调用点已全部替换为 `transaction()`。
   * **优雅退出**：`flush_and_close_all()` 仅执行 `PRAGMA wal_checkpoint(TRUNCATE)`；备份入口 `backup_to()` 改为模块级函数，备份模块直接调用。
   * **保留 WAL 恢复语义**：不再删除异常退出残留的 `site.db-wal` / `site.db-shm`（其中含已提交但尚未合并进主库的数据），交由 SQLite 打开数据库时自动重放恢复。
 

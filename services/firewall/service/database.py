@@ -25,7 +25,9 @@ DB_DIR = os.path.join(APP_ROOT, 'uploads', 'db')
 DB_PATH = os.path.join(DB_DIR, 'firewall.duckdb')
 
 _conn = None
-_conn_lock = threading.Lock()
+# 可重入锁：读写共用同一条 DuckDB 连接，允许同线程内嵌套 with get_db()，
+# 避免非重入锁在嵌套场景下自锁
+_conn_lock = threading.RLock()
 
 # ---------------------------------------------------------------------------
 # 单写入线程 + 写队列 —— 所有 DuckDB 写入统一由一个线程按顺序执行
@@ -501,6 +503,59 @@ def _ensure_dir():
     os.makedirs(DB_DIR, exist_ok=True)
 
 
+def _quarantine(path, tag):
+    """把损坏 / 无法重放的文件重命名隔离，保留现场以便人工排查。
+
+    返回隔离后的路径；文件不存在返回 None。
+    """
+    if not os.path.exists(path):
+        return None
+    stamp = datetime.now().strftime('%Y%m%d%H%M%S')
+    target = f'{path}.{tag}-{stamp}'
+    try:
+        os.replace(path, target)
+        log_firewall('WARNING', 'FirewallDB', f'已隔离文件 {os.path.basename(path)} → {os.path.basename(target)}')
+        return target
+    except OSError as exc:
+        log_firewall('ERROR', 'FirewallDB', f'隔离文件失败 {path}: {exc}')
+        return None
+
+
+def _connect_with_heal(path):
+    """打开 DuckDB 库，遇到 WAL 重放失败时自动自愈。
+
+    背景：旧版本用过 `CREATE SEQUENCE seq_firewall_bans` 作自增主键，迁移为雪花 ID
+    后序列被删除。若某次进程在 CHECKPOINT 前异常退出，WAL 里会残留建/删序列记录；
+    DuckDB 下次打开重放 WAL 时遇到「序列已存在」会直接抛错，导致整个库打不开
+    （现象：备份时防火墙库快照写入失败）。
+
+    自愈顺序（尽力保留数据）：
+      1. 直接打开；
+      2. 失败 → 隔离损坏的 WAL（*.wal）后重试，成功即继续；
+      3. 仍失败 → 隔离整个库文件，重建空库（极端兜底，避免整站防火墙功能不可用）。
+    """
+    try:
+        return duckdb.connect(path)
+    except Exception as exc:
+        log_firewall('WARNING', 'FirewallDB', f'DuckDB 打开失败，尝试自愈: {exc}')
+
+    # 步骤 2：隔离损坏的 WAL（其中为「已提交但未合并进主库」的数据，代价极小）
+    _quarantine(path + '.wal', 'corrupt-wal')
+    _quarantine(path + '.wal.tmp', 'corrupt-wal-tmp')
+    try:
+        conn = duckdb.connect(path)
+        log_firewall('WARNING', 'FirewallDB', '已隔离损坏 WAL，数据库重新打开成功')
+        return conn
+    except Exception as exc:
+        log_firewall('ERROR', 'FirewallDB', f'隔离 WAL 后仍无法打开: {exc}')
+
+    # 步骤 3：兜底隔离整个库文件并重建空库
+    _quarantine(path, 'corrupt-db')
+    conn = duckdb.connect(path)
+    log_firewall('ERROR', 'FirewallDB', '原库文件已隔离，已重建空库（历史封禁数据丢失）')
+    return conn
+
+
 # 带自身主键（雪花 ID）的防火墙表
 _ID_TABLES = (
     'firewall_bans',
@@ -520,6 +575,26 @@ _LEGACY_SEQUENCES = (
     'seq_firewall_ban_details',
     'seq_firewall_content_injections',
 )
+
+
+def _drop_legacy_sequences(conn):
+    """无条件清理历史遗留的自增序列（幂等）。
+
+    旧版本防火墙表用 `id INTEGER DEFAULT nextval('seq_firewall_bans')` 作主键，
+    迁移为雪花 ID 后这些序列已无用。但只要序列仍留在 catalog 中，
+    它的建/删操作就可能残留在 WAL 里——DuckDB 重启重放 WAL 时若再次遇到
+    「CREATE SEQUENCE ... already exists」就会直接报错、导致整个库打不开
+    （表现为备份里防火墙库快照写入失败）。
+
+    因此这里在每次打开库后都主动 DROP 一次（已不存在则无操作），
+    让 catalog 与 WAL 都不再残留这些序列。若某表仍在依赖该序列，
+    DROP 会因依赖失败而被忽略，不影响正常使用。
+    """
+    for seq in _LEGACY_SEQUENCES:
+        try:
+            conn.execute(f'DROP SEQUENCE IF EXISTS {seq}')
+        except Exception:
+            pass
 
 
 def _migrate_legacy_ids(conn):
@@ -576,11 +651,7 @@ def _migrate_legacy_ids(conn):
             except Exception as e:
                 log_firewall('WARNING', 'FirewallDB', f'迁移建表警告: {e}')
     # 清理旧序列
-    for seq in _LEGACY_SEQUENCES:
-        try:
-            conn.execute(f'DROP SEQUENCE IF EXISTS {seq}')
-        except Exception:
-            pass
+    _drop_legacy_sequences(conn)
 
     # 3. 逐表重建数据：id 重分配为雪花 ID，ban_details.ban_id 同步重映射
     ban_map, acc_map = {}, {}
@@ -670,7 +741,7 @@ def get_db():
         with _conn_lock:
             if _conn is None:
                 _ensure_dir()
-                _conn = duckdb.connect(DB_PATH)
+                _conn = _connect_with_heal(DB_PATH)
                 _conn.execute("SET threads TO 2")
                 _conn.execute("SET memory_limit = '256MB'")
                 for stmt in CREATE_TABLES_SQL.split(';'):
@@ -681,7 +752,15 @@ def get_db():
                         except Exception as e:
                             log_firewall('WARNING', 'FirewallDB', f'建表警告: {e}')
                 _migrate_legacy_ids(_conn)
+                # 无条件清理遗留序列：避免其建/删操作残留在 WAL，导致下次打开重放失败
+                _drop_legacy_sequences(_conn)
                 _rebuild_critical_indexes(_conn)
+                # 强制 CHECKPOINT：把「已提交但仍在 WAL」的数据合并进主库并清空 WAL，
+                # 从根上避免 WAL 越积越大、以及 DDL 记录长期滞留导致的重放冲突
+                try:
+                    _conn.execute('CHECKPOINT')
+                except Exception as e:
+                    log_firewall('WARNING', 'FirewallDB', f'初始化 CHECKPOINT 失败: {e}')
                 log_firewall('INFO', 'FirewallDB', '防火墙数据库初始化完成', path=DB_PATH)
     return _DuckDBConnection(_conn, _conn_lock)
 
@@ -717,10 +796,14 @@ def _rebuild_critical_indexes(conn):
 
 
 def close_db():
-    """关闭 DuckDB 连接。"""
+    """关闭 DuckDB 连接（关闭前先 CHECKPOINT，把 WAL 数据合并进主库）。"""
     global _conn
     with _conn_lock:
         if _conn is not None:
+            try:
+                _conn.execute('CHECKPOINT')
+            except Exception:
+                pass
             try:
                 _conn.close()
             except Exception:

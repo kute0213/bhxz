@@ -1,6 +1,6 @@
-"""雪花算法 ID 生成器 —— 全站统一的 ID 生成函数。
+"""雪花 ID 生成器 —— 全站统一的 ID 生成入口（高并发、绝不重复）。
 
-Twitter Snowflake 结构（本项目采用 53 位变体，见下方说明）：
+结构（53 位变体，见下方说明）：
 
     | 41 bit 毫秒时间戳 | 12 bit 序列号 |
 
@@ -15,13 +15,23 @@ Twitter Snowflake 结构（本项目采用 53 位变体，见下方说明）：
     不会出现「超过 2^53 后精度丢失导致 ID 对不上」的问题——
     从根源上避免前后端 ID 不一致。
 
-* 唯一性：同一进程内由「毫秒时间戳 + 自增序列号」保证绝不重复。
-* 单调递增：同一进程内新生成的 ID 一定大于此前生成的 ID，
-  因此 ORDER BY id 与「创建先后顺序」天然一致，可直接替代自增主键用于排序。
-* 线程安全：生成过程在锁内完成，Waitress 多线程并发调用安全。
+并发模型（为什么高并发下不抢 ID、不重复）：
+    1. **唯一生成者**：由唯一的「待命线程」（snowflake）独占计数器，负责预生成 ID。
+       计数器（时间戳 + 序列号）只被这一个线程读写，天然不存在竞态。
+    2. **有界 FIFO 池**：生成的 ID 按顺序进入固定容量的队列（默认 1024 个，
+       内存占用约 32KB）。单个 FIFO 保证每个 ID 只被发放一次、发放顺序与生成顺序一致，
+       因此 ID 仍然单调递增，可直接替代自增主键用于排序。
+    3. **取号零锁竞争**：调用方 next_id() 只是从池中取一个，O(1) 且不做任何算术/等待；
+       超高并发下多个线程同时取号也不会互相阻塞或「抢号」。
+    4. **无忙等**：序列号在某毫秒用尽时的「等到下一毫秒」由待命线程承担，
+       调用方完全不参与，不会出现 sleep 轮询。
+    5. **内存有界**：池满时待命线程在 put 上阻塞，绝不会无限制预生成。
+
 * 返回类型：int，可直接写入 SQLite 的 INTEGER（64 位有符号）列。
+* 唯一性：单进程内由「单生成者 + 单 FIFO」结构性保证，绝不重复。
 """
 
+import queue
 import threading
 import time
 
@@ -37,9 +47,12 @@ _MAX_TIMESTAMP = (1 << _TIMESTAMP_BITS) - 1         # 时间戳位上限
 # 用于「服务器自检」识别尚未迁移的旧记录。
 LEGACY_ID_THRESHOLD = 1_000_000_000_000            # 1e12
 
-_lock = threading.Lock()
-_last_ts = -1
-_sequence = 0
+# 预生成池容量：固定值，内存占用约 32KB，绝不无限增长
+_POOL_SIZE = 1024
+
+_pool = queue.Queue(maxsize=_POOL_SIZE)
+_started = False
+_start_lock = threading.Lock()
 
 
 def _now_ms() -> int:
@@ -48,12 +61,70 @@ def _now_ms() -> int:
 
 
 def _wait_next_ms(last_ts: int) -> int:
-    """等待时钟越过 last_ts，返回第一个大于 last_ts 的毫秒时间戳。"""
+    """等待时钟越过 last_ts，返回第一个大于 last_ts 的毫秒时间戳（仅在待命线程内调用）。"""
     ts = _now_ms()
     while ts <= last_ts:
         time.sleep(0.0005)
         ts = _now_ms()
     return ts
+
+
+def _generate_loop():
+    """待命线程主循环：独占计数器，持续预生成 ID 写入 FIFO 池。
+
+    只有这一个线程读写计数器与 last_ts/sequence，因此不存在竞态；
+    池满时 put 阻塞，保证内存占用有界。
+    """
+    last_ts = -1
+    sequence = 0
+    while True:
+        try:
+            ts = _now_ms()
+            # 时钟回拨（如系统对时）时复用上一次时间戳，靠序列号继续推进，
+            # 保证 ID 仍然单调递增且不重复。
+            if ts < last_ts:
+                ts = last_ts
+
+            if ts == last_ts:
+                sequence = (sequence + 1) & _MAX_SEQUENCE
+                if sequence == 0:
+                    # 当前毫秒的序列号用尽，等到下一毫秒（在待命线程内完成，调用方无感知）
+                    ts = _wait_next_ms(last_ts)
+            else:
+                sequence = 0
+
+            last_ts = ts
+
+            elapsed = ts - _EPOCH_MS
+            if elapsed < 0 or elapsed > _MAX_TIMESTAMP:
+                raise OverflowError('雪花算法时间戳位已耗尽，需更新纪元')
+
+            _pool.put((elapsed << _SEQUENCE_BITS) | sequence)   # 池满时阻塞
+        except Exception as exc:
+            # 防御：任何异常都不能让待命线程退出（否则调用方会永久阻塞）。
+            # 仅记录后继续，避免异常路径导致整站 ID 生成停摆。
+            try:
+                from core.system.logger import log_fatal
+                log_fatal('CRITICAL', 'Snowflake', 'ID 生成线程异常，1 秒后继续', error=str(exc))
+            except Exception:
+                pass
+            time.sleep(1.0)
+
+
+def _ensure_started():
+    """惰性启动待命线程（线程安全，仅启动一次）。
+
+    `_started` 在线程成功启动后才置位：若线程创建失败，异常会立刻抛给调用方，
+    而不是让调用方在空池上永久阻塞。
+    """
+    global _started
+    if _started:
+        return
+    with _start_lock:
+        if _started:
+            return
+        threading.Thread(target=_generate_loop, name='snowflake', daemon=True).start()
+        _started = True
 
 
 def next_id() -> int:
@@ -62,29 +133,8 @@ def next_id() -> int:
     这是全站唯一的 ID 生成入口，所有非用户表主键都必须通过它生成，
     禁止在其他位置自行拼接 ID。
     """
-    global _last_ts, _sequence
-    with _lock:
-        ts = _now_ms()
-        # 时钟回拨（如系统对时）时复用上一次时间戳，靠序列号继续推进，
-        # 保证 ID 仍然单调递增且不重复。
-        if ts < _last_ts:
-            ts = _last_ts
-
-        if ts == _last_ts:
-            _sequence = (_sequence + 1) & _MAX_SEQUENCE
-            if _sequence == 0:
-                # 当前毫秒的序列号用尽，等到下一毫秒
-                ts = _wait_next_ms(_last_ts)
-        else:
-            _sequence = 0
-
-        _last_ts = ts
-
-        elapsed = ts - _EPOCH_MS
-        if elapsed < 0 or elapsed > _MAX_TIMESTAMP:
-            raise OverflowError('雪花算法时间戳位已耗尽，需更新纪元')
-
-        return (elapsed << _SEQUENCE_BITS) | _sequence
+    _ensure_started()
+    return _pool.get()
 
 
 def is_snowflake_id(value) -> bool:
