@@ -44,16 +44,16 @@ class TestSaveMaster:
     """上传落盘：只生成一个文件。"""
 
     def test_only_one_file_on_disk(self, bg_dir):
-        path, name, ratio = bg_service._save_background_master(7, 'photo.png', _png())
+        path, name, ratio = bg_service._save_background_master(7, _png())
 
-        assert name.startswith('bg_7_') and name.endswith('.webp')
+        assert name == '7_2.webp'                            # 雪花ID + 比例（2:1 → 2）
         assert os.path.basename(path) == name
         assert ratio == pytest.approx(2.0, abs=0.01)      # 自然宽高比被保留
 
         assert len(list(bg_dir.iterdir())) == 1            # 不再有 _768 / _1280 变体
 
     def test_long_edge_capped(self, bg_dir):
-        path, _, _ = bg_service._save_background_master(7, 'photo.png', _png(5000, 2500))
+        path, _, _ = bg_service._save_background_master(7, _png(5000, 2500))
         with open(path, 'rb') as f:
             assert _long_edge(f.read()) == bg_service.PRIMARY_SIZE
 
@@ -63,7 +63,7 @@ class TestReadBackgroundData:
 
     @pytest.fixture
     def master(self, bg_dir):
-        path, name, _ = bg_service._save_background_master(7, 'photo.png', _png())
+        path, name, _ = bg_service._save_background_master(7, _png())
         return {'file_path': path, 'filename': name}
 
     def test_size_none_returns_master(self, master):
@@ -92,12 +92,12 @@ class TestEtag:
     """当前启用背景 URL 固定，靠 ETag 让浏览器重新校验、避免缓存旧图。"""
 
     def test_differs_by_size(self, bg_dir):
-        path, _, _ = bg_service._save_background_master(7, 'photo.png', _png())
+        path, _, _ = bg_service._save_background_master(7, _png())
         bg = {'file_path': path}
         assert bg_service.background_etag(bg, size=768) != bg_service.background_etag(bg, size=1280)
 
     def test_differs_by_mtime(self, bg_dir):
-        path, _, _ = bg_service._save_background_master(7, 'photo.png', _png())
+        path, _, _ = bg_service._save_background_master(7, _png())
         bg = {'file_path': path}
         before = bg_service.background_etag(bg)
 

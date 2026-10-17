@@ -4,6 +4,12 @@
 
 ### 变更
 
+* **背景图片文件名改为「雪花 ID + 比例」**（`services/background_service/__init__.py`、`scripts/tests/test_background_service.py`、`README.md`）：
+  * 上传背景主图文件名由原来的 `bg_<雪花ID>_<hash>.webp` 改为 `<雪花ID>_<比例>.webp`（如 `123456789_1.7778.webp`）：直接以背景记录的雪花 ID 作唯一标识，比例取图片自然宽高比（宽 / 高，保留 4 位小数并去掉尾随零），文件名本身即可读出该背景的宽高比；不再拼接随机 hash，也不再使用原始文件名。
+  * 新增 `_format_ratio()` 负责比例格式化；`_background_filename(bg_id, ratio)` 与 `_save_background_master(bg_id, raw)` 相应简化（移除不再需要的原始文件名参数）。
+  * 当前 `uploads/backgrounds/` 目录为空、无任何历史背景图片，故**不提供任何旧文件名 → 新名字的迁移 / 批量改名代码**。
+  * 测试同步更新：断言主图名为 `7_2.webp`（2:1 → 比例 `2`）。
+
 * **业务日志全面模块化——除 core 核心与启动自检外，全部改为模块单独日志**（`core/system/logger.py` 及 23 个业务 / 路由文件）：
   * **总原则**：按开发准则约定，业务日志一律走模块单独日志（`register_module_log('<名称>')` + `log_module('<名称>', ...)`），**不再调用全局 `log()`**。仅 core 基础设施（`core/`：应用初始化、数据库 schema / 连接、WSGI 服务器、任务注册表）与启动自检（`core/system/startup_checks.py`）保留全局日志。
   * **新增 13 个模块**：`background`（背景图片）、`buildings`（公共建筑）、`music`（大喇叭音频）、`email`（异步邮件）、`backup`（数据备份）、`gameban`（游戏服务器封禁）、`sitemap`（站点地图缓存）、`rcon`（RCON 与玩家追踪）、`user`（用户资料 / 管理 / 媒体）、`password`（找回密码）、`cleanup`（被驳回内容清理）、`metrics`（系统指标采集）、`settings`（系统设置管理）；连同既有的 `firewall` / `captcha` / `email_code` / `register` / `login` / `waitress`，共 **19 个模块单独日志**。

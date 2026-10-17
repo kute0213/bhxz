@@ -148,26 +148,28 @@ def _convert_to_webp(raw):
     return data
 
 
-def _background_filename(bg_id, original_filename):
-    """生成背景图片主文件名（不含尺寸后缀）。"""
-    ext = (original_filename.rsplit('.', 1)[-1] if '.' in original_filename else '').lower()
-    hash_suffix = hashlib.md5(f'{bg_id}_{_now()}'.encode()).hexdigest()[:8]
-    return f'bg_{bg_id}_{hash_suffix}.webp'
+def _format_ratio(ratio):
+    """把宽高比格式化为文件名友好的短字符串（保留 4 位小数并去掉尾随零）。"""
+    return f'{ratio:.4f}'.rstrip('0').rstrip('.')
 
 
-def _save_background_master(bg_id, original_filename, raw):
+def _background_filename(bg_id, ratio):
+    """生成背景图片主文件名：雪花 ID + 比例（如 `123456789_1.7778.webp`）。"""
+    return f'{bg_id}_{_format_ratio(ratio)}.webp'
+
+
+def _save_background_master(bg_id, raw):
     """保存背景图片主图（磁盘上唯一的文件），返回 (主图绝对路径, 主文件名, 自然宽高比)。
 
     保持自然宽高比，只按长边缩放到 PRIMARY_SIZE 以内；裁切与按屏幕缩放由客户端
     完成，因此不再生成任何尺寸变体文件。
 
     Args:
-        bg_id: 背景图片记录 ID
-        original_filename: 原始文件名（用于生成主文件名）
+        bg_id: 背景图片记录 ID（雪花 ID）
         raw: 原始图片字节
     """
     ratio = _get_natural_ratio(raw)
-    main_name = _background_filename(bg_id, original_filename)
+    main_name = _background_filename(bg_id, ratio)
     main_path = os.path.join(UPLOAD_BACKGROUNDS_DIR, main_name)
     with open(main_path, 'wb') as f:
         f.write(_convert_to_webp(raw))
@@ -217,8 +219,8 @@ def start_upload(user_id, username, upload_file, ip_address):
                 _upload_tasks[task_id]['percent'] = 60
                 _upload_tasks[task_id]['message'] = '正在保存...'
 
-            # 生成主图并落盘（文件名统一为 bg_<id>_<hash>.webp，不使用原始文件名）
-            save_path, main_name, ratio = _save_background_master(bg_id, original_filename, raw)
+            # 生成主图并落盘（文件名统一为 <雪花ID>_<比例>.webp，不使用原始文件名）
+            save_path, main_name, ratio = _save_background_master(bg_id, raw)
 
             with transaction() as conn:
                 conn.execute(
