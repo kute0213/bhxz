@@ -556,16 +556,6 @@ def _connect_with_heal(path):
     return conn
 
 
-# 带自身主键（雪花 ID）的防火墙表
-_ID_TABLES = (
-    'firewall_bans',
-    'firewall_account_bans',
-    'firewall_warnings',
-    'firewall_ddos_log',
-    'firewall_content_injections',
-    'firewall_ban_details',
-)
-
 # 需要清理的旧自增序列（历史版本遗留）
 _LEGACY_SEQUENCES = (
     'seq_firewall_bans',
@@ -595,105 +585,6 @@ def _drop_legacy_sequences(conn):
             conn.execute(f'DROP SEQUENCE IF EXISTS {seq}')
         except Exception:
             pass
-
-
-def _migrate_legacy_ids(conn):
-    """把防火墙表的历史自增 ID 迁移为雪花 ID（幂等，仅在检测到旧结构时执行）。
-
-    旧结构：id 列为 INTEGER + DEFAULT nextval(seq)，值域仅 int32，无法容纳
-    雪花 ID（~2.3e14）。因此迁移会重建这些表为 BIGINT 主键（无默认值），
-    行数据按原 id 升序重分配雪花 ID，且 firewall_ban_details.ban_id 随父表
-    同步重映射，保证关联关系不变。
-    """
-    from core.shared.snowflake import next_id
-
-    # 检测：任一表 id 列类型不是 BIGINT，即视为旧结构，需迁移
-    need_migrate = False
-    for table in _ID_TABLES:
-        row = conn.execute(
-            "SELECT data_type FROM information_schema.columns "
-            "WHERE table_name = ? AND column_name = 'id'",
-            (table,),
-        ).fetchone()
-        if row is None:
-            continue  # 表尚不存在
-        if str(row[0]).upper() != 'BIGINT':
-            need_migrate = True
-            break
-
-    if not need_migrate:
-        return
-
-    log_firewall('INFO', 'FirewallDB', '检测到历史自增 ID，开始迁移为雪花 ID')
-
-    # 1. 快照所有旧表数据
-    snapshots = {}
-    for table in _ID_TABLES:
-        try:
-            cur = conn.execute(f'SELECT * FROM {table}')
-            cols = [d[0] for d in cur.description]
-            rows = cur.fetchall()
-            snapshots[table] = (cols, rows)
-        except Exception:
-            pass
-
-    # 2. 删除旧表（连同其索引）并重建为新结构
-    for table in _ID_TABLES:
-        try:
-            conn.execute(f'DROP TABLE IF EXISTS {table}')
-        except Exception:
-            pass
-    for stmt in CREATE_TABLES_SQL.split(';'):
-        stmt = stmt.strip()
-        if stmt:
-            try:
-                conn.execute(stmt + ';')
-            except Exception as e:
-                log_firewall('WARNING', 'FirewallDB', f'迁移建表警告: {e}')
-    # 清理旧序列
-    _drop_legacy_sequences(conn)
-
-    # 3. 逐表重建数据：id 重分配为雪花 ID，ban_details.ban_id 同步重映射
-    ban_map, acc_map = {}, {}
-    # 已被删除的封禁（详情仍作为审计日志保留）按旧 ban_id 分组分配雪花 ID，
-    # 保证同一封禁的多条详情仍共享同一 ban_id，且不残留任何历史小 ID。
-    orphan_map = {}
-    restored = 0
-    # ban_details 依赖父表映射，放到最后处理
-    for table in _ID_TABLES:
-        snapshot = snapshots.get(table)
-        if not snapshot:
-            continue
-        cols, rows = snapshot
-        if not rows:
-            continue
-        id_idx = cols.index('id')
-        type_idx = cols.index('ban_type') if 'ban_type' in cols else None
-        bid_idx = cols.index('ban_id') if 'ban_id' in cols else None
-        col_list = ', '.join(cols)
-        placeholders = ', '.join(['?'] * len(cols))
-        for row in rows:
-            row = list(row)
-            old_id = row[id_idx]
-            new_id = next_id()
-            row[id_idx] = new_id
-            if bid_idx is not None:
-                parent = ban_map if row[type_idx] == 'ip' else acc_map
-                old_bid = row[bid_idx]
-                if old_bid in parent:
-                    row[bid_idx] = parent[old_bid]
-                else:
-                    row[bid_idx] = orphan_map.setdefault(old_bid, next_id())
-            conn.execute(
-                f'INSERT INTO {table} ({col_list}) VALUES ({placeholders})', row
-            )
-            restored += 1
-            if table == 'firewall_bans':
-                ban_map[old_id] = new_id
-            elif table == 'firewall_account_bans':
-                acc_map[old_id] = new_id
-
-    log_firewall('INFO', 'FirewallDB', f'防火墙历史 ID 迁移完成：共重分配 {restored} 条记录')
 
 
 class _DuckDBConnection:
@@ -751,7 +642,6 @@ def get_db():
                             _conn.execute(stmt + ';')
                         except Exception as e:
                             log_firewall('WARNING', 'FirewallDB', f'建表警告: {e}')
-                _migrate_legacy_ids(_conn)
                 # 无条件清理遗留序列：避免其建/删操作残留在 WAL，导致下次打开重放失败
                 _drop_legacy_sequences(_conn)
                 _rebuild_critical_indexes(_conn)

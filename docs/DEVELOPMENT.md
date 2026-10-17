@@ -370,10 +370,7 @@ curl -s -o /dev/null -w "%{http_code}" http://localhost:5000/buildings
 * **新装库**：建表语句自带新列，无需额外处理。
 * **已有库**：`CREATE TABLE IF NOT EXISTS` 对已存在的表不生效，需部署方自行执行
   `ALTER TABLE 表名 ADD COLUMN 列名 类型 DEFAULT 默认值;` 后再部署（或重建库）。
-* **例外（启动自检中仍会运行）**：`core/db/snowflake_migration.py` 的两件事——① 历史自增 ID → 雪花 ID 的一次性重分配（`migrate_legacy_ids()`，仅在检测到历史 ID 时执行）；② 磁盘文件名 / 目录名 / 播放列表内容与库里 ID 的**幂等对账**（`reconcile_media_files()`，每次启动都跑）。它们不属于表结构迁移，改动磁盘前请参照该模块的「不猜测」原则：数量对不上时只告警，不做可能挂错数据的重命名。
-
-> 历史上曾在启动流程用 `add_column_if_not_exists()` 自动补列，该方法已随全部一次性迁移代码一并删除；
-> 索引仍使用 `CREATE INDEX IF NOT EXISTS`（幂等，属于常规 schema 初始化）。
+* **索引**：仍使用 `CREATE INDEX IF NOT EXISTS`（幂等，属于常规 schema 初始化）。
 
 ### 4. 页面入场动画不得依赖 JS 显示（避免白屏）
 

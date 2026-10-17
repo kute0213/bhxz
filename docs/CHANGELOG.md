@@ -4,6 +4,13 @@
 
 ### 变更
 
+* **删除已完成的一次性迁移代码（历史 ID 迁移 + 磁盘文件名对账）**（删除 `core/db/snowflake_migration.py`、`scripts/tests/test_file_migration.py`，改 `core/system/startup_checks.py`、`services/firewall/service/database.py`）：
+  * 全站历史自增 ID → 雪花 ID 的迁移已在最新版运行时完成，以下一次性代码不再需要，一并移除，让代码库保持精简：
+    * 主站 `core/db/snowflake_migration.py` 整体删除（含 `migrate_legacy_ids()` 主键 / 外键重映射、音频目录与播放列表内容改名、背景图片改名，以及 `reconcile_media_files()` 启动对账）；`core/system/startup_checks.py` 中对应的两处启动调用与 `scripts/tests/test_file_migration.py` 同步移除。
+    * 防火墙 `services/firewall/service/database.py` 的 `_migrate_legacy_ids()` 及其专用的 `_ID_TABLES` 一并移除；`get_db()` 打开库时不再做历史 ID 迁移。
+  * **保留** `_drop_legacy_sequences()` 与 `_LEGACY_SEQUENCES`：它不只是迁移的一部分，更是 WAL 重放自愈的关键（每次打开库都幂等清理遗留序列，避免 `Sequence ... already exists!` 导致整个 DuckDB 打不开）。
+  * 文档同步：README 目录树与「雪花 ID」章节删除迁移 / 对账相关描述，[DEVELOPMENT.md](docs/DEVELOPMENT.md) 数据库结构一节移除「启动自检仍会运行迁移」的例外说明。
+
 * **背景图片改为「磁盘单主图 + 内存缩图 + 客户端裁切」**（`services/background_service/__init__.py`、`routes/backgrounds/pages/__init__.py`、`static/templates/base.html`、`core/db/snowflake_migration.py`、`scripts/tests/test_background_service.py`、`scripts/tests/test_file_migration.py`）：
   * **问题**：原实现上传时预生成 768 / 1280 / 1920 三档响应式变体，并对历史背景「缺失档位按需生成并落盘缓存」——每次请求一个新档位/比例就在磁盘上多留一张文件，`uploads/backgrounds/` 越用越臃肿。
   * **磁盘单文件**：上传时只生成**一个主图文件**（保持自然宽高比，按长边缩放到 1920 以内）；移除 `_ensure_variant` / `_variant_path` / `_smart_crop` / `_crop_to_ratio` / `_save_background_variants` 等按尺寸生成变体的逻辑，磁盘上每张背景永远只有一张 `.webp`。
