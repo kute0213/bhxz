@@ -76,7 +76,7 @@ PROTECTED_PATHS = {
     '.trae', '.trae-html-share-packages', '.vscode', '.idea',
     # 本地下载的构建产物（.gitignore 排除，服务器上必须保留）
     'static/lib/monaco',
-    # 运行期下载的 ffmpeg 可执行文件
+    # ffmpeg 可执行文件（新版放在 uploads/ffmpeg/，uploads 已整体保护；旧位置保留兼容）
     'scripts/ffmpeg',
     'scripts/build/node_modules',
     # 本地启动脚本（未提交到仓库，本地自建，必须保留）

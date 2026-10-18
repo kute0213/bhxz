@@ -4,6 +4,15 @@
 
 ### 变更
 
+* **进度条统一为「清晰磨砂玻璃」模板 + 修复 ffmpeg 缺失导致的转码报错**（`static/templates/macros/progress.html`、`static/css/base.css`、`static/templates/{backgrounds,music}/upload.html`、`static/js/core/base.js`、`config.py`、`services/music/upload/__init__.py`、`core/system/startup_checks.py`、`update.py`、`README.md`）：
+  * **统一进度条模板**：全站进度条由 `static/templates/macros/progress.html` 的 `progress_track(id, variant, size, width)` 宏渲染，样式集中在 `static/css/base.css` 的 `.progress-track` / `.progress-fill`；没有进度条的地方不引宏、需要时再引。迁移范围：`backgrounds/upload.html`（原手写 `.upload-progress-bar`）、`music/upload.html`（上传 `gold` + 转码 `green` 双阶段，删除页面内联不确定态动画）、`admin/db_backup.html`（已在用宏），`base.js` / `uploader.js` 动态创建改用 `.progress-track` / `.progress-fill` 类名。
+  * **清晰磨砂玻璃质感**：轨道强化为白色半透明磨砂玻璃（`backdrop-filter: blur(12px) saturate(140%)`、1px 白色描边、内阴影），填充沿用渐变；**删除**旧的 `.upload-progress-bar` / `.upload-progress-fill` 别名样式。
+  * **不确定态**：新增 `.progress-fill.is-indeterminate`（满宽 + 滑动光带 `progressIndeterminate` 动画），真实百分比未知时显示动画进度条而非只有文字；音频转码阶段即为「有真实百分比走精确进度、否则走不确定态动画」。
+  * **修复转码报错 `[WinError 2] 系统找不到指定的文件`**：根因是 `FFMPEG_DIR` 指向不存在的 `scripts/ffmpeg/` 且无自动下载。改为 Windows 用 `uploads/ffmpeg/ffmpeg.exe`、Linux/macOS 直接用系统 `ffmpeg`/`ffprobe`，可执行文件缺失时回退系统 PATH（`config.py` 按平台重算 `FFMPEG_BIN` / `FFPROBE_BIN`）；转码同步 / 异步入口前置检查可执行文件，缺失时抛出清晰中文指引（`services/music/upload/__init__.py` 的 `FFMPEG_MISSING_MSG` / `_bin_missing`），不再暴露原生系统错误。
+  * **启动自检**：`core/system/startup_checks.py` 的 uploads 子目录新增 `ffmpeg`，并新增 `_check_ffmpeg()`——启动时检查 ffmpeg / ffprobe 是否可用，缺失仅告警并给出各平台安装 / 放置指引，不阻塞启动。
+  * `update.py`：`scripts/ffmpeg` 保护路径注释更新为「旧位置兼容」（新版在 `uploads/ffmpeg`，`uploads/` 已整体受保护）。
+  * 验证：`python -m pytest scripts/tests -q` 224 项通过；三个受影响页面模板渲染正常，无旧类名残留。
+
 * **删除背景图片的「启用 / 停用」开关，并修正挑选距离为对数距离**（`services/background_service/__init__.py`、`routes/admin/backgrounds/__init__.py`、`core/db/schema.py`、`core/template_context.py`、`static/templates/base.html`、`static/templates/backgrounds/index.html`、`scripts/tests/test_background_service.py`）：
   * **问题**：即使请求 `/backgrounds/serve?ratio=1.1`（宽/高 > 1，属横屏）仍返回竖屏图片，而数据库里明明有横屏图。根因有两处：① 残留的 `is_active`「启用 / 停用」开关（含 `/admin/backgrounds/<id>/toggle` 路由）会把未被启用的横屏图排除在图片池外；② 挑选用线性差值 `|图片比例 − 屏幕比例|`，在比例 1 附近不对称，`ratio=1.1` 会误选到 0.5 的竖屏图。
   * **彻底删除开关**：移除 `backgrounds` 表的 `is_active` 字段（表定义、INSERT 写入、查询条件）、`background_service.toggle_active()` 服务函数与 `/admin/backgrounds/<id>/toggle` 路由，以及后台模板中已失效的启用/停用按钮分支；图片池由 `get_active_backgrounds()`（`status=1 AND is_active=1`）改为 `get_approved_backgrounds()`（`status=1`）——**所有审核通过的背景都可直接用作全站背景，不再需要任何开关**。

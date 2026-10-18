@@ -266,7 +266,7 @@ python scripts/build/package.py
 
 * 支持 mp3 / wav / ogg / m4a / flac，单文件不超过 100MB（依赖 ffmpeg）
 
-* 自动调用内置 ffmpeg：Windows 用 `scripts/ffmpeg/ffmpeg.exe`，Linux/macOS 用 `scripts/ffmpeg/ffmpeg`，未内置时回退系统 PATH 中的 `ffmpeg`
+* 自动调用 ffmpeg：Windows 用 `uploads/ffmpeg/ffmpeg.exe`（缺失时回退系统 PATH），Linux/macOS 直接用系统 PATH 中的 `ffmpeg`；未找到时上传页给出清晰中文指引（不自动下载）
 
 * **公开需审核**：申请公开的音频进入「待审核」，管理员通过后才在游戏内大喇叭展示；**驳回后音频自动转为私有**，用户可重新申请公开或删除；已公开转私有再申请公开需重新审核
 
@@ -420,8 +420,8 @@ python scripts/build/package.py
 | `UPLOAD_DIR`                  | 上传文件目录                                    | `./uploads`                                 |
 | `UPLOAD_MUSIC_DIR`            | 大喇叭音频存放目录                                 | `./uploads/music`                           |
 | `MUSIC_ALLOWED_EXTENSIONS`    | 大喇叭音频允许上传的格式                              | `mp3/wav/ogg/m4a/flac`                      |
-| `FFMPEG_BIN`                  | 大喇叭音频转码用的 ffmpeg                          | 优先 `scripts/ffmpeg/ffmpeg(.exe)`，否则系统 PATH  |
-| `FFPROBE_BIN`                 | 探测音频时长（转码进度百分比）用的 ffprobe                 | 优先 `scripts/ffmpeg/ffprobe(.exe)`，否则系统 PATH |
+| `FFMPEG_BIN`                  | 大喇叭音频转码用的 ffmpeg                          | Windows 优先 `uploads/ffmpeg/ffmpeg.exe`，否则系统 PATH；Linux/macOS 用系统 `ffmpeg`  |
+| `FFPROBE_BIN`                 | 探测音频时长（转码进度百分比）用的 ffprobe                 | Windows 优先 `uploads/ffmpeg/ffprobe.exe`，否则系统 PATH；Linux/macOS 用系统 `ffprobe` |
 | `FFMPEG_THREADS`              | ffmpeg 音频转码线程数                            | `0`（自动按 CPU 核数）                             |
 | `MAX_CONTENT_LENGTH`          | 最大上传大小                                    | 100 MB                                      |
 | `BACKUP_DIR`                  | 备份根目录（支持绝对/相对路径，运行时可在后台热改）            | `../bhxz_backups`（项目上一级）                   |
@@ -617,6 +617,8 @@ python scripts/build/package.py
 * **统一弹窗模板系统**：`static/templates/macros/modal.html` 提供 `modal_overlay`（CustomModal 骨架）、`modal_shell`（页面级弹窗容器，支持尺寸/图标/颜色自定义）、`modal_captcha`（图形验证码弹窗）、`modal_close_script`（全局 `openModal`/`closeModal` 控制器）四组宏，配合 `base.js` 的 `CustomModal`（alert/confirm/prompt）统一全站所有弹窗样式，取代全部原生 `alert`/`confirm`/`prompt` 及手写弹窗；图形验证码弹窗改为**按需加载**（见下文「前端资源按需加载」）
 
 * **统一标签列表输入框**：`static/templates/macros/forms.html` 的 `tags_field()` 宏 + `base.js` 的 `TagInput` 模块，提供全站统一的「列表类」输入体验——输入一项后回车或点「添加」即新增一个标签，已添加标签以胶囊展示、点叉号即可删除，支持粘贴「a, b, c」自动拆分；底层始终用一个隐藏 input 保存**逗号分隔字符串**，与后端解析、表单提交完全兼容（零迁移成本）。建筑发布 / 建筑详情编辑标签 / 音频上传 / 音频标签编辑等所有列表输入均已统一使用该控件，用户无需再手动输入逗号分隔；全局「编辑标签」弹窗（`#tag-edit-modal`）复用同一控件供各场景调用
+
+* **统一进度条模板（清晰磨砂玻璃）**：全站所有进度条由 `static/templates/macros/progress.html` 的 `progress_track(id, variant, size, width)` 宏渲染（`variant` 取 gold/green/blue/purple/red/yellow，`size` 取 xs/sm/md/lg），样式集中在 `static/css/base.css` 的 `.progress-track` / `.progress-fill`——白色半透明**清晰磨砂玻璃**轨道（`backdrop-filter: blur(12px) saturate(140%)` + 细白边框 + 内阴影）配渐变填充；**真实百分比未知时**给填充元素加 `is-indeterminate` 类即切换为滑动光带的不确定态。上传页（`backgrounds/upload.html`）、音频上传（上传+转码双阶段）、数据备份（`admin/db_backup.html`）以及 JS 动态创建（`base.js` / `uploader.js`）一律复用同一套类名，**禁止另起样式**；仅音频播放器的可拖拽进度滑块（`.mp-progress`，含缓冲/圆点）为独立交互控件，不纳入此模板
 
 ### 交互效果
 
@@ -904,7 +906,7 @@ workspace/
 5. **清理「GitHub 上已被删除」的文件与目录**：合并覆盖只会新增/覆盖，反映不了「新版删除」，故覆盖完成后按最新 ZIP 的文件清单递归清理——被移除的文件会删除、被移除的目录会整棵删除（例如更换字体后，旧字体的 woff2 子集一并清掉，不再残留）。`PROTECTED_PATHS` 中的路径**强制跳过、绝不删除**，包括：
    - 用户数据：`uploads/`（音频、背景图、sitemap，数据库也在 `uploads/db/`）
    - 运行期数据 / 本地配置：`db`、`backups`、`logs`、`ssl`、`release`、`.env`、`.env.local`、`.git`、`.venv`、`node_modules`
-   - 本地生成物：`static/lib/monaco`、`scripts/ffmpeg`（运行期下载，`.gitignore` 已排除）
+   - 本地生成物：`static/lib/monaco`、`uploads/ffmpeg`（Windows 下放置 ffmpeg.exe / ffprobe.exe，`uploads/` 已被 `.gitignore` 整目录排除）
    - 本地启动脚本：`start.bat`（未提交到仓库，本地自建）
    - 任意层级：`__pycache__`、`.pytest_cache`、`node_modules`、`.DS_Store`、`Thumbs.db`
 6. 自动安装/更新 Python 依赖

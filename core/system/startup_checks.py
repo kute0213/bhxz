@@ -51,6 +51,7 @@ def run_startup_checks(app_root: str):
     _check_directories(app_root)
     _check_config()
     _check_uploads_structure(app_root)
+    _check_ffmpeg()
 
     log('INFO', 'Startup', '╔══════════════════════════════════════╗')
     log('INFO', 'Startup', '║     服务器健康检查完成                ║')
@@ -238,8 +239,8 @@ def _check_uploads_structure(app_root: str):
         log('INFO', 'Startup', '  ✓ uploads 目录不存在，无需检查')
         return
 
-    # 确保分类子目录存在
-    subdirs = ['sitemap', 'backgrounds']
+    # 确保分类子目录存在（ffmpeg 为 Windows 下放置 ffmpeg.exe / ffprobe.exe 的目录）
+    subdirs = ['sitemap', 'backgrounds', 'ffmpeg']
     created = 0
     for sub in subdirs:
         sub_path = os.path.join(uploads_dir, sub)
@@ -255,3 +256,16 @@ def _check_uploads_structure(app_root: str):
         log('INFO', 'Startup', '  ✓ uploads 子目录结构完整')
     else:
         log('INFO', 'Startup', f'  ✓ 已创建 {created} 个 uploads 子目录')
+
+
+def _check_ffmpeg():
+    """检查 ffmpeg / ffprobe 是否可用（仅告警，不阻塞启动）。"""
+    from config import FFMPEG_BIN, FFPROBE_BIN
+    missing = [b for b in (FFMPEG_BIN, FFPROBE_BIN)
+               if not (os.path.isfile(b) or shutil.which(b))]
+    if not missing:
+        log('INFO', 'Startup', '  ✓ ffmpeg / ffprobe 可用')
+        return
+    log('WARNING', 'Startup', f'  ! 未找到 {"、".join(missing)}，大喇叭音频转码将不可用')
+    log('WARNING', 'Startup', '    Windows：请将 ffmpeg.exe / ffprobe.exe 放到 uploads/ffmpeg/ 目录')
+    log('WARNING', 'Startup', '    Linux/macOS：请安装系统 ffmpeg（apt / yum / brew install ffmpeg）')

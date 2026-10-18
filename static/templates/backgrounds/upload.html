@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "macros/progress.html" import progress_track %}
 
 {% block title %}上传背景图片{% endblock %}
 
@@ -186,9 +187,7 @@
                         <span id="progress-text">准备上传...</span>
                         <span id="progress-percent">0%</span>
                     </div>
-                    <div class="upload-progress-bar lg">
-                        <div class="upload-progress-fill blue" id="progress-fill"></div>
-                    </div>
+                    {{ progress_track(id='progress-fill', variant='blue', size='lg') }}
                 </div>
             </form>
 

@@ -4,10 +4,14 @@
      {{ progress_track(id='progress-bar', variant='gold', size='lg', width='0%') }}
    参数：
      id      - 进度条内部填充元素的 DOM id（JS 更新宽度用）
-     variant - 颜色：gold | green | blue | purple | red（默认 gold）
+     variant - 颜色：gold | green | blue | purple | red | yellow（默认 gold）
      size    - 尺寸：xs | sm | md | lg（默认 md）
      width   - 初始宽度（默认 0%）
-   样式定义见 static/css/base.css 的「统一进度条组件」。
+   样式定义见 static/css/base.css 的「进度条 - 清晰磨砂玻璃」。
+
+   真实的百分比未知时，可在填充元素上追加 class="is-indeterminate"
+   切换到「不确定态」（滑动的光带），进度条会保持满宽并循环动画。
+   JS 侧动态创建进度条时无法使用本宏，须复用 .progress-track / .progress-fill 类。
    ============================================================ #}
 {% macro progress_track(id, variant='gold', size='md', width='0%') -%}
 <div class="progress-track {{ size }}">

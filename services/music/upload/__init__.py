@@ -40,6 +40,19 @@ def _now():
     return datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
 
+# ffmpeg 缺失时的统一提示（Windows 放 uploads/ffmpeg/，Linux/macOS 用系统 ffmpeg）
+FFMPEG_MISSING_MSG = (
+    '未找到 ffmpeg 可执行文件，无法转码：'
+    'Windows 请将 ffmpeg.exe / ffprobe.exe 放到 uploads/ffmpeg/ 目录；'
+    'Linux/macOS 请安装系统 ffmpeg'
+)
+
+
+def _bin_missing(bin_path):
+    """判断 ffmpeg / ffprobe 可执行文件是否不可用（内置路径不存在且 PATH 中也找不到）。"""
+    return not (os.path.isfile(bin_path) or shutil.which(bin_path))
+
+
 def notify_admins_pending_music(title, username):
     """异步通知所有管理员有新的音频公开申请待审核（不阻塞上传线程）。"""
     from services.mail import notify_admins, review_pending as build_pending_html
@@ -276,6 +289,8 @@ def upload_music(user_id, username, title, is_public, upload_file, ip_address, t
         mp3_path = os.path.join(work_dir, 'index.mp3')
         progress_file = os.path.join(work_dir, 'progress.log')
         cmd = _build_transcode_cmd(src_path, playlist_path, seg_pattern, mp3_path, progress_file)
+        if _bin_missing(FFMPEG_BIN):
+            raise RuntimeError(FFMPEG_MISSING_MSG)
         proc = subprocess.run(cmd, capture_output=True, timeout=300, env=make_env())
         if proc.returncode != 0 or not os.path.isfile(playlist_path) or not os.path.isfile(mp3_path):
             detail = (decode_output(proc.stderr) or decode_output(proc.stdout) or '')[-400:]
@@ -393,6 +408,9 @@ def _run_upload_task(task_id, user_id, username, title, is_public,
             duration = _upload_tasks.get(task_id, {}).get('duration')
 
         _set_task(task_id, status='transcoding', percent=0, message='正在转码… 0%')
+
+        if _bin_missing(FFMPEG_BIN):
+            raise RuntimeError(FFMPEG_MISSING_MSG)
 
         with open(err_log, 'w', encoding='utf-8', errors='replace') as errf:
             proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=errf, env=make_env())
