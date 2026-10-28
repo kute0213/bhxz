@@ -231,15 +231,44 @@ def _get_default_base_url() -> str:
     return 'http://localhost:5000'
 
 
-# 无独立内容时间的页面：(path, changefreq, priority)
+# 收录的公开页面白名单：(path, changefreq, priority)
+# 仅收录「无需登录即可访问、且含可被搜索引擎索引的内容」的页面。
+# 明确排除：
+#   * /map        —— 仅内嵌外部地图 iframe，本身无任何可索引内容；
+#   * /apply      —— 历史遗留的死路由（已无对应页面；真实申请页 /game-accounts/apply 需登录）；
+#   * 登录后 / 操作 / 上传页面（/settings、/music/my、/music/upload、/guides/create、
+#     /buildings/create、/backgrounds/upload、/game-accounts/apply 等）；
+#   * /admin、/api、/uploads、/media、/static 等内部路径。
 _STATIC_PAGES = [
-    ('/', 'monthly', '1.0'),
-    ('/server-status', 'weekly', '0.8'),
-    ('/map', 'weekly', '0.6'),
-    ('/docs', 'monthly', '0.7'),
+    ('/', 'weekly', '1.0'),
+    ('/server-status', 'weekly', '0.7'),
     ('/guides', 'weekly', '0.8'),
-    ('/apply', 'monthly', '0.5'),
+    ('/buildings', 'weekly', '0.8'),
+    ('/docs', 'monthly', '0.5'),
 ]
+
+# 静态资源类扩展名：这些不是可索引页面，不写入 sitemap
+# （用于过滤管理后台「公开文件」里配置的 js/css/图片等资源映射）
+_ASSET_EXTENSIONS = {
+    'js', 'css', 'json', 'xml', 'txt', 'map', 'ico', 'svg',
+    'png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp',
+    'woff', 'woff2', 'ttf', 'otf', 'eot',
+    'mp3', 'mp4', 'm3u8', 'ts', 'wav', 'ogg', 'flac',
+    'pdf', 'zip', 'gz', 'rar', '7z', 'rss', 'atom',
+}
+
+
+def _is_page_like(url_path: str) -> bool:
+    """判断公开路径是否像一个「页面」而非静态资源文件。
+
+    末尾带静态资源扩展名（js/css/图片/音视频等）的路径不属于可索引页面，
+    不写入 sitemap；无扩展名（目录或重写路径）与 .html/.htm 视为页面。
+    """
+    last = (url_path or '').rstrip('/').rsplit('/', 1)[-1]
+    if '.' not in last:
+        return True
+    ext = last.rsplit('.', 1)[-1].lower()
+    return ext not in _ASSET_EXTENSIONS
 
 
 def _latest_time(conn, table: str, column: str, where: str = ''):
@@ -258,6 +287,7 @@ def _site_latest(conn) -> str:
     """全站最近内容更新时间：跨所有内容表取最大，作为静态页面的 lastmod。"""
     candidates = (
         _latest_time(conn, 'server_guides', 'updated_at'),
+        _latest_time(conn, 'public_buildings', 'updated_at'),
         _latest_time(conn, 'backgrounds', 'created_at'),
         _latest_time(conn, 'music', 'created_at'),
         _latest_time(conn, 'public_paths', 'created_at'),
@@ -268,6 +298,9 @@ def _site_latest(conn) -> str:
 
 def _build_url_entries() -> list:
     """构建所有 URL 条目（不含 base_url 前缀），全部携带数据库读取的 lastmod。
+
+    仅收录公开可访问、可被搜索引擎索引的页面；详情页只收录「已审核通过」的内容。
+    同一 path 只保留一条（去重），避免重复 URL。
 
     Returns:
         list[dict]: [{'path': '/xxx', 'changefreq': '...', 'priority': '...', 'lastmod': '...'}]
@@ -288,7 +321,7 @@ def _build_url_entries() -> list:
 
         # 2) 内容列表页：时间取各自内容表的最新一条（比全站时间更准确）
         for path, freq, priority, lastmod in (
-            ('/backgrounds', 'weekly', '0.8', _latest_time(conn, 'backgrounds', 'created_at', 'status = 1')),
+            ('/backgrounds', 'weekly', '0.7', _latest_time(conn, 'backgrounds', 'created_at', 'status = 1')),
             ('/music', 'weekly', '0.8', _latest_time(conn, 'music', 'created_at', 'status = 2')),
         ):
             entries.append({
@@ -298,7 +331,7 @@ def _build_url_entries() -> list:
                 'priority': priority,
             })
 
-        # 3) 已审核通过的指南
+        # 3) 已审核通过的服务器指南详情
         rows = conn.execute(
             "SELECT id, updated_at FROM server_guides WHERE status = 'approved' ORDER BY id"
         ).fetchall()
@@ -310,19 +343,41 @@ def _build_url_entries() -> list:
                 'priority': '0.7',
             })
 
-        # 4) 自定义公开页面（public_paths 表）
+        # 4) 已审核通过的公共建筑详情
+        rows = conn.execute(
+            "SELECT id, updated_at FROM public_buildings WHERE status = 'approved' ORDER BY id"
+        ).fetchall()
+        for row in rows:
+            entries.append({
+                'path': f'/buildings/{row["id"]}',
+                'lastmod': _format_date(row['updated_at']),
+                'changefreq': 'weekly',
+                'priority': '0.7',
+            })
+
+        # 5) 自定义公开页面（public_paths 表）：仅收录「页面」，跳过 js/css/图片等资源映射
         rows = conn.execute(
             "SELECT url_path, created_at FROM public_paths WHERE is_active = 1 ORDER BY id"
         ).fetchall()
         for row in rows:
+            url_path = (row['url_path'] or '').rstrip('/')
+            if not _is_page_like(url_path):
+                continue
             entries.append({
-                'path': row['url_path'].rstrip('/') or '/',
+                'path': url_path or '/',
                 'lastmod': _format_date(row['created_at']),
                 'changefreq': 'weekly',
                 'priority': '0.5',
             })
 
-        return entries
+        # 去重：同一 path 只保留一条（先出现者优先）
+        deduped, seen = [], set()
+        for entry in entries:
+            if entry['path'] in seen:
+                continue
+            seen.add(entry['path'])
+            deduped.append(entry)
+        return deduped
     finally:
         conn.close()
 

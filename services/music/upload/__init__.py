@@ -5,6 +5,7 @@
 - 后台线程运行 ffmpeg 并解析 -progress 输出，转码百分比通过 get_upload_progress 获取
 """
 
+import errno
 import os
 import shutil
 import subprocess
@@ -24,7 +25,7 @@ from config import (
     AUDIO_MAX_BYTES,
 )
 from core.system.logger import log_module, register_module_log
-from core.shared.process_utils import make_env, decode_output
+from core.shared.process_utils import decode_output, popen_kwargs
 from services.music.constants import (
     HLS_SEGMENT_SECONDS,
     STATUS_PENDING,
@@ -47,10 +48,61 @@ FFMPEG_MISSING_MSG = (
     'Linux/macOS 请安装系统 ffmpeg'
 )
 
+# 重试后仍被占用时的统一提示（多为杀毒软件 / 播放器正在读取刚生成的文件）
+FILE_BUSY_MSG = '音频文件被其他程序占用，暂时无法完成转码，请关闭正在使用该文件的程序后重试'
+
 
 def _bin_missing(bin_path):
     """判断 ffmpeg / ffprobe 可执行文件是否不可用（内置路径不存在且 PATH 中也找不到）。"""
     return not (os.path.isfile(bin_path) or shutil.which(bin_path))
+
+
+# Windows 文件占用相关错误码：拒绝访问 / 共享冲突 / 文件锁冲突
+_BUSY_WINERRORS = {5, 32, 33}
+_BUSY_ERRNOS = {errno.EACCES, errno.EPERM, errno.EBUSY}
+
+
+def _is_file_busy(exc):
+    """是否为「文件被其他程序占用」类错误（Windows WinError 32 等）。"""
+    if isinstance(exc, PermissionError):
+        return True
+    if getattr(exc, 'winerror', None) in _BUSY_WINERRORS:
+        return True
+    return getattr(exc, 'errno', None) in _BUSY_ERRNOS
+
+
+def _retry_io(op, *args, **kwargs):
+    """执行文件操作；Windows 下遇到文件占用时短时退避重试。
+
+    ffmpeg 刚写完的输出文件可能被系统索引 / 杀毒软件 / 播放器短暂占用，
+    此时立刻删除或重命名目录会抛出 WinError 32（另一个程序正在使用此文件）。
+    重试可跨过这段极短的占用窗口；非占用错误立即抛出，避免掩盖真实原因。
+    """
+    attempts = 10 if os.name == 'nt' else 1
+    delay = 0.2
+    for i in range(attempts):
+        try:
+            return op(*args, **kwargs)
+        except OSError as e:
+            if not _is_file_busy(e) or i == attempts - 1:
+                raise
+            time.sleep(delay)
+            delay = min(delay * 1.5, 1.0)
+
+
+def _close_upload_stream(upload_file):
+    """保存到磁盘后立即关闭上传流。
+
+    Windows 下浏览器上传的临时文件句柄若不及时释放，可能在后继处理
+    （ffprobe / ffmpeg / 目录重命名）时表现为「文件正在使用」。
+    """
+    for obj in (upload_file, getattr(upload_file, 'stream', None)):
+        close = getattr(obj, 'close', None)
+        if callable(close):
+            try:
+                close()
+            except Exception:
+                pass
 
 
 def notify_admins_pending_music(title, username):
@@ -77,16 +129,20 @@ def _rewrite_playlist_segments(playlist_path, music_id):
     播放器（含游戏端）以 m3u8 的 URL（/music/<id>.m3u8）为基准解析分片，
     相对路径会解析到 /music/seg_000.ts 导致 404，因此改为绝对路径。
     """
-    with open(playlist_path, 'r', encoding='utf-8') as f:
-        lines = f.read().splitlines()
-    out = []
-    for line in lines:
-        if line and not line.startswith('#') and line.endswith('.ts'):
-            out.append(f'/music/{music_id}/{os.path.basename(line)}')
-        else:
-            out.append(line)
-    with open(playlist_path, 'w', encoding='utf-8') as f:
-        f.write('\n'.join(out) + '\n')
+    def _rewrite():
+        with open(playlist_path, 'r', encoding='utf-8') as f:
+            lines = f.read().splitlines()
+        out = []
+        for line in lines:
+            if line and not line.startswith('#') and line.endswith('.ts'):
+                out.append(f'/music/{music_id}/{os.path.basename(line)}')
+            else:
+                out.append(line)
+        with open(playlist_path, 'w', encoding='utf-8') as f:
+            f.write('\n'.join(out) + '\n')
+
+    # ffmpeg 刚退出时 m3u8 可能仍被系统短暂占用，Windows 下需重试
+    _retry_io(_rewrite)
 
 
 def _probe_duration(src_path):
@@ -95,7 +151,7 @@ def _probe_duration(src_path):
         proc = subprocess.run(
             [FFPROBE_BIN, '-v', 'error', '-show_entries', 'format=duration',
              '-of', 'default=noprint_wrappers=1:nokey=1', src_path],
-            capture_output=True, timeout=60, env=make_env(),
+            **popen_kwargs(capture_output=True, timeout=60),
         )
         if proc.returncode == 0:
             val = (decode_output(proc.stdout) or '').strip()
@@ -118,7 +174,7 @@ def _probe_bitrate(src_path):
             [FFPROBE_BIN, '-v', 'error', '-select_streams', 'a:0',
              '-show_entries', 'stream=bit_rate',
              '-of', 'default=noprint_wrappers=1:nokey=1', src_path],
-            capture_output=True, timeout=60, env=make_env(),
+            **popen_kwargs(capture_output=True, timeout=60),
         )
         if proc.returncode == 0:
             val = (decode_output(proc.stdout) or '').strip()
@@ -231,13 +287,15 @@ def _finalize_music_files(work_dir, music_id):
     for name in os.listdir(work_dir):
         if name.startswith('source.') or name in ('progress.log', 'transcode.err'):
             try:
-                os.remove(os.path.join(work_dir, name))
+                # 源文件可能仍被杀毒软件扫描，占用时重试，失败也不影响成品
+                _retry_io(os.remove, os.path.join(work_dir, name))
             except OSError:
                 pass
     final_dir = _music_dir(music_id)
     if os.path.isdir(final_dir):
         shutil.rmtree(final_dir, ignore_errors=True)
-    shutil.move(work_dir, final_dir)
+    # Windows 上刚生成的 mp3 / ts 分片可能被系统或播放器短暂占用，重命名目录需重试
+    _retry_io(shutil.move, work_dir, final_dir)
 
     conn = get_db()
     try:
@@ -283,6 +341,7 @@ def upload_music(user_id, username, title, is_public, upload_file, ip_address, t
     try:
         src_path = os.path.join(work_dir, f'source.{ext}')
         upload_file.save(src_path)
+        _close_upload_stream(upload_file)
 
         playlist_path = os.path.join(work_dir, 'index.m3u8')
         seg_pattern = os.path.join(work_dir, 'seg_%03d.ts')
@@ -291,7 +350,7 @@ def upload_music(user_id, username, title, is_public, upload_file, ip_address, t
         cmd = _build_transcode_cmd(src_path, playlist_path, seg_pattern, mp3_path, progress_file)
         if _bin_missing(FFMPEG_BIN):
             raise RuntimeError(FFMPEG_MISSING_MSG)
-        proc = subprocess.run(cmd, capture_output=True, timeout=300, env=make_env())
+        proc = _retry_io(subprocess.run, cmd, **popen_kwargs(capture_output=True, timeout=300))
         if proc.returncode != 0 or not os.path.isfile(playlist_path) or not os.path.isfile(mp3_path):
             detail = (decode_output(proc.stderr) or decode_output(proc.stdout) or '')[-400:]
             raise RuntimeError(f'音频转码失败：{detail}')
@@ -309,7 +368,7 @@ def upload_music(user_id, username, title, is_public, upload_file, ip_address, t
     except Exception as e:
         shutil.rmtree(work_dir, ignore_errors=True)
         _cleanup_music_record(music_id)
-        return False, str(e)
+        return False, FILE_BUSY_MSG if _is_file_busy(e) else str(e)
 
 
 def start_upload(user_id, username, title, is_public, upload_file, ip_address, tags=''):
@@ -346,6 +405,7 @@ def start_upload(user_id, username, title, is_public, upload_file, ip_address, t
     os.makedirs(work_dir, exist_ok=True)
     src_path = os.path.join(work_dir, f'source.{ext}')
     upload_file.save(src_path)
+    _close_upload_stream(upload_file)
 
     task = {
         'task_id': task_id,
@@ -413,7 +473,10 @@ def _run_upload_task(task_id, user_id, username, title, is_public,
             raise RuntimeError(FFMPEG_MISSING_MSG)
 
         with open(err_log, 'w', encoding='utf-8', errors='replace') as errf:
-            proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=errf, env=make_env())
+            proc = _retry_io(
+                subprocess.Popen,
+                cmd, **popen_kwargs(stdout=subprocess.DEVNULL, stderr=errf),
+            )
             deadline = time.time() + 300
             try:
                 while proc.poll() is None:
@@ -452,7 +515,8 @@ def _run_upload_task(task_id, user_id, username, title, is_public,
         _set_task(task_id, status='done', percent=100, message='转码完成', music_id=music_id)
     except Exception as e:
         shutil.rmtree(work_dir, ignore_errors=True)
-        _set_task(task_id, status='error', message='转码失败', error=str(e))
+        _set_task(task_id, status='error', message='转码失败',
+                  error=FILE_BUSY_MSG if _is_file_busy(e) else str(e))
         log_module('music', 'ERROR', 'Music', '上传大喇叭音频失败', user_id=user_id, title=title,
             error=str(e), ip=ip_address)
 
