@@ -972,12 +972,22 @@ body.page-leaving .page-transition-overlay { opacity: 1; pointer-events: all; }
     .modal-close { width: 32px; height: 32px; }
 }
 
-/* Toast 通知系统（磨砂玻璃） */
+/* ============================================
+   Toast 轻提示（全站唯一模板）
+   DOM 由 static/js/core/base.js 的 Toast 统一生成：
+     .toast > i（图标） + span.toast-text（文案）
+   入场 / 退场完全由 CSS 关键帧驱动（toast-in / toast-out），
+   不依赖 requestAnimationFrame 与 transition —— 无论提示框在页面
+   加载瞬间、连续堆叠还是动画进行中创建，都必定完整播放动画。
+   业务代码请一律调用 Toast.success/error/warning/info，
+   不要自行拼接提示框。
+   ============================================ */
 .toast-container {
     position: fixed; top: 80px; left: 50%; transform: translateX(-50%);
     z-index: 1100; display: flex; flex-direction: column; gap: 10px; pointer-events: none;
 }
 .toast {
+    position: relative;                /* 修复 ::before 高光层按容器定位的问题 */
     background: linear-gradient(135deg, rgba(255,255,255,0.98) 0%, rgba(248,250,254,0.98) 100%);
     backdrop-filter: blur(28px) saturate(100%);
     -webkit-backdrop-filter: blur(28px) saturate(100%);
@@ -986,9 +996,9 @@ body.page-leaving .page-transition-overlay { opacity: 1; pointer-events: all; }
     padding: 14px 24px; color: var(--text-primary); font-size: 14px;
     display: flex; align-items: center; gap: 12px;
     box-shadow: var(--shadow-elevated);
-    transform: translateY(-20px) scale(0.9); opacity: 0;
-    transition: transform 0.35s cubic-bezier(0.34,1.56,0.64,1), opacity 0.3s ease;
     pointer-events: auto; overflow: hidden;
+    max-width: min(560px, calc(100vw - 32px));
+    animation: toast-in 0.34s cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
 .toast::before {
     content: ''; position: absolute; inset: 0; border-radius: inherit;
@@ -996,14 +1006,31 @@ body.page-leaving .page-transition-overlay { opacity: 1; pointer-events: all; }
     pointer-events: none; z-index: 0; mix-blend-mode: screen;
 }
 .toast > * { position: relative; z-index: 1; }
-.toast.show { transform: translateY(0) scale(1); opacity: 1; }
-@media (max-width: 640px) { .toast-container { top: 72px; left: 16px; right: 16px; transform: none; width: auto; } .toast { padding: 12px 16px; font-size: 13px; } }
+.toast-text { min-width: 0; word-break: break-word; }
+.toast.is-leaving { animation: toast-out 0.26s cubic-bezier(0.4, 0, 1, 1) both; }
+@keyframes toast-in {
+    from { opacity: 0; transform: translateY(-16px) scale(0.94); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes toast-out {
+    from { opacity: 1; transform: translateY(0) scale(1); }
+    to   { opacity: 0; transform: translateY(-10px) scale(0.96); }
+}
+@media (max-width: 640px) {
+    .toast-container { top: 72px; left: 16px; right: 16px; transform: none; width: auto; }
+    .toast { padding: 12px 16px; font-size: 13px; }
+}
 .toast.success { border-color: rgba(2,132,199,0.3); }
 .toast.success i { color: #0369a1; }
 .toast.error { border-color: rgba(225,29,72,0.3); }
 .toast.error i { color: #be123c; }
 .toast.warning { border-color: rgba(217,119,6,0.3); }
 .toast.warning i { color: var(--accent-amber); }
+.toast.info { border-color: rgba(2,132,199,0.3); }
+.toast.info i { color: #0284c7; }
+@media (prefers-reduced-motion: reduce) {
+    .toast, .toast.is-leaving { animation-duration: 0.01ms; }
+}
 
 img { animation: imgFadeIn 0.5s ease; }
 @keyframes imgFadeIn { from { opacity: 0; } to { opacity: 1; } }
@@ -1369,6 +1396,7 @@ pre::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.24); }
     line-height: 1.2;
     cursor: text;
     overflow: hidden;
+    overflow-anchor: none;         /* 展开时禁止滚动锚定重排，避免整页瞬间抖动一下 */
     /* 与 .glass-nav-inner 同款过渡属性（width→max-width） */
     transition:
         max-width  var(--transition-bounce),

@@ -648,50 +648,78 @@ var CustomModal = (function () {
     };
 })();
 
-// Toast 提示系统（成功/错误/警告/信息）
+// Toast 轻提示系统（成功/错误/警告/信息）
+// 全站唯一模板：结构固定为 <div.toast> <i> + <span.toast-text>，
+// 入场 / 退场动画由 base.css 的 toast-in / toast-out 关键帧驱动，
+// 不依赖 transition 时序，任何时机创建都能完整播放动画。
 var Toast = (function () {
     var container = document.getElementById('toast-container');
+    var ICON_MAP = {
+        'success': 'check-circle',
+        'error': 'x-circle',
+        'warning': 'alert-triangle',
+        'info': 'info'
+    };
+    var LEAVE_FALLBACK = 500;   /* 退场动画结束的兜底移除时间 */
 
     function show(message, type, duration) {
-        type = type || 'info';
-        duration = duration || 3000;
+        if (!container) return null;
+        type = ICON_MAP[type] ? type : 'info';
+        duration = typeof duration === 'number' ? duration : 3000;
 
         var toast = document.createElement('div');
         toast.className = 'toast ' + type;
+        toast.setAttribute('role', 'status');
+        toast.setAttribute('aria-live', 'polite');
 
-        var iconMap = {
-            'success': 'check-circle',
-            'error': 'x-circle',
-            'warning': 'alert-triangle',
-            'info': 'info'
-        };
-        var iconName = iconMap[type] || 'info';
+        var icon = document.createElement('i');
+        icon.className = 'w-5 h-5';
+        icon.setAttribute('data-lucide', ICON_MAP[type]);
 
-        toast.innerHTML = '<i data-lucide="' + iconName + '" class="w-5 h-5"></i><span>' + message + '</span>';
+        var text = document.createElement('span');
+        text.className = 'toast-text';
+        text.textContent = message == null ? '' : String(message);
 
+        toast.appendChild(icon);
+        toast.appendChild(text);
         container.appendChild(toast);
+
         if (typeof lucide !== 'undefined' && lucide.createIcons) {
             try { lucide.createIcons({ root: toast }); } catch (_) {}
         }
 
-        requestAnimationFrame(function () {
-            toast.classList.add('show');
-        });
+        var leaveTimer = null;
+        var timer = null;
+        var leaving = false;
 
-        setTimeout(function () {
-            toast.classList.remove('show');
-            setTimeout(function () {
-                toast.remove();
-            }, 400);
-        }, duration);
+        function remove() {
+            clearTimeout(timer);
+            clearTimeout(leaveTimer);
+            if (toast.parentNode) toast.parentNode.removeChild(toast);
+        }
+
+        function dismiss() {
+            if (leaving) return;
+            leaving = true;
+            clearTimeout(timer);
+            toast.classList.add('is-leaving');
+            toast.addEventListener('animationend', function (e) {
+                if (e.animationName === 'toast-out') remove();
+            });
+            leaveTimer = setTimeout(remove, LEAVE_FALLBACK);
+        }
+
+        timer = setTimeout(dismiss, duration);
+        toast.dismiss = dismiss;
+        return toast;
     }
 
     return {
         show: show,
-        success: function (msg, duration) { show(msg, 'success', duration); },
-        error: function (msg, duration) { show(msg, 'error', duration); },
-        warning: function (msg, duration) { show(msg, 'warning', duration); },
-        info: function (msg, duration) { show(msg, 'info', duration); }
+        success: function (msg, duration) { return show(msg, 'success', duration); },
+        error: function (msg, duration) { return show(msg, 'error', duration); },
+        warning: function (msg, duration) { return show(msg, 'warning', duration); },
+        info: function (msg, duration) { return show(msg, 'info', duration); }
     };
 })();
 

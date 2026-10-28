@@ -4,6 +4,41 @@
 
 ### 变更
 
+* **音频广播链接按钮更名为「广播m3u8」并统一图标**（`static/templates/macros/music_macros.html`、`static/templates/music/index.html`、`static/templates/music/upload.html`、`static/templates/admin/music.html`）：
+  * 原「复制m3u广播链接」按钮统一改为 **「广播m3u8」**，图标由 `copy` 换成 `radio`（大喇叭/广播语义），悬停提示统一为「复制广播 m3u8 链接（游戏内大喇叭在线播放用）」。
+  * 覆盖公开音频列表（前端动态卡片）、我的音频 / 我的收藏（宏）、管理员审核队列（宏 + 前端动态卡片）、上传成功卡片，共四处实现保持一致。
+
+* **Toast 轻提示统一为一套模板 + CSS 关键帧动画**（`static/js/core/base.js`、`static/css/base.css`）：
+  * **问题**：部分提示框（如收藏成功后的轻提示）偶尔「没有动画」直接闪现——旧实现依赖 `requestAnimationFrame` 添加 `.show` 类触发 CSS transition，若创建时机与首帧渲染撞在一起，浏览器会跳过过渡；退场则依赖固定 400ms 定时器。
+  * **统一模板**：`Toast.show/success/error/warning/info` 固定生成 `<div.toast类> <i> + <span.toast-text>` 结构，全部业务提示（收藏、复制链接、表单反馈、flash 消息等）都走这一套，不再各自拼接 HTML；文案改用 `textContent` 写入，避免消息中夹带 HTML 被解析。
+  * **动画改由关键帧驱动**：入场 `toast-in`、退场 `toast-out`（`.is-leaving`），元素创建即播放，任何时机都必定完整播放；退场以 `animationend` 移除，500ms 兜底。另修复 `.toast::before` 高光层因缺少 `position: relative` 而按外层容器定位的问题，并补充 `info` 类型配色与 `prefers-reduced-motion` 降级。
+  * `Toast.show()` 现在返回提示框元素（带 `dismiss()` 方法），便于需要提前关闭的场景。
+
+* **修复搜索框展开瞬间整页抖动**（`static/js/core/search.js`、`static/css/base.css`）：
+  * **聚焦不再触发滚动**：展开后的 `input.focus()` 改为 `focus({ preventScroll: true })`，并放到下一帧执行（输入框刚由 `display:none` 变为可见，同步聚焦会额外触发一次布局计算），避免浏览器把页面滚动到输入框位置造成整页跳动。
+  * **禁止滚动锚定**：`.site-search` 增加 `overflow-anchor: none`，展开时宽度动画引起的内容位移不再触发浏览器滚动锚定微调。
+
+* **修复网页地图刷新后加载遮罩一直不消失**（`static/templates/site/map.html`）：
+  * **根因**：iframe 的 `src` 直接写在 HTML 中，而 `load` 监听在页面末尾脚本里才绑定；刷新页面时 iframe 若从缓存瞬间加载完成，`load` 事件早于绑定就已触发，`is-ready` 永远不会加上，加载圆圈一直盖住已载入的地图，只能手动点「刷新」。
+  * **修复**：去掉 iframe 的 `src` 属性，改为**先注册 `load` 监听、再读取 `data-src` 赋值 `src`**，确保任何加载速度下都能捕获完成事件；`about:blank` 中转仍会被忽略；超时兜底定时器抽出为 `startSlowTimer()`，刷新按钮重置状态后统一调用。
+
+* **静态资源版本号更新**：`base.css` v51、`base.js` v29、`search.js` v10（建筑 / 指南 / 音频三个列表页），确保客户端拿到最新样式与脚本。
+
+* **修复 Windows 下 ffmpeg 转码报 `[WinError 32] 另一个程序正在使用此文件`**（`services/music/upload/__init__.py`）：
+  * **问题**：ffmpeg 刚生成 `index.m3u8` / `index.mp3` / `seg_*.ts` 后，文件可能仍被杀毒软件、系统索引或播放器短暂占用；此时立即改写播放列表或把临时目录重命名为最终目录，Windows 会抛出共享冲突（WinError 32），导致整个转码任务被判失败。
+  * **修复**：新增 `_retry_io()` 占用感知重试——仅对 `PermissionError` / WinError 5、32、33 / `EACCES`、`EPERM`、`EBUSY` 做短时退避重试（约 6 秒），其他错误立即抛出，不掩盖真实原因；覆盖播放列表改写、源文件删除、临时目录重命名与 ffmpeg / ffprobe 进程启动。
+  * **句柄及时释放**：上传文件保存到磁盘后立即关闭 Werkzeug 上传流，避免 Windows 下上传临时文件句柄残留影响后续处理。
+  * **统一子进程参数**：ffmpeg / ffprobe 调用改用 `popen_kwargs()`，Windows 下附带 `CREATE_NO_WINDOW`，不再弹出控制台窗口。
+  * 若重试后仍被占用，向用户返回明确提示「音频文件被其他程序占用，请关闭正在使用该文件的程序后重试」，而不是原始 `WinError`。
+
+* **彻底优化 sitemap.xml 收录逻辑：移除失效 / 无用条目，补上公共建筑**（`services/sitemap_cache/__init__.py`、`scripts/tests/test_sitemap.py`、`README.md`）：
+  * **问题**：站点地图里有一堆无用条目（如 `/apply`），且漏掉了公共建筑。根因是静态白名单把 `/apply` 写死收录——但 `/apply` 是一个**不存在的死路由**（真实申请页是需要登录的 `/game-accounts/apply`），生成出来的就是 404 URL；同时公共建筑（列表 `/buildings` 与已通过详情 `/buildings/<id>`）从未被收录。
+  * **重建白名单**：`_STATIC_PAGES` 只保留「无需登录即可访问、且含可索引内容」的页面——`/`（1.0）、`/server-status`（0.7）、`/guides`（0.8）、`/buildings`（0.8，新增）、`/docs`（0.5）；删除死路由 `/apply` 与仅内嵌外部地图 iframe、无可索引内容的 `/map`；登录后 / 操作 / 上传页与 `/admin`、`/api` 一律不收录。
+  * **新增公共建筑详情**：按 `public_buildings` 表查询「已审核通过（`status='approved'`）」的建筑，逐个写入 `/buildings/<id>`（`lastmod` 取 `updated_at`）；`_site_latest()` 同步把 `public_buildings` 纳入全站最近内容时间。
+  * **过滤资源映射**：管理后台「公开文件」配置的 `public_paths` 里，`js`/`css`/图片/音视频等静态资源路径不再写入 sitemap（新增 `_is_page_like()` + `_ASSET_EXTENSIONS`），只收录目录 / 页面类路径。
+  * **去重**：同一条 path 只保留一次，避免重复 URL。
+  * 新增测试 `scripts/tests/test_sitemap.py`：校验白名单含公共建筑且不含 `/apply` `/map`、资源扩展名过滤、条目去重与字段合法；`python -m pytest scripts/tests -q` 232 项通过。
+
 * **进度条统一为「清晰磨砂玻璃」模板 + 修复 ffmpeg 缺失导致的转码报错**（`static/templates/macros/progress.html`、`static/css/base.css`、`static/templates/{backgrounds,music}/upload.html`、`static/js/core/base.js`、`config.py`、`services/music/upload/__init__.py`、`core/system/startup_checks.py`、`update.py`、`README.md`）：
   * **统一进度条模板**：全站进度条由 `static/templates/macros/progress.html` 的 `progress_track(id, variant, size, width)` 宏渲染，样式集中在 `static/css/base.css` 的 `.progress-track` / `.progress-fill`；没有进度条的地方不引宏、需要时再引。迁移范围：`backgrounds/upload.html`（原手写 `.upload-progress-bar`）、`music/upload.html`（上传 `gold` + 转码 `green` 双阶段，删除页面内联不确定态动画）、`admin/db_backup.html`（已在用宏），`base.js` / `uploader.js` 动态创建改用 `.progress-track` / `.progress-fill` 类名。
   * **清晰磨砂玻璃质感**：轨道强化为白色半透明磨砂玻璃（`backdrop-filter: blur(12px) saturate(140%)`、1px 白色描边、内阴影），填充沿用渐变；**删除**旧的 `.upload-progress-bar` / `.upload-progress-fill` 别名样式。

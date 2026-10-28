@@ -18,7 +18,6 @@
     var MAX_LEN = 60;
     var DEBOUNCE = 220;
     var CLOSE_DELAY = 150;
-    var FOCUS_DELAY = 140;   /* 等展开动画起步再 focus，避免抢焦点卡顿 */
 
     var roots = document.querySelectorAll('.site-search');
     if (!roots.length) return;
@@ -52,15 +51,25 @@
             }));
         }
 
+        function focusInput() {
+            /* preventScroll：避免聚焦时浏览器把页面滚到输入框位置，
+               造成「整个页面抖动一下」（移动端唤出键盘时尤其明显） */
+            try {
+                input.focus({ preventScroll: true });
+            } catch (_) {
+                try { input.focus(); } catch (e) { /* 忽略 */ }
+            }
+        }
+
         function expand() {
             clearTimeout(st.timerClose);
             if (!st.expanded) {
                 st.expanded = true;
                 root.classList.add('is-open');
             }
-            setTimeout(function () {
-                try { input.focus(); } catch (_) {}
-            }, FOCUS_DELAY);
+            /* 等展开后的下一帧再聚焦：input 刚由 display:none 切为可见，
+               同步聚焦会触发一次额外的布局计算 */
+            requestAnimationFrame(focusInput);
         }
 
         function collapse(force) {

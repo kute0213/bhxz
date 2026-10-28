@@ -75,7 +75,7 @@
 
 {% block page_scripts %}
 {# 就地搜索框（SiteSearch） #}
-<script src="{{ url_for('static', filename='js/core/search.js', v='9') }}"></script>
+<script src="{{ url_for('static', filename='js/core/search.js', v='10') }}"></script>
 {% endblock %}
 {% block extra_script %}
 {{ music_player_assets() }}
@@ -128,7 +128,7 @@
             '<span class="fav-text">' + (fav ? '已收藏' : '收藏') + '</span></button>';
 
         var linkCls = 'copy-link-btn px-3 py-2 rounded-lg text-xs border border-cream/20 text-cream/70 hover:text-cream hover:border-cream/40 transition-colors flex items-center gap-1.5';
-        var copyBtn = '<button type="button" class="' + linkCls + '" data-url="' + CFG.host + '/music/' + m.id + '.m3u8" title="复制广播 m3u 链接（游戏内大喇叭在线播放用）"><i data-lucide="copy" class="w-3.5 h-3.5"></i>复制广播m3u链接</button>';
+        var copyBtn = '<button type="button" class="' + linkCls + '" data-url="' + CFG.host + '/music/' + m.id + '.m3u8" title="复制广播 m3u8 链接（游戏内大喇叭在线播放用）"><i data-lucide="radio" class="w-3.5 h-3.5"></i>广播m3u8</button>';
         var mp3Btn = '<button type="button" class="' + linkCls + '" data-url="' + CFG.host + '/music/' + m.id + '.mp3" title="复制唱片 MP3 链接（游戏内电脑下载后可烧录成唱片）"><i data-lucide="disc" class="w-3.5 h-3.5"></i>唱片 MP3</button>';
         var durBtn = m.duration_seconds ? ('<button type="button" class="copy-duration-btn px-3 py-2 rounded-lg text-xs border border-cream/20 text-cream/70 hover:text-cream hover:border-cream/40 transition-colors flex items-center gap-1.5" data-seconds="' + m.duration_seconds + '" title="复制音频总时长（秒）"><i data-lucide="timer" class="w-3.5 h-3.5"></i>时长 ' + m.duration_seconds + 's</button>') : '';
 

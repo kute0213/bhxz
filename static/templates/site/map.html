@@ -147,7 +147,6 @@
                     id="map-frame"
                     class="map-frame"
                     data-src="{{ map_url }}"
-                    src="{{ map_url }}"
                     title="网页地图"
                     loading="eager"
                     allowfullscreen
@@ -190,20 +189,40 @@
         stage.classList.add('is-ready');
     }
 
+    function isBlankFrame() {
+        try {
+            return !frame.contentWindow || frame.contentWindow.location.href === 'about:blank';
+        } catch (e) {
+            /* 跨域读取抛错属正常：说明已载入真实页面 */
+            return false;
+        }
+    }
+
+    function startSlowTimer() {
+        if (slowTimer) clearTimeout(slowTimer);
+        slowTimer = setTimeout(function () {
+            if (stage.classList.contains('is-ready')) return;
+            stage.classList.add('is-slow');
+            if (loadingText) loadingText.textContent = '地图加载中…';
+        }, 12000);
+    }
+
     // iframe 载入完成即淡出遮罩。跨域下无法读取内容，故只依赖 load 事件，
     // 并用定时器兜底：长时间未完成则提示可能被对端限制内嵌。
     frame.addEventListener('load', function () {
-        // about:blank 的中转不视为加载完成
-        try {
-            if (frame.contentWindow && frame.contentWindow.location.href === 'about:blank') return;
-        } catch (e) { /* 跨域读取抛错属正常，说明已载入真实页面 */ }
+        if (isBlankFrame()) return;   /* about:blank 的中转不视为加载完成 */
         markReady();
     });
 
-    slowTimer = setTimeout(function () {
-        stage.classList.add('is-slow');
-        if (loadingText) loadingText.textContent = '地图加载中…';
-    }, 12000);
+    // 关键顺序：先绑定 load 监听，再设置 src。
+    // 若像以前那样在 HTML 里直接写 src，刷新页面时 iframe 可能已从缓存
+    // 瞬间加载完成，load 事件早于脚本绑定就已触发，遮罩（加载圆圈）会
+    // 一直覆盖在已载入的地图上，必须手动点「刷新」才能恢复。
+    var initialSrc = frame.getAttribute('data-src');
+    if (initialSrc && !frame.getAttribute('src')) {
+        frame.src = initialSrc;
+    }
+    startSlowTimer();
 
     // 刷新：优先就地重载（同源），跨域时退回重建 iframe 源
     if (refreshBtn) {
@@ -211,8 +230,7 @@
             var src = frame.getAttribute('data-src');
             if (!src) return;
             stage.classList.remove('is-ready', 'is-slow');
-            if (slowTimer) clearTimeout(slowTimer);
-            slowTimer = setTimeout(function () { stage.classList.add('is-slow'); }, 12000);
+            startSlowTimer();
             try {
                 frame.contentWindow.location.reload();
                 return;

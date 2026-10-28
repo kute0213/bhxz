@@ -216,6 +216,7 @@ python scripts/build/package.py
 * **就地搜索框（SiteSearch v8）**：**每个列表页使用自己的搜索框**（由 `static/templates/macros/search.html` 的 `inline_search()` 宏渲染），导航栏**不再放置**搜索输入框
 * **点击搜索框即可展开**：点击搜索框任意位置（图标、文字或四周留白）都会展开，无需精准点中「搜索」文字
 * **纯水平展开动画**：容器固定高度、无上下内边距，折叠态与展开态上下长度完全一致，展开只做左右伸缩，不会上下抖动
+* **不抖动整页**：展开后的聚焦使用 `focus({ preventScroll: true })` 并放在下一帧执行，避免浏览器把页面滚动到输入框位置；搜索容器设置 `overflow-anchor: none`，展开时不会触发滚动锚定引起整页瞬间跳动
 * **保持展开规则**：输入框内有文字 **或** 光标在输入框内 → 保持展开；无文字 **且** 失焦（点击外部）→ 平滑收起；Esc 一键清空并收起
 * **结果就地渲染**：输入关键词后防抖（`220ms`）或回车，由搜索框在自身派发 `site-search` 事件；**各列表页监听该事件后直接刷新当前列表**，不再弹出下拉面板或独立搜索页，结果与页面风格完全一致
 * **覆盖范围**：公共建筑 / 服务器指南 / 大喇叭音频三个列表页均支持就地搜索；关键词通过各列表 API 的 `q` 参数传入，匹配各自的标题/摘要/标签字段
@@ -264,6 +265,8 @@ python scripts/build/package.py
 
 * 「大喇叭音频」板块：上传音频自动转码为 HLS（m3u8），生成 `http://<主机>/music/<编号>.m3u8` 播放链接；同时生成**唱片 MP3**（`http://<主机>/music/<编号>.mp3`），供游戏内「电脑」下载后烧录成唱片
 
+* **「广播m3u8」按钮**：公开列表 / 我的音频 / 我的收藏 / 管理员审核队列 / 上传成功卡片上的 m3u8 复制按钮统一为「广播m3u8」+ `radio` 图标（悬停提示「复制广播 m3u8 链接（游戏内大喇叭在线播放用）」），点击复制 `http://<主机>/music/<编号>.m3u8`；模板侧由 `music_copy_link_button` 宏渲染，前端动态列表由各页脚本同步维护，文案与图标保持一致
+
 * 支持 mp3 / wav / ogg / m4a / flac，单文件不超过 100MB（依赖 ffmpeg）
 
 * 自动调用 ffmpeg：Windows 用 `uploads/ffmpeg/ffmpeg.exe`（缺失时回退系统 PATH），Linux/macOS 直接用系统 PATH 中的 `ffmpeg`；未找到时上传页给出清晰中文指引（不自动下载）
@@ -297,6 +300,8 @@ python scripts/build/package.py
 * **音频 ID 并发安全**：上传在持锁事务内完成数据库插入与 ID 读取（`with get_db()` + INSERT 后立即读 `lastrowid`），多用户同时上传也不会串号——文件目录名与数据库记录严格对应，播放链接与删除清理均可靠（修复历史并发上传导致编号错乱、无法播放、删除残留文件的问题）
 
 * **ffmpeg 多线程转码**：上传转码统一加 `-threads` 参数（`FFMPEG_THREADS`），每个上传任务是独立 ffmpeg 子进程与独立输出目录，多用户同时上传天然并行，不会出现「文件正在使用」冲突
+
+* **Windows 文件占用容错**：ffmpeg 刚输出的 `m3u8` / `mp3` / `ts` 分片可能被杀毒软件、系统索引或播放器短暂占用，改写播放列表与重命名目录统一走占用感知重试（仅对 WinError 5/32/33 退避重试约 6 秒），避免转码成功后因 `[WinError 32] 另一个程序正在使用此文件` 被判失败；上传流保存后立即关闭，子进程 Windows 下不再弹出控制台窗口
 
 ### 统一定时任务调度
 
@@ -362,6 +367,8 @@ python scripts/build/package.py
 
 * **加载兜底**：iframe 载入完成自动淡出加载遮罩；超过 12 秒仍未完成则提示「可能被对端限制内嵌」并给出「在新标签页打开」出口；若 `MAP_URL` 为空则显示配置引导
 
+* **刷新页面不会卡在加载圆圈**：iframe 的 `src` 不再写在 HTML 里，而是**先绑定 `load` 监听、再赋值 `data-src`**——避免刷新页面时 iframe 从缓存瞬间加载完成、`load` 早于脚本绑定就已触发，导致加载遮罩一直覆盖已载入的地图、必须手动点「刷新」才恢复
+
 ### 文档系统
 
 * Markdown 文档渲染（marked.js）
@@ -382,7 +389,7 @@ python scripts/build/package.py
 
 * **数据备份**：自动备份时间、保留份数、超时
 
-* **Sitemap**：刷新时间、站点域名、多域名列表、搜索引擎爬虫策略（robots.txt：允许所有 / 仅主页 / 禁止所有）
+* **Sitemap**：刷新时间、站点域名、多域名列表、搜索引擎爬虫策略（robots.txt：允许所有 / 仅主页 / 禁止所有）。站点地图（`/sitemap.xml`）**只收录无需登录即可访问、且含可索引内容的页面**——首页、服务器状态、服务器指南（及已通过详情）、公共建筑（及已通过详情）、大喇叭、背景图片、文档，以及后台「公开文件」配置的页面（自动跳过 `js`/`css`/图片等资源映射）；已排除登录后 / 操作 / 上传页（`/settings`、`/music/my`、`/music/upload`、`/game-accounts/apply`、`/guides/create` 等）、仅内嵌外部地图的 `/map`、以及 `/admin`、`/api` 等内部路径，并按 path 去重
 
 * **安全配置**：会话有效期、登录失败锁定次数及时间
 
@@ -629,7 +636,7 @@ python scripts/build/package.py
 | 滚动淡入     | `IntersectionObserver`                                                                                                                               |
 | 页面过渡     | `requestAnimationFrame` 控制 `.page-ready` 类切换                                                                                                         |
 | 统一弹窗系统  | 磨砂玻璃风格，CSS 过渡动画 + 全局 `openModal`/`closeModal` 控制；CustomModal 提供 alert/confirm/prompt（Promise + 回调双风格），自动拦截 `onsubmit="return confirm(...)"` 表单；`modal_shell` 宏支持页面级内容弹窗，全站无原生弹窗 |
-| Toast 提示 | 四种类型（success/error/warning/info）                                                                                                                     |
+| Toast 提示 | 全站统一模板：`Toast.success / error / warning / info` 生成固定的「图标 + 文案」结构，入场 / 退场由 CSS 关键帧 `toast-in` / `toast-out` 驱动，任何时机创建都能完整播放动画（收藏、复制、表单反馈等全部走同一套）                                     |
 
 ### 性能优化
 
