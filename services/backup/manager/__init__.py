@@ -1,17 +1,18 @@
 """
-/uploads/ 全量数据备份服务 —— 极限压缩打包为 zip。
+/uploads/ 全量数据自动维护服务 —— 极限压缩备份 + 日志文件清理。
 
 功能：
 - 将 /uploads/ 文件夹下的所有内容压缩为 zip（ZIP_DEFLATED, level 9）
 - 额外写入数据库一致快照：SQLite 主站库（uploads/db/site.db）与
   DuckDB 防火墙库（uploads/db/firewall.duckdb）
 - 自动清理过期备份（保留 MAX_BACKUPS 份，支持热重载）
+- 自动清理日志文件（截断 logs/app.log、删除 logs/fatal.log 与模块日志）
 - 记录备份历史到 db_backups 表
 - 提供进度回调接口（供前端进度条展示）
 - 后台线程执行，不阻塞主进程
 
 备份类型：
-- scheduled: 定时自动备份
+- scheduled: 定时自动维护
 - manual: 管理员手动触发
 """
 
@@ -99,7 +100,7 @@ def _snapshot_duckdb(dest_path: str) -> None:
 # ---------------------------------------------------------------------------
 
 class BackupManager:
-    """数据备份管理器（单例）。"""
+    """自动维护管理器（单例）—— 数据备份 + 日志清理。"""
 
     _instance = None
     _lock = threading.Lock()
@@ -124,7 +125,7 @@ class BackupManager:
     # ------------------------------------------------------------------
 
     def start_backup(self, backup_type='manual', progress_callback=None):
-        """启动数据备份（后台线程执行）。
+        """启动自动维护（数据备份 + 日志清理，后台线程执行）。
 
         Args:
             backup_type: 'scheduled' 或 'manual'
@@ -295,8 +296,12 @@ class BackupManager:
             self._report_progress(90, '清理过期备份...', progress_callback)
             self._cleanup_old_backups()
 
-            # 阶段 6: 完成
-            self._report_progress(100, '备份完成', progress_callback)
+            # 阶段 6: 清理日志文件（随备份自动执行）
+            self._report_progress(95, '清理日志文件...', progress_callback)
+            self._cleanup_logs()
+
+            # 阶段 7: 完成
+            self._report_progress(100, '维护完成', progress_callback)
 
             status = 'success'
 
@@ -414,3 +419,16 @@ class BackupManager:
             conn.commit()
         finally:
             conn.close()
+
+    def _cleanup_logs(self):
+        """清理日志文件（全局 / 严重错误 / 各模块日志），随备份自动执行。
+
+        失败只记 WARNING，不影响备份结果。
+        """
+        try:
+            from core.system.logger import cleanup_log_files
+            removed = cleanup_log_files()
+            log_module('backup', 'INFO', 'BackupManager',
+                       f'已清理日志文件（删除 {removed} 个模块/错误日志，截断 app.log）')
+        except Exception as e:
+            log_module('backup', 'WARNING', 'BackupManager', f'清理日志文件失败: {e}')

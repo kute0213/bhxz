@@ -77,12 +77,12 @@
                     <p class="text-cream/60 text-sm">审核建筑、处理举报信息</p>
                     <span class="inline-block mt-4 text-gold-400 text-sm font-medium">进入管理 →</span>
                 </a>
-                <a href="{{ url_for('admin.db_backup_page') }}" class="pixel-card rounded-xl p-6 block hover:no-underline">
+                <a href="{{ url_for('admin.maintenance_page') }}" class="pixel-card rounded-xl p-6 block hover:no-underline">
                     <div class="w-12 h-12 mb-4 bg-gold-400/20 rounded-xl flex items-center justify-center">
-                        <i data-lucide="database" class="w-6 h-6 text-gold-400"></i>
+                        <i data-lucide="wrench" class="w-6 h-6 text-gold-400"></i>
                     </div>
-                    <h3 class="text-lg font-bold mb-2">数据库备份</h3>
-                    <p class="text-cream/60 text-sm">优化数据库、清理日志、一键备份恢复</p>
+                    <h3 class="text-lg font-bold mb-2">自动维护</h3>
+                    <p class="text-cream/60 text-sm">定时备份数据、清理日志文件，保持站点整洁</p>
                     <span class="inline-block mt-4 text-gold-400 text-sm font-medium">进入管理 →</span>
                 </a>
                 <a href="{{ url_for('admin.admin_logs_page') }}" class="pixel-card rounded-xl p-6 block hover:no-underline">

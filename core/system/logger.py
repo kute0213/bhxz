@@ -726,6 +726,50 @@ def purge_logs_on_startup() -> None:
         pass
 
 
+def cleanup_log_files() -> int:
+    """清理磁盘上的日志文件（由「自动维护」随数据备份自动调用）。
+
+    清理范围与启动清理一致：
+      - 截断全局日志文件 ``logs/app.log``
+      - 删除严重错误日志文件 ``logs/fatal.log``
+      - 删除 ``logs/modules/*.log`` 全部模块日志文件
+
+    与 :func:`purge_logs_on_startup` 的区别：**不清空内存缓冲**，
+    后台「系统日志」页面仍可继续查看本次运行期间的日志。
+
+    Returns:
+        删除的日志文件数量（不含被截断的全局日志文件）。
+    """
+    removed = 0
+
+    # 全局日志：截断（保持文件存在，后续写入直接续写）
+    _truncate_file(LOG_FILE)
+
+    # 严重错误日志：直接删除（写入时会自动重建）
+    try:
+        if os.path.exists(FATAL_LOG_FILE):
+            os.remove(FATAL_LOG_FILE)
+            removed += 1
+    except Exception:
+        pass
+
+    # 模块单独日志：删除目录下全部 .log 文件
+    try:
+        if os.path.isdir(MODULE_LOG_DIR):
+            for filename in os.listdir(MODULE_LOG_DIR):
+                if not filename.endswith('.log'):
+                    continue
+                try:
+                    os.remove(os.path.join(MODULE_LOG_DIR, filename))
+                    removed += 1
+                except OSError:
+                    pass
+    except Exception:
+        pass
+
+    return removed
+
+
 # ---------------------------------------------------------------------------
 # 全局日志缓冲读取（供管理后台）
 # ---------------------------------------------------------------------------

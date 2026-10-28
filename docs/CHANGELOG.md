@@ -4,6 +4,22 @@
 
 ### 变更
 
+* **音频与账户设置操作全部改为无刷新 API**（`routes/main/music/__init__.py`、`routes/main/settings/__init__.py`、`routes/main/media/__init__.py`、`static/templates/music/my.html`、`static/js/pages/music_my.js`、`static/templates/settings/index.html`）：
+  * 「我的音频」的申请公开 / 转为私有 / 删除不再整页提交刷新，新增 `POST /api/music/<id>/toggle` 与 `POST /api/music/<id>/delete`，返回 JSON；按钮统一走 `.admin-action`，通过 `admin:action` 事件局部更新状态徽章、审核等待提示与按钮文案，删除后即时刷新空状态。
+  * 账户设置页的头像上传 / 恢复默认、修改用户名 / 密码 / 邮箱、注销账号全部改为 fetch 提交：新增 `POST /api/settings/{username,password,email,delete,avatar,avatar/delete}`，成功后直接更新页面头像、当前用户名 / 邮箱，注销成功后再跳转首页；失败以 Toast 提示，不再整页刷新。
+  * 旧的表单 POST 路由（`/music/<id>/toggle|delete`、`/settings/...`）保留为兼容入口，行为不变。
+
+* **自动维护时自动清理日志文件**（`core/system/logger.py`、`services/backup/manager/__init__.py`）：
+  * 新增 `cleanup_log_files()`：截断 `logs/app.log`、删除 `logs/fatal.log` 与 `logs/modules/*.log`，清理范围与启动清理一致，但**不清空内存缓冲**，日志页仍可查看本次运行日志。
+  * `BackupManager._run_backup` 在清理旧备份之后执行日志清理（进度 95%「清理日志文件...」），清理结果写入 `backup` 模块日志；手动维护与每日定时维护都会自动清理。
+
+* **「数据库备份」全面更名为「自动维护」**（`routes/admin/maintenance/__init__.py`、`static/templates/admin/maintenance.html`、`static/templates/admin/dashboard.html`、`config.py`、`services/backup/{__init__,scheduler}/__init__.py`、`docs/DEVELOPMENT.md`）：
+  * 路由包由 `routes/admin/backup` 迁移为 `routes/admin/maintenance`：页面 `/admin/maintenance`，API 统一为 `/admin/api/maintenance/{start,progress,list,dir,<id>/download,<id>/delete}`；旧地址 `/admin/db-backup` 返回 302 到新页面。
+  * 模板 `admin/db_backup.html` 更名为 `admin/maintenance.html`，页面标题、副标题、按钮（「立即执行维护」）与步骤说明同步更新，并补充「自动清理日志文件」步骤；备份目录保存后通过 `/admin/api/maintenance/dir` 无刷新同步显示。
+  * 管理中心仪表盘卡片、系统设置的「自动维护」配置分组与标签、定时任务与文档描述全部改用「自动维护」；内部 `db_backups` 表名与 `BACKUP_*` 配置键保持不变以降低迁移风险。
+
+* **整理 README 文档**（`README.md`）：删除与 CHANGELOG 重复的「最近更新」整段及过细的实现 / 动效描述（搜索框展开、背景挑选、网页地图、导航栏合成器等），保留快速开始、结构、功能、配置与 API 索引；API 表补充音频 toggle / delete 与账户设置无刷新接口，并将「数据备份」小节改写为「自动维护」。
+
 * **音频广播链接按钮更名为「广播m3u8」并统一图标**（`static/templates/macros/music_macros.html`、`static/templates/music/index.html`、`static/templates/music/upload.html`、`static/templates/admin/music.html`）：
   * 原「复制m3u广播链接」按钮统一改为 **「广播m3u8」**，图标由 `copy` 换成 `radio`（大喇叭/广播语义），悬停提示统一为「复制广播 m3u8 链接（游戏内大喇叭在线播放用）」。
   * 覆盖公开音频列表（前端动态卡片）、我的音频 / 我的收藏（宏）、管理员审核队列（宏 + 前端动态卡片）、上传成功卡片，共四处实现保持一致。

@@ -95,7 +95,7 @@ python scripts/build/package.py
 │   ├── template_context.py   #   全局模板上下文注入
 │   └── errors.py             #   统一精简错误页渲染（error_simple）
 ├── services/     # 业务逻辑层（纯 Python，不依赖 Flask）
-│   ├── backup/               #   数据备份（/uploads/ 全量 zip 极限压缩）
+│   ├── backup/               #   自动维护（/uploads/ 全量 zip 极限压缩 + 日志清理）
 │   ├── buildings/      # 公共建筑（列表/搜索/收藏/评论分页）
 │   ├── email/          # 异步邮件发送
 │   ├── game_accounts/  # 游戏账号注册申请（审批/驳回/封禁）
@@ -117,7 +117,7 @@ python scripts/build/package.py
 │   ├── security/            #   安全扫描（SQL 注入 / XSS / 路径穿越 / 命令注入 / 敏感探测 / 恶意 UA）
 │   └── sitemap_cache/       #   Sitemap 缓存服务
 ├── routes/       # HTTP 路由层（Flask Blueprint）
-│   ├── admin/          # 管理后台（用户/备份/设置/日志/更新/游戏账号/指南/音乐/背景/建筑等）
+│   ├── admin/          # 管理后台（用户/自动维护/设置/日志/更新/游戏账号/指南/音乐/背景/建筑等）
 │   ├── api/            # 公开 API（性能/统计/验证码/邮箱）
 │   ├── backgrounds/    # 背景图片页面
 │   ├── buildings/      # 公共建筑（页面+API，搜索/标签/收藏/评论分页，发布需审核）
@@ -152,7 +152,7 @@ python scripts/build/package.py
 │   ├── backgrounds/    # 全站背景图片
 │   ├── music/          # 大喇叭音频（每个音频一个 ID 目录，含 m3u8、ts 分片与唱片 MP3）
 │   └── db/             # 数据库文件（site.db + firewall.duckdb）
-├── backups/      # 数据备份（默认 ../bhxz_backups，支持自定义路径与运行时热改）
+├── backups/      # 自动维护备份目录（默认 ../bhxz_backups，支持自定义路径与运行时热改）
 │   └── uploads/        # /uploads/ 全量 zip 极限压缩备份（含 SQLite / DuckDB 一致快照）
 └── ssl/          # HTTPS 证书（可选）
 ```
@@ -187,7 +187,7 @@ python scripts/build/package.py
 
 * 系统日志（实时查看，SSE 推送，支持等级过滤、自动滚动；按时间顺序从上到下展示，与控制台一致；**可在页面顶部切换来源查看全局日志 / 严重错误日志 / 各模块单独日志**，页面内「日志设置」可为任意模块配置「是否落盘」「是否并入全局日志」，保存即时生效）。统一日志系统分为三类：**① 全局日志**（普通运行日志 → 控制台 + `logs/app.log` + 内存缓冲 + SSE）；**② 严重错误日志**（导致服务器退出的报错 → 单独写入 `logs/fatal.log`，**每次写入直接覆盖文件、只保留最后一次**，且始终打印到控制台，不受日志等级/控制台开关限制）；**③ 模块单独日志**（模块启动时向日志模块注册，→ 独立内存缓冲 + 可选 `logs/modules/<模块名>.log`；是否落盘、是否并入全局日志**均由设置在「日志页面 → 日志设置」决定，不在模块注册时写死**，支持任意模块；当前使用者为防火墙（`firewall`）、图形验证码（`captcha`）、邮箱验证码（`email_code`）、注册账号（`register`）、登录账号（`login`），其中后四者默认落盘、全部默认不并入全局；两个开关都关闭时日志仅存在于模块独立缓冲，不打印、不落盘、不进全局）。**每次启动自动清理日志**（全局日志文件、严重错误日志文件、所有模块日志文件与内存缓冲统一清空）。**403 响应不写入防火墙模块日志**（防火墙成功拦截与授权拒绝类 403 均不记录；仅保留 IP 封禁 / 自动封禁等封禁动作日志）
 
-* 数据备份（手动/自动，极限压缩 zip，进度条；备份目录支持设置绝对/相对路径，默认 `../bhxz_backups`）
+* 自动维护（手动/自动，数据备份 + 日志文件清理，极限压缩 zip，进度条；备份目录支持设置绝对/相对路径，默认 `../bhxz_backups`）
 
 * 公开文件管理
 
@@ -213,13 +213,10 @@ python scripts/build/package.py
 
 ### 页面内搜索
 
-* **就地搜索框（SiteSearch v8）**：**每个列表页使用自己的搜索框**（由 `static/templates/macros/search.html` 的 `inline_search()` 宏渲染），导航栏**不再放置**搜索输入框
-* **点击搜索框即可展开**：点击搜索框任意位置（图标、文字或四周留白）都会展开，无需精准点中「搜索」文字
-* **纯水平展开动画**：容器固定高度、无上下内边距，折叠态与展开态上下长度完全一致，展开只做左右伸缩，不会上下抖动
-* **不抖动整页**：展开后的聚焦使用 `focus({ preventScroll: true })` 并放在下一帧执行，避免浏览器把页面滚动到输入框位置；搜索容器设置 `overflow-anchor: none`，展开时不会触发滚动锚定引起整页瞬间跳动
-* **保持展开规则**：输入框内有文字 **或** 光标在输入框内 → 保持展开；无文字 **且** 失焦（点击外部）→ 平滑收起；Esc 一键清空并收起
-* **结果就地渲染**：输入关键词后防抖（`220ms`）或回车，由搜索框在自身派发 `site-search` 事件；**各列表页监听该事件后直接刷新当前列表**，不再弹出下拉面板或独立搜索页，结果与页面风格完全一致
-* **覆盖范围**：公共建筑 / 服务器指南 / 大喇叭音频三个列表页均支持就地搜索；关键词通过各列表 API 的 `q` 参数传入，匹配各自的标题/摘要/标签字段
+* **就地搜索框**：每个列表页使用自己的搜索框（`static/templates/macros/search.html` 的 `inline_search()` 宏），导航栏不放置搜索输入框
+* **点击展开、Esc 收起**：点击搜索框任意位置即可展开；输入框有内容或光标在内时保持展开，失焦且无内容时平滑收起，Esc 清空并收起
+* **结果就地渲染**：输入后防抖或回车，由搜索框派发 `site-search` 事件，各列表页监听后直接刷新当前列表，不弹出下拉面板或跳转独立搜索页
+* **覆盖范围**：公共建筑 / 服务器指南 / 大喇叭音频三个列表页；关键词通过各列表 API 的 `q` 参数匹配标题、摘要或标签
 
 ### 服务器指南
 
@@ -263,45 +260,21 @@ python scripts/build/package.py
 
 ### 大喇叭音频
 
-* 「大喇叭音频」板块：上传音频自动转码为 HLS（m3u8），生成 `http://<主机>/music/<编号>.m3u8` 播放链接；同时生成**唱片 MP3**（`http://<主机>/music/<编号>.mp3`），供游戏内「电脑」下载后烧录成唱片
-
-* **「广播m3u8」按钮**：公开列表 / 我的音频 / 我的收藏 / 管理员审核队列 / 上传成功卡片上的 m3u8 复制按钮统一为「广播m3u8」+ `radio` 图标（悬停提示「复制广播 m3u8 链接（游戏内大喇叭在线播放用）」），点击复制 `http://<主机>/music/<编号>.m3u8`；模板侧由 `music_copy_link_button` 宏渲染，前端动态列表由各页脚本同步维护，文案与图标保持一致
-
-* 支持 mp3 / wav / ogg / m4a / flac，单文件不超过 100MB（依赖 ffmpeg）
-
-* 自动调用 ffmpeg：Windows 用 `uploads/ffmpeg/ffmpeg.exe`（缺失时回退系统 PATH），Linux/macOS 直接用系统 PATH 中的 `ffmpeg`；未找到时上传页给出清晰中文指引（不自动下载）
-
-* **公开需审核**：申请公开的音频进入「待审核」，管理员通过后才在游戏内大喇叭展示；**驳回后音频自动转为私有**，用户可重新申请公开或删除；已公开转私有再申请公开需重新审核
-
-* **私有仅「不公开列出」而非「限制访问」**：所有音频（含私有/待审核）均可**凭链接访问**（播放 m3u8 / 下载唱片 MP3 / 拉取 HLS 分片均无需登录，不再限制上传者或管理员），私有只表示该音频不会出现在公开音频列表中——上传者分享链接给任何人即可播放
-
-* **审核结果邮件通知**：管理员通过/驳回公开申请后，自动向上传者邮箱发送磨砂玻璃风格的审核结果邮件（通过 / 未通过状态卡），邮件未启用或上传者无邮箱时自动跳过
-
-* **待审核邮件提醒**：用户上传申请公开、或将私有音频重新申请公开时，自动向所有配置邮箱的管理员发送待审核提醒
-
-* **公开音频列表整体走 API 获取**：公开音频列表**首屏 / 搜索 / 「加载更多」全部由前端调用 `GET /api/music/list` 获取**（页面仅渲染骨架，不再在服务端注入列表数据）；顶部搜索框为就地展开的 `inline_search` 组件，关键词同时匹配 `title` 与 `tags` 列，无结果时显示「没有找到匹配…的公开音频」
-
-* **音频收藏**：公开音频列表 / 我的音频均提供「收藏」按钮，可收藏**别人上传的公开音频**，收藏后可在「我的收藏」页（`/music/my/favorites`）统一查看与播放；同一用户对同一音频仅一条收藏，重复点击即取消；删除音频时自动级联清理收藏记录
-
-* **音频标签**：上传时可填标签（逗号分隔，自动去重、最多 10 个、每个 ≤12 字），「我的音频」与管理员后台可随时编辑（普通用户仅可编辑自己的，管理员可编辑任意），标签以金色徽章展示在音频卡片上，并参与搜索匹配
-
-* 音频状态：私有 / 待审核 / 已公开（历史遗留的「已驳回」数据归并为私有），用户可在独立的「我的音频」页（`/music/my`）中查看并管理（播放链接、申请公开/转为私有、删除）
-
-* **独立上传页与详细进度条**：上传入口跳转独立页面 `/music/upload`（`static/templates/music/upload.html` + `static/js/pages/music_upload.js`），异步上传并分两阶段展示进度条——文件上传百分比 + ffmpeg 转码进度条：`ffprobe` 探测音频时长，后台线程结合 ffmpeg `-progress` 文件输出（`out_time_us`）与 m3u8 已生成分片累计时长**双源计算真实百分比**并填充进度条（取两者较大值，避免快速转码时进度条跟不上；真实百分比未知时显示不确定态滑动动画，不再只有文字），成功后展示播放链接与唱片 MP3 链接，失败可一键重试
-
-* **唱片 MP3 与源文件清理**：转码时一次生成 HLS 流与 192kbps 唱片 MP3（`libmp3lame` + ID3 标签），转码完成后**自动删除原上传音频源文件**与临时日志，目录内仅保留播放所需的 `index.m3u8`、`seg_*.ts` 与唱片 `index.mp3`；MP3 链接访问权限与 m3u8 播放链接一致（所有音频均可凭链接访问，私有仅表示不出现在公开列表）
-
-* **复制时长（秒）按钮**：公开列表 / 我的音频 / 管理员审核队列中的每个音频都提供「时长 Ns」按钮，点击一键复制**以秒为单位的音频总时长**（如 `215`）；时长由 HLS 播放列表各分片 EXTINF 累计得出（`services/music_service.py` 的 `get_music_duration_seconds`），对所有音频（含历史数据）都适用，点击复制由 `static/js/core/base.js` 全局代理处理，Toast 提示已复制秒数
-
-* 管理员可在后台审核公开申请、查看全部音频并一键下架（删除数据库记录并同步删除音频文件）
-
-* 音频文件存放在 `uploads/music/<音频ID>/`，删除记录时自动清理对应目录，无文件残留
-
-* **音频 ID 并发安全**：上传在持锁事务内完成数据库插入与 ID 读取（`with get_db()` + INSERT 后立即读 `lastrowid`），多用户同时上传也不会串号——文件目录名与数据库记录严格对应，播放链接与删除清理均可靠（修复历史并发上传导致编号错乱、无法播放、删除残留文件的问题）
-
-* **ffmpeg 多线程转码**：上传转码统一加 `-threads` 参数（`FFMPEG_THREADS`），每个上传任务是独立 ffmpeg 子进程与独立输出目录，多用户同时上传天然并行，不会出现「文件正在使用」冲突
-
-* **Windows 文件占用容错**：ffmpeg 刚输出的 `m3u8` / `mp3` / `ts` 分片可能被杀毒软件、系统索引或播放器短暂占用，改写播放列表与重命名目录统一走占用感知重试（仅对 WinError 5/32/33 退避重试约 6 秒），避免转码成功后因 `[WinError 32] 另一个程序正在使用此文件` 被判失败；上传流保存后立即关闭，子进程 Windows 下不再弹出控制台窗口
+* 上传音频自动转码为 HLS（m3u8），并生成唱片 MP3：播放链接 `http://<主机>/music/<编号>.m3u8`，唱片下载 `http://<主机>/music/<编号>.mp3`（游戏内烧录唱片用）
+* **「广播m3u8」按钮**：公开列表 / 我的音频 / 我的收藏 / 管理员审核队列 / 上传成功卡片统一为「广播m3u8」+ `radio` 图标，点击复制播放链接
+* 支持 mp3 / wav / ogg / m4a / flac，单文件不超过 100MB（依赖 ffmpeg：Windows 优先 `uploads/ffmpeg/ffmpeg.exe`，缺失时回退系统 PATH）
+* **公开需审核**：申请公开的音频进入「待审核」，管理员通过后才在游戏内大喇叭展示；驳回后自动转为私有，可重新申请或删除
+* **私有仅表示不出现在公开列表**：所有音频均可凭链接访问（播放 m3u8 / 下载 MP3 / 拉取分片均无需登录）
+* **邮件通知**：用户申请公开时提醒所有管理员；管理员通过/驳回后通知上传者（邮件未启用或无邮箱时自动跳过）
+* **列表整体走 API**：公开列表首屏 / 搜索 / 加载更多均调用 `GET /api/music/list`，关键词同时匹配标题与标签
+* **收藏**：可收藏他人上传的公开音频，在「我的收藏」（`/music/my/favorites`）统一查看与播放；删除音频时级联清理
+* **标签**：上传时可填（逗号分隔、自动去重、最多 10 个、每个 ≤12 字），「我的音频」与管理员后台可编辑，参与搜索匹配
+* **状态管理**：私有 / 待审核 / 已公开，用户在「我的音频」（`/music/my`）中申请公开、转为私有或删除，操作均为无刷新 API
+* **独立上传页**：`/music/upload` 异步上传，分「文件上传」与「ffmpeg 转码」两阶段展示进度条，成功后展示播放链接与唱片 MP3 链接，失败可重试
+* **转码后清理源文件**：目录内只保留 `index.m3u8`、`seg_*.ts` 与唱片 `index.mp3`
+* **复制时长（秒）**：各音频卡片的「时长 Ns」按钮可一键复制音频总秒数
+* 管理员可审核公开申请、查看全部音频并一键下架（删除记录与文件）
+* 音频存放在 `uploads/music/<音频ID>/`，删除记录时自动清理对应目录
 
 ### 统一定时任务调度
 
@@ -335,39 +308,20 @@ python scripts/build/package.py
 
 ### 全站背景图片
 
-* 上传图片自动转为 WebP 格式（保持自然宽高比，保存时写入数据库 `ratio` 列；LANCZOS 缩放）；**磁盘上每张背景只保留一个主图文件**（长边 ≤ 1920），不再预生成 / 按需缓存任何尺寸变体——彻底消除「请求一次别的尺寸就多一张磁盘文件」的堆积
-
-* **服务端只做查询，不做像素处理**：取图时服务端**不缩放、不裁剪**，一律原样返回主图字节；裁剪与铺满由浏览器按 `background-size` 完成，磁盘永远只有一张主图
-
-* **按屏幕宽高比挑选图片**：页面解析到背景元素后立即预加载（不等动画与其他脚本），自动获取屏幕宽高比并携带 `ratio`（宽/高）请求图片；服务端只查询**所有已通过审核**的背景、返回宽高比最接近的一张原样主图，最终裁切与铺满由浏览器按 `background-size: cover` 完成——横屏（如 16:9 / 21:9）与竖屏（如 9:16 / 3:4）会拿到各自最匹配的图片，不再始终同一张。挑选距离用**对数（几何）距离** `|ln(图片比例) − ln(屏幕比例)|`，保证「屏幕越宽 → 选越宽的图」（线性差值在比例 1 附近不对称，会让 1.1 的横屏请求误选到 0.5 的竖屏图）
-
-* **无「启用 / 停用」开关**：审核通过即为可用，所有已通过图片共同构成全站背景图片池（`get_approved_backgrounds()`），不再有单独的启用开关与 `is_active` 字段，也没有单独的「切换启用状态」接口；某张不想要直接删除即可
-
-* **无 ID 取图入口**：全站背景统一从 `/backgrounds/serve?ratio=` 获取（不带 ID），按屏幕比例返回池中最匹配的已通过背景；响应带 ETag（随主图修改时间变化）并强制重新校验（`no-cache, must-revalidate`），已通过图片变化后浏览器立即拿到新图，不会长期缓存旧图；按 ID 的 `/backgrounds/serve/<id>` 仅用于后台缩略图、审核预览与用户查看自己上传的图片
-
-* **支持一次上传多个图片文件**：拖放/选择批量上传，逐文件校验格式与大小，每个文件独立上传任务并聚合展示整体进度
-
-* 上传文件统一命名为 `<雪花ID>_<比例>.webp`（如 `123456789_1.7778.webp`，比例为宽/高、保留 4 位小数并去掉尾随零），不再保留原始文件名，避免命名冲突
-
-* 审核通过后自动加入全站背景图片池，无需再手动开启（已移除「启用 / 停用」开关）
-
+* 上传图片自动转为 WebP（LANCZOS 缩放，保持自然宽高比），磁盘上每张背景只保留一个主图文件
+* **按屏幕宽高比挑选**：前端携带屏幕宽高比请求图片，服务端只查询并返回宽高比最接近的已通过背景原图，裁剪与铺满由浏览器按 `background-size: cover` 完成；挑选使用对数距离，保证「屏幕越宽 → 选越宽的图」
+* **无启用/停用开关**：审核通过即进入全站背景图片池，不想要直接删除即可
+* **统一取图入口**：全站背景从 `/backgrounds/serve?ratio=` 获取（不带 ID），响应带 ETag 并强制重新校验；按 ID 的 `/backgrounds/serve/<id>` 仅用于后台缩略图、审核预览与用户查看自己的图片
+* **批量上传**：拖放/选择多个文件，逐文件校验格式与大小，聚合展示整体进度
 * 支持审核 / 驳回流程与审核结果邮件通知，管理员与上传者可预览未通过审核的图片
-
-* **列表整体走 API 获取**：`/backgrounds` 页面首屏列表由前端调用 `GET /api/backgrounds/list` 获取（返回「全部已通过背景」`approved` +「我的上传」`my`），「我的上传」删除改为无刷新 AJAX
-
-* **被驳回内容 24 小时自动删除**：被驳回超过 24 小时的服务器指南、背景图片等自动清理（删除数据库记录与关联本地文件；背景删除时顺带清理历史遗留的尺寸变体文件）
+* **列表整体走 API**：`/backgrounds` 首屏由 `GET /api/backgrounds/list` 获取（全部已通过背景 + 我的上传），删除为无刷新 AJAX
+* **被驳回内容 24 小时自动删除**：被驳回的指南、背景图片等自动清理记录与关联文件
 
 ### 网页地图
 
-* 导航栏「服务器 → 网页地图」进入 `/map` 页面，**自动内嵌展示**在「管理中心 → 系统设置 → 外部链接 → 卫星地图地址」（`MAP_URL`，亦是 `config.py` 中的默认值）里配置的网页地图链接，改设置后刷新页面即生效，无需重启
-
-* **CSP 自动放行**：基础 CSP 的 `frame-src` 仅允许 `'self'`，会拦截外部地图 iframe；中间件会按 `MAP_URL` 的源（`scheme://host[:port]`）动态加入 `frame-src` 与 `child-src`（兼容不支持 `frame-src` 的老浏览器），保证地图正常内嵌
-
-* **跨浏览器兼容**：地图区自适应铺满可视高度；工具栏提供「刷新 / 全屏 / 新标签打开」；全屏使用带 `webkit / moz / ms` 前缀的 Fullscreen API 并监听各前缀的 `fullscreenchange` 事件；iframe 带 `allowfullscreen`、`allow="fullscreen"` 与 `title`（无障碍）
-
-* **加载兜底**：iframe 载入完成自动淡出加载遮罩；超过 12 秒仍未完成则提示「可能被对端限制内嵌」并给出「在新标签页打开」出口；若 `MAP_URL` 为空则显示配置引导
-
-* **刷新页面不会卡在加载圆圈**：iframe 的 `src` 不再写在 HTML 里，而是**先绑定 `load` 监听、再赋值 `data-src`**——避免刷新页面时 iframe 从缓存瞬间加载完成、`load` 早于脚本绑定就已触发，导致加载遮罩一直覆盖已载入的地图、必须手动点「刷新」才恢复
+* 导航栏「服务器 → 网页地图」进入 `/map`，自动内嵌「系统设置 → 外部链接 → 卫星地图地址」（`MAP_URL`）配置的网页地图，改设置即时生效
+* 中间件按 `MAP_URL` 的源动态放行 CSP `frame-src` / `child-src`，保证外部地图可内嵌
+* 地图区自适应铺满可视高度，工具栏提供「刷新 / 全屏 / 新标签打开」；iframe 载入完成自动淡出加载遮罩，超时或 `MAP_URL` 为空时给出提示与出口
 
 ### 文档系统
 
@@ -387,7 +341,7 @@ python scripts/build/package.py
 
 * **日志**：日志输出等级、是否打印日志到终端；各模块单独日志是否落盘 / 是否并入全局日志，在「日志页面 → 日志设置」中逐模块配置（支持任意已注册模块）
 
-* **数据备份**：自动备份时间、保留份数、超时
+* **自动维护**：自动维护时间（数据备份 + 日志清理）、备份目录、保留份数、超时
 
 * **Sitemap**：刷新时间、站点域名、多域名列表、搜索引擎爬虫策略（robots.txt：允许所有 / 仅主页 / 禁止所有）。站点地图（`/sitemap.xml`）**只收录无需登录即可访问、且含可索引内容的页面**——首页、服务器状态、服务器指南（及已通过详情）、公共建筑（及已通过详情）、大喇叭、背景图片、文档，以及后台「公开文件」配置的页面（自动跳过 `js`/`css`/图片等资源映射）；已排除登录后 / 操作 / 上传页（`/settings`、`/music/my`、`/music/upload`、`/game-accounts/apply`、`/guides/create` 等）、仅内嵌外部地图的 `/map`、以及 `/admin`、`/api` 等内部路径，并按 path 去重
 
@@ -434,7 +388,7 @@ python scripts/build/package.py
 | `BACKUP_DIR`                  | 备份根目录（支持绝对/相对路径，运行时可在后台热改）            | `../bhxz_backups`（项目上一级）                   |
 | `SECRET_KEY`                  | Session 密钥                                | `mc_server_site_random_secret_key_2024`     |
 | `REGISTER_VERIFY_CODE`        | 注册验证码                                     | `binhai_xz`                                 |
-| `BACKUP_SCHEDULED_TIME`       | 每日自动备份时间                                  | `03:00`                                     |
+| `BACKUP_SCHEDULED_TIME`       | 每日自动维护时间（备份 + 日志清理）                        | `03:00`                                     |
 | `MAX_BACKUPS`                 | 最大保留备份份数                                  | `30`                                        |
 | `BUILDINGS_PER_PAGE`          | 公共建筑列表每页数量（1–100，接口传参无效）                 | `5`                                         |
 | `BUILDING_COMMENTS_PER_PAGE`  | 公共建筑评论列表每页数量（1–100，接口传参无效）               | `10`                                        |
@@ -585,11 +539,24 @@ python scripts/build/package.py
 | POST | `/music/upload`                    | 开始异步上传（返回 `{task_id}`，转码在后台执行）  |
 | GET  | `/music/upload/progress/<task_id>` | 查询上传/转码进度（JSON）                 |
 | GET  | `/music/<id>.mp3`                  | 下载唱片 MP3（游戏内烧录唱片；权限同 m3u8 播放链接） |
-| POST | `/music/<id>/toggle`               | 申请公开 / 转为私有                     |
-| POST | `/music/<id>/delete`               | 删除音频（本人或管理员）                    |
+| POST | `/api/music/<id>/toggle`           | 申请公开 / 转为私有（无刷新，返回最新 `status`）    |
+| POST | `/api/music/<id>/delete`           | 删除音频（本人或管理员，无刷新）               |
+| POST | `/music/<id>/toggle`               | 旧表单入口（兼容保留，整页跳转）                |
+| POST | `/music/<id>/delete`               | 旧表单入口（兼容保留，整页跳转）                |
 | POST | `/music/<id>/favorite`             | 收藏 / 取消收藏（仅已公开音频，需登录）           |
 | POST | `/music/<id>/tags`                 | 编辑音频标签（本人或管理员，需登录）              |
 | GET  | `/music/my/favorites`              | 我的收藏页（需登录）                      |
+
+### 账户设置 API（需登录，无刷新）
+
+| 方法   | 路径                              | 说明                          |
+| ---- | ------------------------------- | --------------------------- |
+| POST | `/api/settings/username`        | 修改用户名（返回新用户名）               |
+| POST | `/api/settings/password`        | 修改密码                        |
+| POST | `/api/settings/email`           | 修改邮箱（需邮箱验证码 + 当前密码）         |
+| POST | `/api/settings/delete`          | 注销账号（成功后前端跳转首页）             |
+| POST | `/api/settings/avatar`          | 上传头像（multipart，返回 `avatar_url`） |
+| POST | `/api/settings/avatar/delete`   | 恢复默认头像                      |
 
 ## 前端特性
 
@@ -607,62 +574,48 @@ python scripts/build/package.py
 
 * 全局细微噪点纹理（SVG `feTurbulence`），模拟蚀刻玻璃表面微观散射
 
-* **桌面端悬停下拉导航栏**：大屏端（≥1024px）主导航为「主页 / 服务器 / 社区 / 我的」，其中「服务器 / 社区 / 我的」为悬停下拉菜单（CSS 过渡动画，`cubic-bezier` 弹性曲线流畅展开）；小屏端保持右侧滑出菜单不变。分组内容：服务器（服务器状态 / 服务器指南 / 网页地图）、社区（大喇叭音频 / 公共建筑 / 官网背景图片）、我的（账户设置 / 申请封禁玩家 / 申请服务器账号 / 管理中心 / 退出登录）；**公共建筑归入「社区」分组**
+* **桌面端悬停下拉导航栏**：大屏端（≥1024px）主导航为「主页 / 服务器 / 社区 / 我的」，其中「服务器 / 社区 / 我的」为悬停下拉菜单；小屏端保持右侧滑出菜单。分组内容：服务器（服务器状态 / 服务器指南 / 网页地图）、社区（大喇叭音频 / 公共建筑 / 官网背景图片）、我的（账户设置 / 申请封禁玩家 / 申请服务器账号 / 管理中心 / 退出登录）
 
-* **自绘下拉菜单层级修复**：`.pixel-card` 的 `contain: paint` 会创建层叠上下文并裁剪溢出内容，导致卡片内展开的自绘下拉（`.custom-select-dropdown`）被相邻卡片压住 / 截断。现展开时由 `base.js` 给所在卡片加 `select-open` 类，CSS 临时去掉 paint 包含（保留 layout/style，不改布局）并把卡片抬到同层卡片之上（`z-index: 30`，仍低于导航栏），收起时还原
+* **邮件模板同款磨砂玻璃**：`static/templates/emails/base.html` 统一白色磨砂玻璃卡片，验证码 / 指南审核 / 音频审核 / 背景图片审核 / 公共建筑审核 / 通用待审核提醒 / 广播邮件共用同一外层与样式；`services/mail/notify_admins()` 为统一的「通知所有管理员」入口
 
-* **首页首屏磨砂玻璃背景铺满整屏**：`static/templates/index.html` 的 `.home-hero` 以负外边距（`--nav-offset`，移动端 80px / ≥768px 96px）抵消粘性导航栏在文档流中的占位高度，并用等量 `padding-top` 补回内容位置，使首页首屏的磨砂玻璃背景从**页面最顶端**开始连续覆盖——顶部不再出现空条、导航栏后方也一并被铺到；`min-height: 100vh` 保证首屏始终铺满一屏
+* **自定义音频播放器（磨砂玻璃风格）**：大喇叭音频列表、我的音频、管理员审核页均使用自研播放器替代默认控件，含进度条拖动、倍速（0.5x~2x）、音量（滑块弹层，记忆在 localStorage）与播放/暂停；同一时间只允许一个播放器出声。样式见 `static/css/base.css` 的 `.music-player`，逻辑见 `static/js/pages/music_player.js`
 
-* **邮件模板同款磨砂玻璃**：`static/templates/emails/base.html` 统一白色磨砂玻璃卡片（浅灰白渐变 + 蓝色主色 `#0284c7` + 背景光晕 + 噪点纹理 + 光线散射层 + 顶部高光描边 + 状态卡），验证码 / 指南审核 / 音频审核 / 背景图片审核 / 公共建筑审核 / 通用待审核提醒 / 广播邮件共用同一外层与样式；`services/mail/notify_admins()` 为统一的「通知所有管理员」入口
+* **全站响应式适配**：窄屏下音频卡片操作按钮组自动占满整行并换行，管理员数据表格统一横向滚动，导航在小屏切换为右侧滑出菜单
 
-* **自定义音频播放器（磨砂玻璃风格）**：大喇叭音频列表（`/music`）、我的音频（`/music/my`）、管理员审核页（`admin/admin_music.html`）均使用自研播放器替代浏览器默认控件，含进度条（点击/拖动 seek、缓冲显示，**圆点（thumb）跟随进度实时移动**）、倍速（0.5x~2x）、音量（按钮+滑块弹层，音量记忆在 localStorage）与播放/暂停，窄屏（≤480px）自动占满整行，且倍速/音量弹层窄屏时改为右对齐，避免超出卡片/视口被裁切；每个 `.music-player` 独立实例化并拥有独立的 HLS 实例与 `Audio` 元素，同一时间只允许一个播放器出声，列表内多个音频均可独立播放；样式见 `static/css/base.css` 的 `.music-player`（倍速/音量弹层 `z-index:100` 向上展开；内含播放器的卡片使用 `.pixel-card.music-card` 显式解除 `contain:paint`/`content-visibility` 的溢出裁切，弹层不被遮挡/裁切），逻辑见 `static/js/pages/music_player.js`，HLS 播放依赖本地 `static/lib/hls/hls.min.js`（构建脚本 `scripts/build/build_static.py` 自动下载）
+* **模板宏复用**：音频状态徽章、复制链接按钮、复制时长按钮、播放器等提取到 `macros/music_macros.html` 公共宏，列表页与管理员页统一调用
 
-* **全站响应式适配所有屏幕**：竖屏/窄屏（≤640px）下音频卡片操作按钮组（复制广播 m3u / 唱片 MP3 / 时长 Ns / 审核操作）通过 `.music-card-actions` 自动占满整行并换行排列，不再横向溢出被裁切导致「穿模」、无法点击；全局 `body` 增加 `overflow-wrap: break-word` 兜底长文本换行，配合 `overflow-x: clip` 杜绝横向滚动；小屏端导航使用右侧滑出菜单，大屏端使用悬停下拉导航，管理员数据表格统一 `overflow-x-auto` 横向滚动、指南/文档 `pre/table` 自带横向滚动，全站各页面均可适配任意屏幕尺寸
+* **统一弹窗模板系统**：`macros/modal.html` 提供弹窗骨架与页面级容器，配合 `base.js` 的 `CustomModal`（alert/confirm/prompt）统一全站弹窗，取代原生 `alert`/`confirm`/`prompt`
 
-* **模板宏复用**：`static/templates/macros/music_macros.html` 提取音频状态徽章、复制广播 m3u 链接按钮、复制唱片 MP3 按钮、复制时长（秒）按钮、自定义播放器（`music_audio_player`）与播放器脚本（`music_player_assets`）为公共宏，`music/list.html`、`music/my.html` 与 `admin/admin_music.html` 统一调用，消除重复代码
+* **统一标签列表输入框**：`macros/forms.html` 的 `tags_field()` 宏 + `base.js` 的 `TagInput` 模块，输入后回车或点「添加」新增标签，可点叉号删除、支持粘贴自动拆分；底层为逗号分隔字符串，与后端解析兼容
 
-* **统一弹窗模板系统**：`static/templates/macros/modal.html` 提供 `modal_overlay`（CustomModal 骨架）、`modal_shell`（页面级弹窗容器，支持尺寸/图标/颜色自定义）、`modal_captcha`（图形验证码弹窗）、`modal_close_script`（全局 `openModal`/`closeModal` 控制器）四组宏，配合 `base.js` 的 `CustomModal`（alert/confirm/prompt）统一全站所有弹窗样式，取代全部原生 `alert`/`confirm`/`prompt` 及手写弹窗；图形验证码弹窗改为**按需加载**（见下文「前端资源按需加载」）
-
-* **统一标签列表输入框**：`static/templates/macros/forms.html` 的 `tags_field()` 宏 + `base.js` 的 `TagInput` 模块，提供全站统一的「列表类」输入体验——输入一项后回车或点「添加」即新增一个标签，已添加标签以胶囊展示、点叉号即可删除，支持粘贴「a, b, c」自动拆分；底层始终用一个隐藏 input 保存**逗号分隔字符串**，与后端解析、表单提交完全兼容（零迁移成本）。建筑发布 / 建筑详情编辑标签 / 音频上传 / 音频标签编辑等所有列表输入均已统一使用该控件，用户无需再手动输入逗号分隔；全局「编辑标签」弹窗（`#tag-edit-modal`）复用同一控件供各场景调用
-
-* **统一进度条模板（清晰磨砂玻璃）**：全站所有进度条由 `static/templates/macros/progress.html` 的 `progress_track(id, variant, size, width)` 宏渲染（`variant` 取 gold/green/blue/purple/red/yellow，`size` 取 xs/sm/md/lg），样式集中在 `static/css/base.css` 的 `.progress-track` / `.progress-fill`——白色半透明**清晰磨砂玻璃**轨道（`backdrop-filter: blur(12px) saturate(140%)` + 细白边框 + 内阴影）配渐变填充；**真实百分比未知时**给填充元素加 `is-indeterminate` 类即切换为滑动光带的不确定态。上传页（`backgrounds/upload.html`）、音频上传（上传+转码双阶段）、数据备份（`admin/db_backup.html`）以及 JS 动态创建（`base.js` / `uploader.js`）一律复用同一套类名，**禁止另起样式**；仅音频播放器的可拖拽进度滑块（`.mp-progress`，含缓冲/圆点）为独立交互控件，不纳入此模板
+* **统一进度条模板**：全站进度条由 `macros/progress.html` 的 `progress_track()` 宏渲染，样式集中在 `static/css/base.css` 的 `.progress-track` / `.progress-fill`；上传页、音频上传、自动维护、JS 动态创建一律复用同一套类名
 
 ### 交互效果
 
-| 效果       | 实现方式                                                                                                                                                 |
-| -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 鼠标光晕跟随   | `requestAnimationFrame` 平滑插值                                                                                                                         |
-| 按钮水波纹    | CSS `ripple` 动画                                                                                                                                      |
-| 滚动淡入     | `IntersectionObserver`                                                                                                                               |
-| 页面过渡     | `requestAnimationFrame` 控制 `.page-ready` 类切换                                                                                                         |
-| 统一弹窗系统  | 磨砂玻璃风格，CSS 过渡动画 + 全局 `openModal`/`closeModal` 控制；CustomModal 提供 alert/confirm/prompt（Promise + 回调双风格），自动拦截 `onsubmit="return confirm(...)"` 表单；`modal_shell` 宏支持页面级内容弹窗，全站无原生弹窗 |
-| Toast 提示 | 全站统一模板：`Toast.success / error / warning / info` 生成固定的「图标 + 文案」结构，入场 / 退场由 CSS 关键帧 `toast-in` / `toast-out` 驱动，任何时机创建都能完整播放动画（收藏、复制、表单反馈等全部走同一套）                                     |
+| 效果       | 实现方式                                                                                     |
+| -------- | ---------------------------------------------------------------------------------------- |
+| 鼠标光晕跟随   | `requestAnimationFrame` 平滑插值                                                            |
+| 按钮水波纹    | CSS `ripple` 动画                                                                          |
+| 滚动淡入     | `IntersectionObserver`                                                                   |
+| 页面过渡     | `requestAnimationFrame` 控制 `.page-ready` 类切换                                           |
+| 统一弹窗系统  | 磨砂玻璃风格，CSS 过渡动画 + 全局 `openModal`/`closeModal` 控制；CustomModal 提供 alert/confirm/prompt |
+| Toast 提示 | 全站统一模板（图标 + 文案），CSS 关键帧驱动入场 / 退场动画，所有轻提示共用同一套                          |
 
 ### 性能优化
 
 * **零外部依赖**：所有 CDN 资源（Lucide、Marked.js）下载到本地，无外部网络请求
 
-* **前端资源按需加载**：页面级内容通过 `base.html` 的独立块按需引入，避免每个页面都加载用不到的资源——
-  * 图形验证码弹窗（`modal_captcha`）由全站固定渲染改为 `captcha_modal` 块，**仅注册 / 找回密码 / 建筑发布 / 指南投稿 / 账号申请等需要验证码的页面加载**；
-  * `purify.min.js` 由 `<head>` 移至页面底部脚本，且**仅在 Markdown 渲染页引入**（不再阻塞首屏）；
-  * `uploader.js` / `search.js` 通过 `page_scripts` 块仅在实际上传页 / 搜索页加载；
-  * 移除 `admin/broadcast.html` 中重复引入的 `base.js`（已在 `base.html` 全局加载），避免重复执行与拉取旧版本。
+* **前端资源按需加载**：页面级资源通过 `base.html` 的独立块按需引入，图形验证码弹窗仅需要验证码的页面加载，`uploader.js` / `search.js` 仅在实际上传页 / 搜索页加载
 
-* **本地自定义字体（站酷庆科黄油体 + 站酷快乐体）**：正文与标题分别使用本地子集化 woff2（`lib/fonts/zcool-*-*.woff2`），按 `unicode-range` 分片 + `font-display: swap`，浏览器只下载页面实际用到的子集，无外部 CDN 请求；字体缺失时自动回退系统字体栈
+* **本地自定义字体**：正文与标题使用本地子集化 woff2（按 `unicode-range` 分片 + `font-display: swap`），无外部 CDN 请求
 
-* **分段列表滚动自动加载**：所有分段加载列表（公共建筑 / 公共建筑评论 / 大喇叭音频 / 服务器指南 / 后台各列表）的「加载更多」按钮带 `data-autoload-more` 属性，`base.js` 用 `IntersectionObserver` 监听——按钮进入视口即自动点击加载下一页；按钮隐藏 / 禁用时不触发，加载后按钮被新内容推出视口，滚动到底再次自动加载，始终只自动加载后面的内容
+* **分段列表滚动自动加载**：带 `data-autoload-more` 属性的「加载更多」按钮由 `IntersectionObserver` 监听，进入视口即自动加载下一页
 
 * `overflow-x: clip` 替代 `hidden`（消除滚动回弹）
 
 * 尊重 `prefers-reduced-motion`（无障碍用户自动禁用动画）
 
 * 触控设备降级光晕效果
-
-* **导航栏滚动收缩动画走合成器（不减弱动画）**：外层容器几何尺寸恒定，收缩动画全部由内层 `transform` + 宽度 + 两层伪元素皮肤（`.glass-nav-inner::before/::after`）的 `opacity` 交叉淡化完成——
-  * 不再逐帧过渡 `box-shadow` 与 `background`（改由两层皮肤淡化，只走合成器，无重排/重绘）；
-  * 不再靠外层 `padding` 过渡（其会触发**整页重排**），收放位移改由内层 `transform` 完成；
-  * `will-change` 只保留 `transform`（移除会诱导图层频繁重建的 `backdrop-filter`）。
-  动画时长、缓动曲线与视觉外观完全不变。同时修正视差滚动每帧 `getBoundingClientRect` 造成的强制同步布局（改为初始化时缓存元素文档位置，窗口尺寸变化后再重测）；滚动收缩的类切换在状态未变时不再写 DOM。
 
 * `IntersectionObserver` 触发后立即 `unobserve`
 
@@ -761,7 +714,7 @@ workspace/
 │   ├── template_context.py   #   全局模板上下文注入
 │   └── errors.py             #   统一错误页渲染（error_simple）
 ├── services/                 # 业务逻辑层（纯 Python，不依赖 Flask）
-│   ├── backup/               #   数据备份（/uploads/ 全量 zip 极限压缩）
+│   ├── backup/               #   自动维护（/uploads/ 全量 zip 极限压缩 + 日志清理）
 │   ├── buildings/            #   公共建筑（列表/搜索/收藏/评论分页）
 │   ├── email/                #   异步邮件发送
 │   ├── game_accounts/        #   游戏账号注册申请
@@ -893,14 +846,15 @@ workspace/
 | `building_favorites`      | 建筑收藏     | 联合主键 `(user_id, building_id)`                                                                                   |
 | `guide_favorites`         | 指南收藏     | 联合主键 `(user_id, guide_id)`                                                                                      |
 
-#### 数据备份
+#### 自动维护
 
-每日凌晨 3:00（可配置）自动执行：
+每日凌晨 3:00（可配置）自动执行「自动维护」：
 
 1. 扫描 `/uploads/` 目录下所有文件 → 极限压缩打包为 zip（ZIP_DEFLATED, level 9）→ 校验 zip 完整性 → 清理旧备份
-2. **数据库以「一致快照」写入 zip**（`uploads/db/`）：主站 SQLite（`site.db`）用在线备份 API 导出，WAL 中「已提交但未 checkpoint」的数据会一并合并进快照；防火墙 DuckDB（`firewall.duckdb`）用引擎级导出（`ATTACH` + `COPY FROM DATABASE`）。运行期的 `-wal` / `-shm` / 原始 `.duckdb` 文件不直接复制（正被独占锁定且状态不一致），其数据已全部包含在快照里，恢复时单文件即可独立使用。若防火墙库因残留 WAL 无法打开，快照前会先自动自愈（见上文「读写与并发模型 → DuckDB」），不再出现「数据库快照写入失败」的 WARNING。
+2. **数据库以「一致快照」写入 zip**（`uploads/db/`）：主站 SQLite（`site.db`）用在线备份 API 导出，WAL 中「已提交但未 checkpoint」的数据会一并合并进快照；防火墙 DuckDB（`firewall.duckdb`）用引擎级导出（`ATTACH` + `COPY FROM DATABASE`）。运行期的 `-wal` / `-shm` / 原始 `.duckdb` 文件不直接复制（正被独占锁定且状态不一致），其数据已全部包含在快照里，恢复时单文件即可独立使用
+3. **自动清理日志文件**：截断 `logs/app.log`，删除 `logs/fatal.log` 与 `logs/modules/*.log`（后台日志页面仍可查看本次运行期间的日志）
 
-管理后台可手动触发，显示实时进度条；备份目录（`BACKUP_DIR`）支持在「系统设置」或「数据备份」面板设置**绝对路径或相对路径**（相对路径基于网站根目录解析，默认 `../bhxz_backups`），更改后新备份将写入新目录，旧备份自动迁移。已取消一键解压恢复功能，历史备份仅作留存与下载。
+管理后台「自动维护」页可手动触发，显示实时进度条；备份目录（`BACKUP_DIR`）可在「系统设置」或「自动维护」页设置**绝对路径或相对路径**（相对路径基于网站根目录解析，默认 `../bhxz_backups`），保存后即时生效。已取消一键解压恢复功能，历史备份仅作留存与下载。
 
 ### 一键更新脚本
 
@@ -956,275 +910,3 @@ workspace/
 ## 更新日志
 
 详见 [docs/CHANGELOG.md](docs/CHANGELOG.md)。
-
-## 最近更新
-
-* **背景图片改为「按屏幕比例挑选 + 客户端裁剪」，服务端不再处理像素**（`services/background_service/__init__.py`、`routes/backgrounds/pages/__init__.py`、`static/templates/base.html`、`static/templates/admin/backgrounds.html`、`static/templates/backgrounds/index.html`）：
-  * **问题**：全站背景始终用同一张图片，且请求参数只有 `size`、直接请求 `/backgrounds/serve?size=10` 也能返回图片——说明服务端在做缩放 / 裁剪这类像素处理，且不会按屏幕比例换图。
-  * **修复**：请求参数改为 `ratio`（屏幕宽/高）。服务端**只做查询与返回**：从已启用的背景里挑选宽高比最接近 `ratio` 的一张主图，**原样返回，不缩放、不裁剪**；裁剪与铺满由浏览器按 `background-size` 完成。彻底删除服务端的按 `size` 内存缩放逻辑（`_resize_to_size` / `_size_cache` / `read_background_data(size=)` / `background_etag(size=)` 一并移除），按 ID 取图同样原样返回。
-  * **可同时启用多张背景**：审核通过 / 启用不再取消其他背景的启用状态，多张背景（各带自己的宽高比）可并存，构成「图片池」，由 `get_background_for_ratio()` 按访问者屏幕比例挑选最合适的一张；横屏（16:9 / 21:9）与竖屏（9:16 / 3:4）因此会拿到各自最匹配的图片，不再始终同一张。
-  * **删除「启用 / 停用」开关与修正挑选距离**（`services/background_service/__init__.py`、`routes/admin/backgrounds/__init__.py`、`core/db/schema.py`、`core/template_context.py`、`static/templates/*`）：
-    * 根因不止一处——除服务端总取第一张外，残留的 `is_active`「启用 / 停用」开关（含 `/admin/backgrounds/<id>/toggle` 路由）会把未被启用的横屏图排除在池外；挑选用线性差值在比例 1 附近不对称，`ratio=1.1` 会误选到竖屏图。
-    * 彻底删除开关：移除 `is_active` 字段（表定义 / 写入 / 查询）、`toggle_active()` 服务函数与「切换启用状态」路由；图片池改为 `get_approved_backgrounds()` —— **所有已通过审核的背景都可直接使用**。
-    * 挑选距离改为**对数（几何）距离** `|ln(图片比例) − ln(屏幕比例)|`，保证横屏请求选横图、竖屏请求选竖图（`ratio=1.1` 现在正确返回横屏图）。
-    * 前端同步：`/backgrounds` 列表接口字段 `active` → `approved`、区块标题「当前启用」→「全部背景」、徽章「已启用」→「已通过」；后台与管理页去掉 `?size=` 与已删掉的启用按钮。
-  * 前端去掉 `size` 档位计算，改用屏幕宽高比（`ratio`，保留 2 位小数）请求；窗口缩放 / 手机旋屏后按新比例重新取图。后台缩略图与 `/backgrounds` 列表同步去掉 `?size=` 参数（缩略图由浏览器按 CSS 尺寸缩放）。新增 / 更新 `scripts/tests/test_background_service.py` 覆盖「原样返回」与「按比例挑选」。
-
-* **业务日志全面模块化——除 core 核心与启动自检外，全部改为模块单独日志**（`core/system/logger.py` 及 23 个业务 / 路由文件）：
-  * 按开发准则约定，业务日志一律走模块单独日志（`register_module_log('<名称>')` + `log_module('<名称>', ...)`），**不再调用全局 `log()`**；只有 core 基础设施（应用初始化、数据库 schema / 连接、WSGI 服务器、任务注册表）与启动自检（`core/system/startup_checks.py`）保留全局日志。
-  * 新增 13 个模块：`background`（背景图片）、`buildings`（公共建筑）、`music`（大喇叭音频）、`email`（异步邮件）、`backup`（数据备份）、`gameban`（游戏服务器封禁）、`sitemap`（站点地图缓存）、`rcon`（RCON 与玩家追踪）、`user`（用户资料 / 管理 / 媒体）、`password`（找回密码）、`cleanup`（被驳回内容清理）、`metrics`（系统指标采集）、`settings`（系统设置管理）；连同既有的 `firewall` / `captcha` / `email_code` / `register` / `login` / `waitress`，共 **19 个模块单独日志**。
-  * 拆分细则：注册流程相关日志归 `register`（含 `routes/main/auth` 的群内验证码）、登录与登出归 `login`、找回密码归 `password`、用户资料与账号管理归 `user`、后台建筑审核与浏览计数归 `buildings`、后台备份与定时备份归 `backup`。
-  * 默认均「落盘到 `logs/modules/<名称>.log`、不并入全局日志」（兜底值集中在 `core/system/logger.py` 的 `MODULE_LOG_DEFAULTS`），可在「日志页面 → 日志设置」逐模块即时调整。
-  * 迁移仅为日志去向调整，不改变任何业务逻辑、文案与参数。
-
-* **数据库读写与 ID 生成机制重构（高并发写入 + ID 绝不重复）**（`core/shared/snowflake.py`、`core/db/connection.py`、`core/db/snowflake_migration.py`、`services/firewall/service/database.py`）：
-  * **修复「数据库快照写入失败：DuckDB WAL 重放报 `Sequence with name "seq_firewall_bans" already exists!`」**：根因是旧版用 `CREATE SEQUENCE seq_firewall_bans` 作自增主键，迁移为雪花 ID 后序列被删，但残留在 WAL 里的建/删序列记录在下次打开重放时冲突，导致整个库打不开。现在从三处根治——① 每次打开库都**无条件幂等清理遗留序列**，从源头阻止相关 DDL 再进 WAL；② 初始化后与关闭前各**强制 `CHECKPOINT`**，把已提交数据合并进主库并清空 WAL；③ 打开失败时**自动自愈**（先隔离损坏的 `*.wal` 后重试，仍失败再隔离整库重建空库），保证防火墙功能不因单文件损坏而下线。实测备份的 DuckDB 快照恢复正常（9 张表、无遗留序列）。
-  * **雪花 ID 生成器重写为「独立待命线程 + 有界 FIFO 池」**：由一个独立线程独占计数器预生成 ID 写入固定容量队列（默认 1024 个、约 32KB、池满即阻塞），`next_id()` 只做 O(1) 取号，**无锁竞争、无忙等**；单生成者 + 单 FIFO 从结构上保证每个 ID 只被发放一次，超高并发同时取号也绝不重复、不「抢号」；保留时钟回拨保护，ID 仍单调递增且恒 ≤ 2^53-1（前端无精度问题）。新增 `scripts/tests/test_snowflake.py`：16 线程 × 2000 次 × 3 轮并发压测，全员同时取号零重复。
-  * **SQLite 写事务改为 `BEGIN IMMEDIATE`**：写事务一开始就独占写锁（而非 `BEGIN` 的「先读锁、写时升级」），避免多线程并发写时两个事务同时持读锁、再抢写锁导致的 `SQLITE_BUSY` 升级冲突——这正是「多线程写入时序问题」的根源；配合 `busy_timeout=30000` 排队等待，写入天然串行、互不打断。新增可复用的 `checkpoint()` 把 WAL 合并落盘，优雅退出与大批量迁移后调用。
-  * **迁移时同步磁盘文件名与文件内容，并新增启动对账兜底**（`core/db/snowflake_migration.py`、`core/system/startup_checks.py`）：重映射主键与子表外键之外，同步处理磁盘上内嵌旧 ID 的名字与内容——① 音频目录 `music/<旧ID>/` → `music/<新ID>/`，并改写目录内 `index.m3u8` 的分片绝对路径（`/music/<旧ID>/<分片>.ts` → 新 ID），修复「库改了 ID、播放列表内容没改」导致分片 404；② 背景图片 `bg_<旧ID>_<hash>.webp` 与全部响应式变体（`_768` / `_1280` / `_1920`）统一改为新 ID，并同步改写库里的 `filename` / `file_path`，避免「库换了 ID、盘上还是旧名」导致取图 404；③ 迁移不再给「`file_path` 为空（上传中途失败的残留）」的记录编造指向不存在目录的路径。因数据库改动是事务性的、磁盘改名与改内容不是，另新增**每次启动幂等运行的磁盘对账** `reconcile_media_files()`：背景图片按文件名里稳定的 `<hash>[<_档位>]` 指纹改名（主图与各档变体一并覆盖）、音频目录按「新 ID 随旧 ID 升序分配」的顺序关系配对改名、播放列表按库里的 ID 逐个改写；两侧数量不一致时只记录告警、不做任何猜测（绝不把音频目录挂到错误的记录上）。新增 `scripts/tests/test_file_migration.py` 覆盖指纹解析、主图/各档变体改名、播放列表改写与配对边界。
-
-* **统一编辑器交互优化 + 统一标签输入框 + 前端资源按需加载**（`static/templates/macros/markdown_editor.html`、`static/js/pages/markdown-editor.js`、`static/templates/macros/forms.html`、`static/js/core/base.js`、`static/templates/base.html` 等）：
-  * **编辑器**：移除编辑器下方的「所见即所得」提示与「插入图片」功能；工具栏改为「基础 / 段落 / 插入」三个常驻标签页 + 「链接」「表格」两个**上下文标签页**（点击链接/表格按钮或光标进入链接/表格时出现，离开即隐藏）。链接改为独立标签页，可直接设置地址、显示文字、悬停标题、新窗口打开，并新增**取消链接**；**未选中文字时点链接按钮自动插入默认文字**。表格插入后自动切到表格页、离开自动收起。**再次点击已激活的样式按钮即取消该样式**（加粗/斜体/删除线/行内代码/标题/引用/任务列表等）。表格列宽拖拽改用 **Pointer Events + 指针捕获**（`touch-action:none`），**修复移动端无法拖动列宽的问题**。
-  * **统一标签输入框**：新增 `tags_field()` 宏与 `base.js` 的 `TagInput` 模块，所有列表类输入（建筑标签、音频标签、音频标签编辑等）统一改为「回车/点添加新增、胶囊叉号删除」，不再需要用户手动以逗号分隔；底层仍保存逗号分隔字符串，后端零改动。
-  * **前端资源按需加载**：图形验证码弹窗改为 `captcha_modal` 按需块（仅验证码页面加载）、`purify.min.js` 移出 `<head>` 且仅在 Markdown 页加载、移除 `admin/broadcast.html` 重复引入的 `base.js`。
-
-* **修复 Waitress 下「逐跳标头」导致的 500（实时日志流 + 封禁响应）**（`routes/admin/logs/__init__.py`、`core/middleware.py`）：日志页 `/admin/api/logs/stream`（SSE 实时日志）反复报 `AssertionError: Connection is a "hop-by-hop" header; it cannot be used by a WSGI application (see PEP 3333)`、实时日志无法推送。原因是 `Connection` 属 PEP 3333 禁止 WSGI **应用**下发的逐跳标头，旧版 Cheroot 容忍、Waitress 会直接抛错（SSE 此前写 `Connection: keep-alive`、封禁响应写 `Connection: close`）。现移除这两处 `Connection` 标头——HTTP/1.1 默认即持久连接，长连接由服务器维护，无需应用声明。
-
-* **数据备份纳入数据库完整快照 + DuckDB 关键索引自愈**（`services/backup/manager/__init__.py`、`services/firewall/service/database.py`）：`/uploads/` 全量 zip 备份原先跳过 `-wal` / `-shm` / `.duckdb`（运行期独占锁定），导致备份里**没有可用数据库**。现改为备份时生成**一致快照**写入 zip：主站 SQLite 用**在线备份 API**（WAL 中已提交数据一并合并，单文件即可独立恢复）、防火墙 DuckDB 用**引擎级导出**（`ATTACH` + `COPY FROM DATABASE`，规避文件锁定）。另修复 DuckDB ART 索引在异常退出后可能与数据行不一致、导致「解封静默失败」的问题——初始化时自动重建 `firewall_bans(ip_address)` 与 `firewall_account_bans(user_id)` 两个关键索引实现自愈。
-
-* **修复 Waitress 剥离代理头导致的「DDoS 防火墙再次失效」**（`core/server.py`、`core/shared/ip.py`）：Waitress 3.x 默认 `clear_untrusted_proxy_headers=True`，会在请求进入应用前**剥离来自非可信来源的 `X-Forwarded-For` / `X-Forwarded-Proto` / `X-Real-IP` 等代理头**。内网穿透 / 反向代理正是靠这些头传递客户端真实 IP，被剥离后 `REMOTE_ADDR` 恒为回环地址，防火墙会把所有外部请求当作本机访问而跳过 DDoS 计数与黑名单拦截（Session Cookie 的 `Secure` 判断同样失效）。现于 `create_server()` 显式设置 `clear_untrusted_proxy_headers=False`，把代理头的可信性判断交回应用自身（`is_trusted_proxy` 只采信回环 / 内网 / `TRUSTED_PROXIES` 转发的头，公网直连伪造的头一律忽略）。同时修正 `is_public_ip()` 对 IPv4-mapped IPv6（`::ffff:1.2.3.4`）的误判——此前首字符为 `:` 会被当成内网地址，进而被当作可信代理采信其伪造的代理头。实测：真实 Waitress 服务下第 151 次请求（10 秒内超过 150 次）即触发封禁，后续连接被直接断开（0 字节响应）。
-
-* **服务器工作线程数可配置 + 热加载**（`core/server.py`、`config.py`、`routes/admin/firewall/__init__.py`、`static/templates/admin/firewall.html`）：原 `WORKER_THREADS=4` 改为 `WAITRESS_THREADS=100`（Waitress 实际工作线程数上限，`0` 表示不限制，按 CPU 核数与可用内存智能推算 32~512）；「系统设置」与「防火墙设置」修改的是同一项配置，保存后通过 `apply_thread_count()` 调 `task_dispatcher.set_thread_count()` **即时热加载**，无需重启服务器。
-
-* **Waitress 内部日志改写到「waitress」模块单独日志**（`core/system/logger.py`）：接管 waitress 的 `logging` 日志器，把 `Task queue depth is xx` 等内部记录转发进「waitress」模块独立缓冲（默认不落盘、不并入全局日志，可在「日志页面 → 日志设置」开启），不再刷屏。验证码清理日志（`清理过期验证码 N 个`）同样改走「captcha」模块单独日志。
-
-* **修改用户名支持实时可用性检测**（`routes/main/auth/__init__.py`、`services/user/auth/__init__.py`、`static/templates/settings/index.html`）：新增 `exclude_self=1` 参数，检查时排除当前登录账号自身（填成自己现在的用户名不算被占用），前端交互与注册页一致（防抖查询、可用/不可用状态提示、未通过检查时阻止提交），服务端写入时仍会再次校验。
-
-* **前端资源按需加载**（`static/templates/base.html` 及列表页 / 详情页）：`uploader.js`、`search.js`、`purify.min.js` 由全站加载改为通过 `page_scripts` / `extra_head` 块**仅在实际用到的页面加载**；移除重复的 favicon `rel="alternate icon"` 链接，避免一次请求取两遍服务器图标。
-
-* **修复触屏设备导航栏动画卡顿**（`static/js/pages/main.js`、`static/css/base.css`）：触屏端的鼠标光晕改用 `requestAnimationFrame` 合并 DOM 写入（避免每个 `touchmove` 都触发一次合成，与导航栏 `backdrop-filter` 抢占合成资源）；移动菜单增加 `will-change: transform, opacity` 与 `backface-visibility: hidden` 独立合成层。动画外观与时长完全不变。
-
-* **修复加入 QQ 群链接始终指向当前页**（`routes/main/pages/__init__.py`）：首页 `qq_group_url` 默认值改为读取 `QQ_GROUP_URL` 配置，不再因默认空串而回落到当前页面地址。
-
-* **全面改用 Waitress 生产服务器 + 移除应用层 SSL**（`core/server.py`、`requirements.txt`、`app.py`、`core/middleware.py`、`startup_checks.py`）：WSGI 服务器由 Cheroot 迁移到 **Waitress**（生产级多线程，工作线程数由 `WAITRESS_THREADS` 配置、默认 100，其余 `connection_limit=1000` / `channel_timeout=300`），启动方式与对外端口不变；**删除应用层全部 SSL 功能**（`ENABLE_SSL` 环境变量、`ssl/` 证书目录、Cheroot `BuiltinSSLAdapter`、HTTPS 强制跳转与相关启动检查），HTTPS 改由内网穿透 / 反向代理层统一终结，应用仅监听 HTTP；防火墙不再依赖服务器私有连接对象，被拦截请求通过抛出 `waitress.channel.ClientDisconnected` 由 Waitress 关闭连接、**不写任何响应字节**。Session Cookie 的 `Secure` 标志改由 `_ProxyAwareSessionInterface` 按可信代理下发的 `X-Forwarded-Proto` 动态决定（HTTPS 访问自动开启、本地 HTTP 直连自动关闭）。
-
-* **服务器状态页网络监控改为「服务端采样缓存」**（`services/system_metrics/`、`routes/api/public/__init__.py`、`static/templates/site/server_status.html`）：新增后台采样服务（每 5 秒采样 `psutil` 的 CPU / 内存 / `net_io_counters()`），在服务端用相邻两次采样的累计字节差换算上行 / 下行速率并写入内存缓存；`/api/server-status` 新增 `net_up` / `net_down` 速率字段，页面**打开即显示速率**（不再需要等一两次刷新），`formatBytes` 单位补充 `TB`。
-
-* **修复 DDoS 防护失效与攻击后报错（防火墙真实 IP / 白名单 / SQLite 并发 / 模板空值）**：
-  * **穿透环境下 DDoS 统计与封禁失效**（`services/firewall/transport/wrappers.py`、`core/shared/ip.py`）：网站经 natfrp 内网穿透对外服务，外部请求的 `REMOTE_ADDR` 恒为本机回环地址，而 WSGI 门禁此前硬编码放行回环 IP，导致攻击请求既不计入 DDoS 窗口也不被黑名单拦截。现于 WSGI 层解析真实客户端 IP：仅当直连来源为可信代理（回环 / 内网地址，或 `config.py` 的 `TRUSTED_PROXIES`）时才采信 `X-Forwarded-For` / `X-Real-IP` 等头部，取链路中**最右侧公网 IP**；公网直连一律忽略代理头，防止伪造头部绕过防护。
-  * **删光白名单后默认 IP 仍被永久放行**（`services/firewall/service/database.py`、`services/firewall/service/core.py`）：白名单缓存此前读取 `config.py` 的常量而非设置，且「移除」只删 DuckDB 表——硬编码默认 `112.82.136.172` 被缓存同步反复加回，删不掉、删光后攻击仍不被拦截。现改为读取设置值并区分「未配置」（回退默认基线）与「清空」（真正清空），白名单页面的「移除」同步清理设置，删除即时生效。
-  * **攻击后报 `sqlite3.InterfaceError: bad parameter or other API misuse`**（`core/db/connection.py`）：跨线程共享的单连接 + SQLite 预处理语句缓存，并发执行相同 SQL 时相互 `reset` 触发该错误并导致全站 500。现关闭语句缓存（`cached_statements=0`），24 线程 × 4000 次查询压测 0 错误。
-  * **建筑详情页报 `TypeError: 'NoneType' object is not subscriptable`**（`static/templates/buildings/detail.html`）：日期字段为 `None` 时取切片报错，补 `or ''` 兜底。
-
-* **修复背景图不按屏幕大小取图（`static/templates/base.html`）**：此前用 `max(视口宽, 视口高) × devicePixelRatio` 计算目标像素再取「不小于它的最小档位」，导致手机（390×844@3x → 2532）、平板（2360）、1366 笔记本（1366）等**几乎所有设备都被算成 1920 档**，768 / 1280 两档形同虚设——任何设备拿到的都是同一张主图；且尺寸只在页面解析时计算一次，缩放窗口、手机旋屏后永不重新取图。现改为按**屏幕 CSS 长边**取「不小于它的最小档位」（全屏背景由半透明遮罩覆盖，无需按物理像素取图），并监听 `resize` / `orientationchange`（300ms 防抖）在视口变化后自动改取当前最合适的档位与裁剪比例。实测：iPhone SE → 768、iPhone 14 → 1280（竖屏 ratio 0.46 / 横屏 2.16）、iPad → 1280、1366 及以上桌面 → 1920。
-
-* **一键更新自动清理已删除文件（`update.py`）**：合并覆盖只会新增/覆盖文件，无法反映「GitHub 上已删除」，导致换字体后服务器上旧字体的 woff2 子集长期残留。现覆盖完成后按最新 ZIP 清单**递归清理**过时文件与整个被移除的目录；`PROTECTED_PATHS` 中的路径强制跳过、绝不删除——`uploads/`（含数据库）、`db`、`backups`、`logs`、`ssl`、`release`、`.env`、`.git`、`.venv`、`node_modules`、`static/lib/monaco`、`scripts/ffmpeg` 等运行期数据与本地生成物都在保护名单内。同时移除了上一版针对字体目录的临时清理代码。`start.bat` 等本地自建启动脚本也加入保护名单，不会被误删。
-
-* **字体换成站酷活泼字体 + 终端日志配色调整**：
-  * **正文改用站酷庆科黄油体、标题改用站酷快乐体**：替换此前的霞鹜文楷——正文（含导航、按钮）改用 **ZCOOL QingKe HuangYou（站酷庆科黄油体）**，圆润活泼且笔画简洁；`h1/h2/h3`（及 `.font-display` / `.font-title`）改用 **ZCOOL KuaiLe（站酷快乐体）**，更俏皮有活力。两者均取自 npm 包 `@fontsource/*`（本地镜像），`scripts/build/build_static.py` 下载后按 `unicode-range` 展开约 93 个子集（**只落地 CSS 实际引用的子集**，包内自带的 2.4MB 整包文件不会写入仓库），仍为本地零 CDN；构建脚本新增**废弃字体文件自动清理**（本轮清掉 194 个旧霞鹜文楷子集），避免换字体后旧文件长期残留。
-  * **终端日志配色调整**（`core/system/logger.py`）：`[INFO]` 改为**绿色**（`\033[92m`），`[DEBUG]` 恢复**原色**（终端默认前景色，不再着色）；`WARNING` / `ERROR` / `CRITICAL` 维持黄 / 红 / 加粗红不变，仍只给等级标签着色、不整行着色。
-
-* **音频播放 404 自愈 + 自定义字体 + 终端日志彩色标签**：
-  * **HLS 播放改为「点击才加载」+ 错误退避重试**（`static/js/pages/music_player.js`）：hls.js 设置 `autoStartLoad: false`，页面加载不再预取分片，避免列表页一次性发起大量分片请求而出现成片瞬时 404；新增致命错误分级处理——媒体错误走 `recoverMediaError()`，网络类错误（清单/分片加载失败）按 700ms×次数退避自动重试（最多 3 次），瞬时 404 可自愈；**修复「一次报错就永久锁死播放按钮」的问题**，重试耗尽后仅提示错误态，用户再次点击播放会重新加载清单，不再始终无法播放。分片缺失时后端 `routes/main/music/__init__.py` 记录 WARNING（含音频 ID / 分片名 / 标题 / IP）便于定位磁盘上确实缺失的文件。
-  * **新增本体内置字体 LXGW WenKai（霞鹜文楷）**：`scripts/build/build_static.py` 新增下载 `lxgw-wenkai-webfont` 并生成按 `unicode-range` 分片的本地 `woff2` 子集与 `fonts.css`；`base.html` / `base.css` 字体栈正文优先使用 `LXGW WenKai`（标题 / 按钮仍优先 `JetBrains Mono`），缺失时回退系统字体栈，全程零外部 CDN。
-  * **终端日志彩色高亮**（`core/system/logger.py`）：仅给 `[DEBUG]/[INFO]/[WARNING]/[ERROR]/[CRITICAL]` **标签**着色（不整行着色），配色与网页日志页 `LEVEL_COLORS` 一致（灰/蓝/黄/红/加粗红）；自动探测终端是否支持 ANSI（含 Windows 虚拟终端开启，支持 `NO_COLOR` / `FORCE_COLOR` 覆盖）；颜色只作用于控制台，日志文件与内存缓冲始终保持无颜色纯文本。
-
-* **就地搜索框交互优化（SiteSearch v8）**：点击搜索框任意位置即可展开（不再需要点中「搜索」文字）；展开动画改为纯水平伸缩，折叠/展开两态上下长度一致、不再上下抖动；移除尾部箭头按钮（搜索仍由输入防抖与回车触发）。
-
-* **修复备份报错与启动残留问题**：
-  * **备份跳过被锁定的 DuckDB 文件**：`services/backup/manager` 新增备份跳过规则（`.duckdb` / `.duckdb.wal` / `.duckdb.tmp` 及 SQLite 的 `-wal` / `-shm` / `-journal`）。DuckDB 运行期对主库文件持有独占锁，Windows 下读取会 `Permission denied (Errno 13)`；现改为备份前统一跳过并汇总为一条 INFO 日志，不再报 WARNING。
-  * **启动自愈清理废弃目录**：`core/system/startup_checks.py` 在模块导入检查前清理旧版本残留的 `routes/firewall/` 目录，修复「`cannot import name 'record_spam'`」导入误报（在线更新为覆盖式，不会删除上游已移除的旧文件）。
-  * **不再自动创建 `./backups`**：从启动检查的必需目录中移除 `backups`，备份目录统一由可配置项 `BACKUP_DIR`（默认 `../bhxz_backups`）决定。
-
-* **删除「发布频率限制」功能 + 修复配置表自增 ID 空耗**：
-  * **删除发布频率限制**：移除 `services/firewall/protection/spam.py`（内存计数 + 超限自动封禁）及全部调用点——公共建筑发布、建筑评论、服务器指南发布/编辑、大喇叭音频上传、背景图片上传、后台邮件广播；防火墙设置页移除「发布频率限制」板块，`FIREWALL_CONFIG_KEYS` 与保存接口同步移除全部 `SPAM_LIMIT_*` 配置项。同时清理底层残留：`services/firewall/service/core.py` 移除已无调用方的 `record_spam` / `get_spam_log` / `get_user_spam_count` / `clear_spam_log`，`services/firewall/service/database.py` 移除 `firewall_spam_log` 表与 `seq_firewall_spam_log` 序列。
-  * **修复配置表自增 ID 空耗**：`settings` 表原先用 `INSERT ... ON CONFLICT(key) DO UPDATE` 保存，SQLite 在走「更新」分支时仍会消耗一个 `AUTOINCREMENT` ID（实测 23 行配置把计数器推到 500）。改为「先 UPDATE，未命中再 INSERT」，重复保存不再消耗 ID。
-
-* **待审核数量限制（总量 + 单类型）+ 防火墙设置面板卡片化**：
-  * **发布数量限制 → 待审核数量限制**：原「发布数量限制」改为对**待审核状态内容数量**的限制，并支持**总量上限 + 单类型上限**双重校验（先达到者先生效），任一上限设为 `0` 表示不限制，管理员不受限制。
-  * **配置入口**：`config.py` 的 `SETTINGS_REGISTRY` 新增 `MAX_PENDING_CONTENT`（总量）、`MAX_PENDING_BUILDING` / `MAX_PENDING_GUIDE` / `MAX_PENDING_MUSIC` / `MAX_PENDING_BACKGROUND`（单类型），并可在**管理后台 → 防火墙 → 设置**在线热改。
-  * **校验逻辑**：`check_pending_limit(user, content_type=None)`（已从 `core/helpers.py` 下沉至 [`services/content_limits/`](services/content_limits/__init__.py)），按 `_PENDING_TYPES` 统一统计公共建筑（`pending`）/ 服务器指南（`pending`）/ 大喇叭音频（`status=1`）/ 背景图片（`status=0`）的待审核数量；修复原实现对 `music` / `backgrounds` 误用 `author_id` 列的问题。
-  * **接入发布流程**：公共建筑发布（`routes/buildings/pages`）、服务器指南发布（`routes/guides/pages`）、大喇叭音频上传申请公开（`routes/main/music`）与私有转公开（`services/music/crud`）、背景图片上传（`routes/backgrounds/pages`）均按对应类型校验。
-  * **防火墙设置面板整理**：设置页所有配置按板块重构为统一的卡片式布局（与「发布内容注入检测」样式一致）——IPv6 拦截 / 自动 IP 封禁 / 可疑访问拦截 / DDoS 防护 / 发布内容注入检测 / **待审核数量限制（新增）**。
-
-* **移除一次性迁移 / 清理临时代码**：最新版已完整启动过一次，所有一次性迁移与清理逻辑已完成使命，全部删除，避免长期携带历史包袱：
-  * **防火墙数据库迁移**：删除 `services/firewall/service/database.py` 的 `_LEGACY_DB_PATH` / `_migrate_legacy_db()`（旧路径数据已搬到 `uploads/db/firewall.duckdb`）。
-  * **启动废弃模块清理**：删除 `core/system/startup_checks.py` 的 `_cleanup_obsolete_modules()` 与 `_OBSOLETE_MODULE_DIRS`（残留目录已清理，启动检查不再删除任何文件）。
-  * **配置键名迁移**：删除 `core/system/startup_checks.py` 的 `_migrate_settings()`（旧键 `IP_BAN_WHITELIST` 已迁移为 `FIREWALL_WHITELIST`）。
-  * **旧数据库 / 旧备份目录迁移**：删除 `core/db/connection.py` 的旧 `site.db` 迁移与 `services/backup/manager` 的 `_migrate_old_backups()` / `_rewrite_backup_paths()`。
-  * **数据库表删除**：删除 `core/db/schema.py` 中的 `game_account_bindings` 与讨论区三表 `DROP TABLE` 逻辑。
-  * **历史列 / 状态迁移**：删除 `add_column_if_not_exists()` 及全部调用、music `is_public → status` 迁移、`server_guides.rejected_at` 回填——相关列（`users.login_attempts` / `locked_until`、`game_account_bans.user_id`、`music.tags`、`backgrounds.ratio` / `rejected_at`）已直接内联进 `CREATE TABLE` 建表语句，新装库自带、老库此前已补齐。
-  * **独立迁移脚本**：删除 `scripts/migrate_db/`（DuckDB → SQLite 迁移）与 `scripts/uploads/`（一次性清理迁移脚本）。
-
-* **防火墙数据库重启不丢 + 项目结构分层优化 + 日志设置独立页面**：
-  * **修复防火墙数据库重启后全部丢失**：`services/firewall/service/database.py` 数据库路径原先经多层 `os.path.dirname` 计算，迁移后层级变深导致实际写入 `services/uploads/db/`（代码目录，不在备份范围、更新时被覆盖）。现改为基于 `APP_ROOT` 直接指向 `uploads/db/firewall.duckdb`（与主站 SQLite 同目录，随站点备份并受更新排除保护）。
-  * **项目结构分层优化**：跨业务的基础能力统一放入 `core/`（日志 `core/system/logger.py`、监控 `services/firewall/service/monitor.py`、调度 `core/shared/scheduler/`）；有业务语义的模块放入 `services/`——安全扫描从 `core/shared/security_scanner.py` 迁至 `services/security/`，防火墙完整下沉至 `services/firewall/`（`service/` 业务层、`protection/` 防护策略、`transport/` 连接层、`api_guard.py`），`routes/firewall/` 只保留 HTTP 路由入口、实际逻辑全部调用服务层，全站导入同步更新。
-  * **修复部分模块单独日志仍打印到全局日志**：排查确认各模块统一走 `log_module()` 接口、模块设置 `LOG_MODULE_*_GLOBAL` 均关闭后，确保模块单独日志仅写入独立缓冲与文件，不混入全局日志（控制台 / `logs/app.log` / SSE）。
-  * **日志设置改为独立页面**：从日志查看页弹窗重构为独立页面 `/admin/logs/settings`（`static/templates/admin/log_settings.html`），按模块展示「存储 / 全局」开关并即时保存，日志查看页改为链接跳转。
-
-* **修复启动时「9 个模块导入失败」误报（废弃模块残留一次性清理）**：现象是启动日志出现 `routes.admin.discussion`、`routes.discussion`、`services.discussion`、`services.attachment_service` 等模块 `cannot import name 'UPLOAD_ATTACHMENTS_DIR' from 'config'`。这些功能已在上一版彻底删除，报错源自**文件同步只覆盖不删除**在本地遗留的旧模块目录（`.py` 已被删除但目录仍在，启动扫描时被导入）。`core/system/startup_checks.py` 曾新增一次性的 `_cleanup_obsolete_modules()`：按精确路径（`routes/discussion`、`routes/admin/discussion`、`routes/community/pages`、`services/discussion`、`services/attachment_service`）幂等删除废弃残留目录（含 `__pycache__`）；**该一次性清理步骤已在后续版本移除**。
-
-* **彻底删除讨论区功能 + 建筑评论改分段加载 + 分段列表滚动自动加载**：
-  * **删除讨论区**：移除 `routes/discussion/`、`services/discussion/`、`static/templates/discussion/`、`routes/admin/discussion/`、`static/templates/admin/discussion.html` 与 `discussion_categories.html`，以及数据库表 `discussion_categories` / `discussion_topics` / `discussion_replies`（旧库的一次性 `DROP` 已随后移除）；同步清理导航栏讨论入口、系统设置「讨论区配置」及 `DISCUSSION_REFRESH_INTERVAL` / `DISCUSSION_TOPICS_PER_PAGE` / `REPLIES_PER_PAGE` 配置项、`static/templates/macros/upload.html` 与 `services/attachment_service/`；并删除仅供讨论附件使用的死代码——社区蓝图与其 `/uploads/<filename>` 附件下载路由、`UPLOAD_ATTACHMENTS_DIR` / `UPLOAD_COMMUNITY_DIR` 配置与 `uploads/attachments`、`uploads/community` 遗留目录，无残留。
-  * **建筑评论分段加载**：新增 `GET /api/buildings/<id>/comments`（分页由 `BUILDING_COMMENTS_PER_PAGE` 控制，返回 `has_more` / `total`），详情页评论区改为 API 分段加载，删除原实时刷新逻辑。
-  * **分段列表滚动自动加载**：`base.js` 新增 `initAutoLoadMore`——任何带 `data-autoload-more` 的「加载更多」按钮进入视口即自动点击一次加载下一页（隐藏 / 禁用时不触发，加载后按钮被新内容推出视口，滚动到底继续加载）。
-
-* **修复大喇叭音频管理页「待审核公开申请」标题后原样显示 HTML 文本**：`static/templates/macros/page_header.html` 的 `section_title` 宏以 `{{ extra }}` 输出 `extra` 参数，在 Jinja 自动转义下把 `static/templates/admin/music.html` 传入的 `<span data-pending-count ...>` 标签当成纯文本渲染，页面出现「待审核公开申请 `<span ...>0</span>`」。现改为 `{{ extra | safe }}` 按 HTML 渲染（`extra` 由模板开发者提供、非用户输入，且仅此一处使用），待审核数量角标正常显示。
-
-* **防火墙拦截与授权拒绝的 403 均不写入防火墙模块日志**：`ip_ban_check_hook`（IP 封禁兜底）与 `suspicious_request_check_hook`（可疑访问拦截）返回 403 时**直接不调用日志函数**（删除原通用 `after_request` 钩子 `log_403_response`，不再需要任何布尔标记）；授权拒绝类 403（权限不足 / CSRF 校验失败等）同样不写防火墙日志。仅保留 IP 封禁 / 自动封禁等封禁动作日志（`可疑访问自动封禁生效` / `自动封禁生效`），被封 IP 反复请求不再刷屏。
-
-* **日志页面支持多来源查看 + 按模块配置日志行为 + 启动自动清理**：日志页面（`/admin/logs`）顶部新增「日志来源」下拉，可切换查看**全局日志 / 严重错误日志 / 任意模块单独日志**（`source=global|fatal|module:<名称>`，全局走 SSE 实时推送，其余来源 3 秒轮询）；新增「日志设置」面板，列出所有已注册模块并各自提供「存储」（落盘到 `logs/modules/<模块名>.log`）与「全局」（并入全局日志：控制台 + `app.log` + SSE）两个开关，实时保存即时生效（`GET/POST /admin/api/logs/modules`）。**模块单独日志的行为不再由模块注册写死**——`register_module_log(name)` 只声明存在，是否落盘、是否并入全局一律由设置 `LOG_MODULE_<模块名>_STORE` / `_GLOBAL` 决定（因此从「系统设置」移除，统一收到日志页）；默认落盘仅保留图形验证码 / 邮箱验证码 / 注册 / 登录，全部默认不并入全局。**每次启动自动清理日志**：`purge_logs_on_startup()` 在应用初始化最开始清空全局日志文件与缓冲、严重错误日志文件、所有 `logs/modules/*.log` 与各模块缓冲，保证每轮启动都从干净状态开始（`core/system/init.py`）。
-
-* **图形验证码 / 邮箱验证码 / 注册账号 / 登录账号改为模块单独日志**：这四类日志不再进入全局日志（控制台 / `logs/app.log` / 全局缓冲 / SSE），改为在各自模块启动时注册独立日志器（`register_module_log`），并用统一入口 `log_module(name, level, event, detail, **kwargs)` 输出到独立内存缓冲并默认落盘到 `logs/modules/{captcha,email_code,register,login}.log`。注册位置：图形验证码 [routes/api/captcha/\_\_init\_\_.py](file:///workspace/routes/api/captcha/__init__.py)、邮箱验证码 [routes/api/email_code/\_\_init\_\_.py](file:///workspace/routes/api/email_code/__init__.py)、注册与登录 [services/user/auth/\_\_init\_\_.py](file:///workspace/services/user/auth/__init__.py)（「找回密码」仍为全局日志）。新增设置项 `LOG_MODULE_CAPTCHA_STORE` / `LOG_MODULE_EMAIL_CODE_STORE` / `LOG_MODULE_REGISTER_STORE` / `LOG_MODULE_LOGIN_STORE`，均默认开启、可在系统设置热切换并即时生效。
-
-* **修复系统设置页下拉选择框被裁切 + 开关无法切换**：`static/templates/admin/settings.html` 动态生成的分类卡片带有 `overflow-hidden`，会把自绘下拉 `.custom-select-dropdown`（绝对定位，`z-index:2000`）裁掉，导致选项被遮挡/看不全；同时开关容器缺少全局开关脚本依赖的 `data-switch` 属性（`base.js` 只对 `[data-switch]` 生效），点击与键盘都无法切换。现移除卡片 `overflow-hidden`（标题栏补 `rounded-t-2xl` 保持顶部圆角），并为开关补上 `data-switch`，下拉可完整展开、开关可正常切换并触发自动保存。
-
-* **修复防火墙设置页所有开关显示为关闭且无法点击切换**：`static/templates/admin/firewall.html` 设置区 15 个开关的 Jinja 表达式被误写成 `{ { ... } }`（多一个空格，Jinja 不识别而原样输出为文本），导致 `is-on` 类与 `aria-checked` 从未正确渲染，无论实际配置为何一律显示为关闭；同时这些开关缺少全局开关脚本依赖的 `data-switch` 属性（`base.js` 只对 `[data-switch]` 生效），点击/键盘均无法切换。现已全部改为标准 `{{ ... }}` 并补上 `data-switch`（并修掉内容注入拦截开关 `else '' else ''` 的语法错误），开关按实际配置正确回显、可正常切换；`/admin/firewall/settings/save` 的布尔键集合补入 `CONTENT_INJECTION_BAN_ENABLED`。
-
-* **防火墙从路由层迁至服务层 + 修复「服务器正常启动但完全无法访问」**：防火墙模块由 `routes/firewall/` 迁至 `services/firewall/`（`service/` 业务层、`protection/` 防护策略、`transport/` 连接层；原路径保留 shim 转发，所有外部 `from routes.firewall.xxx import` 零改动）。迁移中 `BanFilterConnection.communicate()` 误把返回 `(banned, reason)` **元组**的 `is_banned(ip)` 当布尔判断——非空元组恒为真，导致**每个 TCP 连接都被判定为黑名单并在请求解析前强制断开**，表现为进程/端口正常监听、日志无任何报错但所有请求均无响应；已改为显式解包 `banned, _reason = is_banned(ip)` 后再判断，实测 `/`、`/favicon`、`/api/stats`、`/login` 全部返回 200。
-
-* **修复 robots.txt 的 Sitemap 域名错误 + 邮件模板路径 + 指南编辑 500**：`/robots.txt` 的 `Sitemap:` 原先写死站点配置域名（`https://bhxz.tw.kg/sitemap.xml`），访问 `https://binhai.cloud/robots.txt` 时地址不一致。`routes/sitemap/__init__.py` 新增 `_robots_base_url()`：优先匹配与当前 `Host` 一致的已配置域名（`SITE_URL` / `SITEMAP_DOMAINS`），未匹配则直接反映当前访问域名，确保 Sitemap 始终指向当前域名下的 `/sitemap.xml`（`services/sitemap_cache` 同步新增 `base_url_for_host()`）。修复邮件发送 `TemplateNotFound: 'verification_code.html'`——`services/mail/static/templates/__init__.py` 的模板目录层级少算一级，指向了不存在的 `services/static/templates/emails`，已修正为项目根 `static/templates/emails`。修复 `/guides/<id>/edit` 提交 500（`NameError: get_client_ip`）——`routes/guides/pages/__init__.py` 漏导入 `get_client_ip`，已补上并全站排查同类漏导入。
-
-* **评论与发布全面 API 化 + 上传进度统一**：删除评论确认改为网页内弹窗（`CustomModal.confirm`，替代原生 `confirm`）；**发布评论不再需要图形验证码**；公共建筑发布/评论等发布操作统一走无刷新 `AjaxForm`（自动携带身份与 CSRF）；新增统一上传组件 [`uploader.js`](static/js/core/uploader.js)（`FilePicker` / `UploadProgress` / `AjaxForm`），所有文件上传均带进度条。
-
-* **修复 `/buildings/<id>` 页面 500（`modal_shell is undefined`）+ 规范 Jinja2 宏导入**：`static/templates/buildings/detail.html` 原先用 `{% include 'macros/modal.html' %}` 引入弹窗宏，而 `include` 只渲染模板文件、**不会把宏注入当前命名空间**，导致访问公共建筑详情页时 `modal_shell is undefined` 直接 500。改用 `{% from 'macros/modal.html' import modal_shell, modal_close_script %}` 显式导入，并统一放在 `{% extends %}` 之后、第一个 `{% block %}` 之前；同步修正 `admin/guides.html`、`admin/firewall.html`、`admin/broadcast.html`、`admin/guide_form.html`、`auth/register.html`、`guides/form.html` 的宏导入位置，并修正 `admin/buildings.html` 拒绝弹窗把标题误传为 `size` 参数的问题。开发准则（`docs/DEVELOPMENT.md`）新增「宏导入方式（`import` 而非 `include`）」章节，并已用脚本对全站模板做语法编译 + 宏调用/导入一致性校验（0 处未导入）。
-
-* **修复管理员删除用户失败 + 清理废弃代码**：修复管理后台删除用户时因引用已删除的 `poll_votes`、`board_topics`、`board_replies` 表导致数据库操作失败的问题，改为级联清理相关业务表；同步修复用户注销功能的相同问题，修复 `_clean_user_attachments` 函数引用废弃表的问题；优化 `routes/admin/mod_intros/__init__.py` 中三处嵌套 try-except 屎山代码为单层。
-
-* **防火墙迁移至路由层 + 公共建筑去审核 + robots.txt 安全增强**：防火墙模块从 `core/firewall/` 整体迁移至 `routes/firewall/`（路由层，更合理的分层），所有导入引用同步更新；公共建筑**发布即公开**，彻底移除管理员审核流程（删除 approve/reject 路由、模板按钮、仪表盘统计），管理员 403 问题一并修复；全站验证码统一使用 `core.shared.captcha.captcha_service` 单例；robots.txt 路由升级为函数式生成，根据策略自动附加 Crawl‑delay（5 秒）与敏感路径 Disallow 规则，配合 DDoS 防护的 `/robots.txt` 白名单，防止合法爬虫被防火墙误封；更新所有过期注释引用。
-
-* **修复公共建筑验证码与防火墙增强**：修复公共建筑发布页验证码提交无反应（脚本块 `extra_js`→`extra_script` 匹配+阻止默认提交）；发布页「验证并提交」按钮触发图形验证码弹窗，通过验证后自动提交表单；建筑评论新增图形验证码验证，提交前弹出验证码弹窗；防火墙设置页新增「发布频率限制」配置区域（公共建筑/建筑评论/话题/回复/指南/背景/音乐等 7 种内容类型均可独立配置次数与检测窗口），settings API 支持所有频率限制项热保存；`core/firewall/spam.py` 新增 `get_spam_limit()` 函数优先读取系统设置动态配置。
-
-* **数据库迁移至 `uploads/db/` + 备份改为全量 zip 极限压缩**：`db/` 文件夹整体移至 `uploads/db/`，所有路径引用更新；备份方式由 SQLite 在线备份改为扫描 `/uploads/` 目录下全部文件，使用 ZIP_DEFLATED+level 9 极限压缩打包为 zip，存放于 `backups/uploads/`；管理后台备份页面同步更新，支持一键解压恢复、进度条与历史管理。
-
-* **统一任务注册模块（`core/shared/scheduler/` 包）**：全站所有定时执行功能的唯一入口（**防火墙除外**，防火墙保持独立实现）。任务按下次执行时间排序（`ScheduledTask`），注册表单线程（`TaskRegistry`）**每秒检测队首最早到期任务**，到期即取出派发并继续检查下一个；派发走 `TaskExecutor` 两种后台执行方式（`pool` 共享守护线程池 / `thread` 独立守护线程），**tick 线程永不阻塞**；任务执行期间从注册表取出、完成才重新入列，**天然防重叠执行**；基于 `time.monotonic()` 计时，不受系统时间跳变影响。保留两种调度模式：固定间隔（连续失败按 `backoff_factor/backoff_max` 退避）与每日时间点 `HH:MM`（支持配置热重载、当天去重、`mark_done()` 手动跳过当天）。8 个既有定时任务（验证码清理、邮箱验证码清理、RCON 连接池清理、玩家列表追踪、被驳回内容自动清理、每日数据库备份、站点地图刷新、游戏服务器封禁到期自动解封）全部迁移到注册表，行为与原逻辑一致；删除旧 `core/shared/scheduler.py`。全局 API：`register_task / unregister_task / start_task_scheduler / stop_task_scheduler`
-
-* **新增 DDoS 攻击防护与极高性能多线程防火墙**：`core/firewall/` 在 WSGI 入口（先于一切 Flask 逻辑）拦截黑名单 IP，命中即返回最小 403 并利用 Cheroot 连接特性（`linger=False` + `close()`）强制关闭其现存连接（含 keep-alive 空闲与处理中的请求），客户端表现为连接被重置而非收到页面；后台监控线程每 0.5 秒从数据库同步黑名单镜像并扫描关闭黑名单连接；内置 DDoS 检测按强度（low=300/medium=150/high=80 次每 10 秒）统计单位窗口内请求数，超阈值自动封禁来源 IP（首次限时封禁、时长可配，违规记录时间窗口内屡教不改自动升级永久封禁），检测强度/封禁时长/触发次数等配置在线热更新；管理后台 → 系统设置新增「DDoS 防护」分类，白名单 IP 不受影响。
-
-* **移除 CPU 温度检测功能**：`routes/api/public.py` 删除跨平台温度采集（WMI/PowerShell/sysctl/psutil 传感器）与 `/api/server-status` 的 `cpu_temp` 字段，`static/templates/server_status.html` 移除 CPU 温度展示板块与刷新逻辑。
-
-* **「申请账号」调整**：从导航栏「互动」分类移至「导航」分类，并更名为「申请服务器账号」（桌面端主导航与移动端侧栏同步调整）。
-
-* **修复 /admin/settings 500 错误**：系统设置模板 `admin_settings.html` 因缺少 `{% endblock %}` 闭合标签导致 Jinja2 `TemplateSyntaxError`，已基于完整版本重写，恢复设置项动态渲染、自动保存、恢复默认与确认弹窗等功能，页面正常访问。
-
-* **自动更新重启支持自定义启动指令**：新增 `RESTART_COMMAND` 配置（`config.py` 默认空，环境变量/系统设置/一键更新配置页均可设置）。一键更新重启时**优先使用自定义指令**（支持 `uv run app.py`、`python app.py --host 0.0.0.0` 等任意写法，含参数解析，裸 `python`/`python3` 自动替换为当前真实解释器），留空则自动用「当前解释器 + app.py + 原启动参数」重建——彻底修复 uv / venv 环境下更新后无法自动重启的问题。
-
-* **IP 封禁管理页内联编辑配置**：IP 封禁管理页面（`/admin/ip-bans`）新增自动封禁开关与时长、可疑访问拦截开关与时长、封禁白名单的内联编辑与保存（新接口 `POST /admin/ip-bans/settings`），白名单通过 `get_whitelist()` 实时读取数据库配置，修改立即生效，无需再跳转系统设置。
-
-* **新增可疑访问拦截功能**：新增攻击特征扫描器（`services/security_scanner.py`），在请求进入业务处理前识别 SQL 注入 / XSS / 路径穿越 / 命令注入 / 敏感文件与漏洞端点探测 / 恶意扫描 UA 等攻击特征，命中即拦截请求（403）并自动封禁来源 IP（复用 IP 封禁白名单与缓存，原因标注攻击类型与命中片段，操作人显示「系统」）；管理后台 → 系统设置新增「可疑访问拦截」分类（总开关、封禁时长、各攻击类型独立子开关，热更新即时生效），IP 封禁管理页同步展示可疑访问拦截状态；静态资源与用户生成内容（Markdown 代码块等）不会误判，URL 层全量扫描 + 请求体仅扫描高置信度特征（文本类且 ≤1MB）；新增扫描器与自动封禁单元测试（96 项安全用例全部通过）。
-
-* **subprocess 编码统一 UTF-8（补全 Windows 10 场景）**：`services/process_utils.py` 的 `make_env()` 新增 `PYTHONUTF8=1`（强制 Python 子进程启用 UTF-8 模式），与既有 `PYTHONIOENCODING=utf-8` 一起从源头消除 Windows 10 下子进程 GBK 输出乱码 / `UnicodeDecodeError`；已覆盖 CPU 温度获取、ffmpeg/ffprobe 转码、数据库备份恢复、一键更新等全部子进程场景
-
-* **自动更新重启改为通用启动命令（修复 uv 运行下无法自动启动）**：重启逻辑不再写死 `[python, app.py]`，改为用「当前真实解释器 + 原启动脚本 + 原启动参数（sys.argv）」重建完整启动命令——无论服务器用 `python`、venv 还是 `uv run` 启动，解释器路径与 uv/虚拟环境变量天然一致，不针对 uv 做任何特殊处理，同时完整保留 `--host/--port` 等命令行参数
-
-* **服务器状态页整合玩家板块**：`/server-status` 在线玩家、最大玩家数、服务器状态三个小卡片移入「在线玩家列表」卡片头部，以紧凑徽章展示（在线=绿 / 状态=红/绿），页面更简洁
-
-* **图形验证码进一步优化（字更大 + 干扰更丰富 + 颜色更多）**：字号比例提升至 `min(120, height*0.76)`；干扰横线/斜线增至 5~8 条、干扰字符增至 30~50 个，新增 2~5 个随机彩色圆点干扰；干扰线色池 14 色、字符深色池 12 色、浅色干扰字符池 14 色，随机性更强、更难被机器识别，同时保持人类可读
-
-* **修复背景图片与评论等删除失败问题**：背景图片删除时 `remove_background_files` 对 `sqlite3.Row` 使用 `.get()` 导致 `AttributeError`，已改为按键访问；前端删除错误提示统一为「删除失败，请重试。」。删除权限校验正常返回 JSON 失败结果而非 500。
-
-* **背景图片按屏幕比例最适配取图**：保存时自动记录图片自然宽高比（`backgrounds.ratio`，不再强制裁剪 16:9）；客户端在页面解析到背景元素后立即预加载（不等动画与其他脚本），自动携带屏幕宽高比与物理像素长边请求图片；服务端将所选档位中心裁剪到该比例后返回（结果缓存）。横屏/竖屏均获得与屏幕比例完全匹配且像素充足的图片，移动端清晰度大幅提升。
-
-* **统一定时调度算法**：新增 `utils/shared/scheduler/` 统一定时调度（固定间隔含失败退避 / 每日时间点、优雅停止），已接入被驳回内容自动清理、每日备份、玩家列表追踪、验证码清理、连接池清理、站点地图刷新，行为与原逻辑一致。
-
-* **导航栏动画流畅度优化**：下拉 caret 与滚动收缩动画补上 `will-change: transform` 合成层提示，动画更流畅，视觉效果与时长完全不变。
-
-* **新增 IP 封禁功能**：管理后台新增「IP 封禁」页面（`/admin/ip-bans`），支持添加/解除封禁 IP（IPv4/IPv6/CIDR 段），可设置临时封禁时长或永久封禁并填写原因；被封禁 IP 的所有请求由中间件统一拦截返回 403；内置 30 秒缓存降低查询压力，临时封禁到期自动清理。
-
-* **背景图片优化**：审核通过后自动设为「当前显示」背景（无需手动再开启）；上传文件统一按 `bg_<id>_<hash>.webp` 命名，不再保留原始文件名。
-
-* **全站 UI 优化为白色浅蓝磨砂玻璃风格**：主页由深色海洋风格全面转换为白色浅蓝主题（滚动时背景图片保持可见，标题深色 + 浅蓝渐变强调）；全站图标统一为浅蓝色；进度条与滚动条改为浅蓝渐变磨砂玻璃风格；修复 `/backgrounds` 页面「当前显示」按钮与状态徽章浅色文字浅色底融合不可见的问题，黄色/绿色等状态文字改为深色可读版本。
-
-* **控件全面改为白色略微透明磨砂玻璃**：主按钮（`.btn-primary`）由黑色渐变改为白色半透明磨砂玻璃（深色文字 + 蓝色强调边），次按钮/危险按钮/输入框/导航/弹窗/Toast 等控件统一为白色磨砂玻璃质感，更好适配全站背景图片；深色工具类（`.bg-forest-900` 系列）全局映射为白色半透明背景；Markdown 编辑器面板、指南正文的代码块保持深色卡片保证可读性，行内代码改为浅蓝底深蓝字；浅色状态文字（红/黄/绿/蓝 300/400 系列）全局映射为深色可读版本（代码块内除外）；指南卡片、广播富文本编辑器、更新日志面板等同步改为白色磨砂玻璃。
-
-* **同步 GitHub 代码 + 上传**：本地改动已与 GitHub 仓库同步并提交。
-
-* **修复大屏端重复显示汉堡菜单**：`>=900px` 大屏端桌面导航（首页/导航/互动/账号）已足够，隐藏汉堡菜单按钮（`.nav-more-button`），避免出现两个菜单入口；小屏端仍保留右侧滑出菜单。
-
-* **数据备份增强**：新增「下载备份」能力——备份历史中成功备份可一键下载到本地（新增 `admin/api/db-backup/<id>/download` 接口，后端 `send_file` 流式下发，前端下载按钮在静态与 JS 动态渲染中均已接入）。
-
-* **撤回更新优先 Git，改回优先代理下载**：一键更新顺序调整为「① 代理下载 → ② GitHub 直连 → ③ Git（仅当前目录是 git 仓库且系统有 git 时兜底）」，回到代理下载为主、稳定优先的同步方式。
-
-* **整体风格统一为现代化白色磨砂玻璃**：登录页由旧深色主题整体改造为白色磨砂玻璃风格（`.auth-*` 全部改用白色玻璃卡片 + 深色文字 + 蓝色强调色，与全站一致）；基础输入框 `.input-field` 及弹窗输入框同步由深色改为白色磨砂玻璃控件。
-
-* **彻底修复图形验证码文字太小**：登录页内嵌验证码原先被压缩至 136px/112px 且 `object-fit: cover` 裁切，文字几乎不可读；现放大为桌面端 200×72、小屏端 168×64，并改为 `object-fit: contain` 完整显示整幅验证码，文字清晰可辨（弹窗验证码维持 `max-w-[420px]` 原尺寸）。
-
-* **整体界面改为纯白主题**：页面背景色从偏冷灰 `#f3f6fa` 调整为纯白系 `#f8fafc`，白色磨砂玻璃质感更干净
-
-* **修复手机端汉堡栏弹出弹性动画**：侧边菜单起始状态加入 `scale(0.92)` + 新缓动曲线 `cubic-bezier(0.32,1.72,0.56,1)`（更强过冲），弹出时先越过终点再回位，同时配合 overlay `0.35s` 淡入，观感更有"弹簧"弹性
-
-* **自动更新：优先 Git，兜底代理+直连**：检测到 `.git` 目录 + 系统有 `git` 时直接 `git fetch --all --tags && git reset --hard origin/main`（UTF-8 编码统一），完全绕开代理；Git 不可用时才回落到代理+GitHub 直连
-
-* **自动更新启动命令默认使用 `{python路径} {项目根目录}/app.py`**：重启脚本与直接兜底都使用 `sys.executable + APP_ROOT/app.py`，不依赖 shell 命令
-
-* **修复迁移脚本列不匹配报错**：旧 DuckDB `music` 表仍有 `is_public` 等遗留列，迁移脚本改为读取 SQLite 目标表的列清单（`PRAGMA table_info`），只复制新旧库共有列，自动跳过已废弃的 `is_public` 等列并在输出中注明跳过内容
-
-* **彻底删除 MinIO 对象存储**：移除 `services/object_storage.py`、MinIO 相关配置与依赖，背景图片改回本地文件存储。
-
-* **彻底删除 CMD 控制台**：移除快捷命令、定时任务、脚本执行/终端等全部功能（路由、服务、模板、前端脚本、数据库表、xterm.js 依赖与构建下载逻辑），管理后台不再显示终端控制台入口。
-
-* **UI 改回白色页面 + 黑色控件**：全站由深色主题改为白色磨砂玻璃风格（白色卡片 + 深色控件），磨砂玻璃质感保留；导航栏大屏端（≥1024px）改为「首页 / 导航 / 互动 / 账号」悬停下拉菜单（导航=指南/服务器状态，互动=大喇叭音频/背景图片/游戏账号，账号=设置/管理/退出），小屏端保持右侧滑出菜单；下拉使用 CSS 过渡动画流畅展开
-
-* **数据库迁移到 SQLite（WAL 模式）**：从 DuckDB 迁移到 SQLite，启用 `PRAGMA journal_mode=WAL` + `synchronous=NORMAL` + `busy_timeout=30000`，单例共享连接 + 可重入锁保证多线程安全；备份改用 SQLite 在线备份 API（`Connection.backup()`）；新增迁移脚本 `scripts/migrate_db.py`（自动备份旧库后一键迁移）
-
-* **修复自动更新关闭后无法自动启动**（Windows 10 + uv）：重启逻辑不再依赖批处理/Shell 脚本，改为独立 Python 辅助脚本等待旧进程退出后拉起新进程，完整继承原环境变量（含 uv/虚拟环境），跨平台统一且无需特殊处理
-
-* **背景图片功能优化**：上传图片自动转为 WebP 格式（智能裁剪 16:9 + LANCZOS 缩放），自动生成 768/1280/1920 三档响应式变体；前端按设备屏幕宽度（含 DPR）请求最合适的尺寸，实现按设备最佳缩放；修复未通过审核图片无法预览的问题（管理员/上传者可预览）
-
-* **subprocess 编码统一 UTF-8（修复 Windows 10 下 GBK 乱码/UnicodeDecodeError）**：所有 `subprocess` 调用统一添加 `encoding='utf-8', errors='replace'`（或 `env=make_env()` + 显式解码），覆盖 CPU 温度获取、ffmpeg/ffprobe 转码、备份恢复、更新器构建等全部子进程场景
-
-* **图形验证码优化（修复「验证码太小」）**：默认尺寸 360x128 → 420x150，字号增大（`font_size = min(96, int(height*0.68))`）；干扰元素升级——3~6 条明快色系彩色干扰横线/斜线、字符后方 20~40 个浅色小号干扰字符（数字/字母/短横线/点）、背景噪点数量增加并随机浅色着色；字符颜色从深色系（深蓝/深红/深绿/深紫/墨黑/深棕）随机选取，保持清晰可辨；位数（4 位）与字符集不变，`generate()`/`verify()`/`consume()` 接口不变，弹窗图片宽度放宽至 `max-w-[420px]`
-
-* **游戏账号绑定机制改造**：一个网站账号只能绑定一个服务器账号（绑定页提示文案同步更新）；绑定/验证游戏内密码前需先完成图形验证码（复用全局 `CaptchaModal` 弹窗，前端先弹窗验证、后端再次校验并消耗）；`easyauth_bind.py` 解析 `Player Info: {...}` 容错增强（兼容冒号后有无空格、无 uuid 字段、密码为空等场景）
-
-* **恢复密码强度规则**：网站密码恢复为 8-30 位且必须包含大小写字母、数字和特殊字符，拒绝弱密码（常见易猜密码、单一重复字符、连续序列）；游戏账号密码（AuthMe）为 6-30 位且至少包含字母和数字。统一收敛到 `services/validation.py`，注册/找回密码/修改密码均复用 `validate_password_strength`，移除 `services/user/auth.py` 中重复的本地校验函数
-
-* **服务器状态页面重构**：CPU 使用率、内存使用率、CPU 温度改为各占一行独立板块，展示更清晰醒目；新增内存详情（已用/总计）、刻度标签、三色渐变温度条
-
-* **彻底修复 Windows 10 CPU 温度获取**：改用 `MSAcpi_ThermalZoneTemperature` WMI 类（Windows 10 最可靠），新增 PowerShell 兜底策略，多层级重试确保最大兼容性
-
-* **修复汉堡侧边栏无法滚动**：移动端菜单 nav 添加 `overflow: hidden`，解决 `border-radius` 与 `backdrop-filter` 组合时内容溢出破坏滚动行为的问题
-
-* **修复邮件文字颜色**：邮件模板 `base.html` 中 `.mail-content` 区域文本颜色改为 `#e5e7eb`，解决黑色文字在暗灰蓝背景下看不清的问题
-* **修复一键更新自动重启**：重写重启脚本启动逻辑，修复 `devnull` 变量未定义导致崩溃的严重 Bug，添加进程组隔离参数确保子进程独立于父进程存活
-* **修复一键更新源兼容性**：移除过于激进的 `Content-Type` 检查，重构 URL 构建逻辑，支持多种代理 URL 格式自动尝试，修复代理检测的测试 URL 错误
-* **清理屎山代码**：重构 `core.py` 下载逻辑，消除重复代码（提取 `_build_download_urls`、`_try_download` 函数），移除未使用的 `session` 变量，删除冗余的 `Content-Type: text/html` 拦截
-* **测试代码优化**：将测试从手动打印输出改为使用 pytest 框架，使用 `@pytest.mark.parametrize` 参数化测试，添加 `validate_email_format` 和 `validate_ban_reason` 测试用例，76 个测试全部通过
-* **游戏账号解绑功能**：MC 账号列表新增「解绑」按钮，支持确认弹窗和淡出消除动画，绑定服务层新增 `unbind_account`、`create_binding`、`is_bound_to_user` 等服务函数
-
-* **路由层分层规范全面修复**：移除 `routes/game_accounts/__init__.py` 和 `routes/game_accounts/bind.py` 中所有直接 SQL 查询，改用服务层函数调用，彻底消除路由层 `conn.execute()`，严格遵循 MVC 分层架构
-
-* **修复潜在 NameError 运行时错误**：`routes/game_accounts/__init__.py` 中三个路由函数使用 `get_db()` 但未导入，现通过服务层替代已消除该隐患
-
-* **代码清理**：移除未使用的导入（`request`、`abort`、`redirect`、`url_for`）、死代码注释、未使用函数参数和未使用变量，提升代码可维护性。
-
-* **项目结构优化**：将大文件按功能模块拆分为子包，`services/music_service.py` → `services/music/`（常量/查询/CRUD/上传/收藏），`services/user_service.py` → `services/user/`（认证/资料/管理），`services/updater.py` → `services/updater/`（配置/核心逻辑）；保留原文件作为兼容性重导出层，旧代码无需修改导入路径。
-
-* **一键更新重写**：重写 `services/updater/core.py` 更新逻辑，实现跨平台独立重启脚本（Windows 批处理 / Linux Shell），通过 `tasklist` 检测旧进程退出后启动新进程，解决 Windows 环境下更新后服务器无法正常重启的问题。修复前端日志重复显示问题，调整重启检测时机避免误判。
-
-- **启动健康检查**：`core/system/startup_checks.py` 每次启动固定运行服务器健康检查——模块导入完整性、数据库完整性、文件结构、配置完整性、uploads 目录结构检查，只创建不删除、自动修复；`core/system/init.py` 集成该检查，在数据库初始化前执行。
-
-- **错误页面修复**：修复 403/404 错误页面未传递 `user` 上下文变量，导致登录用户显示"请登录"的问题。
-
-- **MC 游戏账号注册改为白名单模式**：重写注册申请功能，审批通过后改为通过 RCON 发送 `/easywhitelist add <玩家名>` 命令添加白名单，不再需要密码。移除前端密码表单字段、后端密码验证、密码加密存储逻辑。新增 `services/rcon/easy_auth.whitelist_add_player()` 函数，使用 `sanitize_rcon_username` 清洗输入防止注入。
-
-- **优化绑定账号操作逻辑**：
-  - 绑定账号改为通过 RCON `/auth getPlayerInfo` 指令获取 BCrypt 哈希验证密码，无需用户输入服务器路径
-  - 错误信息更精确：区分 RCON 连接失败、玩家未注册、密码错误、未设置密码等场景
-  - 后端合并为单次 DB 连接，减少资源开销
-  - 前端按钮增加加载动画和防重复提交，绑定成功后仅清空密码字段，保留用户名便于确认
-  - 使用 `CustomModal` 全局弹窗确认和提示，支持 Toast 辅助反馈
-
-- **RCON 连接池优化**：
-  - 新增 `services/rcon/pool.py` 线程安全连接池，自动复用 TCP 连接
-  - 池满时自动创建临时连接（用完即关），实现理论无限并发
-  - 空闲连接超时自动回收（默认 60 秒），后台守护线程定期清理
-  - 连接失效自动检测并丢弃，不影响其他线程
-  - 非默认 RCON 配置（host/port/password 覆盖）使用一次性连接，兼容旧逻辑
-
-- **修复背景图片不显示 + 新增审核邮件通知**：
-  - 修复 `serve_background` 路由，增加文件存在性检查，文件不存在时返回 404 而非 500
-  - 启动检查 `startup_checks.py` 新增 `uploads/backgrounds` 目录自动创建
-  - 新增背景图片审核结果邮件通知 `background_review_result` 模板
-  - 审核通过/驳回时自动发送邮件通知上传者
-

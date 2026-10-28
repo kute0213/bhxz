@@ -1,4 +1,4 @@
-"""管理后台蓝图包：用户管理、模组介绍、访问日志、数据库备份、系统设置。
+"""管理后台蓝图包：用户管理、模组介绍、访问日志、自动维护、系统设置。
 
 Blueprint 在此创建，子模块从本包导入 bp 后用 @bp.route 注册路由。
 """
@@ -17,7 +17,7 @@ import routes.admin.mod_intros       # noqa: E402,F401
 import routes.admin.guides           # noqa: E402,F401
 import routes.admin.buildings        # noqa: E402,F401
 import routes.admin.guide_bans       # noqa: E402,F401
-import routes.admin.backup           # noqa: E402,F401
+import routes.admin.maintenance     # noqa: E402,F401
 import routes.admin.settings         # noqa: E402,F401
 import routes.admin.broadcast        # noqa: E402,F401
 import routes.admin.music            # noqa: E402,F401

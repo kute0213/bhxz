@@ -191,9 +191,55 @@ def edit_music_tags(music_id):
     return jsonify({'success': success, 'message': message})
 
 
+@main_bp.route('/api/music/<int:music_id>/toggle', methods=['POST'])
+@login_required
+def api_toggle_music_public(music_id):
+    """申请公开 / 转为私有（JSON API，供「我的音频」无刷新切换）。
+
+    返回：{success, message, music_id, status}
+    status 为切换后的状态（0=私有 1=待审核 2=已公开）。
+    """
+    user = get_current_user()
+    success, message = music_service.toggle_music_public(
+        music_id=music_id,
+        user_id=user['id'],
+        is_admin=bool(user.get('is_admin')),
+        ip_address=get_client_ip(),
+    )
+    status = None
+    if success:
+        music = music_service.get_music(music_id)
+        status = music['status'] if music else None
+    return jsonify({
+        'success': success,
+        'message': message,
+        'music_id': music_id,
+        'status': status,
+    })
+
+
+@main_bp.route('/api/music/<int:music_id>/delete', methods=['POST'])
+@login_required
+def api_delete_music(music_id):
+    """删除音频（JSON API，供「我的音频」无刷新删除）。"""
+    user = get_current_user()
+    success, message = music_service.delete_music(
+        music_id=music_id,
+        user_id=user['id'],
+        is_admin=bool(user.get('is_admin')),
+        ip_address=get_client_ip(),
+    )
+    return jsonify({
+        'success': success,
+        'message': message,
+        'music_id': music_id,
+    })
+
+
 @main_bp.route('/music/<int:music_id>/toggle', methods=['POST'])
 @login_required
 def toggle_music_public(music_id):
+    """兼容旧表单提交（页面已改用 /api/music/<id>/toggle 无刷新接口）。"""
     user = get_current_user()
     success, message = music_service.toggle_music_public(
         music_id=music_id,
@@ -208,6 +254,7 @@ def toggle_music_public(music_id):
 @main_bp.route('/music/<int:music_id>/delete', methods=['POST'])
 @login_required
 def delete_music(music_id):
+    """兼容旧表单提交（页面已改用 /api/music/<id>/delete 无刷新接口）。"""
     user = get_current_user()
     success, message = music_service.delete_music(
         music_id=music_id,

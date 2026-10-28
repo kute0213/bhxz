@@ -164,7 +164,7 @@ def do_something(user_id, value, ip_address):
   | `buildings` | `routes/admin/buildings/__init__.py`、`routes/buildings/pages/__init__.py` | 公共建筑审核、浏览次数更新 | 是 | 否 |
   | `music` | `services/music/{crud,upload}/__init__.py`、`routes/main/music/__init__.py` | 大喇叭音频上传 / 编辑 / 审核 / 删除、HLS 分片 | 是 | 否 |
   | `email` | `services/mail/service/__init__.py` | 异步邮件发送队列 | 是 | 否 |
-  | `backup` | `services/backup/{manager,scheduler}/__init__.py`、`routes/admin/backup/__init__.py` | 数据备份、定时备份、备份下载 / 删除 | 是 | 否 |
+  | `backup` | `services/backup/{manager,scheduler}/__init__.py`、`routes/admin/maintenance/__init__.py` | 自动维护（数据备份 + 日志清理）、定时维护、备份下载 / 删除 | 是 | 否 |
   | `gameban` | `services/game_server_ban/__init__.py` | 游戏服务器封禁申请 / 批准 / 驳回 / 自动解封 | 是 | 否 |
   | `sitemap` | `services/sitemap_cache/__init__.py` | 站点地图刷新与生成 | 是 | 否 |
   | `rcon` | `services/rcon/{client,player_tracker}/__init__.py` | RCON 命令执行、玩家列表追踪 | 是 | 否 |

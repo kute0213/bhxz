@@ -1,7 +1,8 @@
 """
-定时备份调度器。
+定时维护调度器。
 
-每天在 BACKUP_SCHEDULED_TIME 指定的时间自动执行数据库备份。
+每天在 BACKUP_SCHEDULED_TIME 指定的时间自动执行「自动维护」：
+数据备份 + 日志文件清理。
 使用统一任务注册表（core/shared/scheduler/）实现，不阻塞主进程。
 支持热重载：通过 get_config_value() 读取最新配置。
 """
@@ -44,7 +45,7 @@ class BackupScheduler:
     def start(self):
         """任务已注册到统一注册表（start_task_scheduler 后自动生效）。"""
         scheduled_time = get_config_value('BACKUP_SCHEDULED_TIME', '03:00')
-        log_module('backup', 'INFO', 'BackupScheduler', f'已启动，每日 {scheduled_time} 自动备份')
+        log_module('backup', 'INFO', 'BackupScheduler', f'已启动，每日 {scheduled_time} 自动维护（备份 + 日志清理）')
 
     def stop(self):
         """从统一注册表注销定时任务。"""
@@ -77,7 +78,7 @@ class BackupScheduler:
     def _do_backup(self):
         """执行定时备份。"""
         from ..manager import BackupManager
-        log_module('backup', 'INFO', 'BackupScheduler', '开始定时自动备份...')
+        log_module('backup', 'INFO', 'BackupScheduler', '开始定时自动维护...')
         backup_id, thread = BackupManager().start_backup(
             backup_type='scheduled',
             progress_callback=None,

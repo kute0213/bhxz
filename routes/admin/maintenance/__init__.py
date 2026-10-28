@@ -1,12 +1,8 @@
-"""数据备份路由：备份页面、启动备份、进度查询、历史列表、下载、删除。"""
+"""自动维护路由：维护页面、启动维护（数据备份 + 日志清理）、进度查询、历史列表、下载、删除。"""
 
 import os
-import sys
-import json
-import subprocess
-from datetime import datetime
 
-from flask import jsonify, send_file
+from flask import jsonify, redirect, send_file, url_for
 
 from core.auth import admin_required, get_current_user
 from core.helpers import render_page
@@ -18,10 +14,10 @@ from core.system.logger import log_module, register_module_log
 register_module_log('backup')
 
 
-@admin_bp.route('/admin/db-backup')
+@admin_bp.route('/admin/maintenance')
 @admin_required
-def db_backup_page():
-    """数据备份管理页面。"""
+def maintenance_page():
+    """自动维护管理页面（数据备份 + 日志自动清理）。"""
     conn = get_db()
     try:
         # 数据量统计
@@ -57,7 +53,7 @@ def db_backup_page():
         conn.close()
 
     return render_page(
-        'admin/db_backup.html',
+        'admin/maintenance.html',
         db_size=db_size,
         uploads_size=uploads_size,
         backups=backups,
@@ -67,12 +63,17 @@ def db_backup_page():
     )
 
 
-@admin_bp.route('/admin/api/db-backup/start', methods=['POST'])
+@admin_bp.route('/admin/db-backup')
 @admin_required
-def api_db_backup_start():
-    """启动手动数据备份（异步执行）。"""
-    user = get_current_user()
+def db_backup_page():
+    """兼容旧地址：数据库备份页面已更名为「自动维护」。"""
+    return redirect(url_for('admin.maintenance_page'), code=302)
 
+
+@admin_bp.route('/admin/api/maintenance/start', methods=['POST'])
+@admin_required
+def api_maintenance_start():
+    """启动手动维护（异步执行数据备份并自动清理日志文件）。"""
     from services.backup import BackupManager
     backup_id, thread = BackupManager().start_backup(
         backup_type='manual',
@@ -88,16 +89,14 @@ def api_db_backup_start():
     return jsonify({
         'success': True,
         'backup_id': backup_id,
-        'message': '备份已启动',
+        'message': '维护任务已启动',
     })
 
 
-@admin_bp.route('/admin/api/db-backup/progress')
+@admin_bp.route('/admin/api/maintenance/progress')
 @admin_required
-def api_db_backup_progress():
-    """获取当前备份进度。"""
-    user = get_current_user()
-
+def api_maintenance_progress():
+    """获取当前维护进度。"""
     from services.backup import BackupManager
     bm = BackupManager()
     progress = bm.get_progress()
@@ -110,12 +109,10 @@ def api_db_backup_progress():
     })
 
 
-@admin_bp.route('/admin/api/db-backup/list')
+@admin_bp.route('/admin/api/maintenance/list')
 @admin_required
-def api_db_backup_list():
+def api_maintenance_list():
     """获取备份历史列表。"""
-    user = get_current_user()
-
     conn = get_db()
     try:
         rows = conn.execute("""
@@ -130,12 +127,21 @@ def api_db_backup_list():
     return jsonify({'backups': backups})
 
 
-@admin_bp.route('/admin/api/db-backup/<int:backup_id>/download')
+@admin_bp.route('/admin/api/maintenance/dir')
 @admin_required
-def api_db_backup_download(backup_id):
-    """下载备份文件到本地。"""
-    user = get_current_user()
+def api_maintenance_dir():
+    """获取当前生效的备份目录（保存路径后无需刷新页面即可同步显示）。"""
+    return jsonify({
+        'success': True,
+        'backup_dir': get_backup_dir(),
+        'backup_dir_setting': get_config_value('BACKUP_DIR', '../bhxz_backups'),
+    })
 
+
+@admin_bp.route('/admin/api/maintenance/<int:backup_id>/download')
+@admin_required
+def api_maintenance_download(backup_id):
+    """下载备份文件到本地。"""
     conn = get_db()
     try:
         row = conn.execute(
@@ -164,12 +170,10 @@ def api_db_backup_download(backup_id):
         conn.close()
 
 
-@admin_bp.route('/admin/api/db-backup/<int:backup_id>/delete', methods=['POST', 'DELETE'])
+@admin_bp.route('/admin/api/maintenance/<int:backup_id>/delete', methods=['POST', 'DELETE'])
 @admin_required
-def api_db_backup_delete(backup_id):
+def api_maintenance_delete(backup_id):
     """删除指定备份（文件 + 记录）。"""
-    user = get_current_user()
-
     conn = get_db()
     try:
         row = conn.execute(

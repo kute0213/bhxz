@@ -34,11 +34,11 @@
                 <p class="text-cream/60">管理你的账户信息</p>
                 <div class="mt-4 flex items-center justify-center gap-2">
                     {% if user.avatar_key %}
-                    <img src="{{ url_for('main.user_avatar', user_id=user.id) }}" alt="当前头像" class="w-10 h-10 rounded-full object-cover border border-gold-400/30">
+                    <img src="{{ url_for('main.user_avatar', user_id=user.id) }}" alt="当前头像" data-avatar-slot="header" data-avatar-class="w-10 h-10 rounded-full" data-avatar-initial="{{ user.username[0] }}" class="w-10 h-10 rounded-full object-cover border border-gold-400/30">
                     {% else %}
-                    <div class="w-10 h-10 bg-gold-400/20 rounded-full flex items-center justify-center text-lg font-bold text-gold-400">{{ user.username[0] }}</div>
+                    <div data-avatar-slot="header" data-avatar-class="w-10 h-10 rounded-full" data-avatar-initial="{{ user.username[0] }}" class="w-10 h-10 bg-gold-400/20 rounded-full flex items-center justify-center text-lg font-bold text-gold-400">{{ user.username[0] }}</div>
                     {% endif %}
-                    <span class="text-lg font-medium break-all">{{ user.username }}</span>
+                    <span class="text-lg font-medium break-all" id="settings-header-username">{{ user.username }}</span>
                     {% if user.is_admin %}<span class="text-xs bg-red-500/20 text-red-300 px-2 py-0.5 rounded">服主</span>{% endif %}
                 </div>
             </div>
@@ -71,22 +71,20 @@
                     <p class="text-cream/60 text-sm mb-6">支持 PNG、JPG、GIF、WebP，最大 10MB；上传后会裁剪为正方形并安全存储。</p>
                     <div class="flex flex-col sm:flex-row items-center gap-6 mb-6">
                         {% if user.avatar_key %}
-                        <img src="{{ url_for('main.user_avatar', user_id=user.id) }}" alt="当前头像" class="w-28 h-28 rounded-2xl object-cover border border-gold-400/30 shadow-lg">
+                        <img src="{{ url_for('main.user_avatar', user_id=user.id) }}" alt="当前头像" data-avatar-slot="preview" data-avatar-class="w-28 h-28 rounded-2xl" data-avatar-initial="{{ user.username[0] }}" class="w-28 h-28 rounded-2xl object-cover border border-gold-400/30 shadow-lg">
                         {% else %}
-                        <div class="w-28 h-28 rounded-2xl bg-gold-400/20 flex items-center justify-center text-4xl font-bold text-gold-400">{{ user.username[0] }}</div>
+                        <div data-avatar-slot="preview" data-avatar-class="w-28 h-28 rounded-2xl" data-avatar-initial="{{ user.username[0] }}" class="w-28 h-28 rounded-2xl bg-gold-400/20 flex items-center justify-center text-4xl font-bold text-gold-400">{{ user.username[0] }}</div>
                         {% endif %}
                         <div class="flex-1 w-full">
-                            <form method="POST" action="{{ url_for('main.upload_avatar') }}" enctype="multipart/form-data" class="space-y-4">
+                            <form id="avatar-upload-form" method="POST" action="{{ url_for('main.upload_avatar') }}" enctype="multipart/form-data" class="space-y-4">
                                 {{ csrf_field() }}
                                 <input type="file" name="avatar" required accept="image/png,image/jpeg,image/gif,image/webp" class="input-field w-full px-4 py-3 rounded-lg">
                                 <button type="submit" class="btn-primary w-full py-3 rounded-lg font-bold">上传新头像</button>
                             </form>
-                            {% if user.avatar_key %}
-                            <form method="POST" action="{{ url_for('main.delete_avatar') }}" class="mt-3">
+                            <form id="avatar-delete-form" method="POST" action="{{ url_for('main.delete_avatar') }}" class="mt-3{% if not user.avatar_key %} hidden{% endif %}">
                                 {{ csrf_field() }}
                                 <button type="submit" class="btn-secondary w-full py-2.5 rounded-lg text-sm">恢复默认头像</button>
                             </form>
-                            {% endif %}
                         </div>
                     </div>
                 </div>
@@ -102,7 +100,7 @@
                         {{ csrf_field() }}
                         <div>
                             <label class="block text-sm font-medium mb-2 text-cream/80">当前用户名</label>
-                            <input type="text" value="{{ user.username }}" disabled class="input-field w-full px-4 py-3 rounded-lg opacity-50">
+                            <input type="text" id="settings-current-username" value="{{ user.username }}" disabled class="input-field w-full px-4 py-3 rounded-lg opacity-50">
                         </div>
                         <div>
                             <label class="block text-sm font-medium mb-2 text-cream/80">新用户名</label>
@@ -126,7 +124,7 @@
                         <i data-lucide="lock" class="w-5 h-5 text-gold-400"></i>修改密码
                     </h2>
                     <p class="text-cream/60 text-sm mb-6">定期更换密码可以提高账户安全性。</p>
-                    <form method="POST" action="{{ url_for('main.change_password') }}" class="space-y-5">
+                    <form id="change-password-form" method="POST" action="{{ url_for('main.change_password') }}" class="space-y-5">
                         {{ csrf_field() }}
                         <div>
                             <label class="block text-sm font-medium mb-2 text-cream/80">当前密码</label>
@@ -153,11 +151,11 @@
                         <i data-lucide="mail" class="w-5 h-5 text-gold-400"></i>修改邮箱
                     </h2>
                     <p class="text-cream/60 text-sm mb-6">修改邮箱后用于接收指南审核通知等重要消息。</p>
-                    <form method="POST" action="{{ url_for('main.change_email') }}" class="space-y-5">
+                    <form id="change-email-form" method="POST" action="{{ url_for('main.change_email') }}" class="space-y-5">
                         {{ csrf_field() }}
                         <div>
                             <label class="block text-sm font-medium mb-2 text-cream/80">当前邮箱</label>
-                            <input type="email" value="{{ user.email or '未设置' }}" disabled class="input-field w-full px-4 py-3 rounded-lg opacity-50">
+                            <input type="email" id="settings-current-email" value="{{ user.email or '未设置' }}" disabled class="input-field w-full px-4 py-3 rounded-lg opacity-50">
                         </div>
                         <div>
                             <label class="block text-sm font-medium mb-2 text-cream/80">新邮箱地址</label>
@@ -209,7 +207,7 @@
                             <li>此操作不可撤销，请谨慎操作</li>
                         </ul>
                     </div>
-                    <form method="POST" action="{{ url_for('main.delete_account') }}" class="space-y-5" onsubmit="return confirm('确定要注销账号吗？此操作不可撤销！');">
+                    <form id="delete-account-form" method="POST" action="{{ url_for('main.delete_account') }}" class="space-y-5">
                         {{ csrf_field() }}
                         <div>
                             <label class="block text-sm font-medium mb-2 text-cream/80">请输入用户名确认</label>
@@ -321,6 +319,155 @@
         {% if tab %}
         switchTab('{{ tab }}');
         {% endif %}
+
+        // ------------------------------------------------------------------
+        // 设置项无刷新提交（统一走 /api/settings/*，不整页跳转）
+        // ------------------------------------------------------------------
+
+        function applyAvatar(url) {
+            document.querySelectorAll('[data-avatar-slot]').forEach(function (el) {
+                var cls = el.dataset.avatarClass || '';
+                var initial = el.dataset.avatarInitial || '';
+                var next;
+                if (url) {
+                    next = document.createElement('img');
+                    next.src = url;
+                    next.alt = '当前头像';
+                    next.className = cls + ' object-cover border border-gold-400/30';
+                } else {
+                    next = document.createElement('div');
+                    next.className = cls + ' bg-gold-400/20 flex items-center justify-center font-bold text-gold-400';
+                    next.textContent = initial;
+                }
+                next.dataset.avatarSlot = el.dataset.avatarSlot;
+                next.dataset.avatarClass = cls;
+                next.dataset.avatarInitial = initial;
+                el.replaceWith(next);
+            });
+            var delForm = document.getElementById('avatar-delete-form');
+            if (delForm) delForm.classList.toggle('hidden', !url);
+        }
+
+        function submitSettingsForm(form, url, onSuccess) {
+            var btn = form.querySelector('button[type="submit"]');
+            var original = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<i data-lucide="loader" class="w-4 h-4 inline mr-1 animate-spin"></i>处理中...';
+                if (window.lucide) lucide.createIcons();
+            }
+            fetch(url, {
+                method: 'POST',
+                body: new FormData(form),
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            })
+                .then(function (res) { return res.json(); })
+                .then(function (data) {
+                    if (data.success) {
+                        Toast.success(data.message || '操作成功');
+                        if (onSuccess) onSuccess(data);
+                    } else {
+                        Toast.error(data.message || '操作失败');
+                    }
+                })
+                .catch(function () {
+                    Toast.error('网络错误，请重试');
+                })
+                .finally(function () {
+                    if (btn) {
+                        btn.disabled = false;
+                        btn.innerHTML = original;
+                        if (window.lucide) lucide.createIcons();
+                    }
+                });
+        }
+
+        (function () {
+            var avatarForm = document.getElementById('avatar-upload-form');
+            if (avatarForm) {
+                avatarForm.addEventListener('submit', function (e) {
+                    e.preventDefault();
+                    submitSettingsForm(avatarForm, {{ url_for('main.api_upload_avatar')|tojson }}, function (data) {
+                        applyAvatar(data.avatar_url);
+                        var fileInput = avatarForm.querySelector('input[type="file"]');
+                        if (fileInput) fileInput.value = '';
+                    });
+                });
+            }
+
+            var avatarDelForm = document.getElementById('avatar-delete-form');
+            if (avatarDelForm) {
+                avatarDelForm.addEventListener('submit', function (e) {
+                    e.preventDefault();
+                    submitSettingsForm(avatarDelForm, {{ url_for('main.api_delete_avatar')|tojson }}, function () {
+                        applyAvatar(null);
+                    });
+                });
+            }
+
+            var usernameForm = document.getElementById('change-username-form');
+            if (usernameForm) {
+                usernameForm.addEventListener('submit', function (e) {
+                    e.preventDefault();
+                    submitSettingsForm(usernameForm, {{ url_for('main.api_change_username')|tojson }}, function (data) {
+                        if (data.username) {
+                            var current = document.getElementById('settings-current-username');
+                            if (current) current.value = data.username;
+                            var header = document.getElementById('settings-header-username');
+                            if (header) header.textContent = data.username;
+                        }
+                        usernameForm.querySelector('input[name="new_username"]').value = '';
+                        usernameForm.querySelector('input[name="current_password"]').value = '';
+                    });
+                });
+            }
+
+            var passwordForm = document.getElementById('change-password-form');
+            if (passwordForm) {
+                passwordForm.addEventListener('submit', function (e) {
+                    e.preventDefault();
+                    submitSettingsForm(passwordForm, {{ url_for('main.api_change_password')|tojson }}, function () {
+                        passwordForm.querySelectorAll('input[type="password"]').forEach(function (input) {
+                            input.value = '';
+                        });
+                    });
+                });
+            }
+
+            var emailForm = document.getElementById('change-email-form');
+            if (emailForm) {
+                emailForm.addEventListener('submit', function (e) {
+                    e.preventDefault();
+                    submitSettingsForm(emailForm, {{ url_for('main.api_change_email')|tojson }}, function (data) {
+                        if (data.email) {
+                            var current = document.getElementById('settings-current-email');
+                            if (current) current.value = data.email;
+                        }
+                        emailForm.querySelector('input[name="new_email"]').value = '';
+                        emailForm.querySelector('input[name="current_password"]').value = '';
+                        var code = emailForm.querySelector('input[name="email_code"]');
+                        if (code) code.value = '';
+                    });
+                });
+            }
+
+            var deleteForm = document.getElementById('delete-account-form');
+            if (deleteForm) {
+                deleteForm.addEventListener('submit', function (e) {
+                    e.preventDefault();
+                    var submitBtn = deleteForm.querySelector('button[type="submit"]');
+                    CustomModal.confirm('确定要注销账号吗？此操作不可撤销！', {
+                        trigger: submitBtn,
+                        callback: function (confirmed) {
+                            if (!confirmed) return;
+                            submitSettingsForm(deleteForm, {{ url_for('main.api_delete_account')|tojson }}, function (data) {
+                                window.location.href = data.redirect || '/';
+                            });
+                        }
+                    });
+                });
+            }
+        })();
 
         // 修改邮箱 - 图形验证码
         function loadEmailCaptcha() {

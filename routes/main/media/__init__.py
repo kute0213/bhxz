@@ -3,7 +3,7 @@
 import os
 from io import BytesIO
 
-from flask import abort, flash, redirect, request, send_file, url_for
+from flask import abort, flash, jsonify, redirect, request, send_file, url_for
 
 from config import UPLOAD_DIR, USER_IMAGE_MAX_BYTES
 from core.auth import get_current_user, login_required
@@ -107,6 +107,44 @@ def _convert_image(upload, kind):
     if not data:
         raise ValueError('图片处理失败')
     return data
+
+
+@main_bp.route('/api/settings/avatar', methods=['POST'])
+@login_required
+def api_upload_avatar():
+    """上传头像（无刷新，返回 JSON）。"""
+    user = get_current_user()
+    try:
+        data = _convert_image(request.files.get('avatar'), 'avatar')
+        filepath = _media_path(user['id'], 'avatar')
+        with open(filepath, 'wb') as f:
+            f.write(data)
+        _update_user_object_key(user['id'], 'avatar_key', filepath)
+        log_module('user', 'INFO', 'UserMedia', '用户头像上传成功', user_id=user['id'], username=user['username'])
+        return jsonify({
+            'success': True,
+            'message': '头像更新成功！',
+            'avatar_url': url_for('main.user_avatar', user_id=user['id']),
+        })
+    except ValueError as exc:
+        log_module('user', 'ERROR', 'UserMedia', '用户头像上传失败', user_id=user['id'], error=str(exc))
+        return jsonify({'success': False, 'message': str(exc)})
+
+
+@main_bp.route('/api/settings/avatar/delete', methods=['POST'])
+@login_required
+def api_delete_avatar():
+    """恢复默认头像（无刷新，返回 JSON）。"""
+    user = get_current_user()
+    try:
+        filepath = user.get('avatar_key', '')
+        if filepath and os.path.isfile(filepath):
+            os.remove(filepath)
+        _update_user_object_key(user['id'], 'avatar_key', '')
+        return jsonify({'success': True, 'message': '头像已恢复为默认样式', 'avatar_url': None})
+    except Exception as exc:
+        log_module('user', 'ERROR', 'UserMedia', '用户头像删除失败', user_id=user['id'], error=str(exc))
+        return jsonify({'success': False, 'message': '头像删除失败，请稍后重试'})
 
 
 @main_bp.route('/settings/avatar', methods=['POST'])
