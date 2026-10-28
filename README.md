@@ -97,17 +97,16 @@ python scripts/build/package.py
 ├── services/     # 业务逻辑层（纯 Python，不依赖 Flask）
 │   ├── backup/               #   自动维护（/uploads/ 全量 zip 极限压缩 + 日志清理）
 │   ├── buildings/      # 公共建筑（列表/搜索/收藏/评论分页）
-│   ├── email/          # 异步邮件发送
+│   ├── mail/           # 异步邮件发送
 │   ├── game_accounts/  # 游戏账号注册申请（审批/驳回/封禁）
 │   ├── game_server_ban/ # 游戏服务器封禁申请（审批 → RCON ban → 到期自动 pardon）
-│   ├── logging/        # 日志自动清理
-│   ├── monitoring/     # CPU/内存/系统/性能追踪（后台线程采集）
+│   ├── system_metrics/ # CPU/内存/系统/性能追踪（后台线程采集）
 │   ├── music/          # 大喇叭音频（常量/查询/CRUD/上传/收藏）
 │   ├── rcon/           # RCON 连接管理、玩家列表追踪、EasyAuth 指令
-│   ├── updater/        # 自动更新（配置/核心逻辑）
 │   ├── user/           # 用户（认证/资料/管理）
 │   ├── background_service/  #   背景图片业务（WebP 转换 + 按屏幕比例挑选）
 │   ├── cleanup_service/     #   被驳回内容自动清理
+│   ├── content_limits/      #   待审核内容上限业务规则
 │   ├── firewall/            #   高性能防火墙（DuckDB 引擎 + WSGI 门禁 + DDoS 防护）
 │   │   ├── api_guard.py     #     接口频率限制
 │   │   ├── service/         #     业务层（core / database / monitor）
@@ -716,12 +715,13 @@ workspace/
 ├── services/                 # 业务逻辑层（纯 Python，不依赖 Flask）
 │   ├── backup/               #   自动维护（/uploads/ 全量 zip 极限压缩 + 日志清理）
 │   ├── buildings/            #   公共建筑（列表/搜索/收藏/评论分页）
-│   ├── email/                #   异步邮件发送
+│   ├── mail/                 #   异步邮件发送
 │   ├── game_accounts/        #   游戏账号注册申请
-│   ├── monitoring/           #   系统监控（CPU/内存/系统/性能追踪）
+│   ├── game_server_ban/      #   游戏服务器封禁申请（审批 → 自动解封）
+│   ├── system_metrics/       #   系统监控（CPU/内存/系统/性能追踪）
 │   ├── music/                #   大喇叭音频（常量/查询/CRUD/上传/收藏）
 │   ├── rcon/                 #   RCON 连接管理、玩家列表追踪、EasyAuth 指令
-│   ├── updater/              #   自动更新（配置/核心逻辑）
+│   ├── security/             #   安全扫描与内容过滤
 │   ├── user/                 #   用户（认证/资料/管理）
 │   ├── background_service/   #   背景图片业务（WebP 转换 + 按屏幕比例挑选）
 │   ├── cleanup_service/      #   被驳回内容自动清理（统一定时调度）
@@ -736,7 +736,7 @@ workspace/
 │   ├── content_limits/       #   待审核内容上限业务规则（从 core/helpers.py 下沉）
 ├── routes/                   # HTTP 路由层
 │   ├── main/                 #   首页、登录、注册、设置、音乐
-│   ├── admin/                #   管理后台（用户/备份/设置/日志/更新/游戏账号/指南/音乐/广播/背景/公共建筑等）
+│   ├── admin/                #   管理后台（用户/自动维护/设置/日志/更新/游戏账号/指南/音乐/广播/背景/公共建筑等）
 │   ├── api/                  #   JSON API（性能/统计/验证码/邮箱）
 │   ├── backgrounds/          #   背景图片页面
 │   ├── community/            #   社区辅助（AJAX / 表单统一响应）
