@@ -159,6 +159,9 @@ function showPreviewModal(btn) {
             ADD_ATTR: ['controls', 'preload', 'poster', 'playsinline', 'muted', 'loop', 'src']
         })
         : '<p class="text-[var(--text-tertiary)] text-center py-8">暂无内容</p>';
+    if (window.SiteVideoPlayer) {
+        window.SiteVideoPlayer.decorateAll(document.getElementById('preview-content'));
+    }
     document.getElementById('previewApproveBtn').setAttribute('data-action-url', '/admin/guides/' + _previewGuideId + '/approve');
     openModal('preview-modal');
 }

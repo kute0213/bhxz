@@ -444,7 +444,12 @@
                 }
                 inlineBuf.push(escapeInline(normalizeInlineText(v), ctx.inTable));
             } else if (n.nodeType === 1) {
-                if (BLOCK_EL[n.tagName]) {
+                // 站内视频播放器容器（自定义控件）：整体序列化为视频语法
+                if (n.classList && n.classList.contains('svp')) {
+                    flush();
+                    var sv = n.querySelector('video');
+                    if (sv) out.push('@[video](' + (sv.getAttribute('src') || '') + ')');
+                } else if (BLOCK_EL[n.tagName]) {
                     flush();
                     var b = serializeBlock(n, ctx);
                     if (b !== '') out.push(b);
@@ -1032,7 +1037,8 @@
     Editor.prototype.renderRich = function (md) {
         if (!this.rich) return;
         this.rich.innerHTML = mdToHtml(md || '');
-        // 视频作为原子块：不可编辑内部，便于前后放置光标或整体选中
+        // 视频统一换成站内自定义控件，并作为原子块不可编辑内部
+        if (window.SiteVideoPlayer) window.SiteVideoPlayer.decorateAll(this.rich);
         var vids = this.rich.querySelectorAll('video');
         for (var i = 0; i < vids.length; i++) vids[i].setAttribute('contenteditable', 'false');
     };
@@ -1417,11 +1423,18 @@
 
     Editor.prototype.removeVideos = function (videos) {
         if (!videos.length) return;
-        var first = videos[0];
+        // 同时删除站内播放器容器，避免留下空壳
+        var hosts = [];
+        for (var i = 0; i < videos.length; i++) {
+            var host = videoHost(videos[i]);
+            if (host && hosts.indexOf(host) === -1) hosts.push(host);
+        }
+        if (!hosts.length) return;
+        var first = hosts[0];
         var prev = first.previousSibling;
         var next = first.nextSibling;
-        for (var i = 0; i < videos.length; i++) {
-            if (videos[i].parentNode) videos[i].parentNode.removeChild(videos[i]);
+        for (var j = 0; j < hosts.length; j++) {
+            if (hosts[j].parentNode) hosts[j].parentNode.removeChild(hosts[j]);
         }
         if (next && next.parentNode) {
             placeCaretAtStart(next);
@@ -1463,11 +1476,25 @@
         try { inserted = document.execCommand('insertHTML', false, html); } catch (err) { inserted = false; }
 
         if (inserted) {
-            // 粘贴进来的视频统一设为原子块，并保证前后可放置光标
+            // 粘贴进来的视频统一换成站内播放器控件，并保证前后可放置光标
+            if (window.SiteVideoPlayer) window.SiteVideoPlayer.decorateAll(this.rich);
             var vids = this.rich.querySelectorAll('video');
+            var hosts = [];
             for (var i = 0; i < vids.length; i++) {
                 vids[i].setAttribute('contenteditable', 'false');
-                this.ensureVideoRoom(vids[i]);
+                var host = videoHost(vids[i]);
+                if (host && hosts.indexOf(host) === -1) hosts.push(host);
+            }
+            // 视频必须作为顶层块（不能嵌在段落里），否则 Markdown 无法正确序列化
+            for (var j = 0; j < hosts.length; j++) {
+                var h = hosts[j];
+                if (h.parentNode && h.parentNode !== this.rich) {
+                    var top = topLevelChild(this.rich, h.parentNode);
+                    if (top && top !== h && top.parentNode) {
+                        top.parentNode.insertBefore(h, top.nextSibling);
+                    }
+                }
+                this.ensureVideoRoom(h);
             }
             this.afterRichChange();
         }
@@ -1490,27 +1517,26 @@
         var block = topLevelChild(this.rich, range.startContainer);
         if (!block) return;
 
-        if (block.tagName === 'VIDEO') {
+        var blockVideo = videoHost(block);
+        if (blockVideo) {
             e.preventDefault();
-            this.removeVideos([block]);
+            this.removeVideos([blockVideo.tagName === 'VIDEO' ? blockVideo : blockVideo.querySelector('video')]);
             return;
         }
 
         if (e.key === 'Backspace' && caretAtStart(range, block)) {
-            var prev = block.previousSibling;
-            if (prev && prev.nodeType === 1 && prev.tagName === 'VIDEO') {
+            var prevHost = videoHost(block.previousSibling);
+            if (prevHost) {
                 e.preventDefault();
-                prev.parentNode.removeChild(prev);
+                this.removeVideos([prevHost]);
                 placeCaretAtStart(block);
-                this.afterRichChange();
             }
         } else if (e.key === 'Delete' && caretAtEnd(range, block)) {
-            var next = block.nextSibling;
-            if (next && next.nodeType === 1 && next.tagName === 'VIDEO') {
+            var nextHost = videoHost(block.nextSibling);
+            if (nextHost) {
                 e.preventDefault();
-                next.parentNode.removeChild(next);
+                this.removeVideos([nextHost]);
                 placeCaretAtEnd(block);
-                this.afterRichChange();
             }
         }
     };
@@ -2227,14 +2253,26 @@
         }
     };
 
-    // 创建富文本中的视频原子块
+    // 创建富文本中的视频原子块（使用站内自定义控件）
     function createVideoNode(url) {
         var node = document.createElement('video');
         node.setAttribute('src', url);
-        node.setAttribute('controls', '');
         node.setAttribute('preload', 'metadata');
         node.setAttribute('contenteditable', 'false');
+        if (window.SiteVideoPlayer) {
+            var wrap = window.SiteVideoPlayer.decorate(node);
+            if (wrap) return wrap;
+        }
+        node.setAttribute('controls', '');
         return node;
+    }
+
+    // 视频对应的顶层节点（自定义控件容器或视频本身）
+    function videoHost(node) {
+        if (!node || node.nodeType !== 1) return null;
+        if (node.tagName === 'VIDEO') return node.closest('.svp') || node;
+        if (node.classList && node.classList.contains('svp')) return node;
+        return null;
     }
 
     // 保证视频前后都有可放置光标的空段落
@@ -2262,7 +2300,6 @@
             this.rich.focus();
             if (this.videoAnchor) {
                 this.videoAnchor.setAttribute('src', url);
-                this.videoAnchor.setAttribute('controls', '');
                 this.videoAnchor.setAttribute('preload', 'metadata');
                 this.videoAnchor.setAttribute('contenteditable', 'false');
             } else {
@@ -2302,7 +2339,13 @@
     Editor.prototype.uploadVideo = function () {
         var self = this;
         var file = this.videoFile && this.videoFile.files && this.videoFile.files[0];
-        if (!file || !this.videoUploadUrl) return;
+        if (!file) return;
+        if (!this.videoUploadUrl) {
+            // 没有指南 ID（如后台「新建指南」页）时无法上传，给出明确提示
+            if (this.videoFile) this.videoFile.value = '';
+            toast('请先保存指南，再上传视频', 'error');
+            return;
+        }
 
         var form = new FormData();
         form.append('video', file);
@@ -2314,6 +2357,9 @@
             var pct = total > 0 ? Math.min(100, loaded / total * 100) : 0;
             if (self.videoProgressFill) self.videoProgressFill.style.width = pct.toFixed(1) + '%';
             if (self.videoProgressText) self.videoProgressText.textContent = Math.round(pct) + '%';
+        };
+        var setStage = function (text) {
+            if (self.videoProgressText) self.videoProgressText.textContent = text;
         };
         var finish = function (keep) {
             if (btn) btn.classList.remove('is-loading');
@@ -2331,6 +2377,11 @@
         xhr.upload.onprogress = function (e) {
             if (e.lengthComputable) setProgress(e.loaded, e.total);
         };
+        // 文件已上传完毕，服务端开始 ffmpeg 转码（保持进度条可见并提示阶段）
+        xhr.upload.onload = function () {
+            setProgress(file.size, file.size);
+            setStage('转码中…');
+        };
         xhr.onload = function () {
             var data = {};
             try { data = JSON.parse(xhr.responseText || '{}'); } catch (e) { /* 忽略 */ }
@@ -2341,16 +2392,24 @@
                 setTimeout(function () {
                     if (self.videoProgressEl) self.videoProgressEl.hidden = true;
                 }, 400);
-                toast('视频已上传', 'success');
+                toast(data.message || '视频已上传', 'success');
                 self.loadVideoList();
             } else {
                 finish(false);
-                toast((data && data.message) || '视频上传失败', 'error');
+                var msg = (data && data.message) || (xhr.status === 413 ? '视频文件过大，无法上传' : '视频上传失败');
+                toast(msg, 'error');
             }
         };
         xhr.onerror = function () {
             finish(false);
-            toast('视频上传失败，请稍后重试', 'error');
+            toast('网络错误，视频上传失败，请稍后重试', 'error');
+        };
+        xhr.ontimeout = function () {
+            finish(false);
+            toast('视频上传超时，请重试', 'error');
+        };
+        xhr.onabort = function () {
+            finish(false);
         };
         xhr.send(form);
     };

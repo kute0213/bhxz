@@ -259,10 +259,11 @@ def save_guide_video(guide_id, upload):
     if msg:
         return False, msg, None
 
-    tmp_dir = tempfile.mkdtemp(prefix='.transcode_', dir=guide_dir(guide_id))
     out_name = f'{next_id()}.mp4'
     out_path = os.path.join(directory, out_name)
+    tmp_dir = None
     try:
+        tmp_dir = tempfile.mkdtemp(prefix='.transcode_', dir=guide_dir(guide_id))
         src_path = os.path.join(tmp_dir, 'source')
         upload.save(src_path)
 
@@ -306,8 +307,14 @@ def save_guide_video(guide_id, upload):
 
         return True, '', {'name': out_name, 'size': size,
                           'size_label': format_size(size)}
+    except Exception as exc:
+        # 兜底：任何未预期异常（临时目录 / 写入 / 权限 / 杀软占用等）
+        # 都要清理半成品并返回可展示的提示，避免接口 500 导致前端「无法上传」。
+        _remove_quiet(out_path)
+        return False, f'视频处理失败：{exc}', None
     finally:
-        shutil.rmtree(tmp_dir, ignore_errors=True)
+        if tmp_dir:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
 def delete_asset(directory, filename):

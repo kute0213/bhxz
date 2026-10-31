@@ -4,6 +4,13 @@
 
 ### 变更
 
+* **站内自定义视频播放器 + 上传进度两阶段提示 + 「我的指南」独立接口**（`static/js/core/video-player.js`、`static/css/base.css`、`static/templates/base.html`、`static/templates/guides/detail.html`、`static/templates/admin/guides.html`、`static/js/pages/markdown-editor.js`、`routes/guides/api/__init__.py`、`static/templates/guides/index.html`、`services/guides/__init__.py`）：
+  * **自定义视频控件**：新增 `static/js/core/video-player.js`，把 `<video>` 统一包裹为 `.svp` 并移除原生 `controls`，提供中央大播放按钮、播放/暂停、可拖动进度条、当前/总时长、静音与全屏；`base.html` 全站加载，指南详情页、Markdown 编辑器、管理后台预览统一调用 `SiteVideoPlayer.decorateAll()`。样式追加于 `base.css` 的 `.svp` 段落。
+  * **编辑器视频原子块兼容播放器**：富文本视频改用 `.svp` 容器，序列化时识别容器输出 `@[video](url)`；删除 / 剪切 / 粘贴均按容器处理，并把嵌套在段落中的视频提升为顶层块，避免 Markdown 序列化丢失视频。
+  * **上传进度两阶段**：文件传输阶段显示百分比，上传完成后继续显示「转码中…」，成功 / 413 / 网络错误 / 超时 / 中断均有明确轻提示；`save_guide_video()` 增加最外层异常兜底，临时目录、写入、权限等异常不再返回 500，前端可拿到可展示的错误信息。
+  * **彻底移除 `my=1`**：`/api/guides/list` 删除 `my` 参数（仅返回已通过指南），新增分页 + 关键词搜索的 `GET /api/guides/my`；`/guides` 页面按 `my_mode` 选择公开列表接口或「我的指南」接口，不再拼接 `my=1`。
+  * 同步更新 README 的 API 说明与播放器说明。
+
 * **指南视频统一转码 + 雪花 ID 命名 + 编辑器剪贴板彻底修复 + 背景图片分段加载**（`config.py`、`services/guides/__init__.py`、`routes/guides/api/__init__.py`、`static/js/pages/markdown-editor.js`、`static/templates/backgrounds/index.html`、`routes/backgrounds/pages/__init__.py`、`scripts/tests/test_guide_storage.py`）：
   * **视频统一转码**：新增 `save_guide_video()`。上传视频先保存到指南目录内的临时目录（`.transcode_*/source`），再由 ffmpeg 统一转码为 **MP4 / H.264（`libx264`、`yuv420p`、`+faststart`，音频 AAC 128k）**，输出到 `assets/`；最终文件名固定为 `<雪花ID>.mp4`（`core.shared.snowflake.next_id()`），不再使用原始文件名。转码失败 / 超时 / ffmpeg 缺失时删除半成品并返回明确提示，`finally` 清理临时目录；配额按转码后实际大小校验。新增 `GUIDE_VIDEO_TRANSCODE_TIMEOUT`（默认 600 秒）。
   * **背景图片分段加载**：`GET /api/backgrounds/list` 改为分页返回已通过背景（每页 5 张，`page` 控制页号，附 `page / total / has_more`）；`/backgrounds` 页面新增「加载更多」按钮，按 `page` 追加卡片，「我的上传」保持全量返回。每页条数沿用系统设置 `BACKGROUNDS_PER_PAGE`。

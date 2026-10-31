@@ -1564,3 +1564,107 @@ pre::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.24); }
 @media (max-width: 640px) {
     .tag-input-add { padding: 10px 12px; }
 }
+
+/* ==========================================================================
+ * 站内统一视频播放器（js/core/video-player.js）
+ * ========================================================================== */
+
+.svp {
+    position: relative;
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    margin: 0.5rem 0 1rem;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #0b1220;
+    line-height: 0;
+}
+.svp-video,
+.svp video {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+    background: #0b1220;
+}
+.svp-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 0;
+    background: radial-gradient(circle at center, rgba(2, 132, 199, 0.22), rgba(2, 8, 20, 0.42));
+    color: #fff;
+    cursor: pointer;
+    transition: opacity 0.2s ease;
+}
+.svp-overlay svg {
+    width: 3.25rem;
+    height: 3.25rem;
+    padding: 0.55rem;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.16);
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    backdrop-filter: blur(6px);
+}
+.svp-overlay:hover svg { background: rgba(2, 132, 199, 0.55); }
+.svp-overlay.is-hidden { opacity: 0; pointer-events: none; }
+.svp-bar {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    padding: 0.45rem 0.65rem;
+    background: linear-gradient(180deg, rgba(6, 12, 24, 0), rgba(6, 12, 24, 0.82));
+    opacity: 0;
+    transform: translateY(6px);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+    line-height: 1;
+}
+.svp:hover .svp-bar,
+.svp:focus-within .svp-bar,
+.svp.is-playing .svp-bar { opacity: 1; transform: translateY(0); }
+.svp-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.85rem;
+    height: 1.85rem;
+    flex: 0 0 auto;
+    padding: 0;
+    border: 0;
+    border-radius: 8px;
+    background: transparent;
+    color: #eaf4ff;
+    cursor: pointer;
+    transition: background-color 0.15s ease, color 0.15s ease;
+}
+.svp-btn:hover { background: rgba(2, 132, 199, 0.35); color: #fff; }
+.svp-btn svg { width: 1rem; height: 1rem; display: block; }
+.svp-seek {
+    flex: 1 1 auto;
+    min-width: 4rem;
+    height: 1.05rem;
+    margin: 0;
+    padding: 0;
+    background: transparent;
+    accent-color: var(--accent-blue, #0284c7);
+    cursor: pointer;
+}
+.svp-time {
+    flex: 0 0 auto;
+    font-size: 0.72rem;
+    color: rgba(234, 244, 255, 0.82);
+    font-variant-numeric: tabular-nums;
+    line-height: 1.2;
+}
+@media (max-width: 640px) {
+    .svp-bar { opacity: 1; transform: none; }
+    .svp-overlay svg { width: 2.6rem; height: 2.6rem; }
+}

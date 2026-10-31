@@ -157,6 +157,9 @@
     var resultHint = document.getElementById('guide-result-hint');
 
     var state = { page: 1, query: "{{ keyword }}", loading: false, myMode: {{ 'true' if my_mode else 'false' }} };
+    var listUrl = state.myMode
+        ? '{{ url_for("guides.my_guides") }}'
+        : '{{ url_for("guides.api_guides_list") }}';
 
     function esc(t) { var d = document.createElement('div'); d.textContent = t == null ? '' : String(t); return d.innerHTML; }
     function refreshIcons() { if (typeof lucide !== 'undefined' && lucide.createIcons) { try { lucide.createIcons(); } catch (_) {} } }
@@ -236,8 +239,7 @@
         var params = new URLSearchParams();
         params.set('page', page);
         if (state.query) params.set('q', state.query);
-        if (state.myMode) params.set('my', '1');
-        fetch('{{ url_for("guides.api_guides_list") }}?' + params.toString(), {
+        fetch(listUrl + '?' + params.toString(), {
             headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
         })
         .then(function (r) { return r.json(); })

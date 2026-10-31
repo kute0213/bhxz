@@ -113,12 +113,13 @@ def _ensure_unique_slug(conn, base_slug, exclude_id=None):
 
 @guides_bp.route('/api/guides/list', methods=['GET'])
 def api_guides_list():
-    """指南列表 API（分页，分页大小由系统设置 GUIDES_PER_PAGE 控制）。
+    """公开指南列表 API（分页，分页大小由系统设置 GUIDES_PER_PAGE 控制）。
 
     参数：
         page  页码，从 1 开始
-        my    1 表示仅当前用户提交的指南（需登录）
         q     关键字，匹配标题与摘要
+
+    仅返回已审核通过的指南；「我的指南」使用独立接口 /api/guides/my。
     """
     user = get_current_user()
     try:
@@ -126,34 +127,25 @@ def api_guides_list():
     except (TypeError, ValueError):
         page = 1
 
-    my_mode = bool(user and request.args.get('my') == '1')
     keyword = (request.args.get('q') or '').strip()[:60]
 
     # 分页大小只由后台设置决定，忽略任何前端传入的参数
     page_size = get_page_size('GUIDES_PER_PAGE', 5)
 
-    where = []
+    where = ["g.status = 'approved'"]
     params = []
-    if my_mode:
-        where.append("g.author_id = ?")
-        params.append(user['id'])
-    else:
-        where.append("g.status = 'approved'")
     if keyword:
         where.append("(g.title LIKE ? OR g.summary LIKE ?)")
         like = f'%{keyword}%'
         params.extend([like, like])
 
-    where_sql = ('WHERE ' + ' AND '.join(where)) if where else ''
-    # 作者自己的指南按更新时间倒序；公开指南按置顶优先 → 收藏数倒序 → 标题升序
-    if my_mode:
-        order_sql = "ORDER BY g.updated_at DESC"
-    else:
-        order_sql = (
-            "ORDER BY g.is_pinned DESC, "
-            "(SELECT COUNT(*) FROM guide_favorites f WHERE f.guide_id = g.id) DESC, "
-            "g.title ASC"
-        )
+    where_sql = 'WHERE ' + ' AND '.join(where)
+    # 公开指南按置顶优先 → 收藏数倒序 → 标题升序
+    order_sql = (
+        "ORDER BY g.is_pinned DESC, "
+        "(SELECT COUNT(*) FROM guide_favorites f WHERE f.guide_id = g.id) DESC, "
+        "g.title ASC"
+    )
 
     conn = get_db()
     try:
@@ -185,7 +177,7 @@ def api_guides_list():
         'page_size': page_size,
         'total': total,
         'has_more': page * page_size < total,
-        'my_mode': my_mode,
+        'my_mode': False,
         'keyword': keyword,
     })
 
@@ -193,24 +185,60 @@ def api_guides_list():
 @guides_bp.route('/api/guides/my', methods=['GET'])
 @login_required
 def my_guides():
-    """获取当前用户创建的所有指南（含待审核）。"""
+    """当前用户创建的指南列表（含草稿 / 待审核 / 已拒绝），分页 + 关键词搜索。
+
+    与 /api/guides/list 返回相同结构，供「我的指南」页面无刷新加载。
+    参数：page 页码、q 关键字。
+    """
     user = get_current_user()
+    try:
+        page = max(1, int(request.args.get('page', 1)))
+    except (TypeError, ValueError):
+        page = 1
+    keyword = (request.args.get('q') or '').strip()[:60]
+    page_size = get_page_size('GUIDES_PER_PAGE', 5)
+
+    where = ["g.author_id = ?"]
+    params = [user['id']]
+    if keyword:
+        where.append("(g.title LIKE ? OR g.summary LIKE ?)")
+        like = f'%{keyword}%'
+        params.extend([like, like])
+    where_sql = 'WHERE ' + ' AND '.join(where)
+
     conn = get_db()
     try:
+        total = conn.execute(
+            f"SELECT COUNT(*) AS c FROM server_guides g {where_sql}", params
+        ).fetchone()['c']
         rows = conn.execute(
-            """
-            SELECT id, title, slug, summary, status, is_pinned, created_at, updated_at, rejected_reason
-            FROM server_guides
-            WHERE author_id = ?
-            ORDER BY updated_at DESC
+            f"""
+            SELECT g.id, g.title, g.slug, g.summary, g.status, g.is_pinned,
+                   g.created_at, g.updated_at, g.published_at, g.rejected_reason,
+                   u.username AS author_name
+            FROM server_guides g
+            LEFT JOIN users u ON g.author_id = u.id
+            {where_sql}
+            ORDER BY g.updated_at DESC
+            LIMIT ? OFFSET ?
             """,
-            (user['id'],),
+            params + [page_size, (page - 1) * page_size],
         ).fetchall()
         guides = [dict(r) for r in rows]
+        _annotate_favorites(conn, guides, user['id'])
     finally:
         conn.close()
 
-    return jsonify({'success': True, 'guides': guides})
+    return jsonify({
+        'success': True,
+        'guides': guides,
+        'page': page,
+        'page_size': page_size,
+        'total': total,
+        'has_more': page * page_size < total,
+        'my_mode': True,
+        'keyword': keyword,
+    })
 
 
 @guides_bp.route('/api/guides/<int:guide_id>/publish', methods=['POST'])

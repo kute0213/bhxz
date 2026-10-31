@@ -131,6 +131,8 @@
             ADD_TAGS: ['video', 'source'],
             ADD_ATTR: ['controls', 'preload', 'poster', 'playsinline', 'muted', 'loop', 'src']
         });
+        // 统一换成站内自定义视频控件
+        if (window.SiteVideoPlayer) window.SiteVideoPlayer.decorateAll(el);
         if (typeof CodeBlocks !== 'undefined') CodeBlocks.enhance(el);
     }
 })();
