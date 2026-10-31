@@ -4,9 +4,16 @@
 
 ### 变更
 
+* **指南视频体验升级 + 移除旧链接兼容跳转**（`static/js/pages/markdown-editor.js`、`static/templates/macros/markdown_editor.html`、`static/templates/guides/detail.html`、`static/templates/admin/guides.html`、`routes/guides/pages/__init__.py`）：
+  * 视频上传改用 XHR 并展示实时进度条；视频用量配额改为带进度条的站内控件（按 `used_bytes / limit_bytes` 填充）。
+  * 视频 Markdown 语法：编辑器序列化为 `@[video](url)`（源码模式与 `guide.md` 均存该语法，不再写原始 HTML `<video>`）；编辑器、指南详情页、管理后台预览统一将语法渲染为可播放视频，并兼容历史 `<video>` HTML。
+  * 视频插入位置在光标之后，并保证视频前后都有可放置光标的段落；视频作为原子块支持整体选中，复制 / 剪切写入 `@[video](url)` 文本，选中后 Backspace / Delete 或光标紧邻时均可删除。
+  * 删除视频确认改用站内统一 `CustomModal.confirm` 弹窗，不再使用浏览器原生 `confirm`。
+  * 移除 `/guides?my=1` → `/guides/my` 的兼容跳转，公开列表忽略 `my` 参数。
+
 * **指南新建改为「一键创建草稿」+ 独立「我的指南」页面**（`routes/guides/{pages,api}/__init__.py`、`static/templates/guides/{index,form}.html`、`static/templates/macros/markdown_editor.html`）：
   * 点击「新建指南」直接创建标题为「未命名指南」的草稿（状态 `draft`，立即生成指南 ID 与目录，正文为空），创建后返回「我的指南」；标题、摘要与正文都在之后点击「修改」时再填写。旧的 `GET /guides/create` 表单页已移除，`POST /guides/create` 仅创建草稿。
-  * 新增独立页面 `/guides/my`（需登录），展示本人创建的全部指南及状态；旧的 `/guides?my=1` 自动 302 跳转到该页面，列表/搜索/加载更多/发布逻辑保持不变。
+  * 新增独立页面 `/guides/my`（需登录），展示本人创建的全部指南及状态；列表/搜索/加载更多/发布逻辑保持不变。
   * 编辑器工具栏调整：将「代码块」按钮从「插入」标签页移到「段落」标签页（与引用、列表等同组），「插入」仅保留链接、表格、视频。
   * 同步更新 README、DEVELOPMENT 与 sitemap 排除项说明。
 

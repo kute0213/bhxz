@@ -387,7 +387,7 @@
         return lines.join('\n');
     }
 
-    // 视频以原始 HTML 写入 Markdown，保证保存后仍可播放
+    // 视频以 Markdown 语法写入（@[video](url)），不再输出原始 HTML
     function serializeVideo(el) {
         var src = el.getAttribute('src') || '';
         if (!src) {
@@ -395,10 +395,7 @@
             src = source ? (source.getAttribute('src') || '') : '';
         }
         if (!src) return '';
-        var attrs = ' src="' + escapeHtml(src) + '" controls preload="metadata"';
-        var poster = el.getAttribute('poster');
-        if (poster) attrs += ' poster="' + escapeHtml(poster) + '"';
-        return '<video' + attrs + '></video>';
+        return '@[video](' + src + ')';
     }
 
     function serializeBlock(el, ctx) {
@@ -537,9 +534,30 @@
         }
     }
 
+    // marked 扩展只需注册一次（同一页面可能有多个编辑器实例）
+    var markedReady = false;
+
     function ensureMarked() {
-        if (!window.marked) return;
-        try { window.marked.use({ gfm: true, breaks: false, pedantic: false }); } catch (e) { /* 忽略 */ }
+        if (!window.marked || markedReady) return;
+        markedReady = true;
+        try {
+            window.marked.use({
+                gfm: true, breaks: false, pedantic: false,
+                extensions: [{
+                    name: 'mreGuideVideo',
+                    level: 'block',
+                    tokenizer: function (src) {
+                        var m = /^@\[video\]\(([^)\n]+)\)\s*(?:\n|$)/.exec(src);
+                        if (!m) return undefined;
+                        return { type: 'mreGuideVideo', raw: m[0], url: m[1] };
+                    },
+                    renderer: function (token) {
+                        return '<video src="' + escapeHtml(token.url) + '" controls preload="metadata"'
+                            + ' contenteditable="false"></video>\n';
+                    }
+                }]
+            });
+        } catch (e) { /* 忽略 */ }
     }
 
     function mdToHtml(md) {
@@ -670,6 +688,11 @@
         this.videoQuotaEl = root.querySelector('[data-mre-video-quota]');
         this.videoEmptyEl = root.querySelector('[data-mre-video-empty]');
         this.videoFile = root.querySelector('[data-mre-video-file]');
+        this.videoProgressEl = root.querySelector('[data-mre-video-progress]');
+        this.videoProgressFill = root.querySelector('[data-mre-video-progress-fill]');
+        this.videoProgressText = root.querySelector('[data-mre-video-progress-text]');
+        this.videoQuotaText = root.querySelector('[data-mre-video-quota-text]');
+        this.videoQuotaFill = root.querySelector('[data-mre-video-quota-fill]');
         this.videoItems = [];
         this.videoLoaded = false;
         // 本地静默草稿（localStorage，仅存本机，不上传）
@@ -707,6 +730,9 @@
             self.scheduleToolbar();
         });
         this.rich.addEventListener('blur', function () { self.syncNow(); });
+        this.rich.addEventListener('copy', function (e) { self.handleVideoClipboard(e, false); });
+        this.rich.addEventListener('cut', function (e) { self.handleVideoClipboard(e, true); });
+        this.rich.addEventListener('keydown', function (e) { self.handleVideoKeydown(e); });
         this.rich.addEventListener('change', function (e) {
             var t = e.target;
             if (t && t.tagName === 'INPUT' && (t.type || '').toLowerCase() === 'checkbox') self.syncNow();
@@ -1005,6 +1031,9 @@
     Editor.prototype.renderRich = function (md) {
         if (!this.rich) return;
         this.rich.innerHTML = mdToHtml(md || '');
+        // 视频作为原子块：不可编辑内部，便于前后放置光标或整体选中
+        var vids = this.rich.querySelectorAll('video');
+        for (var i = 0; i < vids.length; i++) vids[i].setAttribute('contenteditable', 'false');
     };
 
     Editor.prototype.scheduleSync = function () {
@@ -1106,6 +1135,36 @@
         } catch (e) { /* 忽略 */ }
     }
 
+    function placeCaretAtEnd(el) {
+        try {
+            var r = document.createRange();
+            r.selectNodeContents(el);
+            r.collapse(false);
+            var sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(r);
+        } catch (e) { /* 忽略 */ }
+    }
+
+    // 光标是否位于块的起点 / 终点
+    function caretAtStart(range, block) {
+        try {
+            var r = document.createRange();
+            r.selectNodeContents(block);
+            r.setEnd(range.startContainer, range.startOffset);
+            return r.toString() === '';
+        } catch (e) { return false; }
+    }
+
+    function caretAtEnd(range, block) {
+        try {
+            var r = document.createRange();
+            r.selectNodeContents(block);
+            r.setStart(range.endContainer, range.endOffset);
+            return r.toString() === '';
+        } catch (e) { return false; }
+    }
+
     /* ---------- 工具栏可用态 / 激活态 ---------- */
 
     // 在 Markdown 源码中定位光标所在的链接 [文字](地址 "标题")
@@ -1136,18 +1195,24 @@
         return null;
     }
 
-    // 在 Markdown 源码中定位光标所在的 <video ...>...</video>
+    // 在 Markdown 源码中定位光标所在的视频（@[video](url) 或旧版 <video> HTML）
     function mdVideoAt(text, pos) {
         var v = String(text == null ? '' : text);
-        var re = /<video\b[^>]*>(?:[\s\S]*?<\/video>)?/gi;
+        var re = /@\[video\]\(([^)\n]*)\)|<video\b[^>]*>(?:[\s\S]*?<\/video>)?/gi;
         var m;
         while ((m = re.exec(v))) {
             if (pos >= m.index && pos <= m.index + m[0].length) {
-                var sm = m[0].match(/\bsrc\s*=\s*["']([^"']+)["']/i);
+                var url = '';
+                if (m[0].charAt(0) === '@') {
+                    url = m[1] || '';
+                } else {
+                    var sm = m[0].match(/\bsrc\s*=\s*["']([^"']+)["']/i);
+                    url = sm ? sm[1] : '';
+                }
                 return {
                     start: m.index,
                     end: m.index + m[0].length,
-                    url: sm ? sm[1] : ''
+                    url: url
                 };
             }
             if (m.index > pos) break;
@@ -1293,6 +1358,96 @@
     Editor.prototype.afterRichChange = function () {
         this.syncNow();
         this.updateToolbar();
+    };
+
+    /* ---------- 视频原子块：选中 / 剪切 / 删除 ---------- */
+
+    // 当前选区完整覆盖的视频（选区混有文字时返回空，交给浏览器默认处理）
+    Editor.prototype.selectedVideos = function () {
+        var range = this.getRichRange();
+        if (!range || range.collapsed) return [];
+        var videos = [];
+        var all = this.rich.querySelectorAll('video');
+        for (var i = 0; i < all.length; i++) {
+            try {
+                if (range.intersectsNode(all[i])) videos.push(all[i]);
+            } catch (e) { /* 忽略 */ }
+        }
+        if (videos.length && range.toString().replace(/\s/g, '') !== '') return [];
+        return videos;
+    };
+
+    Editor.prototype.removeVideos = function (videos) {
+        if (!videos.length) return;
+        var first = videos[0];
+        var prev = first.previousSibling;
+        var next = first.nextSibling;
+        for (var i = 0; i < videos.length; i++) {
+            if (videos[i].parentNode) videos[i].parentNode.removeChild(videos[i]);
+        }
+        if (next && next.parentNode) {
+            placeCaretAtStart(next);
+        } else if (prev && prev.nodeType === 1) {
+            placeCaretAtEnd(prev);
+        } else if (first.parentNode) {
+            placeCaretAtStart(first.parentNode);
+        }
+        this.afterRichChange();
+    };
+
+    // 复制 / 剪切：把选中的视频序列化为 Markdown 语法写入剪贴板
+    Editor.prototype.handleVideoClipboard = function (e, cut) {
+        var videos = this.selectedVideos();
+        if (!videos.length) return;
+        var md = videos.map(function (v) {
+            return '@[video](' + (v.getAttribute('src') || '') + ')';
+        }).join('\n\n');
+        e.preventDefault();
+        try { e.clipboardData.setData('text/plain', md); } catch (err) { /* 忽略 */ }
+        if (cut) this.removeVideos(videos);
+    };
+
+    // Backspace / Delete：删除整体选中的视频，或在光标紧邻视频时删除该视频
+    Editor.prototype.handleVideoKeydown = function (e) {
+        if (e.key !== 'Backspace' && e.key !== 'Delete') return;
+        var range = this.getRichRange();
+        if (!range) return;
+
+        if (!range.collapsed) {
+            var selected = this.selectedVideos();
+            if (selected.length) {
+                e.preventDefault();
+                this.removeVideos(selected);
+            }
+            return;
+        }
+
+        var block = topLevelChild(this.rich, range.startContainer);
+        if (!block) return;
+
+        if (block.tagName === 'VIDEO') {
+            e.preventDefault();
+            this.removeVideos([block]);
+            return;
+        }
+
+        if (e.key === 'Backspace' && caretAtStart(range, block)) {
+            var prev = block.previousSibling;
+            if (prev && prev.nodeType === 1 && prev.tagName === 'VIDEO') {
+                e.preventDefault();
+                prev.parentNode.removeChild(prev);
+                placeCaretAtStart(block);
+                this.afterRichChange();
+            }
+        } else if (e.key === 'Delete' && caretAtEnd(range, block)) {
+            var next = block.nextSibling;
+            if (next && next.nodeType === 1 && next.tagName === 'VIDEO') {
+                e.preventDefault();
+                next.parentNode.removeChild(next);
+                placeCaretAtEnd(block);
+                this.afterRichChange();
+            }
+        }
     };
 
     Editor.prototype.execRich = function (cmd) {
@@ -1981,7 +2136,7 @@
             del.innerHTML = '<i data-lucide="trash-2"></i>';
             del.addEventListener('click', function (e) {
                 e.stopPropagation();
-                self.deleteVideo(item);
+                self.deleteVideo(item, del);
             });
             row.appendChild(del);
 
@@ -1992,17 +2147,51 @@
     };
 
     Editor.prototype.setVideoQuota = function (data) {
-        if (!this.videoQuotaEl) return;
-        var used = data.used_label;
-        var limit = data.limit_label;
-        this.videoQuotaEl.textContent = used && limit ? ('已用 ' + used + ' / ' + limit) : '';
+        var used = Number(data && data.used_bytes) || 0;
+        var limit = Number(data && data.limit_bytes) || 0;
+        var usedLabel = data && data.used_label;
+        var limitLabel = data && data.limit_label;
+        if (this.videoQuotaText) {
+            this.videoQuotaText.textContent = usedLabel && limitLabel
+                ? ('已用 ' + usedLabel + ' / ' + limitLabel)
+                : '';
+        }
+        if (this.videoQuotaFill) {
+            var pct = limit > 0 ? Math.min(100, used / limit * 100) : 0;
+            this.videoQuotaFill.style.width = pct.toFixed(1) + '%';
+        }
+    };
+
+    // 创建富文本中的视频原子块
+    function createVideoNode(url) {
+        var node = document.createElement('video');
+        node.setAttribute('src', url);
+        node.setAttribute('controls', '');
+        node.setAttribute('preload', 'metadata');
+        node.setAttribute('contenteditable', 'false');
+        return node;
+    }
+
+    // 保证视频前后都有可放置光标的空段落
+    Editor.prototype.ensureVideoRoom = function (node) {
+        if (!node || !node.parentNode) return;
+        var prev = node.previousSibling;
+        var hasPrev = prev && !(prev.nodeType === 3 && !/\S/.test(prev.nodeValue || ''));
+        if (!hasPrev) {
+            var before = document.createElement('p');
+            before.appendChild(document.createElement('br'));
+            node.parentNode.insertBefore(before, node);
+        }
+        if (!node.nextSibling) {
+            var after = document.createElement('p');
+            after.appendChild(document.createElement('br'));
+            node.parentNode.insertBefore(after, node.nextSibling);
+        }
     };
 
     // 把视频插入正文（已有视频时替换其地址，实现「更换视频」）
     Editor.prototype.insertVideoUrl = function (url) {
         if (!url) return;
-        var safe = escapeHtml(url);
-        var block = '<video src="' + safe + '" controls preload="metadata"></video>';
 
         if (this.mode === 'rich') {
             this.rich.focus();
@@ -2010,6 +2199,7 @@
                 this.videoAnchor.setAttribute('src', url);
                 this.videoAnchor.setAttribute('controls', '');
                 this.videoAnchor.setAttribute('preload', 'metadata');
+                this.videoAnchor.setAttribute('contenteditable', 'false');
             } else {
                 if (this.savedRange) {
                     try {
@@ -2018,15 +2208,14 @@
                         sel.addRange(this.savedRange);
                     } catch (e) { /* 忽略 */ }
                 }
-                var node = document.createElement('video');
-                node.setAttribute('src', url);
-                node.setAttribute('controls', '');
-                node.setAttribute('preload', 'metadata');
+                var node = createVideoNode(url);
                 this.insertBlock(node);
+                this.ensureVideoRoom(node);
             }
             this.savedRange = null;
             this.afterRichChange();
         } else {
+            var block = '@[video](' + url + ')';
             var mv = this.mdVideo;
             var ta = this.textarea;
             if (mv) {
@@ -2044,7 +2233,7 @@
         this.updateToolbar();
     };
 
-    // 上传视频到当前指南（新建时先落到草稿目录，提交时自动迁移）
+    // 上传视频到当前指南（带进度条）
     Editor.prototype.uploadVideo = function () {
         var self = this;
         var file = this.videoFile && this.videoFile.files && this.videoFile.files[0];
@@ -2055,43 +2244,80 @@
 
         var btn = this.root.querySelector('.mre-video-upload-btn');
         if (btn) btn.classList.add('is-loading');
-        fetch(this.videoUploadUrl, {
-            method: 'POST', body: form, credentials: 'same-origin',
-            headers: { 'Accept': 'application/json' }
-        })
-            .then(function (res) { return res.json().catch(function () { return {}; }); })
-            .then(function (data) {
-                if (btn) btn.classList.remove('is-loading');
-                if (self.videoFile) self.videoFile.value = '';
-                if (!data || data.success === false) {
-                    toast((data && data.message) || '视频上传失败', 'error');
-                    return;
-                }
+
+        var setProgress = function (loaded, total) {
+            var pct = total > 0 ? Math.min(100, loaded / total * 100) : 0;
+            if (self.videoProgressFill) self.videoProgressFill.style.width = pct.toFixed(1) + '%';
+            if (self.videoProgressText) self.videoProgressText.textContent = Math.round(pct) + '%';
+        };
+        var finish = function (keep) {
+            if (btn) btn.classList.remove('is-loading');
+            if (self.videoFile) self.videoFile.value = '';
+            if (!keep && self.videoProgressEl) self.videoProgressEl.hidden = true;
+        };
+
+        if (this.videoProgressEl) this.videoProgressEl.hidden = false;
+        setProgress(0, file.size);
+
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', this.videoUploadUrl, true);
+        xhr.withCredentials = true;
+        xhr.setRequestHeader('Accept', 'application/json');
+        xhr.upload.onprogress = function (e) {
+            if (e.lengthComputable) setProgress(e.loaded, e.total);
+        };
+        xhr.onload = function () {
+            var data = {};
+            try { data = JSON.parse(xhr.responseText || '{}'); } catch (e) { /* 忽略 */ }
+            var ok = xhr.status >= 200 && xhr.status < 300 && data && data.success !== false;
+            if (ok) {
+                setProgress(file.size, file.size);
+                finish(true);
+                setTimeout(function () {
+                    if (self.videoProgressEl) self.videoProgressEl.hidden = true;
+                }, 400);
                 toast('视频已上传', 'success');
                 self.loadVideoList();
-            })
-            .catch(function () {
-                if (btn) btn.classList.remove('is-loading');
-                if (self.videoFile) self.videoFile.value = '';
-                toast('视频上传失败，请稍后重试', 'error');
-            });
+            } else {
+                finish(false);
+                toast((data && data.message) || '视频上传失败', 'error');
+            }
+        };
+        xhr.onerror = function () {
+            finish(false);
+            toast('视频上传失败，请稍后重试', 'error');
+        };
+        xhr.send(form);
     };
 
     // 删除视频文件（正文中的引用不会自动移除）
-    Editor.prototype.deleteVideo = function (item) {
+    Editor.prototype.deleteVideo = function (item, trigger) {
         var self = this;
         if (!item || !item.delete_url) return;
-        if (typeof window.confirm === 'function' && !window.confirm('删除视频「' + (item.name || '') + '」？正文中的引用需要手动删除。')) return;
-        fetch(item.delete_url, { method: 'POST', credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
-            .then(function (res) { return res.json().catch(function () { return {}; }); })
-            .then(function (data) {
-                if (!data || data.success === false) {
-                    toast((data && data.message) || '删除失败', 'error');
-                    return;
-                }
-                self.loadVideoList();
-            })
-            .catch(function () { toast('删除失败，请稍后重试', 'error'); });
+
+        var doDelete = function () {
+            fetch(item.delete_url, { method: 'POST', credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+                .then(function (res) { return res.json().catch(function () { return {}; }); })
+                .then(function (data) {
+                    if (!data || data.success === false) {
+                        toast((data && data.message) || '删除失败', 'error');
+                        return;
+                    }
+                    self.loadVideoList();
+                })
+                .catch(function () { toast('删除失败，请稍后重试', 'error'); });
+        };
+
+        if (window.CustomModal && typeof window.CustomModal.confirm === 'function') {
+            window.CustomModal.confirm('删除视频「' + (item.name || '') + '」？正文中的引用需要手动删除。', {
+                title: '删除视频',
+                type: 'warning',
+                confirmText: '删除',
+                trigger: trigger || null
+            }).then(function (ok) { if (ok) doDelete(); });
+        } else {
+            doDelete();
+        }
     };
 
     /* ---------- Markdown 源码模式命令 ---------- */

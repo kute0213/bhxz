@@ -83,9 +83,7 @@ def _render_guide_page(my_mode, keyword):
 
 @guides_bp.route('/guides')
 def guide_list():
-    """公开指南列表页（已审核通过的指南；?my=1 兼容旧链接跳转 /guides/my）。"""
-    if get_current_user() and request.args.get('my'):
-        return redirect(url_for('guides.my_guides_page'))
+    """公开指南列表页（展示已审核通过的指南）。"""
     keyword = (request.args.get('q') or '').strip()[:60]
     return _render_guide_page(False, keyword)
 

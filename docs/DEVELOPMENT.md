@@ -695,10 +695,13 @@ python scripts/migrate_guides.py             # 正式迁移
 
 * 每个指南一个目录 `uploads/guides/<ID>/`，内含 `guide.md`（唯一正文来源）与 `assets/`（视频等资源）
 * 新建指南时即生成指南 ID 与目录（正文为空），状态为 `draft`；点击「新建指南」直接创建标题为「未命名指南」的草稿，标题 / 摘要 / 正文再在编辑页修改。之后直接写入正文与 `assets/`，不再使用 `_drafts` token 机制
-* 「我的指南」为独立页面 `/guides/my`（需登录）；旧的 `/guides?my=1` 会 302 跳转到该页面
+* 「我的指南」为独立页面 `/guides/my`（需登录）
 * 草稿保存保持 `draft` 且无需验证码；「发布」（`POST /api/guides/<id>/publish`）将草稿改为 `pending`，要求正文非空
 * 草稿计入「未通过指南数量」（统计条件 `status != 'approved'`），超过上限时禁止新建
 * 每个指南 `assets/` 合计不超过 50MB（`GUIDE_RESOURCE_MAX_BYTES`），视频扩展名见 `GUIDE_VIDEO_EXTENSIONS`
+* 视频在 Markdown 中统一存为 `@[video](url)`（marked 块级扩展），编辑器 / 详情页 / 管理后台预览负责渲染为 `<video>`；同时兼容历史 `<video>` HTML
+* 编辑器视频上传使用 XHR（`upload.onprogress`）驱动进度条；上传配额与删除确认均使用站内控件 / `CustomModal`，不使用原生 file 控件或 `window.confirm`
+* 富文本中的视频为 `contenteditable="false"` 原子块：插入于光标之后，前后保证有空段落，支持整体选中复制 / 剪切 / 删除
 * 删除指南（管理员删除 / 被驳回超时清理）时必须调用 `guide_store.delete_guide_dir(id)`，避免残留目录
 * `uploads/guides/_drafts/` 仅用于自动维护时清理历史残留
 

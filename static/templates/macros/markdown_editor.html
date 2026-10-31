@@ -16,7 +16,7 @@
    并在页面末尾引入共享脚本（缺一不可）：
        <script src="{{ url_for('static', filename='lib/marked/marked.min.js', v='1') }}"></script>
        <script src="{{ url_for('static', filename='lib/purify/purify.min.js', v='1') }}"></script>
-       <script src="{{ url_for('static', filename='js/pages/markdown-editor.js', v='7') }}"></script>
+       <script src="{{ url_for('static', filename='js/pages/markdown-editor.js', v='8') }}"></script>
 
    可选参数：
        name          - 表单提交字段名（textarea 的 name）
@@ -29,6 +29,9 @@
        extra_attrs   - 添加到 textarea 的额外属性（如 required）
        video_list_url  - 视频列表 API（传入后才显示「视频」标签页与上传按钮）
        video_upload_url - 视频上传 API
+#
+#   视频以 Markdown 语法 `@[video](url)` 保存（不再写入原始 HTML），由 marked 块级扩展渲染；
+#   富文本中的视频为原子块，插入于光标之后，支持前后放置光标、整体选中复制 / 剪切 / 删除。
 #
 #   说明：工具栏中的「链接」「表格」「视频」三个标签页是上下文标签页——
 #   只有当光标/选区位于链接内、表格内、视频内（或刚点击了「插入链接 / 视频」）时才会出现，
@@ -362,9 +365,71 @@ body.mre-resizing, body.mre-resizing * { cursor: col-resize !important; user-sel
 }
 .mre-video-quota {
     margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
     font-size: 0.72rem;
     color: var(--text-muted);
 }
+.mre-video-quota-text { white-space: nowrap; }
+.mre-video-quota-track {
+    display: inline-block;
+    width: 5.5rem;
+    height: 0.32rem;
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.08);
+    overflow: hidden;
+}
+.mre-video-quota-fill {
+    display: block;
+    width: 0;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, var(--accent-blue), var(--accent-indigo));
+    transition: width 0.25s ease;
+}
+.mre-video-progress {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.mre-video-progress-track {
+    flex: 1;
+    height: 0.42rem;
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.08);
+    overflow: hidden;
+}
+.mre-video-progress-fill {
+    display: block;
+    width: 0;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, var(--accent-blue), var(--accent-indigo));
+    transition: width 0.15s ease;
+}
+.mre-video-progress-text {
+    min-width: 3rem;
+    text-align: right;
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+}
+.mre-video-upload-btn.is-loading {
+    opacity: 0.55;
+    pointer-events: none;
+}
+/* 富文本中的视频：作为原子块，可前后放置光标 / 整体选中剪切 */
+.mre-rich video {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    margin: 0.4rem 0;
+    border-radius: 0.5rem;
+    background: #0b1220;
+    outline: 2px solid transparent;
+}
+.mre-rich video:hover { outline-color: rgba(2, 132, 199, 0.35); }
 .mre-video-list {
     display: flex;
     flex-wrap: wrap;
@@ -513,7 +578,14 @@ body.mre-resizing, body.mre-resizing * { cursor: col-resize !important; user-sel
                            data-mre-video-file hidden>
                 </label>
                 <button type="button" class="mre-btn" data-mre-video-refresh><i data-lucide="refresh-cw"></i>刷新</button>
-                <span class="mre-video-quota" data-mre-video-quota></span>
+                <span class="mre-video-quota" data-mre-video-quota>
+                    <span class="mre-video-quota-text" data-mre-video-quota-text></span>
+                    <span class="mre-video-quota-track"><span class="mre-video-quota-fill" data-mre-video-quota-fill></span></span>
+                </span>
+            </div>
+            <div class="mre-video-progress" data-mre-video-progress hidden>
+                <span class="mre-video-progress-track"><span class="mre-video-progress-fill" data-mre-video-progress-fill></span></span>
+                <span class="mre-video-progress-text" data-mre-video-progress-text>0%</span>
             </div>
             <div class="mre-video-list" data-mre-video-list></div>
             <p class="mre-video-empty" data-mre-video-empty>暂无视频，点击「上传视频」添加（每个指南全部资源合计最多 50MB）</p>

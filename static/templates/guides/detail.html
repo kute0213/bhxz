@@ -109,6 +109,24 @@
             }
         };
         marked.use({ renderer });
+        // 指南视频语法 @[video](url) → <video>
+        marked.use({
+            extensions: [{
+                name: 'guideVideoBlock',
+                level: 'block',
+                tokenizer(src) {
+                    const m = /^@\[video\]\(([^)\n]+)\)\s*(?:\n|$)/.exec(src);
+                    if (!m) return undefined;
+                    return { type: 'guideVideoBlock', raw: m[0], url: m[1] };
+                },
+                renderer(token) {
+                    const url = String(token.url)
+                        .replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+                        .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    return `<video src="${url}" controls preload="metadata" playsinline></video>\n`;
+                }
+            }]
+        });
         el.innerHTML = DOMPurify.sanitize(marked.parse(raw), {
             ADD_TAGS: ['video', 'source'],
             ADD_ATTR: ['controls', 'preload', 'poster', 'playsinline', 'muted', 'loop', 'src']

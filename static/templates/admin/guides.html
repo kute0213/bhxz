@@ -213,6 +213,27 @@ function rejectFromPreview() {
 // 注意：必须放在 page_modals 之后执行（extra_script 渲染顺序在 page_modals 之后），
 // 否则弹窗 DOM 尚未生成，getElementById 取到 null 会中断后续监听注册。
 (function () {
+    // 指南视频语法 @[video](url) → <video>（预览与详情页保持一致）
+    if (window.marked && marked.use) {
+        marked.use({
+            extensions: [{
+                name: 'guideVideoBlock',
+                level: 'block',
+                tokenizer: function (src) {
+                    var m = /^@\[video\]\(([^)\n]+)\)\s*(?:\n|$)/.exec(src);
+                    if (!m) return undefined;
+                    return { type: 'guideVideoBlock', raw: m[0], url: m[1] };
+                },
+                renderer: function (token) {
+                    var url = String(token.url)
+                        .replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+                        .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                    return '<video src="' + url + '" controls preload="metadata" playsinline></video>\n';
+                }
+            }]
+        });
+    }
+
     var rejectBtn = document.getElementById('rejectConfirmBtn');
     if (rejectBtn) {
         // 捕获阶段先写入拒绝原因，再交由通用 admin-action 处理器提交
