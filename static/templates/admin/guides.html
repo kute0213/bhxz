@@ -152,7 +152,10 @@ function showPreviewModal(btn) {
     if (!data) return;
     document.getElementById('preview-title').textContent = data.title;
     document.getElementById('preview-content').innerHTML = data.content
-        ? DOMPurify.sanitize(marked.parse(data.content))
+        ? DOMPurify.sanitize(marked.parse(data.content), {
+            ADD_TAGS: ['video', 'source'],
+            ADD_ATTR: ['controls', 'preload', 'poster', 'playsinline', 'muted', 'loop', 'src']
+        })
         : '<p class="text-[var(--text-tertiary)] text-center py-8">暂无内容</p>';
     document.getElementById('previewApproveBtn').setAttribute('data-action-url', '/admin/guides/' + _previewGuideId + '/approve');
     openModal('preview-modal');

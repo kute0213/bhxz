@@ -12,6 +12,8 @@ UPLOAD_DIR = os.path.join(APP_ROOT, 'uploads')
 UPLOAD_SITEMAP_DIR = os.path.join(UPLOAD_DIR, 'sitemap')
 UPLOAD_MUSIC_DIR = os.path.join(UPLOAD_DIR, 'music')
 UPLOAD_BACKGROUNDS_DIR = os.path.join(UPLOAD_DIR, 'backgrounds')
+# 服务器指南目录：uploads/guides/<指南ID>/guide.md + assets/（指南资源，如视频）
+UPLOAD_GUIDES_DIR = os.path.join(UPLOAD_DIR, 'guides')
 
 # 大喇叭音频：允许上传的音频格式（上传后由 ffmpeg 转码为 HLS/m3u8）
 MUSIC_ALLOWED_EXTENSIONS = {'mp3', 'wav', 'ogg', 'm4a', 'flac', 'mp4'}
@@ -19,6 +21,19 @@ MAX_CONTENT_LENGTH = 100 * 1024 * 1024
 
 # 音频上传大小限制（字节），默认 100MB
 AUDIO_MAX_BYTES = 100 * 1024 * 1024
+
+# ---------------------------------------------------------------------------
+# 服务器指南资源（视频等）
+# ---------------------------------------------------------------------------
+
+# 每个指南的全部资源（assets/ 目录内所有文件）合计上限，默认 50MB
+GUIDE_RESOURCE_MAX_BYTES = 50 * 1024 * 1024
+
+# 指南允许上传的视频格式
+GUIDE_VIDEO_EXTENSIONS = {'mp4', 'webm', 'ogv', 'ogg', 'mov', 'm4v'}
+
+# 新建指南时先上传的草稿资源保留时长（小时），超时由清理服务删除
+GUIDE_DRAFT_KEEP_HOURS = 24
 
 # 大喇叭音频：ffmpeg / ffprobe 可执行文件位置
 # Windows：使用 uploads/ffmpeg/ 下的 ffmpeg.exe / ffprobe.exe
@@ -276,6 +291,7 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(UPLOAD_SITEMAP_DIR, exist_ok=True)
 os.makedirs(UPLOAD_MUSIC_DIR, exist_ok=True)
 os.makedirs(UPLOAD_BACKGROUNDS_DIR, exist_ok=True)
+os.makedirs(UPLOAD_GUIDES_DIR, exist_ok=True)
 os.makedirs(UPLOADS_BACKUP_DIR, exist_ok=True)
 # 注：自定义备份目录（相对/绝对）在运行时由 services/backup/manager 首次使用时创建，
 # 不在导入期调用 get_config_value（其定义位于本文件末尾，避免导入期 NameError）。

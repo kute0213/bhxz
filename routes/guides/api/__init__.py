@@ -3,15 +3,52 @@
 import re
 from datetime import datetime
 
-from flask import request, jsonify
+from flask import request, jsonify, session, url_for
 
 from core.auth import login_required, get_current_user
 from core.db import get_db
 from core.shared.snowflake import next_id
 from core.shared.captcha import captcha_service
-from config import get_page_size
+from config import (
+    get_page_size,
+    GUIDE_RESOURCE_MAX_BYTES,
+    GUIDE_VIDEO_EXTENSIONS,
+)
 from services.mail import email_service, guide_review_pending as build_pending_html
+from services.firewall.protection.file_guard import check_upload, KIND_AUDIO
+from services import guides as guide_store
 from routes.guides import guides_bp
+
+
+# ---------------------------------------------------------------------------
+# 新建指南草稿 token（视频等资源在指南创建前先上传）
+# ---------------------------------------------------------------------------
+
+DRAFT_TOKEN_SESSION_KEY = 'guide_draft_tokens'
+DRAFT_TOKEN_LIMIT = 5
+
+
+def issue_guide_draft_token():
+    """为新指南编辑页签发草稿 token（保存在 session，最多保留 5 个）。"""
+    tokens = list(session.get(DRAFT_TOKEN_SESSION_KEY) or [])
+    token = guide_store.new_draft_token()
+    tokens.append(token)
+    session[DRAFT_TOKEN_SESSION_KEY] = tokens[-DRAFT_TOKEN_LIMIT:]
+    return token
+
+
+def is_valid_guide_draft_token(token):
+    return bool(token) and token in (session.get(DRAFT_TOKEN_SESSION_KEY) or [])
+
+
+def consume_guide_draft_token(token):
+    """提交指南后移除已使用的草稿 token。"""
+    tokens = list(session.get(DRAFT_TOKEN_SESSION_KEY) or [])
+    if token in tokens:
+        tokens.remove(token)
+        session[DRAFT_TOKEN_SESSION_KEY] = tokens
+    return True
+
 
 
 def _is_banned(user_id, ip_address):
@@ -278,6 +315,199 @@ def toggle_guide_favorite(guide_id):
         'success': True,
         'is_favorited': is_favorited,
         'favorite_count': favorite_count,
+    })
+
+
+# ---------------------------------------------------------------------------
+# 指南资源（视频）
+# ---------------------------------------------------------------------------
+
+def _guide_exists(guide_id):
+    conn = get_db()
+    try:
+        row = conn.execute(
+            "SELECT id FROM server_guides WHERE id = ?", (guide_id,)
+        ).fetchone()
+        return bool(row)
+    finally:
+        conn.close()
+
+
+def _video_payload(guide_id, item):
+    """给资源条目补充访问 / 删除 URL。"""
+    return {
+        'name': item['name'],
+        'size': item['size'],
+        'size_label': item['size_label'],
+        'url': url_for('guides.guide_asset', guide_id=guide_id, filename=item['name']),
+        'delete_url': url_for('guides.api_guide_video_delete',
+                              guide_id=guide_id, filename=item['name']),
+    }
+
+
+def _draft_video_payload(token, item):
+    return {
+        'name': item['name'],
+        'size': item['size'],
+        'size_label': item['size_label'],
+        'url': url_for('guides.guide_draft_asset', token=token, filename=item['name']),
+        'delete_url': url_for('guides.api_guide_draft_video_delete',
+                              token=token, filename=item['name']),
+    }
+
+
+def _get_video_upload():
+    return request.files.get('video') or request.files.get('file')
+
+
+@guides_bp.route('/api/guides/<int:guide_id>/videos', methods=['GET'])
+@login_required
+def api_guide_videos(guide_id):
+    """指南视频列表（编辑指南时用于「视频」标签页）。"""
+    if not _guide_exists(guide_id):
+        return jsonify({'success': False, 'message': '指南不存在'}), 404
+    items = [_video_payload(guide_id, i) for i in guide_store.list_assets(
+        guide_store.assets_dir_for(guide_id))]
+    return jsonify({
+        'success': True,
+        'items': items,
+        'used_bytes': guide_store.guide_total(guide_id),
+        'limit_bytes': GUIDE_RESOURCE_MAX_BYTES,
+        'limit_label': guide_store.format_size(GUIDE_RESOURCE_MAX_BYTES),
+        'used_label': guide_store.format_size(guide_store.guide_total(guide_id)),
+    })
+
+
+@guides_bp.route('/api/guides/<int:guide_id>/videos', methods=['POST'])
+@login_required
+def api_guide_video_upload(guide_id):
+    """上传指南视频资源（每个指南 assets 目录合计不超过 50MB）。"""
+    if not _guide_exists(guide_id):
+        return jsonify({'success': False, 'message': '指南不存在'}), 404
+
+    upload = _get_video_upload()
+    ok, msg = check_upload(
+        upload, KIND_AUDIO,
+        max_bytes=GUIDE_RESOURCE_MAX_BYTES,
+        allowed_extensions=GUIDE_VIDEO_EXTENSIONS,
+        source='guide_video',
+    )
+    if not ok:
+        return jsonify({'success': False, 'message': msg}), 400
+
+    ok, msg, item = guide_store.save_guide_asset(guide_id, upload)
+    if not ok:
+        return jsonify({'success': False, 'message': msg}), 400
+
+    used = guide_store.guide_total(guide_id)
+    return jsonify({
+        'success': True,
+        'message': '视频已上传',
+        'item': _video_payload(guide_id, item),
+        'used_bytes': used,
+        'limit_bytes': GUIDE_RESOURCE_MAX_BYTES,
+        'limit_label': guide_store.format_size(GUIDE_RESOURCE_MAX_BYTES),
+        'used_label': guide_store.format_size(used),
+    })
+
+
+@guides_bp.route('/api/guides/<int:guide_id>/videos/<path:filename>/delete', methods=['POST'])
+@login_required
+def api_guide_video_delete(guide_id, filename):
+    """删除指南视频资源。"""
+    if not _guide_exists(guide_id):
+        return jsonify({'success': False, 'message': '指南不存在'}), 404
+    removed = guide_store.delete_asset(
+        guide_store.assets_dir_for(guide_id), filename)
+    if not removed:
+        return jsonify({'success': False, 'message': '视频不存在'}), 404
+    used = guide_store.guide_total(guide_id)
+    return jsonify({
+        'success': True,
+        'message': '视频已删除',
+        'used_bytes': used,
+        'limit_bytes': GUIDE_RESOURCE_MAX_BYTES,
+        'limit_label': guide_store.format_size(GUIDE_RESOURCE_MAX_BYTES),
+        'used_label': guide_store.format_size(used),
+    })
+
+
+# ---------------------------------------------------------------------------
+# 新建指南草稿视频（指南尚未创建时先上传）
+# ---------------------------------------------------------------------------
+
+@guides_bp.route('/api/guides/draft/videos', methods=['GET'])
+@login_required
+def api_guide_draft_videos():
+    """草稿视频列表（新建指南页使用）。"""
+    token = (request.args.get('token') or '').strip()
+    if not is_valid_guide_draft_token(token):
+        return jsonify({'success': False, 'message': '草稿已失效，请刷新页面重试'}), 403
+    items = [_draft_video_payload(token, i) for i in guide_store.list_draft_assets(token)]
+    used = guide_store.draft_total(token)
+    return jsonify({
+        'success': True,
+        'items': items,
+        'used_bytes': used,
+        'limit_bytes': GUIDE_RESOURCE_MAX_BYTES,
+        'limit_label': guide_store.format_size(GUIDE_RESOURCE_MAX_BYTES),
+        'used_label': guide_store.format_size(used),
+    })
+
+
+@guides_bp.route('/api/guides/draft/videos', methods=['POST'])
+@login_required
+def api_guide_draft_video_upload():
+    """上传草稿视频（提交指南时自动迁移到指南目录）。"""
+    token = (request.form.get('token') or request.args.get('token') or '').strip()
+    if not is_valid_guide_draft_token(token):
+        return jsonify({'success': False, 'message': '草稿已失效，请刷新页面重试'}), 403
+
+    upload = _get_video_upload()
+    ok, msg = check_upload(
+        upload, KIND_AUDIO,
+        max_bytes=GUIDE_RESOURCE_MAX_BYTES,
+        allowed_extensions=GUIDE_VIDEO_EXTENSIONS,
+        source='guide_draft_video',
+    )
+    if not ok:
+        return jsonify({'success': False, 'message': msg}), 400
+
+    ok, msg, item = guide_store.save_draft_asset(token, upload)
+    if not ok:
+        return jsonify({'success': False, 'message': msg}), 400
+
+    used = guide_store.draft_total(token)
+    return jsonify({
+        'success': True,
+        'message': '视频已上传',
+        'item': _draft_video_payload(token, item),
+        'used_bytes': used,
+        'limit_bytes': GUIDE_RESOURCE_MAX_BYTES,
+        'limit_label': guide_store.format_size(GUIDE_RESOURCE_MAX_BYTES),
+        'used_label': guide_store.format_size(used),
+    })
+
+
+@guides_bp.route('/api/guides/draft/videos/<path:filename>/delete', methods=['POST'])
+@login_required
+def api_guide_draft_video_delete(filename):
+    """删除草稿视频。"""
+    token = (request.args.get('token') or
+             (request.get_json(silent=True) or {}).get('token') or '').strip()
+    if not is_valid_guide_draft_token(token):
+        return jsonify({'success': False, 'message': '草稿已失效，请刷新页面重试'}), 403
+    removed = guide_store.delete_draft_asset(token, filename)
+    if not removed:
+        return jsonify({'success': False, 'message': '视频不存在'}), 404
+    used = guide_store.draft_total(token)
+    return jsonify({
+        'success': True,
+        'message': '视频已删除',
+        'used_bytes': used,
+        'limit_bytes': GUIDE_RESOURCE_MAX_BYTES,
+        'limit_label': guide_store.format_size(GUIDE_RESOURCE_MAX_BYTES),
+        'used_label': guide_store.format_size(used),
     })
 
 

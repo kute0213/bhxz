@@ -52,8 +52,17 @@
 
             <div>
                 <label class="block text-sm text-cream/70 mb-2">内容（Markdown）</label>
-                {{ markdown_editor(name='content', value=guide.content if guide else '', placeholder='在此输入 Markdown 内容...') }}
+                {{ markdown_editor(
+                    name='content',
+                    value=guide.content if guide else '',
+                    placeholder='在此输入 Markdown 内容...',
+                    video_list_url=video_list_url|default(''),
+                    video_upload_url=video_upload_url|default(''),
+                    video_token=video_token|default('')
+                ) }}
             </div>
+
+            {% if draft_token %}<input type="hidden" name="draft_token" value="{{ draft_token }}">{% endif %}
 
             <div class="flex items-center justify-end gap-3 pt-4">
                 <a href="{{ url_for('admin.admin_guides') }}" class="btn-secondary px-5 py-2.5 rounded-lg text-sm">取消</a>
@@ -65,7 +74,7 @@
 
 <script src="{{ url_for('static', filename='lib/purify/purify.min.js', v='1') }}"></script>
 <script src="{{ url_for('static', filename='lib/marked/marked.min.js', v='1') }}"></script>
-<script src="{{ url_for('static', filename='js/pages/markdown-editor.js', v='6') }}"></script>
+<script src="{{ url_for('static', filename='js/pages/markdown-editor.js', v='7') }}"></script>
 <script>
 // 指南创建/编辑：JSON 提交，无需刷新页面
 (function () {
@@ -80,7 +89,8 @@
             content: form.querySelector('[name="content"]').value.trim(),
             cover_image: form.querySelector('[name="cover_image"]').value.trim(),
             status: form.querySelector('[name="status"]').value,
-            is_pinned: form.querySelector('[name="is_pinned"]').value
+            is_pinned: form.querySelector('[name="is_pinned"]').value,
+            draft_token: (form.querySelector('[name="draft_token"]') || {}).value || ''
         };
         if (!payload.title || !payload.content) {
             if (typeof Toast !== 'undefined') Toast.error('标题和内容不能为空');

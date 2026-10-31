@@ -4,6 +4,20 @@
 
 ### 变更
 
+* **服务器指南改为「一个指南一个文件夹」+ 视频资源支持**（`config.py`、`services/guides/__init__.py`、`routes/guides/{pages,api}/__init__.py`、`routes/admin/guides/__init__.py`、`services/cleanup_service/__init__.py`、`core/system/startup_checks.py`、`scripts/migrate_guides.py`、`scripts/tests/test_guide_storage.py`）：
+  * 新结构：`uploads/guides/<指南ID>/guide.md`（唯一正文来源）+ `assets/`（视频等资源）；数据库 `server_guides.content` 只保存空串，读取时文件优先、文件缺失回退数据库旧内容，因此迁移脚本未执行前站点仍可正常显示。
+  * 新增 `services/guides` 存储服务：原子写正文、安全文件名（保留中文）、资源列表 / 配额 / 保存 / 删除、草稿上传与迁移、过期草稿清理；整站指南资源统一按 **每个指南 50MB** 校验（`GUIDE_RESOURCE_MAX_BYTES`），视频格式 `mp4/webm/ogv/ogg/mov/m4v`。
+  * 新建指南的视频先上传到 `uploads/guides/_drafts/<token>/assets/`（token 存于会话，最多 5 个，24 小时自动清理），提交时自动迁移到正式目录并把正文中的 `/guides/drafts/<token>/` 重写为 `/guides/<ID>/assets/`，避免「尚无指南 ID」的资源路径问题。
+  * 新增资源路由：`/guides/<ID>/assets/<文件名>`（已通过指南公开、否则仅作者 / 管理员）、`/guides/drafts/<token>/<文件名>`（仅当前会话）；新增 API：`GET/POST /api/guides/<id>/videos`、`POST /api/guides/<id>/videos/<文件名>/delete` 及对应 `draft/videos` 三个端点。
+  * 删除指南（管理员删除、被驳回超时清理）会同步删除 `uploads/guides/<ID>/` 整个目录。
+  * 迁移脚本 `scripts/migrate_guides.py`：把数据库正文写入 `guide.md` 并清空数据库正文，支持 `--dry-run` / `--overwrite`，幂等可重复执行。
+  * 新增测试 `scripts/tests/test_guide_storage.py` 覆盖正文读写回退、目录删除、资源配额、草稿迁移 / URL 重写、过期草稿清理等，`python -m pytest scripts/tests -q` 244 项通过。
+
+* **Markdown 可视化编辑器新增「视频」标签页**（`static/templates/macros/markdown_editor.html`、`static/js/pages/markdown-editor.js`、`static/templates/guides/{form,detail}.html`、`static/templates/admin/{guide_form,guides}.html`）：
+  * 与「链接」标签页一致的上下文机制：点击正文中的视频、或点击「插入」页的「视频」按钮时才显示并切换到「视频」标签页，离开上下文后自动隐藏。
+  * 视频标签页内提供上传按钮、完整视频列表（点击列表项插入正文；已有视频选区时点击其它项即一键更换 `src`）、配额显示（已用 / 上限）与单文件删除，全部经无刷新 fetch 调用。
+  * 视频以原始 HTML `<video src="..." controls preload="metadata"></video>` 写入 Markdown，序列化 / 反序列化往返不丢失；详情页与管理后台预览的 DOMPurify 放开 `video` / `source` 与必要属性，并补充视频展示样式。
+
 * **音频与账户设置操作全部改为无刷新 API**（`routes/main/music/__init__.py`、`routes/main/settings/__init__.py`、`routes/main/media/__init__.py`、`static/templates/music/my.html`、`static/js/pages/music_my.js`、`static/templates/settings/index.html`）：
   * 「我的音频」的申请公开 / 转为私有 / 删除不再整页提交刷新，新增 `POST /api/music/<id>/toggle` 与 `POST /api/music/<id>/delete`，返回 JSON；按钮统一走 `.admin-action`，通过 `admin:action` 事件局部更新状态徽章、审核等待提示与按钮文案，删除后即时刷新空状态。
   * 账户设置页的头像上传 / 恢复默认、修改用户名 / 密码 / 邮箱、注销账号全部改为 fetch 提交：新增 `POST /api/settings/{username,password,email,delete,avatar,avatar/delete}`，成功后直接更新页面头像、当前用户名 / 邮箱，注销成功后再跳转首页；失败以 Toast 提示，不再整页刷新。

@@ -22,7 +22,8 @@
         P: 1, DIV: 1, H1: 1, H2: 1, H3: 1, H4: 1, H5: 1, H6: 1,
         UL: 1, OL: 1, BLOCKQUOTE: 1, PRE: 1, TABLE: 1, HR: 1,
         SECTION: 1, ARTICLE: 1, HEADER: 1, FOOTER: 1, MAIN: 1,
-        ASIDE: 1, NAV: 1, FIGURE: 1, ADDRESS: 1, DL: 1, DT: 1, DD: 1
+        ASIDE: 1, NAV: 1, FIGURE: 1, ADDRESS: 1, DL: 1, DT: 1, DD: 1,
+        VIDEO: 1
     };
 
     // 原样保留为内联 HTML 的标签（Markdown 不支持的常见内联语义）
@@ -386,6 +387,20 @@
         return lines.join('\n');
     }
 
+    // 视频以原始 HTML 写入 Markdown，保证保存后仍可播放
+    function serializeVideo(el) {
+        var src = el.getAttribute('src') || '';
+        if (!src) {
+            var source = el.querySelector('source');
+            src = source ? (source.getAttribute('src') || '') : '';
+        }
+        if (!src) return '';
+        var attrs = ' src="' + escapeHtml(src) + '" controls preload="metadata"';
+        var poster = el.getAttribute('poster');
+        if (poster) attrs += ' poster="' + escapeHtml(poster) + '"';
+        return '<video' + attrs + '></video>';
+    }
+
     function serializeBlock(el, ctx) {
         switch (el.tagName) {
             case 'H1': case 'H2': case 'H3': case 'H4': case 'H5': case 'H6':
@@ -402,6 +417,8 @@
                 return '---';
             case 'TABLE':
                 return serializeTable(el);
+            case 'VIDEO':
+                return serializeVideo(el);
             default: {
                 var arr = [];
                 serializeBlocks(el, arr, ctx);
@@ -460,8 +477,10 @@
         if (typeof window.DOMPurify === 'undefined') return html;
         try {
             return window.DOMPurify.sanitize(html, {
-                ADD_TAGS: ['col', 'colgroup'],
-                ADD_ATTR: ['align', 'colspan', 'rowspan', 'start', 'type', 'checked', 'disabled', 'target', 'rel'],
+                ADD_TAGS: ['col', 'colgroup', 'video', 'source'],
+                ADD_ATTR: ['align', 'colspan', 'rowspan', 'start', 'type', 'checked', 'disabled',
+                           'target', 'rel', 'controls', 'preload', 'poster', 'playsinline',
+                           'muted', 'loop', 'src'],
                 ALLOW_DATA_ATTR: true
             });
         } catch (e) {
@@ -634,12 +653,26 @@
         this.activeTable = null;
         this.savedRange = null;
         this.syncTimer = null;
-        // 上下文：光标是否在链接 / 表格中
+        // 上下文：光标是否在链接 / 表格 / 视频中
         this.linkAnchor = null;
         this.mdLink = null;
         this.tableEl = null;
+        this.videoAnchor = null;
+        this.mdVideo = null;
         // 「插入链接」按钮点击后固定显示链接标签页（即使光标不在链接中）
         this.linkPinned = false;
+        // 「插入视频」按钮点击后固定显示视频标签页
+        this.videoPinned = false;
+        // 视频资源（仅传入 video_list_url 时启用）
+        this.videoListUrl = root.getAttribute('data-mre-video-list') || '';
+        this.videoUploadUrl = root.getAttribute('data-mre-video-upload') || '';
+        this.videoToken = root.getAttribute('data-mre-video-token') || '';
+        this.videoListEl = root.querySelector('[data-mre-video-list]');
+        this.videoQuotaEl = root.querySelector('[data-mre-video-quota]');
+        this.videoEmptyEl = root.querySelector('[data-mre-video-empty]');
+        this.videoFile = root.querySelector('[data-mre-video-file]');
+        this.videoItems = [];
+        this.videoLoaded = false;
         // 本地静默草稿（localStorage，仅存本机，不上传）
         this.autosave = root.getAttribute('data-mre-autosave') !== 'false';
         this.editorId = root.getAttribute('data-editor-id') ||
@@ -669,7 +702,11 @@
         // 编辑区输入
         this.rich.addEventListener('input', function () { self.scheduleSync(); self.scheduleToolbar(); });
         this.rich.addEventListener('keyup', function () { self.scheduleToolbar(); });
-        this.rich.addEventListener('mouseup', function () { self.linkPinned = false; self.scheduleToolbar(); });
+        this.rich.addEventListener('mouseup', function (e) {
+            self.linkPinned = false;
+            if (!closestTag(e.target, 'VIDEO')) self.videoPinned = false;
+            self.scheduleToolbar();
+        });
         this.rich.addEventListener('blur', function () { self.syncNow(); });
         this.rich.addEventListener('change', function (e) {
             var t = e.target;
@@ -687,12 +724,23 @@
         this.rich.addEventListener('mousedown', function (e) {
             self.linkPinned = false;
             if (!closestTag(e.target, 'TABLE')) self.setActiveTable(null);
+            var vid = closestTag(e.target, 'VIDEO');
+            if (vid) {
+                // 点击正文中的视频：显示并切换到「视频」标签页
+                self.videoAnchor = vid;
+                self.videoPinned = true;
+                self.updateContextTabs(false);
+                self.selectTab('video');
+                self.loadVideoList();
+            } else if (!self.videoPinned) {
+                self.videoAnchor = null;
+            }
         });
 
         // Markdown 源码区
         this.textarea.addEventListener('input', function () { self.onMdChange(); self.scheduleToolbar(); });
         this.textarea.addEventListener('keyup', function () { self.scheduleToolbar(); });
-        this.textarea.addEventListener('click', function () { self.linkPinned = false; self.scheduleToolbar(); });
+        this.textarea.addEventListener('click', function () { self.linkPinned = false; self.videoPinned = false; self.scheduleToolbar(); });
         this.textarea.addEventListener('mouseup', function () { self.linkPinned = false; self.scheduleToolbar(); });
         this.textarea.addEventListener('select', function () { self.scheduleToolbar(); });
 
@@ -727,6 +775,15 @@
                 else if (e.key === 'Escape') { self.linkPinned = false; self.rich.focus(); self.updateToolbar(); }
             });
         });
+
+        // 视频标签页：刷新 / 选择文件上传
+        var videoRefresh = this.root.querySelector('[data-mre-video-refresh]');
+        if (videoRefresh) {
+            videoRefresh.addEventListener('click', function () { self.loadVideoList(); });
+        }
+        if (this.videoFile) {
+            this.videoFile.addEventListener('change', function () { self.uploadVideo(); });
+        }
 
         // 全局选区变化：浏览器会高频触发，先去重再合并到同一帧刷新，避免卡顿
         document.addEventListener('selectionchange', function () {
@@ -829,6 +886,9 @@
     Editor.prototype.applyMode = function (mode) {
         this.mode = mode;
         this.linkPinned = false;
+        this.videoPinned = false;
+        this.videoAnchor = null;
+        this.mdVideo = null;
         var richOn = mode === 'rich';
         if (this.richWrap) this.richWrap.hidden = !richOn;
         if (this.mdWrap) this.mdWrap.hidden = richOn;
@@ -865,6 +925,7 @@
         var btn = this.root.querySelector('[data-mre-tab="' + name + '"]');
         if (btn && btn.hidden) return; // 上下文标签页未激活时不可选中
         if (name !== 'link') this.linkPinned = false;
+        if (name !== 'video') this.videoPinned = false;
         this.tab = name;
         this.root.querySelectorAll('[data-mre-tab]').forEach(function (b) {
             b.classList.toggle('is-active', b.getAttribute('data-mre-tab') === name);
@@ -874,20 +935,25 @@
         });
     };
 
-    // 上下文标签页：链接 / 表格只在光标位于其中（或主动打开链接页）时出现
+    // 上下文标签页：链接 / 表格 / 视频只在光标位于其中（或主动打开对应页）时出现
     Editor.prototype.updateContextTabs = function (autoSwitch) {
         var linkVisible = !!this.linkAnchor || !!this.mdLink || this.linkPinned;
         var tableVisible = !!this.tableEl;
+        var videoVisible = !!this.videoAnchor || !!this.mdVideo || this.videoPinned;
         var prevLink = !!(this._prevLinkVisible);
         var prevTable = !!(this._prevTableVisible);
+        var prevVideo = !!(this._prevVideoVisible);
 
         var linkBtn = this.root.querySelector('[data-mre-tab="link"]');
         var tableBtn = this.root.querySelector('[data-mre-tab="table"]');
+        var videoBtn = this.root.querySelector('[data-mre-tab="video"]');
         // 仅在可见性真正变化时才写 DOM，避免高频刷新时反复触发样式/布局计算
         if (linkBtn && linkBtn.hidden !== !linkVisible) linkBtn.hidden = !linkVisible;
         if (tableBtn && tableBtn.hidden !== !tableVisible) tableBtn.hidden = !tableVisible;
+        if (videoBtn && videoBtn.hidden !== !videoVisible) videoBtn.hidden = !videoVisible;
         this._prevLinkVisible = linkVisible;
         this._prevTableVisible = tableVisible;
+        this._prevVideoVisible = videoVisible;
 
         // 当前标签页被隐藏时，自动切回仍可见的标签页
         var cur = this.tab;
@@ -895,13 +961,15 @@
         if (!curBtn || curBtn.hidden) {
             if (linkVisible) this.selectTab('link');
             else if (tableVisible) this.selectTab('table');
+            else if (videoVisible) this.selectTab('video');
             else this.selectTab('basic');
             return;
         }
         if (!autoSwitch) return;
-        // 进入链接 / 表格上下文时自动切换过去，实现「点击表格即出现并切到表格标签页」
+        // 进入链接 / 表格 / 视频上下文时自动切换过去，实现「点击即出现并切到对应标签页」
         if (linkVisible && !prevLink && cur !== 'link') this.selectTab('link');
         else if (!linkVisible && tableVisible && !prevTable && cur !== 'table') this.selectTab('table');
+        else if (!linkVisible && !tableVisible && videoVisible && !prevVideo && cur !== 'video') this.selectTab('video');
     };
 
     // 把链接标签页表单填充为当前链接的信息（用户正在输入时不覆盖）
@@ -1069,6 +1137,25 @@
         return null;
     }
 
+    // 在 Markdown 源码中定位光标所在的 <video ...>...</video>
+    function mdVideoAt(text, pos) {
+        var v = String(text == null ? '' : text);
+        var re = /<video\b[^>]*>(?:[\s\S]*?<\/video>)?/gi;
+        var m;
+        while ((m = re.exec(v))) {
+            if (pos >= m.index && pos <= m.index + m[0].length) {
+                var sm = m[0].match(/\bsrc\s*=\s*["']([^"']+)["']/i);
+                return {
+                    start: m.index,
+                    end: m.index + m[0].length,
+                    url: sm ? sm[1] : ''
+                };
+            }
+            if (m.index > pos) break;
+        }
+        return null;
+    }
+
     Editor.prototype.updateToolbar = function () {
         var mode = this.mode;
         var focusedRich = !!(this.rich && (document.activeElement === this.rich || this.rich.contains(document.activeElement)));
@@ -1091,6 +1178,12 @@
                 // 光标离开编辑区且不在链接表单内时，视为不再处于链接上下文
                 this.linkAnchor = null;
             }
+            if (range) {
+                this.videoAnchor = closestTag(range.startContainer, 'VIDEO');
+            } else if (!this.videoPinned) {
+                this.videoAnchor = null;
+            }
+            this.mdVideo = null;
             this.tableEl = cell ? closestTag(cell, 'TABLE') : null;
         } else {
             caret = focusedMd;
@@ -1106,7 +1199,9 @@
                 if (v.slice(ls, le).indexOf('|') !== -1) inTable = !!readMdTableAt(v, p);
             }
             this.tableEl = inTable ? {} : null;
+            this.videoAnchor = null;
             this.mdLink = mdLinkAt(this.textarea.value, this.textarea.selectionStart);
+            this.mdVideo = mdVideoAt(this.textarea.value, this.textarea.selectionStart);
         }
         if (this.linkAnchor || this.mdLink) this.linkPinned = true;
 
@@ -1226,6 +1321,7 @@
             case 'indent': document.execCommand('indent'); break;
             case 'outdent': document.execCommand('outdent'); break;
             case 'link': this.openLinkEditor(); return;
+            case 'video': this.openVideoEditor(); return;
             case 'codeblock': this.insertCodeBlock(); break;
             case 'table-create': this.insertTable(3, 3); break;
             case 'row-above': case 'row-below': case 'row-delete':
@@ -1396,7 +1492,7 @@
         } else {
             var top = topLevelChild(this.rich, range.startContainer);
             if (top && top.nodeType === 1 && top.tagName !== 'LI') {
-                var isEmpty = !top.textContent.replace(/\s/g, '') && !top.querySelector('img,table,hr,pre');
+                var isEmpty = !top.textContent.replace(/\s/g, '') && !top.querySelector('img,table,hr,pre,video');
                 if (isEmpty) top.parentNode.replaceChild(node, top);
                 else top.parentNode.insertBefore(node, top.nextSibling);
                 var p = document.createElement('p');
@@ -1814,6 +1910,200 @@
         } catch (e) { /* 忽略 */ }
     }
 
+    /* ---------- 视频标签页 ---------- */
+
+    function toast(message, type) {
+        try {
+            if (typeof Toast !== 'undefined' && Toast.show) Toast.show(message, type || 'info');
+        } catch (e) { /* 忽略 */ }
+    }
+
+    // 打开视频标签页（「插入」标签页里的视频按钮，或点击正文中的视频）
+    Editor.prototype.openVideoEditor = function () {
+        if (!this.videoListUrl && !this.videoUploadUrl) return;
+        this.videoPinned = true;
+        if (this.mode === 'rich') {
+            var r = this.getRichRange();
+            this.savedRange = r ? r.cloneRange() : null;
+            this.videoAnchor = r ? closestTag(r.startContainer, 'VIDEO') : null;
+        }
+        this.updateContextTabs(false);
+        this.selectTab('video');
+        this.loadVideoList();
+    };
+
+    // 拉取当前指南（或草稿）的可用视频列表
+    Editor.prototype.loadVideoList = function () {
+        var self = this;
+        if (!this.videoListUrl) return;
+        var url = this.videoListUrl;
+        if (this.videoToken) {
+            url += (url.indexOf('?') === -1 ? '?' : '&') + 'token=' + encodeURIComponent(this.videoToken);
+        }
+        fetch(url, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
+                self.videoItems = (data && data.items) || [];
+                self.videoLoaded = true;
+                self.renderVideoList();
+                self.setVideoQuota(data || {});
+            })
+            .catch(function () { toast('视频列表加载失败', 'error'); });
+    };
+
+    Editor.prototype.renderVideoList = function () {
+        var listEl = this.videoListEl;
+        if (!listEl) return;
+        var self = this;
+        var items = this.videoItems || [];
+        var current = this.videoAnchor
+            ? (this.videoAnchor.getAttribute('src') || '')
+            : (this.mdVideo ? (this.mdVideo.url || '') : '');
+        listEl.innerHTML = '';
+        if (this.videoEmptyEl) this.videoEmptyEl.hidden = items.length > 0;
+        items.forEach(function (item) {
+            var row = document.createElement('div');
+            row.className = 'mre-video-item';
+            if (current && item.url === current) row.classList.add('is-active');
+
+            var name = document.createElement('span');
+            name.className = 'mre-video-item-name';
+            name.textContent = item.name || '';
+            name.title = item.name || '';
+            row.appendChild(name);
+
+            if (item.size_label) {
+                var size = document.createElement('span');
+                size.className = 'mre-video-item-size';
+                size.textContent = item.size_label;
+                row.appendChild(size);
+            }
+
+            var del = document.createElement('button');
+            del.type = 'button';
+            del.className = 'mre-video-item-del';
+            del.title = '删除该视频';
+            del.innerHTML = '<i data-lucide="trash-2"></i>';
+            del.addEventListener('click', function (e) {
+                e.stopPropagation();
+                self.deleteVideo(item);
+            });
+            row.appendChild(del);
+
+            row.addEventListener('click', function () { self.insertVideoUrl(item.url); });
+            listEl.appendChild(row);
+        });
+        this.refreshIcons();
+    };
+
+    Editor.prototype.setVideoQuota = function (data) {
+        if (!this.videoQuotaEl) return;
+        var used = data.used_label;
+        var limit = data.limit_label;
+        this.videoQuotaEl.textContent = used && limit ? ('已用 ' + used + ' / ' + limit) : '';
+    };
+
+    // 把视频插入正文（已有视频时替换其地址，实现「更换视频」）
+    Editor.prototype.insertVideoUrl = function (url) {
+        if (!url) return;
+        var safe = escapeHtml(url);
+        var block = '<video src="' + safe + '" controls preload="metadata"></video>';
+
+        if (this.mode === 'rich') {
+            this.rich.focus();
+            if (this.videoAnchor) {
+                this.videoAnchor.setAttribute('src', url);
+                this.videoAnchor.setAttribute('controls', '');
+                this.videoAnchor.setAttribute('preload', 'metadata');
+            } else {
+                if (this.savedRange) {
+                    try {
+                        var sel = window.getSelection();
+                        sel.removeAllRanges();
+                        sel.addRange(this.savedRange);
+                    } catch (e) { /* 忽略 */ }
+                }
+                var node = document.createElement('video');
+                node.setAttribute('src', url);
+                node.setAttribute('controls', '');
+                node.setAttribute('preload', 'metadata');
+                this.insertBlock(node);
+            }
+            this.savedRange = null;
+            this.afterRichChange();
+        } else {
+            var mv = this.mdVideo;
+            var ta = this.textarea;
+            if (mv) {
+                ta.value = ta.value.slice(0, mv.start) + block + ta.value.slice(mv.end);
+                ta.setSelectionRange(mv.start + block.length, mv.start + block.length);
+            } else {
+                var before = ta.value.slice(0, ta.selectionStart);
+                var needLf = (!before || before.slice(-1) === '\n') ? '' : '\n\n';
+                this.mdInsert(needLf + block + '\n');
+            }
+            ta.focus();
+            this.onMdChange();
+        }
+        this.videoPinned = true;
+        this.updateToolbar();
+    };
+
+    // 上传视频到当前指南（新建时先落到草稿目录，提交时自动迁移）
+    Editor.prototype.uploadVideo = function () {
+        var self = this;
+        var file = this.videoFile && this.videoFile.files && this.videoFile.files[0];
+        if (!file || !this.videoUploadUrl) return;
+
+        var form = new FormData();
+        form.append('video', file);
+        if (this.videoToken) form.append('token', this.videoToken);
+
+        var btn = this.root.querySelector('.mre-video-upload-btn');
+        if (btn) btn.classList.add('is-loading');
+        fetch(this.videoUploadUrl, {
+            method: 'POST', body: form, credentials: 'same-origin',
+            headers: { 'Accept': 'application/json' }
+        })
+            .then(function (res) { return res.json().catch(function () { return {}; }); })
+            .then(function (data) {
+                if (btn) btn.classList.remove('is-loading');
+                if (self.videoFile) self.videoFile.value = '';
+                if (!data || data.success === false) {
+                    toast((data && data.message) || '视频上传失败', 'error');
+                    return;
+                }
+                toast('视频已上传', 'success');
+                self.loadVideoList();
+            })
+            .catch(function () {
+                if (btn) btn.classList.remove('is-loading');
+                if (self.videoFile) self.videoFile.value = '';
+                toast('视频上传失败，请稍后重试', 'error');
+            });
+    };
+
+    // 删除视频文件（正文中的引用不会自动移除）
+    Editor.prototype.deleteVideo = function (item) {
+        var self = this;
+        if (!item || !item.delete_url) return;
+        if (typeof window.confirm === 'function' && !window.confirm('删除视频「' + (item.name || '') + '」？正文中的引用需要手动删除。')) return;
+        var url = item.delete_url;
+        if (this.videoToken) {
+            url += (url.indexOf('?') === -1 ? '?' : '&') + 'token=' + encodeURIComponent(this.videoToken);
+        }
+        fetch(url, { method: 'POST', credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+            .then(function (res) { return res.json().catch(function () { return {}; }); })
+            .then(function (data) {
+                if (!data || data.success === false) {
+                    toast((data && data.message) || '删除失败', 'error');
+                    return;
+                }
+                self.loadVideoList();
+            })
+            .catch(function () { toast('删除失败，请稍后重试', 'error'); });
+    };
+
     /* ---------- Markdown 源码模式命令 ---------- */
 
     Editor.prototype.selectedMdText = function () {
@@ -1912,6 +2202,7 @@
             case 'indent': this.mdIndent(1); break;
             case 'outdent': this.mdIndent(-1); break;
             case 'link': this.openLinkEditor(); return;
+            case 'video': this.openVideoEditor(); return;
             case 'codeblock': this.mdCodeBlock(); break;
             case 'table-create': this.mdInsertTable(); break;
             case 'row-above': case 'row-below': case 'row-delete':
@@ -2079,6 +2370,7 @@
         defaultCols: defaultCols,
         readMdTableAt: readMdTableAt,
         renderMdTable: renderMdTable,
-        mdLinkAt: mdLinkAt
+        mdLinkAt: mdLinkAt,
+        mdVideoAt: mdVideoAt
     };
 })();

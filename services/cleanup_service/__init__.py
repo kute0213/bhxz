@@ -17,6 +17,7 @@ from core.db import get_db
 from core.system.logger import log_module, register_module_log
 from core.shared.scheduler import register_task
 from services.background_service import remove_background_files
+from services.guides import delete_guide_dir, cleanup_stale_drafts
 
 register_module_log('cleanup')
 
@@ -32,7 +33,7 @@ def _deadline():
 
 
 def cleanup_expired_rejected_guides():
-    """删除被驳回超过 REJECTED_KEEP_HOURS 小时的服务器指南。"""
+    """删除被驳回超过 REJECTED_KEEP_HOURS 小时的服务器指南（含指南文件夹）。"""
     conn = get_db()
     try:
         rows = conn.execute(
@@ -43,6 +44,8 @@ def cleanup_expired_rejected_guides():
         deleted = 0
         for row in rows:
             conn.execute("DELETE FROM server_guides WHERE id = ?", (row['id'],))
+            # 同步删除指南文件夹（guide.md + assets 资源）
+            delete_guide_dir(row['id'])
             deleted += 1
             log_module('cleanup', 'INFO', 'Cleanup', '被驳回指南超时自动删除',
                 guide_id=row['id'], title=row['title'])
@@ -90,10 +93,23 @@ def cleanup_expired_rejected_backgrounds():
         conn.close()
 
 
+def cleanup_expired_guide_drafts():
+    """删除超时未提交的新建指南草稿资源（uploads/guides/_drafts）。"""
+    try:
+        removed = cleanup_stale_drafts()
+        if removed:
+            log_module('cleanup', 'INFO', 'Cleanup', '自动清理过期指南草稿资源', count=removed)
+        return removed
+    except Exception as e:
+        log_module('cleanup', 'ERROR', 'Cleanup', '清理指南草稿资源失败', error=str(e))
+        return 0
+
+
 def cleanup_all():
     """执行全部过期被驳回内容的清理。"""
     cleanup_expired_rejected_guides()
     cleanup_expired_rejected_backgrounds()
+    cleanup_expired_guide_drafts()
 
 
 # 统一任务注册表：每 SCHEDULE_INTERVAL 秒执行一次清理

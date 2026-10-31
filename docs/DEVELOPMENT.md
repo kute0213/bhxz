@@ -316,7 +316,7 @@ render_page('admin/admin_users.html')          # ❌ 双重前缀
 python -m pytest scripts/tests -q
 ```
 
-测试套件为 `test_*.py` 中的单元与集成测试（当前覆盖图形验证码、IP 封禁、任务调度、安全扫描、输入校验等）。
+测试套件为 `test_*.py` 中的单元与集成测试（当前覆盖图形验证码、IP 封禁、任务调度、安全扫描、输入校验、指南文件存储与 sitemap 等）。
 
 每个测试函数应：
 
@@ -679,6 +679,24 @@ git push origin main                   # 6. 推送，触发一键更新（见 RE
 1. 委托 `scripts/uploads.py` 执行清理与迁移
 2. 可选构建静态资源（`--build` 参数触发 `scripts/build/build_static.py`）
 3. 用于需要手动迁移的场景，或作为一键更新的补充
+
+**`scripts/migrate_guides.py`** **职责：**
+
+1. 把数据库 `server_guides.content` 中的指南正文写入 `uploads/guides/<指南ID>/guide.md`，并清空数据库正文（正文改由文件维护，见 `services/guides/`）
+2. 支持 `--dry-run`（只统计不写入）与 `--overwrite`（文件已存在时用数据库正文覆盖）
+3. 幂等：可重复执行，已迁移的指南会保留文件并清理残留数据库正文
+
+```bash
+python scripts/migrate_guides.py --dry-run   # 先演练确认数量
+python scripts/migrate_guides.py             # 正式迁移
+```
+
+**指南文件存储约定：**
+
+* 每个指南一个目录 `uploads/guides/<ID>/`，内含 `guide.md`（唯一正文来源）与 `assets/`（视频等资源）
+* 新建指南的资源先放 `uploads/guides/_drafts/<token>/assets/`，提交时由 `finalize_draft()` 迁移并重写正文 URL
+* 每个指南 `assets/` 合计不超过 50MB（`GUIDE_RESOURCE_MAX_BYTES`），视频扩展名见 `GUIDE_VIDEO_EXTENSIONS`
+* 删除指南（管理员删除 / 被驳回超时清理）时必须调用 `guide_store.delete_guide_dir(id)`，避免残留目录
 
 **开发准则：**
 

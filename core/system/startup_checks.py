@@ -240,7 +240,7 @@ def _check_uploads_structure(app_root: str):
         return
 
     # 确保分类子目录存在（ffmpeg 为 Windows 下放置 ffmpeg.exe / ffprobe.exe 的目录）
-    subdirs = ['sitemap', 'backgrounds', 'ffmpeg']
+    subdirs = ['sitemap', 'backgrounds', 'ffmpeg', 'guides']
     created = 0
     for sub in subdirs:
         sub_path = os.path.join(uploads_dir, sub)

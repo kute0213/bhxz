@@ -30,9 +30,17 @@
 
             <div>
                 <label class="block text-sm text-cream/70 mb-2">内容（Markdown）</label>
-                {{ markdown_editor(name='content', value=guide.content if guide else '', placeholder='在此输入 Markdown 内容...') }}
+                {{ markdown_editor(
+                    name='content',
+                    value=guide.content if guide else '',
+                    placeholder='在此输入 Markdown 内容...',
+                    video_list_url=video_list_url|default(''),
+                    video_upload_url=video_upload_url|default(''),
+                    video_token=video_token|default('')
+                ) }}
             </div>
 
+            {% if draft_token %}<input type="hidden" name="draft_token" value="{{ draft_token }}">{% endif %}
             <input type="hidden" name="captcha" id="guide-captcha" value="">
             <input type="hidden" name="captcha_id" id="guide-captcha-id" value="">
 
@@ -46,7 +54,7 @@
 
 <script src="{{ url_for('static', filename='lib/purify/purify.min.js', v='1') }}"></script>
 <script src="{{ url_for('static', filename='lib/marked/marked.min.js', v='1') }}"></script>
-<script src="{{ url_for('static', filename='js/pages/markdown-editor.js', v='6') }}"></script>
+<script src="{{ url_for('static', filename='js/pages/markdown-editor.js', v='7') }}"></script>
 <script>
 // 提交指南：点击“提交审核”按钮后弹出图形验证码弹窗，
 // 验证通过后才提交表单；验证码出错时弹窗内直接刷新验证码，不刷新页面，保留已填内容。

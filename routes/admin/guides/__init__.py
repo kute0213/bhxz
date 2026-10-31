@@ -9,10 +9,39 @@ from core.helpers import render_page
 from core.db import get_db
 from core.shared.snowflake import next_id
 from services.mail import email_service, guide_review_result as build_result_html
+from services import guides as guide_store
 from routes.admin import admin_bp
+from routes.guides.api import (
+    issue_guide_draft_token,
+    is_valid_guide_draft_token,
+    consume_guide_draft_token,
+)
 
 
 PAGE_SIZE = 10
+
+
+def _admin_create_context():
+    """后台新建指南上下文（含草稿视频上传地址）。"""
+    token = issue_guide_draft_token()
+    return {
+        'guide': None,
+        'draft_token': token,
+        'video_list_url': url_for('guides.api_guide_draft_videos'),
+        'video_upload_url': url_for('guides.api_guide_draft_video_upload'),
+        'video_token': token,
+    }
+
+
+def _admin_edit_context(guide):
+    """后台编辑指南上下文（视频直接上传到该指南目录）。"""
+    return {
+        'guide': guide,
+        'draft_token': '',
+        'video_list_url': url_for('guides.api_guide_videos', guide_id=guide['id']),
+        'video_upload_url': url_for('guides.api_guide_video_upload', guide_id=guide['id']),
+        'video_token': '',
+    }
 
 
 def _fetch_guides_page(page, page_size=PAGE_SIZE):
@@ -37,6 +66,8 @@ def _fetch_guides_page(page, page_size=PAGE_SIZE):
             (page_size, offset),
         ).fetchall()
         guides = [dict(r) for r in rows]
+        for g in guides:
+            g['content'] = guide_store.read_guide_content(g['id'], g.get('content') or '')
     finally:
         conn.close()
 
@@ -129,28 +160,38 @@ def admin_guide_create():
         cover_image = (data.get('cover_image') or '').strip()
         is_pinned = 1 if str(data.get('is_pinned') or '') in ('1', 'true', 'on', 'True') else 0
         status = (data.get('status') or 'approved').strip()
+        draft_token = (data.get('draft_token') or '').strip()
 
         if not title or not content:
             return jsonify({'success': False, 'message': '标题和内容不能为空'}), 400
 
         conn = get_db()
+        guide_id = next_id()
         try:
             from routes.guides.api import _slugify, _ensure_unique_slug
             now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             slug = _ensure_unique_slug(conn, _slugify(title))
             published_at = now if status == 'approved' else None
-            guide_id = next_id()
+
+            # 正文写入 guide.md，草稿视频迁移到正式指南目录
+            if draft_token and is_valid_guide_draft_token(draft_token):
+                guide_store.finalize_draft(draft_token, guide_id)
+                content = guide_store.rewrite_draft_urls(content, draft_token, guide_id)
+            guide_store.write_guide_content(guide_id, content)
+
             conn.execute(
                 """
                 INSERT INTO server_guides
                 (id, title, slug, summary, content, cover_image, author_id, status,
                  is_pinned, created_at, updated_at, published_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, '', ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (guide_id, title, slug, summary, content, cover_image, user['id'],
+                (guide_id, title, slug, summary, cover_image, user['id'],
                  status, is_pinned, now, now, published_at),
             )
             conn.commit()
+            if draft_token:
+                consume_guide_draft_token(draft_token)
             return jsonify({
                 'success': True,
                 'message': '指南已创建',
@@ -159,11 +200,12 @@ def admin_guide_create():
             })
         except Exception as e:
             conn.rollback()
+            guide_store.delete_guide_dir(guide_id)
             return jsonify({'success': False, 'message': f'创建失败: {e}'}), 500
         finally:
             conn.close()
 
-    return render_page('admin/guide_form.html', guide=None)
+    return render_page('admin/guide_form.html', **_admin_create_context())
 
 
 @admin_bp.route('/admin/guides/<int:guide_id>/edit', methods=['GET', 'POST'])
@@ -181,6 +223,7 @@ def admin_guide_edit(guide_id):
     if not row:
         abort(404)
     guide = dict(row)
+    guide['content'] = guide_store.read_guide_content(guide_id, guide.get('content') or '')
 
     if request.method == 'POST':
         data = _payload()
@@ -204,15 +247,18 @@ def admin_guide_edit(guide_id):
             if status == 'approved' and not published_at:
                 published_at = now
 
+            # 正文写入 guide.md（数据库不再保存正文）
+            guide_store.write_guide_content(guide_id, content)
+
             conn.execute(
                 """
                 UPDATE server_guides
-                SET title = ?, slug = ?, summary = ?, content = ?,
+                SET title = ?, slug = ?, summary = ?, content = '',
                     cover_image = ?, status = ?, is_pinned = ?,
                     updated_at = ?, published_at = ?
                 WHERE id = ?
                 """,
-                (title, slug, summary, content, cover_image, status,
+                (title, slug, summary, cover_image, status,
                  is_pinned, now, published_at, guide_id),
             )
             if status == 'approved':
@@ -233,19 +279,21 @@ def admin_guide_edit(guide_id):
         finally:
             conn.close()
 
-    return render_page('admin/guide_form.html', guide=guide)
+    return render_page('admin/guide_form.html', **_admin_edit_context(guide))
 
 
 @admin_bp.route('/admin/guides/<int:guide_id>/delete', methods=['POST'])
 @admin_required
 def admin_guide_delete(guide_id):
-    """管理后台：删除指南（JSON API，前端无刷新）。"""
+    """管理后台：删除指南（JSON API，前端无刷新；同时删除指南文件夹）。"""
     conn = get_db()
     try:
         cur = conn.execute("DELETE FROM server_guides WHERE id = ?", (guide_id,))
         conn.commit()
         if cur.rowcount == 0:
             return jsonify({'success': False, 'message': '指南不存在'}), 404
+        # 删除指南文件夹（guide.md + assets 资源）
+        guide_store.delete_guide_dir(guide_id)
         return jsonify({'success': True, 'message': '指南已删除'})
     except Exception:
         conn.rollback()
