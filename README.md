@@ -606,7 +606,7 @@ python scripts/build/package.py
 
 * **自定义音频播放器（磨砂玻璃风格）**：大喇叭音频列表、我的音频、管理员审核页均使用自研播放器替代默认控件，含进度条拖动、倍速（0.5x~2x）、音量（滑块弹层，记忆在 localStorage）与播放/暂停；同一时间只允许一个播放器出声。样式见 `static/css/base.css` 的 `.music-player`，逻辑见 `static/js/pages/music_player.js`
 
-* **自定义视频播放器（全站统一，淡蓝磨砂玻璃）**：指南详情页、Markdown 编辑器、管理后台预览中的视频统一使用站内控件，移除浏览器原生 `controls`；提供中央大播放按钮、播放/暂停、可拖动进度条、当前/总时长、循环倍速按钮（1x → 1.25x → 1.5x → 2x → 0.5x）、静音与全屏，移动端自适应。控制栏为淡蓝磨砂玻璃（`backdrop-filter` + 半透明浅蓝渐变），按钮为白底蓝边深蓝图标以保证倍速等文字清晰可读；视频左上角显示 `data-title`（指南伪文件名）。样式见 `static/css/base.css` 的 `.svp`，逻辑见 `static/js/core/video-player.js`（`SiteVideoPlayer.decorate / decorateAll`），由 `base.html` 全站加载
+* **自定义视频播放器（全站统一，淡蓝磨砂玻璃）**：指南详情页、Markdown 编辑器、管理后台预览中的视频统一使用站内控件，移除浏览器原生 `controls`；提供中央播放按钮、播放/暂停、可拖动进度条、当前/总时长、音量上拉框（静音开关 + 音量滑块）、倍速上拉框（0.5x / 1x / 1.25x / 1.5x / 2x）与全屏，移动端自适应。控制栏**背景透明**，单个按钮 / 时间 / 上拉框为淡蓝磨砂玻璃（`backdrop-filter` + 半透明浅蓝），深蓝图标保证清晰可读；上拉框向上展开，上方空间不足时自动改为向下，不会被容器裁剪；点击播放器外部或其它控件自动收起，避免误触。暂停时**不给视频蒙任何遮罩**，仅显示中央半透明播放按钮。视频左上角显示 `data-title`（指南伪文件名）。样式见 `static/css/base.css` 的 `.svp`，逻辑见 `static/js/core/video-player.js`（`SiteVideoPlayer.decorate / decorateAll / setTitle`），由 `base.html` 全站加载
 
 * **全站响应式适配**：窄屏下音频卡片操作按钮组自动占满整行并换行，管理员数据表格统一横向滚动，导航在小屏切换为右侧滑出菜单
 

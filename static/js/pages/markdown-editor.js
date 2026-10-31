@@ -741,7 +741,7 @@
         this.rich.addEventListener('keyup', function () { self.scheduleToolbar(); });
         this.rich.addEventListener('mouseup', function (e) {
             self.linkPinned = false;
-            if (!closestTag(e.target, 'VIDEO')) self.videoPinned = false;
+            if (!videoFromTarget(e.target)) self.videoPinned = false;
             self.scheduleToolbar();
         });
         this.rich.addEventListener('blur', function () { self.syncNow(); });
@@ -765,9 +765,9 @@
         this.rich.addEventListener('mousedown', function (e) {
             self.linkPinned = false;
             if (!closestTag(e.target, 'TABLE')) self.setActiveTable(null);
-            var vid = closestTag(e.target, 'VIDEO');
+            // 点在播放器任何区域（视频 / 控制栏 / 上拉框）都视为处于该视频上下文
+            var vid = videoFromTarget(e.target);
             if (vid) {
-                // 点击正文中的视频：显示并切换到「视频」标签页
                 self.videoAnchor = vid;
                 self.videoPinned = true;
                 self.updateContextTabs(false);
@@ -777,6 +777,16 @@
                 self.videoAnchor = null;
             }
         });
+
+        // 编辑态点击视频主体 = 选中整个视频块（方便复制 / 剪切 / 删除），
+        // 同时阻止播放器把这次点击当成「播放 / 暂停」。
+        this.rich.addEventListener('click', function (e) {
+            var vid = closestTag(e.target, 'VIDEO');
+            if (!vid) return;
+            e.preventDefault();
+            e.stopPropagation();
+            self.selectVideoBlock(vid);
+        }, true);
 
         // Markdown 源码区
         this.textarea.addEventListener('input', function () { self.onMdChange(); self.scheduleToolbar(); });
@@ -1260,7 +1270,9 @@
                 this.linkAnchor = null;
             }
             if (range) {
-                this.videoAnchor = closestTag(range.startContainer, 'VIDEO');
+                var vAnchor = this.videoAnchorFromRange(range);
+                if (vAnchor) this.videoAnchor = vAnchor;
+                else if (!this.videoPinned) this.videoAnchor = null;
             } else if (!this.videoPinned) {
                 this.videoAnchor = null;
             }
@@ -1392,6 +1404,36 @@
         return videos;
     };
 
+    // 从选区推断当前视频上下文：光标在视频内，或选区覆盖了视频
+    Editor.prototype.videoAnchorFromRange = function (range) {
+        if (!range) return null;
+        var direct = closestTag(range.startContainer, 'VIDEO');
+        if (direct) return direct;
+        if (range.collapsed) return null;
+        var videos = this.videosInRange(range);
+        return videos.length ? videos[0] : null;
+    };
+
+    // 选中整个视频块（原子选中），供复制 / 剪切 / 删除与「更换视频」使用
+    Editor.prototype.selectVideoBlock = function (video) {
+        if (!video) return;
+        var host = videoHost(video) || video;
+        // 先聚焦编辑区，确保 copy / cut 事件落在编辑器上
+        this.rich.focus();
+        var range = document.createRange();
+        range.selectNode(host);
+        var sel = window.getSelection();
+        sel.removeAllRanges();
+        sel.addRange(range);
+
+        this.videoAnchor = video;
+        this.videoPinned = true;
+        this.updateContextTabs(false);
+        this.selectTab('video');
+        this.loadVideoList();
+        this.scheduleToolbar();
+    };
+
     // 把选区内容序列化为 Markdown（文字 + @[video](url)），用于复制 / 剪切
     Editor.prototype.selectionMarkdown = function (range) {
         var videos = this.videosInRange(range);
@@ -1471,6 +1513,38 @@
         if (cut) this.clearRichSelection(range);
     };
 
+    // 在当前选区插入 HTML：优先 execCommand，失败时用 Range 手动插入兜底。
+    // 某些浏览器 / 输入法下 execCommand('insertHTML') 会静默失败，
+    // 若没有兜底，粘贴视频会「看起来毫无反应」。
+    Editor.prototype.insertRichHtml = function (html) {
+        var inserted = false;
+        try { inserted = document.execCommand('insertHTML', false, html); } catch (err) { inserted = false; }
+        if (inserted) return;
+
+        var sel = window.getSelection();
+        if (!sel || sel.rangeCount === 0) return;
+        var range = sel.getRangeAt(0);
+        range.deleteContents();
+
+        var tmp = document.createElement('div');
+        tmp.innerHTML = html;
+        var frag = document.createDocumentFragment();
+        var last = null;
+        while (tmp.firstChild) {
+            last = tmp.firstChild;
+            frag.appendChild(last);
+        }
+        range.insertNode(frag);
+
+        if (last) {
+            var after = document.createRange();
+            after.setStartAfter(last);
+            after.collapse(true);
+            sel.removeAllRanges();
+            sel.addRange(after);
+        }
+    };
+
     // 粘贴：识别 @[video](url) 语法，直接还原为视频块（支持纯视频与图文混排）
     Editor.prototype.handleRichPaste = function (e) {
         var text = '';
@@ -1481,33 +1555,29 @@
         e.preventDefault();
         var html = mdToHtml(trimmed);
         this.rich.focus();
+        this.insertRichHtml(html);
 
-        var inserted = false;
-        try { inserted = document.execCommand('insertHTML', false, html); } catch (err) { inserted = false; }
-
-        if (inserted) {
-            // 粘贴进来的视频统一换成站内播放器控件，并保证前后可放置光标
-            if (window.SiteVideoPlayer) window.SiteVideoPlayer.decorateAll(this.rich);
-            var vids = this.rich.querySelectorAll('video');
-            var hosts = [];
-            for (var i = 0; i < vids.length; i++) {
-                vids[i].setAttribute('contenteditable', 'false');
-                var host = videoHost(vids[i]);
-                if (host && hosts.indexOf(host) === -1) hosts.push(host);
-            }
-            // 视频必须作为顶层块（不能嵌在段落里），否则 Markdown 无法正确序列化
-            for (var j = 0; j < hosts.length; j++) {
-                var h = hosts[j];
-                if (h.parentNode && h.parentNode !== this.rich) {
-                    var top = topLevelChild(this.rich, h.parentNode);
-                    if (top && top !== h && top.parentNode) {
-                        top.parentNode.insertBefore(h, top.nextSibling);
-                    }
-                }
-                this.ensureVideoRoom(h);
-            }
-            this.afterRichChange();
+        // 粘贴进来的视频统一换成站内播放器控件，并保证前后可放置光标
+        if (window.SiteVideoPlayer) window.SiteVideoPlayer.decorateAll(this.rich);
+        var vids = this.rich.querySelectorAll('video');
+        var hosts = [];
+        for (var i = 0; i < vids.length; i++) {
+            vids[i].setAttribute('contenteditable', 'false');
+            var host = videoHost(vids[i]);
+            if (host && hosts.indexOf(host) === -1) hosts.push(host);
         }
+        // 视频必须作为顶层块（不能嵌在段落里），否则 Markdown 无法正确序列化
+        for (var j = 0; j < hosts.length; j++) {
+            var h = hosts[j];
+            if (h.parentNode && h.parentNode !== this.rich) {
+                var top = topLevelChild(this.rich, h.parentNode);
+                if (top && top !== h && top.parentNode) {
+                    top.parentNode.insertBefore(h, top.nextSibling);
+                }
+            }
+            this.ensureVideoRoom(h);
+        }
+        this.afterRichChange();
     };
 
     // Backspace / Delete：删除整体选中的视频，或在光标紧邻视频时删除该视频
@@ -2180,7 +2250,7 @@
         if (this.mode === 'rich') {
             var r = this.getRichRange();
             this.savedRange = r ? r.cloneRange() : null;
-            this.videoAnchor = r ? closestTag(r.startContainer, 'VIDEO') : null;
+            this.videoAnchor = this.videoAnchorFromRange(r);
         }
         this.updateContextTabs(false);
         this.selectTab('video');
@@ -2324,6 +2394,16 @@
         return null;
     }
 
+    // 鼠标目标所属的视频（视频本体或站内播放器容器内任意区域）
+    function videoFromTarget(target) {
+        if (!target) return null;
+        var vid = closestTag(target, 'VIDEO');
+        if (vid) return vid;
+        if (!target.closest) return null;
+        var host = target.closest('.svp');
+        return host ? host.querySelector('video') : null;
+    }
+
     // 保证视频前后都有可放置光标的空段落
     Editor.prototype.ensureVideoRoom = function (node) {
         if (!node || !node.parentNode) return;
@@ -2351,8 +2431,13 @@
                 this.videoAnchor.setAttribute('src', url);
                 this.videoAnchor.setAttribute('preload', 'metadata');
                 this.videoAnchor.setAttribute('contenteditable', 'false');
-                if (title) this.videoAnchor.setAttribute('data-title', title);
-                else this.videoAnchor.removeAttribute('data-title');
+                if (window.SiteVideoPlayer && window.SiteVideoPlayer.setTitle) {
+                    window.SiteVideoPlayer.setTitle(this.videoAnchor, title || '');
+                } else if (title) {
+                    this.videoAnchor.setAttribute('data-title', title);
+                } else {
+                    this.videoAnchor.removeAttribute('data-title');
+                }
             } else {
                 if (this.savedRange) {
                     try {

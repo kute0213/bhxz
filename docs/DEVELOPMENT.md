@@ -715,7 +715,9 @@ python scripts/migrate_guides.py             # 正式迁移
 * 编辑器视频上传使用 XHR（`upload.onprogress`）驱动上传进度，完成后进度条归零并轮询转码进度；进度条统一复用 `macros/progress.html` 的 `progress_track()`（JS 侧用 `.progress-track / .progress-fill`），禁止另起样式；上传配额、改名与删除确认均使用站内控件 / `CustomModal`，不使用原生 file 控件、`window.confirm` 或 `window.prompt`
 * 视频伪文件名统一走 `set_video_title()` / `video_title()`（写入 / 读取 `config.json`），页面渲染时由 URL 文件名查表注入 `<video data-title="...">`，播放器显示在视频左上角；改名 / 删除等写操作必须校验作者或管理员权限
 * 富文本中的视频为 `contenteditable="false"` 原子块：插入于光标之后，前后保证有空段落，支持整体选中复制 / 剪切 / 删除
-* **编辑器视频剪贴板约定**：选区包含视频时，`copy` / `cut` 必须 `preventDefault()` 并调用 `selectionMarkdown(range)`（文字 + `@[video](url)`）写入 `text/plain`；剪切用 `range.deleteContents()` + `normalize()` 后重设选区，内容为空时补 `<p><br></p>`。`paste` 监听识别到 `@[video](url)` 时经 `mdToHtml` + `execCommand('insertHTML')` 还原视频块并设置原子块属性 / 前后空段落
+* **播放器覆盖层不得拦截编辑操作**：`.svp-overlay` 只允许中央播放图标响应指针（`pointer-events: none` + `svg { pointer-events: auto }`），暂停时也不加任何全屏遮罩；否则鼠标无法落进视频、编辑器收不到点击，复制 / 剪切 / 删除 / 选中全部失效
+* **编辑器视频点击约定**：点击视频主体（含播放器容器）由编辑器的捕获阶段 `click` 处理，`stopPropagation()` 阻止播放器播放，并用 `selectVideoBlock()` 以 `Range.selectNode(.svp)` 选中整个视频块；点击播放器控制栏 / 上拉框则不选中，保证控件仍可用。`videoAnchorFromRange()` 在选区覆盖视频时也能正确识别当前视频，用于「更换视频」
+* **编辑器视频剪贴板约定**：选区包含视频时，`copy` / `cut` 必须 `preventDefault()` 并调用 `selectionMarkdown(range)`（文字 + `@[video](url)`）写入 `text/plain`；剪切用 `range.deleteContents()` + `normalize()` 后重设选区，内容为空时补 `<p><br></p>`。`paste` 监听识别到 `@[video](url)` 时经 `mdToHtml` 还原，优先 `execCommand('insertHTML')`，失败必须回退到 `Range.deleteContents()` + `insertNode(fragment)` 手动插入（部分浏览器会静默失败，没有兜底会表现为「粘贴无反应」），随后设置原子块属性与前后空段落
 * **背景图片列表分段加载**：`GET /api/backgrounds/list` 仅分页返回已通过背景（`page` + `BACKGROUNDS_PER_PAGE`），返回 `page / page_size / total / has_more`；前端首屏取第 1 页，`/backgrounds` 的「加载更多」按 `page+1` 追加，「我的上传」保持全量
 * 删除指南（管理员删除 / 被驳回超时清理）时必须调用 `guide_store.delete_guide_dir(id)`，避免残留目录
 * `uploads/guides/_drafts/` 仅用于自动维护时清理历史残留

@@ -4,6 +4,13 @@
 
 ### 变更
 
+* **修复编辑器视频复制 / 粘贴 / 删除 / 选中 + 播放器上拉框与暂停遮罩**（`static/js/pages/markdown-editor.js`、`static/js/core/video-player.js`、`static/css/base.css`、`static/templates/{base,guides/form,admin/guide_form,admin/broadcast}.html`、`static/templates/macros/markdown_editor.html`）：
+  * **视频选中 / 复制 / 剪切 / 删除恢复**：播放器覆盖层改为只在中央播放图标上响应指针，不再铺满视频拦截鼠标；编辑态点击视频主体由编辑器捕获 `click` 并 `stopPropagation()`，用 `Range.selectNode(.svp)` 原子选中整个视频块（同时阻止误播放），控制栏 / 上拉框点击仍交给播放器。
+  * **粘贴兜底**：`execCommand('insertHTML')` 失败时回退到 `Range.deleteContents()` + `insertNode(fragment)` → 修复部分浏览器「粘贴视频毫无反应」的问题；选区覆盖视频时统一用 `videoAnchorFromRange()` 识别当前视频，保证「更换视频」仍可用。
+  * **播放器控件改版**：控制栏背景透明，播放/暂停、时间、音量、倍速、全屏均为淡蓝磨砂玻璃；新增音量上拉框（静音开关 + 滑块）与倍速上拉框（0.5x / 1x / 1.25x / 1.5x / 2x，当前速度高亮），点击外部 / 其它控件自动收起；上拉框默认向上展开，上方空间不足自动向下，`.svp` 改为 `overflow: visible` 避免被裁剪。
+  * **暂停不再盖住视频**：移除整块浅蓝径向遮罩，暂停时只显示中央半透明磨砂播放按钮，视频画面保持原样。
+  * 同步提升 `base.css`、`video-player.js`、`markdown-editor.js` 缓存版本号；更新 README / DEVELOPMENT / CHANGELOG；`python -m pytest scripts/tests -q` 252 项通过。
+
 * **编辑器 Markdown 污染根治 + 异步转码进度 + 指南 config.json + 播放器淡蓝磨砂 + 草稿无刷新保存**（`services/guides/__init__.py`、`config.py`、`routes/guides/{pages,api}/__init__.py`、`routes/admin/guides/__init__.py`、`static/js/pages/markdown-editor.js`、`static/js/core/video-player.js`、`static/css/base.css`、`static/templates/{base,guides/form,guides/detail,admin/guide_form,admin/guides}.html`、`static/templates/admin/broadcast.html`、`static/templates/macros/{markdown_editor,progress}.html`、`scripts/tests/test_guide_storage.py`）：
   * **反斜杠 / `****` / `---` 三个编辑器问题彻底修复**：根因均在富文本 → Markdown 序列化。空 `<strong>` / `<em>` / `<del>` 不再输出 `****` 等空标记（空标记会被 marked 解析为 `<hr>`，表现为保存后多出 `---`）；`<br>` 统一序列化为两空格硬换行（不再用反斜杠），空段落序列化为空串并在 `flush()` 去掉尾部空白，光标处不再残留无用反斜杠。
   * **视频转码改为异步任务 + 进度条**：新增 `start_guide_video_upload()` 与内存任务表（TTL 清理），上传文件先落 `.upload_` 临时目录，后台线程用 `ffmpeg -progress` 转码、`ffprobe` 时长换算百分比；新增 `GET /api/guides/<id>/videos/progress/<task_id>`。前端上传完成后进度条**归零**并切换为转码进度（无时长时为不确定态光带）。
