@@ -666,7 +666,6 @@
         // 视频资源（仅传入 video_list_url 时启用）
         this.videoListUrl = root.getAttribute('data-mre-video-list') || '';
         this.videoUploadUrl = root.getAttribute('data-mre-video-upload') || '';
-        this.videoToken = root.getAttribute('data-mre-video-token') || '';
         this.videoListEl = root.querySelector('[data-mre-video-list]');
         this.videoQuotaEl = root.querySelector('[data-mre-video-quota]');
         this.videoEmptyEl = root.querySelector('[data-mre-video-empty]');
@@ -1936,11 +1935,7 @@
     Editor.prototype.loadVideoList = function () {
         var self = this;
         if (!this.videoListUrl) return;
-        var url = this.videoListUrl;
-        if (this.videoToken) {
-            url += (url.indexOf('?') === -1 ? '?' : '&') + 'token=' + encodeURIComponent(this.videoToken);
-        }
-        fetch(url, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+        fetch(this.videoListUrl, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
             .then(function (res) { return res.json(); })
             .then(function (data) {
                 self.videoItems = (data && data.items) || [];
@@ -2057,7 +2052,6 @@
 
         var form = new FormData();
         form.append('video', file);
-        if (this.videoToken) form.append('token', this.videoToken);
 
         var btn = this.root.querySelector('.mre-video-upload-btn');
         if (btn) btn.classList.add('is-loading');
@@ -2088,11 +2082,7 @@
         var self = this;
         if (!item || !item.delete_url) return;
         if (typeof window.confirm === 'function' && !window.confirm('删除视频「' + (item.name || '') + '」？正文中的引用需要手动删除。')) return;
-        var url = item.delete_url;
-        if (this.videoToken) {
-            url += (url.indexOf('?') === -1 ? '?' : '&') + 'token=' + encodeURIComponent(this.videoToken);
-        }
-        fetch(url, { method: 'POST', credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+        fetch(item.delete_url, { method: 'POST', credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
             .then(function (res) { return res.json().catch(function () { return {}; }); })
             .then(function (data) {
                 if (!data || data.success === false) {

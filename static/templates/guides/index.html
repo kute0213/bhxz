@@ -26,6 +26,7 @@
     display: inline-flex; align-items: center; gap: 0.25rem;
     font-size: 0.75rem; padding: 0.125rem 0.5rem; border-radius: 9999px;
 }
+.guide-status-draft { background: rgba(100, 116, 139, 0.14); color: #475569; border: 1px solid rgba(100, 116, 139, 0.3); }
 .guide-status-pending { background: rgba(217, 119, 6, 0.12); color: #b45309; border: 1px solid rgba(217, 119, 6, 0.3); }
 .guide-status-approved { background: rgba(22, 163, 74, 0.12); color: #15803d; border: 1px solid rgba(22, 163, 74, 0.3); }
 .guide-status-rejected { background: rgba(225, 29, 72, 0.12); color: #be123c; border: 1px solid rgba(225, 29, 72, 0.3); }
@@ -80,8 +81,8 @@
                         {% endif %}
                         {% if my_mode %}
                         <span class="guide-status-badge
-                            {% if guide.status == 'pending' %}guide-status-pending{% elif guide.status == 'approved' %}guide-status-approved{% else %}guide-status-rejected{% endif %}">
-                            {% if guide.status == 'pending' %}待审核{% elif guide.status == 'approved' %}已通过{% else %}已拒绝{% endif %}
+                            {% if guide.status == 'draft' %}guide-status-draft{% elif guide.status == 'pending' %}guide-status-pending{% elif guide.status == 'approved' %}guide-status-approved{% else %}guide-status-rejected{% endif %}">
+                            {% if guide.status == 'draft' %}草稿{% elif guide.status == 'pending' %}待审核{% elif guide.status == 'approved' %}已通过{% else %}已拒绝{% endif %}
                         </span>
                         {% endif %}
                     </div>
@@ -103,6 +104,10 @@
                     {% if my_mode %}
                     <div class="mt-3 pt-3 border-t border-forest-700/30 flex items-center gap-2">
                         <a href="{{ url_for('guides.guide_edit', guide_id=guide.id) }}" class="text-gold-400 hover:text-gold-300 text-xs px-2 py-1 rounded bg-gold-400/10 border border-gold-400/20">修改</a>
+                        {% if guide.status == 'draft' %}
+                        <button type="button" data-guide-publish="{{ guide.id }}"
+                                class="text-green-400 hover:text-green-300 text-xs px-2 py-1 rounded bg-green-500/10 border border-green-500/20">发布</button>
+                        {% endif %}
                         {% if guide.status == 'rejected' and guide.rejected_reason %}
                         <span class="text-xs text-red-300">原因：{{ guide.rejected_reason }}</span>
                         {% endif %}
@@ -157,8 +162,10 @@
     function cardHtml(g) {
         var status = '';
         if (state.myMode) {
-            var cls = g.status === 'pending' ? 'guide-status-pending' : (g.status === 'approved' ? 'guide-status-approved' : 'guide-status-rejected');
-            var label = g.status === 'pending' ? '待审核' : (g.status === 'approved' ? '已通过' : '已拒绝');
+            var clsMap = { draft: 'guide-status-draft', pending: 'guide-status-pending', approved: 'guide-status-approved', rejected: 'guide-status-rejected' };
+            var labelMap = { draft: '草稿', pending: '待审核', approved: '已通过', rejected: '已拒绝' };
+            var cls = clsMap[g.status] || 'guide-status-rejected';
+            var label = labelMap[g.status] || '已拒绝';
             status = '<span class="guide-status-badge ' + cls + '">' + label + '</span>';
         }
         var pin = g.is_pinned ? '<span class="inline-flex items-center gap-1 text-xs text-gold-400"><i data-lucide="pin" class="w-3 h-3"></i>置顶</span>' : '';
@@ -166,8 +173,12 @@
         var summary = g.summary || '暂无摘要';
         var mine = '';
         if (state.myMode) {
+            var publishBtn = g.status === 'draft'
+                ? '<button type="button" data-guide-publish="' + g.id + '" class="text-green-400 hover:text-green-300 text-xs px-2 py-1 rounded bg-green-500/10 border border-green-500/20">发布</button>'
+                : '';
             mine = '<div class="mt-3 pt-3 border-t border-forest-700/30 flex items-center gap-2">' +
                 '<a href="/guides/' + g.id + '/edit" class="text-gold-400 hover:text-gold-300 text-xs px-2 py-1 rounded bg-gold-400/10 border border-gold-400/20">修改</a>' +
+                publishBtn +
                 (g.status === 'rejected' && g.rejected_reason ? '<span class="text-xs text-red-300">原因：' + esc(g.rejected_reason) + '</span>' : '') +
                 '</div>';
         }
@@ -207,7 +218,7 @@
         } else {
             resultHint.classList.add('hidden');
             emptyTitle.textContent = state.myMode ? '还没有创建任何指南' : '暂无服务器指南';
-            emptyHint.textContent = state.myMode ? '点击「新建指南」发布你的第一篇指南' : '管理员或成员可以添加新指南';
+            emptyHint.textContent = state.myMode ? '点击「新建指南」创建草稿，编辑内容后发布' : '管理员或成员可以添加新指南';
         }
         if (btn) {
             btn.classList.toggle('hidden', !data.has_more);
@@ -237,6 +248,35 @@
     }
 
     if (btn) btn.addEventListener('click', function () { fetchList(state.page + 1, true); });
+
+    // 发布草稿：无刷新调用 API，成功后刷新列表
+    if (list) {
+        list.addEventListener('click', function (e) {
+            var pub = e.target.closest('[data-guide-publish]');
+            if (!pub) return;
+            e.preventDefault();
+            var id = pub.getAttribute('data-guide-publish');
+            pub.disabled = true;
+            fetch('/api/guides/' + id + '/publish', {
+                method: 'POST',
+                headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+            })
+            .then(function (r) { return r.json().catch(function () { return {}; }); })
+            .then(function (data) {
+                if (!data || !data.success) {
+                    if (typeof Toast !== 'undefined') Toast.error((data && data.message) || '发布失败');
+                    pub.disabled = false;
+                    return;
+                }
+                if (typeof Toast !== 'undefined') Toast.success(data.message || '指南已发布');
+                setTimeout(function () { location.reload(); }, 300);
+            })
+            .catch(function () {
+                pub.disabled = false;
+                if (typeof Toast !== 'undefined') Toast.error('发布失败，请重试');
+            });
+        });
+    }
 
     // 就地搜索：搜索框派发的 site-search 事件 → 更新关键词并就地刷新列表
     var searchBox = document.querySelector('.site-search');

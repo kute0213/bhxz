@@ -7,12 +7,8 @@
         guide.md        # 指南 Markdown 源文件（唯一内容来源）
         assets/         # 指南资源（视频等），合计不超过 50MB
 
-新建指南时正文还没有指南 ID，视频等资源先上传到草稿目录：
-
-    uploads/guides/_drafts/<token>/assets/<文件名>
-
-提交指南后由 :func:`finalize_draft` 把草稿资源移动到正式指南目录，并把正文中
-``/guides/drafts/<token>/`` 前缀重写为 ``/guides/<指南ID>/assets/``。
+指南在「新建」时即获得 ID 与目录，因此编辑页上传的资源直接写入
+``assets/``，不再需要临时草稿目录。
 
 本模块为纯 Python（不依赖 Flask / 数据库），供路由与迁移脚本复用。
 """
@@ -20,7 +16,6 @@
 import os
 import re
 import shutil
-import uuid
 from datetime import datetime, timedelta
 
 from config import (
@@ -32,7 +27,7 @@ from config import (
 
 MD_FILENAME = 'guide.md'
 ASSETS_DIRNAME = 'assets'
-DRAFT_DIRNAME = '_drafts'
+DRAFT_DIRNAME = '_drafts'  # 旧版草稿目录，仅用于清理历史残留
 
 
 # ---------------------------------------------------------------------------
@@ -55,18 +50,8 @@ def assets_dir_for(guide_id):
 
 
 def draft_dir(token):
-    """草稿根目录：uploads/guides/_drafts/<token>。"""
+    """旧版草稿根目录：uploads/guides/_drafts/<token>（仅用于清理残留）。"""
     return os.path.join(UPLOAD_GUIDES_DIR, DRAFT_DIRNAME, str(token))
-
-
-def draft_assets_dir(token):
-    """草稿资源目录。"""
-    return os.path.join(draft_dir(token), ASSETS_DIRNAME)
-
-
-def new_draft_token():
-    """生成一个新的草稿 token。"""
-    return uuid.uuid4().hex
 
 
 def ensure_guide_dir(guide_id):
@@ -248,74 +233,8 @@ def delete_asset(directory, filename):
 
 
 # ---------------------------------------------------------------------------
-# 草稿（新建指南时先上传的资源）
+# 旧版草稿目录清理
 # ---------------------------------------------------------------------------
-
-def save_draft_asset(token, upload):
-    """保存草稿资源，返回 ``(ok, message, item)``（配额同正式指南）。"""
-    directory = draft_assets_dir(token)
-    os.makedirs(directory, exist_ok=True)
-    total = directory_total(directory)
-    try:
-        stream = getattr(upload, 'stream', None)
-        if stream is not None:
-            stream.seek(0, 2)
-            size = stream.tell()
-            stream.seek(0)
-        else:
-            size = 0
-    except (AttributeError, OSError):
-        size = 0
-    msg = _quota_error(total, size)
-    if msg:
-        return False, msg, None
-    name, size = _save_upload(directory, upload)
-    return True, '', {'name': name, 'size': size, 'size_label': format_size(size)}
-
-
-def list_draft_assets(token):
-    """列出草稿资源。"""
-    return list_assets(draft_assets_dir(token))
-
-
-def draft_total(token):
-    """草稿资源占用字节数。"""
-    return directory_total(draft_assets_dir(token))
-
-
-def delete_draft_asset(token, filename):
-    """删除草稿资源。"""
-    return delete_asset(draft_assets_dir(token), filename)
-
-
-def finalize_draft(token, guide_id):
-    """把草稿资源移动到正式指南目录，并删除草稿目录。
-
-    返回实际移动的文件名列表（正常情况保持原文件名，便于正文 URL 前缀重写）。
-    """
-    src = draft_assets_dir(token)
-    dst = assets_dir_for(guide_id)
-    moved = []
-    if os.path.isdir(src):
-        os.makedirs(dst, exist_ok=True)
-        for name in os.listdir(src):
-            src_path = os.path.join(src, name)
-            if not os.path.isfile(src_path):
-                continue
-            dst_name = _unique_name(dst, name)
-            dst_path = os.path.join(dst, dst_name)
-            shutil.move(src_path, dst_path)
-            moved.append(dst_name)
-    shutil.rmtree(draft_dir(token), ignore_errors=True)
-    return moved
-
-
-def rewrite_draft_urls(content, token, guide_id):
-    """把正文中的草稿资源 URL 重写为正式指南资源 URL。"""
-    old = f'/guides/drafts/{token}/'
-    new = f'/guides/{int(guide_id)}/assets/'
-    return str(content or '').replace(old, new)
-
 
 def cleanup_stale_drafts(keep_hours=GUIDE_DRAFT_KEEP_HOURS):
     """删除超过保留时长的草稿目录，返回删除数量。"""

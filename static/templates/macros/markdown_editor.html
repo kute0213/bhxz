@@ -29,13 +29,12 @@
        extra_attrs   - 添加到 textarea 的额外属性（如 required）
        video_list_url  - 视频列表 API（传入后才显示「视频」标签页与上传按钮）
        video_upload_url - 视频上传 API
-       video_token     - 新建指南时使用的草稿 token（编辑已有指南时留空）
 #
 #   说明：工具栏中的「链接」「表格」「视频」三个标签页是上下文标签页——
 #   只有当光标/选区位于链接内、表格内、视频内（或刚点击了「插入链接 / 视频」）时才会出现，
 #   离开对应上下文后自动隐藏并切回「基础」标签页。
 #}
-{% macro markdown_editor(name='', value='', editor_id='md-editor', placeholder='', show_count=false, autosave=true, toolbar_extra='', extra_attrs='', video_list_url='', video_upload_url='', video_token='') %}
+{% macro markdown_editor(name='', value='', editor_id='md-editor', placeholder='', show_count=false, autosave=true, toolbar_extra='', extra_attrs='', video_list_url='', video_upload_url='') %}
 <style>
 /* ================= 统一编辑器容器 ================= */
 .mre {
@@ -418,8 +417,7 @@ body.mre-resizing, body.mre-resizing * { cursor: col-resize !important; user-sel
 </style>
 
 <div class="mre" data-mre data-editor-id="{{ editor_id }}" data-mre-autosave="{{ 'true' if autosave else 'false' }}"
-     data-mre-video-list="{{ video_list_url }}" data-mre-video-upload="{{ video_upload_url }}"
-     data-mre-video-token="{{ video_token }}">
+     data-mre-video-list="{{ video_list_url }}" data-mre-video-upload="{{ video_upload_url }}">
 
     {# ---------- 顶部：标签页分类 + 模式切换 ---------- #}
     <div class="mre-tabs" role="tablist">

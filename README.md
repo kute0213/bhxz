@@ -227,9 +227,11 @@ python scripts/build/package.py
 * Markdown 详情页（标题锚点、代码一键复制）
 
 * **指南文件化存储**：每条指南对应独立目录 `uploads/guides/<指南ID>/`，正文保存为 `guide.md`（唯一内容来源），视频等资源放在 `assets/`；数据库 `server_guides.content` 只保留空串，读取时以文件优先、文件缺失时回退数据库旧内容。每个指南的全部资源合计上限 **50MB**，支持 mp4 / webm / ogv / ogg / mov / m4v。
-  * **新建指南先存草稿**：尚未创建指南时，视频先上传到 `uploads/guides/_drafts/<token>/assets/`（token 存于会话，最多 5 个，24 小时自动清理），提交后自动迁移到正式目录并把正文中的资源 URL 重写为 `/guides/<ID>/assets/`。
+  * **新建即生成目录（草稿工作流）**：新建指南只需填写标题与摘要，提交后立即创建指南 ID 与目录，正文暂为空，并可在「我的指南」看到该指南；随后进入编辑页撰写内容、上传视频（资源直接写入 `uploads/guides/<ID>/assets/`）。新建后的指南状态为 **草稿（draft）**，草稿计入「未通过指南数量」，超过上限则禁止新建。
+  * **发布**：在「我的指南」或指南详情页点击「发布」（`POST /api/guides/<id>/publish`），草稿即变为待审核（pending）状态，正文非空即可发布；草稿保存无需验证码，正式提交仍需验证码。
   * **迁移脚本**：`python scripts/migrate_guides.py` 把数据库中已有指南正文自动写入 `guide.md` 并清空数据库正文；支持 `--dry-run` 演练与 `--overwrite` 覆盖，可重复执行（幂等）。
   * **资源访问**：`/guides/<ID>/assets/<文件名>`；已审核通过的指南公开可访问，未通过的仅作者与管理员可访问。
+  * 旧版 `uploads/guides/_drafts/` 草稿 token 机制已移除，仅在自动维护时清理历史残留目录。
 
 * **富文本 / Markdown 统一编辑器**（全站唯一宏 `static/templates/macros/markdown_editor.html` + 引擎 `static/js/pages/markdown-editor.js`）：
   * 默认「富文本（所见即所得）」模式，底层数据与保存内容**始终是 Markdown**，可视化界面只是渲染层；可一键无缝切换到「Markdown 源码」模式（单栏，无实时预览），切换时内容与光标位置保留。
@@ -536,12 +538,10 @@ python scripts/build/package.py
 | 方法  | 路径                   | 说明                                                    |
 | --- | -------------------- | ----------------------------------------------------- |
 | GET | `/api/guides/list`   | 指南列表（`page` 页码、`my=1` 我的指南、`q` 关键词匹配标题与摘要；每页条数由 `GUIDES_PER_PAGE` 控制） |
+| POST | `/api/guides/<id>/publish` | 发布草稿指南（草稿 → 待审核，正文不能为空，需登录且仅作者 / 管理员） |
 | GET | `/api/guides/<id>/videos` | 当前指南视频列表（含 `url` / `delete_url` 与配额用量，需登录） |
-| POST | `/api/guides/<id>/videos` | 上传指南视频（表单字段 `video`，按 50MB 配额校验，需登录） |
+| POST | `/api/guides/<id>/videos` | 上传指南视频（表单字段 `video`，写入 `assets/` 并按 50MB 配额校验，需登录） |
 | POST | `/api/guides/<id>/videos/<文件名>/delete` | 删除指南视频（需登录） |
-| GET | `/api/guides/draft/videos` | 新建指南时的草稿视频列表（`token` 参数，需登录） |
-| POST | `/api/guides/draft/videos` | 上传草稿视频（表单字段 `video` + `token`，提交指南时自动迁移） |
-| POST | `/api/guides/draft/videos/<文件名>/delete` | 删除草稿视频（`token` 参数或 JSON 体） |
 
 ### 大喇叭音频 AJAX 端点
 

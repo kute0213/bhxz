@@ -694,9 +694,12 @@ python scripts/migrate_guides.py             # 正式迁移
 **指南文件存储约定：**
 
 * 每个指南一个目录 `uploads/guides/<ID>/`，内含 `guide.md`（唯一正文来源）与 `assets/`（视频等资源）
-* 新建指南的资源先放 `uploads/guides/_drafts/<token>/assets/`，提交时由 `finalize_draft()` 迁移并重写正文 URL
+* 新建指南时即生成指南 ID 与目录（正文为空），状态为 `draft`，之后在编辑页直接写入正文与 `assets/`；不再使用 `_drafts` token 机制
+* 草稿保存保持 `draft` 且无需验证码；「发布」（`POST /api/guides/<id>/publish`）将草稿改为 `pending`，要求正文非空
+* 草稿计入「未通过指南数量」（统计条件 `status != 'approved'`），超过上限时禁止新建
 * 每个指南 `assets/` 合计不超过 50MB（`GUIDE_RESOURCE_MAX_BYTES`），视频扩展名见 `GUIDE_VIDEO_EXTENSIONS`
 * 删除指南（管理员删除 / 被驳回超时清理）时必须调用 `guide_store.delete_guide_dir(id)`，避免残留目录
+* `uploads/guides/_drafts/` 仅用于自动维护时清理历史残留
 
 **开发准则：**
 

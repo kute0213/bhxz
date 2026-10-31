@@ -11,25 +11,17 @@ from core.shared.snowflake import next_id
 from services.mail import email_service, guide_review_result as build_result_html
 from services import guides as guide_store
 from routes.admin import admin_bp
-from routes.guides.api import (
-    issue_guide_draft_token,
-    is_valid_guide_draft_token,
-    consume_guide_draft_token,
-)
 
 
 PAGE_SIZE = 10
 
 
 def _admin_create_context():
-    """后台新建指南上下文（含草稿视频上传地址）。"""
-    token = issue_guide_draft_token()
+    """后台新建指南上下文（指南尚未创建，暂不提供视频上传）。"""
     return {
         'guide': None,
-        'draft_token': token,
-        'video_list_url': url_for('guides.api_guide_draft_videos'),
-        'video_upload_url': url_for('guides.api_guide_draft_video_upload'),
-        'video_token': token,
+        'video_list_url': '',
+        'video_upload_url': '',
     }
 
 
@@ -37,10 +29,8 @@ def _admin_edit_context(guide):
     """后台编辑指南上下文（视频直接上传到该指南目录）。"""
     return {
         'guide': guide,
-        'draft_token': '',
         'video_list_url': url_for('guides.api_guide_videos', guide_id=guide['id']),
         'video_upload_url': url_for('guides.api_guide_video_upload', guide_id=guide['id']),
-        'video_token': '',
     }
 
 
@@ -160,7 +150,6 @@ def admin_guide_create():
         cover_image = (data.get('cover_image') or '').strip()
         is_pinned = 1 if str(data.get('is_pinned') or '') in ('1', 'true', 'on', 'True') else 0
         status = (data.get('status') or 'approved').strip()
-        draft_token = (data.get('draft_token') or '').strip()
 
         if not title or not content:
             return jsonify({'success': False, 'message': '标题和内容不能为空'}), 400
@@ -173,10 +162,7 @@ def admin_guide_create():
             slug = _ensure_unique_slug(conn, _slugify(title))
             published_at = now if status == 'approved' else None
 
-            # 正文写入 guide.md，草稿视频迁移到正式指南目录
-            if draft_token and is_valid_guide_draft_token(draft_token):
-                guide_store.finalize_draft(draft_token, guide_id)
-                content = guide_store.rewrite_draft_urls(content, draft_token, guide_id)
+            # 正文写入 guide.md（数据库不再保存正文）
             guide_store.write_guide_content(guide_id, content)
 
             conn.execute(
@@ -190,8 +176,6 @@ def admin_guide_create():
                  status, is_pinned, now, now, published_at),
             )
             conn.commit()
-            if draft_token:
-                consume_guide_draft_token(draft_token)
             return jsonify({
                 'success': True,
                 'message': '指南已创建',

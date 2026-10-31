@@ -82,32 +82,8 @@ class TestAssets:
         assert guide_store.safe_asset_name('') == 'asset'
 
 
-class TestDraft:
-    """新建指南的草稿资源：迁移与 URL 重写。"""
-
-    def test_draft_flow_finalize_and_rewrite(self, guides_dir):
-        token = 'abc123'
-        ok, _, item = guide_store.save_draft_asset(token, FakeUpload('演示.mp4', b'video'))
-        assert ok
-
-        draft_url = f'/guides/drafts/{token}/' + item['name']
-        guide_id = 123
-        moved = guide_store.finalize_draft(token, guide_id)
-
-        assert moved == [item['name']]
-        assert os.path.isfile(os.path.join(guide_store.assets_dir_for(guide_id), item['name']))
-        assert not os.path.isdir(guide_store.draft_dir(token))
-
-        content = f'<video src="{draft_url}" controls></video>'
-        rewritten = guide_store.rewrite_draft_urls(content, token, guide_id)
-        assert rewritten == f'<video src="/guides/{guide_id}/assets/{item["name"]}" controls></video>'
-
-    def test_draft_quota(self, guides_dir, monkeypatch):
-        monkeypatch.setattr(guide_store, 'GUIDE_RESOURCE_MAX_BYTES', 100)
-        ok, _, _ = guide_store.save_draft_asset('t1', FakeUpload('a.mp4', b'x' * 80))
-        assert ok
-        ok2, msg, _ = guide_store.save_draft_asset('t1', FakeUpload('b.mp4', b'y' * 40))
-        assert not ok2 and '超出上限' in msg
+class TestLegacyDraftCleanup:
+    """旧版草稿目录（_drafts）残留清理。"""
 
     def test_cleanup_stale_drafts(self, guides_dir, monkeypatch):
         old_dir = guide_store.draft_dir('old')

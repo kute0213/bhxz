@@ -45,10 +45,15 @@
                     <div class="flex items-center gap-2 flex-shrink-0">
                         {% if guide.status != 'approved' %}
                         <span class="text-xs px-2 py-1 rounded-full
-                            {% if guide.status == 'pending' %}bg-yellow-500/15 text-yellow-300 border border-yellow-500/25
+                            {% if guide.status == 'draft' %}bg-slate-500/15 text-slate-300 border border-slate-500/25
+                            {% elif guide.status == 'pending' %}bg-yellow-500/15 text-yellow-300 border border-yellow-500/25
                             {% else %}bg-red-500/15 text-red-300 border border-red-500/25{% endif %}">
-                            {% if guide.status == 'pending' %}待审核{% else %}已拒绝{% endif %}
+                            {% if guide.status == 'draft' %}草稿{% elif guide.status == 'pending' %}待审核{% else %}已拒绝{% endif %}
                         </span>
+                        {% endif %}
+                        {% if guide.status == 'draft' and user and user.id == guide.author_id %}
+                        <button id="guide-publish-btn" type="button" data-guide-id="{{ guide.id }}"
+                                class="text-green-400 hover:text-green-300 text-xs px-2 py-1 rounded-full bg-green-500/10 border border-green-500/20">发布</button>
                         {% endif %}
                         <button id="guide-fav-btn" type="button"
                                 class="btn-secondary px-3 py-2 rounded-lg text-xs flex items-center gap-1 guide-fav-btn
@@ -147,6 +152,37 @@
     });
 })();
 </script>
+
+{# 草稿发布按钮（仅草稿作者可见） #}
+<script>
+(function () {
+    var btn = document.getElementById('guide-publish-btn');
+    if (!btn) return;
+    var guideId = btn.getAttribute('data-guide-id');
+    btn.addEventListener('click', function () {
+        btn.disabled = true;
+        fetch('/api/guides/' + guideId + '/publish', {
+            method: 'POST',
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(function (r) { return r.json().catch(function () { return {}; }); })
+        .then(function (d) {
+            if (!d || !d.success) {
+                if (typeof Toast !== 'undefined') Toast.error((d && d.message) || '发布失败');
+                btn.disabled = false;
+                return;
+            }
+            if (typeof Toast !== 'undefined') Toast.success(d.message || '指南已发布');
+            setTimeout(function () { location.reload(); }, 300);
+        })
+        .catch(function () {
+            btn.disabled = false;
+            if (typeof Toast !== 'undefined') Toast.error('发布失败，请重试');
+        });
+    });
+})();
+</script>
+
 <style>
 .guide-fav-btn.guide-fav-active {
     background: rgba(234, 179, 8, 0.12);

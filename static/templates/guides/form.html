@@ -1,20 +1,24 @@
 {% extends "base.html" %}
 {% from "macros/markdown_editor.html" import markdown_editor %}
 {% block title %}{{ '编辑指南' if guide else '新建指南' }}{% endblock %}
-{# 按需加载：本页需要图形验证码弹窗，通过 base.html 的 captcha_modal 块引入 #}
+{# 按需加载：本页需要图形验证码弹窗（仅非草稿保存时使用） #}
 {% block captcha_modal %}{% from 'macros/modal.html' import modal_captcha %}{{ modal_captcha() }}{% endblock %}
 {% block content %}
 <section class="page-container py-12">
     <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="mb-8">
-            <a href="{{ url_for('guides.guide_list') }}" class="text-sm text-cream/50 hover:text-gold-400 inline-flex items-center gap-1 transition-colors mb-4">
+            <a href="{{ url_for('guides.guide_list') }}?my=1" class="text-sm text-cream/50 hover:text-gold-400 inline-flex items-center gap-1 transition-colors mb-4">
                 <i data-lucide="arrow-left" class="w-4 h-4"></i>
-                返回指南列表
+                返回我的指南
             </a>
             <h1 class="text-2xl sm:text-3xl font-bold">{{ '编辑指南' if guide else '新建指南' }}</h1>
+            {% if guide and guide.status == 'draft' %}
+            <div class="mt-4 rounded-lg border border-yellow-500/25 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-200 flex flex-wrap items-center gap-2">
+                <span>当前为草稿，保存后可返回「我的指南」发布。</span>
+                <a href="{{ url_for('guides.guide_list') }}?my=1" class="text-gold-400 hover:text-gold-300 underline">前往我的指南</a>
+            </div>
+            {% endif %}
         </div>
-
-        
 
         <form method="POST" class="guide-submit-form space-y-6">
             {{ csrf_field() }}
@@ -35,18 +39,16 @@
                     value=guide.content if guide else '',
                     placeholder='在此输入 Markdown 内容...',
                     video_list_url=video_list_url|default(''),
-                    video_upload_url=video_upload_url|default(''),
-                    video_token=video_token|default('')
+                    video_upload_url=video_upload_url|default('')
                 ) }}
             </div>
 
-            {% if draft_token %}<input type="hidden" name="draft_token" value="{{ draft_token }}">{% endif %}
             <input type="hidden" name="captcha" id="guide-captcha" value="">
             <input type="hidden" name="captcha_id" id="guide-captcha-id" value="">
 
             <div class="flex items-center justify-end gap-3 pt-4">
-                <a href="{{ url_for('guides.guide_list') }}" class="btn-secondary px-5 py-2.5 rounded-lg text-sm">取消</a>
-                <button type="submit" class="btn-primary px-5 py-2.5 rounded-lg text-sm">{{ '保存修改' if guide else '提交审核' }}</button>
+                <a href="{{ url_for('guides.guide_list') }}?my=1" class="btn-secondary px-5 py-2.5 rounded-lg text-sm">取消</a>
+                <button type="submit" class="btn-primary px-5 py-2.5 rounded-lg text-sm">{{ '保存草稿' if guide and guide.status == 'draft' else '保存修改' }}</button>
             </div>
         </form>
     </div>
@@ -56,12 +58,13 @@
 <script src="{{ url_for('static', filename='lib/marked/marked.min.js', v='1') }}"></script>
 <script src="{{ url_for('static', filename='js/pages/markdown-editor.js', v='7') }}"></script>
 <script>
-// 提交指南：点击“提交审核”按钮后弹出图形验证码弹窗，
-// 验证通过后才提交表单；验证码出错时弹窗内直接刷新验证码，不刷新页面，保留已填内容。
-(function () {
+// 提交指南：草稿直接保存；其他状态保存后需重新审核，弹出图形验证码弹窗。
+( function () {
     function init() {
         var form = document.querySelector('.guide-submit-form');
-        if (!form || typeof CaptchaModal === 'undefined') return;
+        if (!form) return;
+        if (!{{ 'false' if guide and guide.status == 'draft' else 'true' }}) return; // 草稿保存无需验证码
+        if (typeof CaptchaModal === 'undefined') return;
 
         form.addEventListener('submit', function (e) {
             e.preventDefault();

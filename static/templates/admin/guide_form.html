@@ -36,7 +36,8 @@
                 <div>
                     <label class="block text-sm text-cream/70 mb-1">状态</label>
                     <select name="status" class="w-full px-4 py-2 rounded-lg bg-forest-900/60 border border-forest-700/50 text-cream focus:border-gold-400/50 focus:outline-none">
-                        <option value="pending" {% if guide and guide.status == 'pending' %}selected{% endif %}>待审核</option>
+                        <option value="draft" {% if guide and guide.status == 'draft' %}selected{% endif %}>草稿</option>
+                        <option value="pending" {% if not guide or guide.status == 'pending' %}selected{% endif %}>待审核</option>
                         <option value="approved" {% if guide and guide.status == 'approved' %}selected{% endif %}>已通过</option>
                         <option value="rejected" {% if guide and guide.status == 'rejected' %}selected{% endif %}>已拒绝</option>
                     </select>
@@ -57,12 +58,9 @@
                     value=guide.content if guide else '',
                     placeholder='在此输入 Markdown 内容...',
                     video_list_url=video_list_url|default(''),
-                    video_upload_url=video_upload_url|default(''),
-                    video_token=video_token|default('')
+                    video_upload_url=video_upload_url|default('')
                 ) }}
             </div>
-
-            {% if draft_token %}<input type="hidden" name="draft_token" value="{{ draft_token }}">{% endif %}
 
             <div class="flex items-center justify-end gap-3 pt-4">
                 <a href="{{ url_for('admin.admin_guides') }}" class="btn-secondary px-5 py-2.5 rounded-lg text-sm">取消</a>
@@ -89,8 +87,7 @@
             content: form.querySelector('[name="content"]').value.trim(),
             cover_image: form.querySelector('[name="cover_image"]').value.trim(),
             status: form.querySelector('[name="status"]').value,
-            is_pinned: form.querySelector('[name="is_pinned"]').value,
-            draft_token: (form.querySelector('[name="draft_token"]') || {}).value || ''
+            is_pinned: form.querySelector('[name="is_pinned"]').value
         };
         if (!payload.title || !payload.content) {
             if (typeof Toast !== 'undefined') Toast.error('标题和内容不能为空');

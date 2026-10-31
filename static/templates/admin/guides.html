@@ -3,6 +3,7 @@
 {% block title %}指南管理{% endblock %}
 {% block extra_style %}
 <style>
+.status-draft { background: rgba(148, 163, 184, 0.15); color: #cbd5e1; border: 1px solid rgba(148, 163, 184, 0.25); }
 .status-pending { background: rgba(234, 179, 8, 0.15); color: #facc15; border: 1px solid rgba(234, 179, 8, 0.25); }
 .status-approved { background: rgba(34, 197, 94, 0.15); color: #86efac; border: 1px solid rgba(34, 197, 94, 0.25); }
 .status-rejected { background: rgba(239, 68, 68, 0.15); color: #fca5a5; border: 1px solid rgba(239, 68, 68, 0.25); }
@@ -73,10 +74,11 @@
                             <td class="px-4 py-3 text-cream/70">{{ guide.author_name or '未知' }}</td>
                             <td class="px-4 py-3" data-guide-status="{{ guide.id }}">
                                 <span class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full
-                                    {% if guide.status == 'pending' %}status-pending
+                                    {% if guide.status == 'draft' %}status-draft
+                                    {% elif guide.status == 'pending' %}status-pending
                                     {% elif guide.status == 'approved' %}status-approved
                                     {% else %}status-rejected{% endif %}">
-                                    {% if guide.status == 'pending' %}待审核{% elif guide.status == 'approved' %}已通过{% else %}已拒绝{% endif %}
+                                    {% if guide.status == 'draft' %}草稿{% elif guide.status == 'pending' %}待审核{% elif guide.status == 'approved' %}已通过{% else %}已拒绝{% endif %}
                                 </span>
                             </td>
                             <td class="px-4 py-3 text-cream/70">{{ '是' if guide.is_pinned else '否' }}</td>
@@ -253,8 +255,8 @@ function rejectFromPreview() {
     var API_URL = "{{ url_for('admin.admin_guides_api') }}";
     var state = { page: 1, loading: false };
 
-    var CLS_MAP = { pending: 'status-pending', approved: 'status-approved', rejected: 'status-rejected' };
-    var LABEL_MAP = { pending: '待审核', approved: '已通过', rejected: '已拒绝' };
+    var CLS_MAP = { draft: 'status-draft', pending: 'status-pending', approved: 'status-approved', rejected: 'status-rejected' };
+    var LABEL_MAP = { draft: '草稿', pending: '待审核', approved: '已通过', rejected: '已拒绝' };
 
     function esc(t) { var d = document.createElement('div'); d.textContent = t == null ? '' : String(t); return d.innerHTML; }
     function refreshIcons() { if (typeof lucide !== 'undefined' && lucide.createIcons) { try { lucide.createIcons(); } catch (_) {} } }

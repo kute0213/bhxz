@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}新建指南{% endblock %}
+{# 按需加载：本页需要图形验证码弹窗，通过 base.html 的 captcha_modal 块引入 #}
+{% block captcha_modal %}{% from 'macros/modal.html' import modal_captcha %}{{ modal_captcha() }}{% endblock %}
+{% block content %}
+<section class="page-container py-12">
+    <div class="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="mb-8">
+            <a href="{{ url_for('guides.guide_list') }}?my=1" class="text-sm text-cream/50 hover:text-gold-400 inline-flex items-center gap-1 transition-colors mb-4">
+                <i data-lucide="arrow-left" class="w-4 h-4"></i>
+                返回我的指南
+            </a>
+            <h1 class="text-2xl sm:text-3xl font-bold">新建指南</h1>
+            <p class="text-cream/50 text-sm mt-2">先填写标题创建草稿，随后在编辑页撰写内容、上传视频，完成后在「我的指南」点击发布。</p>
+        </div>
+
+        <form method="POST" class="guide-create-form space-y-6">
+            {{ csrf_field() }}
+            <div>
+                <label class="block text-sm text-cream/70 mb-1">标题</label>
+                <input type="text" name="title" value="" class="w-full px-4 py-2 rounded-lg bg-forest-900/60 border border-forest-700/50 text-cream focus:border-gold-400/50 focus:outline-none" required maxlength="200" autofocus>
+            </div>
+
+            <div>
+                <label class="block text-sm text-cream/70 mb-1">摘要（可选）</label>
+                <input type="text" name="summary" value="" class="w-full px-4 py-2 rounded-lg bg-forest-900/60 border border-forest-700/50 text-cream focus:border-gold-400/50 focus:outline-none" maxlength="300">
+            </div>
+
+            <input type="hidden" name="captcha" id="guide-captcha" value="">
+            <input type="hidden" name="captcha_id" id="guide-captcha-id" value="">
+
+            <div class="flex items-center justify-end gap-3 pt-4">
+                <a href="{{ url_for('guides.guide_list') }}?my=1" class="btn-secondary px-5 py-2.5 rounded-lg text-sm">取消</a>
+                <button type="submit" class="btn-primary px-5 py-2.5 rounded-lg text-sm">创建草稿</button>
+            </div>
+        </form>
+    </div>
+</section>
+
+<script>
+// 创建草稿：提交前弹出图形验证码弹窗，验证通过后再提交表单
+(function () {
+    function init() {
+        var form = document.querySelector('.guide-create-form');
+        if (!form || typeof CaptchaModal === 'undefined') return;
+
+        form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            e.stopPropagation();
+
+            CaptchaModal.show('请完成图形验证码后创建指南', function (captchaId, code) {
+                document.getElementById('guide-captcha-id').value = captchaId;
+                document.getElementById('guide-captcha').value = code;
+                form.submit();
+            });
+        }, true);
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+})();
+</script>
+{% endblock %}
