@@ -16,6 +16,8 @@
 import os
 import re
 import shutil
+import subprocess
+import tempfile
 from datetime import datetime, timedelta
 
 from config import (
@@ -23,7 +25,10 @@ from config import (
     GUIDE_RESOURCE_MAX_BYTES,
     GUIDE_VIDEO_EXTENSIONS,
     GUIDE_DRAFT_KEEP_HOURS,
+    GUIDE_VIDEO_TRANSCODE_TIMEOUT,
+    FFMPEG_BIN,
 )
+from core.shared.snowflake import next_id
 
 MD_FILENAME = 'guide.md'
 ASSETS_DIRNAME = 'assets'
@@ -217,6 +222,92 @@ def save_guide_asset(guide_id, upload):
         return False, msg, None
     name, size = _save_upload(directory, upload)
     return True, '', {'name': name, 'size': size, 'size_label': format_size(size)}
+
+
+def _remove_quiet(path):
+    """删除文件，忽略不存在的文件与占用错误。"""
+    try:
+        if os.path.isfile(path):
+            os.remove(path)
+    except OSError:
+        pass
+
+
+def save_guide_video(guide_id, upload):
+    """保存并转码指南视频，返回 ``(ok, message, item)``。
+
+    流程：原文件先写入临时目录 → ffmpeg 统一转码为 H.264 / MP4
+    （音频 AAC、faststart）→ 以雪花 ID 命名 ``<ID>.mp4`` 存入 ``assets/``。
+    转码失败 / 超时 / 超出配额时不会留下任何文件。
+    """
+    directory = assets_dir_for(guide_id)
+    os.makedirs(directory, exist_ok=True)
+    total = directory_total(directory)
+
+    # 先用原始文件大小做一次配额预检（最终以转码后大小为准）
+    try:
+        stream = getattr(upload, 'stream', None)
+        if stream is not None:
+            stream.seek(0, 2)
+            src_size = stream.tell()
+            stream.seek(0)
+        else:
+            src_size = 0
+    except (AttributeError, OSError):
+        src_size = 0
+    msg = _quota_error(total, src_size)
+    if msg:
+        return False, msg, None
+
+    tmp_dir = tempfile.mkdtemp(prefix='.transcode_', dir=guide_dir(guide_id))
+    out_name = f'{next_id()}.mp4'
+    out_path = os.path.join(directory, out_name)
+    try:
+        src_path = os.path.join(tmp_dir, 'source')
+        upload.save(src_path)
+
+        cmd = [
+            FFMPEG_BIN, '-y', '-loglevel', 'error', '-nostats',
+            '-i', src_path,
+            # 视频：H.264（yuv420p 保证浏览器 / 系统兼容，宽高取偶数）
+            '-map', '0:v:0',
+            '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '23',
+            '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2',
+            '-pix_fmt', 'yuv420p',
+            # 音频：有则转 AAC，无则忽略
+            '-map', '0:a?', '-c:a', 'aac', '-b:a', '128k',
+            # 便于网页边下边播
+            '-movflags', '+faststart',
+            '-f', 'mp4', out_path,
+        ]
+        try:
+            proc = subprocess.run(
+                cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                timeout=GUIDE_VIDEO_TRANSCODE_TIMEOUT, check=False,
+            )
+        except FileNotFoundError:
+            _remove_quiet(out_path)
+            return False, ('未找到 ffmpeg 可执行文件，无法转码视频：'
+                           'Windows 请将 ffmpeg.exe 放到 uploads/ffmpeg/ 目录；'
+                           'Linux/macOS 请安装系统 ffmpeg'), None
+        except subprocess.TimeoutExpired:
+            _remove_quiet(out_path)
+            return False, '视频转码超时，请尝试体积更小或更短的视频', None
+
+        if proc.returncode != 0 or not os.path.isfile(out_path):
+            _remove_quiet(out_path)
+            detail = (proc.stderr or b'').decode('utf-8', 'ignore').strip()[-300:]
+            return False, f'视频转码失败：{detail or "ffmpeg 返回异常"}', None
+
+        size = os.path.getsize(out_path)
+        if total + size > GUIDE_RESOURCE_MAX_BYTES:
+            _remove_quiet(out_path)
+            return False, _quota_error(total, size), None
+
+        return True, '', {'name': out_name, 'size': size,
+                          'size_label': format_size(size)}
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
 def delete_asset(directory, filename):

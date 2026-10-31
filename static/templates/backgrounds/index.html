@@ -191,6 +191,9 @@
             <div id="bg-active-empty" class="pixel-card rounded-xl p-8 text-center hidden">
                 <p class="text-muted">暂无背景图片</p>
             </div>
+            <div id="bg-active-more" class="text-center mt-6 hidden">
+                <button type="button" id="bg-load-more" class="btn-secondary px-6 py-2.5 rounded-xl">加载更多</button>
+            </div>
         </div>
 
         <div id="bg-my-section" class="hidden">
@@ -296,6 +299,10 @@
     var mySection = document.getElementById('bg-my-section');
     var myGrid = document.getElementById('bg-my-grid');
     var emptyBox = document.getElementById('bg-empty');
+    var moreWrap = document.getElementById('bg-active-more');
+    var loadMoreBtn = document.getElementById('bg-load-more');
+    var activePage = 1;
+    var loadingMore = false;
 
     function render(data) {
         var approved = data.approved || [];
@@ -304,6 +311,8 @@
         activeGrid.innerHTML = approved.map(activeCard).join('');
         activeEmpty.classList.toggle('hidden', approved.length > 0);
         activeSection.classList.remove('hidden');
+        activePage = data.page || 1;
+        moreWrap.classList.toggle('hidden', !data.has_more);
 
         if (CFG.loggedIn) {
             myGrid.innerHTML = my.map(myCard).join('');
@@ -315,6 +324,38 @@
 
         loading.classList.add('hidden');
         refreshIcons();
+    }
+
+    // 分段加载：每次 5 张，已加载内容追加到列表末尾
+    if (loadMoreBtn) {
+        loadMoreBtn.addEventListener('click', function () {
+            if (loadingMore) return;
+            loadingMore = true;
+            loadMoreBtn.disabled = true;
+            loadMoreBtn.textContent = '加载中…';
+
+            fetch(CFG.apiUrl + '?page=' + (activePage + 1), {
+                headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+            })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (!data.success) throw new Error('load failed');
+                    activeGrid.insertAdjacentHTML('beforeend',
+                        (data.approved || []).map(activeCard).join(''));
+                    activePage = data.page || (activePage + 1);
+                    activeEmpty.classList.add('hidden');
+                    moreWrap.classList.toggle('hidden', !data.has_more);
+                    refreshIcons();
+                })
+                .catch(function () {
+                    if (typeof Toast !== 'undefined') Toast.error('加载失败，请稍后重试');
+                })
+                .then(function () {
+                    loadingMore = false;
+                    loadMoreBtn.disabled = false;
+                    loadMoreBtn.textContent = '加载更多';
+                });
+        });
     }
 
     fetch(CFG.apiUrl, { headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' } })

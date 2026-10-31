@@ -12,6 +12,7 @@ from core.helpers import render_page
 from routes.backgrounds import backgrounds_bp
 from services import background_service
 from core.shared.ip import get_client_ip
+from config import get_page_size
 
 
 @backgrounds_bp.route('/backgrounds')
@@ -22,13 +23,16 @@ def background_list_page():
 
 @backgrounds_bp.route('/api/backgrounds/list')
 def api_backgrounds_list():
-    """背景图片列表 API（JSON，供 /backgrounds 页面前端无刷新获取）。
+    """背景图片列表 API（JSON，分页，每页固定 5 张）。
 
-    返回全部已通过审核的背景图片（即全站背景可用图片池），
-    以及登录用户自己上传的全部背景图片。
+    approved —— 已通过审核的背景图片池，按 page 分页返回（每页 5 张）；
+    my       —— 当前登录用户自己上传的全部背景图片（不分页）。
     """
     user = get_current_user()
-    approved_bgs = background_service.get_approved_backgrounds()
+    page = max(1, request.args.get('page', type=int) or 1)
+    page_size = get_page_size('BACKGROUNDS_PER_PAGE', 5)
+    approved_bgs, total = background_service.get_backgrounds_page(
+        status=background_service.STATUS_APPROVED, page=page, page_size=page_size)
     my_bgs = background_service.get_backgrounds(user_id=user['id']) if user else []
 
     def _public(bg):
@@ -45,6 +49,10 @@ def api_backgrounds_list():
         'logged_in': bool(user),
         'approved': [_public(b) for b in approved_bgs],
         'my': [_public(b) for b in my_bgs],
+        'page': page,
+        'page_size': page_size,
+        'total': total,
+        'has_more': page * page_size < total,
     })
 
 

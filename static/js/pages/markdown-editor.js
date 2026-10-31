@@ -732,6 +732,7 @@
         this.rich.addEventListener('blur', function () { self.syncNow(); });
         this.rich.addEventListener('copy', function (e) { self.handleVideoClipboard(e, false); });
         this.rich.addEventListener('cut', function (e) { self.handleVideoClipboard(e, true); });
+        this.rich.addEventListener('paste', function (e) { self.handleRichPaste(e); });
         this.rich.addEventListener('keydown', function (e) { self.handleVideoKeydown(e); });
         this.rich.addEventListener('change', function (e) {
             var t = e.target;
@@ -1362,10 +1363,9 @@
 
     /* ---------- 视频原子块：选中 / 剪切 / 删除 ---------- */
 
-    // 当前选区完整覆盖的视频（选区混有文字时返回空，交给浏览器默认处理）
-    Editor.prototype.selectedVideos = function () {
-        var range = this.getRichRange();
-        if (!range || range.collapsed) return [];
+    // 选区覆盖到的视频（用于判断是否需要接管复制 / 剪切 / 删除）
+    Editor.prototype.videosInRange = function (range) {
+        if (!range) return [];
         var videos = [];
         var all = this.rich.querySelectorAll('video');
         for (var i = 0; i < all.length; i++) {
@@ -1373,8 +1373,46 @@
                 if (range.intersectsNode(all[i])) videos.push(all[i]);
             } catch (e) { /* 忽略 */ }
         }
-        if (videos.length && range.toString().replace(/\s/g, '') !== '') return [];
         return videos;
+    };
+
+    // 把选区内容序列化为 Markdown（文字 + @[video](url)），用于复制 / 剪切
+    Editor.prototype.selectionMarkdown = function (range) {
+        var videos = this.videosInRange(range);
+        try {
+            var tmp = document.createElement('div');
+            tmp.appendChild(range.cloneContents());
+            var out = [];
+            serializeBlocks(tmp, out, { inTable: false });
+            var md = out.join('\n\n').trim();
+            if (md) return md;
+        } catch (e) { /* 回退到仅视频语法 */ }
+        return videos.map(function (v) {
+            return '@[video](' + (v.getAttribute('src') || '') + ')';
+        }).join('\n\n');
+    };
+
+    // 删除富文本选区，并保证编辑器仍可继续输入
+    Editor.prototype.clearRichSelection = function (range) {
+        if (!range) return;
+        range.deleteContents();
+        try { this.rich.normalize(); } catch (e) { /* 忽略 */ }
+
+        var hasContent = /\S/.test(this.rich.textContent || '')
+            || !!this.rich.querySelector('video, table, img, hr, pre');
+        if (!hasContent) {
+            this.rich.innerHTML = '<p><br></p>';
+            placeCaretAtStart(this.rich.firstChild);
+        } else {
+            var sel = window.getSelection();
+            sel.removeAllRanges();
+            try {
+                sel.addRange(range);
+            } catch (err) {
+                placeCaretAtEnd(this.rich);
+            }
+        }
+        this.afterRichChange();
     };
 
     Editor.prototype.removeVideos = function (videos) {
@@ -1395,16 +1433,44 @@
         this.afterRichChange();
     };
 
-    // 复制 / 剪切：把选中的视频序列化为 Markdown 语法写入剪贴板
+    // 复制 / 剪切：把选区（文字 + 视频）序列化为 Markdown 写入剪贴板
     Editor.prototype.handleVideoClipboard = function (e, cut) {
-        var videos = this.selectedVideos();
-        if (!videos.length) return;
-        var md = videos.map(function (v) {
-            return '@[video](' + (v.getAttribute('src') || '') + ')';
-        }).join('\n\n');
+        var range = this.getRichRange();
+        if (!range || range.collapsed) return;
+        if (!this.videosInRange(range).length) return;
+
         e.preventDefault();
-        try { e.clipboardData.setData('text/plain', md); } catch (err) { /* 忽略 */ }
-        if (cut) this.removeVideos(videos);
+        var md = this.selectionMarkdown(range);
+        try {
+            e.clipboardData.setData('text/plain', md);
+        } catch (err) { /* 忽略 */ }
+
+        if (cut) this.clearRichSelection(range);
+    };
+
+    // 粘贴：识别 @[video](url) 语法，直接还原为视频块（支持纯视频与图文混排）
+    Editor.prototype.handleRichPaste = function (e) {
+        var text = '';
+        try { text = e.clipboardData.getData('text/plain') || ''; } catch (err) { /* 忽略 */ }
+        var trimmed = text.trim();
+        if (!trimmed || trimmed.indexOf('@[video](') === -1) return;
+
+        e.preventDefault();
+        var html = mdToHtml(trimmed);
+        this.rich.focus();
+
+        var inserted = false;
+        try { inserted = document.execCommand('insertHTML', false, html); } catch (err) { inserted = false; }
+
+        if (inserted) {
+            // 粘贴进来的视频统一设为原子块，并保证前后可放置光标
+            var vids = this.rich.querySelectorAll('video');
+            for (var i = 0; i < vids.length; i++) {
+                vids[i].setAttribute('contenteditable', 'false');
+                this.ensureVideoRoom(vids[i]);
+            }
+            this.afterRichChange();
+        }
     };
 
     // Backspace / Delete：删除整体选中的视频，或在光标紧邻视频时删除该视频
@@ -1414,10 +1480,9 @@
         if (!range) return;
 
         if (!range.collapsed) {
-            var selected = this.selectedVideos();
-            if (selected.length) {
+            if (this.videosInRange(range).length) {
                 e.preventDefault();
-                this.removeVideos(selected);
+                this.clearRichSelection(range);
             }
             return;
         }

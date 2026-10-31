@@ -82,6 +82,71 @@ class TestAssets:
         assert guide_store.safe_asset_name('') == 'asset'
 
 
+class TestVideoTranscode:
+    """视频上传：ffmpeg 转码为 H.264/MP4，并以雪花 ID 命名。"""
+
+    def test_transcode_names_with_snowflake_mp4(self, guides_dir, monkeypatch):
+        monkeypatch.setattr(guide_store, 'FFMPEG_BIN', 'ffmpeg')
+        calls = {}
+
+        class Result:
+            returncode = 0
+            stderr = b''
+
+        def fake_run(cmd, **kwargs):
+            calls['cmd'] = cmd
+            with open(cmd[-1], 'wb') as fh:
+                fh.write(b'v' * 80)
+            return Result()
+
+        monkeypatch.setattr(guide_store.subprocess, 'run', fake_run)
+        ok, msg, item = guide_store.save_guide_video(
+            11, FakeUpload('movie.mov', b'm' * 500))
+
+        assert ok and msg == ''
+        assert item['name'].endswith('.mp4')
+        assert item['name'][:-4].isdigit()
+        assert 'libx264' in calls['cmd']
+        assert '-movflags' in calls['cmd']
+        assert guide_store.guide_total(11) == 80
+        leftovers = [n for n in os.listdir(guide_store.guide_dir(11))
+                     if n.startswith('.transcode_')]
+        assert leftovers == []
+
+    def test_transcode_failure_leaves_no_file(self, guides_dir, monkeypatch):
+        monkeypatch.setattr(guide_store, 'FFMPEG_BIN', 'ffmpeg')
+
+        class Result:
+            returncode = 1
+            stderr = b'boom'
+
+        def fake_run(cmd, **kwargs):
+            with open(cmd[-1], 'wb') as fh:
+                fh.write(b'partial')
+            return Result()
+
+        monkeypatch.setattr(guide_store.subprocess, 'run', fake_run)
+        ok, msg, item = guide_store.save_guide_video(
+            12, FakeUpload('bad.mp4', b'x' * 10))
+
+        assert not ok and item is None
+        assert '转码失败' in msg
+        assert guide_store.list_assets(guide_store.assets_dir_for(12)) == []
+
+    def test_ffmpeg_missing_returns_message(self, guides_dir, monkeypatch):
+        monkeypatch.setattr(guide_store, 'FFMPEG_BIN', 'ffmpeg')
+
+        def fake_run(cmd, **kwargs):
+            raise FileNotFoundError()
+
+        monkeypatch.setattr(guide_store.subprocess, 'run', fake_run)
+        ok, msg, item = guide_store.save_guide_video(
+            13, FakeUpload('a.mp4', b'x'))
+
+        assert not ok and item is None
+        assert 'ffmpeg' in msg
+
+
 class TestLegacyDraftCleanup:
     """旧版草稿目录（_drafts）残留清理。"""
 

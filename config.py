@@ -35,6 +35,9 @@ GUIDE_VIDEO_EXTENSIONS = {'mp4', 'webm', 'ogv', 'ogg', 'mov', 'm4v'}
 # 新建指南时先上传的草稿资源保留时长（小时），超时由清理服务删除
 GUIDE_DRAFT_KEEP_HOURS = 24
 
+# 指南视频上传后统一转码为 H.264 / MP4 的最长等待秒数
+GUIDE_VIDEO_TRANSCODE_TIMEOUT = 600
+
 # 大喇叭音频：ffmpeg / ffprobe 可执行文件位置
 # Windows：使用 uploads/ffmpeg/ 下的 ffmpeg.exe / ffprobe.exe
 #          （放在 uploads/ 内，一键更新不会覆盖或删除；文件缺失时回退系统 PATH）

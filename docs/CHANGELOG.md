@@ -4,6 +4,12 @@
 
 ### 变更
 
+* **指南视频统一转码 + 雪花 ID 命名 + 编辑器剪贴板彻底修复 + 背景图片分段加载**（`config.py`、`services/guides/__init__.py`、`routes/guides/api/__init__.py`、`static/js/pages/markdown-editor.js`、`static/templates/backgrounds/index.html`、`routes/backgrounds/pages/__init__.py`、`scripts/tests/test_guide_storage.py`）：
+  * **视频统一转码**：新增 `save_guide_video()`。上传视频先保存到指南目录内的临时目录（`.transcode_*/source`），再由 ffmpeg 统一转码为 **MP4 / H.264（`libx264`、`yuv420p`、`+faststart`，音频 AAC 128k）**，输出到 `assets/`；最终文件名固定为 `<雪花ID>.mp4`（`core.shared.snowflake.next_id()`），不再使用原始文件名。转码失败 / 超时 / ffmpeg 缺失时删除半成品并返回明确提示，`finally` 清理临时目录；配额按转码后实际大小校验。新增 `GUIDE_VIDEO_TRANSCODE_TIMEOUT`（默认 600 秒）。
+  * **背景图片分段加载**：`GET /api/backgrounds/list` 改为分页返回已通过背景（每页 5 张，`page` 控制页号，附 `page / total / has_more`）；`/backgrounds` 页面新增「加载更多」按钮，按 `page` 追加卡片，「我的上传」保持全量返回。每页条数沿用系统设置 `BACKGROUNDS_PER_PAGE`。
+  * **编辑器视频剪贴板修复**：复制 / 剪切选区中只要包含视频，就把「文字 + 视频」整体序列化为 Markdown 写入 `text/plain`（`copy` / `cut` 拦截浏览器原生行为）；剪切使用 `range.deleteContents()` + `normalize()` 后重新定位光标，内容为空时补 `<p><br></p>`，避免视频被删后编辑器不可输入。新增 `paste` 监听：剪贴板含 `@[video](url)` 时经 `mdToHtml` + `insertHTML` 还原为视频原子块并保证前后可放置光标，解决「复制后无法粘贴 / 剪切后编辑器错乱」。
+  * 新增 `TestVideoTranscode` 测试（雪花 ID `.mp4` 命名、转码失败无残留、ffmpeg 缺失提示），`python -m pytest scripts/tests -q` 245 项通过。
+
 * **指南视频体验升级 + 移除旧链接兼容跳转**（`static/js/pages/markdown-editor.js`、`static/templates/macros/markdown_editor.html`、`static/templates/guides/detail.html`、`static/templates/admin/guides.html`、`routes/guides/pages/__init__.py`）：
   * 视频上传改用 XHR 并展示实时进度条；视频用量配额改为带进度条的站内控件（按 `used_bytes / limit_bytes` 填充）。
   * 视频 Markdown 语法：编辑器序列化为 `@[video](url)`（源码模式与 `guide.md` 均存该语法，不再写原始 HTML `<video>`）；编辑器、指南详情页、管理后台预览统一将语法渲染为可播放视频，并兼容历史 `<video>` HTML。

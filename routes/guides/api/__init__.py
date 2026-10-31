@@ -400,14 +400,14 @@ def api_guide_video_upload(guide_id):
     if not ok:
         return jsonify({'success': False, 'message': msg}), 400
 
-    ok, msg, item = guide_store.save_guide_asset(guide_id, upload)
+    ok, msg, item = guide_store.save_guide_video(guide_id, upload)
     if not ok:
         return jsonify({'success': False, 'message': msg}), 400
 
     used = guide_store.guide_total(guide_id)
     return jsonify({
         'success': True,
-        'message': '视频已上传',
+        'message': '视频已转码为 H.264 / MP4 并上传',
         'item': _video_payload(guide_id, item),
         'used_bytes': used,
         'limit_bytes': GUIDE_RESOURCE_MAX_BYTES,
