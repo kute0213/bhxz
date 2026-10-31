@@ -25,17 +25,10 @@ def _edit_form_context(guide):
     }
 
 
-@guides_bp.route('/guides')
-def guide_list():
-    """公开指南列表页（默认展示已审核通过的；?my=1 展示当前用户的；?q=关键字搜索）。
-
-    公开指南按 置顶优先 → 收藏数倒序 → 标题升序 排序。
-    """
+def _render_guide_page(my_mode, keyword):
+    """渲染指南列表页（my_mode=True 时展示当前用户的全部指南）。"""
     user = get_current_user()
-    my_mode = bool(user and request.args.get('my'))
-    keyword = (request.args.get('q') or '').strip()[:60]
     page_size = get_page_size('GUIDES_PER_PAGE', 5)
-
     conn = get_db()
     try:
         where = []
@@ -86,6 +79,23 @@ def guide_list():
         keyword=keyword,
         has_more=total > len(guides),
     )
+
+
+@guides_bp.route('/guides')
+def guide_list():
+    """公开指南列表页（已审核通过的指南；?my=1 兼容旧链接跳转 /guides/my）。"""
+    if get_current_user() and request.args.get('my'):
+        return redirect(url_for('guides.my_guides_page'))
+    keyword = (request.args.get('q') or '').strip()[:60]
+    return _render_guide_page(False, keyword)
+
+
+@guides_bp.route('/guides/my')
+@login_required
+def my_guides_page():
+    """我的指南独立页面（展示本人创建的全部状态指南）。"""
+    keyword = (request.args.get('q') or '').strip()[:60]
+    return _render_guide_page(True, keyword)
 
 
 @guides_bp.route('/guides/<int:guide_id>')
@@ -198,73 +208,46 @@ def guide_favorites():
     )
 
 
-@guides_bp.route('/guides/create', methods=['GET', 'POST'])
+@guides_bp.route('/guides/create', methods=['POST'])
 @login_required
 def guide_create():
-    """新建指南（只创建草稿，随后在编辑页填写内容与上传资源）。"""
+    """点击「新建指南」直接创建未命名草稿，随后在编辑页修改标题与内容。"""
     user = get_current_user()
+    # 草稿也占用「未通过指南」数量上限
+    from services.content_limits import check_pending_limit
+    allowed, msg = check_pending_limit(user, 'guide')
+    if not allowed:
+        flash(msg, 'error')
+        return redirect(url_for('guides.my_guides_page'))
 
-    if request.method == 'POST':
-        # 草稿也占用「未通过指南」数量上限
-        from services.content_limits import check_pending_limit
-        allowed, msg = check_pending_limit(user, 'guide')
-        if not allowed:
-            flash(msg, 'error')
-            return render_page('guides/create.html')
+    title = '未命名指南'
+    from routes.guides.api import _slugify, _ensure_unique_slug
+    conn = get_db()
+    guide_id = next_id()
+    try:
+        now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        slug = _ensure_unique_slug(conn, _slugify(title))
+        # 指南目录立即创建，后续编辑页的资源直接写入 assets/
+        guide_store.write_guide_content(guide_id, '')
 
-        title = (request.form.get('title') or '').strip()
-        summary = (request.form.get('summary') or '').strip()
-
-        if not title:
-            flash('标题不能为空', 'error')
-            return render_page('guides/create.html')
-
-        # 内容注入检测
-        from services.firewall.protection.content_filter import check_content_injection
-        inj_result = check_content_injection(
-            user_id=user['id'], content=title + '\n' + summary,
-            content_type='guide', ip_address=get_client_ip(),
-            username=user['username'],
+        conn.execute(
+            """
+            INSERT INTO server_guides
+            (id, title, slug, summary, content, author_id, status, is_pinned, created_at, updated_at)
+            VALUES (?, ?, ?, '', '', ?, 'draft', 0, ?, ?)
+            """,
+            (guide_id, title, slug, user['id'], now, now),
         )
-        if inj_result['blocked']:
-            flash(inj_result['message'], 'error')
-            return render_page('guides/create.html')
+        conn.commit()
+        flash('已创建草稿「未命名指南」，点击「修改」即可编辑标题与内容', 'success')
+    except Exception as e:
+        conn.rollback()
+        guide_store.delete_guide_dir(guide_id)
+        flash(f'创建失败: {e}', 'error')
+    finally:
+        conn.close()
 
-        # 验证图形验证码
-        captcha_input = (request.form.get('captcha') or '').strip()
-        captcha_id = (request.form.get('captcha_id') or '').strip()
-        if not captcha_service.verify(captcha_id, captcha_input):
-            flash('验证码错误或已过期', 'error')
-            return render_page('guides/create.html')
-
-        from routes.guides.api import _slugify, _ensure_unique_slug
-        conn = get_db()
-        guide_id = next_id()
-        try:
-            now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            slug = _ensure_unique_slug(conn, _slugify(title))
-            # 指南目录立即创建，后续编辑页的资源直接写入 assets/
-            guide_store.write_guide_content(guide_id, '')
-
-            conn.execute(
-                """
-                INSERT INTO server_guides
-                (id, title, slug, summary, content, author_id, status, is_pinned, created_at, updated_at)
-                VALUES (?, ?, ?, ?, '', ?, 'draft', 0, ?, ?)
-                """,
-                (guide_id, title, slug, summary, user['id'], now, now),
-            )
-            conn.commit()
-            flash('指南已创建，请编辑内容后点击发布', 'success')
-            return redirect(url_for('guides.guide_edit', guide_id=guide_id))
-        except Exception as e:
-            conn.rollback()
-            guide_store.delete_guide_dir(guide_id)
-            flash(f'创建失败: {e}', 'error')
-        finally:
-            conn.close()
-
-    return render_page('guides/create.html')
+    return redirect(url_for('guides.my_guides_page'))
 
 
 @guides_bp.route('/guides/<int:guide_id>/edit', methods=['GET', 'POST'])

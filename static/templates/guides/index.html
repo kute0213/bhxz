@@ -56,16 +56,19 @@
                 <i data-lucide="book-open" class="w-4 h-4"></i>全部指南
             </a>
             {% else %}
-            <a href="{{ url_for('guides.guide_list') }}?my=1" class="btn-secondary px-4 py-2 rounded-lg text-sm inline-flex items-center gap-2">
+            <a href="{{ url_for('guides.my_guides_page') }}" class="btn-secondary px-4 py-2 rounded-lg text-sm inline-flex items-center gap-2">
                 <i data-lucide="file-text" class="w-4 h-4"></i>我的指南
             </a>
             {% endif %}
             <a href="{{ url_for('guides.guide_favorites') }}" class="btn-secondary px-4 py-2 rounded-lg text-sm inline-flex items-center gap-2">
                 <i data-lucide="bookmark-check" class="w-4 h-4"></i>我的收藏
             </a>
-            <a href="{{ url_for('guides.guide_create') }}" class="btn-primary px-4 py-2 rounded-lg text-sm inline-flex items-center gap-2">
-                <i data-lucide="plus" class="w-4 h-4"></i>新建指南
-            </a>
+            <form method="POST" action="{{ url_for('guides.guide_create') }}" class="inline-flex">
+                {{ csrf_field() }}
+                <button type="submit" class="btn-primary px-4 py-2 rounded-lg text-sm inline-flex items-center gap-2">
+                    <i data-lucide="plus" class="w-4 h-4"></i>新建指南
+                </button>
+            </form>
         </div>
         {% endif %}
 
@@ -218,7 +221,7 @@
         } else {
             resultHint.classList.add('hidden');
             emptyTitle.textContent = state.myMode ? '还没有创建任何指南' : '暂无服务器指南';
-            emptyHint.textContent = state.myMode ? '点击「新建指南」创建草稿，编辑内容后发布' : '管理员或成员可以添加新指南';
+            emptyHint.textContent = state.myMode ? '点击「新建指南」会直接创建一份草稿，再点击「修改」编辑内容后发布' : '管理员或成员可以添加新指南';
         }
         if (btn) {
             btn.classList.toggle('hidden', !data.has_more);

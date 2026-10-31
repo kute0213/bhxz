@@ -256,7 +256,7 @@ def api_guide_publish(guide_id):
         'success': True,
         'message': '指南已发布，等待管理员审核',
         'status': 'pending',
-        'redirect': url_for('guides.guide_list', my=1),
+        'redirect': url_for('guides.my_guides_page'),
     })
 
 

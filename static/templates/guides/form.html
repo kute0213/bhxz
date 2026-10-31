@@ -7,7 +7,7 @@
 <section class="page-container py-12">
     <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="mb-8">
-            <a href="{{ url_for('guides.guide_list') }}?my=1" class="text-sm text-cream/50 hover:text-gold-400 inline-flex items-center gap-1 transition-colors mb-4">
+            <a href="{{ url_for('guides.my_guides_page') }}" class="text-sm text-cream/50 hover:text-gold-400 inline-flex items-center gap-1 transition-colors mb-4">
                 <i data-lucide="arrow-left" class="w-4 h-4"></i>
                 返回我的指南
             </a>
@@ -15,7 +15,7 @@
             {% if guide and guide.status == 'draft' %}
             <div class="mt-4 rounded-lg border border-yellow-500/25 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-200 flex flex-wrap items-center gap-2">
                 <span>当前为草稿，保存后可返回「我的指南」发布。</span>
-                <a href="{{ url_for('guides.guide_list') }}?my=1" class="text-gold-400 hover:text-gold-300 underline">前往我的指南</a>
+                <a href="{{ url_for('guides.my_guides_page') }}" class="text-gold-400 hover:text-gold-300 underline">前往我的指南</a>
             </div>
             {% endif %}
         </div>
@@ -47,7 +47,7 @@
             <input type="hidden" name="captcha_id" id="guide-captcha-id" value="">
 
             <div class="flex items-center justify-end gap-3 pt-4">
-                <a href="{{ url_for('guides.guide_list') }}?my=1" class="btn-secondary px-5 py-2.5 rounded-lg text-sm">取消</a>
+                <a href="{{ url_for('guides.my_guides_page') }}" class="btn-secondary px-5 py-2.5 rounded-lg text-sm">取消</a>
                 <button type="submit" class="btn-primary px-5 py-2.5 rounded-lg text-sm">{{ '保存草稿' if guide and guide.status == 'draft' else '保存修改' }}</button>
             </div>
         </form>

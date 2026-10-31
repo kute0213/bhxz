@@ -4,6 +4,12 @@
 
 ### 变更
 
+* **指南新建改为「一键创建草稿」+ 独立「我的指南」页面**（`routes/guides/{pages,api}/__init__.py`、`static/templates/guides/{index,form}.html`、`static/templates/macros/markdown_editor.html`）：
+  * 点击「新建指南」直接创建标题为「未命名指南」的草稿（状态 `draft`，立即生成指南 ID 与目录，正文为空），创建后返回「我的指南」；标题、摘要与正文都在之后点击「修改」时再填写。旧的 `GET /guides/create` 表单页已移除，`POST /guides/create` 仅创建草稿。
+  * 新增独立页面 `/guides/my`（需登录），展示本人创建的全部指南及状态；旧的 `/guides?my=1` 自动 302 跳转到该页面，列表/搜索/加载更多/发布逻辑保持不变。
+  * 编辑器工具栏调整：将「代码块」按钮从「插入」标签页移到「段落」标签页（与引用、列表等同组），「插入」仅保留链接、表格、视频。
+  * 同步更新 README、DEVELOPMENT 与 sitemap 排除项说明。
+
 * **服务器指南改为「一个指南一个文件夹」+ 视频资源支持**（`config.py`、`services/guides/__init__.py`、`routes/guides/{pages,api}/__init__.py`、`routes/admin/guides/__init__.py`、`services/cleanup_service/__init__.py`、`core/system/startup_checks.py`、`scripts/migrate_guides.py`、`scripts/tests/test_guide_storage.py`）：
   * 新结构：`uploads/guides/<指南ID>/guide.md`（唯一正文来源）+ `assets/`（视频等资源）；数据库 `server_guides.content` 只保存空串，读取时文件优先、文件缺失回退数据库旧内容，因此迁移脚本未执行前站点仍可正常显示。
   * 新增 `services/guides` 存储服务：原子写正文、安全文件名（保留中文）、资源列表 / 配额 / 保存 / 删除、过期草稿目录清理；整站指南资源统一按 **每个指南 50MB** 校验（`GUIDE_RESOURCE_MAX_BYTES`），视频格式 `mp4/webm/ogv/ogg/mov/m4v`。

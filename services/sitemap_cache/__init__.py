@@ -236,7 +236,7 @@ def _get_default_base_url() -> str:
 # 明确排除：
 #   * /map        —— 仅内嵌外部地图 iframe，本身无任何可索引内容；
 #   * /apply      —— 历史遗留的死路由（已无对应页面；真实申请页 /game-accounts/apply 需登录）；
-#   * 登录后 / 操作 / 上传页面（/settings、/music/my、/music/upload、/guides/create、
+#   * 登录后 / 操作 / 上传页面（/settings、/music/my、/music/upload、/guides/my、
 #     /buildings/create、/backgrounds/upload、/game-accounts/apply 等）；
 #   * /admin、/api、/uploads、/media、/static 等内部路径。
 _STATIC_PAGES = [
