@@ -1,5 +1,6 @@
 """服务器指南成员API：指南列表、发布草稿、视频资源、收藏。"""
 
+import os
 import re
 from datetime import datetime
 
@@ -9,9 +10,10 @@ from core.auth import login_required, get_current_user
 from core.db import get_db
 from core.shared.snowflake import next_id
 from core.shared.captcha import captcha_service
+from core.shared.ip import get_client_ip
 from config import (
     get_page_size,
-    GUIDE_RESOURCE_MAX_BYTES,
+    get_guide_resource_limit,
     GUIDE_VIDEO_EXTENSIONS,
 )
 from services.mail import email_service, guide_review_pending as build_pending_html
@@ -366,26 +368,53 @@ def toggle_guide_favorite(guide_id):
 # 指南资源（视频）
 # ---------------------------------------------------------------------------
 
-def _guide_exists(guide_id):
+def _guide_for_edit(guide_id):
+    """读取指南并校验当前用户是否有编辑权限。
+
+    返回 ``(guide_row, error_response)``：有权限时 ``error_response`` 为 None。
+    """
+    user = get_current_user()
     conn = get_db()
     try:
         row = conn.execute(
-            "SELECT id FROM server_guides WHERE id = ?", (guide_id,)
+            "SELECT id, author_id FROM server_guides WHERE id = ?", (guide_id,)
         ).fetchone()
-        return bool(row)
     finally:
         conn.close()
 
+    if not row:
+        return None, (jsonify({'success': False, 'message': '指南不存在'}), 404)
+    if row['author_id'] != user['id'] and not user.get('is_admin'):
+        return None, (jsonify({'success': False, 'message': '无权操作该指南'}), 403)
+    return row, None
+
 
 def _video_payload(guide_id, item):
-    """给资源条目补充访问 / 删除 URL。"""
+    """给资源条目补充访问 / 删除 / 改名 URL 与页面显示名。"""
+    name = item['name']
     return {
-        'name': item['name'],
+        'name': name,
+        'title': item.get('title') or guide_store.video_title(guide_id, name, name),
         'size': item['size'],
         'size_label': item['size_label'],
-        'url': url_for('guides.guide_asset', guide_id=guide_id, filename=item['name']),
+        'url': url_for('guides.guide_asset', guide_id=guide_id, filename=name),
         'delete_url': url_for('guides.api_guide_video_delete',
-                              guide_id=guide_id, filename=item['name']),
+                              guide_id=guide_id, filename=name),
+        'rename_url': url_for('guides.api_guide_video_rename',
+                              guide_id=guide_id, filename=name),
+    }
+
+
+def _quota_payload(guide_id, limit_bytes=None):
+    """返回配额字段，供前端统一更新进度条。"""
+    limit_bytes = limit_bytes or get_guide_resource_limit()
+    used = guide_store.guide_total(guide_id)
+    return {
+        'used_bytes': used,
+        'limit_bytes': limit_bytes,
+        'limit_label': guide_store.format_size(limit_bytes),
+        'used_label': guide_store.format_size(used),
+        'percent': round(min(100.0, used / limit_bytes * 100), 1) if limit_bytes else 0.0,
     }
 
 
@@ -397,71 +426,191 @@ def _get_video_upload():
 @login_required
 def api_guide_videos(guide_id):
     """指南视频列表（编辑指南时用于「视频」标签页）。"""
-    if not _guide_exists(guide_id):
-        return jsonify({'success': False, 'message': '指南不存在'}), 404
-    items = [_video_payload(guide_id, i) for i in guide_store.list_assets(
-        guide_store.assets_dir_for(guide_id))]
+    _, error = _guide_for_edit(guide_id)
+    if error:
+        return error
+    limit = get_guide_resource_limit()
+    items = [_video_payload(guide_id, i)
+             for i in guide_store.list_guide_assets(guide_id)]
     return jsonify({
         'success': True,
         'items': items,
-        'used_bytes': guide_store.guide_total(guide_id),
-        'limit_bytes': GUIDE_RESOURCE_MAX_BYTES,
-        'limit_label': guide_store.format_size(GUIDE_RESOURCE_MAX_BYTES),
-        'used_label': guide_store.format_size(guide_store.guide_total(guide_id)),
+        **_quota_payload(guide_id, limit),
     })
 
 
 @guides_bp.route('/api/guides/<int:guide_id>/videos', methods=['POST'])
 @login_required
 def api_guide_video_upload(guide_id):
-    """上传指南视频资源（每个指南 assets 目录合计不超过 50MB）。"""
-    if not _guide_exists(guide_id):
-        return jsonify({'success': False, 'message': '指南不存在'}), 404
+    """接收指南视频并启动后台转码，返回转码任务 ID。"""
+    _, error = _guide_for_edit(guide_id)
+    if error:
+        return error
 
+    limit = get_guide_resource_limit()
     upload = _get_video_upload()
     ok, msg = check_upload(
         upload, KIND_AUDIO,
-        max_bytes=GUIDE_RESOURCE_MAX_BYTES,
+        max_bytes=limit,
         allowed_extensions=GUIDE_VIDEO_EXTENSIONS,
         source='guide_video',
     )
     if not ok:
         return jsonify({'success': False, 'message': msg}), 400
 
-    ok, msg, item = guide_store.save_guide_video(guide_id, upload)
+    title = (request.form.get('title') or '').strip()[:100]
+    ok, msg, task = guide_store.start_guide_video_upload(
+        guide_id, upload, limit_bytes=limit, title=title,
+    )
     if not ok:
         return jsonify({'success': False, 'message': msg}), 400
 
-    used = guide_store.guide_total(guide_id)
+    task_id = task['task_id']
     return jsonify({
         'success': True,
-        'message': '视频已转码为 H.264 / MP4 并上传',
+        'message': '视频已上传，正在转码',
+        'task_id': task_id,
+        'progress_url': url_for('guides.api_guide_video_progress',
+                                guide_id=guide_id, task_id=task_id),
+    })
+
+
+@guides_bp.route('/api/guides/<int:guide_id>/videos/progress/<task_id>', methods=['GET'])
+@login_required
+def api_guide_video_progress(guide_id, task_id):
+    """查询视频转码进度。"""
+    _, error = _guide_for_edit(guide_id)
+    if error:
+        return error
+    task = guide_store.get_video_task(task_id)
+    if not task or task['guide_id'] != guide_id:
+        return jsonify({'success': False, 'message': '转码任务不存在或已过期'}), 404
+
+    payload = {
+        'success': True,
+        'status': task['status'],
+        'percent': task['percent'],
+        'message': task['message'],
+    }
+    if task['status'] == 'done':
+        payload['item'] = _video_payload(guide_id, task['item'])
+        payload.update(_quota_payload(guide_id))
+    elif task['status'] == 'error':
+        payload['message'] = task['error'] or '视频转码失败'
+    return jsonify(payload)
+
+
+@guides_bp.route('/api/guides/<int:guide_id>/videos/<path:filename>/rename', methods=['POST'])
+@login_required
+def api_guide_video_rename(guide_id, filename):
+    """修改视频在页面上显示的伪文件名（写入指南 config.json）。"""
+    _, error = _guide_for_edit(guide_id)
+    if error:
+        return error
+
+    name = os.path.basename(str(filename or ''))
+    path = os.path.join(guide_store.assets_dir_for(guide_id), name)
+    if not os.path.isfile(path):
+        return jsonify({'success': False, 'message': '视频不存在'}), 404
+
+    data = request.get_json(silent=True) or request.form
+    title = (data.get('title') or '').strip()[:100]
+    guide_store.set_video_title(guide_id, name, title)
+    display = guide_store.video_title(guide_id, name, name)
+    item = {'name': name, 'title': display,
+            'size': os.path.getsize(path),
+            'size_label': guide_store.format_size(os.path.getsize(path))}
+    return jsonify({
+        'success': True,
+        'message': '视频名称已更新',
         'item': _video_payload(guide_id, item),
-        'used_bytes': used,
-        'limit_bytes': GUIDE_RESOURCE_MAX_BYTES,
-        'limit_label': guide_store.format_size(GUIDE_RESOURCE_MAX_BYTES),
-        'used_label': guide_store.format_size(used),
     })
 
 
 @guides_bp.route('/api/guides/<int:guide_id>/videos/<path:filename>/delete', methods=['POST'])
 @login_required
 def api_guide_video_delete(guide_id, filename):
-    """删除指南视频资源。"""
-    if not _guide_exists(guide_id):
-        return jsonify({'success': False, 'message': '指南不存在'}), 404
-    removed = guide_store.delete_asset(
-        guide_store.assets_dir_for(guide_id), filename)
+    """删除指南视频资源（同时清理 config.json 中的配置）。"""
+    _, error = _guide_for_edit(guide_id)
+    if error:
+        return error
+    removed = guide_store.delete_guide_asset(guide_id, filename)
     if not removed:
         return jsonify({'success': False, 'message': '视频不存在'}), 404
-    used = guide_store.guide_total(guide_id)
     return jsonify({
         'success': True,
         'message': '视频已删除',
-        'used_bytes': used,
-        'limit_bytes': GUIDE_RESOURCE_MAX_BYTES,
-        'limit_label': guide_store.format_size(GUIDE_RESOURCE_MAX_BYTES),
-        'used_label': guide_store.format_size(used),
+        **_quota_payload(guide_id),
+    })
+
+
+@guides_bp.route('/api/guides/<int:guide_id>/draft', methods=['POST'])
+@login_required
+def api_guide_draft(guide_id):
+    """保存草稿（不刷新页面）。
+
+    仅草稿状态的指南可用；其他状态仍需走表单提交并经过验证码与审核流程。
+    """
+    user = get_current_user()
+    conn = get_db()
+    try:
+        row = conn.execute(
+            "SELECT id, title, status, author_id FROM server_guides WHERE id = ?",
+            (guide_id,),
+        ).fetchone()
+    finally:
+        conn.close()
+
+    if not row:
+        return jsonify({'success': False, 'message': '指南不存在'}), 404
+    if row['status'] != 'draft':
+        return jsonify({'success': False, 'message': '只有草稿可以这样保存'}), 400
+    if row['author_id'] != user['id'] and not user.get('is_admin'):
+        return jsonify({'success': False, 'message': '无权修改该指南'}), 403
+
+    data = request.get_json(silent=True) or request.form
+    title = (data.get('title') or '').strip()
+    summary = (data.get('summary') or '').strip()
+    content = data.get('content') or ''
+
+    if not title:
+        return jsonify({'success': False, 'message': '标题不能为空'}), 400
+
+    from services.firewall.protection.content_filter import check_content_injection
+    inj_result = check_content_injection(
+        user_id=user['id'], content=title + '\n' + content,
+        content_type='guide', ip_address=get_client_ip(),
+        username=user['username'],
+    )
+    if inj_result['blocked']:
+        return jsonify({'success': False, 'message': inj_result['message']}), 400
+
+    conn = get_db()
+    try:
+        now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        slug = _ensure_unique_slug(conn, _slugify(title), exclude_id=guide_id)
+        guide_store.write_guide_content(guide_id, content)
+        conn.execute(
+            """
+            UPDATE server_guides
+            SET title = ?, slug = ?, summary = ?, content = '', updated_at = ?
+            WHERE id = ?
+            """,
+            (title, slug, summary, now, guide_id),
+        )
+        conn.commit()
+    except Exception as exc:
+        conn.rollback()
+        return jsonify({'success': False, 'message': f'保存失败：{exc}'}), 500
+    finally:
+        conn.close()
+
+    return jsonify({
+        'success': True,
+        'message': '草稿已保存',
+        'title': title,
+        'summary': summary,
+        'updated_at': now,
     })
 
 

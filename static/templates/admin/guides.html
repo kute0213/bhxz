@@ -130,11 +130,41 @@ var guidePreviewData = {
     {% for guide in guides if guide.status == 'pending' %}
     {{ guide.id }}: {
         title: {{ guide.title | tojson }},
-        content: {{ (guide.content or '') | tojson }}
+        content: {{ (guide.content or '') | tojson }},
+        video_titles: {{ (guide.video_titles or {}) | tojson }}
     },
     {% endfor %}
 };
 var _previewGuideId = null;
+var _previewVideoTitles = {};
+
+// 预览中的视频语法 @[video](url)：与前台指南详情页保持一致
+if (window.marked) {
+    marked.use({
+        extensions: [{
+            name: 'guideVideoBlock',
+            level: 'block',
+            tokenizer: function (src) {
+                var m = /^@\[video\]\(([^)\n]+)\)\s*(?:\n|$)/.exec(src);
+                if (!m) return undefined;
+                return { type: 'guideVideoBlock', raw: m[0], url: m[1] };
+            },
+            renderer: function (token) {
+                var url = String(token.url)
+                    .replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+                    .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                var rawName = String(token.url).split('/').pop().split('?')[0];
+                var name = rawName;
+                try { name = decodeURIComponent(rawName); } catch (_) {}
+                var title = _previewVideoTitles[name] || '';
+                var titleAttr = title
+                    ? ' data-title="' + String(title).replace(/&/g, '&amp;').replace(/"/g, '&quot;') + '"'
+                    : '';
+                return '<video src="' + url + '"' + titleAttr + ' controls preload="metadata" playsinline></video>\n';
+            }
+        }]
+    });
+}
 
 function showRejectModal(id) {
     document.getElementById('reject-reason-input').value = '';
@@ -153,10 +183,11 @@ function showPreviewModal(btn) {
     const data = guidePreviewData[_previewGuideId];
     if (!data) return;
     document.getElementById('preview-title').textContent = data.title;
+    _previewVideoTitles = data.video_titles || {};
     document.getElementById('preview-content').innerHTML = data.content
         ? DOMPurify.sanitize(marked.parse(data.content), {
             ADD_TAGS: ['video', 'source'],
-            ADD_ATTR: ['controls', 'preload', 'poster', 'playsinline', 'muted', 'loop', 'src']
+            ADD_ATTR: ['controls', 'preload', 'poster', 'playsinline', 'muted', 'loop', 'src', 'data-title']
         })
         : '<p class="text-[var(--text-tertiary)] text-center py-8">暂无内容</p>';
     if (window.SiteVideoPlayer) {

@@ -109,7 +109,12 @@
             }
         };
         marked.use({ renderer });
-        // 指南视频语法 @[video](url) → <video>
+        // 指南视频语法 @[video](url) → <video>（附带 config.json 中配置的显示名称）
+        const videoTitles = {{ video_titles | tojson }};
+        const escAttr = function (s) {
+            return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;')
+                .replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        };
         marked.use({
             extensions: [{
                 name: 'guideVideoBlock',
@@ -123,13 +128,18 @@
                     const url = String(token.url)
                         .replace(/&/g, '&amp;').replace(/"/g, '&quot;')
                         .replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                    return `<video src="${url}" controls preload="metadata" playsinline></video>\n`;
+                    const rawName = String(token.url).split('/').pop().split('?')[0];
+                    let name = rawName;
+                    try { name = decodeURIComponent(rawName); } catch (_) {}
+                    const title = videoTitles[name] || '';
+                    const titleAttr = title ? ` data-title="${escAttr(title)}"` : '';
+                    return `<video src="${url}"${titleAttr} controls preload="metadata" playsinline></video>\n`;
                 }
             }]
         });
         el.innerHTML = DOMPurify.sanitize(marked.parse(raw), {
             ADD_TAGS: ['video', 'source'],
-            ADD_ATTR: ['controls', 'preload', 'poster', 'playsinline', 'muted', 'loop', 'src']
+            ADD_ATTR: ['controls', 'preload', 'poster', 'playsinline', 'muted', 'loop', 'src', 'data-title']
         });
         // 统一换成站内自定义视频控件
         if (window.SiteVideoPlayer) window.SiteVideoPlayer.decorateAll(el);

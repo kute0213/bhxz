@@ -426,6 +426,9 @@ SETTINGS_REGISTRY = [
     ('BACKGROUNDS_PER_PAGE', 5, 'int', '后台背景图片每页数量', '管理后台背景图片列表每次加载的条数，用户调用接口传入的参数一律被忽略', '列表分页'),
     ('GAME_ACCOUNTS_PER_PAGE', 5, 'int', '后台账号申请每页数量', '管理后台游戏账号申请列表每次加载的条数，用户调用接口传入的参数一律被忽略', '列表分页'),
 
+    # 指南资源（视频等）
+    ('GUIDE_RESOURCE_MAX_MB', 50, 'int', '单个指南资源上限（MB）', '每个指南的 assets 目录（全部视频等资源）合计大小上限，默认 50MB；1-1024 之间，超出范围按边界值处理。修改后对新的上传立即生效（已上传资源不受影响）', '指南资源'),
+
     # 外部链接
     ('MAP_URL', 'https://map.bhxz.tw.kg', 'str', '卫星地图地址', '首页「卫星地图」按钮跳转、导航栏「服务器 → 网页地图」页内嵌展示的链接地址（需为 http/https 网页地址，该站点需允许被 iframe 内嵌）', '外部链接'),
     ('QQ_GROUP_URL', 'https://qun.qq.com/...', 'str', 'QQ 群链接', '首页加入 QQ 群按钮的链接地址', '外部链接'),
@@ -479,6 +482,22 @@ def get_config_value(key: str, default=None):
         return get_setting(key, default)
     except Exception:
         return default
+
+
+def get_guide_resource_limit() -> int:
+    """读取单个指南的资源上限（字节，运行时可热改）。
+
+    默认值来自 ``GUIDE_RESOURCE_MAX_BYTES``；管理员可在「系统设置 → 指南资源」
+    修改 ``GUIDE_RESOURCE_MAX_MB``。结果限制在 1MB ~ 1024MB。
+    """
+    default_mb = max(1, int(GUIDE_RESOURCE_MAX_BYTES // (1024 * 1024)))
+    value = get_config_value('GUIDE_RESOURCE_MAX_MB', default_mb)
+    try:
+        mb = int(value)
+    except (TypeError, ValueError):
+        mb = default_mb
+    mb = max(1, min(mb, 1024))
+    return mb * 1024 * 1024
 
 
 def get_page_size(key: str, default: int = 5) -> int:

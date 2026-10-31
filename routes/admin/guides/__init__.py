@@ -10,6 +10,7 @@ from core.db import get_db
 from core.shared.snowflake import next_id
 from services.mail import email_service, guide_review_result as build_result_html
 from services import guides as guide_store
+from config import get_guide_resource_limit
 from routes.admin import admin_bp
 
 
@@ -22,6 +23,7 @@ def _admin_create_context():
         'guide': None,
         'video_list_url': '',
         'video_upload_url': '',
+        'video_limit_label': '',
     }
 
 
@@ -31,6 +33,7 @@ def _admin_edit_context(guide):
         'guide': guide,
         'video_list_url': url_for('guides.api_guide_videos', guide_id=guide['id']),
         'video_upload_url': url_for('guides.api_guide_video_upload', guide_id=guide['id']),
+        'video_limit_label': guide_store.format_size(get_guide_resource_limit()),
     }
 
 
@@ -58,6 +61,11 @@ def _fetch_guides_page(page, page_size=PAGE_SIZE):
         guides = [dict(r) for r in rows]
         for g in guides:
             g['content'] = guide_store.read_guide_content(g['id'], g.get('content') or '')
+            config = guide_store.read_guide_config(g['id'])
+            g['video_titles'] = {
+                name: (meta.get('title') or name) if isinstance(meta, dict) else name
+                for name, meta in (config.get('videos') or {}).items()
+            }
     finally:
         conn.close()
 

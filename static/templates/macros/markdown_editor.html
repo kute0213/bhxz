@@ -16,7 +16,7 @@
    并在页面末尾引入共享脚本（缺一不可）：
        <script src="{{ url_for('static', filename='lib/marked/marked.min.js', v='1') }}"></script>
        <script src="{{ url_for('static', filename='lib/purify/purify.min.js', v='1') }}"></script>
-       <script src="{{ url_for('static', filename='js/pages/markdown-editor.js', v='10') }}"></script>
+       <script src="{{ url_for('static', filename='js/pages/markdown-editor.js', v='11') }}"></script>
 
    可选参数：
        name          - 表单提交字段名（textarea 的 name）
@@ -37,7 +37,8 @@
 #   只有当光标/选区位于链接内、表格内、视频内（或刚点击了「插入链接 / 视频」）时才会出现，
 #   离开对应上下文后自动隐藏并切回「基础」标签页。
 #}
-{% macro markdown_editor(name='', value='', editor_id='md-editor', placeholder='', show_count=false, autosave=true, toolbar_extra='', extra_attrs='', video_list_url='', video_upload_url='') %}
+{% from "macros/progress.html" import progress_track %}
+{% macro markdown_editor(name='', value='', editor_id='md-editor', placeholder='', show_count=false, autosave=true, toolbar_extra='', extra_attrs='', video_list_url='', video_upload_url='', video_limit_label='') %}
 <style>
 /* ================= 统一编辑器容器 ================= */
 .mre {
@@ -372,42 +373,13 @@ body.mre-resizing, body.mre-resizing * { cursor: col-resize !important; user-sel
     color: var(--text-muted);
 }
 .mre-video-quota-text { white-space: nowrap; }
-.mre-video-quota-track {
-    display: inline-block;
-    width: 5.5rem;
-    height: 0.32rem;
-    border-radius: 999px;
-    background: rgba(15, 23, 42, 0.08);
-    overflow: hidden;
-}
-.mre-video-quota-fill {
-    display: block;
-    width: 0;
-    height: 100%;
-    border-radius: inherit;
-    background: linear-gradient(90deg, var(--accent-blue), var(--accent-indigo));
-    transition: width 0.25s ease;
-}
+.mre-video-quota-bar { display: inline-block; width: 5.5rem; }
 .mre-video-progress {
     display: flex;
     align-items: center;
     gap: 0.5rem;
 }
-.mre-video-progress-track {
-    flex: 1;
-    height: 0.42rem;
-    border-radius: 999px;
-    background: rgba(15, 23, 42, 0.08);
-    overflow: hidden;
-}
-.mre-video-progress-fill {
-    display: block;
-    width: 0;
-    height: 100%;
-    border-radius: inherit;
-    background: linear-gradient(90deg, var(--accent-blue), var(--accent-indigo));
-    transition: width 0.15s ease;
-}
+.mre-video-progress-bar { flex: 1; min-width: 0; }
 .mre-video-progress-text {
     min-width: 3rem;
     text-align: right;
@@ -466,6 +438,7 @@ body.mre-resizing, body.mre-resizing * { cursor: col-resize !important; user-sel
     white-space: nowrap;
 }
 .mre-video-item-size { color: var(--text-muted); font-size: 0.68rem; }
+.mre-video-item-rename,
 .mre-video-item-del {
     display: inline-flex;
     align-items: center;
@@ -474,10 +447,13 @@ body.mre-resizing, body.mre-resizing * { cursor: col-resize !important; user-sel
     border: none;
     border-radius: 0.3rem;
     background: transparent;
-    color: var(--accent-rose);
     cursor: pointer;
 }
+.mre-video-item-rename { color: var(--accent-blue); }
+.mre-video-item-rename:hover { background: rgba(2, 132, 199, 0.12); }
+.mre-video-item-del { color: var(--accent-rose); }
 .mre-video-item-del:hover { background: rgba(225, 29, 72, 0.12); }
+.mre-video-item-rename svg,
 .mre-video-item-del svg { width: 0.8rem; height: 0.8rem; }
 </style>
 
@@ -580,15 +556,15 @@ body.mre-resizing, body.mre-resizing * { cursor: col-resize !important; user-sel
                 <button type="button" class="mre-btn" data-mre-video-refresh><i data-lucide="refresh-cw"></i>刷新</button>
                 <span class="mre-video-quota" data-mre-video-quota>
                     <span class="mre-video-quota-text" data-mre-video-quota-text></span>
-                    <span class="mre-video-quota-track"><span class="mre-video-quota-fill" data-mre-video-quota-fill></span></span>
+                    <span class="mre-video-quota-bar">{{ progress_track(id=editor_id ~ '-video-quota-fill', variant='blue', size='xs') }}</span>
                 </span>
             </div>
             <div class="mre-video-progress" data-mre-video-progress hidden>
-                <span class="mre-video-progress-track"><span class="mre-video-progress-fill" data-mre-video-progress-fill></span></span>
+                <span class="mre-video-progress-bar">{{ progress_track(id=editor_id ~ '-video-progress-fill', variant='blue', size='sm') }}</span>
                 <span class="mre-video-progress-text" data-mre-video-progress-text>0%</span>
             </div>
             <div class="mre-video-list" data-mre-video-list></div>
-            <p class="mre-video-empty" data-mre-video-empty>暂无视频，点击「上传视频」添加（每个指南全部资源合计最多 50MB）</p>
+            <p class="mre-video-empty" data-mre-video-empty>暂无视频，点击「上传视频」添加{% if video_limit_label %}（每个指南全部资源合计最多 {{ video_limit_label }}）{% endif %}</p>
         </div>
         {% endif %}
     </div>

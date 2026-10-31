@@ -259,12 +259,18 @@
 
     function serializeInline(el, ctx) {
         switch (el.tagName) {
-            case 'STRONG': case 'B':
-                return '**' + inlineOf(el, ctx).trim() + '**';
-            case 'EM': case 'I':
-                return '*' + inlineOf(el, ctx).trim() + '*';
-            case 'DEL': case 'S': case 'STRIKE':
-                return '~~' + inlineOf(el, ctx).trim() + '~~';
+            case 'STRONG': case 'B': {
+                var strong = inlineOf(el, ctx).trim();
+                return strong ? '**' + strong + '**' : '';
+            }
+            case 'EM': case 'I': {
+                var em = inlineOf(el, ctx).trim();
+                return em ? '*' + em + '*' : '';
+            }
+            case 'DEL': case 'S': case 'STRIKE': {
+                var del = inlineOf(el, ctx).trim();
+                return del ? '~~' + del + '~~' : '';
+            }
             case 'CODE':
                 return inlineCode(el.textContent);
             case 'A': {
@@ -280,7 +286,7 @@
                 return '![' + alt + '](' + src + (t ? ' "' + String(t).replace(/"/g, '\\"') + '"' : '') + ')';
             }
             case 'BR':
-                return ctx.inTable ? '<br>' : '\\\n';
+                return ctx.inTable ? '<br>' : '  \n';
             case 'INPUT':
                 return ''; // 任务列表复选框由列表序列化统一处理
             case 'SPAN':
@@ -402,8 +408,12 @@
         switch (el.tagName) {
             case 'H1': case 'H2': case 'H3': case 'H4': case 'H5': case 'H6':
                 return repeat('#', parseInt(el.tagName.charAt(1), 10)) + ' ' + inlineOf(el, ctx).trim();
-            case 'P':
-                return inlineOf(el, ctx).trim();
+            case 'P': {
+                // 空段落（如视频前后的占位 <p><br></p>）必须序列化为空，
+                // 否则会残留孤立的反斜杠或硬换行标记污染 Markdown 源文件。
+                var p = inlineOf(el, ctx).trim().replace(/\\+$/g, '').trim();
+                return p;
+            }
             case 'UL': case 'OL':
                 return serializeList(el, ctx);
             case 'BLOCKQUOTE':
@@ -429,7 +439,7 @@
         function flush() {
             var t = inlineBuf.join('');
             inlineBuf = [];
-            t = t.replace(/[ \t]+$/, '');
+            t = t.replace(/\s+$/, '');
             if (t.trim()) out.push(t);
         }
         var nodes = parent.childNodes;
@@ -454,7 +464,7 @@
                     var b = serializeBlock(n, ctx);
                     if (b !== '') out.push(b);
                 } else if (n.tagName === 'BR') {
-                    inlineBuf.push(ctx.inTable ? '<br>' : '\\\n');
+                    inlineBuf.push(ctx.inTable ? '<br>' : '  \n');
                 } else if (n.tagName === 'INPUT') {
                     // 顶层游离复选框：忽略
                 } else {
@@ -694,10 +704,10 @@
         this.videoEmptyEl = root.querySelector('[data-mre-video-empty]');
         this.videoFile = root.querySelector('[data-mre-video-file]');
         this.videoProgressEl = root.querySelector('[data-mre-video-progress]');
-        this.videoProgressFill = root.querySelector('[data-mre-video-progress-fill]');
+        this.videoProgressFill = root.querySelector('[data-mre-video-progress] .progress-fill');
         this.videoProgressText = root.querySelector('[data-mre-video-progress-text]');
         this.videoQuotaText = root.querySelector('[data-mre-video-quota-text]');
-        this.videoQuotaFill = root.querySelector('[data-mre-video-quota-fill]');
+        this.videoQuotaFill = root.querySelector('[data-mre-video-quota] .progress-fill');
         this.videoItems = [];
         this.videoLoaded = false;
         // 本地静默草稿（localStorage，仅存本机，不上传）
@@ -2209,8 +2219,10 @@
 
             var name = document.createElement('span');
             name.className = 'mre-video-item-name';
-            name.textContent = item.name || '';
-            name.title = item.name || '';
+            name.textContent = item.title || item.name || '';
+            name.title = (item.title && item.name)
+                ? (item.title + '（文件：' + item.name + '）')
+                : (item.name || '');
             row.appendChild(name);
 
             if (item.size_label) {
@@ -2218,6 +2230,19 @@
                 size.className = 'mre-video-item-size';
                 size.textContent = item.size_label;
                 row.appendChild(size);
+            }
+
+            if (item.rename_url) {
+                var rename = document.createElement('button');
+                rename.type = 'button';
+                rename.className = 'mre-video-item-rename';
+                rename.title = '修改显示名称';
+                rename.innerHTML = '<i data-lucide="pencil"></i>';
+                rename.addEventListener('click', function (e) {
+                    e.stopPropagation();
+                    self.renameVideo(item, rename);
+                });
+                row.appendChild(rename);
             }
 
             var del = document.createElement('button');
@@ -2231,7 +2256,7 @@
             });
             row.appendChild(del);
 
-            row.addEventListener('click', function () { self.insertVideoUrl(item.url); });
+            row.addEventListener('click', function () { self.insertVideoUrl(item.url, item.title); });
             listEl.appendChild(row);
         });
         this.refreshIcons();
@@ -2248,17 +2273,41 @@
                 : '';
         }
         if (this.videoQuotaFill) {
-            var pct = limit > 0 ? Math.min(100, used / limit * 100) : 0;
-            this.videoQuotaFill.style.width = pct.toFixed(1) + '%';
+            var pct = Number(data && data.percent);
+            if (!isFinite(pct) || pct <= 0) pct = limit > 0 ? Math.min(100, used / limit * 100) : 0;
+            this.videoQuotaFill.classList.remove('is-indeterminate');
+            this.videoQuotaFill.style.width = Math.max(0, Math.min(100, pct)).toFixed(1) + '%';
+        }
+    };
+
+    // 更新视频上传 / 转码进度：percent 为 null 时显示不确定态光带
+    Editor.prototype.setVideoProgress = function (percent, text) {
+        var fill = this.videoProgressFill;
+        if (!fill) return;
+        if (percent === null || percent === undefined) {
+            fill.classList.add('is-indeterminate');
+            fill.style.width = '100%';
+        } else {
+            fill.classList.remove('is-indeterminate');
+            var pct = Math.max(0, Math.min(100, Number(percent) || 0));
+            fill.style.width = pct.toFixed(1) + '%';
+        }
+        if (this.videoProgressText) {
+            this.videoProgressText.textContent = text || (
+                percent === null || percent === undefined
+                    ? '转码中…'
+                    : Math.round(percent) + '%'
+            );
         }
     };
 
     // 创建富文本中的视频原子块（使用站内自定义控件）
-    function createVideoNode(url) {
+    function createVideoNode(url, title) {
         var node = document.createElement('video');
         node.setAttribute('src', url);
         node.setAttribute('preload', 'metadata');
         node.setAttribute('contenteditable', 'false');
+        if (title) node.setAttribute('data-title', title);
         if (window.SiteVideoPlayer) {
             var wrap = window.SiteVideoPlayer.decorate(node);
             if (wrap) return wrap;
@@ -2293,7 +2342,7 @@
     };
 
     // 把视频插入正文（已有视频时替换其地址，实现「更换视频」）
-    Editor.prototype.insertVideoUrl = function (url) {
+    Editor.prototype.insertVideoUrl = function (url, title) {
         if (!url) return;
 
         if (this.mode === 'rich') {
@@ -2302,6 +2351,8 @@
                 this.videoAnchor.setAttribute('src', url);
                 this.videoAnchor.setAttribute('preload', 'metadata');
                 this.videoAnchor.setAttribute('contenteditable', 'false');
+                if (title) this.videoAnchor.setAttribute('data-title', title);
+                else this.videoAnchor.removeAttribute('data-title');
             } else {
                 if (this.savedRange) {
                     try {
@@ -2310,7 +2361,7 @@
                         sel.addRange(this.savedRange);
                     } catch (e) { /* 忽略 */ }
                 }
-                var node = createVideoNode(url);
+                var node = createVideoNode(url, title);
                 this.insertBlock(node);
                 this.ensureVideoRoom(node);
             }
@@ -2335,7 +2386,7 @@
         this.updateToolbar();
     };
 
-    // 上传视频到当前指南（带进度条）
+    // 上传视频到当前指南：浏览器上传进度 → 上传完成后进度归零 → 轮询转码进度
     Editor.prototype.uploadVideo = function () {
         var self = this;
         var file = this.videoFile && this.videoFile.files && this.videoFile.files[0];
@@ -2353,52 +2404,90 @@
         var btn = this.root.querySelector('.mre-video-upload-btn');
         if (btn) btn.classList.add('is-loading');
 
-        var setProgress = function (loaded, total) {
-            var pct = total > 0 ? Math.min(100, loaded / total * 100) : 0;
-            if (self.videoProgressFill) self.videoProgressFill.style.width = pct.toFixed(1) + '%';
-            if (self.videoProgressText) self.videoProgressText.textContent = Math.round(pct) + '%';
-        };
-        var setStage = function (text) {
-            if (self.videoProgressText) self.videoProgressText.textContent = text;
-        };
-        var finish = function (keep) {
+        var finish = function (done) {
             if (btn) btn.classList.remove('is-loading');
             if (self.videoFile) self.videoFile.value = '';
-            if (!keep && self.videoProgressEl) self.videoProgressEl.hidden = true;
+            if (done && self.videoProgressEl) {
+                setTimeout(function () { self.videoProgressEl.hidden = true; }, 500);
+            }
         };
 
         if (this.videoProgressEl) this.videoProgressEl.hidden = false;
-        setProgress(0, file.size);
+        this.setVideoProgress(0, '上传中 0%');
+
+        // 轮询后台转码任务
+        var poll = function (progressUrl) {
+            var attempts = 0;
+            var tick = function () {
+                attempts += 1;
+                if (attempts > 900) { // 约 15 分钟上限
+                    finish(true);
+                    toast('转码任务超时，请稍后刷新视频列表查看', 'error');
+                    return;
+                }
+                fetch(progressUrl, {
+                    credentials: 'same-origin',
+                    headers: { 'Accept': 'application/json' }
+                })
+                .then(function (res) { return res.json(); })
+                .then(function (data) {
+                    if (!data || data.success === false) {
+                        throw new Error((data && data.message) || '转码状态获取失败');
+                    }
+                    if (data.status === 'done') {
+                        self.setVideoProgress(100, '转码完成');
+                        finish(true);
+                        toast(data.message || '视频已上传', 'success');
+                        self.loadVideoList();
+                        return;
+                    }
+                    if (data.status === 'error') {
+                        finish(false);
+                        toast(data.message || '视频转码失败', 'error');
+                        return;
+                    }
+                    self.setVideoProgress(data.percent, data.message || '正在转码…');
+                    setTimeout(tick, 1000);
+                })
+                .catch(function (err) {
+                    finish(false);
+                    toast((err && err.message) || '转码状态获取失败', 'error');
+                });
+            };
+            tick();
+        };
 
         var xhr = new XMLHttpRequest();
         xhr.open('POST', this.videoUploadUrl, true);
         xhr.withCredentials = true;
         xhr.setRequestHeader('Accept', 'application/json');
         xhr.upload.onprogress = function (e) {
-            if (e.lengthComputable) setProgress(e.loaded, e.total);
+            if (!e.lengthComputable) return;
+            var pct = e.total > 0 ? Math.min(100, e.loaded / e.total * 100) : 0;
+            self.setVideoProgress(pct, '上传中 ' + Math.round(pct) + '%');
         };
-        // 文件已上传完毕，服务端开始 ffmpeg 转码（保持进度条可见并提示阶段）
         xhr.upload.onload = function () {
-            setProgress(file.size, file.size);
-            setStage('转码中…');
+            self.setVideoProgress(0, '上传完成，准备转码…');
         };
         xhr.onload = function () {
             var data = {};
             try { data = JSON.parse(xhr.responseText || '{}'); } catch (e) { /* 忽略 */ }
             var ok = xhr.status >= 200 && xhr.status < 300 && data && data.success !== false;
-            if (ok) {
-                setProgress(file.size, file.size);
-                finish(true);
-                setTimeout(function () {
-                    if (self.videoProgressEl) self.videoProgressEl.hidden = true;
-                }, 400);
-                toast(data.message || '视频已上传', 'success');
-                self.loadVideoList();
-            } else {
+            if (!ok) {
                 finish(false);
                 var msg = (data && data.message) || (xhr.status === 413 ? '视频文件过大，无法上传' : '视频上传失败');
                 toast(msg, 'error');
+                return;
             }
+            if (!data.progress_url) {
+                finish(true);
+                toast(data.message || '视频已上传', 'success');
+                self.loadVideoList();
+                return;
+            }
+            // 上传完成 → 进度条归零 → 变成转码进度条
+            self.setVideoProgress(0, '正在转码…');
+            poll(data.progress_url);
         };
         xhr.onerror = function () {
             finish(false);
@@ -2412,6 +2501,52 @@
             finish(false);
         };
         xhr.send(form);
+    };
+
+    // 修改视频的页面显示名称（伪文件名，写入指南 config.json）
+    Editor.prototype.renameVideo = function (item, trigger) {
+        var self = this;
+        if (!item || !item.rename_url) return;
+
+        var apply = function (title) {
+            fetch(item.rename_url, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({ title: title })
+            })
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
+                if (!data || data.success === false) {
+                    toast((data && data.message) || '修改失败', 'error');
+                    return;
+                }
+                toast(data.message || '视频名称已更新', 'success');
+                self.loadVideoList();
+            })
+            .catch(function () { toast('修改失败，请稍后重试', 'error'); });
+        };
+
+        if (window.CustomModal && typeof window.CustomModal.prompt === 'function') {
+            window.CustomModal.prompt('输入视频在页面上显示的名称（留空则显示真实文件名）', {
+                title: '修改视频名称',
+                type: 'info',
+                defaultValue: item.title || '',
+                placeholder: '例如：海滩日落',
+                confirmText: '保存',
+                trigger: trigger || null,
+                callback: function (value) {
+                    if (value === null || value === undefined) return; // 取消
+                    apply(String(value).trim().slice(0, 100));
+                }
+            });
+            return;
+        }
+        var input = window.prompt('输入视频在页面上显示的名称', item.title || '');
+        if (input !== null) apply(String(input).trim());
     };
 
     // 删除视频文件（正文中的引用不会自动移除）

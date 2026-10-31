@@ -1596,8 +1596,8 @@ pre::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.24); }
     justify-content: center;
     padding: 0;
     border: 0;
-    background: radial-gradient(circle at center, rgba(2, 132, 199, 0.22), rgba(2, 8, 20, 0.42));
-    color: #fff;
+    background: radial-gradient(circle at center, rgba(125, 211, 252, 0.28), rgba(8, 47, 73, 0.38));
+    color: #f0f9ff;
     cursor: pointer;
     transition: opacity 0.2s ease;
 }
@@ -1606,12 +1606,39 @@ pre::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.24); }
     height: 3.25rem;
     padding: 0.55rem;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.16);
-    border: 1px solid rgba(255, 255, 255, 0.28);
-    backdrop-filter: blur(6px);
+    background: rgba(224, 242, 254, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.7);
+    color: #075985;
+    backdrop-filter: blur(12px) saturate(150%);
+    -webkit-backdrop-filter: blur(12px) saturate(150%);
+    box-shadow: 0 8px 24px rgba(8, 47, 73, 0.25);
 }
-.svp-overlay:hover svg { background: rgba(2, 132, 199, 0.55); }
+.svp-overlay:hover svg { background: rgba(186, 230, 253, 0.85); color: #0c4a6e; }
 .svp-overlay.is-hidden { opacity: 0; pointer-events: none; }
+
+/* 伪文件名：淡蓝磨砂玻璃标题条 */
+.svp-caption {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    z-index: 2;
+    padding: 0.45rem 0.7rem 0.9rem;
+    background: linear-gradient(180deg, rgba(224, 242, 254, 0.78), rgba(224, 242, 254, 0));
+    backdrop-filter: blur(8px) saturate(140%);
+    -webkit-backdrop-filter: blur(8px) saturate(140%);
+    color: #0c4a6e;
+    font-size: 0.8rem;
+    font-weight: 600;
+    line-height: 1.4;
+    letter-spacing: 0.01em;
+    pointer-events: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* 底部控制栏：淡蓝色磨砂玻璃 */
 .svp-bar {
     position: absolute;
     left: 0;
@@ -1620,8 +1647,12 @@ pre::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.24); }
     display: flex;
     align-items: center;
     gap: 0.45rem;
-    padding: 0.45rem 0.65rem;
-    background: linear-gradient(180deg, rgba(6, 12, 24, 0), rgba(6, 12, 24, 0.82));
+    padding: 0.5rem 0.65rem;
+    background: linear-gradient(180deg, rgba(224, 242, 254, 0.35), rgba(186, 230, 253, 0.72));
+    backdrop-filter: blur(18px) saturate(170%);
+    -webkit-backdrop-filter: blur(18px) saturate(170%);
+    border-top: 1px solid rgba(255, 255, 255, 0.65);
+    box-shadow: 0 -8px 24px rgba(2, 132, 199, 0.14);
     opacity: 0;
     transform: translateY(6px);
     transition: opacity 0.2s ease, transform 0.2s ease;
@@ -1638,15 +1669,32 @@ pre::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.24); }
     height: 1.85rem;
     flex: 0 0 auto;
     padding: 0;
-    border: 0;
+    border: 1px solid rgba(2, 132, 199, 0.18);
     border-radius: 8px;
-    background: transparent;
-    color: #eaf4ff;
+    background: rgba(255, 255, 255, 0.5);
+    color: #075985;
     cursor: pointer;
-    transition: background-color 0.15s ease, color 0.15s ease;
+    transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
-.svp-btn:hover { background: rgba(2, 132, 199, 0.35); color: #fff; }
+.svp-btn:hover {
+    background: rgba(56, 189, 248, 0.38);
+    border-color: rgba(2, 132, 199, 0.35);
+    color: #0c4a6e;
+}
+.svp-btn:focus-visible {
+    outline: 2px solid rgba(2, 132, 199, 0.55);
+    outline-offset: 1px;
+}
 .svp-btn svg { width: 1rem; height: 1rem; display: block; }
+.svp-speed {
+    width: auto;
+    min-width: 2.45rem;
+    padding: 0 0.45rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+}
 .svp-seek {
     flex: 1 1 auto;
     min-width: 4rem;
@@ -1654,13 +1702,14 @@ pre::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.24); }
     margin: 0;
     padding: 0;
     background: transparent;
-    accent-color: var(--accent-blue, #0284c7);
+    accent-color: #0284c7;
     cursor: pointer;
 }
 .svp-time {
     flex: 0 0 auto;
     font-size: 0.72rem;
-    color: rgba(234, 244, 255, 0.82);
+    color: #075985;
+    font-weight: 500;
     font-variant-numeric: tabular-nums;
     line-height: 1.2;
 }

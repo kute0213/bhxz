@@ -71,9 +71,11 @@ def migrate(dry_run=False, overwrite=False):
             exists = os.path.isfile(md_path)
 
             if exists and not (overwrite and content.strip()):
-                # 文件已存在：视为已迁移，只清理数据库正文
+                # 文件已存在：视为已迁移，补齐 config.json 并清理数据库正文
                 stats['kept'] += 1
                 label = '保留文件'
+                if not dry_run:
+                    guide_store.ensure_guide_dir(gid)
                 if content.strip():
                     stats['cleared'] += 1
                     if not dry_run:

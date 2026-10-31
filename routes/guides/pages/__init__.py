@@ -10,7 +10,7 @@ from core.db import get_db
 from core.shared.snowflake import next_id
 from core.shared.captcha import captcha_service
 from core.shared.ip import get_client_ip
-from config import get_page_size
+from config import get_page_size, get_guide_resource_limit
 from services import guides as guide_store
 from routes.guides import guides_bp
 from routes.guides.api import _annotate_favorites
@@ -22,6 +22,8 @@ def _edit_form_context(guide):
         'guide': guide,
         'video_list_url': url_for('guides.api_guide_videos', guide_id=guide['id']),
         'video_upload_url': url_for('guides.api_guide_video_upload', guide_id=guide['id']),
+        'draft_url': url_for('guides.api_guide_draft', guide_id=guide['id']),
+        'video_limit_label': guide_store.format_size(get_guide_resource_limit()),
     }
 
 
@@ -137,7 +139,13 @@ def guide_detail(guide_id):
     guide['content'] = guide_store.read_guide_content(guide_id, guide.get('content') or '')
     # 把 SQLite 的 0/1 整数转 bool
     guide['is_favorited'] = bool(guide.get('is_favorited'))
-    return render_page('guides/detail.html', guide=guide)
+    # 视频伪文件名（config.json 中配置的页面显示名称）
+    config = guide_store.read_guide_config(guide_id)
+    video_titles = {
+        name: (meta.get('title') or name) if isinstance(meta, dict) else name
+        for name, meta in (config.get('videos') or {}).items()
+    }
+    return render_page('guides/detail.html', guide=guide, video_titles=video_titles)
 
 
 @guides_bp.route('/guides/<int:guide_id>/assets/<path:filename>')

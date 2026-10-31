@@ -148,7 +148,7 @@ python scripts/build/package.py
 ├── docs/         # 项目文档
 ├── scripts/      # 构建脚本（build/）与测试（tests/）
 ├── uploads/      # 运行期上传数据
-│   ├── guides/         # 服务器指南（每个指南一个目录：guide.md + assets/ 视频等资源，单个指南资源上限 50MB）
+│   ├── guides/         # 服务器指南（每个指南一个目录：guide.md + config.json + assets/ 视频等资源，资源上限可在系统设置中调整）
 │   ├── backgrounds/    # 全站背景图片
 │   ├── music/          # 大喇叭音频（每个音频一个 ID 目录，含 m3u8、ts 分片与唱片 MP3）
 │   └── db/             # 数据库文件（site.db + firewall.duckdb）
@@ -226,8 +226,10 @@ python scripts/build/package.py
 
 * Markdown 详情页（标题锚点、代码一键复制）
 
-* **指南文件化存储**：每条指南对应独立目录 `uploads/guides/<指南ID>/`，正文保存为 `guide.md`（唯一内容来源），视频等资源放在 `assets/`；数据库 `server_guides.content` 只保留空串，读取时以文件优先、文件缺失时回退数据库旧内容。每个指南的全部资源合计上限 **50MB**，支持 mp4 / webm / ogv / ogg / mov / m4v 上传。
-  * **视频统一转码**：上传的视频先写入指南目录内的临时目录，再由 ffmpeg 统一转码为 **MP4（H.264 + AAC，`yuv420p`，`+faststart`）**，输出到 `assets/`；最终文件名固定为 `<雪花ID>.mp4`（与全站 ID 生成器一致），不再使用原始文件名。转码失败、超时或不可用 ffmpeg 时会删除半成品并返回明确提示；配额按转码后的实际大小校验。
+* **指南文件化存储**：每条指南对应独立目录 `uploads/guides/<指南ID>/`，内含 `guide.md`（正文，唯一内容来源）、`config.json`（指南配置）与 `assets/`（视频等资源）；数据库 `server_guides.content` 只保留空串，读取时以文件优先、文件缺失时回退数据库旧内容。每个指南的全部资源合计上限默认 **50MB**，可在管理后台「系统设置 → 指南资源」热改（`GUIDE_RESOURCE_MAX_MB`，1–1024），支持 mp4 / webm / ogv / ogg / mov / m4v 上传。
+  * **指南 config.json（版本化分节结构）**：`{"version": 1, "videos": {"<真实文件名>.mp4": {"title": "<页面显示名称>"}}}`。新建指南时自动生成；新增配置项时只追加分节 / 字段，不改动已有结构。视频的页面显示名称（伪文件名）保存在这里，删除视频时同步清理对应配置项。
+  * **视频伪文件名**：编辑器视频列表显示 `config.json` 中配置的名称，点击列表插入正文后详情页视频左上角显示该名称；每个视频条目在删除按钮左侧提供「修改名称」按钮（`POST /api/guides/<ID>/videos/<文件名>/rename`），留空则回退真实文件名。
+  * **视频统一转码（异步 + 进度）**：上传的文件先写入指南目录内的 `.upload_` 临时目录，再由后台线程调用 ffmpeg 统一转码为 **MP4（H.264 + AAC，`yuv420p`，`+faststart`）**；转码中间产物位于 `.transcode_` 临时目录，只有最终文件才会以 `<雪花ID>.mp4`（与全站 ID 生成器一致）落到 `assets/`。ffmpeg `-progress` 输出经 `ffprobe` 时长换算为百分比，前端轮询 `GET /api/guides/<ID>/videos/progress/<task_id>` 展示转码进度；转码失败、超时或不可用 ffmpeg 时会删除半成品并返回明确提示；配额只按最终 MP4 大小校验，原始上传文件与中间产物不计入。
   * **新建即生成草稿**：点击「新建指南」直接创建一份标题为「未命名指南」的草稿（立即生成指南 ID 与目录、正文为空），随后回到「我的指南」页面；之后点击「修改」再填写标题、摘要、正文并上传视频，资源直接写入 `uploads/guides/<ID>/assets/`。新建后的指南状态为 **草稿（draft）**，草稿计入「未通过指南数量」，超过上限则禁止新建。
   * **独立「我的指南」页面**：`/guides/my`（登录后访问），展示本人创建的全部指南及状态。
   * **发布**：在「我的指南」或指南详情页点击「发布」（`POST /api/guides/<id>/publish`），草稿即变为待审核（pending）状态，正文非空即可发布；草稿保存无需验证码，正式提交仍需验证码。
@@ -241,8 +243,8 @@ python scripts/build/package.py
   * **高频交互不卡顿**：选区变化经签名去重后合并到同一帧刷新工具栏，表格检测按当前行预判，避免大文档下反复全量重排 / 重建 DOM。
   * 工具栏按 **基础 / 段落 / 插入 三个常驻标签页**分类：基础（加粗/斜体/删除线/行内代码/清除格式）、段落（H1–H4/引用/代码块/无序/有序/任务列表/分割线/缩进）、插入（链接/表格/视频）。
   * **上下文标签页**：另有「链接」「表格」「视频」三个标签页，仅在光标位于链接内、表格内、视频内（或刚点了「插入链接/表格/视频」）时自动出现，离开对应上下文后自动隐藏并切回基础页。
-  * **视频标签页**：在指南编辑器中可直接上传视频（写入 `assets/`，按指南 50MB 配额校验，上传过程带实时进度条），查看当前视频列表并点击插入正文；点击正文中已有的视频即可打开视频标签页，再点列表中的其它视频可一键更换地址。上传完成即由服务端统一转码为 H.264/MP4 并以雪花 ID 命名，详情见「指南文件化存储 → 视频统一转码」。上传进度分两阶段显示（文件传输百分比 → 「转码中…」），失败 / 413 / 网络中断均有明确提示。视频配额以带进度条的用量控件展示；删除视频使用站内统一确认弹窗，而非浏览器原生提示。
-  * **视频语法**：视频以 Markdown 语法 `@[video](url)` 保存（源码模式与数据库存储均如此，不再写入原始 HTML `<video>`），详情页 / 管理后台预览 / 编辑器富文本会把该语法渲染为可播放视频；兼容历史遗留的 `<video>` HTML。
+  * **视频标签页**：在指南编辑器中可直接上传视频（写入 `assets/`，按系统设置中的指南资源上限校验），查看当前视频列表并点击插入正文；点击正文中已有的视频即可打开视频标签页，再点列表中的其它视频可一键更换地址。上传完成即由服务端统一转码为 H.264/MP4 并以雪花 ID 命名，详情见「指南文件化存储 → 视频统一转码」。进度条分两阶段：文件传输百分比 → 上传完成后**归零**并切换为转码进度（`GET /api/guides/<ID>/videos/progress/<task_id>`，无法获取时长时为不确定态光带），失败 / 413 / 网络中断均有明确提示。视频列表显示 `config.json` 中的伪文件名，删除按钮左侧提供「修改名称」按钮；配额以统一进度条组件展示，删除视频使用站内统一确认弹窗，而非浏览器原生提示。
+  * **视频语法**：视频以 Markdown 语法 `@[video](url)` 保存（源码模式与数据库存储均如此，不再写入原始 HTML `<video>`），详情页 / 管理后台预览 / 编辑器富文本会把该语法渲染为可播放视频；详情页渲染时按 URL 文件名查 `config.json` 注入 `data-title`，播放器在视频左上角显示伪文件名；兼容历史遗留的 `<video>` HTML。
   * **视频编辑体验**：视频在富文本中作为原子块，插入位置在光标之后，并自动保证前后都有可放置光标的段落；可整体选中视频后剪切 / 删除，也可在光标紧邻视频时用 Backspace / Delete 删除。复制 / 剪切时会把选区（文字 + 视频）统一序列化为 Markdown 写入 `text/plain`，因此从编辑器复制的内容可再次粘贴回编辑器或源码模式；粘贴含 `@[video](url)` 的内容会自动还原成可播放视频块，彻底避免原生复制视频节点导致的「粘贴无效 / 剪切后编辑器错乱」。
   * **链接标签页**：可直接填写链接地址、显示文字、悬停标题与「新窗口打开」；**未选中文字时点击链接按钮会自动插入默认文字**（无需先选中文字）；提供独立「取消链接」按钮（仅保留文字、移除链接）。图片插入功能已移除。
   * **表格标签页**：增删行列 / 删除表格 / 当前列左中右对齐；插入表格后自动切到表格标签页，光标离开表格后自动收起。
@@ -371,6 +373,8 @@ python scripts/build/package.py
 
 * **列表分页**：公共建筑 / 公共建筑评论 / 大喇叭音频 / 服务器指南 / 后台背景图片 / 后台账号申请 各列表每次加载条数（1–100，默认 5）。**分页大小仅可在此处或 `config.py` 修改，用户调用接口传入的参数一律被忽略**
 
+* **指南资源**：单个指南的全部资源（`assets/` 目录）合计上限（MB，1–1024，默认 50）。修改后对新的上传立即生效，已上传资源不受影响
+
 * **外部链接**：卫星地图地址、QQ 群链接
 
 * **邮件配置**：SMTP 服务器、端口、SSL、发件邮箱与授权码
@@ -396,7 +400,7 @@ python scripts/build/package.py
 | `FFMPEG_BIN`                  | 大喇叭音频转码与指南视频转码用的 ffmpeg                    | Windows 优先 `uploads/ffmpeg/ffmpeg.exe`，否则系统 PATH；Linux/macOS 用系统 `ffmpeg`  |
 | `FFPROBE_BIN`                 | 探测音频时长（转码进度百分比）用的 ffprobe                 | Windows 优先 `uploads/ffmpeg/ffprobe.exe`，否则系统 PATH；Linux/macOS 用系统 `ffprobe` |
 | `FFMPEG_THREADS`              | ffmpeg 音频转码线程数                            | `0`（自动按 CPU 核数）                             |
-| `GUIDE_RESOURCE_MAX_BYTES`    | 每个指南全部资源（`assets/`）合计上限                   | 50 MB                                       |
+| `GUIDE_RESOURCE_MAX_MB`       | 每个指南全部资源（`assets/`）合计上限，可在系统设置热改         | `50`（MB，1–1024）                            |
 | `GUIDE_VIDEO_TRANSCODE_TIMEOUT` | 指南视频 ffmpeg 转码最长等待秒数                     | `600`                                       |
 | `MAX_CONTENT_LENGTH`          | 最大上传大小                                    | 100 MB                                      |
 | `BACKUP_DIR`                  | 备份根目录（支持绝对/相对路径，运行时可在后台热改）            | `../bhxz_backups`（项目上一级）                   |
@@ -546,9 +550,12 @@ python scripts/build/package.py
 | GET | `/api/guides/list`   | 公开指南列表（仅返回已通过，`page` 页码、`q` 关键词匹配标题与摘要；每页条数由 `GUIDES_PER_PAGE` 控制） |
 | GET | `/api/guides/my`     | 我的指南列表（需登录，结构同公开列表，含草稿 / 待审核 / 已拒绝，支持 `page`、`q`） |
 | POST | `/api/guides/<id>/publish` | 发布草稿指南（草稿 → 待审核，正文不能为空，需登录且仅作者 / 管理员） |
-| GET | `/api/guides/<id>/videos` | 当前指南视频列表（含 `url` / `delete_url` 与配额用量，需登录） |
-| POST | `/api/guides/<id>/videos` | 上传指南视频（表单字段 `video`，写入 `assets/` 并按 50MB 配额校验，需登录） |
-| POST | `/api/guides/<id>/videos/<文件名>/delete` | 删除指南视频（需登录） |
+| GET | `/api/guides/<id>/videos` | 当前指南视频列表（含 `title` / `url` / `delete_url` / `rename_url` 与配额用量，需登录且仅作者或管理员） |
+| POST | `/api/guides/<id>/videos` | 上传指南视频（表单字段 `video`，返回 `task_id` 与 `progress_url`，后台异步转码；需登录且仅作者或管理员） |
+| GET | `/api/guides/<id>/videos/progress/<task_id>` | 查询视频转码进度（`status` / `percent` / `message`，完成后附带视频条目与配额） |
+| POST | `/api/guides/<id>/videos/<文件名>/rename` | 修改视频的页面显示名称（JSON 字段 `title`，写入 `config.json`） |
+| POST | `/api/guides/<id>/videos/<文件名>/delete` | 删除指南视频并清理 `config.json` 配置（需登录且仅作者或管理员） |
+| POST | `/api/guides/<id>/draft` | 保存草稿（AJAX，不刷新页面；仅草稿状态可用，需登录且仅作者或管理员） |
 
 ### 大喇叭音频 AJAX 端点
 
@@ -599,7 +606,7 @@ python scripts/build/package.py
 
 * **自定义音频播放器（磨砂玻璃风格）**：大喇叭音频列表、我的音频、管理员审核页均使用自研播放器替代默认控件，含进度条拖动、倍速（0.5x~2x）、音量（滑块弹层，记忆在 localStorage）与播放/暂停；同一时间只允许一个播放器出声。样式见 `static/css/base.css` 的 `.music-player`，逻辑见 `static/js/pages/music_player.js`
 
-* **自定义视频播放器（全站统一）**：指南详情页、Markdown 编辑器、管理后台预览中的视频统一使用站内控件，移除浏览器原生 `controls`；提供中央大播放按钮、播放/暂停、可拖动进度条、当前/总时长、静音与全屏，移动端自适应。样式见 `static/css/base.css` 的 `.svp`，逻辑见 `static/js/core/video-player.js`（`SiteVideoPlayer.decorate / decorateAll`），由 `base.html` 全站加载
+* **自定义视频播放器（全站统一，淡蓝磨砂玻璃）**：指南详情页、Markdown 编辑器、管理后台预览中的视频统一使用站内控件，移除浏览器原生 `controls`；提供中央大播放按钮、播放/暂停、可拖动进度条、当前/总时长、循环倍速按钮（1x → 1.25x → 1.5x → 2x → 0.5x）、静音与全屏，移动端自适应。控制栏为淡蓝磨砂玻璃（`backdrop-filter` + 半透明浅蓝渐变），按钮为白底蓝边深蓝图标以保证倍速等文字清晰可读；视频左上角显示 `data-title`（指南伪文件名）。样式见 `static/css/base.css` 的 `.svp`，逻辑见 `static/js/core/video-player.js`（`SiteVideoPlayer.decorate / decorateAll`），由 `base.html` 全站加载
 
 * **全站响应式适配**：窄屏下音频卡片操作按钮组自动占满整行并换行，管理员数据表格统一横向滚动，导航在小屏切换为右侧滑出菜单
 
@@ -609,7 +616,7 @@ python scripts/build/package.py
 
 * **统一标签列表输入框**：`macros/forms.html` 的 `tags_field()` 宏 + `base.js` 的 `TagInput` 模块，输入后回车或点「添加」新增标签，可点叉号删除、支持粘贴自动拆分；底层为逗号分隔字符串，与后端解析兼容
 
-* **统一进度条模板**：全站进度条由 `macros/progress.html` 的 `progress_track()` 宏渲染，样式集中在 `static/css/base.css` 的 `.progress-track` / `.progress-fill`；上传页、音频上传、自动维护、JS 动态创建一律复用同一套类名
+* **统一进度条模板**：全站进度条由 `macros/progress.html` 的 `progress_track()` 宏渲染，样式集中在 `static/css/base.css` 的 `.progress-track` / `.progress-fill`；音频上传、背景图上传、自动维护、指南视频上传 / 转码 / 配额，以及 JS 动态创建（`UploadProgress`）一律复用同一套类名，禁止另起样式；百分比未知时在填充元素上加 `is-indeterminate` 切换为滑动光带
 
 ### 交互效果
 

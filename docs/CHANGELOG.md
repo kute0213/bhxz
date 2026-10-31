@@ -4,6 +4,19 @@
 
 ### 变更
 
+* **编辑器 Markdown 污染根治 + 异步转码进度 + 指南 config.json + 播放器淡蓝磨砂 + 草稿无刷新保存**（`services/guides/__init__.py`、`config.py`、`routes/guides/{pages,api}/__init__.py`、`routes/admin/guides/__init__.py`、`static/js/pages/markdown-editor.js`、`static/js/core/video-player.js`、`static/css/base.css`、`static/templates/{base,guides/form,guides/detail,admin/guide_form,admin/guides}.html`、`static/templates/admin/broadcast.html`、`static/templates/macros/{markdown_editor,progress}.html`、`scripts/tests/test_guide_storage.py`）：
+  * **反斜杠 / `****` / `---` 三个编辑器问题彻底修复**：根因均在富文本 → Markdown 序列化。空 `<strong>` / `<em>` / `<del>` 不再输出 `****` 等空标记（空标记会被 marked 解析为 `<hr>`，表现为保存后多出 `---`）；`<br>` 统一序列化为两空格硬换行（不再用反斜杠），空段落序列化为空串并在 `flush()` 去掉尾部空白，光标处不再残留无用反斜杠。
+  * **视频转码改为异步任务 + 进度条**：新增 `start_guide_video_upload()` 与内存任务表（TTL 清理），上传文件先落 `.upload_` 临时目录，后台线程用 `ffmpeg -progress` 转码、`ffprobe` 时长换算百分比；新增 `GET /api/guides/<id>/videos/progress/<task_id>`。前端上传完成后进度条**归零**并切换为转码进度（无时长时为不确定态光带）。
+  * **配额只算最终 MP4**：转码中间产物放在 `.transcode_` 临时目录，只有最终 MP4 通过 `os.replace` 进入 `assets/`，彻底修复「原视频 + 转码视频」大小重复累加；新增测试固化该行为。
+  * **指南资源上限改为系统设置**：新增 `GUIDE_RESOURCE_MAX_MB`（分类「指南资源」，1–1024，默认 50）与 `config.get_guide_resource_limit()`；服务端配额、编辑器提示上限、后台编辑页均动态读取，不再硬编码 50MB。
+  * **指南 `config.json`（版本化分节）**：每个指南目录新增 `config.json`（`{"version": 1, "videos": {"<真实文件名>.mp4": {"title": "<页面显示名>"}}}`），新建指南时自动生成；新增读取 / 原子写入 / 设置标题 / 删除配置 API，后续配置项按分节扩展。视频删除时同步清理配置。
+  * **视频伪文件名 + 改名按钮**：编辑器视频列表显示 `config.json` 中的名称（悬停提示真实文件名），删除按钮左侧新增「改名」按钮（`CustomModal.prompt`，`POST .../rename`）；详情页与管理后台预览按 URL 文件名查表注入 `data-title`，播放器左上角显示该名称。
+  * **播放器淡蓝磨砂玻璃 + 倍速按钮**：`.svp` 控制栏改为淡蓝磨砂玻璃（半透明浅蓝渐变 + `backdrop-filter`），按钮白底蓝边深蓝图标，倍速等文字清晰可读；新增循环倍速按钮（1x → 1.25x → 1.5x → 2x → 0.5x）与视频标题条。
+  * **草稿保存不刷新页面**：新增 `POST /api/guides/<id>/draft`（仅草稿、校验作者 / 管理员、内容注入检测），`guides/form.html` 草稿提交改为 `fetch` + Toast + 按钮禁用恢复；正式提交仍走验证码弹窗。
+  * **进度条全部统一**：编辑器视频上传 / 转码 / 配额条改用 `macros/progress.html` 的 `progress_track()`，删除手写的进度条样式；全站进度条保持同一套 `.progress-track / .progress-fill`。
+  * **视频写操作权限校验**：视频列表 / 上传 / 进度 / 改名 / 删除统一校验作者或管理员，避免任意登录用户操作他人指南资源。
+  * 同步更新 README、DEVELOPMENT（新增配置规范与编辑器序列化易错点）与 CHANGELOG；`python -m pytest scripts/tests -q` 252 项通过。
+
 * **站内自定义视频播放器 + 上传进度两阶段提示 + 「我的指南」独立接口**（`static/js/core/video-player.js`、`static/css/base.css`、`static/templates/base.html`、`static/templates/guides/detail.html`、`static/templates/admin/guides.html`、`static/js/pages/markdown-editor.js`、`routes/guides/api/__init__.py`、`static/templates/guides/index.html`、`services/guides/__init__.py`）：
   * **自定义视频控件**：新增 `static/js/core/video-player.js`，把 `<video>` 统一包裹为 `.svp` 并移除原生 `controls`，提供中央大播放按钮、播放/暂停、可拖动进度条、当前/总时长、静音与全屏；`base.html` 全站加载，指南详情页、Markdown 编辑器、管理后台预览统一调用 `SiteVideoPlayer.decorateAll()`。样式追加于 `base.css` 的 `.svp` 段落。
   * **编辑器视频原子块兼容播放器**：富文本视频改用 `.svp` 容器，序列化时识别容器输出 `@[video](url)`；删除 / 剪切 / 粘贴均按容器处理，并把嵌套在段落中的视频提升为顶层块，避免 Markdown 序列化丢失视频。

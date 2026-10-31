@@ -549,6 +549,15 @@ from flask import render_template, redirect, url_for, flash, abort, request
 
 * [ ] 已运行 `python -m pytest scripts/tests -q` 确认通过
 
+### 8. Markdown 编辑器序列化（反斜杠 / 空标记污染）
+
+编辑器的富文本 → Markdown 序列化（`static/js/pages/markdown-editor.js` 的 `serializeInline / serializeBlock`）直接决定源文件内容，必须遵守：
+
+* **空内联标记不输出**：`<strong>` / `<em>` / `<del>` 内部为空时返回空串，禁止输出 `****` / `**` / `~~~~`（`****` 会被 marked 解析成 `<hr>`，保存后表现为凭空多出 `---`）
+* **换行只用硬换行**：富文本中的 `<br>` 序列化为两个空格 + `\n`（`'  \n'`），不要用反斜杠 `\\\n`；否则空段落 `trim()` 后会残留孤立的反斜杠
+* **空段落必须为空**：`<p><br></p>` 这类占位段落序列化为空串，并在块级 `flush()` 时去掉尾部空白，避免把换行标记带入 Markdown
+* 修改序列化逻辑后，必须用 `node --check` 校验，并手动走一遍：加粗后删除 → 保存 → 重开，确认没有多出 `\`、`****`、`---`
+
 ## 构建与发布
 
 ### 1. 安装与启动
@@ -693,15 +702,18 @@ python scripts/migrate_guides.py             # 正式迁移
 
 **指南文件存储约定：**
 
-* 每个指南一个目录 `uploads/guides/<ID>/`，内含 `guide.md`（唯一正文来源）与 `assets/`（视频等资源）
+* 每个指南一个目录 `uploads/guides/<ID>/`，内含 `guide.md`（唯一正文来源）、`config.json`（指南配置）与 `assets/`（视频等资源）
+* **`config.json` 规范**：固定为「版本号 + 分节」结构 `{"version": 1, "videos": {"<真实文件名>.mp4": {"title": "<页面显示名称>"}}}`；新增配置项时只追加分节 / 字段，不改已有结构。读写统一走 `services/guides/` 的 `read_guide_config()` / `write_guide_config()`（原子写入），不要在其他层直接读写该文件；删除资源时同步清理对应配置项
 * 新建指南时即生成指南 ID 与目录（正文为空），状态为 `draft`；点击「新建指南」直接创建标题为「未命名指南」的草稿，标题 / 摘要 / 正文再在编辑页修改。之后直接写入正文与 `assets/`，不再使用 `_drafts` token 机制
 * 「我的指南」为独立页面 `/guides/my`（需登录）
 * 草稿保存保持 `draft` 且无需验证码；「发布」（`POST /api/guides/<id>/publish`）将草稿改为 `pending`，要求正文非空
 * 草稿计入「未通过指南数量」（统计条件 `status != 'approved'`），超过上限时禁止新建
-* 每个指南 `assets/` 合计不超过 50MB（`GUIDE_RESOURCE_MAX_BYTES`），视频扩展名见 `GUIDE_VIDEO_EXTENSIONS`
-* **视频上传必须统一转码**：调用 `guide_store.save_guide_video()`，先把原始文件写入指南目录内的临时目录（`tempfile.mkdtemp(prefix='.transcode_', dir=guide_dir(id))`），再由 `FFMPEG_BIN` 转码为 MP4 / H.264（`libx264 -preset veryfast -crf 23`、`yuv420p`、`-movflags +faststart`，音频 `aac 128k`）。最终文件名固定为 `<雪花ID>.mp4`（`core.shared.snowflake.next_id()`），**不得沿用原始文件名**；超时由 `GUIDE_VIDEO_TRANSCODE_TIMEOUT` 控制，失败 / 超时 / ffmpeg 缺失时必须删除半成品，`finally` 删除临时目录；配额按转码后实际大小校验
+* 每个指南 `assets/` 合计上限由系统设置「指南资源」的 `GUIDE_RESOURCE_MAX_MB` 控制（默认 50MB，1–1024），读取统一用 `config.get_guide_resource_limit()`，**禁止硬编码**；视频扩展名见 `GUIDE_VIDEO_EXTENSIONS`
+* **视频上传必须统一转码（异步）**：路由调用 `guide_store.start_guide_video_upload()`，原始文件先写入指南目录内的 `.upload_` 临时目录，再由后台线程调用 `_process_video()`；转码在 `.transcode_` 临时目录中进行（`FFMPEG_BIN` 转 MP4 / H.264：`libx264 -preset veryfast -crf 23`、`yuv420p`、`-movflags +faststart`，音频 `aac 128k`），只有最终 MP4 通过 `os.replace` 进入 `assets/`。最终文件名固定为 `<雪花ID>.mp4`（`core.shared.snowflake.next_id()`），**不得沿用原始文件名**；超时由 `GUIDE_VIDEO_TRANSCODE_TIMEOUT` 控制，失败 / 超时 / ffmpeg 缺失时必须删除半成品，`finally` 删除临时目录；**配额只按最终 MP4 大小校验**，原始上传文件与中间产物不得计入
+* **转码进度**：`ffprobe` 读取时长，解析 ffmpeg `-progress` 的 `out_time_us`（微秒）换算百分比（封顶 99，结束置 100）；任务状态保存在内存 `_VIDEO_TASKS`（`status / percent / message / item / error`，TTL 清理），前端通过 `GET /api/guides/<id>/videos/progress/<task_id>` 轮询。上传阶段进度由 XHR `upload.onprogress` 驱动，上传完成后进度条归零再切换为转码进度
 * 视频在 Markdown 中统一存为 `@[video](url)`（marked 块级扩展），编辑器 / 详情页 / 管理后台预览负责渲染为 `<video>`；同时兼容历史 `<video>` HTML
-* 编辑器视频上传使用 XHR（`upload.onprogress`）驱动进度条；上传配额与删除确认均使用站内控件 / `CustomModal`，不使用原生 file 控件或 `window.confirm`
+* 编辑器视频上传使用 XHR（`upload.onprogress`）驱动上传进度，完成后进度条归零并轮询转码进度；进度条统一复用 `macros/progress.html` 的 `progress_track()`（JS 侧用 `.progress-track / .progress-fill`），禁止另起样式；上传配额、改名与删除确认均使用站内控件 / `CustomModal`，不使用原生 file 控件、`window.confirm` 或 `window.prompt`
+* 视频伪文件名统一走 `set_video_title()` / `video_title()`（写入 / 读取 `config.json`），页面渲染时由 URL 文件名查表注入 `<video data-title="...">`，播放器显示在视频左上角；改名 / 删除等写操作必须校验作者或管理员权限
 * 富文本中的视频为 `contenteditable="false"` 原子块：插入于光标之后，前后保证有空段落，支持整体选中复制 / 剪切 / 删除
 * **编辑器视频剪贴板约定**：选区包含视频时，`copy` / `cut` 必须 `preventDefault()` 并调用 `selectionMarkdown(range)`（文字 + `@[video](url)`）写入 `text/plain`；剪切用 `range.deleteContents()` + `normalize()` 后重设选区，内容为空时补 `<p><br></p>`。`paste` 监听识别到 `@[video](url)` 时经 `mdToHtml` + `execCommand('insertHTML')` 还原视频块并设置原子块属性 / 前后空段落
 * **背景图片列表分段加载**：`GET /api/backgrounds/list` 仅分页返回已通过背景（`page` + `BACKGROUNDS_PER_PAGE`），返回 `page / page_size / total / has_more`；前端首屏取第 1 页，`/backgrounds` 的「加载更多」按 `page+1` 追加，「我的上传」保持全量

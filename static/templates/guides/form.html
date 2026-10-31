@@ -39,7 +39,8 @@
                     value=guide.content if guide else '',
                     placeholder='在此输入 Markdown 内容...',
                     video_list_url=video_list_url|default(''),
-                    video_upload_url=video_upload_url|default('')
+                    video_upload_url=video_upload_url|default(''),
+                    video_limit_label=video_limit_label|default('')
                 ) }}
             </div>
 
@@ -56,16 +57,67 @@
 
 <script src="{{ url_for('static', filename='lib/purify/purify.min.js', v='1') }}"></script>
 <script src="{{ url_for('static', filename='lib/marked/marked.min.js', v='1') }}"></script>
-<script src="{{ url_for('static', filename='js/pages/markdown-editor.js', v='10') }}"></script>
+<script src="{{ url_for('static', filename='js/pages/markdown-editor.js', v='11') }}"></script>
 <script>
-// 提交指南：草稿直接保存；其他状态保存后需重新审核，弹出图形验证码弹窗。
+// 提交指南：草稿用 AJAX 保存（不刷新页面）；其他状态弹出验证码后正式提交。
 ( function () {
+    var isDraft = {{ 'true' if guide and guide.status == 'draft' else 'false' }};
+    var draftUrl = {{ draft_url|default('')|tojson }};
+
+    function fieldValue(form, name) {
+        var field = form.querySelector('[name="' + name + '"]');
+        return field ? field.value : '';
+    }
+
     function init() {
         var form = document.querySelector('.guide-submit-form');
         if (!form) return;
-        if (!{{ 'false' if guide and guide.status == 'draft' else 'true' }}) return; // 草稿保存无需验证码
-        if (typeof CaptchaModal === 'undefined') return;
 
+        if (isDraft && draftUrl) {
+            form.addEventListener('submit', function (e) {
+                e.preventDefault();
+                e.stopPropagation();
+
+                var title = fieldValue(form, 'title').trim();
+                if (!title) {
+                    if (typeof Toast !== 'undefined') Toast.error('标题不能为空');
+                    return;
+                }
+
+                var btn = form.querySelector('button[type="submit"]');
+                if (btn) btn.disabled = true;
+
+                fetch(draftUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    body: JSON.stringify({
+                        title: title,
+                        summary: fieldValue(form, 'summary'),
+                        content: fieldValue(form, 'content')
+                    })
+                })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (!data.success) throw new Error(data.message || '保存失败');
+                    if (typeof Toast !== 'undefined') Toast.success(data.message || '草稿已保存');
+                    else if (typeof toast === 'function') toast(data.message || '草稿已保存', 'success');
+                })
+                .catch(function (err) {
+                    if (typeof Toast !== 'undefined') Toast.error(err.message || '保存失败');
+                    else if (typeof toast === 'function') toast(err.message || '保存失败', 'error');
+                })
+                .finally(function () {
+                    if (btn) btn.disabled = false;
+                });
+            }, true);
+            return;
+        }
+
+        if (typeof CaptchaModal === 'undefined') return;
         form.addEventListener('submit', function (e) {
             e.preventDefault();
             e.stopPropagation();

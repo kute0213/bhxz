@@ -14,6 +14,14 @@
     var ICON_VOLUME = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h3l4-3.5v13L7 15H4zM15.5 8.5a5 5 0 0 1 0 7M18 6a8.5 8.5 0 0 1 0 12"/></svg>';
     var ICON_MUTE = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h3l4-3.5v13L7 15H4zM15.5 9.5l5 5m0-5l-5 5"/></svg>';
     var ICON_FULL = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 10V5h5M19 10V5h-5M5 14v5h5M19 14v5h-5"/></svg>';
+    // 播放速度循环：1x → 1.25x → 1.5x → 2x → 0.5x
+    var SPEEDS = [1, 1.25, 1.5, 2, 0.5];
+
+    function rateLabel(rate) {
+        var value = Number(rate);
+        if (!isFinite(value)) value = 1;
+        return (Math.round(value * 100) / 100).toString() + 'x';
+    }
 
     function fmt(sec) {
         if (!isFinite(sec) || sec <= 0) return '0:00';
@@ -55,6 +63,15 @@
         if (parent) parent.insertBefore(wrap, video);
         wrap.appendChild(video);
 
+        // 伪文件名（来自指南 config.json）：显示在视频左上角
+        var captionText = video.getAttribute('data-title') || video.dataset.title || '';
+        if (captionText) {
+            var caption = document.createElement('div');
+            caption.className = 'svp-caption';
+            caption.textContent = captionText;
+            wrap.appendChild(caption);
+        }
+
         // 中央大播放按钮
         var overlay = document.createElement('button');
         overlay.type = 'button';
@@ -89,6 +106,10 @@
         var mute = makeButton('svp-mute', '静音');
         mute.innerHTML = ICON_VOLUME;
         bar.appendChild(mute);
+
+        var speed = makeButton('svp-speed', '播放速度 1x');
+        speed.textContent = '1x';
+        bar.appendChild(speed);
 
         var full = makeButton('svp-full', '全屏');
         full.innerHTML = ICON_FULL;
@@ -159,6 +180,26 @@
             } else if (video.webkitEnterFullscreen) {
                 video.webkitEnterFullscreen();
             }
+        });
+
+        // 倍速按钮：每次点击切换到下一个速度，并在按钮上显示当前倍速
+        var speedIndex = 0;
+        function applySpeed(rate) {
+            video.playbackRate = rate;
+            speed.textContent = rateLabel(rate);
+            speed.title = '播放速度 ' + rateLabel(rate);
+            speed.setAttribute('aria-label', '播放速度 ' + rateLabel(rate));
+        }
+        speed.addEventListener('click', function () {
+            speedIndex = (speedIndex + 1) % SPEEDS.length;
+            applySpeed(SPEEDS[speedIndex]);
+        });
+        video.addEventListener('ratechange', function () {
+            var rate = Number(video.playbackRate) || 1;
+            var idx = SPEEDS.indexOf(rate);
+            if (idx >= 0) speedIndex = idx;
+            speed.textContent = rateLabel(rate);
+            speed.title = '播放速度 ' + rateLabel(rate);
         });
 
         video.addEventListener('loadedmetadata', function () {
