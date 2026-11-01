@@ -16,7 +16,7 @@
    并在页面末尾引入共享脚本（缺一不可）：
        <script src="{{ url_for('static', filename='lib/marked/marked.min.js', v='1') }}"></script>
        <script src="{{ url_for('static', filename='lib/purify/purify.min.js', v='1') }}"></script>
-       <script src="{{ url_for('static', filename='js/pages/markdown-editor.js', v='12') }}"></script>
+       <script src="{{ url_for('static', filename='js/pages/markdown-editor.js', v='13') }}"></script>
 
    可选参数：
        name          - 表单提交字段名（textarea 的 name）
@@ -402,6 +402,8 @@ body.mre-resizing, body.mre-resizing * { cursor: col-resize !important; user-sel
     outline: 2px solid transparent;
 }
 .mre-rich video:hover { outline-color: rgba(2, 132, 199, 0.35); }
+/* 站内播放器容器内的视频由播放器自身（.svp）控制排版 */
+.mre-rich .svp video { margin: 0; }
 .mre-video-list {
     display: flex;
     flex-wrap: wrap;

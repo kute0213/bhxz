@@ -713,9 +713,11 @@ python scripts/migrate_guides.py             # 正式迁移
 * **转码进度**：`ffprobe` 读取时长，解析 ffmpeg `-progress` 的 `out_time_us`（微秒）换算百分比（封顶 99，结束置 100）；任务状态保存在内存 `_VIDEO_TASKS`（`status / percent / message / item / error`，TTL 清理），前端通过 `GET /api/guides/<id>/videos/progress/<task_id>` 轮询。上传阶段进度由 XHR `upload.onprogress` 驱动，上传完成后进度条归零再切换为转码进度
 * 视频在 Markdown 中统一存为 `@[video](url)`（marked 块级扩展），编辑器 / 详情页 / 管理后台预览负责渲染为 `<video>`；同时兼容历史 `<video>` HTML
 * 编辑器视频上传使用 XHR（`upload.onprogress`）驱动上传进度，完成后进度条归零并轮询转码进度；进度条统一复用 `macros/progress.html` 的 `progress_track()`（JS 侧用 `.progress-track / .progress-fill`），禁止另起样式；上传配额、改名与删除确认均使用站内控件 / `CustomModal`，不使用原生 file 控件、`window.confirm` 或 `window.prompt`
-* 视频伪文件名统一走 `set_video_title()` / `video_title()`（写入 / 读取 `config.json`），页面渲染时由 URL 文件名查表注入 `<video data-title="...">`，播放器显示在视频左上角；改名 / 删除等写操作必须校验作者或管理员权限
+* 视频伪文件名统一走 `set_video_title()` / `video_title()`（写入 / 读取 `config.json`），页面渲染时由 URL 文件名查表注入 `<video data-title="...">`，播放器把它显示在**视频下方**（不遮挡画面）；改名 / 删除等写操作必须校验作者或管理员权限
 * 富文本中的视频为 `contenteditable="false"` 原子块：插入于光标之后，前后保证有空段落，支持整体选中复制 / 剪切 / 删除
+* **播放器视觉约定**：`.svp` 只负责外层（`overflow: visible`，供上拉框溢出），视频 / 中央播放按钮 / 控制栏都放在 `.svp-stage` 内相对定位；伪文件名 `.svp-caption` 是 stage 之后的普通流元素，**禁止再叠加在视频上**。控制栏与按钮**背景必须透明**（白色图标 + `drop-shadow`，悬停只允许极淡白色圆底），暂停态只显示透明底白色描边的中央播放按钮，**不得给画面加任何蓝色 / 半透明遮罩**
 * **播放器覆盖层不得拦截编辑操作**：`.svp-overlay` 只允许中央播放图标响应指针（`pointer-events: none` + `svg { pointer-events: auto }`），暂停时也不加任何全屏遮罩；否则鼠标无法落进视频、编辑器收不到点击，复制 / 剪切 / 删除 / 选中全部失效
+* **音量 / 倍速一律用上拉框**：音量按钮点击后展开 `.svp-pop-volume`（滑块直接调节 + 静音开关），倍速按钮展开 `.svp-pop-speed`（选项列表高亮当前速度）；上拉框默认向上，上方空间不足时自动加 `is-below`，点击播放器外部 / 其它控件自动收起。播放器实例统一登记在模块级 `players`，只用一条 document 监听收起上拉框，禁止每个视频各注册一条
 * **编辑器视频点击约定**：点击视频主体（含播放器容器）由编辑器的捕获阶段 `click` 处理，`stopPropagation()` 阻止播放器播放，并用 `selectVideoBlock()` 以 `Range.selectNode(.svp)` 选中整个视频块；点击播放器控制栏 / 上拉框则不选中，保证控件仍可用。`videoAnchorFromRange()` 在选区覆盖视频时也能正确识别当前视频，用于「更换视频」
 * **编辑器视频剪贴板约定**：选区包含视频时，`copy` / `cut` 必须 `preventDefault()` 并调用 `selectionMarkdown(range)`（文字 + `@[video](url)`）写入 `text/plain`；剪切用 `range.deleteContents()` + `normalize()` 后重设选区，内容为空时补 `<p><br></p>`。`paste` 监听识别到 `@[video](url)` 时经 `mdToHtml` 还原，优先 `execCommand('insertHTML')`，失败必须回退到 `Range.deleteContents()` + `insertNode(fragment)` 手动插入（部分浏览器会静默失败，没有兜底会表现为「粘贴无反应」），随后设置原子块属性与前后空段落
 * **背景图片列表分段加载**：`GET /api/backgrounds/list` 仅分页返回已通过背景（`page` + `BACKGROUNDS_PER_PAGE`），返回 `page / page_size / total / has_more`；前端首屏取第 1 页，`/backgrounds` 的「加载更多」按 `page+1` 追加，「我的上传」保持全量

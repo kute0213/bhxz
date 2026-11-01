@@ -19,6 +19,11 @@
 .prose-docs a { color: var(--accent-blue); text-decoration: underline; }
 .prose-docs hr { border: none; border-top: 1px solid var(--border-card); margin: 2rem 0; }
 .prose-docs video { width: 100%; max-width: 100%; border-radius: 0.5rem; margin: 0.5rem 0 1rem; background: #0b1220; }
+/* 站内播放器（.svp）自带圆角与间距，避免重复外边距 */
+.prose-docs .svp video { margin: 0; border-radius: 14px; }
+.prose-docs ul { list-style: disc outside; }
+.prose-docs ol { list-style: decimal outside; }
+.prose-docs ol ol { list-style-type: lower-alpha; }
 .prose-docs strong { color: var(--text-primary); font-weight: 600; }
 </style>
 {% endblock %}

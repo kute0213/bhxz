@@ -1,11 +1,12 @@
 // 站内统一视频播放器
 // —— 把页面中的 <video> 换成与站点风格一致的自定义控件：
-//    淡蓝色磨砂玻璃按钮、透明控制栏、中央播放按钮、拖动进度、音量上拉框、
-//    倍速上拉框、全屏。原生 controls 会被移除，所有视觉与交互均由本项目实现。
+//    全透明控制栏 + 白色图标（带投影保证浅色画面上可读）、中央极简播放按钮、
+//    拖动进度、音量上拉框（滑块调节）、倍速上拉框、全屏。
+//    暂停时不铺任何遮罩；伪文件名显示在视频下方，不遮挡画面。
 // 用法：
 //     SiteVideoPlayer.decorate(video)      // 装饰单个视频，返回包裹容器
 //     SiteVideoPlayer.decorateAll(root)    // 装饰 root 内所有视频
-//     SiteVideoPlayer.setTitle(video, txt) // 更新视频左上角伪文件名
+//     SiteVideoPlayer.setTitle(video, txt) // 更新视频下方伪文件名
 //     DOMContentLoaded 时会自动全站执行一次。
 (function () {
     'use strict';
@@ -17,6 +18,9 @@
     var ICON_FULL = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 10V5h5M19 10V5h-5M5 14v5h5M19 14v5h-5"/></svg>';
     // 倍速可选值（上拉框按升序展示）
     var SPEEDS = [0.5, 1, 1.25, 1.5, 2];
+
+    // 已装饰的播放器（用于统一收起上拉框）
+    var players = [];
 
     function rateLabel(rate) {
         var value = Number(rate);
@@ -53,6 +57,18 @@
         return pop;
     }
 
+    // 点击播放器以外的区域：统一收起所有上拉框（只注册一次全局监听）
+    document.addEventListener('click', function (e) {
+        for (var i = players.length - 1; i >= 0; i--) {
+            var p = players[i];
+            if (!p.wrap.isConnected) { players.splice(i, 1); continue; }
+            var inside = p.wrap.contains(e.target);
+            var onGroup = inside && e.target.closest &&
+                (e.target.closest('.svp-group') || e.target.closest('.svp-pop'));
+            if (!inside || !onGroup) p.closePops();
+        }
+    }, true);
+
     function decorate(video) {
         if (!video || video.__svpReady || video.dataset.svpSkip) return null;
         video.__svpReady = true;
@@ -69,9 +85,14 @@
 
         var parent = video.parentNode;
         if (parent) parent.insertBefore(wrap, video);
-        wrap.appendChild(video);
 
-        // 伪文件名（来自指南 config.json）：显示在视频左上角
+        // 视频舞台：视频 + 中央播放按钮 + 控制栏都相对它定位
+        var stage = document.createElement('div');
+        stage.className = 'svp-stage';
+        wrap.appendChild(stage);
+        stage.appendChild(video);
+
+        // 伪文件名（来自指南 config.json）：显示在视频下方，不遮挡画面
         var caption = document.createElement('div');
         caption.className = 'svp-caption';
         caption.hidden = true;
@@ -87,15 +108,15 @@
         setCaption(video.getAttribute('data-title') || video.dataset.title || '');
         video.__svpSetTitle = setCaption;
 
-        // 中央播放按钮（不覆盖整块视频，暂停时不会给画面蒙上淡蓝色）
+        // 中央播放按钮（不覆盖整块视频，暂停时画面保持完全原样）
         var overlay = document.createElement('button');
         overlay.type = 'button';
         overlay.className = 'svp-overlay';
         overlay.setAttribute('aria-label', '播放');
         overlay.innerHTML = ICON_PLAY;
-        wrap.appendChild(overlay);
+        stage.appendChild(overlay);
 
-        // 底部控制栏（背景透明，按钮本身为淡蓝磨砂玻璃）
+        // 底部控制栏（背景完全透明，仅图标本身可见）
         var bar = document.createElement('div');
         bar.className = 'svp-bar';
 
@@ -118,7 +139,7 @@
         time.textContent = '0:00 / 0:00';
         bar.appendChild(time);
 
-        // 音量：按钮 + 上拉框（静音开关 + 音量滑块）
+        // 音量：点击按钮弹出上拉框，框内直接拖动滑块调节（含静音开关）
         var volPop = makePopover('svp-pop-volume');
         var popMute = makeButton('svp-pop-mute', '静音');
         popMute.innerHTML = ICON_VOLUME;
@@ -141,7 +162,7 @@
         volumeGroup.appendChild(volPop);
         bar.appendChild(volumeGroup);
 
-        // 倍速：按钮 + 上拉框（速度列表）
+        // 倍速：点击按钮弹出上拉框，列表中选择速度
         var speedPop = makePopover('svp-pop-speed');
         var speedTitle = document.createElement('div');
         speedTitle.className = 'svp-pop-title';
@@ -180,7 +201,7 @@
         full.innerHTML = ICON_FULL;
         bar.appendChild(full);
 
-        wrap.appendChild(bar);
+        stage.appendChild(bar);
 
         var dragging = false;
 
@@ -191,7 +212,9 @@
         function updateTime() {
             var dur = duration();
             var cur = video.currentTime || 0;
-            if (!dragging && dur) seek.value = String(Math.round(cur / dur * 1000));
+            var ratio = dur ? Math.min(100, Math.max(0, cur / dur * 100)) : 0;
+            if (!dragging && dur) seek.value = String(Math.round(ratio * 10));
+            seek.style.setProperty('--svp-progress', ratio.toFixed(3) + '%');
             time.textContent = fmt(cur) + ' / ' + fmt(dur);
         }
 
@@ -249,15 +272,18 @@
         }
 
         // 点击播放器其它区域 / 播放器外部时收起上拉框，避免误触
-        document.addEventListener('click', function (e) {
-            var target = e.target;
-            if (!wrap.contains(target)) { closePops(); return; }
-            if (!(target.closest && (target.closest('.svp-group') || target.closest('.svp-pop')))) closePops();
-        }, true);
+        function isInsideGroup(target) {
+            return !!(target && target.closest &&
+                (target.closest('.svp-group') || target.closest('.svp-pop')));
+        }
 
         overlay.addEventListener('click', togglePlay);
         toggle.addEventListener('click', togglePlay);
         video.addEventListener('click', togglePlay);
+        stage.addEventListener('click', function (e) {
+            // 舞台空白处点击（例如标题下方）收起上拉框
+            if (!isInsideGroup(e.target)) closePops();
+        });
 
         seek.addEventListener('pointerdown', function () { dragging = true; });
         seek.addEventListener('input', function () {
@@ -274,7 +300,10 @@
         function syncVolume() {
             var muted = video.muted || video.volume === 0;
             var ratio = muted ? 0 : video.volume;
-            volRange.value = String(Math.round((isFinite(ratio) ? ratio : 1) * 100));
+            if (!isFinite(ratio)) ratio = 1;
+            var pct = Math.round(ratio * 100);
+            volRange.value = String(pct);
+            volRange.style.setProperty('--svp-vol', pct.toFixed(1) + '%');
             var icon = muted ? ICON_MUTE : ICON_VOLUME;
             mute.innerHTML = icon;
             popMute.innerHTML = icon;
@@ -343,8 +372,8 @@
             closePops();
             if (document.fullscreenElement) {
                 document.exitFullscreen && document.exitFullscreen();
-            } else if (wrap.requestFullscreen) {
-                wrap.requestFullscreen();
+            } else if (stage.requestFullscreen) {
+                stage.requestFullscreen().catch(function () { /* 忽略 */ });
             } else if (video.webkitEnterFullscreen) {
                 video.webkitEnterFullscreen();
             }
@@ -362,6 +391,8 @@
             updateState();
             updateTime();
         });
+
+        players.push({ wrap: wrap, closePops: closePops });
 
         updateState();
         updateTime();

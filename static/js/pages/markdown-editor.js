@@ -301,7 +301,17 @@
     function serializeListItem(li, ctx) {
         var arr = [];
         serializeBlocks(li, arr, ctx);
-        return arr.join('\n').replace(/^\s+/, '');
+        // 列表项内部的多段内容必须用空行分隔，否则保存后段落会被并成一行（「少换行」）；
+        // 紧随其后的嵌套列表 / 引用 / 代码块属于同一列表项，用单换行紧贴更符合 Markdown 习惯。
+        var out = '';
+        for (var i = 0; i < arr.length; i++) {
+            var block = arr[i];
+            if (!block) continue;
+            if (!out) { out = block; continue; }
+            var tightFollow = /^(?:[-*+] |\d+\.(?: |$)|> (?:|$)|```|~~~|@\[video\]|!\[|<[a-z])/i.test(block);
+            out += (tightFollow ? '\n' : '\n\n') + block;
+        }
+        return out.replace(/^\s+/, '');
     }
 
     function directCheckbox(li) {
@@ -478,7 +488,9 @@
     function htmlToMarkdown(root) {
         var out = [];
         serializeBlocks(root, out, { inTable: false });
-        return out.join('\n\n').replace(/\n{3,}/g, '\n\n').trim();
+        // 块与块之间统一用空行分隔。这里不再对整篇做 \n{3,} → \n\n 的全局折叠，
+        // 否则代码块、列表项内部有意保留的空行会被吞掉（表现为保存后「少换行」）。
+        return out.join('\n\n').trim();
     }
 
     /* ============================================================
@@ -838,6 +850,7 @@
 
         // 全局选区变化：浏览器会高频触发，先去重再合并到同一帧刷新，避免卡顿
         document.addEventListener('selectionchange', function () {
+            self.rememberRichRange();
             if (!self.selectionChanged()) return;
             self.scheduleToolbar();
         });
@@ -1098,6 +1111,32 @@
         var r = sel.getRangeAt(0);
         if (!this.rich.contains(r.startContainer)) return null;
         return r;
+    };
+
+    // 记录编辑区最近的富文本选区。
+    // 用户切到链接 / 视频表单输入框时，浏览器选区会被输入框「抢走」，
+    // 应用操作时用这里保存的选区恢复，保证真正作用在原来选中的文字 / 光标位置。
+    Editor.prototype.rememberRichRange = function () {
+        if (this.mode !== 'rich' || !this.rich) return;
+        var active = document.activeElement;
+        if (active === this.linkUrl || active === this.linkText || active === this.linkTitle ||
+            active === this.linkBlank || active === this.videoFile) return;
+        var sel = window.getSelection();
+        if (!sel || sel.rangeCount === 0) return;
+        var r = sel.getRangeAt(0);
+        if (!this.rich.contains(r.startContainer) || !this.rich.contains(r.endContainer)) return;
+        this.savedRange = r.cloneRange();
+    };
+
+    // 恢复编辑区选区（若已保存），返回恢复后的 Range
+    Editor.prototype.restoreRichRange = function () {
+        if (this.mode !== 'rich' || !this.savedRange) return null;
+        try {
+            var sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(this.savedRange);
+        } catch (e) { /* 忽略 */ }
+        return this.getRichRange();
     };
 
     Editor.prototype.richCaretOffset = function () {
@@ -2077,16 +2116,23 @@
         this.linkPinned = true;
         if (this.mode === 'rich') {
             var r = this.getRichRange();
-            this.savedRange = r ? r.cloneRange() : null;
-            var a = r ? closestTag(r.startContainer, 'A') : null;
-            this.linkAnchor = a || null;
+            if (r) {
+                this.savedRange = r.cloneRange();
+                this.linkAnchor = closestTag(r.startContainer, 'A');
+            } else if (this.savedRange) {
+                // 焦点可能已离开编辑区，用最近一次记录的选区判断链接上下文
+                this.linkAnchor = closestTag(this.savedRange.startContainer, 'A');
+            }
         }
         this.updateContextTabs(false);
         this.selectTab('link');
         this.syncLinkForm();
-        if (this.linkUrl) {
+        // 有选中文字时不抢焦点：否则输入框会夺走编辑区选区（高亮消失、应用失效）。
+        // 仅在光标处新建链接（没有选中文字）时自动聚焦地址栏，方便直接输入。
+        var hasSelection = !!(this.savedRange && !this.savedRange.collapsed);
+        if (this.linkUrl && !hasSelection) {
             setTimeout(function () {
-                try { self.linkUrl.focus(); self.linkUrl.select(); } catch (e) { /* 忽略 */ }
+                try { self.linkUrl.focus(); } catch (e) { /* 忽略 */ }
             }, 0);
         }
     };
@@ -2109,6 +2155,8 @@
 
     Editor.prototype.applyRichLink = function (url, text, title, blank) {
         this.rich.focus();
+        // 点击「应用」前选区可能已被链接输入框抢走：先用保存的选区恢复
+        if (this.mode === 'rich') this.restoreRichRange();
         var anchor = this.linkAnchor;
 
         if (anchor) {
@@ -2121,10 +2169,6 @@
             placeCaretAfter(anchor);
         } else {
             // 新建链接：无选中文字时自动插入默认文字
-            var sel = window.getSelection();
-            if (this.savedRange) {
-                try { sel.removeAllRanges(); sel.addRange(this.savedRange); } catch (e) { /* 忽略 */ }
-            }
             var r = this.getRichRange();
             var a = document.createElement('a');
             a.setAttribute('href', url);

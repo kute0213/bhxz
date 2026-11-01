@@ -4,6 +4,14 @@
 
 ### 变更
 
+* **播放器现代化重做 + 编辑器链接 / 换行 / 有序列表修复**（`static/js/core/video-player.js`、`static/css/base.css`、`static/js/pages/markdown-editor.js`、`static/templates/{base,guides/detail,guides/form,admin/guide_form,admin/broadcast}.html`、`static/templates/macros/markdown_editor.html`）：
+  * **播放器极简风重做**：`.svp` 拆出 `.svp-stage`（视频 + 中央按钮 + 控制栏），伪文件名 `.svp-caption` 移到视频下方普通流，不再遮挡画面；控制栏与所有按钮背景完全透明，白色图标 + `drop-shadow`，悬停仅极淡白色圆底；暂停只显示透明底白色描边的中央播放按钮，**彻底移除蓝色遮罩**；进度条 / 音量条改为自绘轨道（`--svp-progress` / `--svp-vol` 渐变填充）。
+  * **倍速 / 音量上拉框**：倍速按钮展开 0.5x / 1x / 1.25x / 1.5x / 2x 选项列表（高亮当前速度）；音量按钮展开滑块（直接拖动调节）+ 静音开关；上拉框为浅蓝磨砂面板，默认向上展开、上方空间不足自动改为向下，点击播放器外部或其它控件自动收起；播放器实例统一登记，仅注册一条全局监听，避免多视频重复监听。
+  * **链接应用无反应修复**：新增 `rememberRichRange()` / `restoreRichRange()`，在 `selectionchange` 时持续记录编辑区选区（聚焦链接输入框时不覆盖）；点击「应用」先恢复选区再包裹；有选中文字时不再自动聚焦链接地址栏，避免输入框抢走选区。
+  * **保存后少换行修复**：`htmlToMarkdown` 去掉整篇 `\n{3,} → \n\n` 的全局折叠，避免代码块 / 列表项内的空行被吞；`serializeListItem` 改为按内容类型智能拼接——普通段落用空行分隔，嵌套列表 / 引用 / 代码块 / 视频等紧贴单换行。
+  * **有序列表无序号修复**：Tailwind preflight 会把 `ul / ol` 的 `list-style` 重置为 `none`，在 `base.css` 的 `.prose-docs` 与指南详情页恢复 `disc / decimal`（多层嵌套使用 square / circle、lower-alpha / lower-roman）；任务列表依靠更具体的 `.mre-task-list` 选择器保持无符号。
+  * 同步提升缓存版本号（`base.css` 55、`video-player.js` 4、`markdown-editor.js` 13），更新 README / DEVELOPMENT；`python -m pytest scripts/tests -q` 252 项通过。
+
 * **修复编辑器视频复制 / 粘贴 / 删除 / 选中 + 播放器上拉框与暂停遮罩**（`static/js/pages/markdown-editor.js`、`static/js/core/video-player.js`、`static/css/base.css`、`static/templates/{base,guides/form,admin/guide_form,admin/broadcast}.html`、`static/templates/macros/markdown_editor.html`）：
   * **视频选中 / 复制 / 剪切 / 删除恢复**：播放器覆盖层改为只在中央播放图标上响应指针，不再铺满视频拦截鼠标；编辑态点击视频主体由编辑器捕获 `click` 并 `stopPropagation()`，用 `Range.selectNode(.svp)` 原子选中整个视频块（同时阻止误播放），控制栏 / 上拉框点击仍交给播放器。
   * **粘贴兜底**：`execCommand('insertHTML')` 失败时回退到 `Range.deleteContents()` + `insertNode(fragment)` → 修复部分浏览器「粘贴视频毫无反应」的问题；选区覆盖视频时统一用 `videoAnchorFromRange()` 识别当前视频，保证「更换视频」仍可用。
