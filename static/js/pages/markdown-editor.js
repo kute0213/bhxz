@@ -10,12 +10,8 @@
      * 常量
      * ============================================================ */
 
-    // Markdown 表格分隔行每列至少的破折号数量
+    // Markdown 表格分隔行每列的破折号数量（固定 3 个，仅表示对齐，不承载列宽）
     var DASH_MIN = 3;
-    // 列宽百分比 → 破折号数量的比例（同时决定表格可细分的粒度）
-    var DASH_PER_PERCENT = 0.4;
-    // 拖拽调整列宽时每列的最小宽度（%）
-    var COL_MIN_PERCENT = 8;
 
     // 序列化时按「块级」处理的标签
     var BLOCK_EL = {
@@ -37,12 +33,6 @@
         var out = '';
         for (var i = 0; i < n; i++) out += s;
         return out;
-    }
-
-    function sum(arr) {
-        var t = 0;
-        for (var i = 0; i < arr.length; i++) t += arr[i];
-        return t;
     }
 
     function closestTag(node, names) {
@@ -77,26 +67,12 @@
             .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
-    // 列宽百分比的「默认破折号数组」（等宽）
-    function defaultCols(n) {
-        var d = Math.max(DASH_MIN, Math.round((100 / Math.max(n, 1)) * DASH_PER_PERCENT));
-        var arr = [];
-        for (var i = 0; i < n; i++) arr.push(d);
-        return arr;
-    }
-
     /* ============================================================
-     * Markdown 表格解析（供 MD → HTML 时恢复列宽 / 对齐）
-     * 表格列宽编码规则：分隔行中每列的破折号数量 ∝ 该列宽度。
+     * Markdown 表格解析（供 MD → HTML 时恢复对齐）
      * ============================================================ */
 
     function isDelimCell(cell) {
         return /^\s*:?-+:?\s*$/.test(cell);
-    }
-
-    function countDashes(cell) {
-        var m = String(cell).match(/-+/);
-        return m ? Math.max(DASH_MIN, m[0].length) : DASH_MIN;
     }
 
     function cellAlign(cell) {
@@ -129,7 +105,7 @@
         return String(line).indexOf('|') !== -1 && /^\s*\|?.*\|\s*$/.test(line);
     }
 
-    // 扫描整篇 Markdown，按出现顺序收集表格的列宽 / 对齐信息
+    // 扫描整篇 Markdown，按出现顺序收集表格的对齐信息
     function scanTables(md) {
         var lines = String(md || '').split('\n');
         var out = [];
@@ -153,19 +129,7 @@
             var delim = splitRow(next);
             if (!delim.length || !delim.every(isDelimCell)) continue;
             if (header.length !== delim.length) continue;
-            out.push({ cols: delim.map(countDashes), aligns: delim.map(cellAlign) });
-        }
-        return out;
-    }
-
-    // 读取表格当前列宽（破折号数组），缺失时按等宽兜底
-    function readColDashes(table, n) {
-        var raw = String(table.getAttribute('data-cols') || '').split(',');
-        var out = [];
-        var def = defaultCols(n);
-        for (var i = 0; i < n; i++) {
-            var v = parseInt(raw[i], 10);
-            out.push(v > 0 ? v : def[i]);
+            out.push({ aligns: delim.map(cellAlign) });
         }
         return out;
     }
@@ -196,15 +160,15 @@
         return out;
     }
 
-    function delimLine(cols, aligns) {
+    // 生成表格分隔行（列宽固定，只为对齐加冒号）
+    function delimLine(aligns) {
         var parts = [];
-        for (var i = 0; i < cols.length; i++) {
-            var n = Math.max(DASH_MIN, cols[i]);
+        for (var i = 0; i < aligns.length; i++) {
             var a = aligns[i] || '';
-            if (a === 'center') parts.push(':' + repeat('-', Math.max(1, n - 2)) + ':');
-            else if (a === 'left') parts.push(':' + repeat('-', n - 1));
-            else if (a === 'right') parts.push(repeat('-', n - 1) + ':');
-            else parts.push(repeat('-', n));
+            if (a === 'center') parts.push(':' + repeat('-', DASH_MIN - 2) + ':');
+            else if (a === 'left') parts.push(':' + repeat('-', DASH_MIN - 1));
+            else if (a === 'right') parts.push(repeat('-', DASH_MIN - 1) + ':');
+            else parts.push(repeat('-', DASH_MIN));
         }
         return '| ' + parts.join(' | ') + ' |';
     }
@@ -395,10 +359,9 @@
         var n = headerCells.length;
         for (var i = 0; i < bodyRows.length; i++) n = Math.max(n, bodyRows[i].cells.length);
         if (n === 0) return '';
-        var cols = readColDashes(table, n);
         var aligns = readColAligns(table, n);
         var lines = [tableRowLine(headerCells, n)];
-        lines.push(delimLine(cols, aligns));
+        lines.push(delimLine(aligns));
         for (var r = 0; r < bodyRows.length; r++) lines.push(tableRowLine(rowCells(bodyRows[r]), n));
         return lines.join('\n');
     }
@@ -501,7 +464,7 @@
         if (typeof window.DOMPurify === 'undefined') return html;
         try {
             return window.DOMPurify.sanitize(html, {
-                ADD_TAGS: ['col', 'colgroup', 'video', 'source'],
+                ADD_TAGS: ['video', 'source'],
                 ADD_ATTR: ['align', 'colspan', 'rowspan', 'start', 'type', 'checked', 'disabled',
                            'target', 'rel', 'controls', 'preload', 'poster', 'playsinline',
                            'muted', 'loop', 'src'],
@@ -512,23 +475,9 @@
         }
     }
 
-    // 写入表格的列宽 / 对齐元信息并生成 colgroup
-    function applyTableMeta(table, cols, aligns) {
-        var n = cols.length;
-        table.setAttribute('data-cols', cols.join(','));
+    // 写入表格的对齐元信息（列宽由浏览器自适应，不再编码进 Markdown）
+    function applyTableMeta(table, aligns) {
         table.setAttribute('data-aligns', aligns.join(','));
-
-        var old = table.querySelector('colgroup');
-        if (old && old.parentNode) old.parentNode.removeChild(old);
-
-        var total = sum(cols) || 1;
-        var cg = document.createElement('colgroup');
-        for (var i = 0; i < n; i++) {
-            var col = document.createElement('col');
-            col.style.width = (cols[i] / total * 100).toFixed(2) + '%';
-            cg.appendChild(col);
-        }
-        table.insertBefore(cg, table.firstChild);
 
         var rows = table.rows;
         for (var r = 0; r < rows.length; r++) {
@@ -603,9 +552,8 @@
             var table = tables[i];
             var n = columnCount(table);
             var info = infos[i];
-            var cols = (info && info.cols.length === n) ? info.cols : defaultCols(n);
             var aligns = (info && info.aligns.length === n) ? info.aligns : inferAligns(table, n);
-            applyTableMeta(table, cols, aligns);
+            applyTableMeta(table, aligns);
         }
         enableTaskCheckboxes(wrap);
         return wrap.innerHTML;
@@ -638,13 +586,11 @@
 
         var header = rows[0];
         var aligns = rows[1].map(cellAlign);
-        var cols = rows[1].map(countDashes);
         var body = rows.slice(2);
-        var n = Math.max(header.length, cols.length);
+        var n = Math.max(header.length, aligns.length);
         for (var b = 0; b < body.length; b++) n = Math.max(n, body[b].length);
         while (header.length < n) header.push('');
         for (var b2 = 0; b2 < body.length; b2++) { while (body[b2].length < n) body[b2].push(''); }
-        while (cols.length < n) cols.push(defaultCols(n)[cols.length]);
         while (aligns.length < n) aligns.push('');
 
         var offset = pos - starts[li];
@@ -658,7 +604,7 @@
 
         return {
             lines: lines, start: s, end: e, n: n,
-            header: header, body: body, cols: cols, aligns: aligns,
+            header: header, body: body, aligns: aligns,
             curRow: allRow, curCol: curCol, lineIndex: li
         };
     }
@@ -666,7 +612,7 @@
     function renderMdTable(model) {
         var lines = [];
         lines.push('| ' + model.header.join(' | ') + ' |');
-        lines.push(delimLine(model.cols, model.aligns));
+        lines.push(delimLine(model.aligns));
         for (var i = 0; i < model.body.length; i++) {
             lines.push('| ' + model.body[i].join(' | ') + ' |');
         }
@@ -681,7 +627,6 @@
         this.root = root;
         this.rich = root.querySelector('[data-mre-rich]');
         this.scroll = root.querySelector('[data-mre-scroll]');
-        this.overlay = root.querySelector('[data-mre-overlay]');
         this.richWrap = root.querySelector('[data-mre-rich-wrap]');
         this.mdWrap = root.querySelector('[data-mre-md]');
         this.textarea = root.querySelector('textarea');
@@ -695,7 +640,6 @@
         this.linkUnlink = root.querySelector('[data-mre-link-unlink]');
         this.mode = 'rich';
         this.tab = 'basic';
-        this.activeTable = null;
         this.savedRange = null;
         this.syncTimer = null;
         // 上下文：光标是否在链接 / 表格 / 视频中
@@ -765,18 +709,8 @@
             var t = e.target;
             if (t && t.tagName === 'INPUT' && (t.type || '').toLowerCase() === 'checkbox') self.syncNow();
         });
-        this.rich.addEventListener('mouseover', function (e) {
-            var t = closestTag(e.target, 'TABLE');
-            if (t && self.rich.contains(t)) self.setActiveTable(t);
-        });
-        // 鼠标移出整个富文本区域（含手柄浮层）才清除拖拽手柄。
-        // 注意：不能绑定在 this.rich 上——手柄浮层是 rich 的兄弟节点，
-        // 鼠标移到手柄上会触发 rich 的 mouseleave → 手柄被清空 → 又重新出现，造成闪烁。
-        var leaveTarget = this.richWrap || this.rich;
-        leaveTarget.addEventListener('mouseleave', function () { self.setActiveTable(null); });
         this.rich.addEventListener('mousedown', function (e) {
             self.linkPinned = false;
-            if (!closestTag(e.target, 'TABLE')) self.setActiveTable(null);
             // 点在播放器任何区域（视频 / 控制栏 / 上拉框）都视为处于该视频上下文
             var vid = videoFromTarget(e.target);
             if (vid) {
@@ -855,10 +789,6 @@
             self.scheduleToolbar();
         });
 
-        // 滚动 / 尺寸变化时刷新拖拽手柄
-        if (this.scroll) this.scroll.addEventListener('scroll', function () { self.positionGrips(); });
-        window.addEventListener('resize', function () { self.positionGrips(); });
-
         // 表单提交前强制把富文本同步为 Markdown，并清除本地草稿
         var form = this.root.closest('form');
         if (form) {
@@ -897,7 +827,6 @@
         if (this._toolbarRaf) return;
         var run = function () {
             self._toolbarRaf = null;
-            if (self.mode === 'rich') self.refreshActiveTable();
             self.updateToolbar();
         };
         if (window.requestAnimationFrame) this._toolbarRaf = window.requestAnimationFrame(run);
@@ -959,7 +888,6 @@
         this.root.querySelectorAll('[data-mre-mode]').forEach(function (btn) {
             btn.classList.toggle('is-active', btn.getAttribute('data-mre-mode') === mode);
         });
-        if (!richOn) this.setActiveTable(null);
     };
 
     Editor.prototype.setMode = function (mode) {
@@ -1088,13 +1016,11 @@
         var md = this.serializeRich();
         this.textarea.value = md;
         this.updateCount();
-        this.updateGrips();
         this.scheduleDraftSave();
     };
 
     Editor.prototype.onMdChange = function () {
         this.updateCount();
-        this.updateGrips();
         this.scheduleDraftSave();
     };
 
@@ -1811,7 +1737,6 @@
 
     Editor.prototype.insertTable = function (rows, cols) {
         var n = Math.max(1, cols);
-        var dashes = defaultCols(n);
         var aligns = [];
         for (var i = 0; i < n; i++) aligns.push('');
 
@@ -1837,14 +1762,13 @@
             tbody.appendChild(tr);
         }
         table.appendChild(tbody);
-        applyTableMeta(table, dashes, aligns);
+        applyTableMeta(table, aligns);
 
         this.insertBlock(table);
         var firstTh = table.rows[0] ? table.rows[0].cells[0] : null;
         if (firstTh) placeCaretAtStart(firstTh);
-        // 插入后直接进入表格上下文：显示并切换到「表格」标签页
+        // 插入后直接进入表格上下文：显示「表格」标签页
         this.tableEl = table;
-        this.setActiveTable(table);
         this.updateContextTabs(true);
     };
 
@@ -1885,7 +1809,6 @@
         var row = cell.parentNode;
         var idx = cellIndex(cell);
         var n = columnCount(table);
-        var cols = readColDashes(table, n);
         var aligns = readColAligns(table, n);
 
         switch (cmd) {
@@ -1901,7 +1824,7 @@
                 break;
             }
             case 'row-delete': {
-                if (table.rows.length <= 1) { table.parentNode.removeChild(table); this.setActiveTable(null); return; }
+                if (table.rows.length <= 1) { table.parentNode.removeChild(table); this.afterRichChange(); return; }
                 row.parentNode.removeChild(row);
                 break;
             }
@@ -1913,198 +1836,35 @@
                     var newCell = rows[i].insertCell(Math.min(pos, rows[i].cells.length));
                     newCell.appendChild(document.createElement('br'));
                 }
-                var avg = Math.max(DASH_MIN, Math.round(sum(cols) / Math.max(cols.length, 1)));
-                cols.splice(pos, 0, avg);
                 aligns.splice(pos, 0, '');
-                applyTableMeta(table, cols, aligns);
+                applyTableMeta(table, aligns);
                 break;
             }
             case 'col-delete': {
-                if (n <= 1) { table.parentNode.removeChild(table); this.setActiveTable(null); return; }
+                if (n <= 1) { table.parentNode.removeChild(table); this.afterRichChange(); return; }
                 var rows2 = table.rows;
                 for (var j = 0; j < rows2.length; j++) {
                     if (rows2[j].cells.length > idx) rows2[j].deleteCell(idx);
                 }
-                cols.splice(idx, 1);
                 aligns.splice(idx, 1);
-                applyTableMeta(table, cols, aligns);
+                applyTableMeta(table, aligns);
                 break;
             }
             case 'table-delete':
                 table.parentNode.removeChild(table);
-                this.setActiveTable(null);
+                this.afterRichChange();
                 return;
             case 'align-left':
             case 'align-center':
             case 'align-right': {
                 var a = cmd.replace('align-', '');
                 aligns[idx] = aligns[idx] === a ? '' : a;
-                applyTableMeta(table, cols, aligns);
+                applyTableMeta(table, aligns);
                 break;
             }
             default:
                 return;
         }
-        this.setActiveTable(table);
-        this.afterRichChange();
-    };
-
-    /* ---------- 列宽拖拽 ---------- */
-
-    Editor.prototype.setActiveTable = function (table) {
-        if (this.activeTable === table) { this.positionGrips(); return; }
-        this.activeTable = table;
-        this.updateGrips();
-    };
-
-    Editor.prototype.refreshActiveTable = function () {
-        var cell = this.currentCell();
-        if (cell) {
-            var table = closestTag(cell, 'TABLE');
-            if (table) this.setActiveTable(table);
-        }
-    };
-
-    Editor.prototype.updateGrips = function () {
-        if (!this.overlay) return;
-        if (this.mode !== 'rich') {
-            if (this.overlay.classList.contains('is-on')) this.overlay.classList.remove('is-on');
-            this._gripTable = null;
-            return;
-        }
-        var table = this.activeTable;
-        if (!table || !this.rich.contains(table)) {
-            if (this.overlay.classList.contains('is-on')) this.overlay.classList.remove('is-on');
-            if (this.overlay.firstChild) this.overlay.innerHTML = '';
-            this.activeTable = null;
-            this._gripTable = null;
-            return;
-        }
-        var n = columnCount(table);
-        if (n < 2 || !table.rows.length) {
-            if (this.overlay.classList.contains('is-on')) this.overlay.classList.remove('is-on');
-            this._gripTable = null;
-            return;
-        }
-
-        // 表格与列数都没变时（如鼠标在表格内移动触发的高频 mouseover），
-        // 只重定位、不重建手柄节点，避免节点反复增删导致手柄闪烁。
-        var existing = this.overlay.querySelectorAll('.mre-grip').length;
-        if (this._gripTable === table && existing === n - 1) {
-            this.overlay.classList.add('is-on');
-            this.positionGrips();
-            return;
-        }
-
-        this.overlay.innerHTML = '';
-        // 每列右边界放一个拖拽手柄（最后一列除外）
-        for (var i = 0; i < n - 1; i++) {
-            var grip = document.createElement('div');
-            grip.className = 'mre-grip';
-            grip.setAttribute('data-index', String(i));
-            this.bindGrip(grip, table, i);
-            this.overlay.appendChild(grip);
-        }
-        this._gripTable = table;
-        this.overlay.classList.add('is-on');
-        this.positionGrips();
-    };
-
-    // 只更新手柄位置，不重建节点（拖拽过程中调用，避免拖到一半元素被移除）
-    Editor.prototype.positionGrips = function () {
-        if (!this.overlay) return;
-        var table = this.activeTable;
-        if (!table || !table.rows.length) return;
-        var grips = this.overlay.querySelectorAll('.mre-grip');
-        if (!grips.length) return;
-
-        var scrollRect = this.scroll.getBoundingClientRect();
-        var tableRect = table.getBoundingClientRect();
-        var firstRow = table.rows[0];
-
-        for (var i = 0; i < grips.length; i++) {
-            var idx = parseInt(grips[i].getAttribute('data-index'), 10);
-            var cell = firstRow.cells[idx];
-            if (!cell) continue;
-            var rect = cell.getBoundingClientRect();
-            grips[i].style.left = (rect.right - scrollRect.left + this.scroll.scrollLeft) + 'px';
-            grips[i].style.top = (tableRect.top - scrollRect.top + this.scroll.scrollTop) + 'px';
-            grips[i].style.height = Math.min(tableRect.height, 26) + 'px';
-        }
-    };
-
-    Editor.prototype.bindGrip = function (grip, table, index) {
-        var self = this;
-        // 使用 Pointer Events：鼠标与触屏统一处理（移动端此前用 mousedown/mousemove 收不到事件）
-        grip.addEventListener('pointerdown', function (e) {
-            e.preventDefault();
-            e.stopPropagation();
-            if (e.pointerType === 'touch' && grip.setPointerCapture) {
-                try { grip.setPointerCapture(e.pointerId); } catch (err) { /* 忽略 */ }
-            }
-            var cols = table.querySelectorAll('colgroup > col');
-            var firstRow = table.rows[0];
-            if (!cols.length || !firstRow || !firstRow.cells[index] || !firstRow.cells[index + 1]) return;
-
-            var totalPx = table.getBoundingClientRect().width || 1;
-            var startX = e.clientX;
-            var wL = firstRow.cells[index].getBoundingClientRect().width;
-            var wR = firstRow.cells[index + 1].getBoundingClientRect().width;
-            var minPx = totalPx * COL_MIN_PERCENT / 100;
-            var dragging = true;
-
-            function onMove(ev) {
-                if (!dragging) return;
-                var delta = ev.clientX - startX;
-                var nl = wL + delta;
-                var nr = wR - delta;
-                if (nl < minPx) { nr -= (minPx - nl); nl = minPx; }
-                if (nr < minPx) { nl -= (minPx - nr); nr = minPx; }
-                cols[index].style.width = (nl / totalPx * 100) + '%';
-                cols[index + 1].style.width = (nr / totalPx * 100) + '%';
-                self.positionGrips();
-            }
-            function onUp() {
-                if (!dragging) return;
-                dragging = false;
-                document.removeEventListener('pointermove', onMove);
-                document.removeEventListener('pointerup', onUp);
-                document.removeEventListener('pointercancel', onUp);
-                document.body.classList.remove('mre-resizing');
-                if (grip.releasePointerCapture) {
-                    try { grip.releasePointerCapture(e.pointerId); } catch (err) { /* 忽略 */ }
-                }
-                self.commitColWidths(table);
-            }
-            document.addEventListener('pointermove', onMove);
-            document.addEventListener('pointerup', onUp);
-            document.addEventListener('pointercancel', onUp);
-            document.body.classList.add('mre-resizing');
-        });
-    };
-
-    // 把像素列宽换算回 Markdown 分隔行的破折号数量（列宽即「边框大小」）
-    Editor.prototype.commitColWidths = function (table) {
-        var cols = table.querySelectorAll('colgroup > col');
-        var n = cols.length;
-        if (!n) return;
-        var pcts = [];
-        var total = 0;
-        for (var i = 0; i < n; i++) {
-            var w = parseFloat(cols[i].style.width) || 0;
-            pcts.push(w);
-            total += w;
-        }
-        if (total <= 0) return;
-        var n2 = columnCount(table);
-        var old = readColDashes(table, n2);
-        var dashTotal = sum(old);
-        var dashes = [];
-        for (var j = 0; j < n2; j++) {
-            dashes.push(Math.max(DASH_MIN, Math.round((pcts[j] || 0) / total * dashTotal)));
-        }
-        var aligns = readColAligns(table, n2);
-        applyTableMeta(table, dashes, aligns);
         this.afterRichChange();
     };
 
@@ -2826,11 +2586,10 @@
     };
 
     Editor.prototype.mdInsertTable = function () {
-        var cols = defaultCols(3);
         var aligns = ['', '', ''];
         var tpl = [];
         tpl.push('| 表头1 | 表头2 | 表头3 |');
-        tpl.push(delimLine(cols, aligns));
+        tpl.push(delimLine(aligns));
         tpl.push('|  |  |  |');
         tpl.push('|  |  |  |');
         var ta = this.textarea;
@@ -2872,8 +2631,6 @@
                 var pos = cmd === 'col-left' ? colIdx : colIdx + 1;
                 model.header.splice(pos, 0, '');
                 for (var b = 0; b < model.body.length; b++) model.body[b].splice(pos, 0, '');
-                var avg = Math.max(DASH_MIN, Math.round(sum(model.cols) / model.cols.length));
-                model.cols.splice(pos, 0, avg);
                 model.aligns.splice(pos, 0, '');
                 break;
             }
@@ -2881,7 +2638,6 @@
                 if (model.n <= 1) { this.mdDeleteTable(model); return; }
                 model.header.splice(colIdx, 1);
                 for (var b2 = 0; b2 < model.body.length; b2++) model.body[b2].splice(colIdx, 1);
-                model.cols.splice(colIdx, 1);
                 model.aligns.splice(colIdx, 1);
                 break;
             }
@@ -2971,7 +2727,6 @@
         scanTables: scanTables,
         splitRow: splitRow,
         delimLine: delimLine,
-        defaultCols: defaultCols,
         readMdTableAt: readMdTableAt,
         renderMdTable: renderMdTable,
         mdLinkAt: mdLinkAt,

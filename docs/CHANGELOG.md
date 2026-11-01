@@ -4,6 +4,12 @@
 
 ### 变更
 
+* **移除表格列宽拖拽 + 修复发布后表格不显示 + 播放器按钮改淡蓝磨砂玻璃**（`static/js/pages/markdown-editor.js`、`static/templates/macros/markdown_editor.html`、`services/guides/__init__.py`、`static/css/base.css`、`static/templates/{base,guides/form,admin/guide_form,admin/broadcast}.html`、`scripts/tests/test_guide_storage.py`）：
+  * **删除表格拖拽调整列宽**：移除 `.mre-overlay` / `.mre-grip` 浮层与全部拖拽逻辑（`bindGrip / positionGrips / updateGrips / commitColWidths / setActiveTable` 等），删除 `DASH_PER_PERCENT` / `COL_MIN_PERCENT` 与 `data-cols` / `colgroup` 列宽编码；表格分隔行固定为 `| --- |`（仅保留 `:` 对齐标记），列宽改由浏览器按内容自适应，不再把列宽写进 Markdown。
+  * **发布后表格无法显示修复**：根因是表格的「表头 / 分隔行 / 数据行」之间残留空行，GFM 不再识别为表格。新增 `services/guides/__init__.py` 的 `normalize_markdown_tables()`，在 `read_guide_content()` / `write_guide_content()` 双侧自动压掉表内空行（跳过围栏 / 缩进代码块、保留表格与后续内容之间的空行、不合并相邻表格），历史指南读取时即修复、下次保存写回规范内容；详情页 / 管理后台预览 / 编辑器加载全部生效。
+  * **播放器按钮改淡蓝磨砂玻璃**：`.svp-btn` 与 `.svp-overlay svg` 改为半透明浅蓝渐变底 + `backdrop-filter: blur() saturate()` + 白色描边 + 内高光 + 柔和投影，白图标带细投影保证浅色画面可读；控制栏容器仍透明、暂停仍不遮罩；上拉框内按钮重置为透明底，避免浅色面板上叠色。
+  * 新增 7 项表格规范化测试；同步提升缓存版本号（`base.css` 56、`markdown-editor.js` 14），更新 README / DEVELOPMENT。
+
 * **播放器现代化重做 + 编辑器链接 / 换行 / 有序列表修复**（`static/js/core/video-player.js`、`static/css/base.css`、`static/js/pages/markdown-editor.js`、`static/templates/{base,guides/detail,guides/form,admin/guide_form,admin/broadcast}.html`、`static/templates/macros/markdown_editor.html`）：
   * **播放器极简风重做**：`.svp` 拆出 `.svp-stage`（视频 + 中央按钮 + 控制栏），伪文件名 `.svp-caption` 移到视频下方普通流，不再遮挡画面；控制栏与所有按钮背景完全透明，白色图标 + `drop-shadow`，悬停仅极淡白色圆底；暂停只显示透明底白色描边的中央播放按钮，**彻底移除蓝色遮罩**；进度条 / 音量条改为自绘轨道（`--svp-progress` / `--svp-vol` 渐变填充）。
   * **倍速 / 音量上拉框**：倍速按钮展开 0.5x / 1x / 1.25x / 1.5x / 2x 选项列表（高亮当前速度）；音量按钮展开滑块（直接拖动调节）+ 静音开关；上拉框为浅蓝磨砂面板，默认向上展开、上方空间不足自动改为向下，点击播放器外部或其它控件自动收起；播放器实例统一登记，仅注册一条全局监听，避免多视频重复监听。

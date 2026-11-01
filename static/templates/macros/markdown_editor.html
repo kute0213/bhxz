@@ -16,7 +16,7 @@
    并在页面末尾引入共享脚本（缺一不可）：
        <script src="{{ url_for('static', filename='lib/marked/marked.min.js', v='1') }}"></script>
        <script src="{{ url_for('static', filename='lib/purify/purify.min.js', v='1') }}"></script>
-       <script src="{{ url_for('static', filename='js/pages/markdown-editor.js', v='13') }}"></script>
+       <script src="{{ url_for('static', filename='js/pages/markdown-editor.js', v='14') }}"></script>
 
    可选参数：
        name          - 表单提交字段名（textarea 的 name）
@@ -190,51 +190,6 @@
 .mre-rich ul.mre-task-list, .mre-rich ol.mre-task-list { list-style: none; padding-left: 1.4rem; }
 .mre-rich li.mre-task-item { list-style: none; }
 .mre-rich li.mre-task-item > input[type="checkbox"] { margin-left: -1.1rem; }
-
-/* 拖拽调整列宽时的全局态：列宽光标 + 禁止选中文字 */
-body.mre-resizing, body.mre-resizing * { cursor: col-resize !important; user-select: none !important; }
-
-/* 列宽拖拽手柄（浮层，位于可编辑区之外，避免污染内容） */
-.mre-overlay {
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-}
-.mre-grip {
-    position: absolute;
-    width: 11px;
-    height: 24px;
-    margin-left: -5px;
-    border-radius: 3px;
-    background: rgba(2, 132, 199, 0.5);
-    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.2);
-    cursor: col-resize;
-    pointer-events: auto;
-    /* 触屏：禁用浏览器默认手势，pointer 事件才能持续收到拖动 */
-    touch-action: none;
-    opacity: 0;
-    transition: opacity 0.12s ease;
-}
-/* 扩大的透明命中区，便于手指/鼠标抓取 */
-.mre-grip::before {
-    content: '';
-    position: absolute;
-    top: -8px;
-    bottom: -8px;
-    left: -7px;
-    right: -7px;
-}
-.mre-grip::after {
-    content: '';
-    position: absolute;
-    left: 50%;
-    top: 4px;
-    bottom: 4px;
-    width: 1px;
-    background: rgba(255, 255, 255, 0.85);
-}
-.mre-overlay.is-on .mre-grip { opacity: 1; }
-.mre-grip:hover { background: var(--accent-blue); }
 
 /* ---------- Markdown 源码模式（单栏，无实时预览） ---------- */
 .markdown-editor {
@@ -579,7 +534,6 @@ body.mre-resizing, body.mre-resizing * { cursor: col-resize !important; user-sel
                  spellcheck="false"
                  data-mre-rich
                  data-placeholder="{{ placeholder or '在此输入内容…' }}"></div>
-            <div class="mre-overlay" data-mre-overlay></div>
         </div>
         {% if show_count %}
         <div class="pane-header">

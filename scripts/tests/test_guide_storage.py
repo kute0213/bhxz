@@ -52,6 +52,67 @@ class TestContent:
         assert os.path.isdir(guide_store.guide_dir(8))
 
 
+class TestTableNormalize:
+    """被空行隔断的 Markdown 表格自动修复（发布后表格无法显示的问题）。"""
+
+    def test_compresses_blank_lines_inside_table(self):
+        broken = (
+            '| 表头1 | 表头2 | 表头3 |\n'
+            '\n'
+            '| --- | --- | --- |\n'
+            '\n'
+            '| 内容 | 内容 | 内容 |\n'
+            '\n'
+            '| 内容 | 内容 | 内容 |\n'
+        )
+        fixed = guide_store.normalize_markdown_tables(broken)
+        assert fixed == (
+            '| 表头1 | 表头2 | 表头3 |\n'
+            '| --- | --- | --- |\n'
+            '| 内容 | 内容 | 内容 |\n'
+            '| 内容 | 内容 | 内容 |\n'
+        )
+
+    def test_keeps_alignment_colons(self):
+        broken = '| a | b |\n\n| :--- | ---: |\n\n| 1 | 2 |\n'
+        fixed = guide_store.normalize_markdown_tables(broken)
+        assert fixed.splitlines() == ['| a | b |', '| :--- | ---: |', '| 1 | 2 |']
+
+    def test_skips_fenced_code_block(self):
+        md = '```\n| a | b |\n\n| --- | --- |\n```\n\n| c | d |\n| --- | --- |\n'
+        assert guide_store.normalize_markdown_tables(md) == md
+
+    def test_does_not_merge_two_tables(self):
+        md = (
+            '| a | b |\n'
+            '| --- | --- |\n'
+            '| 1 | 2 |\n'
+            '\n'
+            '| c | d |\n'
+            '| --- | --- |\n'
+            '| 3 | 4 |\n'
+        )
+        assert guide_store.normalize_markdown_tables(md) == md
+
+    def test_keeps_blank_line_before_following_text(self):
+        md = '| a | b |\n| --- | --- |\n| 1 | 2 |\n\n正文段落\n'
+        assert guide_store.normalize_markdown_tables(md) == md
+
+    def test_write_persists_normalized_content(self, guides_dir):
+        broken = '| a | b |\n\n| --- | --- |\n\n| 1 | 2 |\n'
+        guide_store.write_guide_content(31, broken)
+        with open(guide_store.guide_md_path(31), encoding='utf-8') as fh:
+            assert fh.read() == '| a | b |\n| --- | --- |\n| 1 | 2 |\n'
+        assert guide_store.read_guide_content(31) == '| a | b |\n| --- | --- |\n| 1 | 2 |\n'
+
+    def test_read_normalizes_historical_file(self, guides_dir):
+        path = guide_store.guide_md_path(32)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, 'w', encoding='utf-8') as fh:
+            fh.write('| a | b |\n\n| --- | --- |\n')
+        assert guide_store.read_guide_content(32) == '| a | b |\n| --- | --- |\n'
+
+
 class TestAssets:
     """资源保存、配额、删除。"""
 

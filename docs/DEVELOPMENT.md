@@ -557,6 +557,8 @@ from flask import render_template, redirect, url_for, flash, abort, request
 * **换行只用硬换行**：富文本中的 `<br>` 序列化为两个空格 + `\n`（`'  \n'`），不要用反斜杠 `\\\n`；否则空段落 `trim()` 后会残留孤立的反斜杠
 * **空段落必须为空**：`<p><br></p>` 这类占位段落序列化为空串，并在块级 `flush()` 时去掉尾部空白，避免把换行标记带入 Markdown
 * 修改序列化逻辑后，必须用 `node --check` 校验，并手动走一遍：加粗后删除 → 保存 → 重开，确认没有多出 `\`、`****`、`---`
+* **表格格式固定**：表格分隔行每列固定 3 个破折号（`| --- |`），对齐仅通过 `:` 表达（`:---` / `:---:` / `---:`）。**禁止**再把列宽编码进破折号数量，也**禁止**重新引入列宽拖拽手柄 / `colgroup` / `data-cols`——列宽一律交给浏览器自适应
+* **表格行之间不得有空行**：GFM 要求表头紧邻分隔行、数据行连续，否则 marked 不会解析为表格（表现为发布后表格「消失」）。服务端 `services/guides/__init__.py` 的 `normalize_markdown_tables()` 在 `read_guide_content()` / `write_guide_content()` 双侧兜底；任何新增的读写 `guide.md` 入口都必须走这两个函数，不得绕过
 
 ## 构建与发布
 
@@ -715,7 +717,7 @@ python scripts/migrate_guides.py             # 正式迁移
 * 编辑器视频上传使用 XHR（`upload.onprogress`）驱动上传进度，完成后进度条归零并轮询转码进度；进度条统一复用 `macros/progress.html` 的 `progress_track()`（JS 侧用 `.progress-track / .progress-fill`），禁止另起样式；上传配额、改名与删除确认均使用站内控件 / `CustomModal`，不使用原生 file 控件、`window.confirm` 或 `window.prompt`
 * 视频伪文件名统一走 `set_video_title()` / `video_title()`（写入 / 读取 `config.json`），页面渲染时由 URL 文件名查表注入 `<video data-title="...">`，播放器把它显示在**视频下方**（不遮挡画面）；改名 / 删除等写操作必须校验作者或管理员权限
 * 富文本中的视频为 `contenteditable="false"` 原子块：插入于光标之后，前后保证有空段落，支持整体选中复制 / 剪切 / 删除
-* **播放器视觉约定**：`.svp` 只负责外层（`overflow: visible`，供上拉框溢出），视频 / 中央播放按钮 / 控制栏都放在 `.svp-stage` 内相对定位；伪文件名 `.svp-caption` 是 stage 之后的普通流元素，**禁止再叠加在视频上**。控制栏与按钮**背景必须透明**（白色图标 + `drop-shadow`，悬停只允许极淡白色圆底），暂停态只显示透明底白色描边的中央播放按钮，**不得给画面加任何蓝色 / 半透明遮罩**
+* **播放器视觉约定**：`.svp` 只负责外层（`overflow: visible`，供上拉框溢出），视频 / 中央播放按钮 / 控制栏都放在 `.svp-stage` 内相对定位；伪文件名 `.svp-caption` 是 stage 之后的普通流元素，**禁止再叠加在视频上**。控制按钮统一为**淡蓝色磨砂玻璃材质**：半透明浅蓝渐变底 + `backdrop-filter: blur() saturate()` + 白色描边 + 内高光 + 柔和投影，图标为白色并带细投影（投影加在 `svg` 上，不要加在按钮本身，避免 `filter` 与 `backdrop-filter` 互相干扰）；控制栏容器保持透明，暂停态只显示中央的磨砂玻璃播放按钮，**不得给画面加任何蓝色 / 半透明遮罩**。上拉框内部按钮需把玻璃底 / 边框 / `backdrop-filter` 重置为透明（`.svp-pop .svp-btn`），避免在浅色面板上叠加出厚重色块
 * **播放器覆盖层不得拦截编辑操作**：`.svp-overlay` 只允许中央播放图标响应指针（`pointer-events: none` + `svg { pointer-events: auto }`），暂停时也不加任何全屏遮罩；否则鼠标无法落进视频、编辑器收不到点击，复制 / 剪切 / 删除 / 选中全部失效
 * **音量 / 倍速一律用上拉框**：音量按钮点击后展开 `.svp-pop-volume`（滑块直接调节 + 静音开关），倍速按钮展开 `.svp-pop-speed`（选项列表高亮当前速度）；上拉框默认向上，上方空间不足时自动加 `is-below`，点击播放器外部 / 其它控件自动收起。播放器实例统一登记在模块级 `players`，只用一条 document 监听收起上拉框，禁止每个视频各注册一条
 * **编辑器视频点击约定**：点击视频主体（含播放器容器）由编辑器的捕获阶段 `click` 处理，`stopPropagation()` 阻止播放器播放，并用 `selectVideoBlock()` 以 `Range.selectNode(.svp)` 选中整个视频块；点击播放器控制栏 / 上拉框则不选中，保证控件仍可用。`videoAnchorFromRange()` 在选区覆盖视频时也能正确识别当前视频，用于「更换视频」

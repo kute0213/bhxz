@@ -83,29 +83,139 @@ def ensure_guide_dir(guide_id):
 # 正文（guide.md）
 # ---------------------------------------------------------------------------
 
+# Markdown 表格行（至少包含一个 |，且以 | 结尾）
+_TABLE_ROW_RE = re.compile(r'^\s*\|?.*\|\s*$')
+# 表格分隔行中的单个单元格（--- / :--- / ---: / :---:）
+_DELIM_CELL_RE = re.compile(r'^\s*:?-+:?\s*$')
+
+
+def _is_table_row(line):
+    """是否为 Markdown 表格行（与编辑器 isTableRow 判定保持一致）。"""
+    return bool(line) and '|' in line and bool(_TABLE_ROW_RE.match(line))
+
+
+def _table_cells(line):
+    """按未转义的 | 拆分表格行。"""
+    s = line.strip()
+    if s.startswith('|'):
+        s = s[1:]
+    if s.endswith('|') and not s.endswith('\\|'):
+        s = s[:-1]
+    return [c.strip() for c in re.split(r'(?<!\\)\|', s)]
+
+
+def _is_delim_row(line):
+    """是否为表格分隔行（| --- | :---: | ...）。"""
+    cells = _table_cells(line)
+    return bool(cells) and all(_DELIM_CELL_RE.match(c) for c in cells)
+
+
+def normalize_markdown_tables(md):
+    """修复被空行隔断的 Markdown 表格。
+
+    标准 Markdown 要求「表头行」与「分隔行」紧邻，且表格行之间不能有空行，
+    否则表格不会被解析为表格（表现为发布后表格「消失」）。
+    本函数把表头 / 分隔行 / 数据行之间的空行压掉，同时：
+
+    * 跳过围栏代码块（``` / ~~~）与缩进代码块，避免误改代码内容；
+    * 表格结束后紧跟的其他内容不受影响，原有的分隔空行保留；
+    * 两张相邻表格不会被合并（识别「行 + 分隔行」为新表格起点）。
+    """
+    text = str(md or '')
+    if '|' not in text:
+        return text
+    if '\r' in text:
+        text = text.replace('\r\n', '\n').replace('\r', '\n')
+
+    lines = text.split('\n')
+    total = len(lines)
+    out = []
+    i = 0
+    in_fence = False
+    fence_char = ''
+
+    while i < total:
+        line = lines[i]
+        fence = re.match(r'\s*(`{3,}|~{3,})', line)
+        if fence:
+            ch = fence.group(1)[0]
+            if not in_fence:
+                in_fence, fence_char = True, ch
+            elif ch == fence_char:
+                in_fence = False
+            out.append(line)
+            i += 1
+            continue
+        if in_fence or re.match(r'^( {4,}|\t)', line):
+            out.append(line)
+            i += 1
+            continue
+
+        # 表头行 → （可能隔着空行）分隔行
+        if _is_table_row(line):
+            j = i + 1
+            while j < total and lines[j].strip() == '':
+                j += 1
+            if j < total and _is_delim_row(lines[j]):
+                header_cells = _table_cells(line)
+                if len(_table_cells(lines[j])) == len(header_cells):
+                    out.append(line)
+                    out.append(lines[j])
+                    i = j + 1
+                    # 收集表体：行与行之间的空行一并压掉
+                    while i < total:
+                        seg = i
+                        k = i
+                        while k < total and lines[k].strip() == '':
+                            k += 1
+                        if k >= total or not _is_table_row(lines[k]):
+                            # 不是表格行：保留原有空行，交由主循环继续处理
+                            i = seg
+                            break
+                        # 「该行后面紧跟分隔行」说明这是下一张表格的表头
+                        nk = k + 1
+                        while nk < total and lines[nk].strip() == '':
+                            nk += 1
+                        if (nk < total and _is_delim_row(lines[nk])
+                                and len(_table_cells(lines[nk])) == len(_table_cells(lines[k]))):
+                            i = seg
+                            break
+                        out.append(lines[k])
+                        i = k + 1
+                    continue
+        out.append(line)
+        i += 1
+
+    return '\n'.join(out)
+
+
 def read_guide_content(guide_id, fallback=''):
     """读取指南 Markdown 正文。
 
     文件存在时以文件为准；文件缺失时回退到数据库旧内容（迁移前的数据），
     保证迁移脚本尚未执行时站点仍可正常显示。
+    读取时统一修正被空行隔断的表格，历史内容也能正确渲染。
     """
     path = guide_md_path(guide_id)
     if os.path.isfile(path):
         try:
             with open(path, 'r', encoding='utf-8') as fh:
-                return fh.read()
+                return normalize_markdown_tables(fh.read())
         except OSError:
-            return fallback or ''
-    return fallback or ''
+            return normalize_markdown_tables(fallback or '')
+    return normalize_markdown_tables(fallback or '')
 
 
 def write_guide_content(guide_id, content):
-    """写入指南 Markdown 正文（先写临时文件再原子替换）。"""
+    """写入指南 Markdown 正文（先写临时文件再原子替换）。
+
+    写入前统一修正表格空行，保证保存 / 发布的内容一定能正常渲染。
+    """
     ensure_guide_dir(guide_id)
     path = guide_md_path(guide_id)
     tmp = path + '.tmp'
     with open(tmp, 'w', encoding='utf-8') as fh:
-        fh.write(str(content or ''))
+        fh.write(normalize_markdown_tables(content))
     os.replace(tmp, path)
     return path
 
