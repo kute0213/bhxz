@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from flask import abort, request, redirect, url_for, flash, jsonify
+from flask import abort, request, url_for, flash, jsonify
 
 from core.auth import get_current_user, login_required
 from core.db import get_db, transaction
@@ -28,21 +28,14 @@ def _notify_admins_new_building(title, author_name):
     notify_admins(subject, body, html)
 
 
-@buildings_bp.route('/buildings')
-def building_list():
-    """公共建筑列表。
+def _render_building_page(my_mode=False, fav_mode=False):
+    """渲染公共建筑列表页。
 
-    支持 ?my=1（我的建筑，显示全部状态）、?fav=1（我的收藏，需登录）、
-    ?q=关键词（匹配标题与标签）、?tag=标签（精确筛选）。默认按收藏数倒序
-    排列，每次加载 10 条，前端点击「加载更多」通过 /api/buildings 继续获取。
+    my_mode=True 展示当前用户的全部建筑（含待审核 / 未通过），
+    fav_mode=True 展示当前用户收藏的建筑；
+    二者均为独立页面，公开列表不再通过 ?my=1 / ?fav=1 切换。
+    页面仅渲染骨架，列表数据由前端按页面类型调用对应 API 获取。
     """
-    user = get_current_user()
-    my_mode = bool(user and request.args.get('my'))
-    fav_mode = bool(request.args.get('fav'))
-
-    if fav_mode and not user:
-        return redirect(url_for('main.login', next=request.full_path))
-
     query = (request.args.get('q') or '').strip()
     active_tag = (request.args.get('tag') or '').strip()
 
@@ -54,6 +47,26 @@ def building_list():
         active_tag=active_tag,
         all_tags=buildings_service.get_all_tags(),
     )
+
+
+@buildings_bp.route('/buildings')
+def building_list():
+    """公共建筑公开列表（支持 ?q=关键词、?tag=标签）。"""
+    return _render_building_page()
+
+
+@buildings_bp.route('/buildings/my')
+@login_required
+def building_list_my():
+    """我的建筑（独立页面，展示本人发布的全部状态建筑）。"""
+    return _render_building_page(my_mode=True)
+
+
+@buildings_bp.route('/buildings/favorites')
+@login_required
+def building_list_favorites():
+    """我的收藏（独立页面，按收藏时间倒序）。"""
+    return _render_building_page(fav_mode=True)
 
 
 @buildings_bp.route('/buildings/create', methods=['GET', 'POST'])
@@ -120,7 +133,7 @@ def building_create():
             conn.commit()
             _notify_admins_new_building(title, user['username'])
             return _respond('公共建筑已提交，等待管理员审核', 'success',
-                            redirect_to=url_for('buildings.building_list', my=1))
+                            redirect_to=url_for('buildings.building_list_my'))
         except Exception as e:
             conn.rollback()
             return fail(f'提交失败: {e}')

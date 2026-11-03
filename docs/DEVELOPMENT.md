@@ -726,6 +726,11 @@ python scripts/migrate_guides.py             # 正式迁移
 * 删除指南（管理员删除 / 被驳回超时清理）时必须调用 `guide_store.delete_guide_dir(id)`，避免残留目录
 * `uploads/guides/_drafts/` 仅用于自动维护时清理历史残留
 
+**页面路由与前端资源约定：**
+
+* **子页面必须使用独立路由**：`我的建筑` / `我的收藏` 等页面一律使用 `/buildings/my`、`/buildings/favorites` 这类独立路径，并配套独立 API（`/api/buildings/my`、`/api/buildings/favorites`），**禁止再用 `?my=1` / `?fav=1` 等查询参数切换页面类型**（与 `/guides/my`、`/music/my` 保持一致）；查询参数只允许用于搜索（`q`）、标签（`tag`）、分页（`page`）等筛选
+* **前端 JS 按需加载**：`js/core/video-player.js` 不再由 `base.html` 全站引入，只在实际使用视频的页面（指南详情、Markdown 编辑器所在页、管理后台预览）通过 `page_scripts` / `extra_script` 引入；新增公共组件时同样优先按需加载，避免拖慢全站首屏
+
 **开发准则：**
 
 * 新增需要更新后自动清理的数据时，在 `scripts/uploads.py` 的 `_clean_polls_data()` 类似函数中添加对应逻辑

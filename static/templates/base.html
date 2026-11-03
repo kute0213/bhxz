@@ -450,9 +450,7 @@
     {% endcall %}
 
     <script src="{{ url_for('static', filename='js/core/base.js', v='29') }}"></script>
-    {# 全站统一视频播放器（自定义控件） #}
-    <script src="{{ url_for('static', filename='js/core/video-player.js', v='4') }}"></script>
-    {# 页面按需加载的公共组件（如 uploader.js / search.js），避免全站加载 #}
+    {# 页面按需加载的公共组件（如 uploader.js / search.js / video-player.js），避免全站加载 #}
     {% block page_scripts %}{% endblock %}
 
     {# 统一弹窗控制器 #}

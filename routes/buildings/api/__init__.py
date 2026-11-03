@@ -12,57 +12,71 @@ from routes.buildings import buildings_bp
 from services import buildings as buildings_service
 
 
-@buildings_bp.route('/api/buildings/list')
-def api_buildings_list():
-    """公共建筑搜索/分页列表（JSON，供前端无刷新搜索与「加载更多」）。
-
-    参数：
-      q    关键词（匹配标题与标签）
-      tag  精确标签筛选
-      page 页码（从 1 开始，默认 1）
-      my   为 1 时返回当前用户的建筑（需登录）
-      fav  为 1 时返回当前用户收藏的建筑（需登录）
-    """
-    user = get_current_user()
-    my_mode = bool(user and request.args.get('my'))
-    fav_mode = bool(user and request.args.get('fav'))
-    query = (request.args.get('q') or '').strip()[:100]
-    tag = (request.args.get('tag') or '').strip()[:32]
-    page = request.args.get('page', type=int) or 1
-
-    if fav_mode:
-        items, has_more = buildings_service.list_favorite_buildings(
-            user_id=user['id'],
-            search=query,
-            page=page,
-        )
-        favorite_ids = {b['id'] for b in items}
-    else:
-        items, has_more = buildings_service.list_buildings(
-            search=query,
-            tag=tag,
-            page=page,
-            author_id=user['id'] if user else None,
-            my_mode=my_mode,
-        )
-        favorite_ids = set()
-        if user:
-            favorite_ids = buildings_service.get_favorite_ids(
-                user['id'], [b['id'] for b in items]
-            )
-
+def _list_payload(items, has_more, page, favorite_ids):
+    """统一构造建筑列表 JSON 响应（补充当前用户是否已收藏）。"""
     for b in items:
         b['is_favorited'] = b['id'] in favorite_ids
-
     return jsonify({
         'success': True,
         'buildings': items,
         'has_more': has_more,
         'page': page,
         'next_page': page + 1,
-        'my_mode': my_mode,
-        'fav_mode': fav_mode,
     })
+
+
+def _favorite_ids(user, items):
+    """批量查询当前用户在列表中的收藏状态。"""
+    if not user:
+        return set()
+    return buildings_service.get_favorite_ids(user['id'], [b['id'] for b in items])
+
+
+def _list_params():
+    """读取列表通用参数：q 关键词 / tag 标签 / page 页码。"""
+    return (
+        (request.args.get('q') or '').strip()[:100],
+        (request.args.get('tag') or '').strip()[:32],
+        request.args.get('page', type=int) or 1,
+    )
+
+
+@buildings_bp.route('/api/buildings/list')
+def api_buildings_list():
+    """公共建筑公开列表（JSON，供前端无刷新搜索与「加载更多」）。
+
+    参数：q 关键词（匹配标题与标签）、tag 精确标签筛选、page 页码（从 1 开始）。
+    「我的建筑」「我的收藏」为独立接口 /api/buildings/my 与 /api/buildings/favorites。
+    """
+    user = get_current_user()
+    query, tag, page = _list_params()
+    items, has_more = buildings_service.list_buildings(search=query, tag=tag, page=page)
+    return _list_payload(items, has_more, page, _favorite_ids(user, items))
+
+
+@buildings_bp.route('/api/buildings/my')
+@login_required
+def api_buildings_my():
+    """我的建筑列表（JSON，包含本人发布的全部状态，按更新时间排序）。"""
+    user = get_current_user()
+    query, tag, page = _list_params()
+    items, has_more = buildings_service.list_buildings(
+        search=query, tag=tag, page=page,
+        author_id=user['id'], my_mode=True,
+    )
+    return _list_payload(items, has_more, page, _favorite_ids(user, items))
+
+
+@buildings_bp.route('/api/buildings/favorites')
+@login_required
+def api_buildings_favorites():
+    """我的收藏列表（JSON，按收藏时间倒序）。"""
+    user = get_current_user()
+    query, _, page = _list_params()
+    items, has_more = buildings_service.list_favorite_buildings(
+        user_id=user['id'], search=query, page=page,
+    )
+    return _list_payload(items, has_more, page, {b['id'] for b in items})
 
 
 @buildings_bp.route('/api/buildings/<int:building_id>/comments')

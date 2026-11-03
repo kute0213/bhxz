@@ -4,6 +4,12 @@
 
 ### 变更
 
+* **「我的建筑 / 我的收藏」改为独立页面 + 视频播放器按需加载**（`routes/buildings/pages/__init__.py`、`routes/buildings/api/__init__.py`、`static/templates/buildings/index.html`、`static/templates/base.html`、`static/templates/{guides/detail,guides/form,admin/guides,admin/guide_form,admin/broadcast}.html`、`static/templates/macros/markdown_editor.html`）：
+  * **页面独立路由**：`/buildings?my=1` → `/buildings/my`，`/buildings?fav=1` → `/buildings/favorites`，两者均需登录，公开列表 `/buildings` 不再识别 `my` / `fav` 查询参数；页内「全部建筑 / 我的建筑 / 我的收藏」按钮全部改用 `url_for` 独立端点，发布建筑成功后的跳转改为 `/buildings/my`。
+  * **接口拆分**：`/api/buildings/list` 仅返回公开建筑；新增 `GET /api/buildings/my`（本人全部状态，按更新时间）与 `GET /api/buildings/favorites`（按收藏时间倒序，需登录），均支持 `q` / `page`，与指南侧 `/api/guides/my` 保持一致；页面脚本按当前页面选择接口，不再拼接 `my=1` / `fav=1`。
+  * **视频播放器按需加载**：`video-player.js` 从 `base.html` 全局引入移除，只在实际使用视频的页面（指南详情、三个 Markdown 编辑器页面、管理后台指南预览）通过页面脚本块引入，减少全站首屏请求。
+  * 同步更新 README / DEVELOPMENT（新增「页面路由与前端资源约定」章节），提升缓存版本号（`video-player.js` 4 保持、`markdown-editor.js` 14）。
+
 * **移除表格列宽拖拽 + 修复发布后表格不显示 + 播放器按钮改淡蓝磨砂玻璃**（`static/js/pages/markdown-editor.js`、`static/templates/macros/markdown_editor.html`、`services/guides/__init__.py`、`static/css/base.css`、`static/templates/{base,guides/form,admin/guide_form,admin/broadcast}.html`、`scripts/tests/test_guide_storage.py`）：
   * **删除表格拖拽调整列宽**：移除 `.mre-overlay` / `.mre-grip` 浮层与全部拖拽逻辑（`bindGrip / positionGrips / updateGrips / commitColWidths / setActiveTable` 等），删除 `DASH_PER_PERCENT` / `COL_MIN_PERCENT` 与 `data-cols` / `colgroup` 列宽编码；表格分隔行固定为 `| --- |`（仅保留 `:` 对齐标记），列宽改由浏览器按内容自适应，不再把列宽写进 Markdown。
   * **发布后表格无法显示修复**：根因是表格的「表头 / 分隔行 / 数据行」之间残留空行，GFM 不再识别为表格。新增 `services/guides/__init__.py` 的 `normalize_markdown_tables()`，在 `read_guide_content()` / `write_guide_content()` 双侧自动压掉表内空行（跳过围栏 / 缩进代码块、保留表格与后续内容之间的空行、不合并相邻表格），历史指南读取时即修复、下次保存写回规范内容；详情页 / 管理后台预览 / 编辑器加载全部生效。

@@ -83,21 +83,21 @@
                     <a href="{{ url_for('buildings.building_list') }}" class="btn-secondary px-4 py-2.5 rounded-lg text-sm inline-flex items-center gap-2">
                         <i data-lucide="building-2" class="w-4 h-4"></i>全部建筑
                     </a>
-                    <a href="{{ url_for('buildings.building_list') }}?my=1" class="btn-secondary px-4 py-2.5 rounded-lg text-sm inline-flex items-center gap-2">
+                    <a href="{{ url_for('buildings.building_list_my') }}" class="btn-secondary px-4 py-2.5 rounded-lg text-sm inline-flex items-center gap-2">
                         <i data-lucide="file-text" class="w-4 h-4"></i>我的建筑
                     </a>
                     {% elif my_mode %}
                     <a href="{{ url_for('buildings.building_list') }}" class="btn-secondary px-4 py-2.5 rounded-lg text-sm inline-flex items-center gap-2">
                         <i data-lucide="building-2" class="w-4 h-4"></i>全部建筑
                     </a>
-                    <a href="{{ url_for('buildings.building_list') }}?fav=1" class="btn-secondary px-4 py-2.5 rounded-lg text-sm inline-flex items-center gap-2">
+                    <a href="{{ url_for('buildings.building_list_favorites') }}" class="btn-secondary px-4 py-2.5 rounded-lg text-sm inline-flex items-center gap-2">
                         <i data-lucide="heart" class="w-4 h-4"></i>我的收藏
                     </a>
                     {% else %}
-                    <a href="{{ url_for('buildings.building_list') }}?my=1" class="btn-secondary px-4 py-2.5 rounded-lg text-sm inline-flex items-center gap-2">
+                    <a href="{{ url_for('buildings.building_list_my') }}" class="btn-secondary px-4 py-2.5 rounded-lg text-sm inline-flex items-center gap-2">
                         <i data-lucide="file-text" class="w-4 h-4"></i>我的建筑
                     </a>
-                    <a href="{{ url_for('buildings.building_list') }}?fav=1" class="btn-secondary px-4 py-2.5 rounded-lg text-sm inline-flex items-center gap-2">
+                    <a href="{{ url_for('buildings.building_list_favorites') }}" class="btn-secondary px-4 py-2.5 rounded-lg text-sm inline-flex items-center gap-2">
                         <i data-lucide="heart" class="w-4 h-4"></i>我的收藏
                     </a>
                     {% endif %}
@@ -151,10 +151,9 @@
 <script>
 (function () {
     var CFG = {
-        apiUrl: "{{ url_for('buildings.api_buildings_list') }}",
+        apiUrl: "{% if fav_mode %}{{ url_for('buildings.api_buildings_favorites') }}{% elif my_mode %}{{ url_for('buildings.api_buildings_my') }}{% else %}{{ url_for('buildings.api_buildings_list') }}{% endif %}",
         detailBase: "{{ url_for('buildings.building_list') }}/",
         favUrl: "{{ url_for('buildings.toggle_building_favorite', building_id=0) }}",
-        myMode: {{ 'true' if my_mode else 'false' }},
         favMode: {{ 'true' if fav_mode else 'false' }},
         isLoggedIn: {{ 'true' if user else 'false' }}
     };
@@ -270,8 +269,6 @@
         params.set('q', state.query || '');
         params.set('page', page);
         if (state.tag) params.set('tag', state.tag);
-        if (CFG.favMode) params.set('fav', '1');
-        else if (CFG.myMode) params.set('my', '1');
 
         fetch(CFG.apiUrl + '?' + params.toString(), {
             headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
