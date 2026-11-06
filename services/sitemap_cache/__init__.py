@@ -10,6 +10,7 @@
 import datetime
 import os
 import threading
+import time
 
 from config import get_config_value, UPLOAD_SITEMAP_DIR
 from core.db import get_db
@@ -17,6 +18,9 @@ from core.system.logger import log_module, register_module_log
 from core.shared.scheduler import register_task, unregister_task
 
 register_module_log('sitemap')
+
+# 按请求域名懒生成的 sitemap 在内存中的有效期（秒）
+LAZY_CACHE_TTL = 3600
 
 
 class SitemapCache:
@@ -36,6 +40,10 @@ class SitemapCache:
         if self._initialized:
             return
         self._initialized = True
+        # 按请求域名懒生成的 sitemap（防止缓存缺失时返回空内容）：
+        # {host: (xml, 生成时间戳)}，有效期 LAZY_CACHE_TTL 秒
+        self._lazy_cache = {}
+        self._lazy_lock = threading.Lock()
         # 统一任务注册表：每天 SITEMAP_REFRESH_TIME 刷新一次（时间点模式，配置热重载）
         self._task = register_task(
             name='sitemap-cache',
@@ -135,6 +143,65 @@ class SitemapCache:
             pass
 
         return ''
+
+    def get_xml_for_request(self, host: str, scheme: str = 'https') -> str:
+        """获取当前请求域名对应的 sitemap XML，缓存缺失时按需生成。
+
+        与 :meth:`get_xml_for_domain` 的区别：
+          - 不会退回到其它域名的缓存文件（避免返回 URL 归属错误的 sitemap）；
+          - 缓存文件不存在（例如首次部署、新绑定域名、每日刷新尚未执行）时，
+            直接按当前域名生成一份并缓存到内存，保证爬虫永远能取到有效 XML。
+
+        Args:
+            host: 请求的 Host 头（可含端口）。
+            scheme: 请求协议（http/https），仅在域名未在站点配置中出现时使用。
+
+        Returns:
+            sitemap XML 内容；数据库不可用等导致无法生成时返回空字符串。
+        """
+        host = (host or '').split(':')[0].strip().lower()
+        if not host:
+            return ''
+
+        cached = self.get_xml_for_domain(host)
+        if cached.strip():
+            return cached
+
+        # 优先使用站点配置中的协议；否则对公网域名默认 https
+        base = self.base_url_for_host(host)
+        if not base:
+            if host in ('localhost', '127.0.0.1', '::1'):
+                base = f'{(scheme or "http").rstrip("/")}://{host}'
+            else:
+                base = f'https://{host}'
+        return self._get_or_build(host, base)
+
+    def _get_or_build(self, host: str, base_url: str) -> str:
+        """按域名懒生成 sitemap（带内存缓存与锁，避免重复构建）。"""
+        now = time.time()
+        with self._lazy_lock:
+            cached = self._lazy_cache.get(host)
+            if cached and now - cached[1] < LAZY_CACHE_TTL:
+                return cached[0]
+
+            try:
+                entries = _build_url_entries()
+            except Exception as e:
+                log_module('sitemap', 'ERROR', 'SitemapCache', f'按需生成失败（{host}）: {e}')
+                return ''
+            if not entries:
+                return ''
+
+            xml_content = _render_sitemap_xml(base_url, entries)
+            self._lazy_cache[host] = (xml_content, now)
+            # 防止异常 Host 头导致内存无限增长：条目过多时清理过期项
+            if len(self._lazy_cache) > 50:
+                self._lazy_cache = {
+                    h: v for h, v in self._lazy_cache.items()
+                    if now - v[1] < LAZY_CACHE_TTL
+                }
+            log_module('sitemap', 'INFO', 'SitemapCache', f'缓存缺失，已按需生成: {host}')
+            return xml_content
 
     def refresh_now(self):
         """手动立即刷新缓存（供管理面板调用），并标记当天已刷新避免重复。"""

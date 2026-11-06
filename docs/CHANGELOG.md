@@ -4,6 +4,13 @@
 
 ### 变更
 
+* **统一日志 SSE 实时推送 + Bing 收录修复（SEO / sitemap）+ 登录页简化**（`core/system/logger.py`、`routes/admin/logs/__init__.py`、`static/templates/admin/logs.html`、`services/sitemap_cache/__init__.py`、`routes/sitemap/__init__.py`、`static/templates/base.html`、`core/template_context.py`、`static/templates/{auth/login,auth/register,auth/forgot_password,index,site/server_status,site/docs,site/map,guides/index,guides/detail,buildings/index,buildings/detail,music/index,backgrounds/index}.html`）：
+  * **日志实时化（全部来源）**：SSE 客户端改为按来源订阅（`global` / `fatal` / `module:<名称>`），`_emit()` 对全局、严重错误、模块三类日志分别推送；`GET /admin/api/logs/stream?source=...` 支持任意来源；日志页所有来源统一使用 `EventSource`，**删除 3 秒轮询**，严重错误来源只保留最新一条，并修复重复绑定的「自动滚动」监听。
+  * **修复 Bing 无法抓取 `sitemap.xml`**：新增 `SitemapCache.get_xml_for_request()`——缓存文件存在时直接读取，缺失时按请求域名懒生成（内存缓存 1 小时、过期与异常 Host 自动清理），不再回退到其它域名的 sitemap；路由**不再返回内容为空的 200**（空响应会被 CDN / 浏览器缓存并导致爬虫持续失败），无法生成时返回 `503 + Retry-After`，正常响应保持 `application/xml; charset=utf-8`。
+  * **全站 SEO / GEO 补齐**：`base.html` 统一输出 `meta description`（带默认描述，子模板可覆盖）、`canonical`、Open Graph 与 Twitter 卡片；`core/template_context.py` 注入 `canonical_base_url`（优先站点配置域名、公网域名默认 https）；登录、注册、找回密码、服务器状态、首页、指南列表 / 详情、公共建筑列表 / 详情、大喇叭音频、背景图片、文档中心、网页地图均配置更长的标题与页面专属描述，修复 Bing 报「标题太短 / 缺少 Meta Description」。
+  * **登录页简化**：重写为与注册页一致的单卡片布局（图标 + 标题 + 表单 + 返回主页按钮），移除双栏介绍区与约 200 行自定义 CSS；**注册页「群内验证码」弹窗移除右下角关闭按钮**（弹窗不可绕过）。
+  * 新增 DEVELOPMENT「SEO 元信息」「Sitemap 生成约定」章节，更新 README；`python -m pytest scripts/tests -q` 259 项通过。
+
 * **「我的建筑 / 我的收藏」改为独立页面 + 视频播放器按需加载**（`routes/buildings/pages/__init__.py`、`routes/buildings/api/__init__.py`、`static/templates/buildings/index.html`、`static/templates/base.html`、`static/templates/{guides/detail,guides/form,admin/guides,admin/guide_form,admin/broadcast}.html`、`static/templates/macros/markdown_editor.html`）：
   * **页面独立路由**：`/buildings?my=1` → `/buildings/my`，`/buildings?fav=1` → `/buildings/favorites`，两者均需登录，公开列表 `/buildings` 不再识别 `my` / `fav` 查询参数；页内「全部建筑 / 我的建筑 / 我的收藏」按钮全部改用 `url_for` 独立端点，发布建筑成功后的跳转改为 `/buildings/my`。
   * **接口拆分**：`/api/buildings/list` 仅返回公开建筑；新增 `GET /api/buildings/my`（本人全部状态，按更新时间）与 `GET /api/buildings/favorites`（按收藏时间倒序，需登录），均支持 `q` / `page`，与指南侧 `/api/guides/my` 保持一致；页面脚本按当前页面选择接口，不再拼接 `my=1` / `fav=1`。

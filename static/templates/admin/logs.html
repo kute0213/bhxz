@@ -78,6 +78,20 @@
         'email_code': '邮箱验证码',
         'register': '注册账号',
         'login': '登录账号',
+        'waitress': 'WSGI 服务器',
+        'password': '找回密码',
+        'user': '用户资料',
+        'background': '全站背景',
+        'buildings': '公共建筑',
+        'music': '大喇叭音频',
+        'email': '邮件发送',
+        'backup': '数据备份',
+        'gameban': '游戏封禁',
+        'sitemap': '站点地图',
+        'rcon': 'RCON 连接',
+        'cleanup': '内容清理',
+        'metrics': '系统指标',
+        'settings': '系统设置',
     };
     function moduleLabel(name) {
         return MODULE_LABELS[name] || name;
@@ -85,7 +99,6 @@
 
     let autoScroll = true;
     let eventSource = null;
-    let pollTimer = null;
     let entries = [];
     let currentLevel = 'DEBUG';
     let currentSource = 'global';
@@ -139,7 +152,7 @@
         }
     }
 
-    // 拉取当前来源的日志（整体替换，用于首屏与轮询）
+    // 拉取当前来源的历史日志（首屏 / 连接建立时整体替换）
     function loadLogs() {
         var url = LOGS_URL + '?tail=500&source=' + encodeURIComponent(currentSource);
         fetch(url)
@@ -153,29 +166,38 @@
             .catch(function() {});
     }
 
-    // 连接 SSE（仅全局日志实时推送）
+    // 连接 SSE（所有来源统一实时推送）
     function connectSSE() {
         if (eventSource) {
             eventSource.close();
         }
-        eventSource = new EventSource(STREAM_URL);
+        var url = STREAM_URL + '?source=' + encodeURIComponent(currentSource);
+        var sourceAtConnect = currentSource;
+        eventSource = new EventSource(url);
         eventSource.addEventListener('connected', function() {
             loadLogs();
         });
         eventSource.onmessage = function(e) {
+            if (sourceAtConnect !== currentSource) return;
             try {
                 var entry = JSON.parse(e.data);
-                entries.push(entry);
-                if (entries.length > 2000) {
-                    entries = entries.slice(-2000);
+                if (currentSource === 'fatal') {
+                    // 严重错误日志只保留最后一次
+                    entries = [entry];
+                } else {
+                    entries.push(entry);
+                    if (entries.length > 2000) {
+                        entries = entries.slice(-2000);
+                    }
                 }
                 render();
             } catch(err) {}
         };
         eventSource.onerror = function() {
+            if (sourceAtConnect !== currentSource) return;
             eventSource.close();
             setTimeout(function() {
-                if (currentSource === 'global') connectSSE();
+                if (currentSource === sourceAtConnect) connectSSE();
             }, 3000);
         };
     }
@@ -184,16 +206,10 @@
     function applySource(src) {
         currentSource = src;
         if (eventSource) { eventSource.close(); eventSource = null; }
-        if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
         entries = [];
         container.innerHTML = '<div class="text-cream/40 text-center py-8">加载中...</div>';
         loadLogs();
-        if (src === 'global') {
-            connectSSE();
-        } else {
-            // 非全局来源（严重错误 / 模块单独日志）用轮询刷新
-            pollTimer = setInterval(loadLogs, 3000);
-        }
+        connectSSE();
     }
 
     // 等级筛选
@@ -224,15 +240,6 @@
                     .catch(function() {});
             }
         });
-    });
-
-    // 自动滚动切换
-    btnAutoScroll.addEventListener('click', function() {
-        autoScroll = !autoScroll;
-        this.classList.toggle('bg-gold-400/20', autoScroll);
-        if (autoScroll) {
-            container.scrollTop = container.scrollHeight;
-        }
     });
 
     // 自动滚动切换

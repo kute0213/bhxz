@@ -75,7 +75,9 @@ MODULE_LOG_DIR = os.path.join(LOG_DIR, 'modules')           # 模块单独日志
 MAX_LOG_ENTRIES = 2000
 _log_buffer = []           # list[dict] 全局日志缓冲
 _log_buffer_lock = threading.Lock()
-_log_monitor_clients = []  # list[queue.Queue] — SSE 客户端
+# SSE 客户端：[(来源标识, queue.Queue), ...]
+# 来源标识：'global'（全局日志）、'fatal'（严重错误）、'module:<名称>'（模块单独日志）
+_log_monitor_clients = []
 _monitor_lock = threading.Lock()
 
 # 模块单独日志缓冲上限（每个模块各自独立）
@@ -318,15 +320,21 @@ def _write_overwrite(path: str, line: str) -> None:
         pass
 
 
-def _push_to_clients(entry: dict) -> None:
-    """向所有 SSE 客户端推送全局日志条目。"""
+def _push_to_clients(source: str, entry: dict) -> None:
+    """向订阅指定来源的 SSE 客户端推送日志条目。
+
+    Args:
+        source: 来源标识（'global' / 'fatal' / 'module:<名称>'）。
+        entry: 结构化日志条目。
+    """
     import json as _json
     try:
         payload = _json.dumps(entry, ensure_ascii=False)
     except Exception:
         return
     with _monitor_lock:
-        clients = list(_log_monitor_clients)
+        clients = [q for client_source, q in _log_monitor_clients
+                   if client_source == source]
     for q in clients:
         try:
             q.put_nowait(payload)
@@ -524,13 +532,15 @@ def _emit(category: str, level: str, event: str, detail: str, kwargs: dict,
             _log_buffer.append(entry)
             if len(_log_buffer) > MAX_LOG_ENTRIES:
                 _log_buffer.pop(0)
-        _push_to_clients(entry)
+        _push_to_clients('global', entry)
         return
 
     if category == CATEGORY_FATAL:
-        # 严重错误：覆盖写入（只保留最后一次）+ 始终打印
+        # 严重错误：覆盖写入（只保留最后一次）+ 始终打印 + 实时推送
         _write_overwrite(FATAL_LOG_FILE, line)
         print(_colorize(line, level), flush=True)
+        _push_to_clients('fatal', _make_entry(
+            now, thread, line, level, event, detail, kwargs))
         return
 
     if category == CATEGORY_MODULE:
@@ -545,11 +555,14 @@ def _emit(category: str, level: str, event: str, detail: str, kwargs: dict,
             if len(logger._buffer) > logger._max_entries:
                 logger._buffer.pop(0)
 
-        # ② 按需落盘到独立文件
+        # ② 实时推送到订阅该模块的 SSE 客户端
+        _push_to_clients(f'module:{logger.name}', entry)
+
+        # ③ 按需落盘到独立文件
         if logger.store:
             _write_line_to(logger.file_path, line)
 
-        # ③ 按需并入全局日志（控制台 + logs/app.log + 全局缓冲 + SSE）
+        # ④ 按需并入全局日志（控制台 + logs/app.log + 全局缓冲 + SSE）
         if logger.global_enabled:
             if console and _console_enabled:
                 print(_colorize(line, level), flush=True)
@@ -558,7 +571,7 @@ def _emit(category: str, level: str, event: str, detail: str, kwargs: dict,
                 _log_buffer.append(entry)
                 if len(_log_buffer) > MAX_LOG_ENTRIES:
                     _log_buffer.pop(0)
-            _push_to_clients(entry)
+            _push_to_clients('global', entry)
         return
 
 
@@ -825,19 +838,26 @@ def clear_module_log_buffer(name: str) -> None:
 # SSE 客户端管理
 # ---------------------------------------------------------------------------
 
-def register_monitor_client(queue_obj) -> None:
-    """注册一个 SSE 客户端队列（接收全局日志推送）。"""
+def register_monitor_client(queue_obj, source: str = 'global') -> None:
+    """注册一个 SSE 客户端队列。
+
+    Args:
+        queue_obj: 推送队列。
+        source: 订阅来源，'global' / 'fatal' / 'module:<名称>'。
+    """
     with _monitor_lock:
-        _log_monitor_clients.append(queue_obj)
+        _log_monitor_clients.append((source, queue_obj))
 
 
 def unregister_monitor_client(queue_obj) -> None:
     """注销一个 SSE 客户端队列。"""
     with _monitor_lock:
-        try:
-            _log_monitor_clients.remove(queue_obj)
-        except ValueError:
-            pass
+        for item in list(_log_monitor_clients):
+            if item[1] is queue_obj:
+                try:
+                    _log_monitor_clients.remove(item)
+                except ValueError:
+                    pass
 
 
 # ---------------------------------------------------------------------------

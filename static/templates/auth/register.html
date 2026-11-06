@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from 'macros/modal.html' import modal_shell %}
-{% block title %}注册{% endblock %}
+{% block title %}注册社区账户，加入 Minecraft 玩家社区{% endblock %}
+{% block description %}注册滨海小镇社区账户，加入 Minecraft 服务器玩家社区，发布玩家建筑、收藏服务器指南、分享大喇叭音频。{% endblock %}
 {# 按需加载：本页需要图形验证码弹窗，通过 base.html 的 captcha_modal 块引入 #}
 {% block captcha_modal %}{% from 'macros/modal.html' import modal_captcha %}{{ modal_captcha() }}{% endblock %}
 {% block content %}
@@ -126,16 +127,13 @@
             </p>
         </div>
     </div>
+    {% if show_back_to_login %}
     <div class="modal-footer justify-center gap-4 pt-2">
-        {% if show_back_to_login %}
         <a href="{{ url_for('main.login') }}" class="btn-secondary inline-flex items-center gap-1.5 px-3 py-2 text-sm">
             <i data-lucide="arrow-left" class="w-4 h-4"></i>返回上一步
         </a>
-        {% endif %}
-        <a href="{{ url_for('main.home') }}" class="btn-secondary inline-flex items-center justify-center w-9 h-9" title="关闭并返回主页">
-            <i data-lucide="x" class="w-5 h-5"></i>
-        </a>
     </div>
+    {% endif %}
 {% endcall %}
 
 <script>

@@ -44,6 +44,15 @@ def _parse_source():
     return 'global', None
 
 
+def _source_key(category: str, module_name) -> str:
+    """把解析结果转换为 SSE 订阅标识。"""
+    if category == 'fatal':
+        return 'fatal'
+    if category == 'module':
+        return f'module:{module_name}'
+    return 'global'
+
+
 @admin_bp.route('/admin/logs')
 @admin_required
 def admin_logs_page():
@@ -171,10 +180,13 @@ def api_set_log_module():
 @admin_bp.route('/admin/api/logs/stream')
 @admin_required
 def api_log_stream():
-    """SSE 实时日志推送（仅全局日志）。"""
+    """SSE 实时日志推送（支持全局 / 严重错误 / 任意模块单独日志）。"""
+    category, module_name = _parse_source()
+    source_key = _source_key(category, module_name)
+
     def generate():
         q = queue.Queue(maxsize=500)
-        register_monitor_client(q)
+        register_monitor_client(q, source_key)
         try:
             # 发送初始连接成功事件
             yield 'event: connected\ndata: {}\n\n'

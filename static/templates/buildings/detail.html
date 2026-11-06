@@ -1,7 +1,8 @@
 {% extends "base.html" %}
 {% from 'macros/modal.html' import modal_shell, modal_close_script %}
 {% from 'macros/forms.html' import tags_field %}
-{% block title %}{{ building.title }} - 公共建筑{% endblock %}
+{% block title %}{{ building.title }} - Minecraft 玩家公共建筑{% endblock %}
+{% block description %}{{ building.description or (building.title ~ '，滨海小镇 Minecraft 服务器玩家发布的公共建筑作品。') }}{% endblock %}
 {% block content %}
 <section class="page-container py-12">
     <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">

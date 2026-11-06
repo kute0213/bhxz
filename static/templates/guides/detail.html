@@ -1,5 +1,6 @@
 {% extends "base.html" %}
-{% block title %}{{ guide.title }}{% endblock %}
+{% block title %}{{ guide.title }} - Minecraft 服务器指南{% endblock %}
+{% block description %}{{ guide.summary or (guide.title ~ '，滨海小镇 Minecraft 服务器社区玩家编写的服务器指南与玩法教程。') }}{% endblock %}
 {% block extra_style %}
 <style>
 .prose-docs h1 { font-size: 1.75rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border-card); }

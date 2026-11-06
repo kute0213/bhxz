@@ -141,13 +141,14 @@ def do_something(user_id, value, ip_address):
 
 | 类别 | 入口 | 存储 | 是否打印到控制台 |
 |------|------|------|------------------|
-| 全局日志 | `log(level, event, detail, **kwargs)` | `logs/app.log` + 内存环形缓冲 + SSE | 受 `LOG_CONSOLE_ENABLED` 控制 |
-| 严重错误日志 | `log_fatal(level, event, detail, **kwargs)` | `logs/fatal.log`（**每次写入覆盖，只保留最后一次**） | 始终打印 |
-| 模块单独日志 | `register_module_log(name)` + `log_module(name, level, event, ...)` | 模块独立内存缓冲 + 可选 `logs/modules/<name>.log`（`LOG_MODULE_<NAME>_STORE`） | 默认不打印；开启「全局」后随 `LOG_CONSOLE_ENABLED` 打印 |
+| 全局日志 | `log(level, event, detail, **kwargs)` | `logs/app.log` + 内存环形缓冲 + SSE（订阅 `global`） | 受 `LOG_CONSOLE_ENABLED` 控制 |
+| 严重错误日志 | `log_fatal(level, event, detail, **kwargs)` | `logs/fatal.log`（**每次写入覆盖，只保留最后一次**）+ SSE（订阅 `fatal`） | 始终打印 |
+| 模块单独日志 | `register_module_log(name)` + `log_module(name, level, event, ...)` | 模块独立内存缓冲 + 可选 `logs/modules/<name>.log`（`LOG_MODULE_<NAME>_STORE`）+ SSE（订阅 `module:<name>`） | 默认不打印；开启「全局」后随 `LOG_CONSOLE_ENABLED` 打印 |
 
 * 等级：`DEBUG < INFO < WARNING < ERROR < CRITICAL`，由 `LOG_LEVEL` 控制；严重错误日志不受等级过滤。
 * **每次启动自动清理**：`core/system/init.py` 在初始化最开始调用 `purge_logs_on_startup()`，清空全局日志文件与缓冲、严重错误日志文件、所有 `logs/modules/*.log` 与各模块缓冲。
-* 模块单独日志默认**不进入**全局日志文件、全局缓冲与 SSE；未注册时自动按默认（不落盘、不并入全局）注册。
+* 模块单独日志默认**不进入**全局日志文件与全局 SSE；未注册时自动按默认（不落盘、不并入全局）注册。
+* **SSE 按来源分流**：日志页 `/admin/api/logs/stream?source=global|fatal|module:<名称>` 只订阅指定来源，历史数据仍通过 `/admin/api/logs?source=...&tail=N` 拉取；所有来源均为实时推送，**禁止再引入轮询**。服务端推送入口见 `register_monitor_client(queue, source)`；三类日志写入时都会推送到各自来源，模块日志是否并入全局只影响 `global` 订阅，不影响 `module:<名称>` 订阅。
 * **模块的行为不在注册时写死**：`register_module_log('名称')` 只声明模块存在，是否落盘、是否并入全局日志一律由设置决定（`LOG_MODULE_<名称>_STORE` / `LOG_MODULE_<名称>_GLOBAL`），可在**日志页面 → 日志设置**为任意模块配置（`GET/POST /admin/api/logs/modules`），保存即时生效。两项都关闭时，日志仅存在于模块独立缓冲（后台仍可按来源单独查看）。
 * 模块单独日志**在模块启动时自行注册**，现有使用者：
 
@@ -307,6 +308,22 @@ render_page('admin/admin_users.html')          # ❌ 双重前缀
 ```
 
 > 真实事故：`static/templates/buildings/detail.html` 用 `{% include 'macros/modal.html' %}` 引入弹窗宏，访问 `/buildings/<id>` 时 `modal_shell is undefined` 直接 500。
+
+### 6. SEO 元信息（title / description / canonical）
+
+`base.html` 已统一输出 `meta description`、`canonical`、Open Graph 与 Twitter 卡片标签，默认描述对所有页面生效。新增公开页面时必须：
+
+* 写 `{% block title %}`，长度约 20–35 个中文字符（不含自动追加的「 - 滨海小镇」），不要只写「首页」「登录」这类过短标题（Bing 会报「标题太短」）；
+* 用 `{% block description %}` 覆盖页面专属描述（50–100 字），不要依赖默认描述；
+* 不要在子模板重复手写 `<title>` 或 `<meta name="description">`，避免重复标签；
+* canonical 由 `core/template_context.py` 的 `canonical_base_url` 计算（优先匹配 `SITE_URL` / `SITEMAP_DOMAINS`，公网域名默认 https），子模板无需覆盖；
+* 管理后台 / 登录后页面无需索引，但仍输出默认描述，不影响爬虫（robots.txt 已 `Disallow: /admin/`）。
+
+> 注意：**不要用 HTML 注释包裹 Jinja 标签**（如 `<!-- {% block description %}...{% endblock %} -->`）。Jinja 会解析注释里的标签，导致 `TemplateSyntaxError: Unexpected end of template`。
+
+### 7. Sitemap 生成约定
+
+`/sitemap.xml` 统一走 `sitemap_cache.get_xml_for_request(host, scheme)`：优先读取 `uploads/sitemap/` 下的域名缓存文件；缓存缺失时按请求域名懒生成（内存缓存 1 小时），**禁止在路由里返回空字符串或内容为空的 200**（空响应会被 CDN 缓存，导致 Bing 判定无法获取 sitemap）。确实无法生成时返回 503 + `Retry-After`。新增可索引公开页时，在 `services/sitemap_cache/__init__.py` 的 `_STATIC_PAGES` 中登记 path / changefreq / priority。
 
 ## 测试规范
 

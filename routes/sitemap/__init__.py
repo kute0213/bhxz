@@ -110,19 +110,23 @@ def robots():
 
 @sitemap_bp.route('/sitemap.xml')
 def sitemap():
-    """返回缓存的站点地图 XML。
+    """返回当前请求域名对应的站点地图 XML。
 
-    根据请求的 Host 头匹配对应的域名文件，
-    未匹配到特定域名时尝试使用默认域名。
+    缓存文件存在时直接读取；缺失时（首次部署、新域名、当日刷新未执行）
+    按请求域名实时生成，绝不再返回内容为空的 200 响应 —— 空响应会被
+    CDN / 浏览器缓存，导致 Bing 等爬虫持续判定「无法获取 sitemap」。
+    仅当数据库不可用、确实无法生成时才返回 503，让爬虫稍后重试。
     """
     host = request.host.split(':')[0]  # 去除端口号
+    xml_content = sitemap_cache.get_xml_for_request(host, request.scheme)
 
-    # 尝试获取该域名专属的 sitemap
-    xml_content = sitemap_cache.get_xml_for_domain(host)
-
-    # 未匹配到特定域名时，使用默认域名
-    if not xml_content:
-        xml_content = sitemap_cache.get_xml()
+    if not xml_content.strip():
+        return Response(
+            'Sitemap temporarily unavailable, please retry later.',
+            status=503,
+            mimetype='text/plain; charset=utf-8',
+            headers={'Retry-After': '3600', 'Cache-Control': 'no-store'},
+        )
 
     return Response(
         xml_content,
