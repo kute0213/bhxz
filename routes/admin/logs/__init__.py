@@ -9,9 +9,13 @@
     module:<名称>   指定模块的单独日志（任意已注册模块）
     fatal           严重错误日志（logs/fatal.log，覆盖存储，只有一条）
 
+日志页只请求一个接口：``GET /admin/api/logs`` 直接返回 SSE 流，
+首帧 ``history`` 事件携带历史快照，后续 ``data`` 事件持续推送新日志。
+
 模块日志的「是否落盘 / 是否并入全局日志」由本页「日志设置」配置（`/admin/api/logs/modules`）。
 """
 
+import json
 import queue
 
 from flask import request, jsonify, Response, stream_with_context
@@ -19,15 +23,18 @@ from flask import request, jsonify, Response, stream_with_context
 from core.auth import admin_required
 from core.helpers import render_page
 from core.system.logger import (
-    get_log_buffer, get_log_buffer_tail, clear_log_buffer,
-    get_module_log_buffer, get_module_log_buffer_tail, clear_module_log_buffer,
+    LOG_LEVELS,
+    get_log_buffer, clear_log_buffer,
+    get_module_log_buffer, clear_module_log_buffer,
     read_fatal_log, clear_fatal_log,
     register_monitor_client, unregister_monitor_client,
     get_module_log_configs, set_module_log_config,
 )
 from routes.admin import admin_bp
 
-LOG_LEVELS = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
+# 历史快照默认条数 / 上限
+DEFAULT_HISTORY_TAIL = 500
+MAX_HISTORY_TAIL = 2000
 
 
 def _parse_source():
@@ -67,58 +74,108 @@ def admin_log_settings_page():
     return render_page('admin/log_settings.html')
 
 
-@admin_bp.route('/admin/api/logs')
-@admin_required
-def api_get_logs():
-    """获取日志列表（支持等级筛选、增量拉取、来源切换）。
+def _passes_level(level: str, min_level: str) -> bool:
+    """判断日志等级是否达到最低等级要求。"""
+    if not min_level or level not in LOG_LEVELS:
+        return True
+    return LOG_LEVELS.index(level) >= LOG_LEVELS.index(min_level)
 
-    Query params:
-        level:  筛选等级，如 'ERROR'，空字符串表示不过滤
-        after:  只返回索引大于此值的条目（增量拉取）
-        tail:   获取最近 N 条（默认 200），与 after 互斥
-        source: 日志来源，见模块 docstring
-    """
-    level = request.args.get('level', '', type=str)
-    after = request.args.get('after', 0, type=int)
-    tail = request.args.get('tail', 0, type=int)
-    category, module_name = _parse_source()
 
+def _history_entries(category: str, module_name, tail: int, level: str):
+    """读取当前来源最近 tail 条日志作为 SSE 首帧快照。"""
     if category == 'fatal':
         text = read_fatal_log().strip()
-        entries = []
-        if text:
-            entries = [{
-                'index': 0,
-                'timestamp': '',
-                'level': 'CRITICAL',
-                'thread': '',
-                'event': 'Fatal',
-                'detail': text,
-                'kwargs': {},
-                'line': text,
-            }]
-        return jsonify({'success': True, 'entries': entries, 'total': len(entries)})
+        if not text:
+            return []
+        return [{
+            'seq': 0,
+            'index': 0,
+            'timestamp': '',
+            'level': 'CRITICAL',
+            'thread': '',
+            'event': 'Fatal',
+            'detail': text,
+            'kwargs': {},
+            'line': text,
+        }]
 
     if category == 'module':
-        if tail > 0:
-            raw_entries = get_module_log_buffer_tail(module_name, tail)
-            result = [{'index': i, **e} for i, e in enumerate(raw_entries)]
-        else:
-            raw = get_module_log_buffer(module_name, level_filter=level, after_index=after)
-            result = [{'index': idx, **e} for idx, e in raw]
+        raw = get_module_log_buffer(module_name, level_filter=level)
     else:
-        if tail > 0:
-            raw_entries = get_log_buffer_tail(tail)
-            result = [{'index': i, **e} for i, e in enumerate(raw_entries)]
-        else:
-            raw = get_log_buffer(level_filter=level, after_index=after)
-            result = [{'index': idx, **e} for idx, e in raw]
+        raw = get_log_buffer(level_filter=level)
+    return [{'index': idx, **entry} for idx, entry in raw[-tail:]]
 
-    return jsonify({
-        'success': True,
-        'entries': result,
-        'total': len(result),
-    })
+
+def _sse(event: str, payload: dict) -> str:
+    """构造一条 SSE 事件。"""
+    return f'event: {event}\ndata: {json.dumps(payload, ensure_ascii=False)}\n\n'
+
+
+@admin_bp.route('/admin/api/logs')
+@admin_required
+def api_logs_stream():
+    """日志实时推送（SSE）—— 日志页唯一请求的接口。
+
+    首帧 ``history`` 事件携带历史快照，之后持续推送新日志 ``data`` 事件，
+    空闲时发送心跳注释保活。历史快照与实时推送可能重叠，
+    客户端按条目中的 ``seq`` 去重。
+
+    Query params:
+        source: 日志来源，见模块 docstring
+        level:  最低等级（如 'ERROR'），空字符串表示不过滤
+        tail:   历史快照条数（默认 500，最大 2000）
+    """
+    category, module_name = _parse_source()
+    source_key = _source_key(category, module_name)
+    level = (request.args.get('level', '', type=str) or '').upper()
+    if level not in LOG_LEVELS:
+        level = ''
+    tail = request.args.get('tail', DEFAULT_HISTORY_TAIL, type=int)
+    if tail <= 0:
+        tail = DEFAULT_HISTORY_TAIL
+    tail = min(tail, MAX_HISTORY_TAIL)
+
+    def generate():
+        q = queue.Queue(maxsize=500)
+        # 先注册再取快照：保证两者之间产生的日志不会丢失（重复由 seq 去重）
+        register_monitor_client(q, source_key)
+        try:
+            history = _history_entries(category, module_name, tail, level)
+            last_seq = max((e.get('seq', 0) for e in history), default=0)
+            yield _sse('history', {'entries': history, 'total': len(history)})
+
+            while True:
+                try:
+                    data = q.get(timeout=30)
+                except queue.Empty:
+                    # 心跳，保持连接
+                    yield ': heartbeat\n\n'
+                    continue
+                try:
+                    entry = json.loads(data)
+                except ValueError:
+                    continue
+                # 丢弃已包含在历史快照中的条目
+                if entry.get('seq', 0) <= last_seq:
+                    continue
+                if not _passes_level(entry.get('level', ''), level):
+                    continue
+                yield f'data: {data}\n\n'
+        finally:
+            unregister_monitor_client(q)
+
+    return Response(
+        stream_with_context(generate()),
+        mimetype='text/event-stream',
+        headers={
+            'Cache-Control': 'no-cache',
+            # 注意：不能设置 Connection 等「逐跳（hop-by-hop）」标头。
+            # PEP 3333 禁止 WSGI 应用下发逐跳标头，Waitress 会直接抛
+            # AssertionError（Cheroot 此前容忍该写法）。HTTP/1.1 默认即为
+            # 持久连接，长连接由服务器自行维护，无需应用声明 keep-alive。
+            'X-Accel-Buffering': 'no',
+        },
+    )
 
 
 @admin_bp.route('/admin/api/logs/clear', methods=['POST'])
@@ -176,39 +233,3 @@ def api_set_log_module():
 
     return jsonify({'success': True, 'message': '已保存', 'modules': get_module_log_configs()})
 
-
-@admin_bp.route('/admin/api/logs/stream')
-@admin_required
-def api_log_stream():
-    """SSE 实时日志推送（支持全局 / 严重错误 / 任意模块单独日志）。"""
-    category, module_name = _parse_source()
-    source_key = _source_key(category, module_name)
-
-    def generate():
-        q = queue.Queue(maxsize=500)
-        register_monitor_client(q, source_key)
-        try:
-            # 发送初始连接成功事件
-            yield 'event: connected\ndata: {}\n\n'
-            while True:
-                try:
-                    data = q.get(timeout=30)
-                    yield f'data: {data}\n\n'
-                except queue.Empty:
-                    # 心跳，保持连接
-                    yield ': heartbeat\n\n'
-        finally:
-            unregister_monitor_client(q)
-
-    return Response(
-        stream_with_context(generate()),
-        mimetype='text/event-stream',
-        headers={
-            'Cache-Control': 'no-cache',
-            # 注意：不能设置 Connection 等「逐跳（hop-by-hop）」标头。
-            # PEP 3333 禁止 WSGI 应用下发逐跳标头，Waitress 会直接抛
-            # AssertionError（Cheroot 此前容忍该写法）。HTTP/1.1 默认即为
-            # 持久连接，长连接由服务器自行维护，无需应用声明 keep-alive。
-            'X-Accel-Buffering': 'no',
-        },
-    )

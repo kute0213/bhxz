@@ -66,9 +66,8 @@
     const btnClear = document.getElementById('btn-clear-logs');
     const btnAutoScroll = document.getElementById('btn-auto-scroll');
 
-    const LOGS_URL = '{{ url_for("admin.api_get_logs") }}';
+    const STREAM_URL = '{{ url_for("admin.api_logs_stream") }}';
     const CLEAR_URL = '{{ url_for("admin.api_clear_logs") }}';
-    const STREAM_URL = '{{ url_for("admin.api_log_stream") }}';
     const MODULES_GET_URL = '{{ url_for("admin.api_get_log_modules") }}';
 
     // 模块名 → 展示名
@@ -152,35 +151,36 @@
         }
     }
 
-    // 拉取当前来源的历史日志（首屏 / 连接建立时整体替换）
-    function loadLogs() {
-        var url = LOGS_URL + '?tail=500&source=' + encodeURIComponent(currentSource);
-        fetch(url)
-            .then(r => r.json())
-            .then(data => {
-                if (data.success && data.entries) {
-                    entries = data.entries;
-                    render();
-                }
-            })
-            .catch(function() {});
-    }
-
-    // 连接 SSE（所有来源统一实时推送）
+    // 连接 SSE（唯一请求：首帧 history 带历史快照，之后实时推送）
     function connectSSE() {
         if (eventSource) {
             eventSource.close();
         }
-        var url = STREAM_URL + '?source=' + encodeURIComponent(currentSource);
+        var url = STREAM_URL + '?source=' + encodeURIComponent(currentSource) + '&tail=500';
         var sourceAtConnect = currentSource;
+        var lastSeq = 0;
         eventSource = new EventSource(url);
-        eventSource.addEventListener('connected', function() {
-            loadLogs();
+        eventSource.addEventListener('history', function(e) {
+            if (sourceAtConnect !== currentSource) return;
+            try {
+                var data = JSON.parse(e.data);
+                entries = data.entries || [];
+                lastSeq = 0;
+                for (var i = 0; i < entries.length; i++) {
+                    if ((entries[i].seq || 0) > lastSeq) lastSeq = entries[i].seq;
+                }
+            } catch(err) {
+                entries = [];
+            }
+            render();
         });
         eventSource.onmessage = function(e) {
             if (sourceAtConnect !== currentSource) return;
             try {
                 var entry = JSON.parse(e.data);
+                // 历史快照与实时推送可能重叠，按 seq 去重
+                if (entry.seq && entry.seq <= lastSeq) return;
+                if (entry.seq) lastSeq = entry.seq;
                 if (currentSource === 'fatal') {
                     // 严重错误日志只保留最后一次
                     entries = [entry];
@@ -208,7 +208,6 @@
         if (eventSource) { eventSource.close(); eventSource = null; }
         entries = [];
         container.innerHTML = '<div class="text-cream/40 text-center py-8">加载中...</div>';
-        loadLogs();
         connectSSE();
     }
 

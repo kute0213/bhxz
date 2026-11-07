@@ -4,6 +4,12 @@
 
 ### 变更
 
+* **日志接口合并为单一 SSE + 邮件失败自动重试**（`routes/admin/logs/__init__.py`、`core/system/logger.py`、`static/templates/admin/{logs,firewall}.html`、`services/mail/{delivery,service,retry}/__init__.py`、`core/db/schema.py`、`services/security/__init__.py`、`scripts/tests/test_email_retry.py`）：
+  * **`/admin/api/logs` 直接返回 SSE**：页面只发一个请求，首帧 `history` 事件携带历史快照（最近 `tail` 条，默认 500），随后持续推送 `data` 事件，空闲发心跳；原 `/admin/api/logs/stream` 与「先拉历史再连流」的两次请求方式删除。日志条目新增进程内单调递增的 `seq`，客户端据此对历史快照与实时推送去重。防火墙日志 Tab 同步改为 SSE，删除 3 秒轮询。
+  * **邮件失败自动重试**：新增 `services/mail/delivery`（纯 SMTP 投递，失败抛异常）、`services/mail/retry`（失败落库 + 定时重发），`services/mail/service` 只保留异步发送队列；失败邮件写入 `email_retry_queue`（新增表 + `(status, next_retry_at)` 索引），全局任务 `email-retry` **每 60 秒**扫描到期记录重发，**每封最多 10 次**：成功删除、失败 `attempts+1` 并推后 60 秒、达到上限标记 `failed` 保留待查；邮件功能关闭时跳过。
+  * **修复安全扫描误封**：命令注入规则不再把单个 `&` 当作命令分隔符（查询串 / 表单体中的 `&` 是参数分隔符），保留 `;` / `|` / `` ` `` / `&&` 检测；此前 `?a=1&tail=100`、`&id=3` 等正常请求会被误判并自动封禁 IP。
+  * 新增 7 项重试测试（落库、到期重发、失败计数、上限停止、禁用跳过、未到期跳过）；`python -m pytest scripts/tests -q` 266 项通过。同步更新 README / DEVELOPMENT。
+
 * **统一日志 SSE 实时推送 + Bing 收录修复（SEO / sitemap）+ 登录页简化**（`core/system/logger.py`、`routes/admin/logs/__init__.py`、`static/templates/admin/logs.html`、`services/sitemap_cache/__init__.py`、`routes/sitemap/__init__.py`、`static/templates/base.html`、`core/template_context.py`、`static/templates/{auth/login,auth/register,auth/forgot_password,index,site/server_status,site/docs,site/map,guides/index,guides/detail,buildings/index,buildings/detail,music/index,backgrounds/index}.html`）：
   * **日志实时化（全部来源）**：SSE 客户端改为按来源订阅（`global` / `fatal` / `module:<名称>`），`_emit()` 对全局、严重错误、模块三类日志分别推送；`GET /admin/api/logs/stream?source=...` 支持任意来源；日志页所有来源统一使用 `EventSource`，**删除 3 秒轮询**，严重错误来源只保留最新一条，并修复重复绑定的「自动滚动」监听。
   * **修复 Bing 无法抓取 `sitemap.xml`**：新增 `SitemapCache.get_xml_for_request()`——缓存文件存在时直接读取，缺失时按请求域名懒生成（内存缓存 1 小时、过期与异常 Host 自动清理），不再回退到其它域名的 sitemap；路由**不再返回内容为空的 200**（空响应会被 CDN / 浏览器缓存并导致爬虫持续失败），无法生成时返回 `503 + Retry-After`，正常响应保持 `application/xml; charset=utf-8`。

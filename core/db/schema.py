@@ -289,6 +289,21 @@ def init_db():
                 UNIQUE(guide_id, user_id)
             )
         '''),
+        # 失败邮件重试队列（发送失败的邮件落库，定时任务每 60 秒扫描重发）
+        ('email_retry_queue', '''
+            CREATE TABLE IF NOT EXISTS email_retry_queue (
+                id INTEGER PRIMARY KEY,
+                recipient TEXT NOT NULL,
+                subject TEXT NOT NULL,
+                body TEXT NOT NULL DEFAULT '',
+                html TEXT NOT NULL DEFAULT '',
+                attempts INTEGER NOT NULL DEFAULT 0,
+                last_error TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'pending',
+                created_at TEXT NOT NULL,
+                next_retry_at TEXT NOT NULL
+            )
+        '''),
     ]
 
     for table_name, ddl in tables:
@@ -380,6 +395,15 @@ def init_db():
         )
     except Exception as e:
         log('ERROR', 'DB', f'创建 guide_favorites 索引失败: {e}')
+
+    # 失败邮件重试队列：按「状态 + 下次重试时间」扫描到期邮件
+    try:
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_email_retry_due "
+            "ON email_retry_queue (status, next_retry_at)"
+        )
+    except Exception as e:
+        log('ERROR', 'DB', f'创建 email_retry_queue 索引失败: {e}')
 
     # ---- 管理员账号 ----
     # 确保 PRIMARY_ADMIN_USERNAMES 中的所有账号为管理员，

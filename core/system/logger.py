@@ -31,6 +31,7 @@
     DEBUG < INFO < WARNING < ERROR < CRITICAL
 """
 
+import itertools
 import os
 import re
 import sys
@@ -73,6 +74,9 @@ MODULE_LOG_DIR = os.path.join(LOG_DIR, 'modules')           # 模块单独日志
 # ---------------------------------------------------------------------------
 
 MAX_LOG_ENTRIES = 2000
+
+# 进程内日志序号（永不重复，用于 SSE 历史快照与实时推送之间的去重）
+_entry_seq = itertools.count(1)
 _log_buffer = []           # list[dict] 全局日志缓冲
 _log_buffer_lock = threading.Lock()
 # SSE 客户端：[(来源标识, queue.Queue), ...]
@@ -274,8 +278,13 @@ def _build_line(level: str, event: str, detail: str, kwargs: dict):
 
 def _make_entry(now: str, thread: str, line: str, level: str,
                 event: str, detail: str, kwargs: dict) -> dict:
-    """构造结构化日志条目（供内存缓冲 / 后台页面使用）。"""
+    """构造结构化日志条目（供内存缓冲 / 后台页面使用）。
+
+    ``seq`` 为进程内单调递增序号，供 SSE 客户端去重：
+    历史快照与实时推送可能包含同一条日志，客户端按 seq 丢弃重复项。
+    """
     return {
+        'seq': next(_entry_seq),
         'timestamp': now,
         'level': level,
         'thread': thread,

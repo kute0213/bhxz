@@ -530,8 +530,8 @@
       var btnScroll = document.getElementById('fw-btn-scroll');
       var autoScroll = true;
       var loadedEntries = [];
-      var lastIndex = -1;
-      var pollTimer = null;
+      var evtSource = null;
+      var LOGS_STREAM_URL = '{{ url_for("admin.api_logs_stream") }}';
 
       function escapeHtml(str) {
         if (!str) return '';
@@ -549,28 +549,48 @@
       btnClear.addEventListener('click', function() {
         fetch('{{ url_for("admin.api_clear_logs") }}?source=firewall', { method: 'POST', headers: {'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]').getAttribute('content')} })
           .then(function(r) { return r.json(); })
-          .then(function() { loadedEntries = []; lastIndex = -1; renderLogs(); });
+          .then(function() { loadedEntries = []; renderLogs(); });
       });
 
-      function fetchLogs() {
-        var level = levelFilter.value;
-        // source=firewall：从防火墙独立缓冲读取，不再从全局日志里筛 Firewall 条目
-        var url = '{{ url_for("admin.api_get_logs") }}?source=firewall&after=' + lastIndex;
-        if (level) url += '&level=' + level;
-        fetch(url)
-          .then(function(r) { return r.json(); })
-          .then(function(data) {
-            if (data.entries && data.entries.length) {
-              data.entries.forEach(function(e) {
-                if (e.index > lastIndex) {
-                  loadedEntries.push(e);
-                  lastIndex = e.index;
-                }
-              });
-              renderLogs();
-            }
-          })
-          .catch(function() {});
+      // 单一 SSE 连接：首帧 history 带防火墙模块日志历史，之后实时推送
+      function startStream() {
+        if (evtSource) evtSource.close();
+        var url = LOGS_STREAM_URL + '?source=firewall&tail=500';
+        if (levelFilter.value) url += '&level=' + encodeURIComponent(levelFilter.value);
+        var levelAtConnect = levelFilter.value;
+        var lastSeq = 0;
+        evtSource = new EventSource(url);
+        evtSource.addEventListener('history', function(e) {
+          if (levelAtConnect !== levelFilter.value) return;
+          try {
+            var data = JSON.parse(e.data);
+            loadedEntries = data.entries || [];
+          } catch(err) {
+            loadedEntries = [];
+          }
+          lastSeq = 0;
+          loadedEntries.forEach(function(item) {
+            if ((item.seq || 0) > lastSeq) lastSeq = item.seq;
+          });
+          renderLogs();
+        });
+        evtSource.onmessage = function(e) {
+          if (levelAtConnect !== levelFilter.value) return;
+          try {
+            var entry = JSON.parse(e.data);
+            if (entry.seq && entry.seq <= lastSeq) return;
+            if (entry.seq) lastSeq = entry.seq;
+            loadedEntries.push(entry);
+            renderLogs();
+          } catch(err) {}
+        };
+        evtSource.onerror = function() {
+          if (levelAtConnect !== levelFilter.value) return;
+          evtSource.close();
+          setTimeout(function() {
+            if (levelAtConnect === levelFilter.value) startStream();
+          }, 3000);
+        };
       }
 
       function renderLogs() {
@@ -597,16 +617,10 @@
 
       levelFilter.addEventListener('change', function() {
         loadedEntries = [];
-        lastIndex = -1;
-        fetchLogs();
+        startStream();
       });
 
-      // 轮询拉取
-      function startPoll() {
-        fetchLogs();
-        pollTimer = setInterval(fetchLogs, 3000);
-      }
-      startPoll();
+      startStream();
     })();
     </script>
     {% endif %}

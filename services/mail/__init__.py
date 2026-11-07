@@ -1,12 +1,15 @@
 """邮件服务包。
 
 包含：
-- service    SMTP 邮件发送服务（异步队列）
+- delivery      SMTP 纯投递实现（失败抛异常，供发送队列与重试任务共用）
+- service       SMTP 邮件发送服务（异步队列，失败自动写入重试队列）
+- retry         失败邮件重试队列（落库 + 定时任务每 60 秒重发，最多 10 次）
 - verification  邮箱验证码生成、存储、验证
-- templates  Jinja2 邮件 HTML 模板渲染
+- templates     Jinja2 邮件 HTML 模板渲染
 """
 
 from .service import email_service
+from .retry import retry_scheduler
 from .verification import email_code_service, normalize_email, EmailCodeService
 from .templates import (
     broadcast_message,

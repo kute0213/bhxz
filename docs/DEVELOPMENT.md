@@ -125,6 +125,22 @@ def do_something(user_id, value, ip_address):
 
 * 数据库连接仅通过 `get_db()` 获取，用完必须 `close()`
 
+### 邮件发送与失败重试（`services/mail/`）
+
+`services/mail/` 按职责拆分为三个子模块，**不要再把所有逻辑塞进 service**：
+
+| 子模块 | 职责 |
+|--------|------|
+| `delivery` | 纯 SMTP 投递（构建 MIME + 登录 + sendmail），失败直接抛异常；`is_email_enabled()` / `get_smtp_config()` 也在此 |
+| `service` | 异步发送队列（后台线程 `email-sender`），队列满丢弃并记日志；投递失败调用 `retry.record_failure()` |
+| `retry` | 失败邮件重试队列：写库、每 60 秒扫描重发、最多 10 次 |
+
+* 失败邮件落库到 `email_retry_queue`（`id / recipient / subject / body / html / attempts / last_error / status / created_at / next_retry_at`），首次重试在失败 60 秒后。
+* 重试由**统一任务注册表**调度：`register_task(name='email-retry', action=retry_failed_emails, interval=60)`，随 `services.mail` 导入自动注册，无需另起线程。
+* 重发成功即删除记录；失败则 `attempts + 1` 并把 `next_retry_at` 推后 60 秒；累计 10 次仍失败把 `status` 置为 `failed` 并保留记录便于排查（不再扫描）。
+* 邮件功能关闭（`EMAIL_ENABLED=false`）时重试任务直接跳过，不做无意义的重发。
+* 新增邮件出口一律调用 `email_service.send(...)`，**不要**在业务代码里直接 `smtplib`，否则失败邮件不会进入重试队列。
+
 ## 核心层规范（core/）
 
 核心层提供基础设施，不包含任何业务逻辑：
@@ -148,7 +164,7 @@ def do_something(user_id, value, ip_address):
 * 等级：`DEBUG < INFO < WARNING < ERROR < CRITICAL`，由 `LOG_LEVEL` 控制；严重错误日志不受等级过滤。
 * **每次启动自动清理**：`core/system/init.py` 在初始化最开始调用 `purge_logs_on_startup()`，清空全局日志文件与缓冲、严重错误日志文件、所有 `logs/modules/*.log` 与各模块缓冲。
 * 模块单独日志默认**不进入**全局日志文件与全局 SSE；未注册时自动按默认（不落盘、不并入全局）注册。
-* **SSE 按来源分流**：日志页 `/admin/api/logs/stream?source=global|fatal|module:<名称>` 只订阅指定来源，历史数据仍通过 `/admin/api/logs?source=...&tail=N` 拉取；所有来源均为实时推送，**禁止再引入轮询**。服务端推送入口见 `register_monitor_client(queue, source)`；三类日志写入时都会推送到各自来源，模块日志是否并入全局只影响 `global` 订阅，不影响 `module:<名称>` 订阅。
+* **SSE 按来源分流**：日志页**只请求一个接口** `GET /admin/api/logs?source=global|fatal|module:<名称>&tail=N&level=ERROR`，直接返回 SSE 流：首帧 `history` 事件携带历史快照（最近 `tail` 条），之后持续推送 `data` 事件；空闲时发送心跳注释保活。所有来源均为实时推送，**禁止再引入轮询，也不要再拆出独立的 history 接口**。服务端推送入口见 `register_monitor_client(queue, source)`；三类日志写入时都会推送到各自来源，模块日志是否并入全局只影响 `global` 订阅，不影响 `module:<名称>` 订阅。历史快照与实时推送可能重叠，条目带进程内单调递增的 `seq`，客户端按 `seq` 去重。
 * **模块的行为不在注册时写死**：`register_module_log('名称')` 只声明模块存在，是否落盘、是否并入全局日志一律由设置决定（`LOG_MODULE_<名称>_STORE` / `LOG_MODULE_<名称>_GLOBAL`），可在**日志页面 → 日志设置**为任意模块配置（`GET/POST /admin/api/logs/modules`），保存即时生效。两项都关闭时，日志仅存在于模块独立缓冲（后台仍可按来源单独查看）。
 * 模块单独日志**在模块启动时自行注册**，现有使用者：
 
@@ -164,7 +180,7 @@ def do_something(user_id, value, ip_address):
   | `background` | `services/background_service/__init__.py` | 背景图片上传 / 审核 / 删除 / 启用切换 | 是 | 否 |
   | `buildings` | `routes/admin/buildings/__init__.py`、`routes/buildings/pages/__init__.py` | 公共建筑审核、浏览次数更新 | 是 | 否 |
   | `music` | `services/music/{crud,upload}/__init__.py`、`routes/main/music/__init__.py` | 大喇叭音频上传 / 编辑 / 审核 / 删除、HLS 分片 | 是 | 否 |
-  | `email` | `services/mail/service/__init__.py` | 异步邮件发送队列 | 是 | 否 |
+  | `email` | `services/mail/{delivery,service,retry}/__init__.py` | 邮件投递、异步发送队列、失败重发 | 是 | 否 |
   | `backup` | `services/backup/{manager,scheduler}/__init__.py`、`routes/admin/maintenance/__init__.py` | 自动维护（数据备份 + 日志清理）、定时维护、备份下载 / 删除 | 是 | 否 |
   | `gameban` | `services/game_server_ban/__init__.py` | 游戏服务器封禁申请 / 批准 / 驳回 / 自动解封 | 是 | 否 |
   | `sitemap` | `services/sitemap_cache/__init__.py` | 站点地图刷新与生成 | 是 | 否 |

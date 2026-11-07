@@ -53,13 +53,15 @@ URL_PATTERNS = {
         re.compile(r'\b(eval|alert|prompt|confirm)\s*\(', _RE_FLAGS),
     ],
     TYPE_COMMAND_INJECTION: [
+        # 分隔符只用 ; | ` 与 &&：单独的 & 在查询串 / 表单体中是参数分隔符，
+        # 若参与匹配会把 `?a=1&tail=100`、`&id=3` 等正常请求误判为命令注入。
         re.compile(
-            r"[;&|`]\s*(cat|ls|dir|id|whoami|uname|hostname|pwd|rm|sh|bash|cmd|powershell|"
+            r"(?:[;|`]|&&)\s*(cat|ls|dir|id|whoami|uname|hostname|pwd|rm|sh|bash|cmd|powershell|"
             r"python|perl|php|ruby|nc|netcat|wget|curl|fetch|type|find|grep|echo|netstat|"
             r"ifconfig|ipconfig|kill|chmod|chown|mkdir|rmdir|dd|base64|tee|head|tail)\b",
             _RE_FLAGS,
         ),
-        re.compile(r'\b(cat|ls|id|whoami|pwd|uname|hostname|netstat|ifconfig)\s+[;&|>]', _RE_FLAGS),
+        re.compile(r'\b(cat|ls|id|whoami|pwd|uname|hostname|netstat|ifconfig)\s+[;|&>]', _RE_FLAGS),
         re.compile(r'\$\([^)]{1,100}\)'),
         re.compile(r'`[^`]{1,100}`'),
     ],
@@ -106,12 +108,13 @@ BODY_PATTERNS = {
         re.compile(r'\b(load_file|group_concat)\s*\(', _RE_FLAGS),
     ],
     TYPE_COMMAND_INJECTION: [
+        # 同上：& 是表单体的字段分隔符，不单独作为命令分隔符参与匹配
         re.compile(
-            r"[;&|]\s*(cat|ls|dir|id|whoami|uname|hostname|pwd|rm|sh|bash|cmd|powershell|"
+            r"(?:[;|]|&&)\s*(cat|ls|dir|id|whoami|uname|hostname|pwd|rm|sh|bash|cmd|powershell|"
             r"wget|curl|nc|netcat|python|perl|php|ruby)\b",
             _RE_FLAGS,
         ),
-        re.compile(r'\b(cat|ls|id|whoami|pwd)\s+[;&|]', _RE_FLAGS),
+        re.compile(r'\b(cat|ls|id|whoami|pwd)\s+[;|&]', _RE_FLAGS),
         re.compile(r'\$\([^)]{1,100}\)'),
     ],
 }
