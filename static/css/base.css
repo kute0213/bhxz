@@ -1951,3 +1951,43 @@ pre::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.24); }
     .svp-overlay svg { width: 2.8rem; height: 2.8rem; }
     .svp-pop-volume { width: 9rem; }
 }
+
+/* ============================================================
+   自定义悬浮提示（链接 / 按钮的 title 提示）
+   - 磨砂玻璃质感，尺寸适中，最大宽度 280px；
+   - 仅过渡 opacity / transform，避免布局抖动；
+   - 由 static/js/core/base.js 统一控制显示与定位。
+   ============================================================ */
+.site-tooltip {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 9999;
+    max-width: 280px;
+    padding: 0.42rem 0.62rem;
+    border: 1px solid var(--border-card);
+    border-radius: 0.55rem;
+    background: rgba(255, 255, 255, 0.82);
+    backdrop-filter: blur(16px) saturate(150%);
+    -webkit-backdrop-filter: blur(16px) saturate(150%);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7), 0 10px 28px rgba(15, 23, 42, 0.14);
+    color: var(--text-primary);
+    font-size: 0.74rem;
+    line-height: 1.5;
+    letter-spacing: 0.01em;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    opacity: 0;
+    transform: translate3d(0, 4px, 0) scale(0.97);
+    transform-origin: center bottom;
+    transition: opacity 0.14s ease, transform 0.16s cubic-bezier(0.22, 1, 0.36, 1);
+    pointer-events: none;
+    will-change: transform, opacity;
+}
+.site-tooltip.is-visible {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scale(1);
+}
+@media (prefers-reduced-motion: reduce) {
+    .site-tooltip { transition: none; }
+}

@@ -1619,3 +1619,152 @@ document.addEventListener('click', function (e) {
         start();
     }
 })();
+
+/* ============================================================
+   全站自定义悬浮提示
+   用磨砂玻璃提示替代浏览器原生 title 气泡：
+   - 悬停 180ms 后显示，元素上方居中，空间不足自动翻到下方；
+   - 自动避让视口左右边界，只过渡 opacity / transform，滚动与点击即隐藏；
+   - 兼容 [title] 与 [data-tooltip]，可编辑区域内保留原生行为（避免标题被编辑器保存时丢失）。
+   ============================================================ */
+(function initSiteTooltip() {
+    if (!document.body) return;
+
+    var SHOW_DELAY = 180;
+    var GAP = 8;
+    var EDGE = 10;
+    var SELECTOR = '[title], [data-tooltip]';
+
+    var tip = null;
+    var current = null;
+    var visible = false;
+    var showTimer = null;
+    var titleEl = null;
+    var savedTitle = null;
+
+    function ensureTip() {
+        if (tip) return tip;
+        tip = document.createElement('div');
+        tip.className = 'site-tooltip';
+        tip.setAttribute('role', 'tooltip');
+        document.body.appendChild(tip);
+        return tip;
+    }
+
+    function inEditable(el) {
+        return !!(el.closest && el.closest('[contenteditable="true"], [contenteditable=""], textarea'));
+    }
+
+    function textOf(el) {
+        var text = el.getAttribute('data-tooltip');
+        if (text === null) text = el.getAttribute('title');
+        return (text || '').trim();
+    }
+
+    function absorbTitle(el) {
+        if (el === titleEl || !el.hasAttribute('title')) return;
+        restoreTitle();
+        savedTitle = el.getAttribute('title');
+        titleEl = el;
+        el.removeAttribute('title');
+    }
+
+    function restoreTitle() {
+        if (titleEl && savedTitle !== null) {
+            titleEl.setAttribute('title', savedTitle);
+        }
+        titleEl = null;
+        savedTitle = null;
+    }
+
+    function place(el) {
+        var rect = el.getBoundingClientRect();
+        var tw = tip.offsetWidth;
+        var th = tip.offsetHeight;
+        var top = rect.top - th - GAP;
+        var below = false;
+
+        if (top < EDGE) {
+            top = rect.bottom + GAP;
+            below = true;
+        }
+        if (top + th > window.innerHeight - EDGE) {
+            top = Math.max(EDGE, window.innerHeight - th - EDGE);
+        }
+
+        var left = rect.left + rect.width / 2 - tw / 2;
+        left = Math.max(EDGE, Math.min(left, window.innerWidth - tw - EDGE));
+
+        tip.style.left = Math.round(left) + 'px';
+        tip.style.top = Math.round(top) + 'px';
+        tip.style.transformOrigin = below ? 'center top' : 'center bottom';
+    }
+
+    function show(el, text) {
+        ensureTip();
+        tip.textContent = text;
+        tip.classList.remove('is-visible');
+        place(el);
+        visible = true;
+        requestAnimationFrame(function () {
+            if (current === el && visible) tip.classList.add('is-visible');
+        });
+    }
+
+    function hide() {
+        if (showTimer) {
+            clearTimeout(showTimer);
+            showTimer = null;
+        }
+        restoreTitle();
+        current = null;
+        visible = false;
+        if (tip) tip.classList.remove('is-visible');
+    }
+
+    function schedule(el) {
+        var text = textOf(el);
+        if (!text) return;
+        if (current && current !== el) hide();
+        if (current === el) return;
+        current = el;
+        absorbTitle(el);
+        showTimer = setTimeout(function () {
+            showTimer = null;
+            if (current === el && el.isConnected) show(el, text);
+        }, SHOW_DELAY);
+    }
+
+    function resolve(node) {
+        var el = node && node.closest ? node.closest(SELECTOR) : null;
+        if (!el || el.closest('.site-tooltip') || inEditable(el)) return null;
+        return el;
+    }
+
+    document.addEventListener('mouseover', function (e) {
+        var el = resolve(e.target);
+        if (!el || el === current) return;
+        schedule(el);
+    }, true);
+
+    document.addEventListener('mouseout', function (e) {
+        if (!current) return;
+        var to = e.relatedTarget;
+        if (to && current.contains(to)) return;
+        hide();
+    }, true);
+
+    document.addEventListener('focusin', function (e) {
+        var el = resolve(e.target);
+        if (el) schedule(el);
+    }, true);
+
+    document.addEventListener('focusout', function () {
+        hide();
+    }, true);
+
+    document.addEventListener('scroll', hide, true);
+    document.addEventListener('click', hide, true);
+    window.addEventListener('resize', hide);
+    window.addEventListener('blur', hide);
+})();

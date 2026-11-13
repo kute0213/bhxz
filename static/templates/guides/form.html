@@ -12,6 +12,12 @@
                 返回我的指南
             </a>
             <h1 class="text-2xl sm:text-3xl font-bold">{{ '编辑指南' if guide else '新建指南' }}</h1>
+            {% if guide and guide.replace_of %}
+            <div class="mt-4 rounded-lg border border-sky-500/25 bg-sky-500/10 px-4 py-3 text-sm text-sky-200 flex flex-wrap items-center gap-2">
+                <i data-lucide="git-branch" class="w-4 h-4"></i>
+                <span>这是指南 <a href="{{ url_for('guides.guide_detail', guide_id=guide.replace_of) }}" target="_blank" class="underline hover:text-sky-100">#{{ guide.replace_of }}</a> 的替换稿：原指南保持线上原样，本稿审核通过后自动替换原指南。</span>
+            </div>
+            {% endif %}
             {% if guide and guide.status == 'draft' %}
             <div class="mt-4 rounded-lg border border-yellow-500/25 bg-yellow-500/10 px-4 py-3 text-sm text-yellow-200 flex flex-wrap items-center gap-2">
                 <span>当前为草稿，保存后可返回「我的指南」发布。</span>
@@ -38,9 +44,10 @@
                     name='content',
                     value=guide.content if guide else '',
                     placeholder='在此输入 Markdown 内容...',
-                    video_list_url=video_list_url|default(''),
-                    video_upload_url=video_upload_url|default(''),
-                    video_limit_label=video_limit_label|default('')
+                    resource_list_url=resource_list_url|default(''),
+                    resource_image_upload_url=resource_image_upload_url|default(''),
+                    resource_video_upload_url=resource_video_upload_url|default(''),
+                    resource_limit_label=resource_limit_label|default('')
                 ) }}
             </div>
 
@@ -58,7 +65,7 @@
 <script src="{{ url_for('static', filename='js/core/video-player.js', v='4') }}"></script>
 <script src="{{ url_for('static', filename='lib/purify/purify.min.js', v='1') }}"></script>
 <script src="{{ url_for('static', filename='lib/marked/marked.min.js', v='1') }}"></script>
-<script src="{{ url_for('static', filename='js/pages/markdown-editor.js', v='14') }}"></script>
+<script src="{{ url_for('static', filename='js/pages/markdown-editor.js', v='16') }}"></script>
 <script>
 // 提交指南：草稿用 AJAX 保存（不刷新页面）；其他状态弹出验证码后正式提交。
 ( function () {

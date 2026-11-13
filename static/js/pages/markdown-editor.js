@@ -650,22 +650,24 @@
         this.mdVideo = null;
         // 「插入链接」按钮点击后固定显示链接标签页（即使光标不在链接中）
         this.linkPinned = false;
-        // 「插入视频」按钮点击后固定显示视频标签页
+        // 点选正文视频后锁定，便于在资源列表中点击其他视频直接替换
         this.videoPinned = false;
-        // 视频资源（仅传入 video_list_url 时启用）
-        this.videoListUrl = root.getAttribute('data-mre-video-list') || '';
-        this.videoUploadUrl = root.getAttribute('data-mre-video-upload') || '';
-        this.videoListEl = root.querySelector('[data-mre-video-list]');
-        this.videoQuotaEl = root.querySelector('[data-mre-video-quota]');
-        this.videoEmptyEl = root.querySelector('[data-mre-video-empty]');
-        this.videoFile = root.querySelector('[data-mre-video-file]');
-        this.videoProgressEl = root.querySelector('[data-mre-video-progress]');
-        this.videoProgressFill = root.querySelector('[data-mre-video-progress] .progress-fill');
-        this.videoProgressText = root.querySelector('[data-mre-video-progress-text]');
-        this.videoQuotaText = root.querySelector('[data-mre-video-quota-text]');
-        this.videoQuotaFill = root.querySelector('[data-mre-video-quota] .progress-fill');
-        this.videoItems = [];
-        this.videoLoaded = false;
+        // 资源标签页（图片 + 视频，仅在传入 resource_list_url 时启用）
+        this.resourceListUrl = root.getAttribute('data-mre-resource-list') || '';
+        this.resourceImageUploadUrl = root.getAttribute('data-mre-resource-image-upload') || '';
+        this.resourceVideoUploadUrl = root.getAttribute('data-mre-resource-video-upload') || '';
+        this.resourceListEl = root.querySelector('[data-mre-resource-list]');
+        this.resourceQuotaEl = root.querySelector('[data-mre-resource-quota]');
+        this.resourceEmptyEl = root.querySelector('[data-mre-resource-empty]');
+        this.resourceFile = root.querySelector('[data-mre-resource-file]');
+        this.resourceProgressEl = root.querySelector('[data-mre-resource-progress]');
+        this.resourceProgressFill = root.querySelector('[data-mre-resource-progress] .progress-fill');
+        this.resourceProgressText = root.querySelector('[data-mre-resource-progress-text]');
+        this.resourceQuotaText = root.querySelector('[data-mre-resource-quota-text]');
+        this.resourceQuotaFill = root.querySelector('[data-mre-resource-quota] .progress-fill');
+        this.resourceItems = [];
+        this.resourceLoaded = false;
+        this.uploading = false;
         // 本地静默草稿（localStorage，仅存本机，不上传）
         this.autosave = root.getAttribute('data-mre-autosave') !== 'false';
         this.editorId = root.getAttribute('data-editor-id') ||
@@ -695,15 +697,21 @@
         // 编辑区输入
         this.rich.addEventListener('input', function () { self.scheduleSync(); self.scheduleToolbar(); });
         this.rich.addEventListener('keyup', function () { self.scheduleToolbar(); });
-        this.rich.addEventListener('mouseup', function (e) {
+        this.rich.addEventListener('mouseup', function () {
             self.linkPinned = false;
-            if (!videoFromTarget(e.target)) self.videoPinned = false;
             self.scheduleToolbar();
         });
         this.rich.addEventListener('blur', function () { self.syncNow(); });
         this.rich.addEventListener('copy', function (e) { self.handleVideoClipboard(e, false); });
         this.rich.addEventListener('cut', function (e) { self.handleVideoClipboard(e, true); });
         this.rich.addEventListener('paste', function (e) { self.handleRichPaste(e); });
+        // Markdown 源码模式同样支持直接粘贴图片 / 视频
+        this.textarea.addEventListener('paste', function (e) {
+            var files = self.clipboardFiles(e.clipboardData);
+            if (!files.length) return;
+            e.preventDefault();
+            self.uploadResources(files, true);
+        });
         this.rich.addEventListener('keydown', function (e) { self.handleVideoKeydown(e); });
         this.rich.addEventListener('change', function (e) {
             var t = e.target;
@@ -713,15 +721,8 @@
             self.linkPinned = false;
             // 点在播放器任何区域（视频 / 控制栏 / 上拉框）都视为处于该视频上下文
             var vid = videoFromTarget(e.target);
-            if (vid) {
-                self.videoAnchor = vid;
-                self.videoPinned = true;
-                self.updateContextTabs(false);
-                self.selectTab('video');
-                self.loadVideoList();
-            } else if (!self.videoPinned) {
-                self.videoAnchor = null;
-            }
+            self.videoAnchor = vid || null;
+            self.videoPinned = !!vid;
         });
 
         // 编辑态点击视频主体 = 选中整个视频块（方便复制 / 剪切 / 删除），
@@ -773,14 +774,18 @@
             });
         });
 
-        // 视频标签页：刷新 / 选择文件上传
-        var videoRefresh = this.root.querySelector('[data-mre-video-refresh]');
-        if (videoRefresh) {
-            videoRefresh.addEventListener('click', function () { self.loadVideoList(); });
+        // 资源标签页：刷新 / 选择文件上传 / 拖拽上传
+        var resourceRefresh = this.root.querySelector('[data-mre-resource-refresh]');
+        if (resourceRefresh) {
+            resourceRefresh.addEventListener('click', function () { self.loadResourceList(); });
         }
-        if (this.videoFile) {
-            this.videoFile.addEventListener('change', function () { self.uploadVideo(); });
+        if (this.resourceFile) {
+            this.resourceFile.addEventListener('change', function () {
+                self.uploadResources(self.resourceFile.files, false);
+                self.resourceFile.value = '';
+            });
         }
+        if (this.resourceListUrl) this.bindResourceDrop();
 
         // 全局选区变化：浏览器会高频触发，先去重再合并到同一帧刷新，避免卡顿
         document.addEventListener('selectionchange', function () {
@@ -917,7 +922,6 @@
         var btn = this.root.querySelector('[data-mre-tab="' + name + '"]');
         if (btn && btn.hidden) return; // 上下文标签页未激活时不可选中
         if (name !== 'link') this.linkPinned = false;
-        if (name !== 'video') this.videoPinned = false;
         this.tab = name;
         this.root.querySelectorAll('[data-mre-tab]').forEach(function (b) {
             b.classList.toggle('is-active', b.getAttribute('data-mre-tab') === name);
@@ -925,27 +929,23 @@
         this.root.querySelectorAll('[data-mre-panel]').forEach(function (p) {
             p.hidden = p.getAttribute('data-mre-panel') !== name;
         });
+        if (name === 'resource') this.loadResourceList();
     };
 
-    // 上下文标签页：链接 / 表格 / 视频只在光标位于其中（或主动打开对应页）时出现
+    // 上下文标签页：链接 / 表格只在光标位于其中（或主动打开对应页）时出现
     Editor.prototype.updateContextTabs = function (autoSwitch) {
         var linkVisible = !!this.linkAnchor || !!this.mdLink || this.linkPinned;
         var tableVisible = !!this.tableEl;
-        var videoVisible = !!this.videoAnchor || !!this.mdVideo || this.videoPinned;
         var prevLink = !!(this._prevLinkVisible);
         var prevTable = !!(this._prevTableVisible);
-        var prevVideo = !!(this._prevVideoVisible);
 
         var linkBtn = this.root.querySelector('[data-mre-tab="link"]');
         var tableBtn = this.root.querySelector('[data-mre-tab="table"]');
-        var videoBtn = this.root.querySelector('[data-mre-tab="video"]');
         // 仅在可见性真正变化时才写 DOM，避免高频刷新时反复触发样式/布局计算
         if (linkBtn && linkBtn.hidden !== !linkVisible) linkBtn.hidden = !linkVisible;
         if (tableBtn && tableBtn.hidden !== !tableVisible) tableBtn.hidden = !tableVisible;
-        if (videoBtn && videoBtn.hidden !== !videoVisible) videoBtn.hidden = !videoVisible;
         this._prevLinkVisible = linkVisible;
         this._prevTableVisible = tableVisible;
-        this._prevVideoVisible = videoVisible;
 
         // 当前标签页被隐藏时，自动切回仍可见的标签页
         var cur = this.tab;
@@ -953,15 +953,13 @@
         if (!curBtn || curBtn.hidden) {
             if (linkVisible) this.selectTab('link');
             else if (tableVisible) this.selectTab('table');
-            else if (videoVisible) this.selectTab('video');
             else this.selectTab('basic');
             return;
         }
         if (!autoSwitch) return;
-        // 进入链接 / 表格 / 视频上下文时自动切换过去，实现「点击即出现并切到对应标签页」
+        // 进入链接 / 表格上下文时自动切换过去，实现「点击即出现并切到对应标签页」
         if (linkVisible && !prevLink && cur !== 'link') this.selectTab('link');
         else if (!linkVisible && tableVisible && !prevTable && cur !== 'table') this.selectTab('table');
-        else if (!linkVisible && !tableVisible && videoVisible && !prevVideo && cur !== 'video') this.selectTab('video');
     };
 
     // 把链接标签页表单填充为当前链接的信息（用户正在输入时不覆盖）
@@ -1046,7 +1044,7 @@
         if (this.mode !== 'rich' || !this.rich) return;
         var active = document.activeElement;
         if (active === this.linkUrl || active === this.linkText || active === this.linkTitle ||
-            active === this.linkBlank || active === this.videoFile) return;
+            active === this.linkBlank || active === this.resourceFile) return;
         var sel = window.getSelection();
         if (!sel || sel.rangeCount === 0) return;
         var r = sel.getRangeAt(0);
@@ -1392,10 +1390,6 @@
         sel.addRange(range);
 
         this.videoAnchor = video;
-        this.videoPinned = true;
-        this.updateContextTabs(false);
-        this.selectTab('video');
-        this.loadVideoList();
         this.scheduleToolbar();
     };
 
@@ -1510,8 +1504,19 @@
         }
     };
 
-    // 粘贴：识别 @[video](url) 语法，直接还原为视频块（支持纯视频与图文混排）
+    // 粘贴：剪贴板图片 / 视频直接上传；否则识别 @[video](url) 语法还原视频块
     Editor.prototype.handleRichPaste = function (e) {
+        var files = this.clipboardFiles(e.clipboardData);
+        if (files.length) {
+            e.preventDefault();
+            if (this.mode === 'rich') {
+                var range = this.getRichRange();
+                if (range) this.savedRange = range.cloneRange();
+            }
+            this.uploadResources(files, true);
+            return;
+        }
+
         var text = '';
         try { text = e.clipboardData.getData('text/plain') || ''; } catch (err) { /* 忽略 */ }
         var trimmed = text.trim();
@@ -1611,7 +1616,6 @@
             case 'indent': document.execCommand('indent'); break;
             case 'outdent': document.execCommand('outdent'); break;
             case 'link': this.openLinkEditor(); return;
-            case 'video': this.openVideoEditor(); return;
             case 'codeblock': this.insertCodeBlock(); break;
             case 'table-create': this.insertTable(3, 3); break;
             case 'row-above': case 'row-below': case 'row-delete':
@@ -2039,7 +2043,228 @@
         } catch (e) { /* 忽略 */ }
     }
 
-    /* ---------- 视频标签页 ---------- */
+    /* ---------- 资源标签页（图片 + 视频） ---------- */
+
+    var IMAGE_FILE_EXTS = ['png', 'jpg', 'jpeg', 'gif', 'webp'];
+    var VIDEO_FILE_EXTS = ['mp4', 'webm', 'ogv', 'ogg', 'mov', 'm4v'];
+
+    function fileExt(name) {
+        var s = String(name || '');
+        var i = s.lastIndexOf('.');
+        return i === -1 ? '' : s.slice(i + 1).toLowerCase();
+    }
+
+    function isImageFile(file) {
+        if (!file) return false;
+        return (file.type || '').indexOf('image/') === 0 ||
+            IMAGE_FILE_EXTS.indexOf(fileExt(file.name)) !== -1;
+    }
+
+    function isVideoFile(file) {
+        if (!file) return false;
+        return (file.type || '').indexOf('video/') === 0 ||
+            VIDEO_FILE_EXTS.indexOf(fileExt(file.name)) !== -1;
+    }
+
+    // 从剪贴板 / 拖拽数据里取出所有图片与视频文件（保持原始顺序）
+    Editor.prototype.clipboardFiles = function (dataTransfer) {
+        var files = [];
+        if (!dataTransfer) return files;
+        var items = dataTransfer.items || [];
+        for (var i = 0; i < items.length; i++) {
+            var item = items[i];
+            if (item.kind !== 'file') continue;
+            var file = item.getAsFile();
+            if (file && (isImageFile(file) || isVideoFile(file))) files.push(file);
+        }
+        if (!files.length && dataTransfer.files) {
+            for (var j = 0; j < dataTransfer.files.length; j++) {
+                var f = dataTransfer.files[j];
+                if (f && (isImageFile(f) || isVideoFile(f))) files.push(f);
+            }
+        }
+        return files;
+    };
+
+    // 拖拽图片 / 视频到编辑区即上传（整块编辑区域都可作为放置目标）
+    Editor.prototype.bindResourceDrop = function () {
+        var self = this;
+        var zone = this.root;
+        var depth = 0;
+        function hasFiles(e) {
+            var types = (e.dataTransfer && e.dataTransfer.types) || [];
+            for (var i = 0; i < types.length; i++) {
+                if (types[i] === 'Files') return true;
+            }
+            return false;
+        }
+        zone.addEventListener('dragenter', function (e) {
+            if (!hasFiles(e)) return;
+            e.preventDefault();
+            depth++;
+            zone.classList.add('is-dragover');
+        });
+        zone.addEventListener('dragover', function (e) {
+            if (!hasFiles(e)) return;
+            e.preventDefault();
+            e.dataTransfer.dropEffect = 'copy';
+        });
+        zone.addEventListener('dragleave', function () {
+            depth = Math.max(0, depth - 1);
+            if (!depth) zone.classList.remove('is-dragover');
+        });
+        zone.addEventListener('drop', function (e) {
+            if (!hasFiles(e)) return;
+            e.preventDefault();
+            depth = 0;
+            zone.classList.remove('is-dragover');
+            var files = self.clipboardFiles(e.dataTransfer);
+            if (files.length) self.uploadResources(files, true);
+        });
+    };
+
+    // 统一上传入口：图片直接上传，视频后台转码；insert 为 true 时上传后插入正文
+    Editor.prototype.uploadResources = function (files, insert) {
+        var self = this;
+        var queue = [];
+        for (var i = 0; i < (files || []).length; i++) {
+            var file = files[i];
+            if (isVideoFile(file)) queue.push({ file: file, video: true });
+            else if (isImageFile(file)) queue.push({ file: file, video: false });
+        }
+        if (!queue.length) return;
+
+        var needImage = queue.some(function (q) { return !q.video; });
+        var needVideo = queue.some(function (q) { return q.video; });
+        if ((needImage && !this.resourceImageUploadUrl) ||
+            (needVideo && !this.resourceVideoUploadUrl)) {
+            toast('请先保存指南，再上传资源', 'error');
+            return;
+        }
+        if (this.uploading) {
+            toast('资源正在上传，请稍候', 'info');
+            return;
+        }
+
+        if (this.mode === 'rich') {
+            var range = this.getRichRange();
+            if (range) this.savedRange = range.cloneRange();
+        }
+        this.uploading = true;
+        this.openResourceTab();
+        this.showResourceProgress(0, '准备上传…');
+
+        var chain = Promise.resolve();
+        queue.forEach(function (item) {
+            chain = chain.then(function () {
+                return item.video
+                    ? self.uploadVideoFile(item.file, insert)
+                    : self.uploadImageFile(item.file, insert);
+            });
+        });
+        chain.then(function () {
+            self.uploading = false;
+            self.loadResourceList();
+            self.hideResourceProgressSoon();
+        });
+    };
+
+    Editor.prototype.openResourceTab = function () {
+        if (!this.resourceListUrl) return;
+        if (this.tab === 'resource') this.loadResourceList();
+        else this.selectTab('resource');
+    };
+
+    Editor.prototype.showResourceProgress = function (percent, text) {
+        if (!this.resourceProgressEl) return;
+        this.resourceProgressEl.hidden = false;
+        this.setResourceProgress(percent, text);
+    };
+
+    // 更新上传 / 转码进度：percent 为 null 时显示不确定态光带
+    Editor.prototype.setResourceProgress = function (percent, text) {
+        var fill = this.resourceProgressFill;
+        if (!fill) return;
+        if (percent === null || percent === undefined) {
+            fill.classList.add('is-indeterminate');
+            fill.style.width = '100%';
+        } else {
+            fill.classList.remove('is-indeterminate');
+            fill.style.width = Math.max(0, Math.min(100, Number(percent) || 0)).toFixed(1) + '%';
+        }
+        if (this.resourceProgressText) {
+            this.resourceProgressText.textContent = text || (
+                percent === null || percent === undefined
+                    ? '处理中…'
+                    : Math.round(percent) + '%'
+            );
+        }
+    };
+
+    Editor.prototype.hideResourceProgressSoon = function () {
+        var self = this;
+        setTimeout(function () {
+            if (!self.uploading && self.resourceProgressEl) self.resourceProgressEl.hidden = true;
+        }, 600);
+    };
+
+    // 图片上传（XHR 以获得上传进度）
+    Editor.prototype.uploadImageFile = function (file, insert) {
+        var self = this;
+        var form = new FormData();
+        form.append('image', file, file.name || ('image.' + (fileExt(file.name) || 'png')));
+        return new Promise(function (resolve) {
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', self.resourceImageUploadUrl, true);
+            xhr.withCredentials = true;
+            xhr.setRequestHeader('Accept', 'application/json');
+            xhr.upload.onprogress = function (e) {
+                if (!e.lengthComputable) return;
+                var pct = e.total > 0 ? e.loaded / e.total * 100 : 0;
+                self.setResourceProgress(pct, '上传图片 ' + Math.round(pct) + '%');
+            };
+            xhr.onload = function () {
+                var data = {};
+                try { data = JSON.parse(xhr.responseText || '{}'); } catch (e) { /* 忽略 */ }
+                var ok = xhr.status >= 200 && xhr.status < 300 && data && data.success !== false;
+                if (!ok) {
+                    toast((data && data.message) || '图片上传失败', 'error');
+                    resolve(false);
+                    return;
+                }
+                if (insert) self.insertImage(data.url, '');
+                self.setResourceQuota(data);
+                resolve(true);
+            };
+            xhr.onerror = function () {
+                toast('网络错误，图片上传失败', 'error');
+                resolve(false);
+            };
+            xhr.send(form);
+        });
+    };
+
+    Editor.prototype.insertImage = function (url, alt) {
+        if (!url) return;
+        alt = String(alt || '图片').replace(/[\[\]()]/g, ' ').trim() || '图片';
+        if (this.mode === 'rich') {
+            var p = document.createElement('p');
+            var img = document.createElement('img');
+            img.setAttribute('src', url);
+            img.setAttribute('alt', alt);
+            p.appendChild(img);
+            this.rich.focus();
+            this.restoreRichRange();
+            this.insertBlock(p);
+            this.savedRange = null;
+            return;
+        }
+        var before = this.textarea.value.slice(0, this.textarea.selectionStart);
+        var prefix = (!before || before.slice(-1) === '\n') ? '' : '\n\n';
+        this.mdInsert(prefix + '![' + alt + '](' + url + ')\n');
+    };
+
+    /* ---------- 资源列表 ---------- */
 
     function toast(message, type) {
         try {
@@ -2047,131 +2272,234 @@
         } catch (e) { /* 忽略 */ }
     }
 
-    // 打开视频标签页（「插入」标签页里的视频按钮，或点击正文中的视频）
-    Editor.prototype.openVideoEditor = function () {
-        if (!this.videoListUrl && !this.videoUploadUrl) return;
-        this.videoPinned = true;
-        if (this.mode === 'rich') {
-            var r = this.getRichRange();
-            this.savedRange = r ? r.cloneRange() : null;
-            this.videoAnchor = this.videoAnchorFromRange(r);
-        }
-        this.updateContextTabs(false);
-        this.selectTab('video');
-        this.loadVideoList();
-    };
-
-    // 拉取当前指南（或草稿）的可用视频列表
-    Editor.prototype.loadVideoList = function () {
+    Editor.prototype.loadResourceList = function () {
         var self = this;
-        if (!this.videoListUrl) return;
-        fetch(this.videoListUrl, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+        if (!this.resourceListUrl) return;
+        fetch(this.resourceListUrl, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
             .then(function (res) { return res.json(); })
             .then(function (data) {
-                self.videoItems = (data && data.items) || [];
-                self.videoLoaded = true;
-                self.renderVideoList();
-                self.setVideoQuota(data || {});
+                self.resourceItems = (data && data.items) || [];
+                self.renderResourceList();
+                self.setResourceQuota(data || {});
             })
-            .catch(function () { toast('视频列表加载失败', 'error'); });
+            .catch(function () { toast('资源列表加载失败', 'error'); });
     };
 
-    Editor.prototype.renderVideoList = function () {
-        var listEl = this.videoListEl;
+    Editor.prototype.renderResourceList = function () {
+        var listEl = this.resourceListEl;
         if (!listEl) return;
         var self = this;
-        var items = this.videoItems || [];
+        var items = this.resourceItems || [];
         var current = this.videoAnchor
             ? (this.videoAnchor.getAttribute('src') || '')
             : (this.mdVideo ? (this.mdVideo.url || '') : '');
         listEl.innerHTML = '';
-        if (this.videoEmptyEl) this.videoEmptyEl.hidden = items.length > 0;
+        if (this.resourceEmptyEl) this.resourceEmptyEl.hidden = items.length > 0;
         items.forEach(function (item) {
             var row = document.createElement('div');
-            row.className = 'mre-video-item';
-            if (current && item.url === current) row.classList.add('is-active');
+            row.className = 'mre-resource-item';
+            row.setAttribute('role', 'button');
+            row.tabIndex = 0;
+            if (item.type === 'video' && current && item.url === current) row.classList.add('is-active');
+
+            var icon = document.createElement('span');
+            icon.className = 'mre-resource-icon';
+            icon.innerHTML = '<i data-lucide="' + (item.type === 'video' ? 'video' : 'image') + '"></i>';
+            row.appendChild(icon);
 
             var name = document.createElement('span');
-            name.className = 'mre-video-item-name';
-            name.textContent = item.title || item.name || '';
-            name.title = (item.title && item.name)
+            name.className = 'mre-resource-name';
+            name.textContent = item.type === 'video' ? (item.title || item.name || '') : (item.name || '');
+            name.title = (item.type === 'video' && item.title && item.title !== item.name)
                 ? (item.title + '（文件：' + item.name + '）')
                 : (item.name || '');
             row.appendChild(name);
 
-            if (item.size_label) {
-                var size = document.createElement('span');
-                size.className = 'mre-video-item-size';
-                size.textContent = item.size_label;
-                row.appendChild(size);
-            }
+            var size = document.createElement('span');
+            size.className = 'mre-resource-size';
+            size.textContent = item.size_label || '';
+            row.appendChild(size);
 
-            if (item.rename_url) {
-                var rename = document.createElement('button');
-                rename.type = 'button';
-                rename.className = 'mre-video-item-rename';
-                rename.title = '修改显示名称';
-                rename.innerHTML = '<i data-lucide="pencil"></i>';
-                rename.addEventListener('click', function (e) {
+            var addAction = function (kind, iconName, label, handler) {
+                var btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'mre-resource-act mre-resource-act-' + kind;
+                btn.title = label;
+                btn.innerHTML = '<i data-lucide="' + iconName + '"></i>';
+                btn.addEventListener('click', function (e) {
                     e.stopPropagation();
-                    self.renameVideo(item, rename);
+                    handler(btn);
                 });
-                row.appendChild(rename);
-            }
-
-            var del = document.createElement('button');
-            del.type = 'button';
-            del.className = 'mre-video-item-del';
-            del.title = '删除该视频';
-            del.innerHTML = '<i data-lucide="trash-2"></i>';
-            del.addEventListener('click', function (e) {
-                e.stopPropagation();
-                self.deleteVideo(item, del);
+                row.appendChild(btn);
+            };
+            addAction('compress', 'archive', '压缩约 10%（有损）', function (btn) {
+                self.compressResource(item, btn);
             });
-            row.appendChild(del);
+            if (item.rename_url) {
+                addAction('rename', 'pencil', '修改显示名称', function (btn) {
+                    self.renameResource(item, btn);
+                });
+            }
+            addAction('delete', 'trash-2', '删除资源', function (btn) {
+                self.deleteResource(item, btn);
+            });
 
-            row.addEventListener('click', function () { self.insertVideoUrl(item.url, item.title); });
+            var insert = function () { self.insertResource(item); };
+            row.addEventListener('click', insert);
+            row.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    insert();
+                }
+            });
             listEl.appendChild(row);
         });
         this.refreshIcons();
     };
 
-    Editor.prototype.setVideoQuota = function (data) {
+    Editor.prototype.setResourceQuota = function (data) {
         var used = Number(data && data.used_bytes) || 0;
         var limit = Number(data && data.limit_bytes) || 0;
         var usedLabel = data && data.used_label;
         var limitLabel = data && data.limit_label;
-        if (this.videoQuotaText) {
-            this.videoQuotaText.textContent = usedLabel && limitLabel
+        if (this.resourceQuotaText) {
+            this.resourceQuotaText.textContent = usedLabel && limitLabel
                 ? ('已用 ' + usedLabel + ' / ' + limitLabel)
                 : '';
         }
-        if (this.videoQuotaFill) {
+        if (this.resourceQuotaFill) {
             var pct = Number(data && data.percent);
             if (!isFinite(pct) || pct <= 0) pct = limit > 0 ? Math.min(100, used / limit * 100) : 0;
-            this.videoQuotaFill.classList.remove('is-indeterminate');
-            this.videoQuotaFill.style.width = Math.max(0, Math.min(100, pct)).toFixed(1) + '%';
+            this.resourceQuotaFill.classList.remove('is-indeterminate');
+            this.resourceQuotaFill.style.width = Math.max(0, Math.min(100, pct)).toFixed(1) + '%';
         }
     };
 
-    // 更新视频上传 / 转码进度：percent 为 null 时显示不确定态光带
-    Editor.prototype.setVideoProgress = function (percent, text) {
-        var fill = this.videoProgressFill;
-        if (!fill) return;
-        if (percent === null || percent === undefined) {
-            fill.classList.add('is-indeterminate');
-            fill.style.width = '100%';
-        } else {
-            fill.classList.remove('is-indeterminate');
-            var pct = Math.max(0, Math.min(100, Number(percent) || 0));
-            fill.style.width = pct.toFixed(1) + '%';
+    // 点击资源：图片插入图片，视频插入 / 替换视频
+    Editor.prototype.insertResource = function (item) {
+        if (!item || !item.url) return;
+        if (item.type === 'video') this.insertVideoUrl(item.url, item.title);
+        else this.insertImage(item.url, '');
+    };
+
+    // 一键有损压缩（每次约减少 10%）
+    Editor.prototype.compressResource = function (item, trigger) {
+        var self = this;
+        if (!item || !item.compress_url) return;
+        if (trigger) {
+            trigger.classList.add('is-loading');
+            trigger.disabled = true;
         }
-        if (this.videoProgressText) {
-            this.videoProgressText.textContent = text || (
-                percent === null || percent === undefined
-                    ? '转码中…'
-                    : Math.round(percent) + '%'
-            );
+        this.showResourceProgress(null, '正在压缩…');
+        var done = function () {
+            if (trigger) {
+                trigger.classList.remove('is-loading');
+                trigger.disabled = false;
+            }
+            self.hideResourceProgressSoon();
+        };
+        fetch(item.compress_url, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json' }
+        })
+        .then(function (res) { return res.json().catch(function () { return {}; }); })
+        .then(function (data) {
+            if (!data || data.success === false) {
+                toast((data && data.message) || '压缩失败', 'error');
+                done();
+                return;
+            }
+            self.setResourceQuota(data);
+            self.loadResourceList();
+            toast(data.message || '压缩完成', 'success');
+            done();
+        })
+        .catch(function () {
+            toast('压缩失败，请稍后重试', 'error');
+            done();
+        });
+    };
+
+    // 修改视频的页面显示名称（伪文件名，写入指南 config.json）
+    Editor.prototype.renameResource = function (item, trigger) {
+        var self = this;
+        if (!item || !item.rename_url) return;
+
+        var apply = function (title) {
+            fetch(item.rename_url, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({ title: title })
+            })
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
+                if (!data || data.success === false) {
+                    toast((data && data.message) || '修改失败', 'error');
+                    return;
+                }
+                toast(data.message || '名称已更新', 'success');
+                self.loadResourceList();
+            })
+            .catch(function () { toast('修改失败，请稍后重试', 'error'); });
+        };
+
+        if (window.CustomModal && typeof window.CustomModal.prompt === 'function') {
+            window.CustomModal.prompt('输入视频在页面上显示的名称（留空则显示真实文件名）', {
+                title: '修改视频名称',
+                type: 'info',
+                defaultValue: item.title || '',
+                placeholder: '例如：海滩日落',
+                confirmText: '保存',
+                trigger: trigger || null,
+                callback: function (value) {
+                    if (value === null || value === undefined) return; // 取消
+                    apply(String(value).trim().slice(0, 100));
+                }
+            });
+            return;
+        }
+        var input = window.prompt('输入视频在页面上显示的名称', item.title || '');
+        if (input !== null) apply(String(input).trim());
+    };
+
+    // 删除资源文件（正文中的引用不会自动移除）
+    Editor.prototype.deleteResource = function (item, trigger) {
+        var self = this;
+        if (!item || !item.delete_url) return;
+
+        var doDelete = function () {
+            fetch(item.delete_url, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { 'Accept': 'application/json' }
+            })
+                .then(function (res) { return res.json().catch(function () { return {}; }); })
+                .then(function (data) {
+                    if (!data || data.success === false) {
+                        toast((data && data.message) || '删除失败', 'error');
+                        return;
+                    }
+                    self.setResourceQuota(data);
+                    self.loadResourceList();
+                    toast(data.message || '资源已删除', 'success');
+                })
+                .catch(function () { toast('删除失败，请稍后重试', 'error'); });
+        };
+
+        if (window.CustomModal && typeof window.CustomModal.confirm === 'function') {
+            window.CustomModal.confirm('删除资源「' + (item.title || item.name || '') + '」？正文中的引用需要手动删除。', {
+                title: '删除资源',
+                type: 'warning',
+                confirmText: '删除',
+                trigger: trigger || null
+            }).then(function (ok) { if (ok) doDelete(); });
+        } else {
+            doDelete();
         }
     };
 
@@ -2271,201 +2599,106 @@
             ta.focus();
             this.onMdChange();
         }
-        this.videoPinned = true;
+        this.videoPinned = false;
         this.updateToolbar();
     };
 
-    // 上传视频到当前指南：浏览器上传进度 → 上传完成后进度归零 → 轮询转码进度
-    Editor.prototype.uploadVideo = function () {
+    // 上传视频：浏览器上传进度 → 上传完成后转为转码进度
+    Editor.prototype.uploadVideoFile = function (file, insert) {
         var self = this;
-        var file = this.videoFile && this.videoFile.files && this.videoFile.files[0];
-        if (!file) return;
-        if (!this.videoUploadUrl) {
-            // 没有指南 ID（如后台「新建指南」页）时无法上传，给出明确提示
-            if (this.videoFile) this.videoFile.value = '';
-            toast('请先保存指南，再上传视频', 'error');
-            return;
-        }
+        return new Promise(function (resolve) {
+            var form = new FormData();
+            form.append('video', file);
 
-        var form = new FormData();
-        form.append('video', file);
-
-        var btn = this.root.querySelector('.mre-video-upload-btn');
-        if (btn) btn.classList.add('is-loading');
-
-        var finish = function (done) {
-            if (btn) btn.classList.remove('is-loading');
-            if (self.videoFile) self.videoFile.value = '';
-            if (done && self.videoProgressEl) {
-                setTimeout(function () { self.videoProgressEl.hidden = true; }, 500);
-            }
-        };
-
-        if (this.videoProgressEl) this.videoProgressEl.hidden = false;
-        this.setVideoProgress(0, '上传中 0%');
-
-        // 轮询后台转码任务
-        var poll = function (progressUrl) {
-            var attempts = 0;
-            var tick = function () {
-                attempts += 1;
-                if (attempts > 900) { // 约 15 分钟上限
-                    finish(true);
-                    toast('转码任务超时，请稍后刷新视频列表查看', 'error');
-                    return;
-                }
-                fetch(progressUrl, {
-                    credentials: 'same-origin',
-                    headers: { 'Accept': 'application/json' }
-                })
-                .then(function (res) { return res.json(); })
-                .then(function (data) {
-                    if (!data || data.success === false) {
-                        throw new Error((data && data.message) || '转码状态获取失败');
-                    }
-                    if (data.status === 'done') {
-                        self.setVideoProgress(100, '转码完成');
-                        finish(true);
-                        toast(data.message || '视频已上传', 'success');
-                        self.loadVideoList();
-                        return;
-                    }
-                    if (data.status === 'error') {
-                        finish(false);
-                        toast(data.message || '视频转码失败', 'error');
-                        return;
-                    }
-                    self.setVideoProgress(data.percent, data.message || '正在转码…');
-                    setTimeout(tick, 1000);
-                })
-                .catch(function (err) {
-                    finish(false);
-                    toast((err && err.message) || '转码状态获取失败', 'error');
-                });
+            var finish = function (ok) {
+                resolve(ok);
             };
-            tick();
-        };
 
-        var xhr = new XMLHttpRequest();
-        xhr.open('POST', this.videoUploadUrl, true);
-        xhr.withCredentials = true;
-        xhr.setRequestHeader('Accept', 'application/json');
-        xhr.upload.onprogress = function (e) {
-            if (!e.lengthComputable) return;
-            var pct = e.total > 0 ? Math.min(100, e.loaded / e.total * 100) : 0;
-            self.setVideoProgress(pct, '上传中 ' + Math.round(pct) + '%');
-        };
-        xhr.upload.onload = function () {
-            self.setVideoProgress(0, '上传完成，准备转码…');
-        };
-        xhr.onload = function () {
-            var data = {};
-            try { data = JSON.parse(xhr.responseText || '{}'); } catch (e) { /* 忽略 */ }
-            var ok = xhr.status >= 200 && xhr.status < 300 && data && data.success !== false;
-            if (!ok) {
-                finish(false);
-                var msg = (data && data.message) || (xhr.status === 413 ? '视频文件过大，无法上传' : '视频上传失败');
-                toast(msg, 'error');
-                return;
-            }
-            if (!data.progress_url) {
-                finish(true);
-                toast(data.message || '视频已上传', 'success');
-                self.loadVideoList();
-                return;
-            }
-            // 上传完成 → 进度条归零 → 变成转码进度条
-            self.setVideoProgress(0, '正在转码…');
-            poll(data.progress_url);
-        };
-        xhr.onerror = function () {
-            finish(false);
-            toast('网络错误，视频上传失败，请稍后重试', 'error');
-        };
-        xhr.ontimeout = function () {
-            finish(false);
-            toast('视频上传超时，请重试', 'error');
-        };
-        xhr.onabort = function () {
-            finish(false);
-        };
-        xhr.send(form);
-    };
-
-    // 修改视频的页面显示名称（伪文件名，写入指南 config.json）
-    Editor.prototype.renameVideo = function (item, trigger) {
-        var self = this;
-        if (!item || !item.rename_url) return;
-
-        var apply = function (title) {
-            fetch(item.rename_url, {
-                method: 'POST',
-                credentials: 'same-origin',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Accept': 'application/json'
-                },
-                body: JSON.stringify({ title: title })
-            })
-            .then(function (res) { return res.json(); })
-            .then(function (data) {
-                if (!data || data.success === false) {
-                    toast((data && data.message) || '修改失败', 'error');
-                    return;
-                }
-                toast(data.message || '视频名称已更新', 'success');
-                self.loadVideoList();
-            })
-            .catch(function () { toast('修改失败，请稍后重试', 'error'); });
-        };
-
-        if (window.CustomModal && typeof window.CustomModal.prompt === 'function') {
-            window.CustomModal.prompt('输入视频在页面上显示的名称（留空则显示真实文件名）', {
-                title: '修改视频名称',
-                type: 'info',
-                defaultValue: item.title || '',
-                placeholder: '例如：海滩日落',
-                confirmText: '保存',
-                trigger: trigger || null,
-                callback: function (value) {
-                    if (value === null || value === undefined) return; // 取消
-                    apply(String(value).trim().slice(0, 100));
-                }
-            });
-            return;
-        }
-        var input = window.prompt('输入视频在页面上显示的名称', item.title || '');
-        if (input !== null) apply(String(input).trim());
-    };
-
-    // 删除视频文件（正文中的引用不会自动移除）
-    Editor.prototype.deleteVideo = function (item, trigger) {
-        var self = this;
-        if (!item || !item.delete_url) return;
-
-        var doDelete = function () {
-            fetch(item.delete_url, { method: 'POST', credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
-                .then(function (res) { return res.json().catch(function () { return {}; }); })
-                .then(function (data) {
-                    if (!data || data.success === false) {
-                        toast((data && data.message) || '删除失败', 'error');
+            // 轮询后台转码任务
+            var poll = function (progressUrl) {
+                var attempts = 0;
+                var tick = function () {
+                    attempts += 1;
+                    if (attempts > 900) { // 约 15 分钟上限
+                        toast('转码任务超时，请稍后刷新资源列表查看', 'error');
+                        finish(false);
                         return;
                     }
-                    self.loadVideoList();
-                })
-                .catch(function () { toast('删除失败，请稍后重试', 'error'); });
-        };
+                    fetch(progressUrl, {
+                        credentials: 'same-origin',
+                        headers: { 'Accept': 'application/json' }
+                    })
+                    .then(function (res) { return res.json(); })
+                    .then(function (data) {
+                        if (!data || data.success === false) {
+                            throw new Error((data && data.message) || '转码状态获取失败');
+                        }
+                        if (data.status === 'done') {
+                            self.setResourceProgress(100, '转码完成');
+                            if (data.item && insert) self.insertResource(data.item);
+                            self.setResourceQuota(data);
+                            toast(data.message || '视频已上传', 'success');
+                            finish(true);
+                            return;
+                        }
+                        if (data.status === 'error') {
+                            toast(data.message || '视频转码失败', 'error');
+                            finish(false);
+                            return;
+                        }
+                        self.setResourceProgress(data.percent, data.message || '正在转码…');
+                        setTimeout(tick, 1000);
+                    })
+                    .catch(function (err) {
+                        toast((err && err.message) || '转码状态获取失败', 'error');
+                        finish(false);
+                    });
+                };
+                tick();
+            };
 
-        if (window.CustomModal && typeof window.CustomModal.confirm === 'function') {
-            window.CustomModal.confirm('删除视频「' + (item.name || '') + '」？正文中的引用需要手动删除。', {
-                title: '删除视频',
-                type: 'warning',
-                confirmText: '删除',
-                trigger: trigger || null
-            }).then(function (ok) { if (ok) doDelete(); });
-        } else {
-            doDelete();
-        }
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', self.resourceVideoUploadUrl, true);
+            xhr.withCredentials = true;
+            xhr.setRequestHeader('Accept', 'application/json');
+            xhr.upload.onprogress = function (e) {
+                if (!e.lengthComputable) return;
+                var pct = e.total > 0 ? Math.min(100, e.loaded / e.total * 100) : 0;
+                self.setResourceProgress(pct, '上传视频 ' + Math.round(pct) + '%');
+            };
+            xhr.upload.onload = function () {
+                self.setResourceProgress(0, '上传完成，准备转码…');
+            };
+            xhr.onload = function () {
+                var data = {};
+                try { data = JSON.parse(xhr.responseText || '{}'); } catch (e) { /* 忽略 */ }
+                var ok = xhr.status >= 200 && xhr.status < 300 && data && data.success !== false;
+                if (!ok) {
+                    var msg = (data && data.message) || (xhr.status === 413 ? '视频文件过大，无法上传' : '视频上传失败');
+                    toast(msg, 'error');
+                    finish(false);
+                    return;
+                }
+                if (!data.progress_url) {
+                    toast(data.message || '视频已上传', 'success');
+                    finish(true);
+                    return;
+                }
+                // 上传完成 → 进度条归零 → 变成转码进度条
+                self.setResourceProgress(0, '正在转码…');
+                poll(data.progress_url);
+            };
+            xhr.onerror = function () {
+                toast('网络错误，视频上传失败，请稍后重试', 'error');
+                finish(false);
+            };
+            xhr.ontimeout = function () {
+                toast('视频上传超时，请重试', 'error');
+                finish(false);
+            };
+            xhr.onabort = function () { finish(false); };
+            xhr.send(form);
+        });
     };
 
     /* ---------- Markdown 源码模式命令 ---------- */
@@ -2566,7 +2799,6 @@
             case 'indent': this.mdIndent(1); break;
             case 'outdent': this.mdIndent(-1); break;
             case 'link': this.openLinkEditor(); return;
-            case 'video': this.openVideoEditor(); return;
             case 'codeblock': this.mdCodeBlock(); break;
             case 'table-create': this.mdInsertTable(); break;
             case 'row-above': case 'row-below': case 'row-delete':

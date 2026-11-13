@@ -18,23 +18,82 @@ PAGE_SIZE = 10
 
 
 def _admin_create_context():
-    """后台新建指南上下文（指南尚未创建，暂不提供视频上传）。"""
+    """后台新建指南上下文（指南尚未创建，暂不提供资源上传）。"""
     return {
         'guide': None,
-        'video_list_url': '',
-        'video_upload_url': '',
-        'video_limit_label': '',
+        'resource_list_url': '',
+        'resource_image_upload_url': '',
+        'resource_video_upload_url': '',
+        'resource_limit_label': '',
     }
 
 
 def _admin_edit_context(guide):
-    """后台编辑指南上下文（视频直接上传到该指南目录）。"""
+    """后台编辑指南上下文（图片 / 视频统一上传到该指南资源目录）。"""
     return {
         'guide': guide,
-        'video_list_url': url_for('guides.api_guide_videos', guide_id=guide['id']),
-        'video_upload_url': url_for('guides.api_guide_video_upload', guide_id=guide['id']),
-        'video_limit_label': guide_store.format_size(get_guide_resource_limit()),
+        'resource_list_url': url_for('guides.api_guide_resources', guide_id=guide['id']),
+        'resource_image_upload_url': url_for('guides.api_guide_image_upload', guide_id=guide['id']),
+        'resource_video_upload_url': url_for('guides.api_guide_video_upload', guide_id=guide['id']),
+        'resource_limit_label': guide_store.format_size(get_guide_resource_limit()),
     }
+
+
+def _apply_replacement(conn, draft_id):
+    """把「替换草稿」落回原指南，返回最终指南 ID；非替换草稿返回 None。
+
+    规则：原指南的数据行与整个文件夹全部删除，草稿接管原指南 ID
+    （收藏、外链、创建时间、置顶状态原样保留），正文中的资源链接改回原 ID，
+    最终不残留任何草稿痕迹。
+    """
+    draft = conn.execute(
+        "SELECT * FROM server_guides WHERE id = ?", (draft_id,)
+    ).fetchone()
+    if not draft or not draft['replace_of']:
+        return None
+
+    original_id = int(draft['replace_of'])
+    original = conn.execute(
+        "SELECT * FROM server_guides WHERE id = ?", (original_id,)
+    ).fetchone()
+
+    # 草稿正文里指向草稿 ID 的资源链接（编辑期新上传的图片 / 视频）改回原指南 ID
+    content = guide_store.read_guide_content(draft_id, '')
+    guide_store.write_guide_content(
+        draft_id, guide_store.rewrite_asset_links(content, draft_id, original_id)
+    )
+
+    now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    # 原指南数据彻底删除；草稿若被收藏，这些多出来的收藏一并清理
+    conn.execute("DELETE FROM server_guides WHERE id = ?", (original_id,))
+    conn.execute("DELETE FROM guide_favorites WHERE guide_id = ?", (draft_id,))
+
+    # 草稿接管原 ID 与原指南的展示属性
+    conn.execute(
+        """
+        UPDATE server_guides
+        SET id = ?, replace_of = NULL, status = 'approved',
+            author_id = ?, is_pinned = ?, sort_order = ?, created_at = ?,
+            updated_at = ?, published_at = ?,
+            rejected_reason = '', rejected_at = NULL
+        WHERE id = ?
+        """,
+        (
+            original_id,
+            original['author_id'] if original else draft['author_id'],
+            original['is_pinned'] if original else draft['is_pinned'],
+            original['sort_order'] if original else draft['sort_order'],
+            original['created_at'] if original else draft['created_at'],
+            now,
+            (original['published_at'] if original and original['published_at'] else now),
+            draft_id,
+        ),
+    )
+
+    # 文件层面：原指南目录整体删除，草稿目录移动到原指南 ID 下
+    guide_store.replace_guide_dir(draft_id, original_id)
+    return original_id
 
 
 def _fetch_guides_page(page, page_size=PAGE_SIZE):
@@ -253,16 +312,20 @@ def admin_guide_edit(guide_id):
                 (title, slug, summary, cover_image, status,
                  is_pinned, now, published_at, guide_id),
             )
+            final_id = guide_id
             if status == 'approved':
                 conn.execute(
                     "UPDATE server_guides SET rejected_at = NULL WHERE id = ?",
                     (guide_id,),
                 )
+                # 替换草稿通过：原指南行与目录全部删除，草稿接管原 ID
+                if guide.get('replace_of'):
+                    final_id = _apply_replacement(conn, guide_id) or guide_id
             conn.commit()
             return jsonify({
                 'success': True,
                 'message': '指南已更新',
-                'guide_id': guide_id,
+                'guide_id': final_id,
                 'redirect': url_for('admin.admin_guides'),
             })
         except Exception as e:
@@ -297,31 +360,43 @@ def admin_guide_delete(guide_id):
 @admin_bp.route('/admin/guides/<int:guide_id>/approve', methods=['POST'])
 @admin_required
 def admin_guide_approve(guide_id):
-    """管理后台：通过审核（JSON API，前端无刷新）。"""
+    """管理后台：通过审核（JSON API，前端无刷新）。
+
+    替换草稿通过时自动替换原指南：原指南的数据行与文件夹全部删除，
+    草稿接管原指南 ID（含收藏、外链、创建时间），不残留草稿痕迹。
+    """
     conn = get_db()
     try:
         guide = conn.execute(
-            "SELECT g.title, u.email FROM server_guides g "
+            "SELECT g.title, g.replace_of, u.email FROM server_guides g "
             "LEFT JOIN users u ON g.author_id = u.id WHERE g.id = ?",
             (guide_id,),
         ).fetchone()
-
-        now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-        cur = conn.execute(
-            """
-            UPDATE server_guides
-            SET status = 'approved', updated_at = ?, published_at = ?, rejected_reason = ''
-            WHERE id = ?
-            """,
-            (now, now, guide_id),
-        )
-        conn.commit()
-        if cur.rowcount == 0:
+        if not guide:
             return jsonify({'success': False, 'message': '指南不存在'}), 404
 
-        if guide:
-            _notify_author_guide_result(guide['title'], guide['email'] or '', approved=True)
-        return jsonify({'success': True, 'message': '指南已通过审核', 'status': 'approved'})
+        final_id = guide_id
+        if guide['replace_of']:
+            final_id = _apply_replacement(conn, guide_id)
+        else:
+            now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            conn.execute(
+                """
+                UPDATE server_guides
+                SET status = 'approved', updated_at = ?, published_at = ?, rejected_reason = ''
+                WHERE id = ?
+                """,
+                (now, now, guide_id),
+            )
+        conn.commit()
+
+        _notify_author_guide_result(guide['title'], guide['email'] or '', approved=True)
+        return jsonify({
+            'success': True,
+            'message': '指南已通过审核' + ('，并已替换原指南' if guide['replace_of'] else ''),
+            'status': 'approved',
+            'guide_id': final_id,
+        })
     except Exception:
         conn.rollback()
         return jsonify({'success': False, 'message': '操作失败'}), 500

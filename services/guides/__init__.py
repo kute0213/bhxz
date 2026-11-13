@@ -5,7 +5,7 @@
 
     uploads/guides/<指南ID>/
         guide.md        # 指南 Markdown 源文件（唯一内容来源）
-        assets/         # 指南资源（视频等），合计不超过 50MB
+        assets/         # 指南资源（图片 / 视频统一存放），合计不超过 50MB
 
 指南在「新建」时即获得 ID 与目录，因此编辑页上传的资源直接写入
 ``assets/``，不再需要临时草稿目录。
@@ -13,6 +13,7 @@
 本模块为纯 Python（不依赖 Flask / 数据库），供路由与迁移脚本复用。
 """
 
+import io
 import json
 import os
 import re
@@ -23,6 +24,8 @@ import threading
 import time
 import uuid
 from datetime import datetime, timedelta
+
+from PIL import Image, ImageSequence
 
 from config import (
     UPLOAD_GUIDES_DIR,
@@ -37,10 +40,15 @@ from core.shared.snowflake import next_id
 
 MD_FILENAME = 'guide.md'
 ASSETS_DIRNAME = 'assets'
+LEGACY_IMAGES_DIRNAME = 'images'  # 旧版图片子目录，仅在读取时迁移到 assets/
 CONFIG_FILENAME = 'config.json'
 CONFIG_VERSION = 1
 VIDEO_TASK_TTL = 3600  # 视频转码任务进度在内存中保留的秒数
 DRAFT_DIRNAME = '_drafts'  # 旧版草稿目录，仅用于清理历史残留
+COMPRESS_RATIO = 0.9  # 每次有损压缩后保留的体积比例（压缩约 10%）
+
+# 正文图片允许的格式（与防火墙上传校验的图片白名单保持一致）
+GUIDE_IMAGE_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif', 'webp'}
 
 
 # ---------------------------------------------------------------------------
@@ -58,7 +66,7 @@ def guide_md_path(guide_id):
 
 
 def assets_dir_for(guide_id):
-    """指南资源目录（视频等）。"""
+    """指南资源目录（图片 / 视频统一存放）。"""
     return os.path.join(guide_dir(guide_id), ASSETS_DIRNAME)
 
 
@@ -73,10 +81,32 @@ def draft_dir(token):
 
 
 def ensure_guide_dir(guide_id):
-    """确保指南目录、assets 目录与 config.json 存在。"""
+    """确保指南目录、assets 目录与 config.json 存在，并迁移旧版图片目录。"""
     os.makedirs(assets_dir_for(guide_id), exist_ok=True)
+    _migrate_legacy_images(guide_id)
     if not os.path.isfile(guide_config_path(guide_id)):
         write_guide_config(guide_id, default_guide_config())
+
+
+def _migrate_legacy_images(guide_id):
+    """把旧版 assets/images/ 中的图片并入 assets/（图片与视频同目录）。
+
+    迁移只在目录存在时发生；旧版图片文件名是内容哈希，与雪花 ID 不会冲突。
+    """
+    legacy = os.path.join(assets_dir_for(guide_id), LEGACY_IMAGES_DIRNAME)
+    if not os.path.isdir(legacy):
+        return
+    target = assets_dir_for(guide_id)
+    for name in os.listdir(legacy):
+        src = os.path.join(legacy, name)
+        if not os.path.isfile(src) or name.startswith('.'):
+            continue
+        dst = os.path.join(target, name)
+        if os.path.exists(dst):
+            os.remove(src)
+        else:
+            os.replace(src, dst)
+    shutil.rmtree(legacy, ignore_errors=True)
 
 
 # ---------------------------------------------------------------------------
@@ -189,33 +219,38 @@ def normalize_markdown_tables(md):
     return '\n'.join(out)
 
 
+def normalize_asset_links(md):
+    """把旧版图片链接 assets/images/ 统一改为 assets/（图片已并入资源根目录）。"""
+    return str(md or '').replace('/assets/%s/' % LEGACY_IMAGES_DIRNAME, '/assets/')
+
+
 def read_guide_content(guide_id, fallback=''):
     """读取指南 Markdown 正文。
 
     文件存在时以文件为准；文件缺失时回退到数据库旧内容（迁移前的数据），
     保证迁移脚本尚未执行时站点仍可正常显示。
-    读取时统一修正被空行隔断的表格，历史内容也能正确渲染。
+    读取时统一修正被空行隔断的表格与旧版图片链接，历史内容也能正确渲染。
     """
     path = guide_md_path(guide_id)
     if os.path.isfile(path):
         try:
             with open(path, 'r', encoding='utf-8') as fh:
-                return normalize_markdown_tables(fh.read())
+                return normalize_markdown_tables(normalize_asset_links(fh.read()))
         except OSError:
-            return normalize_markdown_tables(fallback or '')
-    return normalize_markdown_tables(fallback or '')
+            pass
+    return normalize_markdown_tables(normalize_asset_links(fallback))
 
 
 def write_guide_content(guide_id, content):
     """写入指南 Markdown 正文（先写临时文件再原子替换）。
 
-    写入前统一修正表格空行，保证保存 / 发布的内容一定能正常渲染。
+    写入前统一修正表格空行与旧版图片链接，保证保存 / 发布的内容一定能正常渲染。
     """
     ensure_guide_dir(guide_id)
     path = guide_md_path(guide_id)
     tmp = path + '.tmp'
     with open(tmp, 'w', encoding='utf-8') as fh:
-        fh.write(normalize_markdown_tables(content))
+        fh.write(normalize_markdown_tables(normalize_asset_links(content)))
     os.replace(tmp, path)
     return path
 
@@ -223,6 +258,59 @@ def write_guide_content(guide_id, content):
 def delete_guide_dir(guide_id):
     """删除整个指南文件夹（正文 + 资源 + config.json）。目录不存在时静默。"""
     shutil.rmtree(guide_dir(guide_id), ignore_errors=True)
+
+
+# ---------------------------------------------------------------------------
+# 复制 / 替换（修改已发布指南：先复制成新 ID 的草稿，审核通过后替换原指南）
+# ---------------------------------------------------------------------------
+
+def copy_guide_dir(src_id, dst_id):
+    """把一条指南的整个目录复制到新 ID，返回是否复制了已有内容。"""
+    src = guide_dir(src_id)
+    dst = guide_dir(dst_id)
+    if not os.path.isdir(src):
+        ensure_guide_dir(dst_id)
+        return False
+    shutil.copytree(src, dst, dirs_exist_ok=True)
+    return True
+
+
+def replace_guide_dir(src_id, dst_id):
+    """用草稿目录替换原指南目录（原目录先移到备份位，替换完成即删除）。
+
+    目录整体移动而非逐文件复制，替换后原指南不会留下任何文件残留。
+    """
+    src = guide_dir(src_id)
+    dst = guide_dir(dst_id)
+    backup = dst + '.replaced'
+    shutil.rmtree(backup, ignore_errors=True)
+    if os.path.isdir(dst):
+        os.replace(dst, backup)
+    try:
+        if os.path.isdir(src):
+            os.replace(src, dst)
+    except OSError:
+        # 替换失败：把原目录还原，避免指南资源丢失
+        if os.path.isdir(backup) and not os.path.isdir(dst):
+            os.replace(backup, dst)
+        raise
+    shutil.rmtree(backup, ignore_errors=True)
+
+
+def rewrite_asset_links(content, from_id, to_id):
+    """把正文中的资源链接从某个指南 ID 改到另一个指南 ID。
+
+    指南资源 URL 形如 ``/guides/<ID>/assets/...``；复制草稿时正文沿用原指南的
+    链接，编辑期新上传的图片 / 视频则指向草稿 ID，替换时统一改回原指南 ID。
+    """
+    text = str(content or '')
+    if not text:
+        return text
+    return re.sub(
+        r'/guides/%d/assets/' % int(from_id),
+        '/guides/%d/assets/' % int(to_id),
+        text,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -345,10 +433,25 @@ def _unique_name(directory, name):
     return candidate
 
 
+def _ext_of(filename):
+    """取文件名的小写扩展名（不含点）；无扩展名时返回空串。"""
+    name = str(filename or '')
+    return name.rsplit('.', 1)[-1].lower() if '.' in name else ''
+
+
 def is_video_name(filename):
     """文件名扩展名是否为允许的视频格式。"""
-    ext = str(filename or '').rsplit('.', 1)[-1].lower() if '.' in str(filename or '') else ''
-    return ext in GUIDE_VIDEO_EXTENSIONS
+    return _ext_of(filename) in GUIDE_VIDEO_EXTENSIONS
+
+
+def asset_kind(filename):
+    """资源类型：``image`` / ``video`` / ``file``。"""
+    ext = _ext_of(filename)
+    if ext in GUIDE_VIDEO_EXTENSIONS:
+        return 'video'
+    if ext in GUIDE_IMAGE_EXTENSIONS:
+        return 'image'
+    return 'file'
 
 
 def format_size(size):
@@ -389,8 +492,20 @@ def list_assets(directory):
 
 
 def directory_total(directory):
-    """目录内所有资源文件的总字节数。"""
-    return sum(size for _, size in _iter_files(directory))
+    """目录（含所有子目录，如 images/）内资源文件的总字节数。"""
+    if not os.path.isdir(directory):
+        return 0
+    total = 0
+    for root, dirs, files in os.walk(directory):
+        dirs[:] = [d for d in dirs if not d.startswith('.')]
+        for name in files:
+            if name.startswith('.'):
+                continue
+            try:
+                total += os.path.getsize(os.path.join(root, name))
+            except OSError:
+                continue
+    return total
 
 
 def guide_total(guide_id):
@@ -407,6 +522,20 @@ def _quota_error(total, size, limit_bytes=None):
             f'当前已用 {format_size(total)}'
         )
     return ''
+
+
+def _upload_size(upload):
+    """估算上传文件大小（不消费上传流）；无法获取时返回 0。"""
+    try:
+        stream = getattr(upload, 'stream', None)
+        if stream is not None:
+            stream.seek(0, 2)
+            size = stream.tell()
+            stream.seek(0)
+            return size
+    except (AttributeError, OSError):
+        pass
+    return 0
 
 
 def _save_upload(directory, upload):
@@ -426,22 +555,213 @@ def save_guide_asset(guide_id, upload, limit_bytes=None):
     directory = assets_dir_for(guide_id)
     os.makedirs(directory, exist_ok=True)
     total = directory_total(directory)
-    # 先估算大小，超配额时不落盘
-    try:
-        stream = getattr(upload, 'stream', None)
-        if stream is not None:
-            stream.seek(0, 2)
-            size = stream.tell()
-            stream.seek(0)
-        else:
-            size = 0
-    except (AttributeError, OSError):
-        size = 0
-    msg = _quota_error(total, size, limit_bytes)
+    msg = _quota_error(total, _upload_size(upload), limit_bytes)
     if msg:
         return False, msg, None
     name, size = _save_upload(directory, upload)
     return True, '', {'name': name, 'size': size, 'size_label': format_size(size)}
+
+
+def save_guide_image(guide_id, upload, limit_bytes=None):
+    """保存正文图片到 ``assets/``（与视频同目录），返回 ``(ok, message, item)``。
+
+    文件名使用雪花 ID，每次上传都是独立文件；配额与视频共用整个 assets 目录上限。
+    """
+    ext = _ext_of(getattr(upload, 'filename', ''))
+    if ext not in GUIDE_IMAGE_EXTENSIONS:
+        ext = 'png'
+
+    directory = assets_dir_for(guide_id)
+    os.makedirs(directory, exist_ok=True)
+
+    size = _upload_size(upload)
+    msg = _quota_error(directory_total(directory), size, limit_bytes)
+    if msg:
+        return False, msg, None
+
+    name = f'{next_id()}.{ext}'
+    path = os.path.join(directory, name)
+    upload.save(path)
+    size = os.path.getsize(path)
+    if size == 0:
+        os.remove(path)
+        return False, '图片内容为空', None
+    return True, '', {
+        'name': name,
+        'type': 'image',
+        'size': size,
+        'size_label': format_size(size),
+    }
+
+
+# ---------------------------------------------------------------------------
+# 有损压缩（每次约减少 10% 体积）
+# ---------------------------------------------------------------------------
+
+def _compress_target(size):
+    """本次压缩的目标体积：当前体积的 90%。"""
+    return max(1, int((size or 0) * COMPRESS_RATIO))
+
+
+def _encode_quality(img, fmt, quality):
+    """按指定质量编码图片，返回字节内容。"""
+    buf = io.BytesIO()
+    img.save(buf, format=fmt, quality=quality, optimize=True)
+    return buf.getvalue()
+
+
+def _search_quality(img, fmt, target):
+    """从高到低尝试质量，返回不超过目标体积且质量最高的编码结果。"""
+    for quality in range(90, 19, -5):
+        data = _encode_quality(img, fmt, quality)
+        if len(data) <= target:
+            return data
+    return _encode_quality(img, fmt, 20)
+
+
+def _search_palette(encode, target):
+    """二分查找满足目标体积的最大颜色数（PNG / GIF 有损量化）。"""
+    best = None
+    low, high = 4, 256
+    while low <= high:
+        colors = (low + high) // 2
+        data = encode(colors)
+        if len(data) <= target:
+            best = data
+            low = colors + 1
+        else:
+            high = colors - 1
+    return best if best is not None else encode(4)
+
+
+def _compress_image_file(path):
+    """有损压缩图片（保持原格式与文件名），返回 ``(ok, message)``。"""
+    fmt = {'jpg': 'JPEG', 'jpeg': 'JPEG', 'png': 'PNG', 'gif': 'GIF', 'webp': 'WEBP'}.get(_ext_of(path))
+    if not fmt:
+        return False, '该图片格式暂不支持压缩'
+    current = os.path.getsize(path)
+    target = _compress_target(current)
+    tmp = os.path.join(os.path.dirname(path), '.compress_' + uuid.uuid4().hex)
+    try:
+        with Image.open(path) as img:
+            if getattr(img, 'is_animated', False) and fmt != 'GIF':
+                return False, '动态图片暂不支持压缩'
+            if fmt in ('JPEG', 'WEBP'):
+                source = img.convert('RGB') if fmt == 'JPEG' else img.copy()
+                data = _search_quality(source, fmt, target)
+            elif fmt == 'PNG':
+                data = _search_palette(
+                    lambda colors: _encode_png(img, colors), target)
+            else:
+                data = _search_palette(
+                    lambda colors: _encode_gif(img, colors), target)
+        if not data:
+            return False, '图片压缩失败'
+        with open(tmp, 'wb') as fh:
+            fh.write(data)
+        if os.path.getsize(tmp) >= current:
+            return False, '图片已接近最小体积，无法继续压缩'
+        os.replace(tmp, path)
+        return True, ''
+    except (OSError, ValueError):
+        return False, '图片压缩失败'
+    finally:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+
+
+def _encode_png(img, colors):
+    """把图片量化为指定颜色数并编码为 PNG。"""
+    quantized = img.convert('RGBA').quantize(colors=colors, method=Image.FASTOCTREE)
+    buf = io.BytesIO()
+    quantized.save(buf, format='PNG', optimize=True)
+    return buf.getvalue()
+
+
+def _encode_gif(img, colors):
+    """把（可能动态的）GIF 逐帧量化到指定颜色数。"""
+    frames = [
+        frame.convert('RGBA').quantize(colors=colors, method=Image.FASTOCTREE)
+        for frame in ImageSequence.Iterator(img)
+    ]
+    buf = io.BytesIO()
+    frames[0].save(
+        buf, format='GIF', save_all=True, append_images=frames[1:],
+        duration=img.info.get('duration', 100), loop=img.info.get('loop', 0),
+        optimize=True,
+    )
+    return buf.getvalue()
+
+
+def _compress_video_file(path):
+    """按当前码率的 90% 重新编码 MP4（有损），返回 ``(ok, message)``。"""
+    if _ext_of(path) != 'mp4':
+        return False, '仅支持压缩 MP4 视频'
+    duration = _probe_duration(path)
+    if duration <= 0:
+        return False, '无法读取视频时长，暂不能压缩'
+    current = os.path.getsize(path)
+    audio_kbps = 96
+    total_kbps = current * 8 / duration / 1000
+    video_kbps = max(100, int(total_kbps * COMPRESS_RATIO - audio_kbps))
+    tmp = os.path.join(os.path.dirname(path), '.compress_' + uuid.uuid4().hex)
+    cmd = [
+        FFMPEG_BIN, '-y', '-loglevel', 'error', '-nostats', '-i', path,
+        '-map', '0:v:0', '-c:v', 'libx264', '-preset', 'veryfast',
+        '-b:v', f'{video_kbps}k',
+        '-maxrate', f'{int(video_kbps * 1.3)}k',
+        '-bufsize', f'{video_kbps * 2}k',
+        '-vf', 'scale=trunc(iw/2)*2:trunc(ih/2)*2',
+        '-pix_fmt', 'yuv420p',
+        '-map', '0:a?', '-c:a', 'aac', '-b:a', f'{audio_kbps}k',
+        '-movflags', '+faststart', '-f', 'mp4', tmp,
+    ]
+    try:
+        subprocess.run(
+            cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            timeout=GUIDE_VIDEO_TRANSCODE_TIMEOUT, check=False,
+        )
+    except (FileNotFoundError, OSError):
+        return False, FFMPEG_MISSING_MSG
+    except subprocess.TimeoutExpired:
+        return False, '视频压缩超时，请稍后重试'
+    if not os.path.isfile(tmp):
+        return False, '视频压缩失败'
+    try:
+        if os.path.getsize(tmp) >= current:
+            return False, '视频已接近最小体积，无法继续压缩'
+        os.replace(tmp, path)
+        return True, ''
+    finally:
+        if os.path.exists(tmp):
+            os.remove(tmp)
+
+
+def compress_guide_asset(guide_id, filename):
+    """对单个资源做一次有损压缩（体积约减少 10%）。
+
+    返回 ``(ok, message, item)``；item 与资源列表项结构一致。
+    """
+    name = os.path.basename(str(filename or ''))
+    path = os.path.join(assets_dir_for(guide_id), name)
+    if not os.path.isfile(path):
+        return False, '资源不存在', None
+    kind = asset_kind(name)
+    if kind == 'video':
+        ok, message = _compress_video_file(path)
+    elif kind == 'image':
+        ok, message = _compress_image_file(path)
+    else:
+        return False, '该资源暂不支持压缩', None
+    if not ok:
+        return False, message, None
+    size = os.path.getsize(path)
+    return True, '', {
+        'name': name,
+        'type': kind,
+        'size': size,
+        'size_label': format_size(size),
+    }
 
 
 FFMPEG_MISSING_MSG = (
@@ -575,6 +895,7 @@ def _process_video(guide_id, src_path, limit_bytes=None, title=None, progress_cb
             set_video_title(guide_id, out_name, title)
         return True, '', {
             'name': out_name,
+            'type': 'video',
             'size': size,
             'size_label': format_size(size),
             'title': video_title(guide_id, out_name, out_name),
@@ -721,11 +1042,15 @@ def delete_guide_asset(guide_id, filename):
 
 
 def list_guide_assets(guide_id):
-    """列出指南资源；视频附带页面显示名 ``title``。"""
+    """列出指南资源（图片 + 视频），附带类型与视频显示名。"""
     items = list_assets(assets_dir_for(guide_id))
     for item in items:
-        if is_video_name(item['name']):
+        kind = asset_kind(item['name'])
+        item['type'] = kind
+        if kind == 'video':
             item['title'] = video_title(guide_id, item['name'], item['name'])
+        else:
+            item['title'] = item['name']
     return items
 
 

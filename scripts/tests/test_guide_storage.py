@@ -105,12 +105,171 @@ class TestTableNormalize:
             assert fh.read() == '| a | b |\n| --- | --- |\n| 1 | 2 |\n'
         assert guide_store.read_guide_content(31) == '| a | b |\n| --- | --- |\n| 1 | 2 |\n'
 
+
+class FakeImageUpload:
+    """模拟 werkzeug FileStorage 的图片上传（filename + stream + save）。"""
+
+    def __init__(self, filename, data):
+        self.filename = filename
+        self._data = data
+        self.stream = BytesIO(data)
+
+    def read(self):
+        return self._data
+
+    def save(self, path):
+        with open(path, 'wb') as fh:
+            fh.write(self._data)
+
+
+class TestReplacement:
+    """修改已发布指南：复制为替换草稿，审核通过后整体替换原指南。"""
+
+    def test_copy_guide_dir_copies_content_and_images(self, guides_dir):
+        guide_store.write_guide_content(100, '原正文')
+        os.makedirs(guide_store.assets_dir_for(100), exist_ok=True)
+        with open(os.path.join(guide_store.assets_dir_for(100), 'a.png'), 'wb') as fh:
+            fh.write(b'png')
+
+        assert guide_store.copy_guide_dir(100, 200) is True
+        assert guide_store.read_guide_content(200) == '原正文'
+        assert os.path.isfile(os.path.join(guide_store.assets_dir_for(200), 'a.png'))
+
+    def test_copy_missing_guide_creates_empty_folder(self, guides_dir):
+        assert guide_store.copy_guide_dir(404, 405) is False
+        assert os.path.isdir(guide_store.guide_dir(405))
+
+    def test_replace_guide_dir_removes_draft_folder(self, guides_dir):
+        guide_store.write_guide_content(10, '旧内容')
+        guide_store.write_guide_content(20, '新内容')
+
+        guide_store.replace_guide_dir(20, 10)
+
+        assert guide_store.read_guide_content(10) == '新内容'
+        assert not os.path.isdir(guide_store.guide_dir(20))
+        assert not os.path.isdir(guide_store.guide_dir(10) + '.replaced')
+
+    def test_rewrite_asset_links(self, guides_dir):
+        md = '![a](/guides/200/assets/a.png)\n[v](/guides/200/assets/v.mp4)'
+        fixed = guide_store.rewrite_asset_links(md, 200, 100)
+        assert fixed == (
+            '![a](/guides/100/assets/a.png)\n'
+            '[v](/guides/100/assets/v.mp4)'
+        )
+
+    def test_rewrite_only_matches_whole_id(self, guides_dir):
+        md = '/guides/2000/assets/x.png'
+        assert guide_store.rewrite_asset_links(md, 200, 100) == md
+
+
+class TestImages:
+    """正文图片存储：雪花 ID 命名、与视频同目录、计入资源配额。"""
+
+    def test_save_image_uses_snowflake_name(self, guides_dir):
+        ok, msg, item = guide_store.save_guide_image(
+            55, FakeImageUpload('photo.png', b'same-bytes'))
+        assert ok, msg
+        assert item['name'].endswith('.png')
+        assert item['name'][:-4].isdigit()
+        assert item['type'] == 'image'
+        assert item['size'] == len(b'same-bytes')
+
+        ok2, _, item2 = guide_store.save_guide_image(
+            55, FakeImageUpload('copy.png', b'same-bytes'))
+        assert ok2 and item2['name'] != item['name']
+        assert len(os.listdir(guide_store.assets_dir_for(55))) == 2
+
+    def test_image_counts_towards_quota(self, guides_dir):
+        guide_store.write_guide_content(56, '')
+        ok, msg, _ = guide_store.save_guide_image(
+            56, FakeImageUpload('a.png', b'x' * 2048), limit_bytes=1024
+        )
+        assert not ok and '上限' in msg
+
+    def test_directory_total_includes_legacy_subfolder(self, guides_dir):
+        guide_store.write_guide_content(57, '')
+        assets = guide_store.assets_dir_for(57)
+        with open(os.path.join(assets, 'v.mp4'), 'wb') as fh:
+            fh.write(b'v' * 100)
+        legacy = os.path.join(assets, guide_store.LEGACY_IMAGES_DIRNAME)
+        os.makedirs(legacy, exist_ok=True)
+        with open(os.path.join(legacy, 'a.png'), 'wb') as fh:
+            fh.write(b'i' * 50)
+
+        assert guide_store.directory_total(assets) == 150
+
+    def test_ensure_migrates_legacy_images(self, guides_dir):
+        assets = guide_store.assets_dir_for(58)
+        legacy = os.path.join(assets, guide_store.LEGACY_IMAGES_DIRNAME)
+        os.makedirs(legacy, exist_ok=True)
+        with open(os.path.join(legacy, 'a.png'), 'wb') as fh:
+            fh.write(b'png')
+
+        guide_store.ensure_guide_dir(58)
+
+        assert os.path.isfile(os.path.join(assets, 'a.png'))
+        assert not os.path.isdir(legacy)
+        names = [a['name'] for a in guide_store.list_guide_assets(58)]
+        assert names == ['a.png']
+
+    def test_read_normalizes_legacy_asset_link(self, guides_dir):
+        path = guide_store.guide_md_path(59)
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        with open(path, 'w', encoding='utf-8') as fh:
+            fh.write('![a](/guides/59/assets/images/a.png)')
+        assert guide_store.read_guide_content(59) == '![a](/guides/59/assets/a.png)'
+
     def test_read_normalizes_historical_file(self, guides_dir):
         path = guide_store.guide_md_path(32)
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, 'w', encoding='utf-8') as fh:
             fh.write('| a | b |\n\n| --- | --- |\n')
         assert guide_store.read_guide_content(32) == '| a | b |\n| --- | --- |\n'
+
+
+class TestCompress:
+    """资源有损压缩：每次约减少 10% 体积。"""
+
+    @staticmethod
+    def _write_noise_png(path, size=(220, 220)):
+        import random
+        from PIL import Image as PILImage
+
+        rnd = random.Random(7)
+        img = PILImage.new('RGB', size)
+        img.putdata([(rnd.randrange(256), rnd.randrange(256), rnd.randrange(256))
+                     for _ in range(size[0] * size[1])])
+        img.save(path, format='PNG')
+
+    def test_compress_png_reduces_size(self, guides_dir):
+        assets = guide_store.assets_dir_for(60)
+        os.makedirs(assets, exist_ok=True)
+        path = os.path.join(assets, '123456789.png')
+        self._write_noise_png(path)
+        before = os.path.getsize(path)
+
+        ok, msg, item = guide_store.compress_guide_asset(60, '123456789.png')
+
+        assert ok, msg
+        assert item['type'] == 'image'
+        assert os.path.getsize(path) < before
+        assert item['size'] == os.path.getsize(path)
+
+    def test_compress_unsupported_file(self, guides_dir):
+        ok, msg, item = guide_store.save_guide_asset(61, FakeUpload('note.txt', b'x' * 20))
+        assert ok
+        ok, msg, item = guide_store.compress_guide_asset(61, 'note.txt')
+        assert not ok and item is None
+
+    def test_compress_missing_file(self, guides_dir):
+        ok, msg, item = guide_store.compress_guide_asset(62, '404.png')
+        assert not ok and '不存在' in msg
+
+    def test_compress_video_requires_probe(self, guides_dir, monkeypatch):
+        monkeypatch.setattr(guide_store, 'FFPROBE_BIN', '')
+        guide_store.save_guide_asset(63, FakeUpload('a.mp4', b'x' * 100))
+        ok, msg, item = guide_store.compress_guide_asset(63, 'a.mp4')
+        assert not ok and item is None
 
 
 class TestAssets:

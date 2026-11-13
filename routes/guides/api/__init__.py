@@ -15,9 +15,10 @@ from config import (
     get_page_size,
     get_guide_resource_limit,
     GUIDE_VIDEO_EXTENSIONS,
+    USER_IMAGE_MAX_BYTES,
 )
 from services.mail import email_service, guide_review_pending as build_pending_html
-from services.firewall.protection.file_guard import check_upload, KIND_AUDIO
+from services.firewall.protection.file_guard import check_upload, KIND_AUDIO, KIND_IMAGE
 from services import guides as guide_store
 from routes.guides import guides_bp
 
@@ -217,6 +218,7 @@ def my_guides():
             f"""
             SELECT g.id, g.title, g.slug, g.summary, g.status, g.is_pinned,
                    g.created_at, g.updated_at, g.published_at, g.rejected_reason,
+                   g.replace_of,
                    u.username AS author_name
             FROM server_guides g
             LEFT JOIN users u ON g.author_id = u.id
@@ -389,20 +391,26 @@ def _guide_for_edit(guide_id):
     return row, None
 
 
-def _video_payload(guide_id, item):
-    """给资源条目补充访问 / 删除 / 改名 URL 与页面显示名。"""
+def _resource_payload(guide_id, item):
+    """给资源条目补充访问 / 删除 / 压缩 / 改名 URL。"""
     name = item['name']
-    return {
+    kind = item.get('type') or guide_store.asset_kind(name)
+    payload = {
         'name': name,
-        'title': item.get('title') or guide_store.video_title(guide_id, name, name),
+        'type': kind,
+        'title': item.get('title') or name,
         'size': item['size'],
         'size_label': item['size_label'],
         'url': url_for('guides.guide_asset', guide_id=guide_id, filename=name),
-        'delete_url': url_for('guides.api_guide_video_delete',
+        'delete_url': url_for('guides.api_guide_resource_delete',
                               guide_id=guide_id, filename=name),
-        'rename_url': url_for('guides.api_guide_video_rename',
-                              guide_id=guide_id, filename=name),
+        'compress_url': url_for('guides.api_guide_resource_compress',
+                                guide_id=guide_id, filename=name),
     }
+    if kind == 'video':
+        payload['rename_url'] = url_for('guides.api_guide_resource_rename',
+                                        guide_id=guide_id, filename=name)
+    return payload
 
 
 def _quota_payload(guide_id, limit_bytes=None):
@@ -422,15 +430,15 @@ def _get_video_upload():
     return request.files.get('video') or request.files.get('file')
 
 
-@guides_bp.route('/api/guides/<int:guide_id>/videos', methods=['GET'])
+@guides_bp.route('/api/guides/<int:guide_id>/resources', methods=['GET'])
 @login_required
-def api_guide_videos(guide_id):
-    """指南视频列表（编辑指南时用于「视频」标签页）。"""
+def api_guide_resources(guide_id):
+    """指南资源列表（图片 + 视频，统一用于「资源」标签页）。"""
     _, error = _guide_for_edit(guide_id)
     if error:
         return error
     limit = get_guide_resource_limit()
-    items = [_video_payload(guide_id, i)
+    items = [_resource_payload(guide_id, i)
              for i in guide_store.list_guide_assets(guide_id)]
     return jsonify({
         'success': True,
@@ -493,16 +501,50 @@ def api_guide_video_progress(guide_id, task_id):
         'message': task['message'],
     }
     if task['status'] == 'done':
-        payload['item'] = _video_payload(guide_id, task['item'])
+        payload['item'] = _resource_payload(guide_id, task['item'])
         payload.update(_quota_payload(guide_id))
     elif task['status'] == 'error':
         payload['message'] = task['error'] or '视频转码失败'
     return jsonify(payload)
 
 
-@guides_bp.route('/api/guides/<int:guide_id>/videos/<path:filename>/rename', methods=['POST'])
+@guides_bp.route('/api/guides/<int:guide_id>/images', methods=['POST'])
 @login_required
-def api_guide_video_rename(guide_id, filename):
+def api_guide_image_upload(guide_id):
+    """上传正文图片，与视频统一存入指南 assets/ 目录。"""
+    _, error = _guide_for_edit(guide_id)
+    if error:
+        return error
+
+    limit = get_guide_resource_limit()
+    upload = request.files.get('image') or request.files.get('file')
+    ok, msg = check_upload(
+        upload, KIND_IMAGE,
+        max_bytes=min(USER_IMAGE_MAX_BYTES, limit),
+        source='guide_image',
+        allowed_extensions=guide_store.GUIDE_IMAGE_EXTENSIONS,
+    )
+    if not ok:
+        return jsonify({'success': False, 'message': msg}), 400
+
+    ok, msg, item = guide_store.save_guide_image(guide_id, upload, limit_bytes=limit)
+    if not ok:
+        return jsonify({'success': False, 'message': msg}), 400
+
+    url = url_for('guides.guide_asset', guide_id=guide_id, filename=item['name'])
+    alt = os.path.splitext(os.path.basename(item['name']))[0]
+    return jsonify({
+        'success': True,
+        'url': url,
+        'markdown': '![%s](%s)' % (alt, url),
+        'item': _resource_payload(guide_id, item),
+        **_quota_payload(guide_id, limit),
+    })
+
+
+@guides_bp.route('/api/guides/<int:guide_id>/resources/<path:filename>/rename', methods=['POST'])
+@login_required
+def api_guide_resource_rename(guide_id, filename):
     """修改视频在页面上显示的伪文件名（写入指南 config.json）。"""
     _, error = _guide_for_edit(guide_id)
     if error:
@@ -510,36 +552,54 @@ def api_guide_video_rename(guide_id, filename):
 
     name = os.path.basename(str(filename or ''))
     path = os.path.join(guide_store.assets_dir_for(guide_id), name)
-    if not os.path.isfile(path):
+    if not os.path.isfile(path) or not guide_store.is_video_name(name):
         return jsonify({'success': False, 'message': '视频不存在'}), 404
 
     data = request.get_json(silent=True) or request.form
     title = (data.get('title') or '').strip()[:100]
     guide_store.set_video_title(guide_id, name, title)
-    display = guide_store.video_title(guide_id, name, name)
-    item = {'name': name, 'title': display,
-            'size': os.path.getsize(path),
-            'size_label': guide_store.format_size(os.path.getsize(path))}
+    size = os.path.getsize(path)
+    item = {'name': name, 'type': 'video',
+            'title': guide_store.video_title(guide_id, name, name),
+            'size': size, 'size_label': guide_store.format_size(size)}
     return jsonify({
         'success': True,
         'message': '视频名称已更新',
-        'item': _video_payload(guide_id, item),
+        'item': _resource_payload(guide_id, item),
     })
 
 
-@guides_bp.route('/api/guides/<int:guide_id>/videos/<path:filename>/delete', methods=['POST'])
+@guides_bp.route('/api/guides/<int:guide_id>/resources/<path:filename>/delete', methods=['POST'])
 @login_required
-def api_guide_video_delete(guide_id, filename):
-    """删除指南视频资源（同时清理 config.json 中的配置）。"""
+def api_guide_resource_delete(guide_id, filename):
+    """删除指南资源（图片 / 视频），同时清理视频配置。"""
     _, error = _guide_for_edit(guide_id)
     if error:
         return error
     removed = guide_store.delete_guide_asset(guide_id, filename)
     if not removed:
-        return jsonify({'success': False, 'message': '视频不存在'}), 404
+        return jsonify({'success': False, 'message': '资源不存在'}), 404
     return jsonify({
         'success': True,
-        'message': '视频已删除',
+        'message': '资源已删除',
+        **_quota_payload(guide_id),
+    })
+
+
+@guides_bp.route('/api/guides/<int:guide_id>/resources/<path:filename>/compress', methods=['POST'])
+@login_required
+def api_guide_resource_compress(guide_id, filename):
+    """对资源做一次有损压缩（体积约减少 10%）。"""
+    _, error = _guide_for_edit(guide_id)
+    if error:
+        return error
+    ok, message, item = guide_store.compress_guide_asset(guide_id, filename)
+    if not ok:
+        return jsonify({'success': False, 'message': message}), 400
+    return jsonify({
+        'success': True,
+        'message': '压缩完成',
+        'item': _resource_payload(guide_id, item),
         **_quota_payload(guide_id),
     })
 

@@ -116,7 +116,8 @@ def init_db():
                 updated_at TEXT NOT NULL,
                 published_at TEXT DEFAULT NULL,
                 rejected_reason TEXT DEFAULT '',
-                rejected_at TEXT DEFAULT NULL
+                rejected_at TEXT DEFAULT NULL,
+                replace_of INTEGER DEFAULT NULL
             )
         '''),
         # 指南编辑封禁表
@@ -361,7 +362,27 @@ def init_db():
     except Exception as e:
         log('ERROR', 'DB', f'创建 users 活跃用户名唯一索引失败: {e}')
 
+    # ---- 指南「替换草稿」字段迁移 ----
+    # 修改已发布指南时不再原地改写，而是复制成新 ID 的草稿并记录 replace_of；
+    # 审核通过后草稿接管原指南 ID。旧库需补列。
+    try:
+        guide_cols = {row[1] for row in cursor.execute("PRAGMA table_info(server_guides)").fetchall()}
+        if guide_cols and 'replace_of' not in guide_cols:
+            cursor.execute("ALTER TABLE server_guides ADD COLUMN replace_of INTEGER DEFAULT NULL")
+            conn.commit()
+            log('INFO', 'DB', 'server_guides 表已添加 replace_of 字段')
+    except Exception as e:
+        log('ERROR', 'DB', f'server_guides 表 replace_of 迁移失败: {e}')
+
     # ---- 索引 ----
+    try:
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_server_guides_replace_of "
+            "ON server_guides (replace_of)"
+        )
+    except Exception as e:
+        log('ERROR', 'DB', f'创建 replace_of 索引失败: {e}')
+
     # 游戏服务器封禁申请：自动解封查询索引（status + expires_at，避免全表扫描）
     try:
         cursor.execute(

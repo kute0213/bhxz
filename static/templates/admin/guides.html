@@ -67,6 +67,9 @@
                             <td class="px-4 py-3 text-cream/40">{{ guide.id }}</td>
                             <td class="px-4 py-3">
                                 <a href="{{ url_for('guides.guide_detail', guide_id=guide.id) }}" target="_blank" class="text-gold-400 hover:underline font-medium">{{ guide.title }}</a>
+                                {% if guide.replace_of %}
+                                <span class="ml-2 inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-sky-500/10 text-sky-300 border border-sky-500/20" title="审核通过后自动替换原指南 #{{ guide.replace_of }}">替换 #{{ guide.replace_of }}</span>
+                                {% endif %}
                                 {% if guide.rejected_reason %}
                                 <div class="text-xs text-red-300 mt-1">原因：{{ guide.rejected_reason }}</div>
                                 {% endif %}
@@ -342,7 +345,9 @@ function rejectFromPreview() {
 
         return '<tr class="border-b border-forest-700/30 hover:bg-forest-800/20 transition-colors" data-guide-row="' + g.id + '">' +
             '<td class="px-4 py-3 text-cream/40">' + g.id + '</td>' +
-            '<td class="px-4 py-3"><a href="/guides/' + g.id + '" target="_blank" class="text-gold-400 hover:underline font-medium">' + esc(g.title) + '</a>' + reason + '</td>' +
+            '<td class="px-4 py-3"><a href="/guides/' + g.id + '" target="_blank" class="text-gold-400 hover:underline font-medium">' + esc(g.title) + '</a>' +
+            (g.replace_of ? '<span class="ml-2 inline-flex items-center gap-1 text-[11px] px-1.5 py-0.5 rounded bg-sky-500/10 text-sky-300 border border-sky-500/20">替换 #' + g.replace_of + '</span>' : '') +
+            reason + '</td>' +
             '<td class="px-4 py-3 text-cream/70">' + esc(g.author_name || '未知') + '</td>' +
             '<td class="px-4 py-3" data-guide-status="' + g.id + '"><span class="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full ' + cls + '">' + label + '</span></td>' +
             '<td class="px-4 py-3 text-cream/70">' + (g.is_pinned ? '是' : '否') + '</td>' +

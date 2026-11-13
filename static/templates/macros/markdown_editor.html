@@ -5,7 +5,8 @@
        可视化界面只是渲染层，保存到数据库的永远是 Markdown 文本。
      - 可无缝切换到「Markdown 源码」模式（单栏，无实时预览），切换保留全部内容。
      - 顶部工具栏按 3 个常驻标签页分类（基础 / 段落 / 插入），另有
-       「链接」「表格」两个上下文标签页（仅在光标位于链接 / 表格时出现）。
+       「链接」「表格」两个上下文标签页（仅在光标位于链接 / 表格时出现），
+       以及一个常驻的「资源」标签页（图片 / 视频统一查看、上传、插入、压缩）。
      - 按钮在「未满足可用条件」时置灰不可点：文字类需选中文字、表格类需光标在表格中。
      - 内容实时静默保存到浏览器 localStorage（本地，不上传），刷新 / 误关闭后可恢复。
 
@@ -17,7 +18,7 @@
        <script src="{{ url_for('static', filename='js/core/video-player.js', v='4') }}"></script>
        <script src="{{ url_for('static', filename='lib/marked/marked.min.js', v='1') }}"></script>
        <script src="{{ url_for('static', filename='lib/purify/purify.min.js', v='1') }}"></script>
-       <script src="{{ url_for('static', filename='js/pages/markdown-editor.js', v='14') }}"></script>
+       <script src="{{ url_for('static', filename='js/pages/markdown-editor.js', v='16') }}"></script>
 
    可选参数：
        name          - 表单提交字段名（textarea 的 name）
@@ -28,18 +29,21 @@
        autosave      - 是否启用本地静默草稿（默认 true）
        toolbar_extra - 额外工具栏按钮 HTML（追加到「插入」标签页，|safe 注入）
        extra_attrs   - 添加到 textarea 的额外属性（如 required）
-       video_list_url  - 视频列表 API（传入后才显示「视频」标签页与上传按钮）
-       video_upload_url - 视频上传 API
+       resource_list_url         - 资源列表 API（传入后显示「资源」标签页）
+       resource_image_upload_url - 图片上传 API
+       resource_video_upload_url - 视频上传 API
+       resource_limit_label      - 资源配额说明（如 50 MB）
+
+#   图片以标准 Markdown `![alt](url)` 保存，视频以 `@[video](url)` 保存；
+#   图片与视频统一存入指南 assets/ 目录，文件名使用雪花 ID。
+#   在编辑区粘贴 / 拖入图片或视频会自动上传，并切到「资源」标签页显示进度。
+#   视频在富文本中为原子块，支持前后放置光标、整体选中复制 / 剪切 / 删除。
 #
-#   视频以 Markdown 语法 `@[video](url)` 保存（不再写入原始 HTML），由 marked 块级扩展渲染；
-#   富文本中的视频为原子块，插入于光标之后，支持前后放置光标、整体选中复制 / 剪切 / 删除。
-#
-#   说明：工具栏中的「链接」「表格」「视频」三个标签页是上下文标签页——
-#   只有当光标/选区位于链接内、表格内、视频内（或刚点击了「插入链接 / 视频」）时才会出现，
-#   离开对应上下文后自动隐藏并切回「基础」标签页。
+#   说明：「链接」「表格」是上下文标签页，只有光标位于其中（或刚点击了「插入链接」）
+#   时才会出现；「资源」标签页常驻，不受光标位置影响。
 #}
 {% from "macros/progress.html" import progress_track %}
-{% macro markdown_editor(name='', value='', editor_id='md-editor', placeholder='', show_count=false, autosave=true, toolbar_extra='', extra_attrs='', video_list_url='', video_upload_url='', video_limit_label='') %}
+{% macro markdown_editor(name='', value='', editor_id='md-editor', placeholder='', show_count=false, autosave=true, toolbar_extra='', extra_attrs='', resource_list_url='', resource_image_upload_url='', resource_video_upload_url='', resource_limit_label='') %}
 <style>
 /* ================= 统一编辑器容器 ================= */
 .mre {
@@ -308,19 +312,21 @@
     .mre-panel-link { flex-direction: column; align-items: stretch; }
 }
 
-/* ---------- 视频标签页（上下文面板） ---------- */
-.mre-panel-video {
+/* ---------- 资源标签页（图片 + 视频） ---------- */
+.mre-panel-resource {
     flex-direction: column;
     align-items: stretch;
     gap: 0.45rem;
 }
-.mre-video-bar {
+.mre-resource-bar {
     display: flex;
     align-items: center;
     gap: 0.5rem;
     flex-wrap: wrap;
 }
-.mre-video-quota {
+.mre-resource-upload-btn { cursor: pointer; }
+.mre-resource-upload-btn.is-loading { opacity: 0.55; pointer-events: none; }
+.mre-resource-quota {
     margin-left: auto;
     display: inline-flex;
     align-items: center;
@@ -328,24 +334,20 @@
     font-size: 0.72rem;
     color: var(--text-muted);
 }
-.mre-video-quota-text { white-space: nowrap; }
-.mre-video-quota-bar { display: inline-block; width: 5.5rem; }
-.mre-video-progress {
+.mre-resource-quota-text { white-space: nowrap; }
+.mre-resource-quota-bar { display: inline-block; width: 5.5rem; }
+.mre-resource-progress {
     display: flex;
     align-items: center;
     gap: 0.5rem;
 }
-.mre-video-progress-bar { flex: 1; min-width: 0; }
-.mre-video-progress-text {
-    min-width: 3rem;
+.mre-resource-progress-bar { flex: 1; min-width: 0; }
+.mre-resource-progress-text {
+    min-width: 6.5rem;
     text-align: right;
     font-size: 0.72rem;
     color: var(--text-muted);
     font-variant-numeric: tabular-nums;
-}
-.mre-video-upload-btn.is-loading {
-    opacity: 0.55;
-    pointer-events: none;
 }
 /* 富文本中的视频：作为原子块，可前后放置光标 / 整体选中剪切 */
 .mre-rich video {
@@ -360,74 +362,96 @@
 .mre-rich video:hover { outline-color: rgba(2, 132, 199, 0.35); }
 /* 站内播放器容器内的视频由播放器自身（.svp）控制排版 */
 .mre-rich .svp video { margin: 0; }
-.mre-video-list {
+.mre-resource-list {
     display: flex;
-    flex-wrap: wrap;
-    gap: 0.4rem;
-    max-height: 11rem;
+    flex-direction: column;
+    gap: 0.3rem;
+    max-height: 12rem;
     overflow-y: auto;
 }
-.mre-video-empty {
+.mre-resource-empty {
     margin: 0;
     padding: 0.35rem 0.2rem;
     font-size: 0.75rem;
     color: var(--text-muted);
 }
-.mre-video-item {
-    display: inline-flex;
+.mre-resource-item {
+    display: flex;
     align-items: center;
-    gap: 0.35rem;
-    max-width: 100%;
-    padding: 0.28rem 0.35rem 0.28rem 0.6rem;
+    gap: 0.45rem;
+    padding: 0.3rem 0.4rem 0.3rem 0.55rem;
     border: 1px solid var(--border-card);
     border-radius: 0.5rem;
     background: rgba(255, 255, 255, 0.75);
     color: var(--text-secondary);
-    font-size: 0.75rem;
+    font-size: 0.76rem;
     cursor: pointer;
     transition: border-color 0.15s ease, background 0.15s ease;
 }
-.mre-video-item:hover { border-color: var(--accent-blue); background: rgba(2, 132, 199, 0.08); }
-.mre-video-item.is-active { border-color: var(--accent-blue); background: rgba(2, 132, 199, 0.14); color: var(--accent-blue); }
-.mre-video-item-name {
-    max-width: 14rem;
+.mre-resource-item:hover { border-color: var(--accent-blue); background: rgba(2, 132, 199, 0.08); }
+.mre-resource-item.is-active { border-color: var(--accent-blue); background: rgba(2, 132, 199, 0.14); color: var(--accent-blue); }
+.mre-resource-icon {
+    display: inline-flex;
+    align-items: center;
+    color: var(--accent-blue);
+    flex-shrink: 0;
+}
+.mre-resource-icon svg { width: 0.9rem; height: 0.9rem; }
+.mre-resource-name {
+    flex: 1 1 auto;
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
-.mre-video-item-size { color: var(--text-muted); font-size: 0.68rem; }
-.mre-video-item-rename,
-.mre-video-item-del {
+.mre-resource-size {
+    color: var(--text-muted);
+    font-size: 0.68rem;
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+}
+.mre-resource-act {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    padding: 0.1rem;
+    padding: 0.15rem;
     border: none;
     border-radius: 0.3rem;
     background: transparent;
     cursor: pointer;
+    color: var(--text-muted);
+    flex-shrink: 0;
 }
-.mre-video-item-rename { color: var(--accent-blue); }
-.mre-video-item-rename:hover { background: rgba(2, 132, 199, 0.12); }
-.mre-video-item-del { color: var(--accent-rose); }
-.mre-video-item-del:hover { background: rgba(225, 29, 72, 0.12); }
-.mre-video-item-rename svg,
-.mre-video-item-del svg { width: 0.8rem; height: 0.8rem; }
+.mre-resource-act:hover { background: rgba(2, 132, 199, 0.12); color: var(--accent-blue); }
+.mre-resource-act-compress { color: var(--accent-indigo); }
+.mre-resource-act-delete { color: var(--accent-rose); }
+.mre-resource-act-delete:hover { background: rgba(225, 29, 72, 0.12); color: var(--accent-rose); }
+.mre-resource-act svg { width: 0.82rem; height: 0.82rem; }
+.mre-resource-act.is-loading { pointer-events: none; }
+.mre-resource-act.is-loading svg { animation: mre-spin 0.8s linear infinite; }
+@keyframes mre-spin { to { transform: rotate(360deg); } }
+
+/* ---------- 拖拽上传 / 正文图片 ---------- */
+.mre.is-dragover { outline: 2px dashed var(--accent-blue); outline-offset: -4px; }
+.mre-rich img { cursor: default; max-width: 100%; border-radius: 0.5rem; }
+.mre-rich img.is-image-active { outline: 2px solid rgba(2, 132, 199, 0.45); }
 </style>
 
 <div class="mre" data-mre data-editor-id="{{ editor_id }}" data-mre-autosave="{{ 'true' if autosave else 'false' }}"
-     data-mre-video-list="{{ video_list_url }}" data-mre-video-upload="{{ video_upload_url }}">
+     data-mre-resource-list="{{ resource_list_url }}"
+     data-mre-resource-image-upload="{{ resource_image_upload_url }}"
+     data-mre-resource-video-upload="{{ resource_video_upload_url }}">
 
     {# ---------- 顶部：标签页分类 + 模式切换 ---------- #}
     <div class="mre-tabs" role="tablist">
         <button type="button" class="mre-tab is-active" data-mre-tab="basic"><i data-lucide="type"></i>基础</button>
         <button type="button" class="mre-tab" data-mre-tab="block"><i data-lucide="pilcrow"></i>段落</button>
         <button type="button" class="mre-tab" data-mre-tab="insert"><i data-lucide="plus"></i>插入</button>
-        {# 上下文标签页：仅在链接 / 表格 / 视频上下文出现，见下方脚本 updateContextTabs() #}
+        {# 上下文标签页：仅在链接 / 表格上下文出现，见下方脚本 updateContextTabs() #}
         <button type="button" class="mre-tab" data-mre-tab="link" hidden><i data-lucide="link"></i>链接</button>
         <button type="button" class="mre-tab" data-mre-tab="table" hidden><i data-lucide="table"></i>表格</button>
-        {% if video_list_url %}
-        <button type="button" class="mre-tab" data-mre-tab="video" hidden><i data-lucide="video"></i>视频</button>
+        {% if resource_list_url %}
+        <button type="button" class="mre-tab" data-mre-tab="resource"><i data-lucide="folder-open"></i>资源</button>
         {% endif %}
         <span class="mre-spacer"></span>
         <div class="mre-modes">
@@ -466,9 +490,6 @@
         <div class="mre-panel" data-mre-panel="insert" hidden>
             <button type="button" class="mre-btn" data-mre-cmd="link" data-mre-need="caret" title="插入/编辑链接"><i data-lucide="link"></i>链接</button>
             <button type="button" class="mre-btn" data-mre-cmd="table-create" data-mre-need="caret" title="插入 3×3 表格"><i data-lucide="table"></i>表格</button>
-            {% if video_upload_url %}
-            <button type="button" class="mre-btn" data-mre-cmd="video" data-mre-need="caret" title="插入 / 更换视频"><i data-lucide="video"></i>视频</button>
-            {% endif %}
             {{ toolbar_extra | safe }}
         </div>
 
@@ -502,27 +523,28 @@
             <button type="button" class="mre-btn" data-mre-cmd="align-right" data-mre-need="table" title="当前列右对齐"><i data-lucide="align-right"></i>右对齐</button>
         </div>
 
-        {# ---------- 工具栏面板（标签页 6：视频，上下文标签页） ---------- #}
-        {% if video_list_url %}
-        <div class="mre-panel mre-panel-video" data-mre-panel="video" hidden>
-            <div class="mre-video-bar">
-                <label class="mre-btn mre-btn-solid mre-video-upload-btn">
-                    <i data-lucide="upload"></i>上传视频
-                    <input type="file" accept="video/mp4,video/webm,video/ogg,video/quicktime,.mp4,.webm,.ogv,.ogg,.mov,.m4v"
-                           data-mre-video-file hidden>
+        {# ---------- 工具栏面板（标签页 6：资源，常驻） ---------- #}
+        {% if resource_list_url %}
+        <div class="mre-panel mre-panel-resource" data-mre-panel="resource" hidden>
+            <div class="mre-resource-bar">
+                <label class="mre-btn mre-btn-solid mre-resource-upload-btn" title="上传图片或视频">
+                    <i data-lucide="upload"></i>上传资源
+                    <input type="file" hidden multiple
+                           accept="image/png,image/jpeg,image/gif,image/webp,video/mp4,video/webm,video/ogg,video/quicktime,.png,.jpg,.jpeg,.gif,.webp,.mp4,.webm,.ogv,.ogg,.mov,.m4v"
+                           data-mre-resource-file>
                 </label>
-                <button type="button" class="mre-btn" data-mre-video-refresh><i data-lucide="refresh-cw"></i>刷新</button>
-                <span class="mre-video-quota" data-mre-video-quota>
-                    <span class="mre-video-quota-text" data-mre-video-quota-text></span>
-                    <span class="mre-video-quota-bar">{{ progress_track(id=editor_id ~ '-video-quota-fill', variant='blue', size='xs') }}</span>
+                <button type="button" class="mre-btn" data-mre-resource-refresh><i data-lucide="refresh-cw"></i>刷新</button>
+                <span class="mre-resource-quota" data-mre-resource-quota>
+                    <span class="mre-resource-quota-text" data-mre-resource-quota-text></span>
+                    <span class="mre-resource-quota-bar">{{ progress_track(id=editor_id ~ '-resource-quota-fill', variant='blue', size='xs') }}</span>
                 </span>
             </div>
-            <div class="mre-video-progress" data-mre-video-progress hidden>
-                <span class="mre-video-progress-bar">{{ progress_track(id=editor_id ~ '-video-progress-fill', variant='blue', size='sm') }}</span>
-                <span class="mre-video-progress-text" data-mre-video-progress-text>0%</span>
+            <div class="mre-resource-progress" data-mre-resource-progress hidden>
+                <span class="mre-resource-progress-bar">{{ progress_track(id=editor_id ~ '-resource-progress-fill', variant='blue', size='sm') }}</span>
+                <span class="mre-resource-progress-text" data-mre-resource-progress-text>0%</span>
             </div>
-            <div class="mre-video-list" data-mre-video-list></div>
-            <p class="mre-video-empty" data-mre-video-empty>暂无视频，点击「上传视频」添加{% if video_limit_label %}（每个指南全部资源合计最多 {{ video_limit_label }}）{% endif %}</p>
+            <div class="mre-resource-list" data-mre-resource-list></div>
+            <p class="mre-resource-empty" data-mre-resource-empty>暂无资源，点击「上传资源」添加{% if resource_limit_label %}（每个指南全部资源合计最多 {{ resource_limit_label }}）{% endif %}</p>
         </div>
         {% endif %}
     </div>

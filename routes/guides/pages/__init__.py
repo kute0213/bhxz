@@ -12,19 +12,93 @@ from core.shared.captcha import captcha_service
 from core.shared.ip import get_client_ip
 from config import get_page_size, get_guide_resource_limit
 from services import guides as guide_store
+from services.content_limits import check_pending_limit
 from routes.guides import guides_bp
 from routes.guides.api import _annotate_favorites
 
 
 def _edit_form_context(guide):
-    """编辑指南表单上下文（视频直接上传到该指南目录）。"""
+    """编辑指南表单上下文（图片 / 视频统一上传到该指南资源目录）。"""
     return {
         'guide': guide,
-        'video_list_url': url_for('guides.api_guide_videos', guide_id=guide['id']),
-        'video_upload_url': url_for('guides.api_guide_video_upload', guide_id=guide['id']),
+        'resource_list_url': url_for('guides.api_guide_resources', guide_id=guide['id']),
+        'resource_image_upload_url': url_for('guides.api_guide_image_upload', guide_id=guide['id']),
+        'resource_video_upload_url': url_for('guides.api_guide_video_upload', guide_id=guide['id']),
         'draft_url': url_for('guides.api_guide_draft', guide_id=guide['id']),
-        'video_limit_label': guide_store.format_size(get_guide_resource_limit()),
+        'resource_limit_label': guide_store.format_size(get_guide_resource_limit()),
     }
+
+
+def _replacement_draft_id(conn, guide_id, user_id):
+    """当前用户针对某条指南已存在的替换草稿（草稿 / 待审核 / 已驳回）。"""
+    row = conn.execute(
+        """
+        SELECT id FROM server_guides
+        WHERE replace_of = ? AND author_id = ? AND status != 'approved'
+        ORDER BY updated_at DESC LIMIT 1
+        """,
+        (guide_id, user_id),
+    ).fetchone()
+    return row['id'] if row else None
+
+
+def _start_replacement(guide, user):
+    """修改已发布指南：复制成新 ID 的草稿并标记 replace_of，返回草稿 ID。
+
+    修改全程不触碰原指南；审核通过后由管理端用草稿替换原指南（含 ID 与收藏）。
+    已存在替换草稿时直接复用，避免重复复制。
+    """
+    conn = get_db()
+    draft_id = None
+    try:
+        existing = _replacement_draft_id(conn, guide['id'], user['id'])
+        if existing:
+            return existing
+
+        allowed, message = check_pending_limit(user, 'guide')
+        if not allowed:
+            flash(message, 'error')
+            return None
+
+        from routes.guides.api import _slugify, _ensure_unique_slug
+
+        now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        draft_id = next_id()
+        content = guide_store.read_guide_content(guide['id'], guide.get('content') or '')
+
+        guide_store.copy_guide_dir(guide['id'], draft_id)
+        guide_store.write_guide_content(draft_id, content)
+
+        conn.execute(
+            """
+            INSERT INTO server_guides
+                (id, title, slug, summary, content, cover_image, author_id,
+                 status, is_pinned, sort_order, created_at, updated_at, replace_of)
+            VALUES (?, ?, ?, ?, '', ?, ?, 'draft', 0, 0, ?, ?, ?)
+            """,
+            (
+                draft_id,
+                guide['title'],
+                _ensure_unique_slug(conn, _slugify(guide['title'])),
+                guide.get('summary') or '',
+                guide.get('cover_image') or '',
+                user['id'],
+                now,
+                now,
+                guide['id'],
+            ),
+        )
+        conn.commit()
+        flash('已复制为新草稿：审核通过后会自动替换原指南', 'info')
+        return draft_id
+    except Exception as exc:
+        conn.rollback()
+        if draft_id:
+            guide_store.delete_guide_dir(draft_id)
+        flash(f'创建修改草稿失败: {exc}', 'error')
+        return None
+    finally:
+        conn.close()
 
 
 def _render_guide_page(my_mode, keyword):
@@ -59,6 +133,7 @@ def _render_guide_page(my_mode, keyword):
             f"""
             SELECT g.id, g.title, g.summary, g.status, g.is_pinned, g.cover_image,
                    g.created_at, g.updated_at, g.published_at, g.rejected_reason,
+                   g.replace_of,
                    u.username as author_name,
                    (SELECT COUNT(*) FROM guide_favorites f WHERE f.guide_id = g.id) AS favorite_count
             FROM server_guides g
@@ -183,6 +258,7 @@ def guide_favorites():
             """
             SELECT g.id, g.title, g.summary, g.status, g.is_pinned, g.cover_image,
                    g.created_at, g.updated_at, g.published_at, g.rejected_reason,
+                   g.replace_of,
                    u.username AS author_name,
                    (SELECT COUNT(*) FROM guide_favorites f WHERE f.guide_id = g.id) AS favorite_count
             FROM guide_favorites fav
@@ -275,6 +351,15 @@ def guide_edit(guide_id):
 
     guide = dict(row)
     guide['content'] = guide_store.read_guide_content(guide_id, guide.get('content') or '')
+
+    # 已发布的指南不在原地修改：进入编辑即复制成新 ID 的替换草稿，
+    # 原指南保持线上原样，审核通过后再由管理端整体替换。
+    if guide['status'] == 'approved':
+        draft_id = _start_replacement(guide, user)
+        if draft_id:
+            return redirect(url_for('guides.guide_edit', guide_id=draft_id))
+        return redirect(url_for('guides.my_guides_page'))
+
     is_draft = guide['status'] == 'draft'
     is_author = guide['author_id'] == user['id'] or user.get('is_admin')
 

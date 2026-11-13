@@ -31,6 +31,7 @@
 .guide-status-pending { background: rgba(217, 119, 6, 0.12); color: #b45309; border: 1px solid rgba(217, 119, 6, 0.3); }
 .guide-status-approved { background: rgba(22, 163, 74, 0.12); color: #15803d; border: 1px solid rgba(22, 163, 74, 0.3); }
 .guide-status-rejected { background: rgba(225, 29, 72, 0.12); color: #be123c; border: 1px solid rgba(225, 29, 72, 0.3); }
+.guide-status-replace { background: rgba(2, 132, 199, 0.12); color: #0369a1; border: 1px solid rgba(2, 132, 199, 0.3); }
 
 
 </style>
@@ -88,6 +89,9 @@
                             {% if guide.status == 'draft' %}guide-status-draft{% elif guide.status == 'pending' %}guide-status-pending{% elif guide.status == 'approved' %}guide-status-approved{% else %}guide-status-rejected{% endif %}">
                             {% if guide.status == 'draft' %}草稿{% elif guide.status == 'pending' %}待审核{% elif guide.status == 'approved' %}已通过{% else %}已拒绝{% endif %}
                         </span>
+                        {% if guide.replace_of %}
+                        <span class="guide-status-badge guide-status-replace" title="审核通过后自动替换原指南">替换稿</span>
+                        {% endif %}
                         {% endif %}
                     </div>
                     <a href="{{ url_for('guides.guide_detail', guide_id=guide.id) }}" class="hover:no-underline">
@@ -173,7 +177,8 @@
             var labelMap = { draft: '草稿', pending: '待审核', approved: '已通过', rejected: '已拒绝' };
             var cls = clsMap[g.status] || 'guide-status-rejected';
             var label = labelMap[g.status] || '已拒绝';
-            status = '<span class="guide-status-badge ' + cls + '">' + label + '</span>';
+            status = '<span class="guide-status-badge ' + cls + '">' + label + '</span>' +
+                (g.replace_of ? '<span class="guide-status-badge guide-status-replace" title="审核通过后自动替换原指南">替换稿</span>' : '');
         }
         var pin = g.is_pinned ? '<span class="inline-flex items-center gap-1 text-xs text-gold-400"><i data-lucide="pin" class="w-3 h-3"></i>置顶</span>' : '';
         var date = ((g.published_at || g.created_at || '') + '').slice(0, 10);

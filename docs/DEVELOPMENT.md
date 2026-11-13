@@ -737,7 +737,11 @@ python scripts/migrate_guides.py             # 正式迁移
 
 **指南文件存储约定：**
 
-* 每个指南一个目录 `uploads/guides/<ID>/`，内含 `guide.md`（唯一正文来源）、`config.json`（指南配置）与 `assets/`（视频等资源）
+* 每个指南一个目录 `uploads/guides/<ID>/`，内含 `guide.md`（唯一正文来源）、`config.json`（指南配置）与 `assets/`（图片、视频统一存放，不建子目录）。历史 `assets/images/` 由 `ensure_guide_dir()` 自动并入 `assets/`，`read_guide_content()` / `write_guide_content()` 会经 `normalize_asset_links()` 把正文里的 `assets/images/` 链接改为 `assets/`
+* **修改已发布指南必须走「替换稿」流程**：`guide_edit` 遇到 `status = 'approved'` 时不原地改写，而是由 `_start_replacement()` 调用 `guide_store.copy_guide_dir()` 复制整条指南到新雪花 ID，`server_guides.replace_of` 记录原指南 ID；同一用户同一原指南已有未通过（draft / pending / rejected）的替换稿时直接复用，禁止重复复制
+* **替换在审核通过时原子完成**：`routes/admin/guides/_apply_replacement()` 先改写正文中指向草稿 ID 的资源链接（`guide_store.rewrite_asset_links`），删除原指南数据行与原收藏副本，再把草稿行 `id` 改为原指南 ID（`replace_of` 置空、状态 approved，`author_id / is_pinned / sort_order / created_at / published_at` 还原），最后 `guide_store.replace_guide_dir()` 用草稿目录整体替换原目录（原目录先移备份位再删除）。**不得采用「重新插入新行」或「逐文件复制」的写法**，否则收藏 / 外链会失效或残留草稿文件
+* 替换稿被驳回时原指南保持不变，替换稿本身按「被驳回内容 24 小时自动删除」规则清理；`guide_favorites` 中指向草稿 ID 的记录在替换时一并删除
+* 正文图片：上传接口 `POST /api/guides/<id>/images`（`KIND_IMAGE` 校验、单张 ≤ `USER_IMAGE_MAX_BYTES`、计入指南资源总量），存储统一走 `guide_store.save_guide_image()`（写入 `assets/` 根目录，文件名固定为 `<雪花ID>.<扩展名>`，**不做内容哈希去重**）；编辑器资源标签页上传 / 拖拽 / 剪贴板粘贴均走此接口，插入标准 Markdown `![alt](url)`。资源配额统计使用 `directory_total()`（递归包含历史子目录，保证迁移期数据仍计入）
 * **`config.json` 规范**：固定为「版本号 + 分节」结构 `{"version": 1, "videos": {"<真实文件名>.mp4": {"title": "<页面显示名称>"}}}`；新增配置项时只追加分节 / 字段，不改已有结构。读写统一走 `services/guides/` 的 `read_guide_config()` / `write_guide_config()`（原子写入），不要在其他层直接读写该文件；删除资源时同步清理对应配置项
 * 新建指南时即生成指南 ID 与目录（正文为空），状态为 `draft`；点击「新建指南」直接创建标题为「未命名指南」的草稿，标题 / 摘要 / 正文再在编辑页修改。之后直接写入正文与 `assets/`，不再使用 `_drafts` token 机制
 * 「我的指南」为独立页面 `/guides/my`（需登录）
@@ -748,6 +752,8 @@ python scripts/migrate_guides.py             # 正式迁移
 * **转码进度**：`ffprobe` 读取时长，解析 ffmpeg `-progress` 的 `out_time_us`（微秒）换算百分比（封顶 99，结束置 100）；任务状态保存在内存 `_VIDEO_TASKS`（`status / percent / message / item / error`，TTL 清理），前端通过 `GET /api/guides/<id>/videos/progress/<task_id>` 轮询。上传阶段进度由 XHR `upload.onprogress` 驱动，上传完成后进度条归零再切换为转码进度
 * 视频在 Markdown 中统一存为 `@[video](url)`（marked 块级扩展），编辑器 / 详情页 / 管理后台预览负责渲染为 `<video>`；同时兼容历史 `<video>` HTML
 * 编辑器视频上传使用 XHR（`upload.onprogress`）驱动上传进度，完成后进度条归零并轮询转码进度；进度条统一复用 `macros/progress.html` 的 `progress_track()`（JS 侧用 `.progress-track / .progress-fill`），禁止另起样式；上传配额、改名与删除确认均使用站内控件 / `CustomModal`，不使用原生 file 控件、`window.confirm` 或 `window.prompt`
+* **资源标签页是图片 / 视频的唯一入口**：「插入」标签页只保留链接与表格按钮，**不得再加图片 / 视频按钮**。资源列表统一走 `GET /api/guides/<id>/resources`（`routes/guides/api/_resource_payload()` 生成 `type / title / url / delete_url / compress_url`，视频额外 `rename_url`），删除 / 压缩 / 改名分别为 `POST /api/guides/<id>/resources/<文件名>/{delete,compress,rename}`；粘贴 / 拖拽图片或视频后必须通过 `openResourceTab()` 切到资源页并用 `setResourceProgress()` 展示进度条
+* **一键有损压缩**：`guide_store.compress_guide_asset()` 中的 `_compress_image_file()`（Pillow：JPEG / WEBP 搜质量，PNG / GIF 搜颜色数）与 `_compress_video_file()`（ffmpeg 按 90% 码率，AAC 96k）都必须先写隐藏临时文件再用 `os.replace()` 原子替换原文件；压缩目标为当前体积的 90%（`COMPRESS_RATIO`），体积无法继续下降时返回提示且**不得破坏原文件**；临时文件在 `finally` 中清理。
 * 视频伪文件名统一走 `set_video_title()` / `video_title()`（写入 / 读取 `config.json`），页面渲染时由 URL 文件名查表注入 `<video data-title="...">`，播放器把它显示在**视频下方**（不遮挡画面）；改名 / 删除等写操作必须校验作者或管理员权限
 * 富文本中的视频为 `contenteditable="false"` 原子块：插入于光标之后，前后保证有空段落，支持整体选中复制 / 剪切 / 删除
 * **播放器视觉约定**：`.svp` 只负责外层（`overflow: visible`，供上拉框溢出），视频 / 中央播放按钮 / 控制栏都放在 `.svp-stage` 内相对定位；伪文件名 `.svp-caption` 是 stage 之后的普通流元素，**禁止再叠加在视频上**。控制按钮统一为**淡蓝色磨砂玻璃材质**：半透明浅蓝渐变底 + `backdrop-filter: blur() saturate()` + 白色描边 + 内高光 + 柔和投影，图标为白色并带细投影（投影加在 `svg` 上，不要加在按钮本身，避免 `filter` 与 `backdrop-filter` 互相干扰）；控制栏容器保持透明，暂停态只显示中央的磨砂玻璃播放按钮，**不得给画面加任何蓝色 / 半透明遮罩**。上拉框内部按钮需把玻璃底 / 边框 / `backdrop-filter` 重置为透明（`.svp-pop .svp-btn`），避免在浅色面板上叠加出厚重色块
@@ -763,6 +769,7 @@ python scripts/migrate_guides.py             # 正式迁移
 
 * **子页面必须使用独立路由**：`我的建筑` / `我的收藏` 等页面一律使用 `/buildings/my`、`/buildings/favorites` 这类独立路径，并配套独立 API（`/api/buildings/my`、`/api/buildings/favorites`），**禁止再用 `?my=1` / `?fav=1` 等查询参数切换页面类型**（与 `/guides/my`、`/music/my` 保持一致）；查询参数只允许用于搜索（`q`）、标签（`tag`）、分页（`page`）等筛选
 * **前端 JS 按需加载**：`js/core/video-player.js` 不再由 `base.html` 全站引入，只在实际使用视频的页面（指南详情、Markdown 编辑器所在页、管理后台预览）通过 `page_scripts` / `extra_script` 引入；新增公共组件时同样优先按需加载，避免拖慢全站首屏
+* **悬浮提示统一走 `.site-tooltip`**：`static/js/core/base.js` 的 `initSiteTooltip()` 通过事件委托接管全站 `[title]` / `[data-tooltip]`，悬停时把 `title` 暂存并移除（避免原生气泡），移出 / 滚动 / 点击 / 失焦时还原；定位只写入 `left` / `top`，动画只用 `opacity` / `transform`。**可编辑区域（`[contenteditable]` / `textarea`）内跳过接管**，否则编辑器序列化时会丢链接标题。新组件如需提示，直接写 `title` 或 `data-tooltip` 即可，不要另造气泡
 
 **开发准则：**
 
