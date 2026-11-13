@@ -737,22 +737,23 @@ python scripts/migrate_guides.py             # 正式迁移
 
 **指南文件存储约定：**
 
-* 每个指南一个目录 `uploads/guides/<ID>/`，内含 `guide.md`（唯一正文来源）、`config.json`（指南配置）与 `assets/`（图片、视频统一存放，不建子目录）。历史 `assets/images/` 由 `ensure_guide_dir()` 自动并入 `assets/`，`read_guide_content()` / `write_guide_content()` 会经 `normalize_asset_links()` 把正文里的 `assets/images/` 链接改为 `assets/`
+* 每个指南一个目录 `uploads/guides/<ID>/`，内含 `guide.md`（唯一正文来源）、`config.json`（指南配置）与 `assets/`（图片、视频统一存放，不建子目录）。正文里的资源统一写相对链接 `assets/<文件名>`，**不得包含指南 ID**；读取时以 `guide.md` 为唯一来源，缺失即视为空正文，不再回退数据库旧内容。历史数据由 `scripts/migrate_guide_assets.py` 迁移，运行时代码不保留迁移分支
 * **修改已发布指南必须走「替换稿」流程**：`guide_edit` 遇到 `status = 'approved'` 时不原地改写，而是由 `_start_replacement()` 调用 `guide_store.copy_guide_dir()` 复制整条指南到新雪花 ID，`server_guides.replace_of` 记录原指南 ID；同一用户同一原指南已有未通过（draft / pending / rejected）的替换稿时直接复用，禁止重复复制
-* **替换在审核通过时原子完成**：`routes/admin/guides/_apply_replacement()` 先改写正文中指向草稿 ID 的资源链接（`guide_store.rewrite_asset_links`），删除原指南数据行与原收藏副本，再把草稿行 `id` 改为原指南 ID（`replace_of` 置空、状态 approved，`author_id / is_pinned / sort_order / created_at / published_at` 还原），最后 `guide_store.replace_guide_dir()` 用草稿目录整体替换原目录（原目录先移备份位再删除）。**不得采用「重新插入新行」或「逐文件复制」的写法**，否则收藏 / 外链会失效或残留草稿文件
+* **替换在审核通过时原子完成**：`routes/admin/guides/_apply_replacement()` 删除原指南数据行与原收藏副本，再把草稿行 `id` 改为原指南 ID（`replace_of` 置空、状态 approved，`author_id / is_pinned / sort_order / created_at / published_at` 还原），最后 `guide_store.replace_guide_dir()` 用草稿目录整体替换原目录（原目录先移备份位再删除）。正文资源使用相对链接，**无需改写链接**。**不得采用「重新插入新行」或「逐文件复制」的写法**，否则收藏 / 外链会失效或残留草稿文件
 * 替换稿被驳回时原指南保持不变，替换稿本身按「被驳回内容 24 小时自动删除」规则清理；`guide_favorites` 中指向草稿 ID 的记录在替换时一并删除
-* 正文图片：上传接口 `POST /api/guides/<id>/images`（`KIND_IMAGE` 校验、单张 ≤ `USER_IMAGE_MAX_BYTES`、计入指南资源总量），存储统一走 `guide_store.save_guide_image()`（写入 `assets/` 根目录，文件名固定为 `<雪花ID>.<扩展名>`，**不做内容哈希去重**）；编辑器资源标签页上传 / 拖拽 / 剪贴板粘贴均走此接口，插入标准 Markdown `![alt](url)`。资源配额统计使用 `directory_total()`（递归包含历史子目录，保证迁移期数据仍计入）
+* 正文图片：上传接口 `POST /api/guides/<id>/images`（`KIND_IMAGE` 校验、单张 ≤ `USER_IMAGE_MAX_BYTES`、计入指南资源总量），存储统一走 `guide_store.save_guide_image()`（写入 `assets/` 根目录，文件名固定为 `<雪花ID>.<扩展名>`，**不做内容哈希去重**）；编辑器资源标签页上传 / 拖拽 / 剪贴板粘贴均走此接口，插入标准 Markdown `![alt](assets/<文件名>)`。资源配额统计使用 `directory_total()`
 * **`config.json` 规范**：固定为「版本号 + 分节」结构 `{"version": 1, "videos": {"<真实文件名>.mp4": {"title": "<页面显示名称>"}}}`；新增配置项时只追加分节 / 字段，不改已有结构。读写统一走 `services/guides/` 的 `read_guide_config()` / `write_guide_config()`（原子写入），不要在其他层直接读写该文件；删除资源时同步清理对应配置项
-* 新建指南时即生成指南 ID 与目录（正文为空），状态为 `draft`；点击「新建指南」直接创建标题为「未命名指南」的草稿，标题 / 摘要 / 正文再在编辑页修改。之后直接写入正文与 `assets/`，不再使用 `_drafts` token 机制
+* 新建指南时即生成指南 ID 与目录（正文为空），状态为 `draft`；点击「新建指南」直接创建标题为「未命名指南」的草稿，标题 / 摘要 / 正文再在编辑页修改。之后直接写入正文与 `assets/`
+* **草稿删除权限**：作者只能删除 `draft` / `rejected` 指南（`POST /api/guides/<id>/delete`），删除时同步移除整个指南目录；`pending` / `approved` 不允许作者直接删除，必须先走审核 / 拒绝流程
 * 「我的指南」为独立页面 `/guides/my`（需登录）
 * 草稿保存保持 `draft` 且无需验证码；「发布」（`POST /api/guides/<id>/publish`）将草稿改为 `pending`，要求正文非空
 * 草稿计入「未通过指南数量」（统计条件 `status != 'approved'`），超过上限时禁止新建
 * 每个指南 `assets/` 合计上限由系统设置「指南资源」的 `GUIDE_RESOURCE_MAX_MB` 控制（默认 50MB，1–1024），读取统一用 `config.get_guide_resource_limit()`，**禁止硬编码**；视频扩展名见 `GUIDE_VIDEO_EXTENSIONS`
 * **视频上传必须统一转码（异步）**：路由调用 `guide_store.start_guide_video_upload()`，原始文件先写入指南目录内的 `.upload_` 临时目录，再由后台线程调用 `_process_video()`；转码在 `.transcode_` 临时目录中进行（`FFMPEG_BIN` 转 MP4 / H.264：`libx264 -preset veryfast -crf 23`、`yuv420p`、`-movflags +faststart`，音频 `aac 128k`），只有最终 MP4 通过 `os.replace` 进入 `assets/`。最终文件名固定为 `<雪花ID>.mp4`（`core.shared.snowflake.next_id()`），**不得沿用原始文件名**；超时由 `GUIDE_VIDEO_TRANSCODE_TIMEOUT` 控制，失败 / 超时 / ffmpeg 缺失时必须删除半成品，`finally` 删除临时目录；**配额只按最终 MP4 大小校验**，原始上传文件与中间产物不得计入
 * **转码进度**：`ffprobe` 读取时长，解析 ffmpeg `-progress` 的 `out_time_us`（微秒）换算百分比（封顶 99，结束置 100）；任务状态保存在内存 `_VIDEO_TASKS`（`status / percent / message / item / error`，TTL 清理），前端通过 `GET /api/guides/<id>/videos/progress/<task_id>` 轮询。上传阶段进度由 XHR `upload.onprogress` 驱动，上传完成后进度条归零再切换为转码进度
-* 视频在 Markdown 中统一存为 `@[video](url)`（marked 块级扩展），编辑器 / 详情页 / 管理后台预览负责渲染为 `<video>`；同时兼容历史 `<video>` HTML
+* 视频在 Markdown 中统一存为 `@[video](assets/<文件名>)`（marked 块级扩展，相对链接），编辑器 / 详情页 / 管理后台预览负责补全资源前缀并渲染为 `<video>`；同时兼容历史 `<video>` HTML
 * 编辑器视频上传使用 XHR（`upload.onprogress`）驱动上传进度，完成后进度条归零并轮询转码进度；进度条统一复用 `macros/progress.html` 的 `progress_track()`（JS 侧用 `.progress-track / .progress-fill`），禁止另起样式；上传配额、改名与删除确认均使用站内控件 / `CustomModal`，不使用原生 file 控件、`window.confirm` 或 `window.prompt`
-* **资源标签页是图片 / 视频的唯一入口**：「插入」标签页只保留链接与表格按钮，**不得再加图片 / 视频按钮**。资源列表统一走 `GET /api/guides/<id>/resources`（`routes/guides/api/_resource_payload()` 生成 `type / title / url / delete_url / compress_url`，视频额外 `rename_url`），删除 / 压缩 / 改名分别为 `POST /api/guides/<id>/resources/<文件名>/{delete,compress,rename}`；粘贴 / 拖拽图片或视频后必须通过 `openResourceTab()` 切到资源页并用 `setResourceProgress()` 展示进度条
+* **资源标签页是图片 / 视频的唯一入口**：「插入」标签页只保留链接与表格按钮，**不得再加图片 / 视频按钮**。资源列表统一走 `GET /api/guides/<id>/resources`（`routes/guides/api/_resource_payload()` 生成 `type / title / link / url / delete_url / compress_url`，视频额外 `rename_url`；`link` 为正文相对链接），删除 / 压缩 / 改名分别为 `POST /api/guides/<id>/resources/<文件名>/{delete,compress,rename}`；粘贴 / 拖拽图片或视频后必须通过 `openResourceTab()` 切到资源页并用 `setResourceProgress()` 展示进度条。正文只存 `link`，编辑器用根节点 `data-mre-asset-base` 补全后渲染，序列化时还原
 * **一键有损压缩**：`guide_store.compress_guide_asset()` 中的 `_compress_image_file()`（Pillow：JPEG / WEBP 搜质量，PNG / GIF 搜颜色数）与 `_compress_video_file()`（ffmpeg 按 90% 码率，AAC 96k）都必须先写隐藏临时文件再用 `os.replace()` 原子替换原文件；压缩目标为当前体积的 90%（`COMPRESS_RATIO`），体积无法继续下降时返回提示且**不得破坏原文件**；临时文件在 `finally` 中清理。
 * 视频伪文件名统一走 `set_video_title()` / `video_title()`（写入 / 读取 `config.json`），页面渲染时由 URL 文件名查表注入 `<video data-title="...">`，播放器把它显示在**视频下方**（不遮挡画面）；改名 / 删除等写操作必须校验作者或管理员权限
 * 富文本中的视频为 `contenteditable="false"` 原子块：插入于光标之后，前后保证有空段落，支持整体选中复制 / 剪切 / 删除
@@ -762,8 +763,7 @@ python scripts/migrate_guides.py             # 正式迁移
 * **编辑器视频点击约定**：点击视频主体（含播放器容器）由编辑器的捕获阶段 `click` 处理，`stopPropagation()` 阻止播放器播放，并用 `selectVideoBlock()` 以 `Range.selectNode(.svp)` 选中整个视频块；点击播放器控制栏 / 上拉框则不选中，保证控件仍可用。`videoAnchorFromRange()` 在选区覆盖视频时也能正确识别当前视频，用于「更换视频」
 * **编辑器视频剪贴板约定**：选区包含视频时，`copy` / `cut` 必须 `preventDefault()` 并调用 `selectionMarkdown(range)`（文字 + `@[video](url)`）写入 `text/plain`；剪切用 `range.deleteContents()` + `normalize()` 后重设选区，内容为空时补 `<p><br></p>`。`paste` 监听识别到 `@[video](url)` 时经 `mdToHtml` 还原，优先 `execCommand('insertHTML')`，失败必须回退到 `Range.deleteContents()` + `insertNode(fragment)` 手动插入（部分浏览器会静默失败，没有兜底会表现为「粘贴无反应」），随后设置原子块属性与前后空段落
 * **背景图片列表分段加载**：`GET /api/backgrounds/list` 仅分页返回已通过背景（`page` + `BACKGROUNDS_PER_PAGE`），返回 `page / page_size / total / has_more`；前端首屏取第 1 页，`/backgrounds` 的「加载更多」按 `page+1` 追加，「我的上传」保持全量
-* 删除指南（管理员删除 / 被驳回超时清理）时必须调用 `guide_store.delete_guide_dir(id)`，避免残留目录
-* `uploads/guides/_drafts/` 仅用于自动维护时清理历史残留
+* 删除指南（作者删除草稿、管理员删除、被驳回超时清理）时必须调用 `guide_store.delete_guide_dir(id)`，避免残留目录
 
 **页面路由与前端资源约定：**
 

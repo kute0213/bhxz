@@ -17,7 +17,7 @@ from core.db import get_db
 from core.system.logger import log_module, register_module_log
 from core.shared.scheduler import register_task
 from services.background_service import remove_background_files
-from services.guides import delete_guide_dir, cleanup_stale_drafts
+from services.guides import delete_guide_dir
 
 register_module_log('cleanup')
 
@@ -93,23 +93,10 @@ def cleanup_expired_rejected_backgrounds():
         conn.close()
 
 
-def cleanup_expired_guide_drafts():
-    """删除超时未提交的新建指南草稿资源（uploads/guides/_drafts）。"""
-    try:
-        removed = cleanup_stale_drafts()
-        if removed:
-            log_module('cleanup', 'INFO', 'Cleanup', '自动清理过期指南草稿资源', count=removed)
-        return removed
-    except Exception as e:
-        log_module('cleanup', 'ERROR', 'Cleanup', '清理指南草稿资源失败', error=str(e))
-        return 0
-
-
 def cleanup_all():
     """执行全部过期被驳回内容的清理。"""
     cleanup_expired_rejected_guides()
     cleanup_expired_rejected_backgrounds()
-    cleanup_expired_guide_drafts()
 
 
 # 统一任务注册表：每 SCHEDULE_INTERVAL 秒执行一次清理

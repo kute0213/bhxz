@@ -245,6 +245,38 @@ def my_guides():
     })
 
 
+@guides_bp.route('/api/guides/<int:guide_id>/delete', methods=['POST'])
+@login_required
+def api_guide_delete(guide_id):
+    """删除自己的未发布指南（草稿 / 已拒绝）。
+
+    待审核与已通过指南不允许作者直接删除，避免绕过审核流程；
+    删除成功后同步移除指南目录（正文、资源、config.json）。
+    """
+    user = get_current_user()
+    conn = get_db()
+    try:
+        row = conn.execute(
+            "SELECT id, status, author_id FROM server_guides WHERE id = ?",
+            (guide_id,),
+        ).fetchone()
+        if not row:
+            return jsonify({'success': False, 'message': '指南不存在'}), 404
+        if row['author_id'] != user['id'] and not user.get('is_admin'):
+            return jsonify({'success': False, 'message': '无权删除该指南'}), 403
+        if row['status'] not in ('draft', 'rejected'):
+            return jsonify({'success': False, 'message': '只有草稿或已拒绝的指南可以删除'}), 400
+
+        conn.execute("DELETE FROM guide_favorites WHERE guide_id = ?", (guide_id,))
+        conn.execute("DELETE FROM server_guides WHERE id = ?", (guide_id,))
+        conn.commit()
+    finally:
+        conn.close()
+
+    guide_store.delete_guide_dir(guide_id)
+    return jsonify({'success': True, 'message': '指南已删除'})
+
+
 @guides_bp.route('/api/guides/<int:guide_id>/publish', methods=['POST'])
 @login_required
 def api_guide_publish(guide_id):
@@ -266,7 +298,7 @@ def api_guide_publish(guide_id):
         if row['status'] != 'draft':
             return jsonify({'success': False, 'message': '只有草稿指南可以发布'}), 400
 
-        content = guide_store.read_guide_content(guide_id, '')
+        content = guide_store.read_guide_content(guide_id)
         if not content.strip():
             return jsonify({'success': False, 'message': '请先编辑指南内容再发布'}), 400
 
@@ -401,6 +433,8 @@ def _resource_payload(guide_id, item):
         'title': item.get('title') or name,
         'size': item['size'],
         'size_label': item['size_label'],
+        # 正文内使用的相对链接（assets/<文件名>），替换稿接管 ID 后无需改写
+        'link': 'assets/%s' % name,
         'url': url_for('guides.guide_asset', guide_id=guide_id, filename=name),
         'delete_url': url_for('guides.api_guide_resource_delete',
                               guide_id=guide_id, filename=name),

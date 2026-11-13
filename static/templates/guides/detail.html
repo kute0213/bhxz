@@ -150,6 +150,14 @@
             ADD_TAGS: ['video', 'source'],
             ADD_ATTR: ['controls', 'preload', 'poster', 'playsinline', 'muted', 'loop', 'src', 'data-title']
         });
+        // 正文资源使用相对路径 assets/<文件名>，这里补全为本指南的访问地址
+        const assetBase = '/guides/{{ guide.id }}/assets/';
+        el.querySelectorAll('img[src], video[src], source[src], a[href]').forEach(function (node) {
+            const attr = node.tagName === 'A' ? 'href' : 'src';
+            const value = node.getAttribute(attr) || '';
+            const match = /^(?:\.\/)?assets\/(.+)$/.exec(value);
+            if (match) node.setAttribute(attr, assetBase + match[1]);
+        });
         // 统一换成站内自定义视频控件
         if (window.SiteVideoPlayer) window.SiteVideoPlayer.decorateAll(el);
         if (typeof CodeBlocks !== 'undefined') CodeBlocks.enhance(el);

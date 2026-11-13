@@ -39,10 +39,10 @@ class TestContent:
         assert os.path.dirname(path) == os.path.join(str(guides_dir), '42')
         assert os.path.basename(path) == 'guide.md'
         assert os.path.isdir(guide_store.assets_dir_for(42))
-        assert guide_store.read_guide_content(42, 'db 旧内容') == content
+        assert guide_store.read_guide_content(42) == content
 
-    def test_read_falls_back_to_db_content(self, guides_dir):
-        assert guide_store.read_guide_content(99, 'db 旧内容') == 'db 旧内容'
+    def test_read_missing_returns_empty(self, guides_dir):
+        assert guide_store.read_guide_content(99) == ''
 
     def test_delete_guide_dir(self, guides_dir):
         guide_store.write_guide_content(7, '内容')
@@ -149,18 +149,6 @@ class TestReplacement:
         assert not os.path.isdir(guide_store.guide_dir(20))
         assert not os.path.isdir(guide_store.guide_dir(10) + '.replaced')
 
-    def test_rewrite_asset_links(self, guides_dir):
-        md = '![a](/guides/200/assets/a.png)\n[v](/guides/200/assets/v.mp4)'
-        fixed = guide_store.rewrite_asset_links(md, 200, 100)
-        assert fixed == (
-            '![a](/guides/100/assets/a.png)\n'
-            '[v](/guides/100/assets/v.mp4)'
-        )
-
-    def test_rewrite_only_matches_whole_id(self, guides_dir):
-        md = '/guides/2000/assets/x.png'
-        assert guide_store.rewrite_asset_links(md, 200, 100) == md
-
 
 class TestImages:
     """正文图片存储：雪花 ID 命名、与视频同目录、计入资源配额。"""
@@ -186,38 +174,15 @@ class TestImages:
         )
         assert not ok and '上限' in msg
 
-    def test_directory_total_includes_legacy_subfolder(self, guides_dir):
+    def test_directory_total_counts_assets(self, guides_dir):
         guide_store.write_guide_content(57, '')
         assets = guide_store.assets_dir_for(57)
         with open(os.path.join(assets, 'v.mp4'), 'wb') as fh:
             fh.write(b'v' * 100)
-        legacy = os.path.join(assets, guide_store.LEGACY_IMAGES_DIRNAME)
-        os.makedirs(legacy, exist_ok=True)
-        with open(os.path.join(legacy, 'a.png'), 'wb') as fh:
+        with open(os.path.join(assets, 'a.png'), 'wb') as fh:
             fh.write(b'i' * 50)
 
         assert guide_store.directory_total(assets) == 150
-
-    def test_ensure_migrates_legacy_images(self, guides_dir):
-        assets = guide_store.assets_dir_for(58)
-        legacy = os.path.join(assets, guide_store.LEGACY_IMAGES_DIRNAME)
-        os.makedirs(legacy, exist_ok=True)
-        with open(os.path.join(legacy, 'a.png'), 'wb') as fh:
-            fh.write(b'png')
-
-        guide_store.ensure_guide_dir(58)
-
-        assert os.path.isfile(os.path.join(assets, 'a.png'))
-        assert not os.path.isdir(legacy)
-        names = [a['name'] for a in guide_store.list_guide_assets(58)]
-        assert names == ['a.png']
-
-    def test_read_normalizes_legacy_asset_link(self, guides_dir):
-        path = guide_store.guide_md_path(59)
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, 'w', encoding='utf-8') as fh:
-            fh.write('![a](/guides/59/assets/images/a.png)')
-        assert guide_store.read_guide_content(59) == '![a](/guides/59/assets/a.png)'
 
     def test_read_normalizes_historical_file(self, guides_dir):
         path = guide_store.guide_md_path(32)
@@ -256,8 +221,11 @@ class TestCompress:
         assert item['size'] == os.path.getsize(path)
 
     def test_compress_unsupported_file(self, guides_dir):
-        ok, msg, item = guide_store.save_guide_asset(61, FakeUpload('note.txt', b'x' * 20))
-        assert ok
+        assets = guide_store.assets_dir_for(61)
+        os.makedirs(assets, exist_ok=True)
+        with open(os.path.join(assets, 'note.txt'), 'wb') as fh:
+            fh.write(b'x' * 20)
+
         ok, msg, item = guide_store.compress_guide_asset(61, 'note.txt')
         assert not ok and item is None
 
@@ -267,40 +235,36 @@ class TestCompress:
 
     def test_compress_video_requires_probe(self, guides_dir, monkeypatch):
         monkeypatch.setattr(guide_store, 'FFPROBE_BIN', '')
-        guide_store.save_guide_asset(63, FakeUpload('a.mp4', b'x' * 100))
+        assets = guide_store.assets_dir_for(63)
+        os.makedirs(assets, exist_ok=True)
+        with open(os.path.join(assets, 'a.mp4'), 'wb') as fh:
+            fh.write(b'x' * 100)
+
         ok, msg, item = guide_store.compress_guide_asset(63, 'a.mp4')
         assert not ok and item is None
 
 
 class TestAssets:
-    """资源保存、配额、删除。"""
+    """资源列表与删除。"""
 
-    def test_save_asset_and_list(self, guides_dir):
-        ok, msg, item = guide_store.save_guide_asset(5, FakeUpload('视频 1.mp4', b'x' * 100))
-        assert ok and msg == ''
-        assert item['name'] == '视频 1.mp4'
-        names = [a['name'] for a in guide_store.list_assets(guide_store.assets_dir_for(5))]
+    def test_list_assets(self, guides_dir):
+        assets = guide_store.assets_dir_for(5)
+        os.makedirs(assets, exist_ok=True)
+        with open(os.path.join(assets, '视频 1.mp4'), 'wb') as fh:
+            fh.write(b'x' * 100)
+
+        names = [a['name'] for a in guide_store.list_assets(assets)]
         assert names == ['视频 1.mp4']
         assert guide_store.guide_total(5) == 100
 
-    def test_quota_blocks_upload(self, guides_dir, monkeypatch):
-        monkeypatch.setattr(guide_store, 'GUIDE_RESOURCE_MAX_BYTES', 300)
-        ok1, _, _ = guide_store.save_guide_asset(5, FakeUpload('a.mp4', b'x' * 200))
-        assert ok1
-        ok2, msg, item = guide_store.save_guide_asset(5, FakeUpload('b.mp4', b'y' * 200))
-        assert not ok2 and item is None
-        assert '超出上限' in msg
-        assert not os.path.isfile(os.path.join(guide_store.assets_dir_for(5), 'b.mp4'))
-
     def test_delete_asset(self, guides_dir):
-        guide_store.save_guide_asset(6, FakeUpload('a.mp4', b'x'))
-        assert guide_store.delete_asset(guide_store.assets_dir_for(6), 'a.mp4')
-        assert guide_store.delete_asset(guide_store.assets_dir_for(6), 'a.mp4') is False
+        assets = guide_store.assets_dir_for(6)
+        os.makedirs(assets, exist_ok=True)
+        with open(os.path.join(assets, 'a.mp4'), 'wb') as fh:
+            fh.write(b'x')
 
-    def test_safe_asset_name_keeps_chinese(self):
-        assert guide_store.safe_asset_name('../../我的 视频.mp4') == '我的 视频.mp4'
-        assert guide_store.safe_asset_name('a/b/c.mp4') == 'c.mp4'
-        assert guide_store.safe_asset_name('') == 'asset'
+        assert guide_store.delete_asset(assets, 'a.mp4')
+        assert guide_store.delete_asset(assets, 'a.mp4') is False
 
 
 class TestVideoTranscode:
@@ -442,34 +406,22 @@ class TestGuideConfig:
         assert guide_store.video_title(23, '456.mp4', '456.mp4') == '456.mp4'
 
     def test_delete_asset_cleans_config(self, guides_dir):
-        guide_store.save_guide_asset(24, FakeUpload('a.mp4', b'x'))
+        assets = guide_store.assets_dir_for(24)
+        os.makedirs(assets, exist_ok=True)
+        with open(os.path.join(assets, 'a.mp4'), 'wb') as fh:
+            fh.write(b'x')
         guide_store.set_video_title(24, 'a.mp4', '自定义名称')
         assert guide_store.delete_guide_asset(24, 'a.mp4') is True
         assert guide_store.read_guide_config(24)['videos'] == {}
 
     def test_list_guide_assets_includes_title(self, guides_dir):
-        guide_store.save_guide_asset(25, FakeUpload('b.mp4', b'x'))
+        assets = guide_store.assets_dir_for(25)
+        os.makedirs(assets, exist_ok=True)
+        with open(os.path.join(assets, 'b.mp4'), 'wb') as fh:
+            fh.write(b'x')
         guide_store.set_video_title(25, 'b.mp4', '我的视频')
         items = guide_store.list_guide_assets(25)
         assert items[0]['title'] == '我的视频'
-
-
-class TestLegacyDraftCleanup:
-    """旧版草稿目录（_drafts）残留清理。"""
-
-    def test_cleanup_stale_drafts(self, guides_dir, monkeypatch):
-        old_dir = guide_store.draft_dir('old')
-        new_dir = guide_store.draft_dir('new')
-        for path in (old_dir, new_dir):
-            os.makedirs(os.path.join(path, 'assets'), exist_ok=True)
-        # 把 old 的修改时间调早 48 小时
-        old_time = os.path.getmtime(old_dir) - 48 * 3600
-        os.utime(old_dir, (old_time, old_time))
-
-        removed = guide_store.cleanup_stale_drafts(keep_hours=24)
-        assert removed == 1
-        assert not os.path.isdir(old_dir)
-        assert os.path.isdir(new_dir)
 
 
 class TestHelpers:

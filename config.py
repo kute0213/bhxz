@@ -32,9 +32,6 @@ GUIDE_RESOURCE_MAX_BYTES = 50 * 1024 * 1024
 # 指南允许上传的视频格式
 GUIDE_VIDEO_EXTENSIONS = {'mp4', 'webm', 'ogv', 'ogg', 'mov', 'm4v'}
 
-# 新建指南时先上传的草稿资源保留时长（小时），超时由清理服务删除
-GUIDE_DRAFT_KEEP_HOURS = 24
-
 # 指南视频上传后统一转码为 H.264 / MP4 的最长等待秒数
 GUIDE_VIDEO_TRANSCODE_TIMEOUT = 600
 

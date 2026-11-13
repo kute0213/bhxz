@@ -188,14 +188,23 @@ function showPreviewModal(btn) {
     if (!data) return;
     document.getElementById('preview-title').textContent = data.title;
     _previewVideoTitles = data.video_titles || {};
-    document.getElementById('preview-content').innerHTML = data.content
+    const box = document.getElementById('preview-content');
+    box.innerHTML = data.content
         ? DOMPurify.sanitize(marked.parse(data.content), {
             ADD_TAGS: ['video', 'source'],
             ADD_ATTR: ['controls', 'preload', 'poster', 'playsinline', 'muted', 'loop', 'src', 'data-title']
         })
         : '<p class="text-[var(--text-tertiary)] text-center py-8">暂无内容</p>';
+    // 正文资源使用相对路径 assets/<文件名>，预览时补全为该指南的访问地址
+    const assetBase = '/guides/' + _previewGuideId + '/assets/';
+    box.querySelectorAll('img[src], video[src], source[src], a[href]').forEach(function (node) {
+        const attr = node.tagName === 'A' ? 'href' : 'src';
+        const value = node.getAttribute(attr) || '';
+        const match = /^(?:\.\/)?assets\/(.+)$/.exec(value);
+        if (match) node.setAttribute(attr, assetBase + match[1]);
+    });
     if (window.SiteVideoPlayer) {
-        window.SiteVideoPlayer.decorateAll(document.getElementById('preview-content'));
+        window.SiteVideoPlayer.decorateAll(box);
     }
     document.getElementById('previewApproveBtn').setAttribute('data-action-url', '/admin/guides/' + _previewGuideId + '/approve');
     openModal('preview-modal');

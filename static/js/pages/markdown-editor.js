@@ -238,13 +238,13 @@
             case 'CODE':
                 return inlineCode(el.textContent);
             case 'A': {
-                var href = el.getAttribute('href') || '';
+                var href = assetRel(el.getAttribute('href') || '', activeAssetBase);
                 var text = inlineOf(el, ctx).trim() || href;
                 var title = el.getAttribute('title');
                 return '[' + text + '](' + href + (title ? ' "' + String(title).replace(/"/g, '\\"') + '"' : '') + ')';
             }
             case 'IMG': {
-                var src = el.getAttribute('src') || '';
+                var src = assetRel(el.getAttribute('src') || '', activeAssetBase);
                 var alt = el.getAttribute('alt') || '';
                 var t = el.getAttribute('title');
                 return '![' + alt + '](' + src + (t ? ' "' + String(t).replace(/"/g, '\\"') + '"' : '') + ')';
@@ -374,7 +374,7 @@
             src = source ? (source.getAttribute('src') || '') : '';
         }
         if (!src) return '';
-        return '@[video](' + src + ')';
+        return '@[video](' + assetRel(src, activeAssetBase) + ')';
     }
 
     function serializeBlock(el, ctx) {
@@ -431,7 +431,7 @@
                 if (n.classList && n.classList.contains('svp')) {
                     flush();
                     var sv = n.querySelector('video');
-                    if (sv) out.push('@[video](' + (sv.getAttribute('src') || '') + ')');
+                    if (sv) out.push('@[video](' + assetRel(sv.getAttribute('src') || '', activeAssetBase) + ')');
                 } else if (BLOCK_EL[n.tagName]) {
                     flush();
                     var b = serializeBlock(n, ctx);
@@ -536,7 +536,7 @@
         } catch (e) { /* 忽略 */ }
     }
 
-    function mdToHtml(md) {
+    function mdToHtml(md, assetBase) {
         var infos = scanTables(md);
         var raw;
         if (window.marked && window.marked.parse) {
@@ -546,6 +546,7 @@
         }
         var wrap = document.createElement('div');
         wrap.innerHTML = sanitizeHtml(raw);
+        absolutizeAssets(wrap, assetBase);
 
         var tables = wrap.querySelectorAll('table');
         for (var i = 0; i < tables.length; i++) {
@@ -558,6 +559,42 @@
         enableTaskCheckboxes(wrap);
         return wrap.innerHTML;
     }
+
+    /* ============================================================
+     * 资源相对链接
+     * 正文只保存 assets/<文件名>，渲染时补全为 /guides/<ID>/assets/<文件名>，
+     * 序列化时再还原，替换稿接管原指南 ID 后无需改写任何链接。
+     * ============================================================ */
+
+    function assetRest(url) {
+        var match = /^(?:\.\/)?assets\/(.+)$/.exec(String(url || '').trim());
+        return match ? match[1] : '';
+    }
+
+    function assetUrl(url, base) {
+        var rest = assetRest(url);
+        return (rest && base) ? base + rest : url;
+    }
+
+    function assetRel(url, base) {
+        var value = String(url || '');
+        if (base && value.indexOf(base) === 0) return 'assets/' + value.slice(base.length);
+        return url;
+    }
+
+    function absolutizeAssets(root, base) {
+        if (!base || !root.querySelectorAll) return;
+        var nodes = root.querySelectorAll('img[src], video[src], source[src], a[href]');
+        for (var i = 0; i < nodes.length; i++) {
+            var el = nodes[i];
+            var attr = el.tagName === 'A' ? 'href' : 'src';
+            var next = assetUrl(el.getAttribute(attr), base);
+            if (next !== el.getAttribute(attr)) el.setAttribute(attr, next);
+        }
+    }
+
+    // 富文本序列化期间的资源前缀（同步执行，供 A / IMG / video 还原相对链接）
+    var activeAssetBase = '';
 
     /* ============================================================
      * Markdown 源码模式下的表格定位 / 读写
@@ -656,6 +693,8 @@
         this.resourceListUrl = root.getAttribute('data-mre-resource-list') || '';
         this.resourceImageUploadUrl = root.getAttribute('data-mre-resource-image-upload') || '';
         this.resourceVideoUploadUrl = root.getAttribute('data-mre-resource-video-upload') || '';
+        // 正文相对资源链接的访问前缀（/guides/<ID>/assets/）
+        this.assetBase = root.getAttribute('data-mre-asset-base') || '';
         this.resourceListEl = root.querySelector('[data-mre-resource-list]');
         this.resourceQuotaEl = root.querySelector('[data-mre-resource-quota]');
         this.resourceEmptyEl = root.querySelector('[data-mre-resource-empty]');
@@ -990,12 +1029,17 @@
 
     Editor.prototype.serializeRich = function () {
         if (!this.rich) return '';
-        return htmlToMarkdown(this.rich);
+        activeAssetBase = this.assetBase || '';
+        try {
+            return htmlToMarkdown(this.rich);
+        } finally {
+            activeAssetBase = '';
+        }
     };
 
     Editor.prototype.renderRich = function (md) {
         if (!this.rich) return;
-        this.rich.innerHTML = mdToHtml(md || '');
+        this.rich.innerHTML = mdToHtml(md || '', this.assetBase);
         // 视频统一换成站内自定义控件，并作为原子块不可编辑内部
         if (window.SiteVideoPlayer) window.SiteVideoPlayer.decorateAll(this.rich);
         var vids = this.rich.querySelectorAll('video');
@@ -1400,13 +1444,15 @@
             var tmp = document.createElement('div');
             tmp.appendChild(range.cloneContents());
             var out = [];
+            activeAssetBase = this.assetBase || '';
             serializeBlocks(tmp, out, { inTable: false });
+            activeAssetBase = '';
             var md = out.join('\n\n').trim();
             if (md) return md;
         } catch (e) { /* 回退到仅视频语法 */ }
         return videos.map(function (v) {
-            return '@[video](' + (v.getAttribute('src') || '') + ')';
-        }).join('\n\n');
+            return '@[video](' + assetRel(v.getAttribute('src') || '', this.assetBase) + ')';
+        }, this).join('\n\n');
     };
 
     // 删除富文本选区，并保证编辑器仍可继续输入
@@ -1523,7 +1569,7 @@
         if (!trimmed || trimmed.indexOf('@[video](') === -1) return;
 
         e.preventDefault();
-        var html = mdToHtml(trimmed);
+        var html = mdToHtml(trimmed, this.assetBase);
         this.rich.focus();
         this.insertRichHtml(html);
 
@@ -2232,7 +2278,7 @@
                     resolve(false);
                     return;
                 }
-                if (insert) self.insertImage(data.url, '');
+                if (insert) self.insertImage(data.item ? data.item.link : data.url, '');
                 self.setResourceQuota(data);
                 resolve(true);
             };
@@ -2250,7 +2296,7 @@
         if (this.mode === 'rich') {
             var p = document.createElement('p');
             var img = document.createElement('img');
-            img.setAttribute('src', url);
+            img.setAttribute('src', assetUrl(url, this.assetBase));
             img.setAttribute('alt', alt);
             p.appendChild(img);
             this.rich.focus();
@@ -2261,7 +2307,7 @@
         }
         var before = this.textarea.value.slice(0, this.textarea.selectionStart);
         var prefix = (!before || before.slice(-1) === '\n') ? '' : '\n\n';
-        this.mdInsert(prefix + '![' + alt + '](' + url + ')\n');
+        this.mdInsert(prefix + '![' + alt + '](' + assetRel(url, this.assetBase) + ')\n');
     };
 
     /* ---------- 资源列表 ---------- */
@@ -2377,9 +2423,9 @@
 
     // 点击资源：图片插入图片，视频插入 / 替换视频
     Editor.prototype.insertResource = function (item) {
-        if (!item || !item.url) return;
-        if (item.type === 'video') this.insertVideoUrl(item.url, item.title);
-        else this.insertImage(item.url, '');
+        if (!item || !item.link) return;
+        if (item.type === 'video') this.insertVideoUrl(item.link, item.title);
+        else this.insertImage(item.link, '');
     };
 
     // 一键有损压缩（每次约减少 10%）
@@ -2448,23 +2494,18 @@
             .catch(function () { toast('修改失败，请稍后重试', 'error'); });
         };
 
-        if (window.CustomModal && typeof window.CustomModal.prompt === 'function') {
-            window.CustomModal.prompt('输入视频在页面上显示的名称（留空则显示真实文件名）', {
-                title: '修改视频名称',
-                type: 'info',
-                defaultValue: item.title || '',
-                placeholder: '例如：海滩日落',
-                confirmText: '保存',
-                trigger: trigger || null,
-                callback: function (value) {
-                    if (value === null || value === undefined) return; // 取消
-                    apply(String(value).trim().slice(0, 100));
-                }
-            });
-            return;
-        }
-        var input = window.prompt('输入视频在页面上显示的名称', item.title || '');
-        if (input !== null) apply(String(input).trim());
+        window.CustomModal.prompt('输入视频在页面上显示的名称（留空则显示真实文件名）', {
+            title: '修改视频名称',
+            type: 'info',
+            defaultValue: item.title || '',
+            placeholder: '例如：海滩日落',
+            confirmText: '保存',
+            trigger: trigger || null,
+            callback: function (value) {
+                if (value === null || value === undefined) return; // 取消
+                apply(String(value).trim().slice(0, 100));
+            }
+        });
     };
 
     // 删除资源文件（正文中的引用不会自动移除）
@@ -2491,16 +2532,12 @@
                 .catch(function () { toast('删除失败，请稍后重试', 'error'); });
         };
 
-        if (window.CustomModal && typeof window.CustomModal.confirm === 'function') {
-            window.CustomModal.confirm('删除资源「' + (item.title || item.name || '') + '」？正文中的引用需要手动删除。', {
-                title: '删除资源',
-                type: 'warning',
-                confirmText: '删除',
-                trigger: trigger || null
-            }).then(function (ok) { if (ok) doDelete(); });
-        } else {
-            doDelete();
-        }
+        window.CustomModal.confirm('删除资源「' + (item.title || item.name || '') + '」？正文中的引用需要手动删除。', {
+            title: '删除资源',
+            type: 'warning',
+            confirmText: '删除',
+            trigger: trigger || null
+        }).then(function (ok) { if (ok) doDelete(); });
     };
 
     // 创建富文本中的视频原子块（使用站内自定义控件）
@@ -2556,6 +2593,7 @@
     // 把视频插入正文（已有视频时替换其地址，实现「更换视频」）
     Editor.prototype.insertVideoUrl = function (url, title) {
         if (!url) return;
+        url = assetUrl(url, this.assetBase);
 
         if (this.mode === 'rich') {
             this.rich.focus();
@@ -2585,7 +2623,7 @@
             this.savedRange = null;
             this.afterRichChange();
         } else {
-            var block = '@[video](' + url + ')';
+            var block = '@[video](' + assetRel(url, this.assetBase) + ')';
             var mv = this.mdVideo;
             var ta = this.textarea;
             if (mv) {

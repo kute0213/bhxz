@@ -18,7 +18,7 @@
        <script src="{{ url_for('static', filename='js/core/video-player.js', v='4') }}"></script>
        <script src="{{ url_for('static', filename='lib/marked/marked.min.js', v='1') }}"></script>
        <script src="{{ url_for('static', filename='lib/purify/purify.min.js', v='1') }}"></script>
-       <script src="{{ url_for('static', filename='js/pages/markdown-editor.js', v='16') }}"></script>
+       <script src="{{ url_for('static', filename='js/pages/markdown-editor.js', v='17') }}"></script>
 
    可选参数：
        name          - 表单提交字段名（textarea 的 name）
@@ -33,8 +33,10 @@
        resource_image_upload_url - 图片上传 API
        resource_video_upload_url - 视频上传 API
        resource_limit_label      - 资源配额说明（如 50 MB）
+       asset_base_url            - 资源访问前缀（如 /guides/123/assets/），用于渲染相对链接
 
-#   图片以标准 Markdown `![alt](url)` 保存，视频以 `@[video](url)` 保存；
+#   图片以标准 Markdown `![alt](assets/<文件名>)` 保存，视频以 `@[video](assets/<文件名>)` 保存；
+#   正文不写指南 ID，替换稿接管原 ID 后无需改写链接；渲染时用 asset_base_url 补全。
 #   图片与视频统一存入指南 assets/ 目录，文件名使用雪花 ID。
 #   在编辑区粘贴 / 拖入图片或视频会自动上传，并切到「资源」标签页显示进度。
 #   视频在富文本中为原子块，支持前后放置光标、整体选中复制 / 剪切 / 删除。
@@ -43,7 +45,7 @@
 #   时才会出现；「资源」标签页常驻，不受光标位置影响。
 #}
 {% from "macros/progress.html" import progress_track %}
-{% macro markdown_editor(name='', value='', editor_id='md-editor', placeholder='', show_count=false, autosave=true, toolbar_extra='', extra_attrs='', resource_list_url='', resource_image_upload_url='', resource_video_upload_url='', resource_limit_label='') %}
+{% macro markdown_editor(name='', value='', editor_id='md-editor', placeholder='', show_count=false, autosave=true, toolbar_extra='', extra_attrs='', resource_list_url='', resource_image_upload_url='', resource_video_upload_url='', resource_limit_label='', asset_base_url='') %}
 <style>
 /* ================= 统一编辑器容器 ================= */
 .mre {
@@ -440,7 +442,8 @@
 <div class="mre" data-mre data-editor-id="{{ editor_id }}" data-mre-autosave="{{ 'true' if autosave else 'false' }}"
      data-mre-resource-list="{{ resource_list_url }}"
      data-mre-resource-image-upload="{{ resource_image_upload_url }}"
-     data-mre-resource-video-upload="{{ resource_video_upload_url }}">
+     data-mre-resource-video-upload="{{ resource_video_upload_url }}"
+     data-mre-asset-base="{{ asset_base_url }}">
 
     {# ---------- 顶部：标签页分类 + 模式切换 ---------- #}
     <div class="mre-tabs" role="tablist">

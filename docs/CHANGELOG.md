@@ -4,17 +4,24 @@
 
 ### 变更
 
+* **草稿可删除 + 资源相对链接 + 清理迁移代码**（`routes/guides/api/__init__.py`、`routes/guides/pages/__init__.py`、`routes/admin/guides/__init__.py`、`services/guides/__init__.py`、`services/cleanup_service/__init__.py`、`config.py`、`static/templates/guides/{index,form,detail}.html`、`static/templates/admin/{guide_form,guides}.html`、`static/templates/macros/markdown_editor.html`、`static/js/pages/markdown-editor.js`、`scripts/migrate_guide_assets.py`、`scripts/tests/test_guide_storage.py`）：
+  * **修复草稿无法删除**：「我的指南」为草稿 / 已拒绝指南增加「删除」按钮，调用新增的 `POST /api/guides/<id>/delete`，站内确认弹窗后删除数据库记录与整个指南目录；待审核 / 已通过仍不可由作者直接删除。
+  * **正文资源改为相对链接**：图片与视频统一保存为 `assets/<文件名>`，不再写入指南 ID。编辑器通过根节点 `data-mre-asset-base` 在渲染时补全、序列化时还原；详情页与后台预览渲染后补全；替换稿接管原指南 ID 时无需再改写任何链接（删除 `rewrite_asset_links()`）。
+  * **删除迁移 / 无用代码**：移除 `assets/images/` 自动迁移与链接规范化、数据库正文回退、旧版 `_drafts` 草稿目录清理及 `GUIDE_DRAFT_KEEP_HOURS`、未使用的 `save_guide_asset()` / `safe_asset_name()` / `_unique_name()`；JS 侧移除 `window.prompt` / 原生确认等无用保底。
+  * **新增自动迁移脚本** `scripts/migrate_guide_assets.py`：把残留 `assets/images/*` 并入 `assets/`，并把正文中的 `/guides/<ID>/assets/...`（含完整 URL）改写为 `assets/<文件名>`；幂等、支持 `--dry-run`。
+  * 同步更新 README / DEVELOPMENT 与指南存储测试；`markdown-editor.js` 版本提升为 17。
+
 * **自定义悬浮提示 + 指南资源统一管理 + 一键有损压缩**（`static/js/core/base.js`、`static/css/base.css`、`static/templates/base.html`、`services/guides/__init__.py`、`routes/guides/api/__init__.py`、`routes/guides/pages/__init__.py`、`routes/admin/guides/__init__.py`、`static/templates/macros/markdown_editor.html`、`static/js/pages/markdown-editor.js`、`static/templates/{guides/form,admin/guide_form}.html`、`scripts/tests/test_guide_storage.py`）：
   * **全站自定义悬浮提示**：新增 `.site-tooltip` 磨砂玻璃气泡与 `initSiteTooltip()`，替代浏览器原生 `title` 提示。悬停 180ms 显示、上方居中、空间不足自动翻到下方、自动避让视口边界；只过渡 `opacity` / `transform`，滚动 / 点击 / 失焦立即隐藏；支持 `[title]` / `[data-tooltip]`，编辑器可编辑区域内跳过接管以免标题丢失。
   * **图片改为雪花 ID 命名**：`save_guide_image()` 不再按内容 SHA1 去重，统一使用 `next_id()` 生成 `<雪花ID>.<扩展名>`，每次上传都是独立文件。
-  * **图片与视频同目录**：图片写入 `assets/` 根目录，不再使用 `assets/images/`；`ensure_guide_dir()` 自动迁移历史子目录，`normalize_asset_links()` 在正文读写时把旧链接改为 `assets/`。
+  * **图片与视频同目录**：图片写入 `assets/` 根目录，不再使用 `assets/images/`；历史子目录由 `scripts/migrate_guide_assets.py` 迁移。
   * **编辑器新增「资源」标签页**：图片 + 视频统一列出、上传、点击插入、删除与视频改名；粘贴 / 拖拽图片或视频后自动切换到资源页并显示上传 / 转码进度条；「插入」标签页删除图片与视频按钮。资源接口统一为 `GET /api/guides/<id>/resources` 与 `POST .../resources/<文件名>/{delete,compress,rename}`。
   * **一键有损压缩**：资源条目新增压缩按钮，每次把单个资源压缩到约当前体积的 90%（JPEG / WEBP 搜索质量，PNG / GIF 搜索颜色数，MP4 按 90% 码率重编码）；`POST /api/guides/<id>/resources/<文件名>/compress`，临时文件原子替换，无法继续压缩时返回提示且不破坏原文件。
-  * 新增 6 项存储 / 迁移 / 压缩测试；提升缓存版本号（`base.css` 57、`base.js` 30、`markdown-editor.js` 16）。同步更新 README / DEVELOPMENT。
+  * 新增 6 项存储 / 迁移 / 压缩测试；提升缓存版本号（`base.css` 57、`base.js` 30、`markdown-editor.js` 17）。同步更新 README / DEVELOPMENT。
 
 * **指南图片插入 + 修改改为「替换稿」流程**：
   * Markdown 富文本编辑器新增正文图片：拖拽图片到编辑区、在富文本 / 源码模式直接粘贴剪贴板图片都会自动上传并插入（`POST /api/guides/<id>/images`，存入 `uploads/guides/<id>/assets/`，单张 ≤ 10MB 且计入指南资源总量；后续版本改为雪花 ID 命名，见上条）；详情页图片自适应宽度。
-  * 修改已发布指南不再原地改写：进入编辑即把整条指南复制为新雪花 ID 的草稿，`server_guides.replace_of` 记录「发布后替换」标记（同一用户复用已有草稿，草稿计入待审核数量）；管理员审核通过后自动替换——原指南数据行与文件夹全部删除，草稿接管原指南 ID、收藏、外链、创建时间与置顶，资源链接改回原 ID，不残留草稿痕迹。
+  * 修改已发布指南不再原地改写：进入编辑即把整条指南复制为新雪花 ID 的草稿，`server_guides.replace_of` 记录「发布后替换」标记（同一用户复用已有草稿，草稿计入待审核数量）；管理员审核通过后自动替换——原指南数据行与文件夹全部删除，草稿接管原指南 ID、收藏、外链、创建时间与置顶，不残留草稿痕迹。
   * 数据库 `server_guides` 新增 `replace_of` 字段与索引（旧库自动迁移）；后台指南列表与「我的指南」显示「替换稿」标记。
 
 * **新增单文件视觉与动效示例页**（`scripts/style-showcase.html`）：**完全自包含**——站点字体（按本页字符裁剪的 woff2 子集）、`static/css/tailwind.css`、`static/css/base.css` 与 Lucide 全部内联，无外部 CSS / JS / 字体请求，可单独打开或分发；集中演示设计令牌、按钮、卡片、表单、进度条、Toast、弹窗、音乐播放器、滚动入场、页面过渡与完整动效清单；交互示例（Toast、弹窗、开关、下拉、密码强度、搜索淡入、播放器倍速 / 音量、重播动效）均为页内联脚本。同步更新 README。

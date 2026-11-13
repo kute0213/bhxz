@@ -26,6 +26,8 @@ def _edit_form_context(guide):
         'resource_video_upload_url': url_for('guides.api_guide_video_upload', guide_id=guide['id']),
         'draft_url': url_for('guides.api_guide_draft', guide_id=guide['id']),
         'resource_limit_label': guide_store.format_size(get_guide_resource_limit()),
+        'asset_base_url': url_for(
+            'guides.guide_asset', guide_id=guide['id'], filename='').rstrip('/') + '/',
     }
 
 
@@ -64,10 +66,7 @@ def _start_replacement(guide, user):
 
         now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         draft_id = next_id()
-        content = guide_store.read_guide_content(guide['id'], guide.get('content') or '')
-
         guide_store.copy_guide_dir(guide['id'], draft_id)
-        guide_store.write_guide_content(draft_id, content)
 
         conn.execute(
             """
@@ -210,8 +209,8 @@ def guide_detail(guide_id):
         abort(404)
 
     guide = dict(row)
-    # 正文以 guide.md 为准（文件缺失时回退数据库旧内容）
-    guide['content'] = guide_store.read_guide_content(guide_id, guide.get('content') or '')
+    # 正文以 guide.md 为准
+    guide['content'] = guide_store.read_guide_content(guide_id)
     # 把 SQLite 的 0/1 整数转 bool
     guide['is_favorited'] = bool(guide.get('is_favorited'))
     # 视频伪文件名（config.json 中配置的页面显示名称）
@@ -350,7 +349,7 @@ def guide_edit(guide_id):
         abort(404)
 
     guide = dict(row)
-    guide['content'] = guide_store.read_guide_content(guide_id, guide.get('content') or '')
+    guide['content'] = guide_store.read_guide_content(guide_id)
 
     # 已发布的指南不在原地修改：进入编辑即复制成新 ID 的替换草稿，
     # 原指南保持线上原样，审核通过后再由管理端整体替换。

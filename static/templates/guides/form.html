@@ -47,7 +47,8 @@
                     resource_list_url=resource_list_url|default(''),
                     resource_image_upload_url=resource_image_upload_url|default(''),
                     resource_video_upload_url=resource_video_upload_url|default(''),
-                    resource_limit_label=resource_limit_label|default('')
+                    resource_limit_label=resource_limit_label|default(''),
+                    asset_base_url=asset_base_url|default('')
                 ) }}
             </div>
 
@@ -65,7 +66,7 @@
 <script src="{{ url_for('static', filename='js/core/video-player.js', v='4') }}"></script>
 <script src="{{ url_for('static', filename='lib/purify/purify.min.js', v='1') }}"></script>
 <script src="{{ url_for('static', filename='lib/marked/marked.min.js', v='1') }}"></script>
-<script src="{{ url_for('static', filename='js/pages/markdown-editor.js', v='16') }}"></script>
+<script src="{{ url_for('static', filename='js/pages/markdown-editor.js', v='17') }}"></script>
 <script>
 // 提交指南：草稿用 AJAX 保存（不刷新页面）；其他状态弹出验证码后正式提交。
 ( function () {

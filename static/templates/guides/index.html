@@ -116,6 +116,10 @@
                         <button type="button" data-guide-publish="{{ guide.id }}"
                                 class="text-green-400 hover:text-green-300 text-xs px-2 py-1 rounded bg-green-500/10 border border-green-500/20">发布</button>
                         {% endif %}
+                        {% if guide.status in ('draft', 'rejected') %}
+                        <button type="button" data-guide-delete="{{ guide.id }}"
+                                class="text-red-400 hover:text-red-300 text-xs px-2 py-1 rounded bg-red-500/10 border border-red-500/20">删除</button>
+                        {% endif %}
                         {% if guide.status == 'rejected' and guide.rejected_reason %}
                         <span class="text-xs text-red-300">原因：{{ guide.rejected_reason }}</span>
                         {% endif %}
@@ -188,9 +192,12 @@
             var publishBtn = g.status === 'draft'
                 ? '<button type="button" data-guide-publish="' + g.id + '" class="text-green-400 hover:text-green-300 text-xs px-2 py-1 rounded bg-green-500/10 border border-green-500/20">发布</button>'
                 : '';
+            var deleteBtn = (g.status === 'draft' || g.status === 'rejected')
+                ? '<button type="button" data-guide-delete="' + g.id + '" class="text-red-400 hover:text-red-300 text-xs px-2 py-1 rounded bg-red-500/10 border border-red-500/20">删除</button>'
+                : '';
             mine = '<div class="mt-3 pt-3 border-t border-forest-700/30 flex items-center gap-2">' +
                 '<a href="/guides/' + g.id + '/edit" class="text-gold-400 hover:text-gold-300 text-xs px-2 py-1 rounded bg-gold-400/10 border border-gold-400/20">修改</a>' +
-                publishBtn +
+                publishBtn + deleteBtn +
                 (g.status === 'rejected' && g.rejected_reason ? '<span class="text-xs text-red-300">原因：' + esc(g.rejected_reason) + '</span>' : '') +
                 '</div>';
         }
@@ -285,6 +292,50 @@
             .catch(function () {
                 pub.disabled = false;
                 if (typeof Toast !== 'undefined') Toast.error('发布失败，请重试');
+            });
+        });
+    }
+
+    // 删除草稿 / 已拒绝指南：站内确认后调用 API，成功后移除卡片
+    if (list) {
+        list.addEventListener('click', function (e) {
+            var del = e.target.closest('[data-guide-delete]');
+            if (!del) return;
+            e.preventDefault();
+            var id = del.getAttribute('data-guide-delete');
+            var card = del.closest('.guide-card');
+            var title = card ? (card.querySelector('h3') || {}).textContent || '' : '';
+            CustomModal.confirm('删除指南「' + title + '」？正文与全部资源文件都会被删除，且无法恢复。', {
+                title: '删除指南',
+                type: 'warning',
+                confirmText: '删除',
+                trigger: del
+            }).then(function (ok) {
+                if (!ok) return;
+                del.disabled = true;
+                fetch('/api/guides/' + id + '/delete', {
+                    method: 'POST',
+                    headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+                })
+                .then(function (r) { return r.json().catch(function () { return {}; }); })
+                .then(function (data) {
+                    if (!data || !data.success) {
+                        if (typeof Toast !== 'undefined') Toast.error((data && data.message) || '删除失败');
+                        del.disabled = false;
+                        return;
+                    }
+                    if (typeof Toast !== 'undefined') Toast.success(data.message || '指南已删除');
+                    if (card) card.remove();
+                    if (emptyBox && !list.children.length) {
+                        emptyBox.classList.remove('hidden');
+                        emptyTitle.textContent = '还没有创建任何指南';
+                        emptyHint.textContent = '点击「新建指南」会直接创建一份草稿，再点击「修改」编辑内容后发布';
+                    }
+                })
+                .catch(function () {
+                    del.disabled = false;
+                    if (typeof Toast !== 'undefined') Toast.error('删除失败，请重试');
+                });
             });
         });
     }

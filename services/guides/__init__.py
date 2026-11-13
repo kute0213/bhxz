@@ -23,7 +23,6 @@ import tempfile
 import threading
 import time
 import uuid
-from datetime import datetime, timedelta
 
 from PIL import Image, ImageSequence
 
@@ -31,7 +30,6 @@ from config import (
     UPLOAD_GUIDES_DIR,
     GUIDE_RESOURCE_MAX_BYTES,
     GUIDE_VIDEO_EXTENSIONS,
-    GUIDE_DRAFT_KEEP_HOURS,
     GUIDE_VIDEO_TRANSCODE_TIMEOUT,
     FFPROBE_BIN,
     FFMPEG_BIN,
@@ -40,11 +38,9 @@ from core.shared.snowflake import next_id
 
 MD_FILENAME = 'guide.md'
 ASSETS_DIRNAME = 'assets'
-LEGACY_IMAGES_DIRNAME = 'images'  # 旧版图片子目录，仅在读取时迁移到 assets/
 CONFIG_FILENAME = 'config.json'
 CONFIG_VERSION = 1
 VIDEO_TASK_TTL = 3600  # 视频转码任务进度在内存中保留的秒数
-DRAFT_DIRNAME = '_drafts'  # 旧版草稿目录，仅用于清理历史残留
 COMPRESS_RATIO = 0.9  # 每次有损压缩后保留的体积比例（压缩约 10%）
 
 # 正文图片允许的格式（与防火墙上传校验的图片白名单保持一致）
@@ -75,38 +71,11 @@ def guide_config_path(guide_id):
     return os.path.join(guide_dir(guide_id), CONFIG_FILENAME)
 
 
-def draft_dir(token):
-    """旧版草稿根目录：uploads/guides/_drafts/<token>（仅用于清理残留）。"""
-    return os.path.join(UPLOAD_GUIDES_DIR, DRAFT_DIRNAME, str(token))
-
-
 def ensure_guide_dir(guide_id):
-    """确保指南目录、assets 目录与 config.json 存在，并迁移旧版图片目录。"""
+    """确保指南目录、assets 目录与 config.json 存在。"""
     os.makedirs(assets_dir_for(guide_id), exist_ok=True)
-    _migrate_legacy_images(guide_id)
     if not os.path.isfile(guide_config_path(guide_id)):
         write_guide_config(guide_id, default_guide_config())
-
-
-def _migrate_legacy_images(guide_id):
-    """把旧版 assets/images/ 中的图片并入 assets/（图片与视频同目录）。
-
-    迁移只在目录存在时发生；旧版图片文件名是内容哈希，与雪花 ID 不会冲突。
-    """
-    legacy = os.path.join(assets_dir_for(guide_id), LEGACY_IMAGES_DIRNAME)
-    if not os.path.isdir(legacy):
-        return
-    target = assets_dir_for(guide_id)
-    for name in os.listdir(legacy):
-        src = os.path.join(legacy, name)
-        if not os.path.isfile(src) or name.startswith('.'):
-            continue
-        dst = os.path.join(target, name)
-        if os.path.exists(dst):
-            os.remove(src)
-        else:
-            os.replace(src, dst)
-    shutil.rmtree(legacy, ignore_errors=True)
 
 
 # ---------------------------------------------------------------------------
@@ -219,38 +188,31 @@ def normalize_markdown_tables(md):
     return '\n'.join(out)
 
 
-def normalize_asset_links(md):
-    """把旧版图片链接 assets/images/ 统一改为 assets/（图片已并入资源根目录）。"""
-    return str(md or '').replace('/assets/%s/' % LEGACY_IMAGES_DIRNAME, '/assets/')
+def read_guide_content(guide_id):
+    """读取指南 Markdown 正文（文件为唯一内容来源，缺失时返回空串）。
 
-
-def read_guide_content(guide_id, fallback=''):
-    """读取指南 Markdown 正文。
-
-    文件存在时以文件为准；文件缺失时回退到数据库旧内容（迁移前的数据），
-    保证迁移脚本尚未执行时站点仍可正常显示。
-    读取时统一修正被空行隔断的表格与旧版图片链接，历史内容也能正确渲染。
+    读取时统一修正被空行隔断的表格，历史内容也能正确渲染。
     """
     path = guide_md_path(guide_id)
-    if os.path.isfile(path):
-        try:
-            with open(path, 'r', encoding='utf-8') as fh:
-                return normalize_markdown_tables(normalize_asset_links(fh.read()))
-        except OSError:
-            pass
-    return normalize_markdown_tables(normalize_asset_links(fallback))
+    if not os.path.isfile(path):
+        return ''
+    try:
+        with open(path, 'r', encoding='utf-8') as fh:
+            return normalize_markdown_tables(fh.read())
+    except OSError:
+        return ''
 
 
 def write_guide_content(guide_id, content):
     """写入指南 Markdown 正文（先写临时文件再原子替换）。
 
-    写入前统一修正表格空行与旧版图片链接，保证保存 / 发布的内容一定能正常渲染。
+    写入前统一修正表格空行，保证保存 / 发布的内容一定能正常渲染。
     """
     ensure_guide_dir(guide_id)
     path = guide_md_path(guide_id)
     tmp = path + '.tmp'
     with open(tmp, 'w', encoding='utf-8') as fh:
-        fh.write(normalize_markdown_tables(normalize_asset_links(content)))
+        fh.write(normalize_markdown_tables(content))
     os.replace(tmp, path)
     return path
 
@@ -295,22 +257,6 @@ def replace_guide_dir(src_id, dst_id):
             os.replace(backup, dst)
         raise
     shutil.rmtree(backup, ignore_errors=True)
-
-
-def rewrite_asset_links(content, from_id, to_id):
-    """把正文中的资源链接从某个指南 ID 改到另一个指南 ID。
-
-    指南资源 URL 形如 ``/guides/<ID>/assets/...``；复制草稿时正文沿用原指南的
-    链接，编辑期新上传的图片 / 视频则指向草稿 ID，替换时统一改回原指南 ID。
-    """
-    text = str(content or '')
-    if not text:
-        return text
-    return re.sub(
-        r'/guides/%d/assets/' % int(from_id),
-        '/guides/%d/assets/' % int(to_id),
-        text,
-    )
 
 
 # ---------------------------------------------------------------------------
@@ -411,28 +357,6 @@ def remove_video_config(guide_id, filename):
 # 资源文件名 / 大小
 # ---------------------------------------------------------------------------
 
-def safe_asset_name(filename):
-    """把上传文件名转换为安全的资源文件名（保留中文，去掉路径与危险字符）。"""
-    raw = os.path.basename(str(filename or '').replace('\\', '/')).strip()
-    if not raw:
-        return 'asset'
-    stem, ext = os.path.splitext(raw)
-    stem = re.sub(r'[^\w\- .()]+', '_', stem).strip(' ._')[:80] or 'asset'
-    ext = re.sub(r'[^A-Za-z0-9]', '', ext.lstrip('.')).lower()
-    return f'{stem}.{ext}' if ext else stem
-
-
-def _unique_name(directory, name):
-    """在目录内生成不冲突的文件名。"""
-    base, ext = os.path.splitext(name)
-    candidate = name
-    i = 1
-    while os.path.exists(os.path.join(directory, candidate)):
-        candidate = f'{base}-{i}{ext}'
-        i += 1
-    return candidate
-
-
 def _ext_of(filename):
     """取文件名的小写扩展名（不含点）；无扩展名时返回空串。"""
     name = str(filename or '')
@@ -492,7 +416,7 @@ def list_assets(directory):
 
 
 def directory_total(directory):
-    """目录（含所有子目录，如 images/）内资源文件的总字节数。"""
+    """目录内资源文件的总字节数（忽略隐藏临时文件）。"""
     if not os.path.isdir(directory):
         return 0
     total = 0
@@ -536,30 +460,6 @@ def _upload_size(upload):
     except (AttributeError, OSError):
         pass
     return 0
-
-
-def _save_upload(directory, upload):
-    """把上传文件保存到目录（自动重名），返回 (文件名, 字节数)。"""
-    os.makedirs(directory, exist_ok=True)
-    name = _unique_name(directory, safe_asset_name(upload.filename))
-    path = os.path.join(directory, name)
-    upload.save(path)
-    return name, os.path.getsize(path)
-
-
-def save_guide_asset(guide_id, upload, limit_bytes=None):
-    """保存指南资源，返回 ``(ok, message, item)``。
-
-    item 为 ``{'name', 'size', 'size_label'}``；配额按整个 assets 目录累计。
-    """
-    directory = assets_dir_for(guide_id)
-    os.makedirs(directory, exist_ok=True)
-    total = directory_total(directory)
-    msg = _quota_error(total, _upload_size(upload), limit_bytes)
-    if msg:
-        return False, msg, None
-    name, size = _save_upload(directory, upload)
-    return True, '', {'name': name, 'size': size, 'size_label': format_size(size)}
 
 
 def save_guide_image(guide_id, upload, limit_bytes=None):
@@ -1052,28 +952,3 @@ def list_guide_assets(guide_id):
         else:
             item['title'] = item['name']
     return items
-
-
-# ---------------------------------------------------------------------------
-# 旧版草稿目录清理
-# ---------------------------------------------------------------------------
-
-def cleanup_stale_drafts(keep_hours=GUIDE_DRAFT_KEEP_HOURS):
-    """删除超过保留时长的草稿目录，返回删除数量。"""
-    root = os.path.join(UPLOAD_GUIDES_DIR, DRAFT_DIRNAME)
-    if not os.path.isdir(root):
-        return 0
-    deadline = datetime.now() - timedelta(hours=keep_hours)
-    removed = 0
-    for name in os.listdir(root):
-        path = os.path.join(root, name)
-        if not os.path.isdir(path):
-            continue
-        try:
-            mtime = datetime.fromtimestamp(os.path.getmtime(path))
-        except OSError:
-            continue
-        if mtime < deadline:
-            shutil.rmtree(path, ignore_errors=True)
-            removed += 1
-    return removed

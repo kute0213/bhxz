@@ -25,6 +25,7 @@ def _admin_create_context():
         'resource_image_upload_url': '',
         'resource_video_upload_url': '',
         'resource_limit_label': '',
+        'asset_base_url': '',
     }
 
 
@@ -36,6 +37,8 @@ def _admin_edit_context(guide):
         'resource_image_upload_url': url_for('guides.api_guide_image_upload', guide_id=guide['id']),
         'resource_video_upload_url': url_for('guides.api_guide_video_upload', guide_id=guide['id']),
         'resource_limit_label': guide_store.format_size(get_guide_resource_limit()),
+        'asset_base_url': url_for(
+            'guides.guide_asset', guide_id=guide['id'], filename='').rstrip('/') + '/',
     }
 
 
@@ -43,8 +46,7 @@ def _apply_replacement(conn, draft_id):
     """把「替换草稿」落回原指南，返回最终指南 ID；非替换草稿返回 None。
 
     规则：原指南的数据行与整个文件夹全部删除，草稿接管原指南 ID
-    （收藏、外链、创建时间、置顶状态原样保留），正文中的资源链接改回原 ID，
-    最终不残留任何草稿痕迹。
+    （收藏、外链、创建时间、置顶状态原样保留），最终不残留任何草稿痕迹。
     """
     draft = conn.execute(
         "SELECT * FROM server_guides WHERE id = ?", (draft_id,)
@@ -56,12 +58,6 @@ def _apply_replacement(conn, draft_id):
     original = conn.execute(
         "SELECT * FROM server_guides WHERE id = ?", (original_id,)
     ).fetchone()
-
-    # 草稿正文里指向草稿 ID 的资源链接（编辑期新上传的图片 / 视频）改回原指南 ID
-    content = guide_store.read_guide_content(draft_id, '')
-    guide_store.write_guide_content(
-        draft_id, guide_store.rewrite_asset_links(content, draft_id, original_id)
-    )
 
     now = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
@@ -119,7 +115,7 @@ def _fetch_guides_page(page, page_size=PAGE_SIZE):
         ).fetchall()
         guides = [dict(r) for r in rows]
         for g in guides:
-            g['content'] = guide_store.read_guide_content(g['id'], g.get('content') or '')
+            g['content'] = guide_store.read_guide_content(g['id'])
             config = guide_store.read_guide_config(g['id'])
             g['video_titles'] = {
                 name: (meta.get('title') or name) if isinstance(meta, dict) else name
@@ -274,7 +270,7 @@ def admin_guide_edit(guide_id):
     if not row:
         abort(404)
     guide = dict(row)
-    guide['content'] = guide_store.read_guide_content(guide_id, guide.get('content') or '')
+    guide['content'] = guide_store.read_guide_content(guide_id)
 
     if request.method == 'POST':
         data = _payload()
