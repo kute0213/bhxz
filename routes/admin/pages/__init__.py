@@ -24,6 +24,7 @@ def admin_page():
             'pending_backgrounds': conn.execute("SELECT COUNT(*) AS c FROM backgrounds WHERE status = 0").fetchone()['c'],
             'total_buildings': conn.execute("SELECT COUNT(*) AS c FROM public_buildings").fetchone()['c'],
             'pending_buildings': conn.execute("SELECT COUNT(*) AS c FROM public_buildings WHERE status = 'pending'").fetchone()['c'],
+            'active_lives': conn.execute("SELECT COUNT(*) AS c FROM live_channels WHERE status = 'live'").fetchone()['c'],
         }
     finally:
         conn.close()

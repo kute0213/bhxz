@@ -305,6 +305,36 @@ def init_db():
                 next_retry_at TEXT NOT NULL
             )
         '''),
+        # 音频直播频道表
+        # mode: loop=循环播放音频 rec=WebRTC 实时录音
+        # status: live=直播中 stopped=已停止
+        ('live_channels', '''
+            CREATE TABLE IF NOT EXISTS live_channels (
+                id INTEGER PRIMARY KEY,
+                user_id INTEGER NOT NULL,
+                username TEXT DEFAULT '',
+                title TEXT NOT NULL,
+                mode TEXT NOT NULL DEFAULT 'loop',
+                music_id INTEGER DEFAULT NULL,
+                volume REAL NOT NULL DEFAULT 1.0,
+                speed REAL NOT NULL DEFAULT 1.0,
+                status TEXT NOT NULL DEFAULT 'live',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                stopped_at TEXT DEFAULT NULL,
+                stop_reason TEXT DEFAULT ''
+            )
+        '''),
+        # 音频直播封禁表（永久封禁，管理员可手动解封；每个用户最多一条）
+        ('live_bans', '''
+            CREATE TABLE IF NOT EXISTS live_bans (
+                user_id INTEGER PRIMARY KEY,
+                username TEXT DEFAULT '',
+                reason TEXT DEFAULT '',
+                banned_by INTEGER NOT NULL,
+                created_at TEXT NOT NULL
+            )
+        '''),
     ]
 
     for table_name, ddl in tables:
@@ -416,6 +446,19 @@ def init_db():
         )
     except Exception as e:
         log('ERROR', 'DB', f'创建 guide_favorites 索引失败: {e}')
+
+    # 音频直播：按用户/状态查询（单用户单直播校验、直播间列表）
+    try:
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_live_channels_user_status "
+            "ON live_channels (user_id, status)"
+        )
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_live_channels_status "
+            "ON live_channels (status)"
+        )
+    except Exception as e:
+        log('ERROR', 'DB', f'创建 live_channels 索引失败: {e}')
 
     # 失败邮件重试队列：按「状态 + 下次重试时间」扫描到期邮件
     try:

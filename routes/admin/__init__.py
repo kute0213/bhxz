@@ -26,3 +26,4 @@ import routes.admin.logs             # noqa: E402,F401
 import routes.admin.access_log       # noqa: E402,F401
 import routes.admin.account_applications  # noqa: E402,F401
 import routes.admin.firewall         # noqa: E402,F401
+import routes.admin.live             # noqa: E402,F401

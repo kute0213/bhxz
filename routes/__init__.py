@@ -21,12 +21,14 @@ def register_blueprints(app: Flask):
     from routes.public import public_bp, try_serve_public
     from routes.sitemap import sitemap_bp
     from routes.game_accounts import account_apply_bp
+    from routes.live import live_bp
 
     blueprints = [
         public_bp, main_bp, admin_bp,
         api_bp, captcha_bp, email_code_bp,
         docs_bp, guides_bp, buildings_bp,
         backgrounds_bp, sitemap_bp, account_apply_bp,
+        live_bp,
     ]
     for bp in blueprints:
         app.register_blueprint(bp)

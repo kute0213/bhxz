@@ -133,6 +133,12 @@ def shutdown_application(signum=None):
     BackupScheduler().stop()
     email_service.stop()
     sitemap_cache.stop()
+    # 音频直播：结束 ffmpeg 子进程但不改数据库状态，下次启动自动恢复循环直播
+    try:
+        from services.live import manager as live_manager
+        live_manager.shutdown()
+    except Exception as exc:
+        log('WARNING', 'App', f'音频直播关闭异常: {exc}')
     try:
         # 关闭所有线程连接（未提交事务回滚），并对 WAL 执行 checkpoint，
         # 确保所有已提交数据合并落盘（避免进程被杀导致 WAL 文件残留）

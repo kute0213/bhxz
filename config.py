@@ -12,6 +12,8 @@ UPLOAD_DIR = os.path.join(APP_ROOT, 'uploads')
 UPLOAD_SITEMAP_DIR = os.path.join(UPLOAD_DIR, 'sitemap')
 UPLOAD_MUSIC_DIR = os.path.join(UPLOAD_DIR, 'music')
 UPLOAD_BACKGROUNDS_DIR = os.path.join(UPLOAD_DIR, 'backgrounds')
+# 音频直播目录：uploads/live/<直播ID>/（HLS 播放列表与分片）
+UPLOAD_LIVE_DIR = os.path.join(UPLOAD_DIR, 'live')
 # 服务器指南目录：uploads/guides/<指南ID>/guide.md + assets/（指南资源，如视频）
 UPLOAD_GUIDES_DIR = os.path.join(UPLOAD_DIR, 'guides')
 
@@ -55,6 +57,20 @@ else:
 # 注意：每个上传任务都是独立 ffmpeg 子进程、独立输出目录，互不共享文件，
 # 多用户同时上传时天然并行，不会出现「文件正在使用」冲突。
 FFMPEG_THREADS = int(os.environ.get('FFMPEG_THREADS', '0'))
+
+# ---------------------------------------------------------------------------
+# 音频直播（WebRTC 实时录音）ICE 配置
+# ---------------------------------------------------------------------------
+# STUN 服务器列表（逗号分隔）。服务端在公网且 UDP 可用时可获取 srflx 候选；
+# 部署在 NAT 后无法直连时，请配置 TURN 中继（下方三项）。
+LIVE_STUN_SERVERS = [
+    s.strip()
+    for s in (os.environ.get('LIVE_STUN_SERVERS', 'stun:stun.qq.com:3478')).split(',')
+    if s.strip()
+]
+LIVE_TURN_URL = (os.environ.get('LIVE_TURN_URL') or '').strip()
+LIVE_TURN_USERNAME = (os.environ.get('LIVE_TURN_USERNAME') or '').strip()
+LIVE_TURN_PASSWORD = (os.environ.get('LIVE_TURN_PASSWORD') or '').strip()
 
 # 用户图片（头像/背景）最大字节数
 USER_IMAGE_MAX_BYTES = 10 * 1024 * 1024
@@ -291,6 +307,7 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(UPLOAD_SITEMAP_DIR, exist_ok=True)
 os.makedirs(UPLOAD_MUSIC_DIR, exist_ok=True)
 os.makedirs(UPLOAD_BACKGROUNDS_DIR, exist_ok=True)
+os.makedirs(UPLOAD_LIVE_DIR, exist_ok=True)
 os.makedirs(UPLOAD_GUIDES_DIR, exist_ok=True)
 os.makedirs(UPLOADS_BACKUP_DIR, exist_ok=True)
 # 注：自定义备份目录（相对/绝对）在运行时由 services/backup/manager 首次使用时创建，

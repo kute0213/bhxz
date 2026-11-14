@@ -4,6 +4,17 @@
 
 ### 变更
 
+* **新增音频直播台**（`services/live/`、`routes/live/`、`routes/admin/live/`、`static/templates/live/{index,play}.html`、`static/templates/admin/live.html`、`static/templates/base.html`、`core/db/schema.py`、`config.py`、`requirements.txt`）：
+  * 社区导航新增「音频直播」（`/live`），播放页为独立路由 `/live/play.html?channelId=<直播ID>`，支持 m3u8 与 MP3 两种收听方式；标题、按钮与播放器沿用站点磨砂玻璃风格。
+  * 两种开播模式：**循环播放**（仅可选自己已通过审核的公开音频，ffmpeg `-re -stream_loop -1` 无限循环，支持实时调整音量 0~200% 与速度 0.5x~2.0x）与 **实时录音**（浏览器麦克风 WebRTC 推流，服务端 aiortc 接收并解码为 PCM）。
+  * 单 ffmpeg 进程同时产出 HLS（落盘 `uploads/live/<ID>/`）与 MP3（stdout → Python 内存分发给所有听众，慢客户端丢弃旧数据保证低延迟）；提供 `/live/stream/<ID>.m3u8`、`/live/stream/<ID>.mp3` 与 HLS 分片路由。
+  * 前端关闭不影响直播：ffmpeg 在服务端持续运行；重新打开直播台可继续收听 / 重新连接麦克风。每个用户最多同时 1 路直播（事务内原子校验）。
+  * 服务重启自动恢复循环播放直播；实时录音无法恢复，启动时自动标记停止并清空遗留频道。
+  * 管理后台新增「音频直播管理」（`/admin/live`）：查看正在直播与听众数、强制停止、按用户名永久封禁（立即停止其当前直播）与手动解封；管理中心首页新增「正在直播」统计与入口卡片。
+  * 新增 `live_channels` / `live_bans` 表与 `(user_id, status)` 索引；新增 `UPLOAD_LIVE_DIR`、`LIVE_STUN_SERVERS`、`LIVE_TURN_*` 配置；依赖新增 `aiortc`。
+  * 实时录音要求 HTTPS 安全上下文与服务端 UDP 可达（公网 IP 或配置 TURN）；页面在非安全上下文会给出明确提示。
+  * 新增 14 项测试（参数规范化、ffmpeg 命令构造、频道单用户单直播、音源归属与审核状态、封禁/解封、服务重启清理）；`python -m pytest scripts/tests -q` 全部通过。同步更新 README / DEVELOPMENT。
+
 * **访问日志 SSE 实时性增强**（`services/access_log/capture.py`、`routes/admin/access_log/__init__.py`、`static/templates/admin/access_log.html`）：访问记录产生后**立即广播给 SSE 订阅者**，不再等待后台线程把 DuckDB 批处理落盘，数据库写入慢或失败时前端仍能实时看到记录；SSE 增加 `retry: 3000`、心跳缩短到 10 秒、`Cache-Control: no-cache, no-transform`，服务端记录 SSE 连接 / 断开日志（模块日志 `access_log`）；页面新增「SSE 已接收」计数与「本页不产生记录」提示。
 
 * **修复访问日志 SSE 前端未接收命名 data 事件**（`static/templates/admin/access_log.html`、`scripts/tests/test_access_log.py`）：服务端实时记录使用命名事件 `event: data`，前端误用 `EventSource.onmessage`（只接收默认 `message` 事件），导致首帧历史之后的新记录被静默丢弃。前端改为 `addEventListener('data')` 接收，并补充回归测试验证命名事件协议。

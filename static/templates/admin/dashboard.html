@@ -38,6 +38,10 @@
                     <div class="text-xl sm:text-2xl font-bold text-gold-400 mb-1 break-all">{{ stats.total_buildings }}</div>
                     <div class="text-xs text-cream/60">公共建筑</div>
                 </div>
+                <div class="pixel-card rounded-xl p-4 text-center">
+                    <div class="text-xl sm:text-2xl font-bold text-gold-400 mb-1 break-all">{{ stats.active_lives }}</div>
+                    <div class="text-xs text-cream/60">正在直播</div>
+                </div>
             </div>
         </div>
 
@@ -131,6 +135,14 @@
                     </div>
                     <h3 class="text-lg font-bold mb-2">大喇叭音频管理</h3>
                     <p class="text-cream/60 text-sm">查看全部音频，下架违规内容</p>
+                    <span class="inline-block mt-4 text-gold-400 text-sm font-medium">进入管理 →</span>
+                </a>
+                <a href="{{ url_for('admin.admin_live_page') }}" class="pixel-card rounded-xl p-6 block hover:no-underline">
+                    <div class="w-12 h-12 mb-4 bg-gold-400/20 rounded-xl flex items-center justify-center">
+                        <i data-lucide="radio" class="w-6 h-6 text-gold-400"></i>
+                    </div>
+                    <h3 class="text-lg font-bold mb-2">音频直播管理</h3>
+                    <p class="text-cream/60 text-sm">查看正在直播、强制停止、禁止用户开播</p>
                     <span class="inline-block mt-4 text-gold-400 text-sm font-medium">进入管理 →</span>
                 </a>
                 <a href="{{ url_for('admin.admin_backgrounds_page') }}" class="pixel-card rounded-xl p-6 block hover:no-underline">

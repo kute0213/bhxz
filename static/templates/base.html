@@ -243,6 +243,10 @@
                     <i data-lucide="music" class="w-5 h-5"></i>
                     <span>大喇叭音频</span>
                 </a>
+                <a href="{{ url_for('live.live_page') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors{% if request.endpoint and request.endpoint.startswith('live.') %} active{% endif %}">
+                    <i data-lucide="radio" class="w-5 h-5"></i>
+                    <span>音频直播</span>
+                </a>
                 <a href="{{ url_for('buildings.building_list') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors{% if request.endpoint and request.endpoint.startswith('buildings.') %} active{% endif %}">
                     <i data-lucide="building-2" class="w-5 h-5"></i>
                     <span>公共建筑</span>
@@ -343,6 +347,9 @@
                         <div class="desktop-nav-dropdown" role="menu">
                             <a href="{{ url_for('main.music_page') }}" class="desktop-nav-dropdown-link{% if request.endpoint and request.endpoint.startswith('main.music') %} active{% endif %}" role="menuitem">
                                 <i data-lucide="music"></i><span>大喇叭音频</span>
+                            </a>
+                            <a href="{{ url_for('live.live_page') }}" class="desktop-nav-dropdown-link{% if request.endpoint and request.endpoint.startswith('live.') %} active{% endif %}" role="menuitem">
+                                <i data-lucide="radio"></i><span>音频直播</span>
                             </a>
                             <a href="{{ url_for('buildings.building_list') }}" class="desktop-nav-dropdown-link{% if request.endpoint and request.endpoint.startswith('buildings.') %} active{% endif %}" role="menuitem">
                                 <i data-lucide="building-2"></i><span>公共建筑</span>

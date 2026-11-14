@@ -1,0 +1,263 @@
+{% extends "base.html" %}
+{% block title %}{{ channel.title if channel else '直播已结束' }} - 音频直播{% endblock %}
+{% block description %}滨海小镇音频直播播放页，支持 HLS（m3u8）与 MP3 实时收听。{% endblock %}
+
+{% block extra_style %}
+<style>
+    .live-pulse {
+        display: inline-block; width: .5rem; height: .5rem; border-radius: 999px;
+        background: #f87171; box-shadow: 0 0 0 0 rgba(248, 113, 113, .7);
+        animation: livePulse 1.6s infinite;
+    }
+    @keyframes livePulse {
+        0% { box-shadow: 0 0 0 0 rgba(248, 113, 113, .65); }
+        70% { box-shadow: 0 0 0 8px rgba(248, 113, 113, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(248, 113, 113, 0); }
+    }
+    .live-link-row { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+    .live-link-row code {
+        flex: 1 1 12rem; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+        white-space: nowrap; background: rgba(0, 0, 0, .28); padding: .35rem .55rem;
+        border-radius: .4rem; font-size: .75rem;
+    }
+    .source-btn.active { border-color: #f0c060; color: #f0c060; background: rgba(240, 192, 96, .10); }
+    #live-player { width: 100%; }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="page-container py-12">
+    <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+        <a href="{{ url_for('live.live_page') }}" class="text-gold-400 hover:text-gold-300 text-sm mb-4 inline-block">
+            <i data-lucide="arrow-left" class="w-4 h-4 inline mr-1"></i>返回直播台
+        </a>
+
+        <div class="pixel-card rounded-xl p-6">
+            {% if channel %}
+            <div class="flex items-center gap-2 flex-wrap mb-1">
+                <span class="live-pulse"></span>
+                <h1 id="live-title" class="text-xl sm:text-2xl font-bold">{{ channel.title }}</h1>
+                <span id="live-badge" class="text-[11px] px-2 py-0.5 rounded bg-red-500/15 text-red-300">直播中</span>
+            </div>
+            <div class="text-xs text-cream/50 mb-5">
+                主播：{{ channel.username or '未知' }} ·
+                <span id="live-listeners">{{ channel.listeners or 0 }}</span> 人在听 ·
+                直播 ID：{{ channel.id }}
+            </div>
+            {% else %}
+            <div class="text-center py-10">
+                <i data-lucide="radio" class="w-12 h-12 mx-auto text-cream/20 mb-4"></i>
+                <h1 class="text-xl font-bold mb-2">直播已结束</h1>
+                <p class="text-cream/50 text-sm mb-5">该直播可能已经停止或链接不正确。</p>
+                <a href="{{ url_for('live.live_page') }}" class="btn-primary px-5 py-2.5 rounded-lg inline-flex items-center gap-2">
+                    <i data-lucide="list" class="w-4 h-4"></i>查看其他直播
+                </a>
+            </div>
+            {% endif %}
+
+            <div id="player-wrap" class="{{ '' if channel else 'hidden' }}">
+                <audio id="live-player" controls preload="none"></audio>
+
+                <div class="flex flex-wrap items-center gap-2 mt-4">
+                    <button type="button" id="source-hls" class="source-btn btn-secondary px-3 py-1.5 rounded text-xs active">HLS（m3u8）</button>
+                    <button type="button" id="source-mp3" class="source-btn btn-secondary px-3 py-1.5 rounded text-xs">MP3 直连</button>
+                    <button type="button" id="play-btn" class="btn-primary px-4 py-1.5 rounded text-xs inline-flex items-center gap-1.5">
+                        <i data-lucide="play" class="w-3.5 h-3.5"></i>开始收听
+                    </button>
+                    <span id="player-status" class="text-xs text-cream/40"></span>
+                </div>
+
+                <div class="mt-4 flex items-center gap-3">
+                    <i data-lucide="volume-2" class="w-4 h-4 text-cream/50"></i>
+                    <input id="player-volume" type="range" min="0" max="100" step="1" value="100" class="live-range flex-1" style="accent-color:#f0c060">
+                    <span id="volume-text" class="text-xs text-cream/50 w-10 text-right">100%</span>
+                </div>
+
+                <div class="mt-5 pt-4 border-t border-cream/10 space-y-2 text-xs live-link-row">
+                    <span class="text-cream/40 w-10">播放页</span>
+                    <code id="link-page">{{ request.url }}</code>
+                    <button type="button" class="btn-secondary px-2.5 py-1 rounded copy-btn" data-copy-target="link-page">复制</button>
+                </div>
+                <div class="space-y-2 text-xs live-link-row mt-2">
+                    <span class="text-cream/40 w-10">m3u8</span>
+                    <code id="link-m3u8">{{ request.host_url }}live/stream/{{ channel_id }}.m3u8</code>
+                    <button type="button" class="btn-secondary px-2.5 py-1 rounded copy-btn" data-copy-target="link-m3u8">复制</button>
+                </div>
+                <div class="space-y-2 text-xs live-link-row mt-2">
+                    <span class="text-cream/40 w-10">mp3</span>
+                    <code id="link-mp3">{{ request.host_url }}live/stream/{{ channel_id }}.mp3</code>
+                    <button type="button" class="btn-secondary px-2.5 py-1 rounded copy-btn" data-copy-target="link-mp3">复制</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_script %}
+<script src="{{ url_for('static', filename='lib/hls/hls.min.js', v='1') }}"></script>
+<script>
+(function () {
+    'use strict';
+
+    var CHANNEL_ID = {{ channel_id|tojson }};
+    var HAS_CHANNEL = {{ 'true' if channel else 'false' }};
+    var STATUS_URL = {{ url_for('live.api_live_status', channel_id=channel_id)|tojson }};
+    var M3U8_URL = {{ (request.host_url ~ 'live/stream/' ~ channel_id ~ '.m3u8')|tojson }};
+    var MP3_URL = {{ (request.host_url ~ 'live/stream/' ~ channel_id ~ '.mp3')|tojson }};
+
+    var audio = document.getElementById('live-player');
+    var statusEl = document.getElementById('player-status');
+    var hls = null;
+    var currentSource = 'hls';
+    var ended = false;
+
+    function setStatus(text, isError) {
+        if (!statusEl) return;
+        statusEl.textContent = text || '';
+        statusEl.className = 'text-xs ' + (isError ? 'text-red-300' : 'text-cream/40');
+    }
+
+    function destroyHls() {
+        if (hls) {
+            try { hls.destroy(); } catch (e) {}
+            hls = null;
+        }
+    }
+
+    function setActiveSource(source) {
+        currentSource = source;
+        var hlsBtn = document.getElementById('source-hls');
+        var mp3Btn = document.getElementById('source-mp3');
+        if (hlsBtn) hlsBtn.classList.toggle('active', source === 'hls');
+        if (mp3Btn) mp3Btn.classList.toggle('active', source === 'mp3');
+    }
+
+    function playMp3(autoplay) {
+        destroyHls();
+        setActiveSource('mp3');
+        audio.src = MP3_URL;
+        setStatus('MP3 直连播放中');
+        if (autoplay !== false) {
+            audio.play().catch(function () {
+                setStatus('浏览器阻止了自动播放，请点击「开始收听」');
+            });
+        }
+    }
+
+    function playHls(autoplay) {
+        destroyHls();
+        setActiveSource('hls');
+        if (window.Hls && Hls.isSupported()) {
+            hls = new Hls({ lowLatencyMode: true, liveSyncDurationCount: 3 });
+            hls.loadSource(M3U8_URL);
+            hls.attachMedia(audio);
+            hls.on(Hls.Events.ERROR, function (_event, data) {
+                if (data && data.fatal) {
+                    setStatus('HLS 播放失败，正在切换 MP3…', true);
+                    playMp3(autoplay);
+                }
+            });
+            setStatus('HLS 播放中');
+        } else if (audio.canPlayType('application/vnd.apple.mpegurl')) {
+            audio.src = M3U8_URL;
+            setStatus('HLS 播放中');
+        } else {
+            playMp3(autoplay);
+            return;
+        }
+        if (autoplay !== false) {
+            audio.play().catch(function () {
+                setStatus('浏览器阻止了自动播放，请点击「开始收听」');
+            });
+        }
+    }
+
+    function play(startNow) {
+        if (currentSource === 'mp3') playMp3(startNow);
+        else playHls(startNow);
+    }
+
+    function refreshStatus() {
+        if (!CHANNEL_ID || ended) return;
+        fetch(STATUS_URL, { headers: { 'Accept': 'application/json' } })
+            .then(function (res) { return res.json(); })
+            .then(function (data) {
+                if (!data || !data.success || !data.channel) {
+                    markEnded();
+                    return;
+                }
+                var ch = data.channel;
+                var listeners = document.getElementById('live-listeners');
+                if (listeners) listeners.textContent = ch.listeners || 0;
+                if (!ch.alive) {
+                    markEnded();
+                }
+            })
+            .catch(function () {});
+    }
+
+    function markEnded() {
+        ended = true;
+        destroyHls();
+        try { audio.pause(); } catch (e) {}
+        audio.removeAttribute('src');
+        var badge = document.getElementById('live-badge');
+        if (badge) {
+            badge.textContent = '已结束';
+            badge.className = 'text-[11px] px-2 py-0.5 rounded bg-cream/10 text-cream/50';
+        }
+        var pulse = document.querySelector('.live-pulse');
+        if (pulse) pulse.style.display = 'none';
+        setStatus('直播已结束', true);
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        if (!CHANNEL_ID || !HAS_CHANNEL) return;
+
+        var playBtn = document.getElementById('play-btn');
+        if (playBtn) playBtn.addEventListener('click', function () { play(true); });
+
+        var hlsBtn = document.getElementById('source-hls');
+        var mp3Btn = document.getElementById('source-mp3');
+        if (hlsBtn) hlsBtn.addEventListener('click', function () { play(true); });
+        if (mp3Btn) mp3Btn.addEventListener('click', function () { playMp3(true); });
+
+        var volume = document.getElementById('player-volume');
+        var volumeText = document.getElementById('volume-text');
+        if (volume) {
+            volume.addEventListener('input', function () {
+                audio.volume = volume.value / 100;
+                if (volumeText) volumeText.textContent = volume.value + '%';
+            });
+        }
+
+        document.addEventListener('click', function (e) {
+            var btn = e.target && e.target.closest ? e.target.closest('.copy-btn') : null;
+            if (!btn) return;
+            e.preventDefault();
+            var target = document.getElementById(btn.getAttribute('data-copy-target'));
+            if (!target) return;
+            var text = target.textContent.trim();
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(text).then(function () {
+                    Toast.success('链接已复制');
+                }).catch(function () { Toast.error('复制失败，请手动复制'); });
+            } else {
+                var ta = document.createElement('textarea');
+                ta.value = text;
+                document.body.appendChild(ta);
+                ta.select();
+                try { document.execCommand('copy'); Toast.success('链接已复制'); }
+                catch (err) { Toast.error('复制失败，请手动复制'); }
+                document.body.removeChild(ta);
+            }
+        });
+
+        // 首次进入不自动播放（浏览器通常禁止），由用户点击「开始收听」
+        play(false);
+        setInterval(refreshStatus, 8000);
+    });
+})();
+</script>
+{% endblock %}
