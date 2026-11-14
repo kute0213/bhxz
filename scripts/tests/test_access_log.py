@@ -118,6 +118,7 @@ def test_sse_live_record_uses_default_message_event(monkeypatch):
     assert access_log.start_capture()[0] is True
     response = client.get('/admin/api/access-log/stream?tail=5', buffered=False)
     frames = iter(response.response)
+    assert next(frames).startswith(b'retry:')
     assert next(frames).startswith(b'event: history')
 
     access_log.record_access(path='/live-check')

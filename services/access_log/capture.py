@@ -161,6 +161,8 @@ def record_access(*, ip='', method='', path='', query_string='', status=0,
     """投递一条访问记录（非阻塞）。
 
     状态未开启时直接忽略；队列满时丢弃并计数，避免阻塞请求线程。
+    记录会**立即**广播给 SSE 订阅者，不等 DuckDB 落盘，保证实时性；
+    落盘由后台线程异步完成，数据库写入失败不会影响实时展示。
     """
     global _count, _dropped
 
@@ -184,6 +186,8 @@ def record_access(*, ip='', method='', path='', query_string='', status=0,
         _count += 1
         write_queue = _write_queue
 
+    _publish_entries([{k: v for k, v in entry.items() if not k.startswith('_')}])
+
     if write_queue is None:
         return
     try:
@@ -194,7 +198,7 @@ def record_access(*, ip='', method='', path='', query_string='', status=0,
 
 
 def _writer_loop(write_queue):
-    """后台写入线程：批量落库，成功后把记录广播给 SSE 订阅者。"""
+    """后台写入线程：批量落库（SSE 广播已在记录时同步完成）。"""
     pending = []
 
     def flush():
@@ -203,15 +207,9 @@ def _writer_loop(write_queue):
         batch = list(pending)
         pending.clear()
         try:
-            inserted = store.insert_many(batch)
+            store.insert_many(batch)
         except Exception as exc:
             log_module(MODULE_NAME, 'WARNING', 'AccessLog', f'访问日志写入失败: {exc}')
-            return
-        if inserted:
-            _publish_entries([
-                {k: v for k, v in entry.items() if not k.startswith('_')}
-                for entry in batch
-            ])
 
     while True:
         try:
@@ -235,6 +233,8 @@ def subscribe(client_queue):
     """注册一个 SSE 客户端队列。"""
     with _subscriber_lock:
         _subscribers.append(client_queue)
+        clients = len(_subscribers)
+    log_module(MODULE_NAME, 'INFO', 'AccessLog', 'SSE 客户端已连接', clients=clients)
 
 
 def unsubscribe(client_queue):
@@ -244,6 +244,8 @@ def unsubscribe(client_queue):
             _subscribers.remove(client_queue)
         except ValueError:
             pass
+        clients = len(_subscribers)
+    log_module(MODULE_NAME, 'INFO', 'AccessLog', 'SSE 客户端已断开', clients=clients)
 
 
 def _publish_entries(entries):

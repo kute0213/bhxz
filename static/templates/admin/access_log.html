@@ -13,6 +13,9 @@
                 开启后服务端会持续记录每一次访问并写入独立 DuckDB 数据库，同时通过 SSE 实时推送到本页；
                 关闭页面不会中断抓取，只有在下方点击「取消抓取」才会停止并删除访问日志数据库。
             </p>
+            <p class="text-cream/40 text-xs mt-2">
+                提示：本页只维持 SSE 长连接、本身不产生访问记录；可在其他标签页打开站点页面或刷新，即可看到实时记录。
+            </p>
         </div>
 
         <!-- 控制栏 -->
@@ -35,6 +38,7 @@
             </div>
             <div class="flex flex-wrap items-center gap-3 mt-3 text-xs text-cream/50">
                 <span>SSE 状态：<span id="stream-state">未连接</span></span>
+                <span>SSE 已接收：<span id="stream-count">0</span> 条</span>
                 <span id="capture-db-path" class="break-all"></span>
                 <span id="capture-dropped" class="hidden text-yellow-300"></span>
             </div>
@@ -73,6 +77,7 @@
     var dbPathEl = document.getElementById('capture-db-path');
     var droppedEl = document.getElementById('capture-dropped');
     var streamState = document.getElementById('stream-state');
+    var streamCountEl = document.getElementById('stream-count');
     var visibleCount = document.getElementById('visible-count');
     var btnStart = document.getElementById('btn-start');
     var btnStop = document.getElementById('btn-stop');
@@ -91,6 +96,7 @@
     var entries = [];
     var renderQueued = false;
     var lastCount = 0;
+    var streamCount = 0;
 
     function escapeHtml(text) {
         var div = document.createElement('div');
@@ -217,6 +223,8 @@
             try {
                 var data = JSON.parse(ev.data);
                 entries = data.entries || [];
+                streamCount = 0;
+                streamCountEl.textContent = 0;
                 applyStatus(data.status);
                 setStreamState('已连接', 'text-green-300');
                 render();
@@ -235,6 +243,8 @@
                     entries = entries.slice(-MAX_ROWS);
                 }
                 lastCount += 1;
+                streamCount += 1;
+                streamCountEl.textContent = streamCount;
                 countEl.textContent = lastCount;
                 scheduleRender();
             } catch (err) {}
@@ -306,6 +316,8 @@
         postAction(START_URL, '访问日志抓取已开启').then(function(data) {
             if (data && data.success) {
                 entries = [];
+                streamCount = 0;
+                streamCountEl.textContent = 0;
                 render();
                 connectStream();
             } else {

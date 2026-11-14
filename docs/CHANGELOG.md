@@ -4,6 +4,8 @@
 
 ### 变更
 
+* **访问日志 SSE 实时性增强**（`services/access_log/capture.py`、`routes/admin/access_log/__init__.py`、`static/templates/admin/access_log.html`）：访问记录产生后**立即广播给 SSE 订阅者**，不再等待后台线程把 DuckDB 批处理落盘，数据库写入慢或失败时前端仍能实时看到记录；SSE 增加 `retry: 3000`、心跳缩短到 10 秒、`Cache-Control: no-cache, no-transform`，服务端记录 SSE 连接 / 断开日志（模块日志 `access_log`）；页面新增「SSE 已接收」计数与「本页不产生记录」提示。
+
 * **修复访问日志 SSE 无实时输出**（`routes/admin/access_log/__init__.py`、`scripts/tests/test_access_log.py`）：实时记录误用了命名事件 `event: data`，而前端通过 `EventSource.onmessage`（默认 `message` 事件）接收，导致只有首帧历史可见、后续新记录被静默丢弃。改为发送默认 `message` 事件（`data:` 帧），并新增回归测试验证新记录能在 1 秒内到达。
 
 * **新增访问日志抓取**（`services/access_log/{__init__,store,capture}.py`、`routes/admin/access_log/__init__.py`、`core/middleware.py`、`static/templates/admin/{access_log,dashboard,logs}.html`、`core/system/logger.py`、`scripts/tests/test_access_log.py`）：

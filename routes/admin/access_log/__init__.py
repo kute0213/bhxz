@@ -30,7 +30,7 @@ from services.access_log import (
 
 DEFAULT_HISTORY_TAIL = 500
 MAX_HISTORY_TAIL = 2000
-SSE_HEARTBEAT_SECONDS = 15
+SSE_HEARTBEAT_SECONDS = 10
 
 
 def _sse(event, payload):
@@ -85,6 +85,8 @@ def api_access_log_stream():
         client_queue = queue.Queue(maxsize=2000)
         subscribe(client_queue)
         try:
+            # 告诉浏览器断线后的重连间隔
+            yield 'retry: 3000\n\n'
             running = is_capturing()
             history = query_recent(tail) if running else []
             yield _sse('history', {
@@ -114,7 +116,8 @@ def api_access_log_stream():
         stream_with_context(generate()),
         mimetype='text/event-stream',
         headers={
-            'Cache-Control': 'no-cache',
+            # no-transform 让反向代理不要压缩/改写 SSE 流，避免缓冲
+            'Cache-Control': 'no-cache, no-transform',
             # 不能下发 Connection 等逐跳标头（PEP 3333 禁止，Waitress 会断言失败）
             'X-Accel-Buffering': 'no',
         },
