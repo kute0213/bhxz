@@ -98,8 +98,8 @@ def test_stale_database_removed_on_start():
     assert access_log.query_recent(10) == []
 
 
-def test_sse_live_record_uses_default_message_event(monkeypatch):
-    """实时记录必须走默认 message 事件，否则前端 onmessage 收不到。"""
+def test_sse_live_record_uses_named_data_event(monkeypatch):
+    """实时记录使用命名 data 事件，前端必须以 addEventListener('data') 接收。"""
     from flask import Flask
     import core.auth as auth_module
     from routes.admin import admin_bp
@@ -124,8 +124,7 @@ def test_sse_live_record_uses_default_message_event(monkeypatch):
     access_log.record_access(path='/live-check')
     frame = next(frames)
     try:
-        assert frame.startswith(b'data: ')
-        assert not frame.startswith(b'event: data')
+        assert frame.startswith(b'event: data')
         assert b'/live-check' in frame
     finally:
         response.close()

@@ -234,7 +234,7 @@
             }
         });
 
-        source.onmessage = function(ev) {
+        source.addEventListener('data', function(ev) {
             if (eventSource !== source) return;
             try {
                 var entry = JSON.parse(ev.data);
@@ -248,7 +248,7 @@
                 countEl.textContent = lastCount;
                 scheduleRender();
             } catch (err) {}
-        };
+        });
 
         source.addEventListener('stopped', function(ev) {
             if (eventSource !== source) return;

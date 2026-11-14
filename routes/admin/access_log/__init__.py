@@ -106,9 +106,7 @@ def api_access_log_stream():
                 if item.get('_event') == 'stopped':
                     yield _sse('stopped', {'status': get_status()})
                     return
-                # 实时记录必须使用默认 message 事件（不写 event: 行），
-                # 前端用 EventSource.onmessage 接收；命名事件不会触发 onmessage。
-                yield f'data: {json.dumps(item, ensure_ascii=False)}\n\n'
+                yield _sse('data', item)
         finally:
             unsubscribe(client_queue)
 
