@@ -96,3 +96,35 @@ def test_stale_database_removed_on_start():
     assert access_log.start_capture()[0] is True
     assert access_log.get_status()['count'] == 0
     assert access_log.query_recent(10) == []
+
+
+def test_sse_live_record_uses_default_message_event(monkeypatch):
+    """实时记录必须走默认 message 事件，否则前端 onmessage 收不到。"""
+    from flask import Flask
+    import core.auth as auth_module
+    from routes.admin import admin_bp
+
+    monkeypatch.setattr(
+        auth_module, 'get_current_user',
+        lambda: {'id': 1, 'username': 'admin', 'is_admin': True},
+    )
+    app = Flask(__name__)
+    app.secret_key = 'test-secret'
+    app.register_blueprint(admin_bp)
+    client = app.test_client()
+    with client.session_transaction() as sess:
+        sess['user_id'] = 1
+
+    assert access_log.start_capture()[0] is True
+    response = client.get('/admin/api/access-log/stream?tail=5', buffered=False)
+    frames = iter(response.response)
+    assert next(frames).startswith(b'event: history')
+
+    access_log.record_access(path='/live-check')
+    frame = next(frames)
+    try:
+        assert frame.startswith(b'data: ')
+        assert not frame.startswith(b'event: data')
+        assert b'/live-check' in frame
+    finally:
+        response.close()

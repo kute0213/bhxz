@@ -4,6 +4,8 @@
 
 ### 变更
 
+* **修复访问日志 SSE 无实时输出**（`routes/admin/access_log/__init__.py`、`scripts/tests/test_access_log.py`）：实时记录误用了命名事件 `event: data`，而前端通过 `EventSource.onmessage`（默认 `message` 事件）接收，导致只有首帧历史可见、后续新记录被静默丢弃。改为发送默认 `message` 事件（`data:` 帧），并新增回归测试验证新记录能在 1 秒内到达。
+
 * **新增访问日志抓取**（`services/access_log/{__init__,store,capture}.py`、`routes/admin/access_log/__init__.py`、`core/middleware.py`、`static/templates/admin/{access_log,dashboard,logs}.html`、`core/system/logger.py`、`scripts/tests/test_access_log.py`）：
   * 管理后台新增「访问日志抓取」页面（`GET /admin/access-log`）：开启后服务端把每次访问（方法、路径、查询串、状态码、耗时、来源 IP、用户、UA / Referer）写入独立 DuckDB 数据库 `uploads/db/access_logs.duckdb`。
   * 抓取状态保存在服务端进程内，**页面关闭 / SSE 断开不会停止抓取**；只有管理员在页面点击「取消抓取」或调用 stop 接口才停止，并**自动删除访问日志数据库文件**（含 WAL）。
