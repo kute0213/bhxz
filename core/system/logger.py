@@ -117,6 +117,7 @@ MODULE_LOG_DEFAULTS = {
     'cleanup': {'store': True, 'global': False},      # 被驳回内容自动清理
     'metrics': {'store': True, 'global': False},      # 系统指标采集
     'settings': {'store': True, 'global': False},     # 系统设置管理
+    'access_log': {'store': True, 'global': False},   # 访问日志抓取
 }
 
 

@@ -4,9 +4,10 @@
 """
 
 import threading
+import time
 from urllib.parse import urlparse
 
-from flask import request
+from flask import g, request, session
 from werkzeug.exceptions import HTTPException
 
 from core.shared.ip import get_client_ip
@@ -171,6 +172,17 @@ def register_hooks(app, try_serve_public):
     """
 
     @app.before_request
+    def access_log_start_hook():
+        """记录请求开始时间（仅在访问日志抓取开启时）。
+
+        放在所有业务钩子之前，保证即使请求随后被防火墙拦截，
+        after_request 也能记录到这次访问。
+        """
+        from services.access_log import is_capturing
+        if is_capturing():
+            g._access_log_started = time.perf_counter()
+
+    @app.before_request
     def ip_ban_check_hook():
         """IP 封禁兜底检查：被封 IP 直接断开，不产生页面。
 
@@ -274,6 +286,37 @@ def register_hooks(app, try_serve_public):
         except Exception:
             pass
         return None
+
+    @app.after_request
+    def access_log_record_hook(response):
+        """请求结束后写入访问日志（仅在抓取开启时）。
+
+        记录方法、路径、状态码、耗时、来源 IP、用户与会话信息；
+        静态资源与抓取页自身的 SSE 长连接由服务层过滤。
+        """
+        started = getattr(g, '_access_log_started', None)
+        if started is None:
+            return response
+        try:
+            from services.access_log import record_access, should_capture_request
+            path = request.path
+            if should_capture_request(path, request.method):
+                record_access(
+                    ip=get_client_ip(),
+                    method=request.method,
+                    path=path,
+                    query_string=request.query_string.decode('utf-8', 'ignore'),
+                    status=response.status_code,
+                    duration_ms=int((time.perf_counter() - started) * 1000),
+                    user_id=session.get('user_id') or 0,
+                    username=session.get('username') or '',
+                    user_agent=request.headers.get('User-Agent', ''),
+                    referer=request.headers.get('Referer', ''),
+                )
+        except Exception:
+            # 访问日志写入失败不能影响正常响应
+            pass
+        return response
 
     # 统一为所有响应写入安全标头（在 before_request 之后注册，顺序无关紧要）
     app.after_request(_set_security_headers)

@@ -4,6 +4,14 @@
 
 ### 变更
 
+* **新增访问日志抓取**（`services/access_log/{__init__,store,capture}.py`、`routes/admin/access_log/__init__.py`、`core/middleware.py`、`static/templates/admin/{access_log,dashboard,logs}.html`、`core/system/logger.py`、`scripts/tests/test_access_log.py`）：
+  * 管理后台新增「访问日志抓取」页面（`GET /admin/access-log`）：开启后服务端把每次访问（方法、路径、查询串、状态码、耗时、来源 IP、用户、UA / Referer）写入独立 DuckDB 数据库 `uploads/db/access_logs.duckdb`。
+  * 抓取状态保存在服务端进程内，**页面关闭 / SSE 断开不会停止抓取**；只有管理员在页面点击「取消抓取」或调用 stop 接口才停止，并**自动删除访问日志数据库文件**（含 WAL）。
+  * SSE 实时推送：`GET /admin/api/access-log/stream` 首帧 `history` 携带最近 500 条快照，之后持续推送 `data`；取消时下发 `stopped` 并结束连接；空闲发心跳。
+  * 写入采用「请求线程投递 → 后台单写入线程批量落库 → 广播 SSE」的异步模型，队列满丢弃并计数，不阻塞请求线程；静态资源与抓取页自身 SSE 长连接不计入日志。
+  * 新增 `POST /admin/api/access-log/{start,stop}` 与 `GET /admin/api/access-log/status`；系统日志新增「访问日志抓取」模块单独日志来源（默认落盘、不并入全局）。
+  * 新增访问日志服务测试（生命周期、落库查询、停止删除、过滤规则、SSE 订阅）。同步更新 README / DEVELOPMENT。
+
 * **草稿可删除 + 资源相对链接 + 清理迁移代码**（`routes/guides/api/__init__.py`、`routes/guides/pages/__init__.py`、`routes/admin/guides/__init__.py`、`services/guides/__init__.py`、`services/cleanup_service/__init__.py`、`config.py`、`static/templates/guides/{index,form,detail}.html`、`static/templates/admin/{guide_form,guides}.html`、`static/templates/macros/markdown_editor.html`、`static/js/pages/markdown-editor.js`、`scripts/migrate_guide_assets.py`、`scripts/tests/test_guide_storage.py`）：
   * **修复草稿无法删除**：「我的指南」为草稿 / 已拒绝指南增加「删除」按钮，调用新增的 `POST /api/guides/<id>/delete`，站内确认弹窗后删除数据库记录与整个指南目录；待审核 / 已通过仍不可由作者直接删除。
   * **正文资源改为相对链接**：图片与视频统一保存为 `assets/<文件名>`，不再写入指南 ID。编辑器通过根节点 `data-mre-asset-base` 在渲染时补全、序列化时还原；详情页与后台预览渲染后补全；替换稿接管原指南 ID 时无需再改写任何链接（删除 `rewrite_asset_links()`）。

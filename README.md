@@ -151,7 +151,7 @@ python scripts/build/package.py
 │   ├── guides/         # 服务器指南（每个指南一个目录：guide.md + config.json + assets/ 视频等资源，资源上限可在系统设置中调整）
 │   ├── backgrounds/    # 全站背景图片
 │   ├── music/          # 大喇叭音频（每个音频一个 ID 目录，含 m3u8、ts 分片与唱片 MP3）
-│   └── db/             # 数据库文件（site.db + firewall.duckdb）
+│   └── db/             # 数据库文件（site.db + firewall.duckdb；access_logs.duckdb 仅抓取期间存在）
 ├── backups/      # 自动维护备份目录（默认 ../bhxz_backups，支持自定义路径与运行时热改）
 │   └── uploads/        # /uploads/ 全量 zip 极限压缩备份（含 SQLite / DuckDB 一致快照）
 └── ssl/          # HTTPS 证书（可选）
@@ -191,7 +191,9 @@ python scripts/build/package.py
 
 * **全站 SEO / GEO**（`static/templates/base.html`、`core/template_context.py`、`routes/sitemap/__init__.py`）：所有页面统一输出 `meta description`、`canonical`、Open Graph / Twitter 卡片标签，子模板可按页面覆盖标题与描述；登录、注册、找回密码、服务器状态、指南、公共建筑、大喇叭音频、背景图片、文档中心、网页地图等公开页均配置了长度充足的标题与页面专属描述；`/sitemap.xml` 修复「缓存缺失时返回空 200」的问题，改为按请求域名按需生成并向 Bing 等爬虫返回有效 XML
 
-* 系统日志（实时查看，**页面只请求一个接口 `GET /admin/api/logs`：直接返回 SSE 流，首帧 `history` 携带历史快照、后续实时推送新日志，全局 / 严重错误 / 各模块单独日志全部覆盖，不再有 3 秒轮询、也不再单独请求历史接口**，支持等级过滤、自动滚动；按时间顺序从上到下展示，与控制台一致；**可在页面顶部切换来源查看全局日志 / 严重错误日志 / 各模块单独日志**，页面内「日志设置」可为任意模块配置「是否落盘」「是否并入全局日志」，保存即时生效）。统一日志系统分为三类：**① 全局日志**（普通运行日志 → 控制台 + `logs/app.log` + 内存缓冲 + SSE）；**② 严重错误日志**（导致服务器退出的报错 → 单独写入 `logs/fatal.log`，**每次写入直接覆盖文件、只保留最后一次**，且始终打印到控制台，不受日志等级/控制台开关限制）；**③ 模块单独日志**（模块启动时向日志模块注册，→ 独立内存缓冲 + 可选 `logs/modules/<模块名>.log`；是否落盘、是否并入全局日志**均由设置在「日志页面 → 日志设置」决定，不在模块注册时写死**，支持任意模块；当前使用者为防火墙（`firewall`）、图形验证码（`captcha`）、邮箱验证码（`email_code`）、注册账号（`register`）、登录账号（`login`），其中后四者默认落盘、全部默认不并入全局；两个开关都关闭时日志仅存在于模块独立缓冲，不打印、不落盘、不进全局）。**每次启动自动清理日志**（全局日志文件、严重错误日志文件、所有模块日志文件与内存缓冲统一清空）。**403 响应不写入防火墙模块日志**（防火墙成功拦截与授权拒绝类 403 均不记录；仅保留 IP 封禁 / 自动封禁等封禁动作日志）
+* 系统日志（实时查看，**页面只请求一个接口 `GET /admin/api/logs`：直接返回 SSE 流，首帧 `history` 携带历史快照、后续实时推送新日志，全局 / 严重错误 / 各模块单独日志全部覆盖，不再有 3 秒轮询、也不再单独请求历史接口**，支持等级过滤、自动滚动；按时间顺序从上到下展示，与控制台一致；**可在页面顶部切换来源查看全局日志 / 严重错误日志 / 各模块单独日志**，页面内「日志设置」可为任意模块配置「是否落盘」「是否并入全局日志」，保存即时生效）。统一日志系统分为三类：**① 全局日志**（普通运行日志 → 控制台 + `logs/app.log` + 内存缓冲 + SSE）；**② 严重错误日志**（导致服务器退出的报错 → 单独写入 `logs/fatal.log`，**每次写入直接覆盖文件、只保留最后一次**，且始终打印到控制台，不受日志等级/控制台开关限制）；**③ 模块单独日志**（模块启动时向日志模块注册，→ 独立内存缓冲 + 可选 `logs/modules/<模块名>.log`；是否落盘、是否并入全局日志**均由设置在「日志页面 → 日志设置」决定，不在模块注册时写死**，支持任意模块；当前使用者为防火墙（`firewall`）、图形验证码（`captcha`）、邮箱验证码（`email_code`）、注册账号（`register`）、登录账号（`login`）、访问日志抓取（`access_log`），其中后五者默认落盘、全部默认不并入全局；两个开关都关闭时日志仅存在于模块独立缓冲，不打印、不落盘、不进全局）。**每次启动自动清理日志**（全局日志文件、严重错误日志文件、所有模块日志文件与内存缓冲统一清空）。**403 响应不写入防火墙模块日志**（防火墙成功拦截与授权拒绝类 403 均不记录；仅保留 IP 封禁 / 自动封禁等封禁动作日志）
+
+* **访问日志抓取**（管理后台 → 访问日志抓取）：管理员在页面开启后，服务端把每一次访问（方法、路径、查询串、状态码、耗时、来源 IP、用户、UA / Referer）写入独立的 DuckDB 数据库 `uploads/db/access_logs.duckdb`，并通过 `GET /admin/api/access-log/stream`（SSE）实时推送；**关闭页面 / 断开 SSE 不会停止抓取**，抓取状态保存在服务端，直到管理员在界面点击「取消抓取」才停止，并在停止后**自动删除访问日志数据库文件**；静态资源与抓取页自身的 SSE 长连接不计入日志
 
 * 自动维护（手动/自动，数据备份 + 日志文件清理，极限压缩 zip，进度条；备份目录支持设置绝对/相对路径，默认 `../bhxz_backups`）
 
@@ -522,6 +524,17 @@ python scripts/build/package.py
 | GET | `/admin/api/backgrounds`                    | 背景图片分页列表（`page`，可选 `status` 筛选） |
 | GET | `/admin/api/game-accounts/applications/list` | 注册申请分页列表（`status=pending\|approved\|rejected\|all`，`page`） |
 
+### 访问日志抓取 API（管理员）
+
+抓取状态保存在服务端，页面关闭或 SSE 断开都不会停止抓取，只有在界面点击「取消抓取」（或调用 stop）才会停止并删除数据库。
+
+| 方法 | 路径 | 说明 |
+| -- | -- | -- |
+| POST | `/admin/api/access-log/start` | 开启抓取，创建独立 DuckDB 数据库 `uploads/db/access_logs.duckdb` |
+| POST | `/admin/api/access-log/stop` | 取消抓取，关闭并删除访问日志数据库文件 |
+| GET | `/admin/api/access-log/status` | 查询状态（是否运行中、开始时间、已抓取条数、数据库大小） |
+| GET | `/admin/api/access-log/stream` | SSE 实时推送：首帧 `history` 历史快照，后续 `data` 新记录，取消时下发 `stopped` |
+
 ### 公共建筑 API（搜索 / 标签 / 收藏 / 评论）
 
 公共建筑列表经 `GET /api/buildings/list`（公开）、`GET /api/buildings/my`（我的建筑）、`GET /api/buildings/favorites`（我的收藏）无刷新搜索与分页加载（每页条数由 `BUILDINGS_PER_PAGE` 控制，接口不接受前端传入的数量参数），搜索关键词同时匹配标题与标签；公开列表默认按收藏数量排序，我的建筑按更新时间排序，我的收藏按收藏时间倒序。详情页评论经 `GET /api/buildings/<id>/comments` 分段加载（每页条数由 `BUILDING_COMMENTS_PER_PAGE` 控制，接口不接受前端传入的数量参数）。所有接口均纳入 API 防火墙计数。
@@ -773,6 +786,9 @@ workspace/
 │   ├── user/                 #   用户（认证/资料/管理）
 │   ├── background_service/   #   背景图片业务（WebP 转换 + 按屏幕比例挑选）
 │   ├── cleanup_service/      #   被驳回内容自动清理（统一定时调度）
+│   ├── access_log/           #   访问日志抓取（独立 DuckDB + 异步写入 + SSE 广播）
+│   │   ├── store.py          #     DuckDB 存储（uploads/db/access_logs.duckdb）
+│   │   └── capture.py        #     抓取状态、写入队列、SSE 订阅生命周期
 │   ├── firewall/             #   高性能防火墙（DuckDB 引擎 + WSGI 门禁 + DDoS 防护）
 │   │   ├── __init__.py       #     公共 API re-export（ban_ip / firewall 单例等）
 │   │   ├── api_guard.py      #     接口频率限制（每 IP 每分钟）

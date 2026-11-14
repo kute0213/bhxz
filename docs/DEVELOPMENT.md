@@ -188,6 +188,7 @@ def do_something(user_id, value, ip_address):
   | `cleanup` | `services/cleanup_service/__init__.py` | 被驳回内容超时自动清理 | 是 | 否 |
   | `metrics` | `services/system_metrics/__init__.py` | 系统指标采集 | 是 | 否 |
   | `settings` | `services/settings_manager/__init__.py` | 系统设置读取 / 保存 / 删除 | 是 | 否 |
+  | `access_log` | `services/access_log/capture.py` | 访问日志抓取开启 / 取消 / 写入失败 | 是 | 否 |
   | `waitress` | `core/system/logger.py`（`install_waitress_logging()`） | Waitress 内部日志（`Task queue depth is xx` 等） | 否 | 否 |
 
   **总原则：除 core 基础设施（`core/`：应用初始化、数据库 schema / 连接、WSGI 服务器、任务注册表）与启动自检（`core/system/startup_checks.py`）保留全局 `log()` 外，业务侧日志一律走模块单独日志。**

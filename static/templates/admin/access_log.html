@@ -1,0 +1,357 @@
+{% extends "base.html" %}
+{% block title %}访问日志抓取{% endblock %}
+{% block description %}管理员访问日志抓取：服务端实时记录全站访问并写入独立 DuckDB 数据库，通过 SSE 实时推送，取消后自动删除数据库。{% endblock %}
+{% block content %}
+<section class="page-container py-12">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="mb-8">
+            <a href="{{ url_for('admin.admin_page') }}" class="text-gold-400 hover:text-gold-300 text-sm mb-2 inline-block">
+                <i data-lucide="arrow-left" class="w-4 h-4 inline mr-1"></i>返回管理中心
+            </a>
+            <h1 class="text-xl sm:text-2xl font-bold">访问日志抓取</h1>
+            <p class="text-cream/60 text-sm mt-1">
+                开启后服务端会持续记录每一次访问并写入独立 DuckDB 数据库，同时通过 SSE 实时推送到本页；
+                关闭页面不会中断抓取，只有在下方点击「取消抓取」才会停止并删除访问日志数据库。
+            </p>
+        </div>
+
+        <!-- 控制栏 -->
+        <div class="pixel-card rounded-xl p-4 mb-4">
+            <div class="flex flex-wrap items-center gap-3">
+                <span id="capture-badge" class="px-3 py-1 rounded-lg text-sm border border-cream/20 bg-forest-900/60 text-cream/60">
+                    未开启
+                </span>
+                <span class="text-xs text-cream/50">开始时间：<span id="capture-started">—</span></span>
+                <span class="text-xs text-cream/50">已抓取：<span id="capture-count">0</span> 条</span>
+                <span class="text-xs text-cream/50">数据库：<span id="capture-size">0 B</span></span>
+                <div class="flex items-center gap-2 ml-auto">
+                    <button id="btn-start" class="btn-primary text-sm">
+                        <i data-lucide="play" class="w-4 h-4 inline mr-1"></i>开启抓取
+                    </button>
+                    <button id="btn-stop" class="btn-danger text-sm" disabled>
+                        <i data-lucide="square" class="w-4 h-4 inline mr-1"></i>取消抓取并删除数据库
+                    </button>
+                </div>
+            </div>
+            <div class="flex flex-wrap items-center gap-3 mt-3 text-xs text-cream/50">
+                <span>SSE 状态：<span id="stream-state">未连接</span></span>
+                <span id="capture-db-path" class="break-all"></span>
+                <span id="capture-dropped" class="hidden text-yellow-300"></span>
+            </div>
+        </div>
+
+        <!-- 实时日志 -->
+        <div class="pixel-card rounded-xl p-4">
+            <div class="flex flex-wrap items-center gap-3 mb-3">
+                <h2 class="text-lg font-bold">实时访问日志</h2>
+                <div class="flex items-center gap-2 ml-auto">
+                    <span id="visible-count" class="text-xs text-cream/50">0 条</span>
+                    <button id="btn-auto-scroll" class="px-3 py-1.5 bg-gold-400/20 hover:bg-gold-400/30 text-gold-300 text-sm rounded-lg transition-colors border border-gold-400/30">
+                        <i data-lucide="arrow-up-to-line" class="w-4 h-4 inline mr-1"></i>自动滚动
+                    </button>
+                    <button id="btn-clear-view" class="px-3 py-1.5 bg-forest-900/60 hover:bg-forest-800 text-cream/80 text-sm rounded-lg transition-colors border border-cream/20">
+                        <i data-lucide="eraser" class="w-4 h-4 inline mr-1"></i>清空视图
+                    </button>
+                </div>
+            </div>
+            <div id="access-log-container" class="bg-forest-950/80 rounded-xl p-3 font-mono text-xs leading-relaxed overflow-auto" style="max-height: 70vh; min-height: 400px;">
+                <div class="text-cream/40 text-center py-8">未开启抓取</div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_script %}
+<script>
+(function() {
+    var container = document.getElementById('access-log-container');
+    var badge = document.getElementById('capture-badge');
+    var startedEl = document.getElementById('capture-started');
+    var countEl = document.getElementById('capture-count');
+    var sizeEl = document.getElementById('capture-size');
+    var dbPathEl = document.getElementById('capture-db-path');
+    var droppedEl = document.getElementById('capture-dropped');
+    var streamState = document.getElementById('stream-state');
+    var visibleCount = document.getElementById('visible-count');
+    var btnStart = document.getElementById('btn-start');
+    var btnStop = document.getElementById('btn-stop');
+    var btnAutoScroll = document.getElementById('btn-auto-scroll');
+    var btnClearView = document.getElementById('btn-clear-view');
+
+    var STATUS_URL = '{{ url_for("admin.api_access_log_status") }}';
+    var START_URL = '{{ url_for("admin.api_access_log_start") }}';
+    var STOP_URL = '{{ url_for("admin.api_access_log_stop") }}';
+    var STREAM_URL = '{{ url_for("admin.api_access_log_stream") }}';
+    var MAX_ROWS = 2000;
+
+    var running = false;
+    var autoScroll = true;
+    var eventSource = null;
+    var entries = [];
+    var renderQueued = false;
+    var lastCount = 0;
+
+    function escapeHtml(text) {
+        var div = document.createElement('div');
+        div.textContent = text == null ? '' : text;
+        return div.innerHTML;
+    }
+
+    function escapeAttr(text) {
+        return escapeHtml(text).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    function formatBytes(n) {
+        n = Number(n) || 0;
+        if (n < 1024) return n + ' B';
+        if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+        return (n / 1024 / 1024).toFixed(2) + ' MB';
+    }
+
+    function statusClass(code) {
+        if (code >= 500) return 'text-red-400 font-bold';
+        if (code >= 400) return 'text-yellow-300';
+        if (code >= 300) return 'text-blue-300';
+        return 'text-green-300';
+    }
+
+    function methodClass(method) {
+        if (method === 'GET') return 'text-blue-300';
+        if (method === 'POST') return 'text-gold-300';
+        if (method === 'DELETE') return 'text-red-400';
+        return 'text-cream/80';
+    }
+
+    function applyStatus(status) {
+        if (!status) return;
+        running = !!status.running;
+        lastCount = status.count || 0;
+
+        badge.textContent = running ? '抓取中' : '未开启';
+        badge.className = running
+            ? 'px-3 py-1 rounded-lg text-sm border border-green-400/40 bg-green-400/10 text-green-300'
+            : 'px-3 py-1 rounded-lg text-sm border border-cream/20 bg-forest-900/60 text-cream/60';
+
+        startedEl.textContent = status.started_at || '—';
+        countEl.textContent = lastCount;
+        sizeEl.textContent = running ? formatBytes(status.db_size) : '—';
+        dbPathEl.textContent = status.db_path ? '路径：' + status.db_path : '';
+        droppedEl.textContent = status.dropped ? '队列丢弃 ' + status.dropped + ' 条' : '';
+        droppedEl.classList.toggle('hidden', !status.dropped);
+
+        btnStart.disabled = running;
+        btnStop.disabled = !running;
+        btnStart.classList.toggle('opacity-50', running);
+        btnStop.classList.toggle('opacity-50', !running);
+
+        if (!running) {
+            streamState.textContent = '未连接';
+            streamState.className = 'text-cream/50';
+        }
+    }
+
+    function render() {
+        if (!running && entries.length === 0) {
+            container.innerHTML = '<div class="text-cream/40 text-center py-8">未开启抓取</div>';
+            visibleCount.textContent = '0 条';
+            return;
+        }
+        if (entries.length === 0) {
+            container.innerHTML = '<div class="text-cream/40 text-center py-8">等待访问记录...</div>';
+            visibleCount.textContent = '0 条';
+            return;
+        }
+        var html = '';
+        for (var i = 0; i < entries.length; i++) {
+            var e = entries[i];
+            var url = e.path || '';
+            if (e.query_string) url += '?' + e.query_string;
+            html += '<div class="hover:bg-forest-800/40 px-2 py-1 rounded flex flex-wrap items-center gap-x-3 gap-y-0.5">'
+                + '<span class="text-cream/40">' + escapeHtml(e.captured_at) + '</span>'
+                + '<span class="w-12 font-bold ' + methodClass(e.method) + '">' + escapeHtml(e.method) + '</span>'
+                + '<span class="w-10 ' + statusClass(e.status) + '">' + escapeHtml(e.status) + '</span>'
+                + '<span class="w-16 text-cream/40">' + escapeHtml(e.duration_ms) + 'ms</span>'
+                + '<span class="text-cream/60">' + escapeHtml(e.ip) + '</span>'
+                + '<span class="flex-1 break-all text-cream/90">' + escapeHtml(url) + '</span>'
+                + (e.username ? '<span class="text-gold-300">' + escapeHtml(e.username) + '</span>' : '')
+                + (e.user_agent ? '<span class="text-cream/30 truncate max-w-[18rem]" title="' + escapeAttr(e.user_agent) + '">' + escapeHtml(e.user_agent) + '</span>' : '')
+                + '</div>';
+        }
+        container.innerHTML = html;
+        visibleCount.textContent = entries.length + ' 条';
+        if (autoScroll) {
+            container.scrollTop = container.scrollHeight;
+        }
+    }
+
+    function scheduleRender() {
+        if (renderQueued) return;
+        renderQueued = true;
+        requestAnimationFrame(function() {
+            renderQueued = false;
+            render();
+        });
+    }
+
+    function closeStream() {
+        if (eventSource) {
+            eventSource.close();
+            eventSource = null;
+        }
+    }
+
+    function setStreamState(text, className) {
+        streamState.textContent = text;
+        streamState.className = className || 'text-cream/50';
+    }
+
+    function connectStream() {
+        closeStream();
+        setStreamState('连接中...', 'text-gold-300');
+        var source = new EventSource(STREAM_URL + '?tail=500');
+        eventSource = source;
+
+        source.addEventListener('history', function(ev) {
+            if (eventSource !== source) return;
+            try {
+                var data = JSON.parse(ev.data);
+                entries = data.entries || [];
+                applyStatus(data.status);
+                setStreamState('已连接', 'text-green-300');
+                render();
+            } catch (err) {
+                entries = [];
+                render();
+            }
+        });
+
+        source.onmessage = function(ev) {
+            if (eventSource !== source) return;
+            try {
+                var entry = JSON.parse(ev.data);
+                entries.push(entry);
+                if (entries.length > MAX_ROWS) {
+                    entries = entries.slice(-MAX_ROWS);
+                }
+                lastCount += 1;
+                countEl.textContent = lastCount;
+                scheduleRender();
+            } catch (err) {}
+        };
+
+        source.addEventListener('stopped', function(ev) {
+            if (eventSource !== source) return;
+            try {
+                applyStatus(JSON.parse(ev.data).status);
+            } catch (err) {
+                applyStatus(null);
+            }
+            closeStream();
+            setStreamState('已停止', 'text-cream/50');
+            scheduleRender();
+        });
+
+        source.onerror = function() {
+            if (eventSource !== source) return;
+            closeStream();
+            setStreamState('连接中断，3 秒后重连', 'text-yellow-300');
+            if (running) {
+                setTimeout(function() {
+                    if (running) connectStream();
+                }, 3000);
+            }
+        };
+    }
+
+    function loadStatus() {
+        fetch(STATUS_URL)
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (!data || !data.success) return;
+                applyStatus(data.status);
+                if (data.status.running) {
+                    connectStream();
+                } else {
+                    render();
+                }
+            })
+            .catch(function() {});
+    }
+
+    function postAction(url, successText) {
+        return fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: '{}'
+        })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data && data.success) {
+                    Toast.success(successText);
+                } else {
+                    Toast.error((data && data.message) || '操作失败');
+                }
+                if (data) applyStatus(data.status);
+                return data;
+            })
+            .catch(function() {
+                Toast.error('请求失败，请稍后重试');
+                return null;
+            });
+    }
+
+    btnStart.addEventListener('click', function() {
+        btnStart.disabled = true;
+        postAction(START_URL, '访问日志抓取已开启').then(function(data) {
+            if (data && data.success) {
+                entries = [];
+                render();
+                connectStream();
+            } else {
+                btnStart.disabled = false;
+            }
+        });
+    });
+
+    btnStop.addEventListener('click', function() {
+        CustomModal.confirm('确认取消抓取？停止后将删除访问日志数据库，已抓取的记录无法恢复。', {
+            trigger: this,
+            callback: function(confirmed) {
+                if (!confirmed) return;
+                btnStop.disabled = true;
+                postAction(STOP_URL, '已取消抓取，访问日志数据库已删除').then(function(data) {
+                    if (data && data.success) {
+                        closeStream();
+                        entries = [];
+                        render();
+                        setStreamState('未连接', 'text-cream/50');
+                    } else {
+                        btnStop.disabled = false;
+                    }
+                });
+            }
+        });
+    });
+
+    btnAutoScroll.addEventListener('click', function() {
+        autoScroll = !autoScroll;
+        this.classList.toggle('bg-gold-400/20', autoScroll);
+        this.classList.toggle('bg-forest-900/60', !autoScroll);
+        if (autoScroll) {
+            container.scrollTop = container.scrollHeight;
+        }
+    });
+
+    btnClearView.addEventListener('click', function() {
+        entries = [];
+        render();
+    });
+
+    // 页面关闭时只断开本页 SSE，服务端抓取会继续，直到在界面取消
+    window.addEventListener('beforeunload', closeStream);
+
+    loadStatus();
+})();
+</script>
+{% endblock %}
