@@ -1,23 +1,38 @@
-"""音频直播 JSON API：列表、状态、开播、停止、参数调整、WebRTC 推流。"""
+"""音频直播 JSON API：列表、状态、开播、停止、参数调整、音源搜索。"""
 
 from flask import jsonify, request
 
 from core.auth import get_current_user, login_required
-from core.shared.ip import get_client_ip
+from core.shared.ip import get_client_ip, is_trusted_proxy
 from routes.live import live_bp
-from services.live import (
-    MODE_LOOP,
-    MODE_REC,
-    manager,
-    store,
-    webrtc,
-)
+from services.live import manager, store
 from services.live.constants import M3U8_PATH, MP3_PATH, PLAY_PAGE_PATH
+from services.music import STATUS_LABELS, get_user_musics_page, tags_to_list
+
+
+def _base_url():
+    """构造对外访问的站点根地址。
+
+    反向代理 / 内网穿透下 Flask 看到的协议恒为 http，这里在可信代理场景下
+    采信 X-Forwarded-Proto / X-Forwarded-Host，避免分享出去的链接是 http。
+    """
+    scheme = request.scheme
+    host = request.host
+    if is_trusted_proxy(request.remote_addr):
+        proto = (request.headers.get('X-Forwarded-Proto') or '')
+        proto = proto.split(',')[0].strip().lower()
+        if proto in ('http', 'https'):
+            scheme = proto
+        fwd_host = (request.headers.get('X-Forwarded-Host') or '')
+        fwd_host = fwd_host.split(',')[0].strip()
+        if fwd_host:
+            host = fwd_host
+    return f'{scheme}://{host}'
 
 
 def _links(channel_id):
     """直播的三种访问地址（绝对地址，便于前端复制分享）。"""
-    base = request.host_url.rstrip('/')
+    base = _base_url()
     return {
         'm3u8': base + M3U8_PATH.format(channel_id=channel_id),
         'mp3': base + MP3_PATH.format(channel_id=channel_id),
@@ -34,7 +49,7 @@ def _payload(channel, row=None):
             'user_id': int(row['user_id']),
             'username': row.get('username') or '',
             'title': row.get('title') or '',
-            'mode': row.get('mode') or MODE_LOOP,
+            'music_id': row.get('music_id'),
             'volume': row.get('volume'),
             'speed': row.get('speed'),
             'created_at': row.get('created_at') or '',
@@ -81,7 +96,7 @@ def api_live_status(channel_id):
 @live_bp.route('/api/live/me')
 @login_required
 def api_live_me():
-    """当前用户的开播状态：封禁信息、正在进行的直播、可选音频。"""
+    """当前用户的开播状态：封禁信息与正在进行的直播。"""
     user = get_current_user()
     ban = store.get_ban(user['id'])
     row = store.get_user_active_channel(user['id'])
@@ -91,29 +106,47 @@ def api_live_me():
         payload = _payload(channel, row) if channel and channel.is_live() \
             else _payload(None, row)
 
-    my_musics = [] if ban else store.get_user_public_musics(user['id'])
     return jsonify({
         'success': True,
         'banned': bool(ban),
         'ban': ban,
         'channel': payload,
-        'my_musics': my_musics,
+    })
+
+
+@live_bp.route('/api/live/musics')
+@login_required
+def api_live_musics():
+    """当前用户可用的直播音源（含私有音频），支持搜索与分页。"""
+    user = get_current_user()
+    keyword = (request.args.get('q') or '').strip()[:60]
+    page = request.args.get('page', type=int) or 1
+
+    items, has_more = get_user_musics_page(
+        user['id'], keyword=keyword, page=page, page_size=20)
+    for m in items:
+        m['tags_list'] = tags_to_list(m.get('tags'))
+        m['status_label'] = STATUS_LABELS.get(m.get('status'), '')
+
+    return jsonify({
+        'success': True,
+        'musics': items,
+        'has_more': has_more,
+        'page': page,
+        'next_page': page + 1,
     })
 
 
 @live_bp.route('/api/live/start', methods=['POST'])
 @login_required
 def api_live_start():
-    """开始直播：循环播放音频或 WebRTC 实时录音。"""
+    """开始循环播放直播。"""
     user = get_current_user()
     data = _json_body()
 
     title = (data.get('title') or '').strip()
-    mode = (data.get('mode') or '').strip()
     if not title:
         return jsonify({'success': False, 'message': '请填写直播标题'}), 400
-    if mode not in (MODE_LOOP, MODE_REC):
-        return jsonify({'success': False, 'message': '无效的直播模式'}), 400
 
     # 标题内容注入检测（与音频上传保持一致）
     from services.firewall.protection.content_filter import check_content_injection
@@ -127,17 +160,12 @@ def api_live_start():
     if store.is_banned(user['id']):
         return jsonify({'success': False, 'message': '你已被管理员禁止开播'}), 403
 
-    if mode == MODE_LOOP:
-        ok, result = manager.start_loop(
-            user['id'], user['username'], title,
-            data.get('music_id'),
-            volume=data.get('volume'),
-            speed=data.get('speed'),
-        )
-    else:
-        ok, result = manager.start_rec(
-            user['id'], user['username'], title)
-
+    ok, result = manager.start_loop(
+        user['id'], user['username'], title,
+        data.get('music_id'),
+        volume=data.get('volume'),
+        speed=data.get('speed'),
+    )
     if not ok:
         return jsonify({'success': False, 'message': result}), 400
     return jsonify({'success': True, 'channel': _payload(
@@ -159,7 +187,7 @@ def api_live_stop(channel_id):
 @live_bp.route('/api/live/<int:channel_id>/settings', methods=['POST'])
 @login_required
 def api_live_settings(channel_id):
-    """调整循环直播的音量 / 播放速度（实时生效）。"""
+    """调整直播的音量 / 播放速度（实时生效）。"""
     user = get_current_user()
     data = _json_body()
     ok, result = manager.adjust(
@@ -171,24 +199,3 @@ def api_live_settings(channel_id):
     if not ok:
         return jsonify({'success': False, 'message': result}), 400
     return jsonify({'success': True, 'channel': _payload(manager.get(channel_id), result)})
-
-
-@live_bp.route('/api/live/<int:channel_id>/webrtc/offer', methods=['POST'])
-@login_required
-def api_live_webrtc_offer(channel_id):
-    """接收浏览器 SDP offer，返回 answer（实时录音推流）。"""
-    user = get_current_user()
-    channel = manager.get(channel_id)
-    if channel is None:
-        return jsonify({'success': False, 'message': '直播不存在或已结束'}), 404
-    if channel.user_id != int(user['id']):
-        return jsonify({'success': False, 'message': '无权向该直播推流'}), 403
-    if channel.mode != MODE_REC:
-        return jsonify({'success': False, 'message': '该直播不是实时录音模式'}), 400
-
-    data = _json_body()
-    ok, result = webrtc.submit_offer(
-        channel, data.get('sdp'), data.get('type'))
-    if not ok:
-        return jsonify({'success': False, 'message': result}), 400
-    return jsonify({'success': True, 'answer': result})

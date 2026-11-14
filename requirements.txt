@@ -11,5 +11,3 @@ pywinpty>=2.0.5; sys_platform == 'win32'
 mcrcon>=0.7.0
 cryptography>=41.0.0
 bcrypt>=5.0.0
-# 音频直播实时录音（WebRTC）：浏览器麦克风推流，服务端 aiortc 接收
-aiortc>=1.10.0

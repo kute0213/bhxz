@@ -42,7 +42,7 @@ def start_background_services():
     email_service.start()
     sitemap_cache.start()
     player_tracker.start()
-    # 音频直播：恢复上次未结束的循环播放直播（实时录音无法恢复，会被标记停止）
+    # 音频直播：恢复上次未结束的循环播放直播（音源缺失或历史模式会被标记停止）
     live_manager.restore()
     # 被驳回内容自动清理（指南/背景图片超 24 小时删除）—— 导入即完成注册
     # 游戏服务器封禁到期自动解封（每 60 秒检查一次）—— 导入即完成注册

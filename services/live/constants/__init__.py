@@ -3,14 +3,8 @@
 纯 Python，不依赖 Flask。
 """
 
-# 直播模式
-MODE_LOOP = 'loop'      # 循环播放音频库中的音频
-MODE_REC = 'rec'        # WebRTC 实时录音
-
-MODE_LABELS = {
-    MODE_LOOP: '循环播放',
-    MODE_REC: '实时录音',
-}
+# 直播模式（历史数据保留 mode 字段，当前仅支持循环播放）
+MODE_LOOP = 'loop'
 
 # 直播状态
 STATUS_LIVE = 'live'
@@ -42,10 +36,6 @@ HLS_LIST_SIZE = 6
 HLS_AUDIO_BITRATE = '128k'
 MP3_AUDIO_BITRATE = '192k'
 OUTPUT_SAMPLE_RATE = 44100
-
-# WebRTC 录音输入参数（浏览器 Opus 解码后的 PCM）
-PCM_SAMPLE_RATE = 48000
-PCM_CHANNELS = 2
 
 # 播放地址格式（相对站点根路径）
 M3U8_PATH = '/live/stream/{channel_id}.m3u8'
@@ -85,7 +75,3 @@ def normalize_title(value):
     """清洗直播标题：去首尾空白、折叠内部空白、限制长度。"""
     title = ' '.join(str(value or '').split())
     return title[:TITLE_MAX_LENGTH]
-
-
-def is_valid_mode(mode):
-    return mode in (MODE_LOOP, MODE_REC)

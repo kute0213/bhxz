@@ -149,39 +149,38 @@ def do_something(user_id, value, ip_address):
 
 | 文件 | 职责 |
 |------|------|
-| `constants/__init__.py` | 模式（`loop` / `rec`）、状态、音量 / 速度 / 标题规范化、HLS 参数、播放地址模板 |
-| `ffmpeg/__init__.py` | **纯函数**构造 ffmpeg 命令（循环 / 实时录音），便于测试，不得启动进程 |
+| `constants/__init__.py` | 状态、音量 / 速度 / 标题规范化、HLS 参数、播放地址模板 |
+| `ffmpeg/__init__.py` | **纯函数**构造循环播放 ffmpeg 命令（HLS + MP3 双输出），便于测试，不得启动进程 |
 | `store/__init__.py` | 频道与封禁的 SQLite 读写；单用户单直播在 `transaction()` 内原子校验；不依赖 Flask |
 | `runtime/__init__.py` | `LiveManager` 单例 + `LiveChannel`：ffmpeg 进程、HLS 目录、MP3 听众分发、启动恢复 |
-| `webrtc/__init__.py` | aiortc 接收浏览器 Opus，解码为 PCM 写入 ffmpeg stdin；独立 asyncio 线程 |
 
 #### 进程与输出
 
 * **一个频道一个 ffmpeg 进程**，同时输出两路：HLS（落盘 `uploads/live/<直播ID>/index.m3u8`）与 MP3（`pipe:1`）。
-* 循环模式使用 `-re -stream_loop -1`；实时录音使用 `-f s16le -ar 48000 -ac 2 -i pipe:0`。
+* 只支持循环播放：`-re -stream_loop -1` 读取音频库中的 `index.mp3`，无限循环。
 * 音量 / 速度通过 `volume` + `atempo` 滤镜实现；`atempo` 限制在 0.5~2.0，调整设置时**重启 ffmpeg 但保留频道 ID 与听众连接**。
 * MP3 由 Python 读取 ffmpeg stdout 后写入每个听众的 `queue.Queue`（有界队列，慢客户端丢弃最旧数据）；新听众先收到最近约 1 秒的环形缓冲快照。**禁止**为每个听众单独启动 ffmpeg。
 * HLS 使用 `delete_segments+omit_endlist` 保持直播语义；m3u8 路由必须把分片相对路径改写为 `/live/stream/<ID>/<文件>`，分片路由必须做路径穿越校验。
+* 面向超长直播设计：运行时**不记录、不展示直播时长**，所有缓冲 / 分片列表均为有界结构，长时间运行内存不增长。
 
 #### 生命周期
 
-* `LiveManager` 是模块级单例，所有注册表操作必须持锁；`LiveChannel` 内部另有锁保护进程 / stdin / 订阅者。
+* `LiveManager` 是模块级单例，所有注册表操作必须持锁；`LiveChannel` 内部另有锁保护进程 / 订阅者。
 * **前端关闭不停止直播**：只有显式停止、管理员强制停止、ffmpeg 异常退出才会结束频道并 `mark_stopped`。
-* 服务启动时 `restore()`：循环直播检查音源后自动恢复；实时录音无法恢复，统一标记停止并写 `stop_reason`。
-* 服务关闭时 `shutdown()` 只结束 ffmpeg，**不修改数据库状态**，保证下次启动能恢复循环直播；停止直播时必须删除 `uploads/live/<ID>/`。
-* 每个用户最多 1 路直播（`loop` 与 `rec` 共用限制），禁止在路由层用「先查后插」实现。
+* 服务启动时 `restore()`：检查音源后自动恢复循环直播；音源缺失或历史遗留的非 `loop` 频道统一标记停止并写 `stop_reason`。
+* 服务关闭时 `shutdown()` 只结束 ffmpeg，**不修改数据库状态**，保证下次启动能恢复直播；停止直播时必须删除 `uploads/live/<ID>/`。
+* 每个用户最多 1 路直播，禁止在路由层用「先查后插」实现。
 
-#### WebRTC 约束
+#### 前端与播放地址
 
-* 浏览器麦克风只在 **HTTPS 安全上下文**（或 localhost）可用；页面必须检测 `window.isSecureContext` 并提示。
-* 协商走 HTTP POST（`/api/live/<ID>/webrtc/offer`），不使用 WebSocket；aiortc 在**独立 daemon asyncio 线程**中运行，禁止在 Waitress 工作线程里 `asyncio.run()`。
-* aiortc 必须**延迟导入**（`services/live/webrtc.py` 内部 `_load_aiortc()`），未安装时给出明确错误，不能让站点导入失败。
-* 服务端需可被浏览器 UDP 直连，或配置 `LIVE_TURN_URL` / `LIVE_TURN_USERNAME` / `LIVE_TURN_PASSWORD`；STUN 通过 `LIVE_STUN_SERVERS`（逗号分隔）配置。
-* 同一频道只保留最新一条 PeerConnection（主播刷新页面后自动替换旧连接）。
+* 直播台主页保持「正在直播列表」为主体，`我的直播` / `开始直播` 通过弹窗完成，避免页面堆叠。
+* **媒体地址必须使用同源相对路径**（`/live/stream/<ID>.mp3`）。反向代理下用 `request.host_url` 生成的绝对地址可能协议 / 端口与实际页面不一致，会被 CSP `media-src 'self'` 拦截。
+* 播放页使用自定义控件（开始 / 关闭 / 音量），**不要**使用原生 `controls`、不要显示进度条或已直播时长。
+* 音源选择必须走 `GET /api/live/musics` 搜索 + 分页，支持自己的私有音频；禁止一次性下发全部音频。
 
 #### 权限与管理
 
-* 开播、停止、调参、推流均校验登录；停止 / 调参校验本人（管理员可强制停止）。
+* 开播、停止、调参均校验登录；停止 / 调参校验本人（管理员可强制停止）。
 * `live_bans` 为**永久封禁**（`user_id` 主键），管理员可解封；封禁用户 `create_channel` 必须在事务内拒绝，管理员封禁时立即停止其当前直播。
 * 直播标题必须经过防火墙内容注入检测（与音频上传一致），长度上限 60。
 
@@ -224,7 +223,7 @@ def do_something(user_id, value, ip_address):
   | `background` | `services/background_service/__init__.py` | 背景图片上传 / 审核 / 删除 / 启用切换 | 是 | 否 |
   | `buildings` | `routes/admin/buildings/__init__.py`、`routes/buildings/pages/__init__.py` | 公共建筑审核、浏览次数更新 | 是 | 否 |
   | `music` | `services/music/{crud,upload}/__init__.py`、`routes/main/music/__init__.py` | 大喇叭音频上传 / 编辑 / 审核 / 删除、HLS 分片 | 是 | 否 |
-  | `live` | `services/live/{runtime,webrtc}/__init__.py`、`routes/live/*`、`routes/admin/live/__init__.py` | 音频直播开播 / 停止 / 调参、ffmpeg 管线异常、WebRTC 协商失败、管理员强制停止 / 封禁 | 是 | 否 |
+  | `live` | `services/live/runtime/__init__.py`、`routes/live/*`、`routes/admin/live/__init__.py` | 音频直播开播 / 停止 / 调参、ffmpeg 管线异常、管理员强制停止 / 封禁 | 是 | 否 |
   | `email` | `services/mail/{delivery,service,retry}/__init__.py` | 邮件投递、异步发送队列、失败重发 | 是 | 否 |
   | `backup` | `services/backup/{manager,scheduler}/__init__.py`、`routes/admin/maintenance/__init__.py` | 自动维护（数据备份 + 日志清理）、定时维护、备份下载 / 删除 | 是 | 否 |
   | `gameban` | `services/game_server_ban/__init__.py` | 游戏服务器封禁申请 / 批准 / 驳回 / 自动解封 | 是 | 否 |

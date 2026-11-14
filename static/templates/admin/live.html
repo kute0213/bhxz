@@ -17,7 +17,7 @@
         <div class="mb-10">
             {{ section_title(title='正在直播', icon='signal') }}
             {% if active_channels %}
-            {% call data_table([('直播', 'left'), ('主播', 'left'), ('模式', 'left'), ('听众', 'center'), ('开播时间', 'left'), ('操作', 'right')]) %}
+            {% call data_table([('直播', 'left'), ('主播', 'left'), ('听众', 'center'), ('开播时间', 'left'), ('操作', 'right')]) %}
                 {% for ch in active_channels %}
                 <tr class="border-b border-forest-700/30 last:border-0" data-live-row="{{ ch.id }}">
                     <td class="px-4 py-3">
@@ -28,17 +28,12 @@
                         <div class="text-cream/80">{{ ch.username or '未知' }}</div>
                         <div class="text-xs text-cream/40">UID {{ ch.user_id }}</div>
                     </td>
-                    <td class="px-4 py-3">
-                        {% if ch.mode == 'rec' %}
-                        <span class="text-xs px-2 py-0.5 rounded bg-red-500/15 text-red-300">实时录音</span>
-                        {% else %}
-                        <span class="text-xs px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300">循环播放</span>
-                        {% endif %}
+                    <td class="px-4 py-3 text-center">
+                        {{ ch.listeners }}
                         {% if not ch.alive %}
-                        <span class="text-xs px-2 py-0.5 rounded bg-cream/10 text-cream/50">未连接</span>
+                        <div class="text-xs text-cream/40 mt-0.5">未连接</div>
                         {% endif %}
                     </td>
-                    <td class="px-4 py-3 text-center">{{ ch.listeners }}</td>
                     <td class="px-4 py-3 text-cream/60 text-xs">{{ ch.created_at }}</td>
                     <td class="px-4 py-3 text-right">
                         <div class="flex items-center justify-end gap-2">
@@ -119,7 +114,7 @@
         <div>
             {{ section_title(title='最近直播记录', icon='history') }}
             {% if recent_channels %}
-            {% call data_table([('直播', 'left'), ('主播', 'left'), ('模式', 'left'), ('状态', 'left'), ('开播时间', 'left'), ('停止时间', 'left')]) %}
+            {% call data_table([('直播', 'left'), ('主播', 'left'), ('状态', 'left'), ('开播时间', 'left'), ('停止时间', 'left')]) %}
                 {% for ch in recent_channels %}
                 <tr class="border-b border-forest-700/30 last:border-0">
                     <td class="px-4 py-3">
@@ -127,7 +122,6 @@
                         <div class="text-xs text-cream/40">ID {{ ch.id }}</div>
                     </td>
                     <td class="px-4 py-3 text-cream/60 text-xs">{{ ch.username or '未知' }}</td>
-                    <td class="px-4 py-3 text-cream/60 text-xs">{{ '实时录音' if ch.mode == 'rec' else '循环播放' }}</td>
                     <td class="px-4 py-3">
                         {% if ch.status == 'live' %}
                         <span class="text-xs px-2 py-0.5 rounded bg-red-500/15 text-red-300">直播中</span>

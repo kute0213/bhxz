@@ -58,20 +58,6 @@ else:
 # 多用户同时上传时天然并行，不会出现「文件正在使用」冲突。
 FFMPEG_THREADS = int(os.environ.get('FFMPEG_THREADS', '0'))
 
-# ---------------------------------------------------------------------------
-# 音频直播（WebRTC 实时录音）ICE 配置
-# ---------------------------------------------------------------------------
-# STUN 服务器列表（逗号分隔）。服务端在公网且 UDP 可用时可获取 srflx 候选；
-# 部署在 NAT 后无法直连时，请配置 TURN 中继（下方三项）。
-LIVE_STUN_SERVERS = [
-    s.strip()
-    for s in (os.environ.get('LIVE_STUN_SERVERS', 'stun:stun.qq.com:3478')).split(',')
-    if s.strip()
-]
-LIVE_TURN_URL = (os.environ.get('LIVE_TURN_URL') or '').strip()
-LIVE_TURN_USERNAME = (os.environ.get('LIVE_TURN_USERNAME') or '').strip()
-LIVE_TURN_PASSWORD = (os.environ.get('LIVE_TURN_PASSWORD') or '').strip()
-
 # 用户图片（头像/背景）最大字节数
 USER_IMAGE_MAX_BYTES = 10 * 1024 * 1024
 

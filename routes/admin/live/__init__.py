@@ -20,7 +20,6 @@ def _live_payload(channel, row=None):
             'user_id': int(row['user_id']),
             'username': row.get('username') or '',
             'title': row.get('title') or '',
-            'mode': row.get('mode') or 'loop',
             'volume': row.get('volume'),
             'speed': row.get('speed'),
             'created_at': row.get('created_at') or '',

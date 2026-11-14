@@ -102,7 +102,7 @@ python scripts/build/package.py
 │   ├── game_server_ban/ # 游戏服务器封禁申请（审批 → RCON ban → 到期自动 pardon）
 │   ├── system_metrics/ # CPU/内存/系统/性能追踪（后台线程采集）
 │   ├── music/          # 大喇叭音频（常量/查询/CRUD/上传/收藏）
-│   ├── live/           # 音频直播（常量/ffmpeg 双输出/存储/运行时/WebRTC）
+│   ├── live/           # 音频直播（常量/ffmpeg 双输出/存储/运行时）
 │   ├── rcon/           # RCON 连接管理、玩家列表追踪、EasyAuth 指令
 │   ├── user/           # 用户（认证/资料/管理）
 │   ├── background_service/  #   背景图片业务（WebP 转换 + 按屏幕比例挑选）
@@ -311,19 +311,19 @@ python scripts/build/package.py
 
 ### 音频直播台
 
-* **入口与页面**：社区导航「音频直播」（`/live`）进入直播台；播放页为独立路由 `GET /live/play.html?channelId=<直播ID>`，支持 HLS（m3u8）与 MP3 两种收听方式
-* **两种开播模式**：
-  * **循环播放**：从自己已通过审核的公开音频中选择一首，服务端用 ffmpeg `-stream_loop -1` 循环推流；可实时调整音量（0~200%）与播放速度（0.5x~2.0x）
-  * **实时录音**：浏览器麦克风经 WebRTC 推流到服务端（aiortc 接收 Opus 并解码为 PCM），转码为 HLS + MP3；需要 **HTTPS 安全上下文** 与麦克风权限
-* **直播不随前端关闭**：ffmpeg 在服务端持续运行，关闭页面后直播继续；重新打开直播台可看到自己的直播并继续收听 / 重新连接麦克风（实时录音）
+* **入口与页面**：社区导航「音频直播」（`/live`）进入直播台，主页为「正在直播」列表，顶部提供「我的直播」与「开始直播」按钮；播放页为独立路由 `GET /live/play.html?channelId=<直播ID>`，支持 HLS（m3u8）与 MP3 两种收听方式
+* **循环播放开播**：从自己上传的音频中选择一首（支持**私有音频**、待审核与已公开音频，已驳回的除外），服务端用 ffmpeg `-re -stream_loop -1` 无限循环推流；可实时调整音量（0~200%）与播放速度（0.5x~2.0x）
+* **音源选择**：开播弹窗支持关键词搜索（匹配名称 / 标签）与分页「加载更多」，按需调用音频 API，音频再多也不会拖慢页面
+* **超长直播设计**：不展示「已直播时长」，MP3 听众缓冲与 HLS 分片列表均为有界结构，ffmpeg 持续循环，可长期运行不受时长影响
+* **直播不随前端关闭**：ffmpeg 在服务端持续运行，关闭页面或播放器都不会停止直播；重新打开直播台可看到自己的直播并继续管理 / 收听
 * **每个用户最多 1 路直播**：在数据库事务内原子校验，避免并发开播绕过限制
-* **服务重启恢复**：循环播放直播在服务重启后自动恢复；实时录音依赖浏览器推流，无法恢复，会被标记为「已停止」
+* **服务重启恢复**：循环播放直播在服务重启后自动恢复（音源文件缺失则该直播标记停止）
 * **流媒体地址**（开启后展示，可直接分享 / 播放器拉流）：
   * m3u8：`/live/stream/<直播ID>.m3u8`（播放列表自动改写分片地址）
   * mp3：`/live/stream/<直播ID>.mp3`（单 ffmpeg 进程 → Python 内存分发给所有听众，慢客户端自动丢弃旧数据保证低延迟）
   * HLS 分片：`/live/stream/<直播ID>/seg_*.ts`（带路径穿越校验）
+* **播放页自定义控件**：不展示进度条与时长，仅提供「开始」「关闭」与音量调节；播放地址使用同源相对路径，避免反向代理下协议 / 端口不一致被 CSP 拦截
 * **管理员管控**（`/admin/live`）：查看正在直播、强制停止任意直播、按用户名**永久禁止开播**（可手动解封）；封禁会立即停止该用户当前直播，被封禁用户无法再开播
-* **部署要求**：WebRTC 实时录音需要服务端可被浏览器通过 UDP 直连（公网 IP + 开放 UDP 端口），或配置 TURN 中继（见「环境变量」）；纯 HLS / MP3 收听不受影响
 
 ### 统一定时任务调度
 
@@ -435,10 +435,6 @@ python scripts/build/package.py
 | `FFMPEG_BIN`                  | 大喇叭音频转码与指南视频转码用的 ffmpeg                    | Windows 优先 `uploads/ffmpeg/ffmpeg.exe`，否则系统 PATH；Linux/macOS 用系统 `ffmpeg`  |
 | `FFPROBE_BIN`                 | 探测音频时长（转码进度百分比）用的 ffprobe                 | Windows 优先 `uploads/ffmpeg/ffprobe.exe`，否则系统 PATH；Linux/macOS 用系统 `ffprobe` |
 | `FFMPEG_THREADS`              | ffmpeg 音频转码线程数                            | `0`（自动按 CPU 核数）                             |
-| `LIVE_STUN_SERVERS`           | WebRTC 实时录音的 STUN 服务器（逗号分隔）                | `stun:stun.qq.com:3478`                     |
-| `LIVE_TURN_URL`               | WebRTC TURN 中继地址（NAT 后部署必填，如 `turn:turn.example.com:3478`） | 空（仅使用 STUN / 主机候选）                 |
-| `LIVE_TURN_USERNAME`          | TURN 用户名                                  | 空                                           |
-| `LIVE_TURN_PASSWORD`          | TURN 密码                                   | 空                                           |
 | `GUIDE_RESOURCE_MAX_MB`       | 每个指南全部资源（`assets/`）合计上限，可在系统设置热改         | `50`（MB，1–1024）                            |
 | `GUIDE_VIDEO_TRANSCODE_TIMEOUT` | 指南视频 ffmpeg 转码最长等待秒数                     | `600`                                       |
 | `MAX_CONTENT_LENGTH`          | 最大上传大小                                    | 100 MB                                      |
@@ -632,15 +628,15 @@ python scripts/build/package.py
 
 | 方法   | 路径                                        | 说明 |
 | ---- | ----------------------------------------- | ---- |
-| GET  | `/live`                                   | 音频直播台页面（公开列表 + 登录用户开播控制台） |
-| GET  | `/live/play.html?channelId=<ID>`          | 独立播放页（HLS / MP3 切换、状态轮询、链接复制） |
+| GET  | `/live`                                   | 音频直播台页面（正在直播列表 + 我的直播 / 开始直播） |
+| GET  | `/live/play.html?channelId=<ID>`          | 独立播放页（自定义开始 / 关闭 / 音量控件、状态轮询、链接复制） |
 | GET  | `/api/live/list`                          | 正在直播的公开列表（含 m3u8 / mp3 / 播放页绝对地址与听众数） |
 | GET  | `/api/live/<ID>`                          | 单个直播状态（播放页每 8 秒轮询，`alive` 表示服务端管线是否在运行） |
-| GET  | `/api/live/me`                            | 当前用户的封禁信息、正在进行的直播、可选公开音频（需登录） |
-| POST | `/api/live/start`                         | 开始直播（JSON：`title`、`mode=loop\|rec`、`music_id`、`volume`、`speed`；需登录，每人最多 1 路） |
+| GET  | `/api/live/me`                            | 当前用户的封禁信息与正在进行的直播（需登录） |
+| GET  | `/api/live/musics?q=&page=`               | 当前用户可用的直播音源（含私有音频，搜索 + 分页，需登录） |
+| POST | `/api/live/start`                         | 开始直播（JSON：`title`、`music_id`、`volume`、`speed`；需登录，每人最多 1 路） |
 | POST | `/api/live/<ID>/stop`                     | 停止直播（本人或管理员；停止后清理 HLS 目录并通知所有听众） |
-| POST | `/api/live/<ID>/settings`                 | 调整循环直播音量（0~2）/ 速度（0.5~2），会重启 ffmpeg 管线（需本人） |
-| POST | `/api/live/<ID>/webrtc/offer`             | 提交浏览器 SDP offer，返回 answer（实时录音推流，需本人且为 `rec` 模式） |
+| POST | `/api/live/<ID>/settings`                 | 调整直播音量（0~2）/ 速度（0.5~2），会重启 ffmpeg 管线（需本人） |
 | GET  | `/live/stream/<ID>.m3u8`                  | HLS 播放列表（分片路径自动改写为本站地址，`no-store`） |
 | GET  | `/live/stream/<ID>.mp3`                   | MP3 实时流（长连接，ffmpeg stdout 内存分发，支持多听众） |
 | GET  | `/live/stream/<ID>/<分片文件名>`             | HLS TS 分片（路径穿越校验，`max-age=30`） |
@@ -828,7 +824,7 @@ workspace/
 │   ├── game_server_ban/      #   游戏服务器封禁申请（审批 → 自动解封）
 │   ├── system_metrics/       #   系统监控（CPU/内存/系统/性能追踪）
 │   ├── music/                #   大喇叭音频（常量/查询/CRUD/上传/收藏）
-│   ├── live/                 #   音频直播（ffmpeg 双输出 + MP3 分发 + aiortc 实时录音）
+│   ├── live/                 #   音频直播（ffmpeg 双输出 + MP3 分发）
 │   ├── rcon/                 #   RCON 连接管理、玩家列表追踪、EasyAuth 指令
 │   ├── security/             #   安全扫描与内容过滤
 │   ├── user/                 #   用户（认证/资料/管理）
@@ -895,7 +891,7 @@ workspace/
 | CSS      | Tailwind CSS + 自定义样式（白色磨砂玻璃） |
 | 图标       | Lucide（本地化）                   |
 | Markdown | marked.js / Python Markdown   |
-| 实时音频     | ffmpeg（HLS + MP3 双输出）/ aiortc（WebRTC 接收） |
+| 实时音频     | ffmpeg（HLS + MP3 双输出、循环播放） |
 
 ### 异步架构
 
@@ -951,7 +947,7 @@ workspace/
 | `broadcast_logs`          | 广播邮件日志   | —                                                                                                               |
 | `music`                   | 大喇叭音频    | `status` 状态机（0=私有/1=待审核/2=已公开，驳回后自动转为私有；旧库 `gain` 列仅保留不再使用），`tags` 逗号分隔标签列，删除记录时同步删除 `uploads/music/<ID>/` 文件目录 |
 | `music_favorites`         | 大喇叭音频收藏  | 联合主键 `(user_id, music_id)`（同一用户对同一音频仅一条收藏）                                                                      |
-| `live_channels`           | 音频直播频道   | `mode`（`loop` 循环播放 / `rec` 实时录音）、`status`（`live` / `stopped`）、`music_id` 音源、`volume` / `speed`；`(user_id, status)` 索引用于「单用户单直播」原子校验；`stop_reason` 记录停止原因（含服务重启 / 管理员强制停止） |
+| `live_channels`           | 音频直播频道   | `mode`（当前固定为 `loop`，字段保留兼容历史数据）、`status`（`live` / `stopped`）、`music_id` 音源、`volume` / `speed`；`(user_id, status)` 索引用于「单用户单直播」原子校验；`stop_reason` 记录停止原因（含服务重启 / 管理员强制停止） |
 | `live_bans`               | 音频直播封禁   | `user_id` 主键（永久封禁，一个用户一条），管理员可手动解封；封禁立即停止该用户当前直播 |
 | `backgrounds`             | 背景图片     | `status` 审核状态，WebP 格式，磁盘单主图（取图按屏幕比例挑选、原样返回，不缩放不裁剪），多张可同时启用，`rejected_at` 记录驳回时间（超 24h 自动删除）                                            |
 | `game_account_registrations` | 游戏账号注册申请 | 申请注册 MC 账号，管理员审批                                                                                               |

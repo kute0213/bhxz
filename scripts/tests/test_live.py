@@ -1,26 +1,12 @@
-"""音频直播服务测试：参数规范化、ffmpeg 命令、频道与封禁存储。"""
-
-import os
+"""音频直播服务测试：参数规范化、ffmpeg 命令、频道与封禁存储、音源分页。"""
 
 import pytest
 
 import core.db.connection as connection
 from services.live import store
-from services.live.constants import (
-    MODE_LOOP,
-    MODE_REC,
-    STATUS_LIVE,
-    STATUS_STOPPED,
-    is_valid_mode,
-    normalize_speed,
-    normalize_title,
-    normalize_volume,
-)
-from services.live.ffmpeg import (
-    build_filter_chain,
-    build_loop_cmd,
-    build_rec_cmd,
-)
+from services.live.constants import STATUS_LIVE, STATUS_STOPPED, normalize_speed, normalize_title, normalize_volume
+from services.live.ffmpeg import build_filter_chain, build_loop_cmd
+from services.music.queries import get_user_musics_page
 
 
 # ---------------------------------------------------------------------------
@@ -48,12 +34,6 @@ def test_normalize_title():
     assert normalize_title(None) == ''
 
 
-def test_is_valid_mode():
-    assert is_valid_mode(MODE_LOOP)
-    assert is_valid_mode(MODE_REC)
-    assert not is_valid_mode('other')
-
-
 # ---------------------------------------------------------------------------
 # ffmpeg 命令
 # ---------------------------------------------------------------------------
@@ -79,22 +59,10 @@ def test_build_loop_cmd(tmp_path):
     assert '/tmp/song.mp3' in cmd
     assert 'volume=0.800' in joined
     assert 'atempo=1.200' in joined
-    assert os.path.join(hls_dir, 'index.m3u8') in cmd
+    assert str(tmp_path / 'live' / '1' / 'index.m3u8') in cmd
     assert 'pipe:1' in cmd
     assert 'libmp3lame' in cmd
     assert 'delete_segments' in joined
-
-
-def test_build_rec_cmd(tmp_path):
-    hls_dir = str(tmp_path / 'live' / '2')
-    cmd = build_rec_cmd(hls_dir)
-    joined = ' '.join(cmd)
-
-    assert '-f' in cmd and 's16le' in cmd
-    assert 'pipe:0' in cmd
-    assert '48000' in cmd
-    assert os.path.join(hls_dir, 'index.m3u8') in cmd
-    assert 'pipe:1' in cmd
 
 
 # ---------------------------------------------------------------------------
@@ -142,12 +110,14 @@ INSERT INTO users (id, username) VALUES (1, 'alice');
 INSERT INTO users (id, username) VALUES (2, 'bob');
 INSERT INTO users (id, username) VALUES (3, 'deleted_user');
 UPDATE users SET is_deleted = 1 WHERE id = 3;
-INSERT INTO music (id, user_id, username, title, status, created_at)
-    VALUES (101, 1, 'alice', '公开音频', 2, '2026-01-01 00:00:00');
-INSERT INTO music (id, user_id, username, title, status, created_at)
-    VALUES (102, 1, 'alice', '私有音频', 0, '2026-01-01 00:00:00');
-INSERT INTO music (id, user_id, username, title, status, created_at)
-    VALUES (103, 2, 'bob', '别人的音频', 2, '2026-01-01 00:00:00');
+INSERT INTO music (id, user_id, username, title, status, tags, created_at)
+    VALUES (101, 1, 'alice', '公开音频', 2, '轻音乐', '2026-01-01 00:00:00');
+INSERT INTO music (id, user_id, username, title, status, tags, created_at)
+    VALUES (102, 1, 'alice', '私有音频', 0, '', '2026-01-01 00:00:00');
+INSERT INTO music (id, user_id, username, title, status, tags, created_at)
+    VALUES (103, 2, 'bob', '别人的音频', 2, '', '2026-01-01 00:00:00');
+INSERT INTO music (id, user_id, username, title, status, tags, created_at)
+    VALUES (104, 1, 'alice', '被驳回音频', 3, '', '2026-01-01 00:00:00');
 """
 
 
@@ -163,19 +133,16 @@ def temp_db(tmp_path, monkeypatch):
     yield db_path
 
 
-def test_create_loop_channel_and_single_active_limit(temp_db):
+def test_create_channel_and_single_active_limit(temp_db):
     ok, ch = store.create_channel(
-        1, 'alice', '我的直播', MODE_LOOP, music_id=101,
-        volume=0.8, speed=1.5)
+        1, 'alice', '我的直播', music_id=101, volume=0.8, speed=1.5)
     assert ok is True, ch
-    assert ch['mode'] == MODE_LOOP
     assert ch['volume'] == 0.8
     assert ch['speed'] == 1.5
     assert ch['status'] == STATUS_LIVE
 
     # 同一用户不允许同时开第二个直播
-    ok2, err = store.create_channel(
-        1, 'alice', '第二个直播', MODE_REC)
+    ok2, err = store.create_channel(1, 'alice', '第二个直播', music_id=101)
     assert ok2 is False
     assert '已有一个' in err
 
@@ -184,21 +151,31 @@ def test_create_loop_channel_and_single_active_limit(temp_db):
     row = store.get_channel(ch['id'])
     assert row['status'] == STATUS_STOPPED
 
-    ok3, ch3 = store.create_channel(1, 'alice', '重新开播', MODE_REC)
+    ok3, ch3 = store.create_channel(1, 'alice', '重新开播', music_id=102)
     assert ok3 is True
-    assert ch3['mode'] == MODE_REC
+    assert ch3['music_id'] == 102
 
 
-def test_loop_channel_music_ownership_and_status(temp_db):
-    ok, err = store.create_channel(
-        1, 'alice', '用别人的音频', MODE_LOOP, music_id=103)
+def test_channel_music_ownership_and_status(temp_db):
+    # 不能使用别人上传的音频
+    ok, err = store.create_channel(1, 'alice', '用别人的音频', music_id=103)
     assert ok is False
     assert '自己上传' in err
 
-    ok, err = store.create_channel(
-        1, 'alice', '用私有音频', MODE_LOOP, music_id=102)
+    # 支持自己的私有音频
+    ok, ch = store.create_channel(1, 'alice', '用私有音频', music_id=102)
+    assert ok is True
+    store.mark_stopped(ch['id'])
+
+    # 被驳回的音频不可用于直播
+    ok, err = store.create_channel(1, 'alice', '用驳回音频', music_id=104)
     assert ok is False
-    assert '公开' in err
+    assert '驳回' in err
+
+    # 不存在的音频
+    ok, err = store.create_channel(1, 'alice', '不存在', music_id=999)
+    assert ok is False
+    assert '不存在' in err
 
 
 def test_ban_and_unban(temp_db):
@@ -207,7 +184,7 @@ def test_ban_and_unban(temp_db):
     assert ok is True
     assert store.is_banned(1) is True
 
-    ok, err = store.create_channel(1, 'alice', '开播', MODE_REC)
+    ok, err = store.create_channel(1, 'alice', '开播', music_id=101)
     assert ok is False
     assert '禁止开播' in err
 
@@ -229,18 +206,18 @@ def test_find_user_by_username(temp_db):
     assert store.find_user_by_username('') is None
 
 
-def test_get_user_public_musics(temp_db):
-    musics = store.get_user_public_musics(1)
-    assert [m['id'] for m in musics] == [101]
+def test_user_musics_page_search_and_private(temp_db):
+    items, has_more = get_user_musics_page(1, keyword='', page=1, page_size=20)
+    ids = [m['id'] for m in items]
+    # 自己的公开 + 私有，排除被驳回音频
+    assert ids == [102, 101]
+    assert has_more is False
 
+    items, _ = get_user_musics_page(1, keyword='轻音乐', page=1, page_size=20)
+    assert [m['id'] for m in items] == [101]
 
-def test_mark_all_rec_stopped(temp_db):
-    ok, rec = store.create_channel(1, 'alice', '录音直播', MODE_REC)
-    assert ok is True
-    ok, loop = store.create_channel(2, 'bob', '循环直播', MODE_LOOP, music_id=103)
-    assert ok is True
-
-    store.mark_all_rec_stopped('服务重启')
-
-    assert store.get_channel(rec['id'])['status'] == STATUS_STOPPED
-    assert store.get_channel(loop['id'])['status'] == STATUS_LIVE
+    # 分页：每页 1 条
+    page1, more1 = get_user_musics_page(1, page=1, page_size=1)
+    page2, more2 = get_user_musics_page(1, page=2, page_size=1)
+    assert len(page1) == 1 and more1 is True
+    assert len(page2) == 1 and more2 is False

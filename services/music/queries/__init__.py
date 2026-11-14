@@ -117,6 +117,46 @@ def get_user_musics(user_id):
         conn.close()
 
 
+def get_user_musics_page(user_id, keyword='', page=1, page_size=None, exclude_rejected=True):
+    """分页/搜索指定用户上传的音频（含私有音频，供音频直播选择音源）。
+
+    Args:
+        user_id: 用户 ID
+        keyword: 关键词（匹配名称或标签）
+        page: 页码（从 1 开始）
+        page_size: 每页数量，默认沿用 MUSIC_PER_PAGE 设置
+        exclude_rejected: 是否排除已驳回音频（默认是）
+
+    Returns:
+        (items, has_more)
+    """
+    page = max(1, int(page or 1))
+    page_size = _page_size() if page_size is None else max(1, min(int(page_size), 100))
+    offset = (page - 1) * page_size
+
+    sql = ("SELECT id, user_id, username, title, tags, status, created_at "
+           "FROM music WHERE user_id = ?")
+    params = [int(user_id)]
+    if exclude_rejected:
+        sql += " AND status != ?"
+        params.append(3)
+    kw = (keyword or '').strip()
+    if kw:
+        sql += " AND (title LIKE ? OR tags LIKE ?)"
+        params.extend([f'%{kw}%', f'%{kw}%'])
+    sql += " ORDER BY id DESC LIMIT ? OFFSET ?"
+
+    conn = get_db()
+    try:
+        rows = conn.execute(sql, (*params, page_size + 1, offset)).fetchall()
+    finally:
+        conn.close()
+
+    items = [dict(r) for r in rows]
+    has_more = len(items) > page_size
+    return items[:page_size], has_more
+
+
 def get_pending_musics():
     """获取所有待审核音频（管理员审核队列）。"""
     conn = get_db()

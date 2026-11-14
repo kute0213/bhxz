@@ -306,7 +306,7 @@ def init_db():
             )
         '''),
         # 音频直播频道表
-        # mode: loop=循环播放音频 rec=WebRTC 实时录音
+        # mode: 当前固定为 loop（循环播放音频）；字段保留用于兼容历史数据
         # status: live=直播中 stopped=已停止
         ('live_channels', '''
             CREATE TABLE IF NOT EXISTS live_channels (

@@ -19,6 +19,7 @@ from services.music.queries import (
     get_public_musics,
     get_public_musics_page,
     get_user_musics,
+    get_user_musics_page,
     get_pending_musics,
     get_all_musics,
     get_musics_page,
@@ -52,7 +53,7 @@ __all__ = [
     'STATUS_REJECTED', 'STATUS_LABELS',
     # queries
     'parse_tags', 'tags_to_list', 'get_public_musics', 'get_public_musics_page',
-    'get_user_musics',
+    'get_user_musics', 'get_user_musics_page',
     'get_pending_musics', 'get_all_musics', 'get_musics_page', 'get_music', 'get_music_file_path',
     'get_music_mp3_path', 'get_music_duration_seconds', 'attach_durations',
     'get_author_email',

@@ -8,14 +8,11 @@ from datetime import datetime
 from core.db import get_db, transaction
 from core.shared.snowflake import next_id
 from services.live.constants import (
-    MODE_LABELS,
     MODE_LOOP,
-    MODE_REC,
     STATUS_LIVE,
     STATUS_STOPPED,
     VOLUME_DEFAULT,
     SPEED_DEFAULT,
-    is_valid_mode,
     normalize_speed,
     normalize_title,
     normalize_volume,
@@ -96,21 +93,7 @@ def get_user_channels(user_id, limit=20):
         conn.close()
 
 
-def get_user_public_musics(user_id):
-    """用户已通过审核的公开音频（循环播放模式的合法音源）。"""
-    conn = get_db()
-    try:
-        rows = conn.execute(
-            "SELECT id, title, tags, created_at FROM music "
-            "WHERE user_id = ? AND status = 2 ORDER BY id DESC",
-            (int(user_id),),
-        ).fetchall()
-        return [dict(r) for r in rows]
-    finally:
-        conn.close()
-
-
-def create_channel(user_id, username, title, mode, music_id=None,
+def create_channel(user_id, username, title, music_id=None,
                    volume=VOLUME_DEFAULT, speed=SPEED_DEFAULT):
     """创建直播频道记录（单用户单直播在事务内原子校验）。
 
@@ -120,18 +103,14 @@ def create_channel(user_id, username, title, mode, music_id=None,
     title = normalize_title(title)
     if not title:
         return False, '请填写直播标题'
-    if not is_valid_mode(mode):
-        return False, '无效的直播模式'
 
-    mode = MODE_LOOP if mode == MODE_LOOP else MODE_REC
     volume = normalize_volume(volume)
     speed = normalize_speed(speed)
 
-    if mode == MODE_LOOP:
-        try:
-            music_id = int(music_id)
-        except (TypeError, ValueError):
-            return False, '请选择要循环播放的音频'
+    try:
+        music_id = int(music_id)
+    except (TypeError, ValueError):
+        return False, '请选择要循环播放的音频'
 
     channel_id = next_id()
     now = _now()
@@ -148,16 +127,15 @@ def create_channel(user_id, username, title, mode, music_id=None,
         ).fetchone():
             return False, '你已有一个正在进行的直播，请先停止后再开播'
 
-        if mode == MODE_LOOP:
-            music = conn.execute(
-                "SELECT id, user_id, status FROM music WHERE id = ?", (music_id,)
-            ).fetchone()
-            if not music:
-                return False, '选择的音频不存在'
-            if music['user_id'] != int(user_id):
-                return False, '只能循环播放自己上传的音频'
-            if music['status'] != 2:
-                return False, '只能循环播放已通过审核的公开音频'
+        music = conn.execute(
+            "SELECT id, user_id, status FROM music WHERE id = ?", (music_id,)
+        ).fetchone()
+        if not music:
+            return False, '选择的音频不存在'
+        if music['user_id'] != int(user_id):
+            return False, '只能循环播放自己上传的音频'
+        if music['status'] == 3:
+            return False, '该音频已被驳回，无法用于直播'
 
         conn.execute(
             "INSERT INTO live_channels "
@@ -165,9 +143,8 @@ def create_channel(user_id, username, title, mode, music_id=None,
             " status, created_at, updated_at, stopped_at, stop_reason) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, '')",
             (
-                channel_id, int(user_id), username or '', title, mode,
-                music_id if mode == MODE_LOOP else None,
-                volume, speed, STATUS_LIVE, now, now,
+                channel_id, int(user_id), username or '', title, MODE_LOOP,
+                music_id, volume, speed, STATUS_LIVE, now, now,
             ),
         )
 
@@ -176,9 +153,7 @@ def create_channel(user_id, username, title, mode, music_id=None,
         'user_id': int(user_id),
         'username': username or '',
         'title': title,
-        'mode': mode,
-        'mode_label': MODE_LABELS.get(mode, mode),
-        'music_id': music_id if mode == MODE_LOOP else None,
+        'music_id': music_id,
         'volume': volume,
         'speed': speed,
         'status': STATUS_LIVE,
@@ -188,7 +163,7 @@ def create_channel(user_id, username, title, mode, music_id=None,
 
 
 def update_channel_settings(channel_id, volume=None, speed=None):
-    """更新循环直播的音量 / 速度（只更新传入的字段）。"""
+    """更新直播的音量 / 速度（只更新传入的字段）。"""
     sets, params = [], []
     if volume is not None:
         sets.append('volume = ?')
@@ -225,21 +200,6 @@ def mark_stopped(channel_id, reason=''):
             "WHERE id = ? AND status = ?",
             (STATUS_STOPPED, _now(), (reason or '')[:200], _now(),
              int(channel_id), STATUS_LIVE),
-        )
-        conn.commit()
-    finally:
-        conn.close()
-
-
-def mark_all_rec_stopped(reason='服务重启'):
-    """服务启动时把遗留的实时录音频道标记为停止（录音无法恢复）。"""
-    conn = get_db()
-    try:
-        conn.execute(
-            "UPDATE live_channels SET status = ?, stopped_at = ?, "
-            "stop_reason = ?, updated_at = ? "
-            "WHERE status = ? AND mode = ?",
-            (STATUS_STOPPED, _now(), reason, _now(), STATUS_LIVE, MODE_REC),
         )
         conn.commit()
     finally:
