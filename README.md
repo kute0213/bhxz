@@ -115,7 +115,7 @@ python scripts/build/package.py
 │   ├── game_server_ban/ # 游戏服务器封禁申请（审批 → RCON ban → 到期自动 pardon）
 │   ├── system_metrics/ # CPU/内存/系统/性能追踪（后台线程采集）
 │   ├── music/          # 大喇叭音频（常量/查询/CRUD/上传/收藏）
-│   ├── live/           # 音频直播（常量/ffmpeg 双输出/存储/运行时/WebRTC 录音）
+│   ├── live/           # 音频直播（常量/ffmpeg 双输出/存储/运行时/PCM 上传校验）
 │   ├── rcon/           # RCON 连接管理、玩家列表追踪、EasyAuth 指令
 │   ├── user/           # 用户（认证/资料/管理）
 │   ├── background_service/  #   背景图片业务（WebP 转换 + 按屏幕比例挑选）
@@ -333,8 +333,8 @@ python scripts/build/package.py
 * **管理端**：`/admin/live`「音频直播管理」把**循环播放**与**实时录音**两种直播放在同一张「正在直播」表里，标注模式、查看 ID / 听众 / 推流状态，可「收听」、实时录音可直接进入**直播台**查看（管理员视图只读，不连接麦克风），并可**强制停止**或按用户封禁
 * **两种开播方式**：
   * **循环播放音频**：点击「选择音频」打开**音频选择弹窗**，支持关键词搜索（名称 / 标签）、分页「加载更多」、弹窗内滚动；支持**私有音频**、待审核与已公开音频（已驳回的除外）。服务端用 ffmpeg `-re -stream_loop -1` 无限循环推流，不再提供音量 / 速度调整
-  * **实时录音直播**：创建后自动跳转到**实时录音直播台**，在直播台内连接麦克风并实时调整设备、输入音量、静音、降噪、回声消除、自动增益等配置；浏览器通过 WebRTC（aiortc）把音频推送到服务端，ffmpeg 将 PCM 实时编码为 HLS + MP3。关闭页面只断麦克风，直播本身继续
-* **实时录音权限**：`/live` 相关响应**强制覆盖**为 `Permissions-Policy: microphone=(self)`（并附带旧版 `Feature-Policy`），确保不会被上游或其他中间件改回拒绝；其余页面仍默认拒绝。麦克风需要 HTTPS 安全上下文，公网 NAT 环境可通过 `LIVE_TURN_URL` / `LIVE_TURN_USERNAME` / `LIVE_TURN_PASSWORD` 配置 TURN 中继
+  * **实时录音直播**：创建后自动跳转到**实时录音直播台**，在直播台内连接麦克风并实时调整设备、输入音量、静音、降噪、回声消除、自动增益等配置；浏览器用 AudioWorklet 把麦克风音频转成 48kHz 双声道 PCM，**每 200ms 通过 HTTPS 上传一次**，服务端写入 ffmpeg 管道实时编码为 HLS + MP3。不依赖 WebRTC / UDP / TURN，纯 TCP 即可穿透反向代理；关闭页面只断麦克风，直播本身继续
+* **实时录音权限**：`/live` 相关响应**强制覆盖**为 `Permissions-Policy: microphone=(self)`（并附带旧版 `Feature-Policy`），确保不会被上游或其他中间件改回拒绝；其余页面仍默认拒绝。麦克风需要 HTTPS 安全上下文
 * **音源选择**：弹窗按需调用音频 API，音频再多也不会拖慢页面
 * **开播数量限制**：循环播放默认每人最多 **5** 路，可在「系统设置 → 音频直播」、`config.py` 的 `LIVE_MAX_LOOP_PER_USER` 或「防火墙设置」页面修改（1~50）；实时录音固定每人最多 **1** 路，两者互不占用额度，均在数据库事务内原子校验
 * **超长直播设计**：不展示「已直播时长」，MP3 听众缓冲与 HLS 分片列表均为有界结构，ffmpeg 持续循环，可长期运行不受时长影响
@@ -661,7 +661,7 @@ python scripts/build/package.py
 | GET  | `/api/live/me`                            | 当前用户封禁信息、全部进行中的直播与数量上限（需登录） |
 | GET  | `/api/live/musics?q=&page=`               | 当前用户可用的直播音源（含私有音频，搜索 + 分页，需登录） |
 | POST | `/api/live/start`                         | 开始直播（JSON：`title`、`mode`=`loop`/`rec`；循环模式另传 `music_id`；需登录） |
-| POST | `/api/live/<ID>/webrtc/offer`             | 实时录音：提交 SDP offer，返回 SDP answer（需登录且为本人） |
+| POST | `/api/live/<ID>/pcm`                       | 实时录音：上传 s16le PCM 裸数据（48kHz 双声道，需登录且为本人） |
 | POST | `/api/live/<ID>/stop`                     | 停止直播（本人或管理员；停止后清理 HLS 目录并通知所有听众） |
 | GET  | `/live/stream/<ID>.m3u8`                  | HLS 播放列表（分片路径自动改写为本站地址，`no-store`） |
 | GET  | `/live/stream/<ID>.mp3`                   | MP3 实时流（长连接，ffmpeg stdout 内存分发，支持多听众） |
@@ -850,7 +850,7 @@ workspace/
 │   ├── game_server_ban/      #   游戏服务器封禁申请（审批 → 自动解封）
 │   ├── system_metrics/       #   系统监控（CPU/内存/系统/性能追踪）
 │   ├── music/                #   大喇叭音频（常量/查询/CRUD/上传/收藏）
-│   ├── live/                 #   音频直播（ffmpeg 双输出 + MP3 分发 + WebRTC 录音）
+│   ├── live/                 #   音频直播（ffmpeg 双输出 + MP3 分发 + PCM 实时录音）
 │   ├── rcon/                 #   RCON 连接管理、玩家列表追踪、EasyAuth 指令
 │   ├── security/             #   安全扫描与内容过滤
 │   ├── user/                 #   用户（认证/资料/管理）

@@ -1,4 +1,4 @@
-"""音频直播 JSON API：列表、状态、开播、停止、参数调整、音源搜索。"""
+"""音频直播 JSON API：列表、状态、开播、停止、PCM 推流、音源搜索。"""
 
 from flask import jsonify, request
 
@@ -17,6 +17,7 @@ from services.live.constants import (
     PLAY_PAGE_PATH,
     is_valid_mode,
 )
+from services.live.ingest import validate_pcm_chunk
 from services.music import STATUS_LABELS, get_user_musics_page, tags_to_list
 
 
@@ -209,23 +210,28 @@ def api_live_stop(channel_id):
     return jsonify({'success': ok, 'message': message}), (200 if ok else 400)
 
 
-@live_bp.route('/api/live/<int:channel_id>/webrtc/offer', methods=['POST'])
+@live_bp.route('/api/live/<int:channel_id>/pcm', methods=['POST'])
 @login_required
-def api_live_webrtc_offer(channel_id):
-    """实时录音：提交浏览器 SDP offer，返回 SDP answer。"""
+def api_live_pcm(channel_id):
+    """实时录音：接收浏览器上传的 s16le PCM 裸数据（48kHz 双声道）。
+
+    使用 HTTPS 分片上传而不是 WebRTC：不需要 UDP / STUN / TURN，也不依赖
+    原生扩展，部署在反向代理后同样可用。前端约每 200ms 上传一次。
+    """
     user = get_current_user()
     channel = manager.get(channel_id)
     if channel is None or not channel.is_live():
         return jsonify({'success': False, 'message': '直播不存在或已结束'}), 404
-    if channel.user_id != int(user['id']) and not user.get('is_admin'):
-        return jsonify({'success': False, 'message': '无权向该直播推送音频'}), 403
     if channel.mode != MODE_REC:
         return jsonify({'success': False, 'message': '该直播不是实时录音模式'}), 400
+    if channel.user_id != int(user['id']) and not user.get('is_admin'):
+        return jsonify({'success': False, 'message': '无权向该直播推送音频'}), 403
 
-    data = _json_body()
-    from services.live import webrtc
-    ok, result = webrtc.submit_offer(
-        channel, data.get('sdp'), data.get('type'))
+    data = request.get_data(cache=False)
+    ok, message, status = validate_pcm_chunk(data)
     if not ok:
-        return jsonify({'success': False, 'message': result}), 400
-    return jsonify({'success': True, 'answer': result})
+        return jsonify({'success': False, 'message': message}), status
+
+    if not channel.write_pcm(data):
+        return jsonify({'success': False, 'message': '直播音频管道已关闭'}), 409
+    return jsonify({'success': True})

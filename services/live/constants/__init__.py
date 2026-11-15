@@ -5,7 +5,7 @@
 
 # 直播模式
 MODE_LOOP = 'loop'      # 循环播放音频库中的音频
-MODE_REC = 'rec'        # WebRTC 实时录音
+MODE_REC = 'rec'        # 实时录音（浏览器采集 PCM 上传）
 
 MODE_LABELS = {
     MODE_LOOP: '循环播放',
@@ -46,9 +46,12 @@ HLS_AUDIO_BITRATE = '128k'
 MP3_AUDIO_BITRATE = '192k'
 OUTPUT_SAMPLE_RATE = 44100
 
-# WebRTC 录音输入参数（浏览器 Opus 解码后的 PCM）
+# 实时录音输入参数（浏览器采集的 PCM，s16le 双声道）
 PCM_SAMPLE_RATE = 48000
 PCM_CHANNELS = 2
+PCM_FRAME_BYTES = PCM_CHANNELS * 2  # 每采样帧 4 字节
+# 单次上传的 PCM 上限（约 2.5 秒），用于拒绝异常请求
+PCM_MAX_CHUNK_BYTES = PCM_SAMPLE_RATE * PCM_FRAME_BYTES * 5 // 2
 
 # 播放地址格式（相对站点根路径）
 M3U8_PATH = '/live/stream/{channel_id}.m3u8'

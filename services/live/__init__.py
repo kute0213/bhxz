@@ -5,7 +5,6 @@
 - ffmpeg：纯函数构造 ffmpeg 命令（HLS + MP3 双输出）
 - store：数据库读写（频道、封禁）
 - runtime：ffmpeg 进程与 MP3 听众分发
-- webrtc：aiortc 实时录音接收
 
 所有函数为 Flask 无关的纯业务逻辑，返回 (success, data_or_error) 元组。
 """
@@ -33,7 +32,7 @@ from services.live.constants import (
     is_valid_mode,
 )
 from services.live.runtime import LiveChannel, LiveManager, manager
-from services.live import store, webrtc
+from services.live import store
 
 __all__ = [
     'MAX_REC_PER_USER',
@@ -44,5 +43,5 @@ __all__ = [
     'M3U8_PATH', 'MP3_PATH', 'PLAY_PAGE_PATH',
     'normalize_speed', 'normalize_title', 'normalize_volume', 'is_valid_mode',
     'LiveChannel', 'LiveManager', 'manager',
-    'store', 'webrtc',
+    'store',
 ]

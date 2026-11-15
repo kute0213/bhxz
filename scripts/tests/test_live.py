@@ -14,6 +14,8 @@ from services.live.constants import (
     normalize_volume,
 )
 from services.live.ffmpeg import build_filter_chain, build_loop_cmd, build_rec_cmd
+from services.live.constants import PCM_MAX_CHUNK_BYTES
+from services.live.ingest import validate_pcm_chunk
 from services.music.queries import get_user_musics_page
 
 
@@ -72,6 +74,20 @@ def test_build_rec_cmd(tmp_path):
     assert 'atempo=' not in joined
     # 部分 ffmpeg 构建把 -thread_queue_size 当作输出选项，加在 pipe:0 前会启动失败
     assert '-thread_queue_size' not in cmd
+
+
+def test_validate_pcm_chunk():
+    """PCM 上传校验：空数据 / 长度错位 / 超大分片都要被拒绝。"""
+    assert validate_pcm_chunk(b'') == (False, '音频数据为空', 400)
+
+    ok, message, status = validate_pcm_chunk(b'\x00' * 38400)
+    assert ok is True and message is None and status is None
+
+    ok, _, status = validate_pcm_chunk(b'\x00' * 3)
+    assert ok is False and status == 400
+
+    ok, _, status = validate_pcm_chunk(b'\x00' * (PCM_MAX_CHUNK_BYTES + 4))
+    assert ok is False and status == 413
 
 
 def test_build_loop_cmd(tmp_path):

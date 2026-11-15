@@ -23,11 +23,20 @@ def _live_channel(channel_id):
 
 @live_bp.route('/live/stream/<int:channel_id>.m3u8')
 def live_hls_playlist(channel_id):
-    """HLS 播放列表：把分片相对路径改写为本站绝对路径。"""
+    """HLS 播放列表：把分片相对路径改写为本站绝对路径。
+
+    实时录音刚开播、主播还没推上音频时，ffmpeg 尚未产出分片。此时返回一个
+    合法的空播放列表（不含 ENDLIST），播放器会持续轮询，而不是直接 404。
+    """
     channel = _live_channel(channel_id)
     playlist_path = os.path.join(channel.hls_dir, 'index.m3u8')
     if not os.path.isfile(playlist_path):
-        abort(404)
+        resp = Response(
+            '#EXTM3U\n#EXT-X-VERSION:3\n#EXT-X-TARGETDURATION:2\n'
+            '#EXT-X-MEDIA-SEQUENCE:0\n',
+            mimetype='application/vnd.apple.mpegurl')
+        resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
+        return resp
 
     with open(playlist_path, 'r', encoding='utf-8', errors='replace') as f:
         lines = f.read().splitlines()

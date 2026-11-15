@@ -59,19 +59,8 @@ else:
 FFMPEG_THREADS = int(os.environ.get('FFMPEG_THREADS', '0'))
 
 # ---------------------------------------------------------------------------
-# 音频直播（WebRTC 实时录音）ICE 配置
+# 音频直播
 # ---------------------------------------------------------------------------
-# STUN 服务器列表（逗号分隔）。服务端在公网且 UDP 可用时可获取 srflx 候选；
-# 部署在 NAT 后无法直连时，请配置 TURN 中继（下方三项）。
-LIVE_STUN_SERVERS = [
-    s.strip()
-    for s in (os.environ.get('LIVE_STUN_SERVERS', 'stun:stun.qq.com:3478')).split(',')
-    if s.strip()
-]
-LIVE_TURN_URL = (os.environ.get('LIVE_TURN_URL') or '').strip()
-LIVE_TURN_USERNAME = (os.environ.get('LIVE_TURN_USERNAME') or '').strip()
-LIVE_TURN_PASSWORD = (os.environ.get('LIVE_TURN_PASSWORD') or '').strip()
-
 # 每个账号最多同时开启的「循环播放音频」直播数量（默认 5）
 # 实时录音直播固定每人最多 1 个，不随此项变化。
 LIVE_MAX_LOOP_PER_USER = 5

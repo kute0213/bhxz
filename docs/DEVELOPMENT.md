@@ -153,17 +153,17 @@ def do_something(user_id, value, ip_address):
 | `ffmpeg/__init__.py` | **纯函数**构造循环播放 / 实时录音 ffmpeg 命令（HLS + MP3 双输出），便于测试，不得启动进程 |
 | `store/__init__.py` | 频道与封禁的 SQLite 读写；循环上限（默认 5）与实时录音上限（固定 1）在 `transaction()` 内原子校验；不依赖 Flask |
 | `runtime/__init__.py` | `LiveManager` 单例 + `LiveChannel`：ffmpeg 进程、HLS 目录、MP3 听众分发、PCM stdin 写入、启动恢复 |
-| `webrtc/__init__.py` | aiortc 协商与音频帧接收（独立 asyncio 线程），延迟导入，未安装时给出明确错误 |
+| `ingest.py` | PCM 上传校验（空数据 / 长度错位 / 超大分片），纯函数，返回 `(ok, message, http_status)` |
 
 #### 进程与输出
 
 * **一个频道一个 ffmpeg 进程**，同时输出两路：HLS（落盘 `uploads/live/<直播ID>/index.m3u8`）与 MP3（`pipe:1`）。
 * 两种输入模式：
   * `loop`：`-re -stream_loop -1` 读取音频库中的 `index.mp3`，无限循环；
-  * `rec`：从 `stdin` 读取 WebRTC 解码后的 `s16le` PCM（48000Hz 双声道）。
+  * `rec`：从 `stdin` 读取浏览器上传的 `s16le` PCM（48000Hz 双声道）。
 * **实时录音输入禁止加 `-thread_queue_size`**：部分 ffmpeg 构建把它视为输出（muxer）选项，会报 `cannot be applied to input url pipe:0` 导致开播失败；`build_rec_cmd` 已移除该参数，测试会断言其不存在。
 * **不提供直播音量 / 速度调整**：不要重新加回 `volume` / `atempo` 滤镜、`/api/live/<ID>/settings` 路由或 `LiveManager.adjust()`，避免为调参重启 ffmpeg 打断听众。实时录音的输入音量 / 静音在**浏览器端**用 Web Audio `GainNode` 实时调整，服务端不参与。
-* WebRTC 使用 aiortc 的独立 asyncio 事件循环线程，HTTP 路由只负责提交 SDP；`/live` 相关响应的 `Permissions-Policy` 必须放行 `microphone=(self)`，其他路径保持默认拒绝（见 `core/middleware.py`）。
+* **实时录音使用 HTTPS 分片上传，不使用 WebRTC**：浏览器 `AudioWorklet`（`static/js/live/pcm-worklet.js`）把麦克风音频转成 48kHz 双声道 s16le，主线程每约 200ms 合并成一块 `POST /api/live/<ID>/pcm`（原始二进制，约 38KB），服务端 `LiveChannel.write_pcm` 串行写入 ffmpeg stdin。不要重新引入 aiortc / STUN / TURN：那需要 UDP 可达与原生扩展，在反向代理后极易失败，且 Python 3.14 无可用 wheel。
 * MP3 由 Python 读取 ffmpeg stdout 后写入每个听众的 `queue.Queue`（有界队列，慢客户端丢弃最旧数据）；新听众先收到最近约 1 秒的环形缓冲快照。**禁止**为每个听众单独启动 ffmpeg。
 * HLS 使用 `delete_segments+omit_endlist` 保持直播语义；m3u8 路由必须把分片相对路径改写为 `/live/stream/<ID>/<文件>`，分片路由必须做路径穿越校验。
 * 面向超长直播设计：运行时**不记录、不展示直播时长**，所有缓冲 / 分片列表均为有界结构，长时间运行内存不增长。
@@ -190,7 +190,7 @@ def do_something(user_id, value, ip_address):
 
 #### 权限与管理
 
-* 开播、停止、WebRTC offer 均校验登录；停止校验本人（管理员可强制停止）；WebRTC offer 只允许直播本人提交（管理员打开他人直播台时只读，不连接麦克风）。
+* 开播、停止、PCM 上传均校验登录；停止校验本人（管理员可强制停止）；PCM 上传只允许直播本人（管理员打开他人直播台时只读，不连接麦克风）。`/live` 相关响应的 `Permissions-Policy` 必须放行 `microphone=(self)`，其他路径保持默认拒绝（见 `core/middleware.py`）。
 * `live_bans` 为**永久封禁**（`user_id` 主键），管理员可解封；封禁用户 `create_channel` 必须在事务内拒绝，管理员封禁时必须停止其**全部**直播。
 * 直播标题必须经过防火墙内容注入检测（与音频上传一致），长度上限 60。
 

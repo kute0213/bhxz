@@ -131,23 +131,36 @@
     var CHANNEL_ID = {{ channel_id|tojson }};
     var INITIAL_ALIVE = {{ 'true' if channel.alive else 'false' }};
     var IS_OWNER = {{ 'true' if is_owner else 'false' }};
+    var PCM_WORKLET_URL = {{ url_for('static', filename='js/live/pcm-worklet.js')|tojson }};
     var URLS = {
         statusTpl: {{ url_for('live.api_live_status', channel_id=0)|tojson }},
         stopTpl: {{ url_for('live.api_live_stop', channel_id=0)|tojson }},
-        offerTpl: {{ url_for('live.api_live_webrtc_offer', channel_id=0)|tojson }},
+        pcmTpl: {{ url_for('live.api_live_pcm', channel_id=0)|tojson }},
         myPage: {{ url_for('live.live_my_page')|tojson }},
         adminPage: {{ url_for('admin.admin_live_page')|tojson }}
     };
 
+    // 上传节奏：攒够约 200ms 音频再上传一次；队列最多缓冲 5 批，网络慢时丢弃最旧数据
+    var PCM_CHUNK_BYTES = 38400;  // 48000Hz × 双声道 × 2 字节 × 0.2s
+    var UPLOAD_QUEUE_MAX_CHUNKS = 5;
+    var UPLOAD_MAX_FAILURES = 5;
+
     var state = {
         alive: INITIAL_ALIVE,
-        pc: null,
         micStream: null,
         audioCtx: null,
         sourceNode: null,
         gainNode: null,
-        destNode: null,
+        workletNode: null,
+        silentGain: null,
+        pendingBuffers: [],
+        pendingBytes: 0,
+        flushTimer: null,
+        pcmQueue: [],
+        uploading: false,
+        uploadFailures: 0,
         micState: 'idle',
+        micError: '',
         muted: false,
         gain: 100,
         endNotified: false
@@ -235,16 +248,19 @@
     // 麦克风连接
     // ------------------------------------------------------------------
     function micStatusText() {
-        if (state.micState === 'connecting') return '正在连接麦克风…';
+        if (state.micState === 'connecting') return state.micError || '正在连接麦克风…';
         if (state.micState === 'connected') return '麦克风推流已连接';
         if (state.micState === 'denied') return '麦克风权限被拒绝，请在浏览器地址栏允许本站使用麦克风';
-        if (state.micState === 'failed') return '麦克风推流连接失败，请点击「连接麦克风」重试';
+        if (state.micState === 'failed') {
+            return state.micError || '麦克风推流连接失败，请点击「连接麦克风」重试';
+        }
         if (state.micState === 'ended') return '直播已结束';
         return '麦克风未连接';
     }
 
-    function setMicState(value) {
+    function setMicState(value, error) {
         state.micState = value;
+        state.micError = error || '';
         var el = qs('#mic-status');
         el.textContent = micStatusText();
         el.className = 'rounded-lg p-3 text-sm mb-4 ' + (
@@ -266,9 +282,23 @@
     }
 
     function disconnectMic(silent) {
-        if (state.pc) {
-            try { state.pc.close(); } catch (e) {}
-            state.pc = null;
+        state.pcmQueue.length = 0;
+        state.pendingBuffers = [];
+        state.pendingBytes = 0;
+        state.uploading = false;
+        state.uploadFailures = 0;
+        if (state.flushTimer) {
+            clearInterval(state.flushTimer);
+            state.flushTimer = null;
+        }
+        if (state.workletNode) {
+            try { state.workletNode.port.onmessage = null; } catch (e) {}
+            try { state.workletNode.disconnect(); } catch (e) {}
+            state.workletNode = null;
+        }
+        if (state.silentGain) {
+            try { state.silentGain.disconnect(); } catch (e) {}
+            state.silentGain = null;
         }
         if (state.micStream) {
             state.micStream.getTracks().forEach(function (t) { try { t.stop(); } catch (e) {} });
@@ -280,25 +310,70 @@
         }
         state.sourceNode = null;
         state.gainNode = null;
-        state.destNode = null;
         if (!silent && state.micState !== 'ended') {
             setMicState('idle');
         }
     }
 
-    function waitIceGathering(pc, timeoutMs) {
-        return new Promise(function (resolve) {
-            if (pc.iceGatheringState === 'complete') { resolve(); return; }
-            var done = false;
-            function finish() {
-                if (done) return;
-                done = true;
-                pc.removeEventListener('icegatheringstatechange', onChange);
-                resolve();
+    // ------------------------------------------------------------------
+    // PCM 上传（HTTPS 分片，不依赖 WebRTC / UDP）
+    // ------------------------------------------------------------------
+    function enqueuePcm(buffer) {
+        if (!state.alive || !buffer || !buffer.byteLength) return;
+        state.pendingBuffers.push(buffer);
+        state.pendingBytes += buffer.byteLength;
+        if (state.pendingBytes >= PCM_CHUNK_BYTES) flushPending();
+    }
+
+    function flushPending() {
+        if (!state.pendingBytes) return;
+        var merged = new Uint8Array(state.pendingBytes);
+        var offset = 0;
+        state.pendingBuffers.forEach(function (buf) {
+            merged.set(new Uint8Array(buf), offset);
+            offset += buf.byteLength;
+        });
+        state.pendingBuffers = [];
+        state.pendingBytes = 0;
+        if (state.pcmQueue.length >= UPLOAD_QUEUE_MAX_CHUNKS) state.pcmQueue.shift();
+        state.pcmQueue.push(merged.buffer);
+        pumpUpload();
+    }
+
+    function pumpUpload() {
+        if (state.uploading || !state.pcmQueue.length || !state.alive) return;
+        var buffer = state.pcmQueue.shift();
+        state.uploading = true;
+        fetch(channelUrl(URLS.pcmTpl, CHANNEL_ID), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/octet-stream' },
+            body: buffer
+        }).then(function (res) {
+            return res.json().catch(function () { return {}; }).then(function (data) {
+                if (!res.ok || data.success === false) {
+                    throw new Error(data.message || ('音频上传失败（' + res.status + '）'));
+                }
+                return data;
+            });
+        }).then(function () {
+            state.uploading = false;
+            state.uploadFailures = 0;
+            if (state.micState !== 'connected') setMicState('connected');
+            pumpUpload();
+        }).catch(function (err) {
+            state.uploading = false;
+            state.uploadFailures += 1;
+            var message = (err && err.message) || '音频上传失败';
+            if (state.uploadFailures >= UPLOAD_MAX_FAILURES) {
+                state.pcmQueue.length = 0;
+                disconnectMic(true);
+                setMicState('failed', message);
+                Toast.error(message);
+                return;
             }
-            function onChange() { if (pc.iceGatheringState === 'complete') finish(); }
-            pc.addEventListener('icegatheringstatechange', onChange);
-            setTimeout(finish, timeoutMs || 3000);
+            // 网络抖动：保留队列，稍后重试，不打断主播
+            setMicState('connecting', '音频上传中断，正在重试…（' + message + '）');
+            setTimeout(pumpUpload, 600);
         });
     }
 
@@ -359,56 +434,57 @@
             refreshDevices();
 
             var Ctx = window.AudioContext || window.webkitAudioContext;
-            var ctx = new Ctx();
+            if (!Ctx) {
+                throw new Error('当前浏览器不支持 Web Audio，无法采集麦克风');
+            }
+            var canWorklet = Ctx.prototype && 'audioWorklet' in Ctx.prototype;
+            var ctx = canWorklet
+                ? new Ctx({ sampleRate: 48000 })
+                : new Ctx();
             state.audioCtx = ctx;
             state.sourceNode = ctx.createMediaStreamSource(stream);
             state.gainNode = ctx.createGain();
             state.gainNode.gain.value = state.muted ? 0 : state.gain / 100;
-            state.destNode = ctx.createMediaStreamDestination();
             state.sourceNode.connect(state.gainNode);
-            state.gainNode.connect(state.destNode);
-            resumeAudioContext();
-            if (ctx.state === 'suspended') {
-                Toast.info('浏览器暂停了音频处理，点击页面任意位置即可恢复声音');
-            }
 
-            var pc = new RTCPeerConnection({ iceServers: [{ urls: 'stun:stun.qq.com:3478' }] });
-            state.pc = pc;
-            pc.onconnectionstatechange = function () {
-                if (state.pc !== pc) return;
-                if (pc.connectionState === 'connected') setMicState('connected');
-                else if (pc.connectionState === 'failed') {
-                    setMicState('failed');
-                    Toast.error('麦克风推流连接失败，请重试');
-                } else if (pc.connectionState === 'disconnected') {
-                    setMicState('connecting');
-                }
-            };
-            state.destNode.stream.getAudioTracks().forEach(function (track) {
-                pc.addTrack(track, state.destNode.stream);
-            });
-
-            return pc.createOffer()
-                .then(function (offer) { return pc.setLocalDescription(offer); })
-                .then(function () { return waitIceGathering(pc, 3000); })
-                .then(function () {
-                    return apiFetch(channelUrl(URLS.offerTpl, CHANNEL_ID), {
-                        method: 'POST',
-                        body: JSON.stringify({
-                            sdp: pc.localDescription.sdp,
-                            type: pc.localDescription.type
-                        })
+            // 音量节点之后接 worklet：把音频转成 48kHz s16le 双声道 PCM 上传；
+            // silentGain（0 增益）把 worklet 连到 destination，保证音频图被持续驱动。
+            return (canWorklet
+                ? ctx.audioWorklet.addModule(PCM_WORKLET_URL).then(function () {
+                    var node = new AudioWorkletNode(ctx, 'pcm-tap', {
+                        numberOfInputs: 1,
+                        numberOfOutputs: 1,
+                        outputChannelCount: [2],
+                        processorOptions: { targetRate: 48000 }
                     });
+                    node.port.onmessage = function (e) { enqueuePcm(e.data); };
+                    return node;
                 })
-                .then(function (data) {
-                    return pc.setRemoteDescription(new RTCSessionDescription(data.answer));
-                });
+                : Promise.reject(new Error('浏览器不支持 AudioWorklet，请升级浏览器'))
+            ).then(function (node) {
+                state.workletNode = node;
+                state.silentGain = ctx.createGain();
+                state.silentGain.gain.value = 0;
+                state.gainNode.connect(node);
+                node.connect(state.silentGain);
+                state.silentGain.connect(ctx.destination);
+                // 定时兜底冲刷，避免音频块不足 200ms 时数据滞留
+                state.flushTimer = setInterval(flushPending, 200);
+
+                resumeAudioContext();
+                if (ctx.state === 'suspended') {
+                    Toast.info('浏览器暂停了音频处理，点击页面任意位置即可恢复声音');
+                }
+                // 音频帧开始上传后由 pumpUpload 切换为「已连接」
+            });
         }).catch(function (err) {
             var denied = err && (err.name === 'NotAllowedError' || err.name === 'SecurityError');
-            setMicState(denied ? 'denied' : 'failed');
+            disconnectMic(true);
+            setMicState(denied ? 'denied' : 'failed',
+                        denied ? '' : (err && err.message) || '麦克风连接失败');
             Toast.error(denied
                 ? '麦克风权限被拒绝，请在浏览器允许本站使用麦克风后重试'
-                : (err.message || '麦克风连接失败'));
+                : ((err && err.message) || '麦克风连接失败'));
         });
     }
 

@@ -2,7 +2,7 @@
 
 每个直播频道对应一个 ffmpeg 子进程，支持两种输入：
 - 循环播放（loop）：`-re -stream_loop -1` 读取音频库中的 MP3；
-- 实时录音（rec）：从 stdin 读取 WebRTC 解码出的 s16le PCM。
+- 实时录音（rec）：从 stdin 读取浏览器上传的 s16le PCM（48kHz 双声道）。
 
 两种模式都同时产出 HLS 文件（落盘）与 MP3（stdout），MP3 由本模块分发给所有听众。
 
@@ -72,7 +72,8 @@ class LiveChannel:
         self._lock = threading.RLock()
         self._proc = None
         self._stdin = None
-        self._peer = None  # WebRTC RTCPeerConnection（录音模式）
+        # 并发请求可能同时写入 stdin，串行化避免 PCM 采样帧错位
+        self._write_lock = threading.Lock()
         self._generation = 0
         self._stopped = False
         self._stopping = False
@@ -135,7 +136,7 @@ class LiveChannel:
         return self._spawn(cmd)
 
     def start_rec(self):
-        """启动实时录音管线（PCM 由 WebRTC 写入 stdin）。"""
+        """启动实时录音管线（PCM 由 HTTP 上传写入 stdin）。"""
         return self._spawn(ffmpeg_builder.build_rec_cmd(self.hls_dir),
                            stdin=subprocess.PIPE)
 
@@ -201,15 +202,27 @@ class LiveChannel:
     def _terminate_current_locked(self):
         """结束当前 ffmpeg（调用方需持有 self._lock）。保留 DB 与听众连接。"""
         proc = self._proc
+        stdin = self._stdin
         self._proc = None
         self._stdin = None
         # 使旧的 stdout 读取线程失效，避免它触发「异常退出」逻辑
         self._generation += 1
         if proc is None:
             return
+        # 先关 stdin：录音模式下 ffmpeg 阻塞在读 pipe，收到 EOF 会立即正常退出
+        if stdin is not None:
+            try:
+                stdin.close()
+            except Exception:
+                pass
+        try:
+            proc.wait(timeout=2)
+            return
+        except Exception:
+            pass
         try:
             proc.terminate()
-            proc.wait(timeout=5)
+            proc.wait(timeout=3)
         except Exception:
             try:
                 proc.kill()
@@ -217,35 +230,30 @@ class LiveChannel:
                 pass
 
     def write_pcm(self, data):
-        """把 WebRTC 解码出的 PCM 写入 ffmpeg stdin（录音模式）。"""
+        """把浏览器上传的 PCM 写入 ffmpeg stdin（录音模式）。
+
+        返回 False 表示管道已关闭，调用方应提示前端停止上传。
+        """
         if not data:
             return True
-        with self._lock:
-            stdin = self._stdin
-            proc = self._proc
-        if stdin is None or proc is None or proc.poll() is not None:
-            return False
-        try:
-            stdin.write(data)
-            stdin.flush()
-            return True
-        except (BrokenPipeError, OSError):
-            return False
-
-    def close_webrtc(self):
-        """关闭当前 WebRTC 连接（由 webrtc 模块延迟导入，避免循环依赖）。"""
-        try:
-            from services.live import webrtc
-            webrtc.close_channel(self)
-        except Exception:
-            self._peer = None
+        with self._write_lock:
+            with self._lock:
+                stdin = self._stdin
+                proc = self._proc
+            if stdin is None or proc is None or proc.poll() is not None:
+                return False
+            try:
+                stdin.write(data)
+                stdin.flush()
+                return True
+            except (BrokenPipeError, OSError, ValueError):
+                return False
 
     def stop(self, reason='用户停止直播'):
         """停止直播：终止 ffmpeg、通知听众并清理目录。"""
         with self._lock:
             if self._stopped and self._proc is None:
                 # 进程可能在进入 manager 注册表前就已异常退出，仍需确保 DB 与目录被清理
-                self.close_webrtc()
                 _remove_dir(self.hls_dir)
                 store.mark_stopped(self.id, reason)
                 return
@@ -253,7 +261,6 @@ class LiveChannel:
             self._stopped = True
             self._terminate_current_locked()
 
-        self.close_webrtc()
         self._notify_stop()
         store.mark_stopped(self.id, reason)
         _remove_dir(self.hls_dir)
@@ -265,7 +272,6 @@ class LiveChannel:
         with self._lock:
             self._stopped = True
             self._terminate_current_locked()
-        self.close_webrtc()
         self._notify_stop()
 
     # ------------------------------------------------------------------

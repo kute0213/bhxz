@@ -4,6 +4,13 @@
 
 ### 修复
 
+* **实时录音彻底改为 HTTPS PCM 上传**（`routes/live/api`、`services/live/{ingest,runtime}`、`static/js/live/pcm-worklet.js`、`static/templates/live/rec.html`）：
+  * 原 WebRTC 方案依赖 `aiortc`（Python 3.14 无可用 wheel，服务器上未安装即推流失败），且需要浏览器与服务端 UDP 直连或 TURN，反向代理环境下几乎必然失败。表现为「麦克风推流连接失败」、`m3u8` / `mp3` 一直 404。
+  * 现改为浏览器 `AudioWorklet` 采集 → 48kHz 双声道 s16le → 每 200ms `POST /api/live/<ID>/pcm` → 服务端串行写入 ffmpeg stdin。纯 TCP/HTTPS，穿透反向代理，无原生依赖；实测写入 PCM 后 1 秒内产出 `index.m3u8` 与分片。
+  * 删除 `services/live/webrtc/`、`/api/live/<ID>/webrtc/offer`、`aiortc` 依赖、`LIVE_STUN_SERVERS` / `LIVE_TURN_*` 配置。
+  * 上传失败不再只显示固定文案：错误信息直接来自服务端（如「直播不存在或已结束」「直播音频管道已关闭」），网络抖动时自动重试最多 5 次。
+* **`m3u8` 开播瞬间 404**：实时录音刚开播、尚未收到音频时 ffmpeg 还没产出分片，`/live/stream/<ID>.m3u8` 现在返回合法的空播放列表（无 `ENDLIST`），播放器会持续轮询而不是 404。
+* **停止直播卡顿**：`_terminate_current_locked` 先关闭 stdin 让录音模式的 ffmpeg 收到 EOF 立即退出（实测 0.03s），再按需 terminate / kill。
 * **`/live/rec/0` 返回 404**：开播成功后的跳转用 `replace('/0/', ...)` 拼 URL，而 `url_for` 生成的 `/live/rec/0` 末尾没有斜杠，替换失败后直接跳到 `/live/rec/0`。现在统一用 `base.js` 的全局 `channelUrl(tpl, id)`（同时兼容 `/api/live/0/status` 与 `/live/rec/0`）；路由对 `channel_id <= 0` 直接跳回「我的直播」兜底。
 * **管理端补充实时录音管理**：`/admin/live` 正在直播表新增模式徽章（循环播放 / 实时录音），实时录音行提供「直播台」入口；管理员打开他人直播台时展示只读视图（不自动连接麦克风），可查看状态与强制停止。`/live/rec/<ID>` 新增 `is_owner` 上下文。新增测试断言直播 ID 为雪花 ID。
 * **一键更新可能退回旧版本**（`update.py`）：原先直接下载分支归档，第三方镜像 / CDN 若缓存了旧的 `main.zip`，更新会把新文件当成「已删除」清理掉，站点因此退回好几个版本。现在先读分支 Atom 提交源（失败回退 GitHub API）取最新 commit SHA，优先下载内容不可变的 `<sha>` 固定版本归档；SHA 取不到时才回退分支归档。README「一键更新机制」已同步说明。
