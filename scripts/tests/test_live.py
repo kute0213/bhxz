@@ -70,6 +70,8 @@ def test_build_rec_cmd(tmp_path):
     assert str(tmp_path / 'live' / '2' / 'index.m3u8') in cmd
     assert '-stream_loop' not in cmd
     assert 'atempo=' not in joined
+    # 部分 ffmpeg 构建把 -thread_queue_size 当作输出选项，加在 pipe:0 前会启动失败
+    assert '-thread_queue_size' not in cmd
 
 
 def test_build_loop_cmd(tmp_path):

@@ -81,10 +81,15 @@ def build_loop_cmd(src_path, hls_dir, volume=VOLUME_DEFAULT, speed=SPEED_DEFAULT
 
 
 def build_rec_cmd(hls_dir):
-    """接收 WebRTC 解码后的 PCM：从 stdin 读 s16le 原始音频。"""
+    """接收 WebRTC 解码后的 PCM：从 stdin 读 s16le 原始音频。
+
+    注意：**不要**给 ``pipe:0`` 添加 ``-thread_queue_size``。部分 ffmpeg 构建把它
+    当作输出（muxer）选项，会直接报错
+    ``Option thread_queue_size ... cannot be applied to input url pipe:0``，
+    导致实时录音直播无法启动。
+    """
     cmd = [
         FFMPEG_BIN, '-hide_banner', '-loglevel', 'error', '-nostdin',
-        '-thread_queue_size', '512',
         '-f', 's16le',
         '-ar', str(PCM_SAMPLE_RATE),
         '-ac', str(PCM_CHANNELS),

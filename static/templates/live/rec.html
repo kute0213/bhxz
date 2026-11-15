@@ -2,47 +2,26 @@
 {% block title %}实时录音直播台 · {{ channel.title }}{% endblock %}
 {% block description %}实时录音直播台：连接麦克风并实时调整录音配置。{% endblock %}
 
-{% block extra_style %}
-<style>
-    .live-range { width: 100%; accent-color: #f0c060; }
-    .live-link-row { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
-    .live-link-row code {
-        flex: 1 1 10rem; min-width: 0; overflow: hidden; text-overflow: ellipsis;
-        white-space: nowrap; background: rgba(0, 0, 0, .28); padding: .35rem .55rem;
-        border-radius: .4rem; font-size: .72rem;
-    }
-    .mode-badge {
-        font-size: 11px; line-height: 1; padding: .3rem .5rem; border-radius: .35rem;
-        background: rgba(255, 255, 255, .08); color: rgba(255, 255, 255, .68);
-    }
-    .switch-row {
-        display: flex; align-items: center; justify-content: space-between;
-        padding: .55rem 0; border-bottom: 1px solid rgba(255, 255, 255, .06);
-    }
-    .switch-row:last-child { border-bottom: none; }
-</style>
-{% endblock %}
-
 {% block content %}
 <section class="page-container py-10">
     <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="flex flex-wrap items-end justify-between gap-4 mb-6">
             <div class="min-w-0">
                 <a href="{{ url_for('live.live_my_page') }}"
-                   class="text-xs text-cream/50 hover:text-gold-300 inline-flex items-center gap-1 mb-2">
+                   class="text-xs text-cream/50 hover:text-gold-400 inline-flex items-center gap-1 mb-2">
                     <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>返回我的直播
                 </a>
                 <h1 class="text-2xl sm:text-3xl font-bold truncate">{{ channel.title }}</h1>
                 <div class="flex items-center gap-2 flex-wrap mt-2 text-sm">
                     <span class="mode-badge">实时录音</span>
-                    <span id="live-state" class="{{ 'text-emerald-300' if channel.alive else 'text-red-300' }}">
+                    <span id="live-state" class="{{ 'text-emerald-600' if channel.alive else 'text-red-600' }}">
                         {{ '直播中' if channel.alive else '直播已结束或连接中断' }}
                     </span>
                     <span class="text-cream/40">· <span id="listeners">{{ channel.listeners }}</span> 人在听</span>
                 </div>
             </div>
             <button type="button" id="stop-live"
-                    class="px-4 py-2.5 rounded-lg text-sm border border-red-400/40 text-red-300 hover:bg-red-500/10 inline-flex items-center gap-2">
+                    class="px-4 py-2.5 rounded-lg text-sm border border-red-500/40 text-red-600 hover:bg-red-500/10 inline-flex items-center gap-2">
                 <i data-lucide="square" class="w-4 h-4"></i>结束直播
             </button>
         </div>
@@ -76,7 +55,7 @@
                         <div class="switch-row">
                             <span class="text-sm text-cream/70">静音</span>
                             <button type="button" id="mic-mute"
-                                    class="btn-secondary px-3 py-1.5 rounded text-xs inline-flex items-center gap-1">
+                                    class="btn-secondary px-3 py-1.5 rounded-lg text-xs inline-flex items-center gap-1">
                                 <i data-lucide="mic" class="w-3.5 h-3.5"></i><span id="mute-text">静音</span>
                             </button>
                         </div>
@@ -197,18 +176,18 @@
         var box = qs('#live-links');
         box.innerHTML =
             '<div class="live-link-row"><span class="text-cream/40 w-10">播放页</span><code>' + esc(links.page) + '</code>' +
-                '<button type="button" class="btn-secondary px-2.5 py-1 rounded copy-btn" data-copy="' + esc(links.page) + '">复制</button></div>' +
+                '<button type="button" class="btn-secondary px-2.5 py-1 rounded-lg copy-btn" data-copy="' + esc(links.page) + '">复制</button></div>' +
             '<div class="live-link-row"><span class="text-cream/40 w-10">m3u8</span><code>' + esc(links.m3u8) + '</code>' +
-                '<button type="button" class="btn-secondary px-2.5 py-1 rounded copy-btn" data-copy="' + esc(links.m3u8) + '">复制</button></div>' +
+                '<button type="button" class="btn-secondary px-2.5 py-1 rounded-lg copy-btn" data-copy="' + esc(links.m3u8) + '">复制</button></div>' +
             '<div class="live-link-row"><span class="text-cream/40 w-10">mp3</span><code>' + esc(links.mp3) + '</code>' +
-                '<button type="button" class="btn-secondary px-2.5 py-1 rounded copy-btn" data-copy="' + esc(links.mp3) + '">复制</button></div>';
+                '<button type="button" class="btn-secondary px-2.5 py-1 rounded-lg copy-btn" data-copy="' + esc(links.mp3) + '">复制</button></div>';
     }
 
     function setLiveState(alive) {
         state.alive = alive;
         var el = qs('#live-state');
         el.textContent = alive ? '直播中' : '直播已结束';
-        el.className = alive ? 'text-emerald-300' : 'text-red-300';
+        el.className = alive ? 'text-emerald-600' : 'text-red-600';
         qs('#stop-live').disabled = !alive;
         qs('#mic-connect').disabled = !alive;
         if (!alive) {
@@ -249,9 +228,9 @@
         var el = qs('#mic-status');
         el.textContent = micStatusText();
         el.className = 'rounded-lg p-3 text-sm mb-4 ' + (
-            value === 'connected' ? 'bg-emerald-500/10 text-emerald-300'
-            : (value === 'failed' || value === 'denied' || value === 'ended') ? 'bg-red-500/10 text-red-300'
-            : value === 'connecting' ? 'bg-amber-400/10 text-amber-200'
+            value === 'connected' ? 'bg-emerald-500/10 text-emerald-600'
+            : (value === 'failed' || value === 'denied' || value === 'ended') ? 'bg-red-500/10 text-red-600'
+            : value === 'connecting' ? 'bg-amber-400/10 text-amber-600'
             : 'bg-cream/5 text-cream/60');
     }
 
@@ -262,8 +241,8 @@
         }
         qs('#gain-label').textContent = state.muted ? '静音' : state.gain + '%';
         qs('#mute-text').textContent = state.muted ? '取消静音' : '静音';
-        qs('#mic-mute').classList.toggle('border-red-400/50', state.muted);
-        qs('#mic-mute').classList.toggle('text-red-300', state.muted);
+        qs('#mic-mute').classList.toggle('border-red-500/50', state.muted);
+        qs('#mic-mute').classList.toggle('text-red-600', state.muted);
     }
 
     function disconnectMic(silent) {

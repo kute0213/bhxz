@@ -3,31 +3,6 @@
 {% block title %}音频直播台{% endblock %}
 {% block description %}滨海小镇音频直播台：循环播放自己的音频或实时录音开播，支持 m3u8 与 MP3 链接收听。{% endblock %}
 
-{% block extra_style %}
-<style>
-    .live-pulse {
-        display: inline-block; width: .5rem; height: .5rem; border-radius: 999px;
-        background: #f87171; box-shadow: 0 0 0 0 rgba(248, 113, 113, .7);
-        animation: livePulse 1.6s infinite;
-    }
-    @keyframes livePulse {
-        0% { box-shadow: 0 0 0 0 rgba(248, 113, 113, .65); }
-        70% { box-shadow: 0 0 0 8px rgba(248, 113, 113, 0); }
-        100% { box-shadow: 0 0 0 0 rgba(248, 113, 113, 0); }
-    }
-    .live-link-row { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
-    .live-link-row code {
-        flex: 1 1 12rem; min-width: 0; overflow: hidden; text-overflow: ellipsis;
-        white-space: nowrap; background: rgba(0, 0, 0, .28); padding: .35rem .55rem;
-        border-radius: .4rem; font-size: .75rem;
-    }
-    .mode-badge {
-        font-size: 11px; line-height: 1; padding: .3rem .5rem; border-radius: .35rem;
-        background: rgba(255, 255, 255, .08); color: rgba(255, 255, 255, .68);
-    }
-</style>
-{% endblock %}
-
 {% block content %}
 <section class="page-container py-12">
     <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -60,7 +35,7 @@
         </div>
 
         {% if user and is_banned %}
-        <div class="mb-6 rounded-xl p-4 border border-red-400/30 bg-red-500/10 text-red-200 text-sm">
+        <div class="mb-6 rounded-xl p-4 border border-red-500/30 bg-red-500/10 text-red-600 text-sm">
             <i data-lucide="ban" class="w-4 h-4 inline mr-1"></i>
             你已被管理员禁止开播。如有疑问请联系服主。
         </div>
@@ -130,7 +105,7 @@
                             '<span class="live-pulse"></span>' +
                             '<span class="font-bold truncate">' + esc(ch.title) + '</span>' +
                             '<span class="mode-badge">' + esc(ch.mode_label || '循环播放') + '</span>' +
-                            (mine ? '<span class="text-[11px] px-2 py-0.5 rounded bg-gold-400/15 text-gold-300">我的直播</span>' : '') +
+                            (mine ? '<span class="text-[11px] px-2 py-0.5 rounded bg-gold-400/15 text-gold-400">我的直播</span>' : '') +
                         '</div>' +
                         '<div class="text-xs text-cream/50">' +
                             '主播：' + esc(ch.username || '未知') +
@@ -143,9 +118,9 @@
                 '</div>' +
                 '<div class="mt-3 live-link-row text-xs">' +
                     '<span class="text-cream/40">m3u8</span><code>' + esc(ch.links.m3u8) + '</code>' +
-                    '<button type="button" class="btn-secondary px-2.5 py-1 rounded copy-btn" data-copy="' + esc(ch.links.m3u8) + '">复制</button>' +
+                    '<button type="button" class="btn-secondary px-2.5 py-1 rounded-lg copy-btn" data-copy="' + esc(ch.links.m3u8) + '">复制</button>' +
                     '<span class="text-cream/40 ml-2">mp3</span><code>' + esc(ch.links.mp3) + '</code>' +
-                    '<button type="button" class="btn-secondary px-2.5 py-1 rounded copy-btn" data-copy="' + esc(ch.links.mp3) + '">复制</button>' +
+                    '<button type="button" class="btn-secondary px-2.5 py-1 rounded-lg copy-btn" data-copy="' + esc(ch.links.mp3) + '">复制</button>' +
                 '</div>' +
             '</div>';
         }).join('');
@@ -158,7 +133,7 @@
             .then(function (data) { renderList(data.channels || []); })
             .catch(function () {
                 var box = qs('#live-list');
-                if (box) box.innerHTML = '<div class="pixel-card rounded-xl p-8 text-center text-red-300 text-sm">直播列表加载失败</div>';
+                if (box) box.innerHTML = '<div class="pixel-card rounded-xl p-8 text-center text-red-600 text-sm">直播列表加载失败</div>';
             });
     }
 

@@ -161,6 +161,7 @@ def do_something(user_id, value, ip_address):
 * 两种输入模式：
   * `loop`：`-re -stream_loop -1` 读取音频库中的 `index.mp3`，无限循环；
   * `rec`：从 `stdin` 读取 WebRTC 解码后的 `s16le` PCM（48000Hz 双声道）。
+* **实时录音输入禁止加 `-thread_queue_size`**：部分 ffmpeg 构建把它视为输出（muxer）选项，会报 `cannot be applied to input url pipe:0` 导致开播失败；`build_rec_cmd` 已移除该参数，测试会断言其不存在。
 * **不提供直播音量 / 速度调整**：不要重新加回 `volume` / `atempo` 滤镜、`/api/live/<ID>/settings` 路由或 `LiveManager.adjust()`，避免为调参重启 ffmpeg 打断听众。实时录音的输入音量 / 静音在**浏览器端**用 Web Audio `GainNode` 实时调整，服务端不参与。
 * WebRTC 使用 aiortc 的独立 asyncio 事件循环线程，HTTP 路由只负责提交 SDP；`/live` 相关响应的 `Permissions-Policy` 必须放行 `microphone=(self)`，其他路径保持默认拒绝（见 `core/middleware.py`）。
 * MP3 由 Python 读取 ffmpeg stdout 后写入每个听众的 `queue.Queue`（有界队列，慢客户端丢弃最旧数据）；新听众先收到最近约 1 秒的环形缓冲快照。**禁止**为每个听众单独启动 ffmpeg。
@@ -183,6 +184,7 @@ def do_something(user_id, value, ip_address):
 * **媒体地址必须使用同源相对路径**（`/live/stream/<ID>.mp3`）。反向代理下用 `request.host_url` 生成的绝对地址可能协议 / 端口与实际页面不一致，会被 CSP `media-src 'self'` 拦截。
 * 播放页使用自定义控件（开始 / 关闭 / 音量），**不要**使用原生 `controls`、不要显示进度条或已直播时长。
 * 音源选择必须走 `GET /api/live/musics` 搜索 + 分页，支持自己的私有音频；禁止一次性下发全部音频。
+* 直播页公共样式（`.live-pulse` / `.live-link-row` / `.mode-badge` / `.mode-tab` / `.music-pick-item` / `.live-range` / `.switch-row` / `.live-control-btn`）统一在 `static/css/base.css` 末尾的「音频直播页面公共样式」块维护，**禁止**再在页面 `extra_style` 里重复定义；颜色必须使用 `:root` 变量（全站为白色磨砂玻璃主题，写死白色系会导致未选中项不可见）。
 
 #### 权限与管理
 
@@ -750,6 +752,8 @@ git push origin main                   # 6. 推送，触发一键更新（见 RE
 * 推送到 GitHub 后，一键更新即可生效
 
 * 修改 `base.css`/`base.js` 后必须同步 bump 模板中的版本号，避免浏览器缓存
+
+* 模板 / JS 中新增或修改 Tailwind 工具类后，必须重新编译 `static/css/tailwind.css`（命令见 README「重新编译 Tailwind CSS」），并 bump 其版本号；否则新类不会生效（按钮丢 padding / 圆角）
 
 * 一键更新的**机制原理**见 [README.md 一键更新机制](../README.md#一键更新机制)
 

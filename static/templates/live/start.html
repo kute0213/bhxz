@@ -3,34 +3,13 @@
 {% block title %}开始直播{% endblock %}
 {% block description %}滨海小镇音频直播：循环播放自己的音频，或使用麦克风实时录音开播。{% endblock %}
 
-{% block extra_style %}
-<style>
-    .music-pick-item {
-        display: flex; align-items: center; gap: .65rem; padding: .7rem .8rem;
-        border: 1px solid rgba(255, 255, 255, .10); border-radius: .6rem;
-        cursor: pointer; width: 100%; text-align: left; transition: all .15s ease;
-    }
-    .music-pick-item:hover { border-color: rgba(240, 192, 96, .45); background: rgba(240, 192, 96, .05); }
-    .music-pick-item.selected { border-color: #f0c060; background: rgba(240, 192, 96, .10); }
-    .mode-tab {
-        display: flex; align-items: center; justify-content: center; gap: .45rem;
-        padding: .7rem .75rem; border-radius: .55rem; cursor: pointer; font-size: .875rem;
-        border: 1px solid rgba(255, 255, 255, .12); color: rgba(255, 255, 255, .65);
-        transition: all .15s ease;
-    }
-    .mode-tab.is-active {
-        border-color: #f0c060; color: #f5d98a; background: rgba(240, 192, 96, .10);
-    }
-</style>
-{% endblock %}
-
 {% block content %}
 <section class="page-container py-10">
     <div class="max-w-2xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="flex flex-wrap items-end justify-between gap-4 mb-6">
             <div>
                 <a href="{{ url_for('live.live_page') }}"
-                   class="text-xs text-cream/50 hover:text-gold-300 inline-flex items-center gap-1 mb-2">
+                   class="text-xs text-cream/50 hover:text-gold-400 inline-flex items-center gap-1 mb-2">
                     <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>返回直播台
                 </a>
                 <h1 class="text-2xl sm:text-3xl font-bold">开始直播</h1>
@@ -43,7 +22,7 @@
         </div>
 
         {% if is_banned %}
-        <div class="mb-6 rounded-xl p-4 border border-red-400/30 bg-red-500/10 text-red-200 text-sm">
+        <div class="mb-6 rounded-xl p-4 border border-red-500/30 bg-red-500/10 text-red-600 text-sm">
             <i data-lucide="ban" class="w-4 h-4 inline mr-1"></i>
             你已被管理员禁止开播，暂时无法创建新的直播。
         </div>
@@ -87,13 +66,13 @@
                 <div id="rec-panel" class="hidden">
                     <div class="rounded-lg border border-amber-400/25 bg-amber-400/5 p-4 text-sm text-cream/70 space-y-2">
                         <p class="flex items-start gap-2">
-                            <i data-lucide="mic" class="w-4 h-4 mt-0.5 text-amber-300 shrink-0"></i>
+                            <i data-lucide="mic" class="w-4 h-4 mt-0.5 text-amber-600 shrink-0"></i>
                             <span>创建后会自动跳转到实时录音直播台，并在那里连接麦克风、调整录音配置。</span>
                         </p>
                         <p class="text-xs text-cream/45">
                             麦克风需要 HTTPS 安全上下文；每个账号最多同时开启 1 个实时录音直播，服务重启后不恢复。
                         </p>
-                        <p id="secure-warning" class="text-xs text-red-300 hidden">
+                        <p id="secure-warning" class="text-xs text-red-600 hidden">
                             当前页面不是 HTTPS 安全上下文，浏览器会拒绝使用麦克风。请通过 https:// 访问本站。
                         </p>
                     </div>
@@ -122,7 +101,7 @@
     <div class="flex items-center justify-between mt-3 min-h-[2rem]">
         <span id="music-hint" class="text-xs text-cream/40"></span>
         <button type="button" id="music-more"
-                class="btn-secondary px-3 py-1.5 rounded text-xs hidden">加载更多</button>
+                class="btn-secondary px-3 py-1.5 rounded-lg text-xs hidden">加载更多</button>
     </div>
 </div>
 {% endcall %}
@@ -185,8 +164,8 @@
     // ------------------------------------------------------------------
     function musicItemHtml(m) {
         var selected = state.selected && state.selected.id === m.id ? ' selected' : '';
-        var badgeClass = m.status === 2 ? 'bg-emerald-500/15 text-emerald-300'
-            : (m.status === 1 ? 'bg-yellow-400/15 text-yellow-200' : 'bg-cream/10 text-cream/50');
+        var badgeClass = m.status === 2 ? 'bg-emerald-500/10 text-emerald-600'
+            : (m.status === 1 ? 'bg-yellow-400/15 text-amber-600' : 'bg-cream/10 text-cream/50');
         var tags = (m.tags_list || []).length
             ? '<span class="block text-[11px] text-cream/35 truncate">' + esc(m.tags_list.join(' · ')) + '</span>'
             : '';
@@ -217,7 +196,7 @@
                 if (!musics.length && reset) {
                     list.innerHTML = '<div class="text-xs text-cream/40 text-center py-6">' +
                         '没有找到可用音频。请先到「大喇叭音频」上传一首。' +
-                        '<a href="' + URLS.uploadPage + '" class="text-gold-400 hover:text-gold-300">去上传</a>' +
+                        '<a href="' + URLS.uploadPage + '" class="text-gold-400 hover:text-gold-400">去上传</a>' +
                         '</div>';
                 } else {
                     list.insertAdjacentHTML('beforeend', musics.map(musicItemHtml).join(''));
@@ -230,7 +209,7 @@
             })
             .catch(function (err) {
                 if (reset) {
-                    list.innerHTML = '<div class="text-xs text-red-300 text-center py-5">' + esc(err.message) + '</div>';
+                    list.innerHTML = '<div class="text-xs text-red-600 text-center py-5">' + esc(err.message) + '</div>';
                 }
             })
             .finally(function () { state.music.loading = false; });

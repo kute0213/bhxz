@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### 修复
+
+* **实时录音直播启动失败**（`services/live/ffmpeg/__init__.py`）：移除 `pipe:0` 输入前的 `-thread_queue_size`，避免部分 ffmpeg 构建报 `cannot be applied to input url pipe:0`；测试新增断言防回归。
+* **直播页面样式与可读性**（`static/css/base.css`、`static/css/tailwind.css`、`static/templates/live/*`、`base.html`）：
+  * 重新编译 Tailwind，补全直播页面使用但产物缺失的工具类（`px-2.5`、`text-[11px]`、`border-red-400/40` 等），修复按钮文字贴边、圆角失效。
+  * 直播页公共样式（`.mode-tab` / `.music-pick-item` / `.mode-badge` / `.live-link-row` 等）统一收敛到 `base.css`，删除 5 个页面重复的 `extra_style`；配色改用 `:root` 主题变量，修复未选中直播方式、徽章、链接在白色主题下几乎不可见的问题。
+  * 小按钮圆角由 4px 提升到 8px，状态文字改用 600 级色阶，提升对比度；bump `tailwind.css` / `base.css` 版本号。
+* **我的直播停止后列表不刷新**（`static/templates/live/my.html`）：停止成功后强制重新拉取并渲染（原逻辑在「停止最后一个直播」时新旧签名都为空，被去重逻辑跳过）。
+
 ### 变更
 
 * **直播页面拆分 + 音频选择弹窗 + 删除调参 + 实时录音直播台**（`routes/live/{pages,api}/__init__.py`、`services/live/{store,runtime}/__init__.py`、`static/templates/live/{index,start,my,rec,play}.html`、`core/middleware.py`、`docs/DEVELOPMENT.md`、`README.md`）：

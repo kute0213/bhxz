@@ -1991,3 +1991,74 @@ pre::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.24); }
 @media (prefers-reduced-motion: reduce) {
     .site-tooltip { transition: none; }
 }
+
+/* ============================================================
+   音频直播页面公共样式（index / my / rec / play / start 共用）
+   - 全部基于 :root 颜色变量，适配白色磨砂玻璃主题；
+   - 不要在各页面 extra_style 里重复定义这些类。
+   ============================================================ */
+.live-pulse {
+    display: inline-block; width: .5rem; height: .5rem; border-radius: 999px;
+    background: #ef4444; box-shadow: 0 0 0 0 rgba(239, 68, 68, .55);
+    animation: livePulse 1.6s infinite;
+}
+@keyframes livePulse {
+    0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, .55); }
+    70% { box-shadow: 0 0 0 8px rgba(239, 68, 68, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+}
+
+.live-link-row { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+.live-link-row code {
+    flex: 1 1 10rem; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; background: rgba(15, 23, 42, .05); color: var(--text-secondary);
+    padding: .35rem .55rem; border-radius: .4rem; font-size: .72rem;
+}
+
+.mode-badge {
+    font-size: 11px; line-height: 1; padding: .3rem .5rem; border-radius: .35rem;
+    background: var(--accent-blue-dim); color: var(--accent-blue);
+    font-weight: 600; white-space: nowrap;
+}
+
+.live-range { width: 100%; accent-color: var(--accent-blue); }
+
+.switch-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: .55rem 0; border-bottom: 1px solid var(--border-subtle);
+}
+.switch-row:last-child { border-bottom: none; }
+
+.live-control-btn {
+    min-width: 7rem; padding: .7rem 1.4rem; border-radius: .7rem;
+    display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
+    font-size: .9rem; transition: opacity .15s ease;
+}
+.live-control-btn:disabled { opacity: .45; cursor: not-allowed; }
+
+/* 直播方式切换（开播页） */
+.mode-tab {
+    display: flex; align-items: center; justify-content: center; gap: .45rem;
+    padding: .7rem .75rem; border-radius: .55rem; cursor: pointer; font-size: .875rem;
+    border: 1px solid var(--border-card); color: var(--text-secondary);
+    background: rgba(255, 255, 255, .6);
+    transition: border-color .15s ease, background .15s ease, color .15s ease;
+}
+.mode-tab:hover { border-color: var(--border-accent); color: var(--text-primary); }
+.mode-tab.is-active {
+    border-color: var(--accent-blue); color: var(--accent-blue);
+    background: var(--accent-blue-dim); font-weight: 600;
+    box-shadow: inset 0 0 0 1px var(--accent-blue);
+}
+.mode-tab:focus-visible { outline: 2px solid var(--border-accent); outline-offset: 2px; }
+
+/* 音频选择弹窗条目 */
+.music-pick-item {
+    display: flex; align-items: center; gap: .65rem; padding: .7rem .8rem;
+    border: 1px solid var(--border-card); border-radius: .6rem;
+    background: rgba(255, 255, 255, .55); color: var(--text-primary);
+    cursor: pointer; width: 100%; text-align: left;
+    transition: border-color .15s ease, background .15s ease;
+}
+.music-pick-item:hover { border-color: var(--border-accent); background: rgba(2, 132, 199, .05); }
+.music-pick-item.selected { border-color: var(--accent-blue); background: var(--accent-blue-dim); }

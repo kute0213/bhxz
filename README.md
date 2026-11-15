@@ -52,6 +52,19 @@ python scripts/build/build_static.py
 > 均为本地分片子集，浏览器只按需下载用到的子集；字体文件随静态资源预构建提交，**零外部 CDN 依赖**。
 > 静态资源（含 Tailwind 构建产物 `static/css/tailwind.css`）已预构建并随代码提交，一键更新无需额外构建步骤。
 
+#### 重新编译 Tailwind CSS
+
+模板或 JS 中新增 / 修改 Tailwind 工具类后，必须重新生成 `static/css/tailwind.css`，否则新类不会出现在产物中（典型症状：按钮丢失内边距、圆角失效、文字贴着边框）：
+
+```bash
+cd scripts/build
+npm install            # 仅首次
+npx tailwindcss -c tailwind.config.js -i tailwind-source.css \
+    -o ../../static/css/tailwind.css --minify
+```
+
+编译后同步 bump `static/templates/base.html` 中 `css/tailwind.css` 的 `v=` 版本号，避免浏览器缓存旧样式。
+
 ### 打包发布 zip
 
 需要离线分发时，可打包为发布 zip（排除敏感文件、数据库、上传、备份、SSL、日志与第三方库大文件）：
@@ -323,6 +336,7 @@ python scripts/build/package.py
 * **音源选择**：弹窗按需调用音频 API，音频再多也不会拖慢页面
 * **开播数量限制**：循环播放默认每人最多 **5** 路，可在「系统设置 → 音频直播」、`config.py` 的 `LIVE_MAX_LOOP_PER_USER` 或「防火墙设置」页面修改（1~50）；实时录音固定每人最多 **1** 路，两者互不占用额度，均在数据库事务内原子校验
 * **超长直播设计**：不展示「已直播时长」，MP3 听众缓冲与 HLS 分片列表均为有界结构，ffmpeg 持续循环，可长期运行不受时长影响
+* **开播失败排查**：实时录音输入固定使用 `-f s16le -i pipe:0`，**不要**给输入加 `-thread_queue_size`（部分 ffmpeg 构建视其为输出选项，会报 `cannot be applied to input url pipe:0`）；实时录音需 HTTPS 安全上下文，否则浏览器会拒绝麦克风
 * **直播不随前端关闭**：ffmpeg 在服务端持续运行，关闭页面或播放器都不会停止直播；重新打开直播台 / 开播页可看到自己的全部直播并继续管理、推流或收听
 * **服务重启恢复**：循环播放直播在服务重启后自动恢复（音源文件缺失则该直播标记停止）；实时录音直播依赖浏览器推流，重启后标记停止、不自动恢复
 * **流媒体地址**（开启后展示，可直接分享 / 播放器拉流）：
@@ -881,7 +895,7 @@ workspace/
 │       ├── guides/               #     服务器指南页面（index / detail / form）
 │       ├── buildings/            #     公共建筑（index / create / detail）
 │       ├── music/                #     大喇叭音频页面（index / my / favorites / upload）
-│       ├── live/                 #     音频直播页面（index 直播台 / start 开播页 / play 播放页）
+│       ├── live/                 #     音频直播页面（index 直播台 / start 开播页 / my 我的直播 / rec 实时录音台 / play 播放页）
 │       ├── macros/               #     通用模板宏（模态框/编辑器/进度条/音乐/页面内搜索）
 │       └── ...                   #     根级：base.html / index.html / error_simple.html
 ├── docs/                     # 项目文档

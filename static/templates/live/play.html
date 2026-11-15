@@ -2,38 +2,10 @@
 {% block title %}{{ channel.title if channel else '直播已结束' }} - 音频直播{% endblock %}
 {% block description %}滨海小镇音频直播播放页，支持 HLS（m3u8）与 MP3 实时收听。{% endblock %}
 
-{% block extra_style %}
-<style>
-    .live-pulse {
-        display: inline-block; width: .5rem; height: .5rem; border-radius: 999px;
-        background: #f87171; box-shadow: 0 0 0 0 rgba(248, 113, 113, .7);
-        animation: livePulse 1.6s infinite;
-    }
-    @keyframes livePulse {
-        0% { box-shadow: 0 0 0 0 rgba(248, 113, 113, .65); }
-        70% { box-shadow: 0 0 0 8px rgba(248, 113, 113, 0); }
-        100% { box-shadow: 0 0 0 0 rgba(248, 113, 113, 0); }
-    }
-    .live-link-row { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
-    .live-link-row code {
-        flex: 1 1 12rem; min-width: 0; overflow: hidden; text-overflow: ellipsis;
-        white-space: nowrap; background: rgba(0, 0, 0, .28); padding: .35rem .55rem;
-        border-radius: .4rem; font-size: .75rem;
-    }
-    .live-control-btn {
-        min-width: 7rem; padding: .7rem 1.4rem; border-radius: .7rem;
-        display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
-        font-size: .9rem; transition: opacity .15s ease;
-    }
-    .live-control-btn:disabled { opacity: .45; cursor: not-allowed; }
-    .live-range { width: 100%; accent-color: #f0c060; }
-</style>
-{% endblock %}
-
 {% block content %}
 <section class="page-container py-12">
     <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
-        <a href="{{ url_for('live.live_page') }}" class="text-gold-400 hover:text-gold-300 text-sm mb-4 inline-block">
+        <a href="{{ url_for('live.live_page') }}" class="text-gold-400 hover:text-gold-400 text-sm mb-4 inline-block">
             <i data-lucide="arrow-left" class="w-4 h-4 inline mr-1"></i>返回直播台
         </a>
 
@@ -42,7 +14,7 @@
             <div class="flex items-center gap-2 flex-wrap mb-1">
                 <span class="live-pulse"></span>
                 <h1 id="live-title" class="text-xl sm:text-2xl font-bold">{{ channel.title }}</h1>
-                <span id="live-badge" class="text-[11px] px-2 py-0.5 rounded bg-red-500/15 text-red-300">直播中</span>
+                <span id="live-badge" class="text-[11px] px-2 py-0.5 rounded bg-red-500/10 text-red-600">直播中</span>
             </div>
             <div class="text-xs text-cream/50 mb-6">
                 主播：{{ channel.username or '未知' }} ·
@@ -87,17 +59,17 @@
                 <div class="mt-6 pt-4 border-t border-cream/10 space-y-2 text-xs live-link-row">
                     <span class="text-cream/40 w-10">播放页</span>
                     <code id="link-page">{{ request.url }}</code>
-                    <button type="button" class="btn-secondary px-2.5 py-1 rounded copy-btn" data-copy-target="link-page">复制</button>
+                    <button type="button" class="btn-secondary px-2.5 py-1 rounded-lg copy-btn" data-copy-target="link-page">复制</button>
                 </div>
                 <div class="space-y-2 text-xs live-link-row mt-2">
                     <span class="text-cream/40 w-10">m3u8</span>
                     <code id="link-m3u8">/live/stream/{{ channel_id }}.m3u8</code>
-                    <button type="button" class="btn-secondary px-2.5 py-1 rounded copy-btn" data-copy-target="link-m3u8">复制</button>
+                    <button type="button" class="btn-secondary px-2.5 py-1 rounded-lg copy-btn" data-copy-target="link-m3u8">复制</button>
                 </div>
                 <div class="space-y-2 text-xs live-link-row mt-2">
                     <span class="text-cream/40 w-10">mp3</span>
                     <code id="link-mp3">/live/stream/{{ channel_id }}.mp3</code>
-                    <button type="button" class="btn-secondary px-2.5 py-1 rounded copy-btn" data-copy-target="link-mp3">复制</button>
+                    <button type="button" class="btn-secondary px-2.5 py-1 rounded-lg copy-btn" data-copy-target="link-mp3">复制</button>
                 </div>
             </div>
         </div>
@@ -126,7 +98,7 @@
     function setStatus(text, isError) {
         if (!statusEl) return;
         statusEl.textContent = text || '';
-        statusEl.className = 'text-center text-xs mt-3 min-h-[1.25rem] ' + (isError ? 'text-red-300' : 'text-cream/40');
+        statusEl.className = 'text-center text-xs mt-3 min-h-[1.25rem] ' + (isError ? 'text-red-600' : 'text-cream/40');
     }
 
     function setButtons() {

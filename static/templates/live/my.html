@@ -2,28 +2,13 @@
 {% block title %}我的直播{% endblock %}
 {% block description %}管理我正在进行中的音频直播。{% endblock %}
 
-{% block extra_style %}
-<style>
-    .live-link-row { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
-    .live-link-row code {
-        flex: 1 1 10rem; min-width: 0; overflow: hidden; text-overflow: ellipsis;
-        white-space: nowrap; background: rgba(0, 0, 0, .28); padding: .35rem .55rem;
-        border-radius: .4rem; font-size: .72rem;
-    }
-    .mode-badge {
-        font-size: 11px; line-height: 1; padding: .3rem .5rem; border-radius: .35rem;
-        background: rgba(255, 255, 255, .08); color: rgba(255, 255, 255, .68);
-    }
-</style>
-{% endblock %}
-
 {% block content %}
 <section class="page-container py-10">
     <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="flex flex-wrap items-end justify-between gap-4 mb-6">
             <div>
                 <a href="{{ url_for('live.live_page') }}"
-                   class="text-xs text-cream/50 hover:text-gold-300 inline-flex items-center gap-1 mb-2">
+                   class="text-xs text-cream/50 hover:text-gold-400 inline-flex items-center gap-1 mb-2">
                     <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>返回直播台
                 </a>
                 <h1 class="text-2xl sm:text-3xl font-bold">我的直播</h1>
@@ -36,7 +21,7 @@
         </div>
 
         {% if is_banned %}
-        <div class="mb-6 rounded-xl p-4 border border-red-400/30 bg-red-500/10 text-red-200 text-sm">
+        <div class="mb-6 rounded-xl p-4 border border-red-500/30 bg-red-500/10 text-red-600 text-sm">
             <i data-lucide="ban" class="w-4 h-4 inline mr-1"></i>
             你已被管理员禁止开播。
         </div>
@@ -118,7 +103,7 @@
         box.innerHTML = channels.map(function (ch) {
             var rec = ch.mode === 'rec';
             var action = rec
-                ? '<a href="' + channelUrl(URLS.recPageTpl, ch.id) + '" class="btn-primary px-3 py-1.5 rounded text-xs inline-flex items-center gap-1">' +
+                ? '<a href="' + channelUrl(URLS.recPageTpl, ch.id) + '" class="btn-primary px-3 py-1.5 rounded-lg text-xs inline-flex items-center gap-1">' +
                     '<i data-lucide="mic" class="w-3.5 h-3.5"></i>进入直播台</a>'
                 : '';
             return '<div class="pixel-card rounded-xl p-5">' +
@@ -127,36 +112,36 @@
                         '<div class="flex items-center gap-2 flex-wrap">' +
                             '<span class="font-bold truncate">' + esc(ch.title) + '</span>' +
                             '<span class="mode-badge">' + esc(ch.mode_label || '循环播放') + '</span>' +
-                            '<span class="text-xs ' + (ch.alive ? 'text-emerald-300' : 'text-red-300') + '">' +
+                            '<span class="text-xs ' + (ch.alive ? 'text-emerald-600' : 'text-red-600') + '">' +
                                 (ch.alive ? '直播中' : '连接中断') + '</span>' +
                         '</div>' +
                         '<div class="text-xs text-cream/50 mt-1">直播 ID：' + ch.id +
                             ' · <span data-listeners="' + ch.id + '">' + ch.listeners + '</span> 人在听</div>' +
                     '</div>' +
                     '<div class="flex items-center gap-2">' + action +
-                        '<button type="button" class="px-3 py-1.5 rounded text-xs border border-red-400/40 text-red-300 hover:bg-red-500/10 inline-flex items-center gap-1 stop-live-btn" data-id="' + ch.id + '">' +
+                        '<button type="button" class="px-3 py-1.5 rounded-lg text-xs border border-red-500/40 text-red-600 hover:bg-red-500/10 inline-flex items-center gap-1 stop-live-btn" data-id="' + ch.id + '">' +
                             '<i data-lucide="square" class="w-3.5 h-3.5"></i>停止</button>' +
                     '</div>' +
                 '</div>' +
                 '<div class="live-link-row text-xs mt-3">' +
                     '<span class="text-cream/40 w-10">播放页</span><code>' + esc(ch.links.page) + '</code>' +
-                    '<button type="button" class="btn-secondary px-2.5 py-1 rounded copy-btn" data-copy="' + esc(ch.links.page) + '">复制</button>' +
+                    '<button type="button" class="btn-secondary px-2.5 py-1 rounded-lg copy-btn" data-copy="' + esc(ch.links.page) + '">复制</button>' +
                 '</div>' +
                 '<div class="live-link-row text-xs mt-1.5">' +
                     '<span class="text-cream/40 w-10">mp3</span><code>' + esc(ch.links.mp3) + '</code>' +
-                    '<button type="button" class="btn-secondary px-2.5 py-1 rounded copy-btn" data-copy="' + esc(ch.links.mp3) + '">复制</button>' +
+                    '<button type="button" class="btn-secondary px-2.5 py-1 rounded-lg copy-btn" data-copy="' + esc(ch.links.mp3) + '">复制</button>' +
                 '</div>' +
             '</div>';
         }).join('');
         if (window.lucide) lucide.createIcons();
     }
 
-    var signature = '';
-    function loadMe() {
+    var signature = null;
+    function loadMe(force) {
         return apiFetch(URLS.me).then(function (data) {
             var channels = data.channels || [];
             var sig = channels.map(function (c) { return c.id + '|' + (c.alive ? 1 : 0); }).join(',');
-            if (sig === signature) {
+            if (!force && sig === signature) {
                 channels.forEach(function (c) {
                     var el = document.querySelector('[data-listeners="' + c.id + '"]');
                     if (el) el.textContent = c.listeners;
@@ -176,8 +161,8 @@
                     method: 'POST', body: JSON.stringify({})
                 }).then(function (data) {
                     Toast.success(data.message || '直播已停止');
-                    signature = '';
-                    loadMe();
+                    signature = null;
+                    loadMe(true);
                 }).catch(function (err) { Toast.error(err.message); });
             }
         });
