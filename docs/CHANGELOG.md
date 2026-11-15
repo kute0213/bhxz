@@ -4,6 +4,11 @@
 
 ### 修复
 
+* **直播时被 API 限流误封**（`services/firewall/api_guard.py`、`scripts/tests/test_api_guard.py`）：
+  * 实时录音每 200ms 上传一块 PCM（约 300 次/分钟），却被全局 API 限流（60 次/60 秒）当成滥用，直播中不断弹出「API 调用过于频繁」。现为该接口建立**独立计数桶**（`live_pcm`，600 次/60 秒），既不占用普通 API 的额度，也不会因为普通接口超限而中断直播；PCM 超限同样只封禁 PCM 桶，不影响页面其它接口。
+  * 独立配额**仅对已登录用户生效**：未登录请求仍按普通 60 次/分钟计数，接口本身继续校验登录与频道归属，不放大攻击面；全局开关、配置的热更新语义保持不变。
+  * 计数改为按 `(IP, 计数桶)` 维护，刷新页面会清空该 IP 的全部桶；新增 8 个测试覆盖独立配额、登录门槛、停用开关与重置逻辑。
+
 * **实时录音彻底改为 HTTPS PCM 上传**（`routes/live/api`、`services/live/{ingest,runtime}`、`static/js/live/pcm-worklet.js`、`static/templates/live/rec.html`）：
   * 原 WebRTC 方案依赖 `aiortc`（Python 3.14 无可用 wheel，服务器上未安装即推流失败），且需要浏览器与服务端 UDP 直连或 TURN，反向代理环境下几乎必然失败。表现为「麦克风推流连接失败」、`m3u8` / `mp3` 一直 404。
   * 现改为浏览器 `AudioWorklet` 采集 → 48kHz 双声道 s16le → 每 200ms `POST /api/live/<ID>/pcm` → 服务端串行写入 ffmpeg stdin。纯 TCP/HTTPS，穿透反向代理，无原生依赖；实测写入 PCM 后 1 秒内产出 `index.m3u8` 与分片。

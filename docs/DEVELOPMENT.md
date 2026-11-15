@@ -164,6 +164,7 @@ def do_something(user_id, value, ip_address):
 * **实时录音输入禁止加 `-thread_queue_size`**：部分 ffmpeg 构建把它视为输出（muxer）选项，会报 `cannot be applied to input url pipe:0` 导致开播失败；`build_rec_cmd` 已移除该参数，测试会断言其不存在。
 * **不提供直播音量 / 速度调整**：不要重新加回 `volume` / `atempo` 滤镜、`/api/live/<ID>/settings` 路由或 `LiveManager.adjust()`，避免为调参重启 ffmpeg 打断听众。实时录音的输入音量 / 静音在**浏览器端**用 Web Audio `GainNode` 实时调整，服务端不参与。
 * **实时录音使用 HTTPS 分片上传，不使用 WebRTC**：浏览器 `AudioWorklet`（`static/js/live/pcm-worklet.js`）把麦克风音频转成 48kHz 双声道 s16le，主线程每约 200ms 合并成一块 `POST /api/live/<ID>/pcm`（原始二进制，约 38KB），服务端 `LiveChannel.write_pcm` 串行写入 ffmpeg stdin。不要重新引入 aiortc / STUN / TURN：那需要 UDP 可达与原生扩展，在反向代理后极易失败，且 Python 3.14 无可用 wheel。
+* **PCM 上传使用独立限流配额**：`services/firewall/api_guard.py` 为该路径单独计数（`live_pcm` 桶，600 次/60 秒），不占用普通 API 的 60 次/分钟额度，避免正常直播被误封为 429。该配额只对**已登录**用户开放，未登录请求仍走普通限流；接口本身还会校验登录与频道归属。新增高频接口时按同样的「已登录 + 独立桶」方式处理，**禁止**直接调高全局 `API_RATE_LIMIT_PER_MINUTE`。
 * MP3 由 Python 读取 ffmpeg stdout 后写入每个听众的 `queue.Queue`（有界队列，慢客户端丢弃最旧数据）；新听众先收到最近约 1 秒的环形缓冲快照。**禁止**为每个听众单独启动 ffmpeg。
 * HLS 使用 `delete_segments+omit_endlist` 保持直播语义；m3u8 路由必须把分片相对路径改写为 `/live/stream/<ID>/<文件>`，分片路由必须做路径穿越校验。
 * 面向超长直播设计：运行时**不记录、不展示直播时长**，所有缓冲 / 分片列表均为有界结构，长时间运行内存不增长。

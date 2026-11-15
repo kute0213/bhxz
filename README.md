@@ -233,7 +233,7 @@ python scripts/build/package.py
 
 * DDoS 攻击防护（高性能防火墙模块 `services/firewall/`）：独立 DuckDB 数据库存储封禁/白名单/警告/攻击日志，WSGI 门禁在进入 Flask 前直接断开黑名单 IP 的连接（抛出 `waitress.channel.ClientDisconnected`，不写任何响应字节，客户端读到 0 字节后连接断开），不返回任何 HTTP 响应。按检测强度统计单位时间窗口内每个 IP 的请求数（低/中/高三档，检测窗口 10 秒），**防误判机制**：静态资源（`.css/.js/.ico`）、媒体文件（`.mp3/.ts/.m3u8/.webp`）、公共路径（`/static/`、`/music/<id>.mp3`、`/robots.txt`、`/sitemap.xml`）、**API 路径（`/api/`、`/admin/api/`）**不计入请求计数，音频下载与批量接口调用不会误判为 DDoS（批量 API 调用统一交由 API 防火墙限流处理，超限返回 429 而非断开连接）。超阈值自动封禁来源 IP（首次限时封禁；屡教不改升级永久封禁）。后台监控线程同步黑名单镜像、定时清理过期数据与 VACUUM。检测强度、封禁时长、永久封禁触发次数等可在线热更新，白名单 IP 不受影响。robots.txt 自动添加 Crawl‑delay 与敏感路径 Disallow 规则，防止合法爬虫被误封
 
-* **API 调用限流（`services/firewall/api_guard.py`）**：所有 API 请求（`/api/` 前缀、带 `X-Requested-With: XMLHttpRequest` 或 `Accept: application/json`）按来源 IP 限流，**默认每分钟 60 次**；超限返回 429 JSON（含 `Retry-After`），计数存于内存缓存，刷新后随滚动窗口恢复；白名单 IP 与本地回环不受限。搜索、列表「加载更多」等前端 API 调用均纳入计数
+* **API 调用限流（`services/firewall/api_guard.py`）**：所有 API 请求（`/api/` 前缀、带 `X-Requested-With: XMLHttpRequest` 或 `Accept: application/json`）按来源 IP 限流，**默认每分钟 60 次**；超限返回 429 JSON（含 `Retry-After`），计数存于内存缓存，刷新后随滚动窗口恢复；白名单 IP 与本地回环不受限。搜索、列表「加载更多」等前端 API 调用均纳入计数。**实时录音 PCM 上传**（`POST /api/live/<ID>/pcm`，约 5 次/秒）使用独立计数桶（600 次/60 秒），不占用普通 API 额度；该配额只对已登录用户开放，接口本身仍校验登录与频道归属，未登录请求继续按普通限流计数
 
 * **上传文件防火墙（`services/firewall/protection/file_guard.py`）**：统一校验音频 / 图片上传——危险扩展名（html/svg/js/php/exe 等）直接拒绝；按上传场景限定扩展名白名单；校验文件头魔数，防止「改名伪装」（如 .html 改名 .png）；纯文本文件做内容嗅探拦截脚本标记。未知类型跳过魔数校验以尽可能不误判，被拦截的上传写入防火墙日志。已接入大喇叭音频、背景图片两条上传链路
 
