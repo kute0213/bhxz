@@ -190,11 +190,7 @@ def api_live_start():
         ok, result = manager.start_rec(user['id'], user['username'], title)
     else:
         ok, result = manager.start_loop(
-            user['id'], user['username'], title,
-            data.get('music_id'),
-            volume=data.get('volume'),
-            speed=data.get('speed'),
-        )
+            user['id'], user['username'], title, data.get('music_id'))
     if not ok:
         return jsonify({'success': False, 'message': result}), 400
     return jsonify({'success': True, 'channel': _payload(
@@ -211,23 +207,6 @@ def api_live_stop(channel_id):
         channel_id, user_id=user['id'],
         is_admin=bool(user.get('is_admin')), reason=reason)
     return jsonify({'success': ok, 'message': message}), (200 if ok else 400)
-
-
-@live_bp.route('/api/live/<int:channel_id>/settings', methods=['POST'])
-@login_required
-def api_live_settings(channel_id):
-    """调整直播的音量 / 播放速度（实时生效）。"""
-    user = get_current_user()
-    data = _json_body()
-    ok, result = manager.adjust(
-        channel_id, user_id=user['id'],
-        volume=data.get('volume'),
-        speed=data.get('speed'),
-        is_admin=bool(user.get('is_admin')),
-    )
-    if not ok:
-        return jsonify({'success': False, 'message': result}), 400
-    return jsonify({'success': True, 'channel': _payload(manager.get(channel_id), result)})
 
 
 @live_bp.route('/api/live/<int:channel_id>/webrtc/offer', methods=['POST'])

@@ -1,4 +1,4 @@
-"""音频直播页面路由：直播台与独立播放页。
+"""音频直播页面路由：直播台、开播页、我的直播、实时录音台与独立播放页。
 
 播放页地址格式：/live/play.html?channelId=<直播ID>
 """
@@ -31,6 +31,51 @@ def live_start_page():
     return render_page(
         'live/start.html',
         is_banned=is_banned,
+    )
+
+
+@live_bp.route('/live/my')
+@login_required
+def live_my_page():
+    """独立的「我的直播」页面：管理全部进行中的直播。"""
+    user = get_current_user()
+    return render_page(
+        'live/my.html',
+        is_banned=bool(user and store.is_banned(user['id'])),
+    )
+
+
+@live_bp.route('/live/rec/<int:channel_id>')
+@login_required
+def live_rec_page(channel_id):
+    """实时录音直播台：连接麦克风并实时调整录音参数。"""
+    user = get_current_user()
+    row = store.get_channel(channel_id)
+    if not row or (row.get('mode') or 'loop') != 'rec':
+        abort(404)
+    if row['user_id'] != user['id'] and not user.get('is_admin'):
+        abort(403)
+
+    channel = manager.get(channel_id)
+    info = channel.state() if channel else {
+        'id': row['id'],
+        'user_id': row['user_id'],
+        'username': row['username'],
+        'title': row['title'],
+        'mode': 'rec',
+        'mode_label': '实时录音',
+        'music_id': None,
+        'volume': row.get('volume'),
+        'speed': row.get('speed'),
+        'created_at': row.get('created_at') or '',
+        'alive': False,
+        'listeners': 0,
+        'last_error': '',
+    }
+    return render_page(
+        'live/rec.html',
+        channel=info,
+        channel_id=channel_id,
     )
 
 

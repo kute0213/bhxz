@@ -1,6 +1,5 @@
 {% extends "base.html" %}
 {% from 'macros/page_header.html' import section_title %}
-{% from 'macros/modal.html' import modal_shell %}
 {% block title %}音频直播台{% endblock %}
 {% block description %}滨海小镇音频直播台：循环播放自己的音频或实时录音开播，支持 m3u8 与 MP3 链接收听。{% endblock %}
 
@@ -39,10 +38,10 @@
             </div>
             <div class="flex items-center gap-2">
                 {% if user and not is_banned %}
-                <button type="button" id="open-my-live"
-                        class="btn-secondary px-4 py-2.5 rounded-lg text-sm inline-flex items-center gap-2">
+                <a href="{{ url_for('live.live_my_page') }}"
+                   class="btn-secondary px-4 py-2.5 rounded-lg text-sm inline-flex items-center gap-2">
                     <i data-lucide="radio" class="w-4 h-4"></i>我的直播
-                </button>
+                </a>
                 <a href="{{ url_for('live.live_start_page') }}"
                    class="btn-primary px-4 py-2.5 rounded-lg text-sm inline-flex items-center gap-2">
                     <i data-lucide="play-circle" class="w-4 h-4"></i>开始直播
@@ -77,58 +76,22 @@
 </section>
 {% endblock %}
 
-{% block page_modals %}
-{% if user %}
-{% call modal_shell('my-live-modal', size='md', title='我的直播', icon='radio', icon_color='green') %}
-<div class="modal-body">
-    <div id="my-live-card">
-        <div class="text-center text-cream/40 text-sm py-6">加载中…</div>
-    </div>
-</div>
-{% endcall %}
-{% endif %}
-{% endblock %}
-
 {% block extra_script %}
 <script>
 (function () {
     'use strict';
 
     var USER_ID = {{ (user.id|tojson) if user else 'null' }};
-    var LOGGED_IN = {{ 'true' if user else 'false' }};
     var URLS = {
-        me: {{ url_for('live.api_live_me')|tojson }},
         list: {{ url_for('live.api_live_list')|tojson }},
-        stopTpl: {{ url_for('live.api_live_stop', channel_id=0)|tojson }},
-        playPage: {{ url_for('live.live_play_page')|tojson }},
-        startPage: {{ url_for('live.live_start_page')|tojson }}
+        playPage: {{ url_for('live.live_play_page')|tojson }}
     };
-
-    var state = { channels: [], signature: '' };
 
     function qs(sel) { return document.querySelector(sel); }
     function esc(text) {
         return String(text == null ? '' : text).replace(/[&<>"']/g, function (c) {
             return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
         });
-    }
-    function apiFetch(url, options) {
-        options = options || {};
-        options.headers = Object.assign({ 'Accept': 'application/json' }, options.headers || {});
-        if (options.method && options.method !== 'GET') {
-            options.headers['Content-Type'] = 'application/json';
-        }
-        return fetch(url, options).then(function (res) {
-            return res.json().catch(function () { return {}; }).then(function (data) {
-                if (!res.ok || data.success === false) {
-                    throw new Error(data.message || ('请求失败（' + res.status + '）'));
-                }
-                return data;
-            });
-        });
-    }
-    function channelUrl(tpl, id) {
-        return tpl.replace('/0/', '/' + id + '/');
     }
     function copyText(text) {
         if (navigator.clipboard && window.isSecureContext) {
@@ -137,20 +100,17 @@
             }).catch(function () {
                 Toast.error('复制失败，请手动复制');
             });
-        } else {
-            var ta = document.createElement('textarea');
-            ta.value = text;
-            document.body.appendChild(ta);
-            ta.select();
-            try { document.execCommand('copy'); Toast.success('链接已复制'); }
-            catch (e) { Toast.error('复制失败，请手动复制'); }
-            document.body.removeChild(ta);
+            return;
         }
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); Toast.success('链接已复制'); }
+        catch (e) { Toast.error('复制失败，请手动复制'); }
+        document.body.removeChild(ta);
     }
 
-    // ------------------------------------------------------------------
-    // 正在直播列表
-    // ------------------------------------------------------------------
     function renderList(channels) {
         var box = qs('#live-list');
         if (!box) return;
@@ -193,147 +153,25 @@
     }
 
     function loadList() {
-        return apiFetch(URLS.list).then(function (data) {
-            renderList(data.channels || []);
-        }).catch(function () {
-            var box = qs('#live-list');
-            if (box) box.innerHTML = '<div class="pixel-card rounded-xl p-8 text-center text-red-300 text-sm">直播列表加载失败</div>';
-        });
-    }
-
-    // ------------------------------------------------------------------
-    // 我的直播
-    // ------------------------------------------------------------------
-    function renderMyChannels(channels, limits) {
-        state.channels = channels || [];
-        var card = qs('#my-live-card');
-        if (!card) return;
-
-        if (!state.channels.length) {
-            state.signature = '';
-            card.innerHTML = '<div class="text-center py-6">' +
-                '<i data-lucide="radio" class="w-10 h-10 mx-auto text-cream/20 mb-3"></i>' +
-                '<p class="text-cream/50 text-sm mb-4">你当前没有正在进行的直播</p>' +
-                '<a href="' + URLS.startPage + '" class="btn-primary px-5 py-2.5 rounded-lg text-sm inline-flex items-center gap-2">' +
-                    '<i data-lucide="play-circle" class="w-4 h-4"></i>开始直播</a>' +
-                '</div>';
-            if (window.lucide) lucide.createIcons();
-            return;
-        }
-
-        // 仅刷新听众数，避免轮询时整块重绘打断用户操作
-        var signature = state.channels.map(function (c) {
-            return c.id + '|' + (c.alive ? 1 : 0);
-        }).join(',');
-        if (signature === state.signature) {
-            state.channels.forEach(function (c) {
-                var el = card.querySelector('[data-listeners="' + c.id + '"]');
-                if (el) el.textContent = c.listeners;
+        fetch(URLS.list, { headers: { 'Accept': 'application/json' } })
+            .then(function (res) { return res.json(); })
+            .then(function (data) { renderList(data.channels || []); })
+            .catch(function () {
+                var box = qs('#live-list');
+                if (box) box.innerHTML = '<div class="pixel-card rounded-xl p-8 text-center text-red-300 text-sm">直播列表加载失败</div>';
             });
-            return;
-        }
-        state.signature = signature;
-
-        var limitText = limits
-            ? '循环直播 ' + limits.loop_used + '/' + limits.loop_max +
-              ' · 实时录音 ' + limits.rec_used + '/' + limits.rec_max
-            : '';
-
-        card.innerHTML =
-            (limitText ? '<p class="text-xs text-cream/40 mb-3">' + esc(limitText) + '</p>' : '') +
-            state.channels.map(function (ch) {
-                var rec = ch.mode === 'rec';
-                return '<div class="rounded-lg border border-cream/10 p-4 mb-3">' +
-                    '<div class="flex flex-wrap items-start justify-between gap-2 mb-2">' +
-                        '<div class="min-w-0">' +
-                            '<div class="flex items-center gap-2 flex-wrap">' +
-                                '<span class="live-pulse"></span>' +
-                                '<span class="font-bold truncate">' + esc(ch.title) + '</span>' +
-                                '<span class="mode-badge">' + esc(ch.mode_label || '循环播放') + '</span>' +
-                                '<span class="text-xs ' + (ch.alive ? 'text-emerald-300' : 'text-red-300') + '">' +
-                                    (ch.alive ? '直播中' : '连接中断') + '</span>' +
-                            '</div>' +
-                            '<div class="text-xs text-cream/50 mt-1">直播 ID：' + ch.id +
-                                ' · <span data-listeners="' + ch.id + '">' + ch.listeners + '</span> 人在听</div>' +
-                        '</div>' +
-                        '<div class="flex items-center gap-2">' +
-                            '<a href="' + URLS.startPage + '" class="btn-secondary px-3 py-1.5 rounded text-xs inline-flex items-center gap-1">' +
-                                '<i data-lucide="' + (rec ? 'mic' : 'sliders-horizontal') + '" class="w-3.5 h-3.5"></i>' +
-                                (rec ? '前往推流' : '管理') + '</a>' +
-                            '<button type="button" class="px-3 py-1.5 rounded text-xs border border-red-400/40 text-red-300 hover:bg-red-500/10 inline-flex items-center gap-1 stop-live-btn" data-id="' + ch.id + '">' +
-                                '<i data-lucide="square" class="w-3.5 h-3.5"></i>停止</button>' +
-                        '</div>' +
-                    '</div>' +
-                    '<div class="live-link-row text-xs mb-1">' +
-                        '<span class="text-cream/40 w-10">播放页</span><code>' + esc(ch.links.page) + '</code>' +
-                        '<button type="button" class="btn-secondary px-2.5 py-1 rounded copy-btn" data-copy="' + esc(ch.links.page) + '">复制</button>' +
-                    '</div>' +
-                    '<div class="live-link-row text-xs">' +
-                        '<span class="text-cream/40 w-10">mp3</span><code>' + esc(ch.links.mp3) + '</code>' +
-                        '<button type="button" class="btn-secondary px-2.5 py-1 rounded copy-btn" data-copy="' + esc(ch.links.mp3) + '">复制</button>' +
-                    '</div>' +
-                '</div>';
-            }).join('');
-        if (window.lucide) lucide.createIcons();
     }
 
-    function loadMe() {
-        if (!LOGGED_IN) return Promise.resolve();
-        return apiFetch(URLS.me).then(function (data) {
-            renderMyChannels(data.channels || [], data.limits);
-        }).catch(function () {});
-    }
+    document.addEventListener('click', function (e) {
+        var btn = e.target && e.target.closest ? e.target.closest('.copy-btn') : null;
+        if (!btn) return;
+        e.preventDefault();
+        copyText(btn.getAttribute('data-copy'));
+    });
 
-    function confirmStop(channelId) {
-        CustomModal.confirm('确定要停止这个直播吗？停止后所有听众将断开。', {
-            callback: function (ok) {
-                if (!ok) return;
-                apiFetch(channelUrl(URLS.stopTpl, channelId), {
-                    method: 'POST',
-                    body: JSON.stringify({})
-                }).then(function (data) {
-                    Toast.success(data.message || '直播已停止');
-                    state.signature = '';
-                    loadMe();
-                    loadList();
-                }).catch(function (err) { Toast.error(err.message); });
-            }
-        });
-    }
-
-    // ------------------------------------------------------------------
-    // 初始化
-    // ------------------------------------------------------------------
     document.addEventListener('DOMContentLoaded', function () {
-        var myBtn = qs('#open-my-live');
-        if (myBtn) {
-            myBtn.addEventListener('click', function () {
-                openModal('my-live-modal');
-                loadMe();
-            });
-        }
-
-        document.addEventListener('click', function (e) {
-            var copyBtn = e.target && e.target.closest ? e.target.closest('.copy-btn') : null;
-            if (copyBtn) {
-                e.preventDefault();
-                copyText(copyBtn.getAttribute('data-copy'));
-                return;
-            }
-            var stopBtn = e.target && e.target.closest ? e.target.closest('.stop-live-btn') : null;
-            if (stopBtn) {
-                e.preventDefault();
-                confirmStop(parseInt(stopBtn.getAttribute('data-id'), 10));
-            }
-        });
-
         loadList();
-        loadMe();
-        setInterval(function () {
-            loadList();
-            var modal = qs('#my-live-modal');
-            if (modal && modal.classList.contains('open')) loadMe();
-        }, 10000);
+        setInterval(loadList, 10000);
     });
 })();
 </script>

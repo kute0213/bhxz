@@ -197,34 +197,6 @@ def create_channel(user_id, username, title, mode=MODE_LOOP, music_id=None,
     }
 
 
-def update_channel_settings(channel_id, volume=None, speed=None):
-    """更新直播的音量 / 速度（只更新传入的字段）。"""
-    sets, params = [], []
-    if volume is not None:
-        sets.append('volume = ?')
-        params.append(normalize_volume(volume))
-    if speed is not None:
-        sets.append('speed = ?')
-        params.append(normalize_speed(speed))
-    if not sets:
-        return True, '没有需要更新的设置'
-
-    sets.append('updated_at = ?')
-    params.append(_now())
-    params.append(int(channel_id))
-
-    conn = get_db()
-    try:
-        conn.execute(
-            f"UPDATE live_channels SET {', '.join(sets)} WHERE id = ?",
-            params,
-        )
-        conn.commit()
-        return True, '设置已更新'
-    finally:
-        conn.close()
-
-
 def mark_stopped(channel_id, reason=''):
     """将频道标记为已停止（幂等）。"""
     conn = get_db()

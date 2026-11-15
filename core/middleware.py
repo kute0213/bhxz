@@ -64,13 +64,20 @@ LIVE_MIC_PERMISSIONS_POLICY = (
     "geolocation=(), camera=(), microphone=(self), payment=(), usb=(), "
     "magnetometer=(), gyroscope=(), accelerometer=(), clipboard-write=(self)"
 )
+# 旧版 Chrome 使用的 Feature-Policy，仅直播页下发，兼容仍读取旧标头的浏览器。
+LIVE_MIC_FEATURE_POLICY = "microphone 'self'"
+
+
+def _is_live_path(path):
+    return path == '/live' or path.startswith('/live/')
 
 
 def _permissions_policy(path):
     """按请求路径返回 Permissions-Policy（直播页放行麦克风）。"""
-    if path == '/live' or path.startswith('/live/'):
+    if _is_live_path(path):
         return LIVE_MIC_PERMISSIONS_POLICY
     return PERMISSIONS_POLICY
+
 
 # ---------------------------------------------------------------------------
 # 网页地图内嵌放行（frame-src 动态扩展）
@@ -133,8 +140,14 @@ def _set_security_headers(response):
     response.headers.setdefault('X-Frame-Options', 'SAMEORIGIN')
     response.headers.setdefault('Referrer-Policy', 'strict-origin-when-cross-origin')
 
-    # ---- 浏览器功能权限（直播页放行麦克风，其余页面默认拒绝） ----
-    response.headers.setdefault('Permissions-Policy', _permissions_policy(request.path))
+    # ---- 浏览器功能权限（直播页强制放行麦克风，其余页面默认拒绝） ----
+    # 直播页直接赋值而不是 setdefault：避免上游/其他中间件已写入 microphone=()
+    # 时无法覆盖，导致实时录音被权限策略拦截。
+    if _is_live_path(request.path):
+        response.headers['Permissions-Policy'] = LIVE_MIC_PERMISSIONS_POLICY
+        response.headers.setdefault('Feature-Policy', LIVE_MIC_FEATURE_POLICY)
+    else:
+        response.headers.setdefault('Permissions-Policy', PERMISSIONS_POLICY)
 
     # ---- 跨源隔离 ----
     response.headers.setdefault('Cross-Origin-Opener-Policy', 'same-origin')

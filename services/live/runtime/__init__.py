@@ -134,16 +134,6 @@ class LiveChannel:
             src_path, self.hls_dir, self.volume, self.speed)
         return self._spawn(cmd)
 
-    def restart(self):
-        """音量 / 速度变化后重启 ffmpeg（保持频道 ID 与听众连接）。"""
-        from services.music import get_music_mp3_path
-        src = get_music_mp3_path(self.music_id)
-        if not os.path.isfile(src):
-            return False, '直播音源文件不存在'
-        cmd = ffmpeg_builder.build_loop_cmd(
-            src, self.hls_dir, self.volume, self.speed)
-        return self._spawn(cmd)
-
     def start_rec(self):
         """启动实时录音管线（PCM 由 WebRTC 写入 stdin）。"""
         return self._spawn(ffmpeg_builder.build_rec_cmd(self.hls_dir),
@@ -404,13 +394,11 @@ class LiveManager:
         return channel.state()
 
     # ------------------------------------------------------------------
-    def start_loop(self, user_id, username, title, music_id,
-                   volume=VOLUME_DEFAULT, speed=SPEED_DEFAULT):
+    def start_loop(self, user_id, username, title, music_id):
         from services.music import get_music_mp3_path
 
         ok, data = store.create_channel(
-            user_id, username, title, mode=MODE_LOOP, music_id=music_id,
-            volume=volume, speed=speed)
+            user_id, username, title, mode=MODE_LOOP, music_id=music_id)
         if not ok:
             return False, data
 
@@ -425,8 +413,7 @@ class LiveManager:
         with self._lock:
             self._channels[channel.id] = channel
         log_module('live', 'INFO', 'LiveRuntime', '循环直播已启动',
-                   channel_id=channel.id, user_id=user_id, music_id=music_id,
-                   volume=channel.volume, speed=channel.speed)
+                   channel_id=channel.id, user_id=user_id, music_id=music_id)
         return True, channel.state()
 
     # ------------------------------------------------------------------
@@ -473,36 +460,6 @@ class LiveManager:
         with self._lock:
             self._channels.pop(channel.id, None)
         return True, '直播已停止'
-
-    def adjust(self, channel_id, user_id, volume=None, speed=None,
-               is_admin=False):
-        channel = self.get(channel_id)
-        if channel is None:
-            return False, '直播不存在或已结束'
-        if not is_admin and channel.user_id != int(user_id):
-            return False, '无权修改该直播'
-        if channel.mode != MODE_LOOP:
-            return False, '实时录音直播不支持调整音量 / 速度'
-
-        if volume is not None:
-            from services.live.constants import normalize_volume
-            volume = normalize_volume(volume)
-        if speed is not None:
-            from services.live.constants import normalize_speed
-            speed = normalize_speed(speed)
-        if volume is not None:
-            channel.volume = volume
-        if speed is not None:
-            channel.speed = speed
-
-        store.update_channel_settings(channel_id, volume=volume, speed=speed)
-        ok, message = channel.restart()
-        if not ok:
-            channel.stop('调整设置失败')
-            with self._lock:
-                self._channels.pop(channel.id, None)
-            return False, message
-        return True, channel.state()
 
     # ------------------------------------------------------------------
     def _on_channel_exit(self, channel, error):

@@ -1,0 +1,200 @@
+{% extends "base.html" %}
+{% block title %}我的直播{% endblock %}
+{% block description %}管理我正在进行中的音频直播。{% endblock %}
+
+{% block extra_style %}
+<style>
+    .live-link-row { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+    .live-link-row code {
+        flex: 1 1 10rem; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+        white-space: nowrap; background: rgba(0, 0, 0, .28); padding: .35rem .55rem;
+        border-radius: .4rem; font-size: .72rem;
+    }
+    .mode-badge {
+        font-size: 11px; line-height: 1; padding: .3rem .5rem; border-radius: .35rem;
+        background: rgba(255, 255, 255, .08); color: rgba(255, 255, 255, .68);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="page-container py-10">
+    <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex flex-wrap items-end justify-between gap-4 mb-6">
+            <div>
+                <a href="{{ url_for('live.live_page') }}"
+                   class="text-xs text-cream/50 hover:text-gold-300 inline-flex items-center gap-1 mb-2">
+                    <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>返回直播台
+                </a>
+                <h1 class="text-2xl sm:text-3xl font-bold">我的直播</h1>
+                <p class="text-cream/50 text-sm mt-1">查看并管理自己正在进行中的直播。</p>
+            </div>
+            <a href="{{ url_for('live.live_start_page') }}"
+               class="btn-primary px-4 py-2.5 rounded-lg text-sm inline-flex items-center gap-2">
+                <i data-lucide="play-circle" class="w-4 h-4"></i>开始直播
+            </a>
+        </div>
+
+        {% if is_banned %}
+        <div class="mb-6 rounded-xl p-4 border border-red-400/30 bg-red-500/10 text-red-200 text-sm">
+            <i data-lucide="ban" class="w-4 h-4 inline mr-1"></i>
+            你已被管理员禁止开播。
+        </div>
+        {% endif %}
+
+        <div id="live-limits" class="text-xs text-cream/40 mb-3"></div>
+        <div id="my-channels" class="space-y-3">
+            <div class="pixel-card rounded-xl p-8 text-center text-cream/40 text-sm">加载中…</div>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_script %}
+<script>
+(function () {
+    'use strict';
+
+    var URLS = {
+        me: {{ url_for('live.api_live_me')|tojson }},
+        stopTpl: {{ url_for('live.api_live_stop', channel_id=0)|tojson }},
+        recPageTpl: {{ url_for('live.live_rec_page', channel_id=0)|tojson }},
+        startPage: {{ url_for('live.live_start_page')|tojson }}
+    };
+
+    function qs(sel) { return document.querySelector(sel); }
+    function esc(text) {
+        return String(text == null ? '' : text).replace(/[&<>"']/g, function (c) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
+    }
+    function apiFetch(url, options) {
+        options = options || {};
+        options.headers = Object.assign({ 'Accept': 'application/json' }, options.headers || {});
+        if (options.method && options.method !== 'GET') {
+            options.headers['Content-Type'] = 'application/json';
+        }
+        return fetch(url, options).then(function (res) {
+            return res.json().catch(function () { return {}; }).then(function (data) {
+                if (!res.ok || data.success === false) {
+                    throw new Error(data.message || ('请求失败（' + res.status + '）'));
+                }
+                return data;
+            });
+        });
+    }
+    function channelUrl(tpl, id) { return tpl.replace('/0/', '/' + id + '/'); }
+    function copyText(text) {
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(text).then(function () { Toast.success('链接已复制'); })
+                .catch(function () { Toast.error('复制失败，请手动复制'); });
+            return;
+        }
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); Toast.success('链接已复制'); }
+        catch (e) { Toast.error('复制失败，请手动复制'); }
+        document.body.removeChild(ta);
+    }
+
+    function renderChannels(channels, limits) {
+        var box = qs('#my-channels');
+        var limitBox = qs('#live-limits');
+        if (limits) {
+            limitBox.textContent = '循环直播 ' + limits.loop_used + '/' + limits.loop_max +
+                ' · 实时录音 ' + limits.rec_used + '/' + limits.rec_max;
+        }
+        if (!channels.length) {
+            box.innerHTML = '<div class="pixel-card rounded-xl p-8 text-center">' +
+                '<i data-lucide="radio" class="w-10 h-10 mx-auto text-cream/20 mb-3"></i>' +
+                '<p class="text-cream/50 text-sm mb-4">你当前没有正在进行的直播</p>' +
+                '<a href="' + URLS.startPage + '" class="btn-primary px-5 py-2.5 rounded-lg text-sm inline-flex items-center gap-2">' +
+                    '<i data-lucide="play-circle" class="w-4 h-4"></i>开始直播</a></div>';
+            if (window.lucide) lucide.createIcons();
+            return;
+        }
+        box.innerHTML = channels.map(function (ch) {
+            var rec = ch.mode === 'rec';
+            var action = rec
+                ? '<a href="' + channelUrl(URLS.recPageTpl, ch.id) + '" class="btn-primary px-3 py-1.5 rounded text-xs inline-flex items-center gap-1">' +
+                    '<i data-lucide="mic" class="w-3.5 h-3.5"></i>进入直播台</a>'
+                : '';
+            return '<div class="pixel-card rounded-xl p-5">' +
+                '<div class="flex flex-wrap items-start justify-between gap-3">' +
+                    '<div class="min-w-0">' +
+                        '<div class="flex items-center gap-2 flex-wrap">' +
+                            '<span class="font-bold truncate">' + esc(ch.title) + '</span>' +
+                            '<span class="mode-badge">' + esc(ch.mode_label || '循环播放') + '</span>' +
+                            '<span class="text-xs ' + (ch.alive ? 'text-emerald-300' : 'text-red-300') + '">' +
+                                (ch.alive ? '直播中' : '连接中断') + '</span>' +
+                        '</div>' +
+                        '<div class="text-xs text-cream/50 mt-1">直播 ID：' + ch.id +
+                            ' · <span data-listeners="' + ch.id + '">' + ch.listeners + '</span> 人在听</div>' +
+                    '</div>' +
+                    '<div class="flex items-center gap-2">' + action +
+                        '<button type="button" class="px-3 py-1.5 rounded text-xs border border-red-400/40 text-red-300 hover:bg-red-500/10 inline-flex items-center gap-1 stop-live-btn" data-id="' + ch.id + '">' +
+                            '<i data-lucide="square" class="w-3.5 h-3.5"></i>停止</button>' +
+                    '</div>' +
+                '</div>' +
+                '<div class="live-link-row text-xs mt-3">' +
+                    '<span class="text-cream/40 w-10">播放页</span><code>' + esc(ch.links.page) + '</code>' +
+                    '<button type="button" class="btn-secondary px-2.5 py-1 rounded copy-btn" data-copy="' + esc(ch.links.page) + '">复制</button>' +
+                '</div>' +
+                '<div class="live-link-row text-xs mt-1.5">' +
+                    '<span class="text-cream/40 w-10">mp3</span><code>' + esc(ch.links.mp3) + '</code>' +
+                    '<button type="button" class="btn-secondary px-2.5 py-1 rounded copy-btn" data-copy="' + esc(ch.links.mp3) + '">复制</button>' +
+                '</div>' +
+            '</div>';
+        }).join('');
+        if (window.lucide) lucide.createIcons();
+    }
+
+    var signature = '';
+    function loadMe() {
+        return apiFetch(URLS.me).then(function (data) {
+            var channels = data.channels || [];
+            var sig = channels.map(function (c) { return c.id + '|' + (c.alive ? 1 : 0); }).join(',');
+            if (sig === signature) {
+                channels.forEach(function (c) {
+                    var el = document.querySelector('[data-listeners="' + c.id + '"]');
+                    if (el) el.textContent = c.listeners;
+                });
+                return;
+            }
+            signature = sig;
+            renderChannels(channels, data.limits);
+        }).catch(function () {});
+    }
+
+    function confirmStop(channelId) {
+        CustomModal.confirm('确定要停止这个直播吗？停止后所有听众将断开。', {
+            callback: function (ok) {
+                if (!ok) return;
+                apiFetch(channelUrl(URLS.stopTpl, channelId), {
+                    method: 'POST', body: JSON.stringify({})
+                }).then(function (data) {
+                    Toast.success(data.message || '直播已停止');
+                    signature = '';
+                    loadMe();
+                }).catch(function (err) { Toast.error(err.message); });
+            }
+        });
+    }
+
+    document.addEventListener('click', function (e) {
+        if (!e.target || !e.target.closest) return;
+        var copyBtn = e.target.closest('.copy-btn');
+        if (copyBtn) { e.preventDefault(); copyText(copyBtn.getAttribute('data-copy')); return; }
+        var stopBtn = e.target.closest('.stop-live-btn');
+        if (stopBtn) { e.preventDefault(); confirmStop(parseInt(stopBtn.getAttribute('data-id'), 10)); }
+    });
+
+    document.addEventListener('DOMContentLoaded', function () {
+        loadMe();
+        setInterval(loadMe, 10000);
+    });
+})();
+</script>
+{% endblock %}

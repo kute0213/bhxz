@@ -4,6 +4,14 @@
 
 ### 变更
 
+* **直播页面拆分 + 音频选择弹窗 + 删除调参 + 实时录音直播台**（`routes/live/{pages,api}/__init__.py`、`services/live/{store,runtime}/__init__.py`、`static/templates/live/{index,start,my,rec,play}.html`、`core/middleware.py`、`docs/DEVELOPMENT.md`、`README.md`）：
+  * **「我的直播」改为独立页面** `GET /live/my`：列出全部进行中的循环 / 实时录音直播，分别提供播放页 / mp3 链接、进入直播台与停止按钮，每 10 秒刷新听众数；主页 `/live` 只保留「正在直播」列表，不再使用弹窗。
+  * **音源选择改为弹窗**：开播页 `/live/start` 选音频时弹出列表弹窗，支持关键词搜索、`page/has_more` 分段加载与弹窗内滚动（`max-height` + `overflow-y-auto`），选中后回填卡片并关闭。
+  * **删除直播音量 / 速度调整**：移除 `/api/live/<ID>/settings` 路由、`LiveManager.adjust()`、`LiveChannel.restart()`、`store.update_channel_settings()` 与前端滑块；ffmpeg 不再挂 `volume` / `atempo`，`volume` / `speed` 列仅保留固定默认值 1.0。
+  * **实时录音独立直播台** `GET /live/rec/<ID>`：实时录音开播成功后自动跳转，台内可实时调整麦克风设备、输入音量（0~200%）、静音、降噪 / 回声消除 / 自动增益（Web Audio `GainNode` + 设备变更自动重连）；页面卸载只断麦克风，服务端直播继续。
+  * **修复麦克风被拦截**：对 `/live` 路径**强制覆盖** `Permissions-Policy: microphone=(self)` 并补发 `Feature-Policy: microphone 'self'`，其他路径仍默认拒绝。
+  * 同步更新 README / DEVELOPMENT；`python -m pytest scripts/tests -q` 通过（294 passed）。
+
 * **直播开播独立页 + 实时录音回归 + 数量上限可配置**（`services/live/*`、`routes/live/*`、`static/templates/live/{index,start,play}.html`、`core/middleware.py`、`core/system/{init.py}`、`config.py`、`routes/admin/firewall/__init__.py`、`static/templates/admin/{firewall,live}.html`、`requirements.txt`、`scripts/tests/test_live.py`）：
   * 「开始直播」改为独立页面 `GET /live/start`：支持循环播放与实时录音两种模式、音源搜索分页、已有直播管理（调参 / 停止 / 复制链接 / 重新连接麦克风）；直播台主页保留「正在直播」列表与「我的直播」弹窗。
   * **加回实时录音直播（WebRTC + aiortc）**：浏览器采集麦克风，`POST /api/live/<ID>/webrtc/offer` 完成 SDP 协商，服务端把 PCM 写入 ffmpeg stdin 实时编码为 HLS + MP3；关闭页面只断麦克风，直播继续。`requirements.txt` 新增 `aiortc>=1.10.0`，并支持 `LIVE_STUN_SERVERS` / `LIVE_TURN_URL` / `LIVE_TURN_USERNAME` / `LIVE_TURN_PASSWORD`。

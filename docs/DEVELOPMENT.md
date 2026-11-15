@@ -149,7 +149,7 @@ def do_something(user_id, value, ip_address):
 
 | 文件 | 职责 |
 |------|------|
-| `constants/__init__.py` | 模式 / 状态、音量 / 速度 / 标题规范化、PCM 参数、HLS 参数、播放地址模板 |
+| `constants/__init__.py` | 模式 / 状态、标题规范化、PCM 参数、HLS 参数、播放地址模板（`volume` / `speed` 仅保留固定默认值，不再对外调整） |
 | `ffmpeg/__init__.py` | **纯函数**构造循环播放 / 实时录音 ffmpeg 命令（HLS + MP3 双输出），便于测试，不得启动进程 |
 | `store/__init__.py` | 频道与封禁的 SQLite 读写；循环上限（默认 5）与实时录音上限（固定 1）在 `transaction()` 内原子校验；不依赖 Flask |
 | `runtime/__init__.py` | `LiveManager` 单例 + `LiveChannel`：ffmpeg 进程、HLS 目录、MP3 听众分发、PCM stdin 写入、启动恢复 |
@@ -160,8 +160,8 @@ def do_something(user_id, value, ip_address):
 * **一个频道一个 ffmpeg 进程**，同时输出两路：HLS（落盘 `uploads/live/<直播ID>/index.m3u8`）与 MP3（`pipe:1`）。
 * 两种输入模式：
   * `loop`：`-re -stream_loop -1` 读取音频库中的 `index.mp3`，无限循环；
-  * `rec`：从 `stdin` 读取 WebRTC 解码后的 `s16le` PCM（48000Hz 双声道），不做音量 / 速度滤镜。
-* 音量 / 速度通过 `volume` + `atempo` 滤镜实现；`atempo` 限制在 0.5~2.0，调整设置时**重启 ffmpeg 但保留频道 ID 与听众连接**；实时录音模式不支持调参。
+  * `rec`：从 `stdin` 读取 WebRTC 解码后的 `s16le` PCM（48000Hz 双声道）。
+* **不提供直播音量 / 速度调整**：不要重新加回 `volume` / `atempo` 滤镜、`/api/live/<ID>/settings` 路由或 `LiveManager.adjust()`，避免为调参重启 ffmpeg 打断听众。实时录音的输入音量 / 静音在**浏览器端**用 Web Audio `GainNode` 实时调整，服务端不参与。
 * WebRTC 使用 aiortc 的独立 asyncio 事件循环线程，HTTP 路由只负责提交 SDP；`/live` 相关响应的 `Permissions-Policy` 必须放行 `microphone=(self)`，其他路径保持默认拒绝（见 `core/middleware.py`）。
 * MP3 由 Python 读取 ffmpeg stdout 后写入每个听众的 `queue.Queue`（有界队列，慢客户端丢弃最旧数据）；新听众先收到最近约 1 秒的环形缓冲快照。**禁止**为每个听众单独启动 ffmpeg。
 * HLS 使用 `delete_segments+omit_endlist` 保持直播语义；m3u8 路由必须把分片相对路径改写为 `/live/stream/<ID>/<文件>`，分片路由必须做路径穿越校验。
@@ -177,14 +177,16 @@ def do_something(user_id, value, ip_address):
 
 #### 前端与播放地址
 
-* 直播台主页保持「正在直播列表」为主体，`我的直播` 使用弹窗；`开始直播` 必须跳转到独立页面 `/live/start`（循环播放 / 实时录音两种模式、音源搜索分页、已有直播管理）。
+* 直播台主页 `/live` 只保留「正在直播列表」；`我的直播`（`/live/my`）与`开始直播`（`/live/start`）**都必须是独立页面，禁止再使用弹窗**。
+* 开播页 `/live/start` 的音源选择必须使用**弹窗**：关键词搜索 + `page/has_more` 分段加载 + 弹窗内 `max-height` + `overflow-y-auto` 滚动，选中后回填卡片并关闭弹窗。
+* 实时录音开播成功后必须跳转独立直播台 `/live/rec/<ID>`，台内可实时调整麦克风设备、输入音量、静音、降噪 / 回声消除 / 自动增益；页面卸载只断开麦克风，不停止服务端直播。
 * **媒体地址必须使用同源相对路径**（`/live/stream/<ID>.mp3`）。反向代理下用 `request.host_url` 生成的绝对地址可能协议 / 端口与实际页面不一致，会被 CSP `media-src 'self'` 拦截。
 * 播放页使用自定义控件（开始 / 关闭 / 音量），**不要**使用原生 `controls`、不要显示进度条或已直播时长。
 * 音源选择必须走 `GET /api/live/musics` 搜索 + 分页，支持自己的私有音频；禁止一次性下发全部音频。
 
 #### 权限与管理
 
-* 开播、停止、调参均校验登录；停止 / 调参校验本人（管理员可强制停止）；WebRTC offer 只允许直播本人提交。
+* 开播、停止、WebRTC offer 均校验登录；停止校验本人（管理员可强制停止）；WebRTC offer 只允许直播本人提交。
 * `live_bans` 为**永久封禁**（`user_id` 主键），管理员可解封；封禁用户 `create_channel` 必须在事务内拒绝，管理员封禁时必须停止其**全部**直播。
 * 直播标题必须经过防火墙内容注入检测（与音频上传一致），长度上限 60。
 
@@ -227,7 +229,7 @@ def do_something(user_id, value, ip_address):
   | `background` | `services/background_service/__init__.py` | 背景图片上传 / 审核 / 删除 / 启用切换 | 是 | 否 |
   | `buildings` | `routes/admin/buildings/__init__.py`、`routes/buildings/pages/__init__.py` | 公共建筑审核、浏览次数更新 | 是 | 否 |
   | `music` | `services/music/{crud,upload}/__init__.py`、`routes/main/music/__init__.py` | 大喇叭音频上传 / 编辑 / 审核 / 删除、HLS 分片 | 是 | 否 |
-  | `live` | `services/live/runtime/__init__.py`、`routes/live/*`、`routes/admin/live/__init__.py` | 音频直播开播 / 停止 / 调参、ffmpeg 管线异常、管理员强制停止 / 封禁 | 是 | 否 |
+  | `live` | `services/live/runtime/__init__.py`、`routes/live/*`、`routes/admin/live/__init__.py` | 音频直播开播 / 停止 / 实时录音推流、ffmpeg 管线异常、管理员强制停止 / 封禁 | 是 | 否 |
   | `email` | `services/mail/{delivery,service,retry}/__init__.py` | 邮件投递、异步发送队列、失败重发 | 是 | 否 |
   | `backup` | `services/backup/{manager,scheduler}/__init__.py`、`routes/admin/maintenance/__init__.py` | 自动维护（数据备份 + 日志清理）、定时维护、备份下载 / 删除 | 是 | 否 |
   | `gameban` | `services/game_server_ban/__init__.py` | 游戏服务器封禁申请 / 批准 / 驳回 / 自动解封 | 是 | 否 |
