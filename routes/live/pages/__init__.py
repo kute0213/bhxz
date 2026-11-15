@@ -3,7 +3,7 @@
 播放页地址格式：/live/play.html?channelId=<直播ID>
 """
 
-from flask import abort, request
+from flask import abort, redirect, request, url_for
 
 from core.auth import get_current_user, login_required
 from core.helpers import render_page
@@ -50,6 +50,9 @@ def live_my_page():
 def live_rec_page(channel_id):
     """实时录音直播台：连接麦克风并实时调整录音参数。"""
     user = get_current_user()
+    if channel_id <= 0:
+        # URL 模板占位 ID（/live/rec/0）或非法 ID：回到「我的直播」而不是 404
+        return redirect(url_for('live.live_my_page'))
     row = store.get_channel(channel_id)
     if not row or (row.get('mode') or 'loop') != 'rec':
         abort(404)
@@ -76,6 +79,7 @@ def live_rec_page(channel_id):
         'live/rec.html',
         channel=info,
         channel_id=channel_id,
+        is_owner=(row['user_id'] == user['id']),
     )
 
 

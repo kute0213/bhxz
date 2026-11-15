@@ -6,6 +6,12 @@ if (typeof lucide !== 'undefined' && lucide.createIcons) {
     try { lucide.createIcons(); } catch (_) {}
 }
 
+// 直播 URL 模板替换：模板以 id=0 生成（如 /api/live/0/status、/live/rec/0），
+// 统一在这里替换，避免各页面各写一份 replace 逻辑（末尾无斜杠时替换失败会跳到 /0）。
+window.channelUrl = function (tpl, id) {
+    return String(tpl).replace(/\/0(\/|$)/, '/' + id + '$1');
+};
+
 // 密码策略：与 core/shared/validation.validate_password_strength 规则保持一致
 // 规则：长度 8-30 位；必须同时包含大写字母、小写字母、数字、特殊字符；拒绝常见弱密码
 var PasswordPolicy = (function() {

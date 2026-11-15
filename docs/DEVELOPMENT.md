@@ -185,10 +185,12 @@ def do_something(user_id, value, ip_address):
 * 播放页使用自定义控件（开始 / 关闭 / 音量），**不要**使用原生 `controls`、不要显示进度条或已直播时长。
 * 音源选择必须走 `GET /api/live/musics` 搜索 + 分页，支持自己的私有音频；禁止一次性下发全部音频。
 * 直播页公共样式（`.live-pulse` / `.live-link-row` / `.mode-badge` / `.mode-tab` / `.music-pick-item` / `.live-range` / `.switch-row` / `.live-control-btn`）统一在 `static/css/base.css` 末尾的「音频直播页面公共样式」块维护，**禁止**再在页面 `extra_style` 里重复定义；颜色必须使用 `:root` 变量（全站为白色磨砂玻璃主题，写死白色系会导致未选中项不可见）。
+* 直播 ID 一律用全局 `channelUrl(tpl, id)`（`base.js`）替换模板里的 `0`，**禁止**手写 `replace('/0/', ...)`：`/live/rec/0` 末尾没有斜杠，会替换失败跳到 `/live/rec/0` 而 404。
+* 直播 ID 由 `next_id()`（雪花算法）生成，表主键虽然是 INTEGER，但写入值必须保持雪花量级，测试 `test_channel_id_is_snowflake` 会拦截退回自增 ID 的改动。
 
 #### 权限与管理
 
-* 开播、停止、WebRTC offer 均校验登录；停止校验本人（管理员可强制停止）；WebRTC offer 只允许直播本人提交。
+* 开播、停止、WebRTC offer 均校验登录；停止校验本人（管理员可强制停止）；WebRTC offer 只允许直播本人提交（管理员打开他人直播台时只读，不连接麦克风）。
 * `live_bans` 为**永久封禁**（`user_id` 主键），管理员可解封；封禁用户 `create_channel` 必须在事务内拒绝，管理员封禁时必须停止其**全部**直播。
 * 直播标题必须经过防火墙内容注入检测（与音频上传一致），长度上限 60。
 

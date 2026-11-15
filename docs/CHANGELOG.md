@@ -4,6 +4,8 @@
 
 ### 修复
 
+* **`/live/rec/0` 返回 404**：开播成功后的跳转用 `replace('/0/', ...)` 拼 URL，而 `url_for` 生成的 `/live/rec/0` 末尾没有斜杠，替换失败后直接跳到 `/live/rec/0`。现在统一用 `base.js` 的全局 `channelUrl(tpl, id)`（同时兼容 `/api/live/0/status` 与 `/live/rec/0`）；路由对 `channel_id <= 0` 直接跳回「我的直播」兜底。
+* **管理端补充实时录音管理**：`/admin/live` 正在直播表新增模式徽章（循环播放 / 实时录音），实时录音行提供「直播台」入口；管理员打开他人直播台时展示只读视图（不自动连接麦克风），可查看状态与强制停止。`/live/rec/<ID>` 新增 `is_owner` 上下文。新增测试断言直播 ID 为雪花 ID。
 * **一键更新可能退回旧版本**（`update.py`）：原先直接下载分支归档，第三方镜像 / CDN 若缓存了旧的 `main.zip`，更新会把新文件当成「已删除」清理掉，站点因此退回好几个版本。现在先读分支 Atom 提交源（失败回退 GitHub API）取最新 commit SHA，优先下载内容不可变的 `<sha>` 固定版本归档；SHA 取不到时才回退分支归档。README「一键更新机制」已同步说明。
 * **实时录音直播启动失败**（`services/live/ffmpeg/__init__.py`）：移除 `pipe:0` 输入前的 `-thread_queue_size`，避免部分 ffmpeg 构建报 `cannot be applied to input url pipe:0`；测试新增断言防回归。
 * **直播页面样式与可读性**（`static/css/base.css`、`static/css/tailwind.css`、`static/templates/live/*`、`base.html`）：

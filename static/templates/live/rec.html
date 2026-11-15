@@ -7,10 +7,17 @@
     <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="flex flex-wrap items-end justify-between gap-4 mb-6">
             <div class="min-w-0">
+                {% if is_owner %}
                 <a href="{{ url_for('live.live_my_page') }}"
                    class="text-xs text-cream/50 hover:text-gold-400 inline-flex items-center gap-1 mb-2">
                     <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>返回我的直播
                 </a>
+                {% else %}
+                <a href="{{ url_for('admin.admin_live_page') }}"
+                   class="text-xs text-cream/50 hover:text-gold-400 inline-flex items-center gap-1 mb-2">
+                    <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>返回直播管理
+                </a>
+                {% endif %}
                 <h1 class="text-2xl sm:text-3xl font-bold truncate">{{ channel.title }}</h1>
                 <div class="flex items-center gap-2 flex-wrap mt-2 text-sm">
                     <span class="mode-badge">实时录音</span>
@@ -22,12 +29,13 @@
             </div>
             <button type="button" id="stop-live"
                     class="px-4 py-2.5 rounded-lg text-sm border border-red-500/40 text-red-600 hover:bg-red-500/10 inline-flex items-center gap-2">
-                <i data-lucide="square" class="w-4 h-4"></i>结束直播
+                <i data-lucide="square" class="w-4 h-4"></i>{{ '结束直播' if is_owner else '强制停止' }}
             </button>
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
             <!-- 录音配置 -->
+            {% if is_owner %}
             <div class="pixel-card rounded-xl p-6">
                 <h2 class="font-bold text-lg mb-1 flex items-center gap-2">
                     <i data-lucide="mic" class="w-5 h-5 text-gold-400"></i>录音配置
@@ -85,6 +93,17 @@
                     </div>
                 </div>
             </div>
+            {% else %}
+            <div class="pixel-card rounded-xl p-6">
+                <h2 class="font-bold text-lg mb-2 flex items-center gap-2">
+                    <i data-lucide="shield" class="w-5 h-5 text-gold-400"></i>管理员视图
+                </h2>
+                <p class="text-sm text-cream/60">
+                    该直播台属于 <span class="text-cream">{{ channel.username or '未知' }}</span>，
+                    实时录音需要主播本人连接麦克风。管理员可在此查看直播状态与链接，或使用「强制停止」结束直播。
+                </p>
+            </div>
+            {% endif %}
 
             <!-- 直播信息 -->
             <div class="pixel-card rounded-xl p-6">
@@ -111,11 +130,13 @@
 
     var CHANNEL_ID = {{ channel_id|tojson }};
     var INITIAL_ALIVE = {{ 'true' if channel.alive else 'false' }};
+    var IS_OWNER = {{ 'true' if is_owner else 'false' }};
     var URLS = {
         statusTpl: {{ url_for('live.api_live_status', channel_id=0)|tojson }},
         stopTpl: {{ url_for('live.api_live_stop', channel_id=0)|tojson }},
         offerTpl: {{ url_for('live.api_live_webrtc_offer', channel_id=0)|tojson }},
-        myPage: {{ url_for('live.live_my_page')|tojson }}
+        myPage: {{ url_for('live.live_my_page')|tojson }},
+        adminPage: {{ url_for('admin.admin_live_page')|tojson }}
     };
 
     var state = {
@@ -133,7 +154,6 @@
     };
 
     function qs(sel) { return document.querySelector(sel); }
-    function channelUrl(tpl, id) { return tpl.replace('/0/', '/' + id + '/'); }
     function esc(text) {
         return String(text == null ? '' : text).replace(/[&<>"']/g, function (c) {
             return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
@@ -401,7 +421,9 @@
                 }).then(function (data) {
                     disconnectMic(true);
                     Toast.success(data.message || '直播已结束');
-                    setTimeout(function () { window.location.href = URLS.myPage; }, 600);
+                    setTimeout(function () {
+                        window.location.href = IS_OWNER ? URLS.myPage : URLS.adminPage;
+                    }, 600);
                 }).catch(function (err) { Toast.error(err.message); });
             }
         });
@@ -418,34 +440,38 @@
     });
 
     document.addEventListener('DOMContentLoaded', function () {
-        qs('#mic-connect').addEventListener('click', connectMic);
-        qs('#mic-disconnect').addEventListener('click', function () {
-            disconnectMic(false);
-            Toast.success('已断开麦克风（直播仍在继续）');
-        });
-        qs('#mic-mute').addEventListener('click', function () {
-            state.muted = !state.muted;
-            applyGain();
-        });
-        qs('#mic-gain').addEventListener('input', function () {
-            state.gain = parseInt(this.value, 10);
-            applyGain();
-        });
-        qs('#mic-device').addEventListener('change', function () {
-            if (state.micState === 'connected') connectMic();
-        });
-        ['#opt-noise', '#opt-echo', '#opt-agc'].forEach(function (sel) {
-            qs(sel).addEventListener('change', function () {
+        if (IS_OWNER) {
+            qs('#mic-connect').addEventListener('click', connectMic);
+            qs('#mic-disconnect').addEventListener('click', function () {
+                disconnectMic(false);
+                Toast.success('已断开麦克风（直播仍在继续）');
+            });
+            qs('#mic-mute').addEventListener('click', function () {
+                state.muted = !state.muted;
+                applyGain();
+            });
+            qs('#mic-gain').addEventListener('input', function () {
+                state.gain = parseInt(this.value, 10);
+                applyGain();
+            });
+            qs('#mic-device').addEventListener('change', function () {
                 if (state.micState === 'connected') connectMic();
             });
-        });
+            ['#opt-noise', '#opt-echo', '#opt-agc'].forEach(function (sel) {
+                qs(sel).addEventListener('change', function () {
+                    if (state.micState === 'connected') connectMic();
+                });
+            });
+
+            document.addEventListener('pointerdown', resumeAudioContext);
+            document.addEventListener('keydown', resumeAudioContext);
+            applyGain();
+        }
+
         qs('#stop-live').addEventListener('click', stopLive);
 
-        document.addEventListener('pointerdown', resumeAudioContext);
-        document.addEventListener('keydown', resumeAudioContext);
-
-        applyGain();
         loadStatus().then(function () {
+            if (!IS_OWNER) return;
             refreshDevices();
             if (state.alive) connectMic();
         });

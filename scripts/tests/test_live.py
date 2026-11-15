@@ -185,6 +185,15 @@ def test_create_channel_and_loop_limit(temp_db, monkeypatch):
     assert ch4['music_id'] == 102
 
 
+def test_channel_id_is_snowflake(temp_db, monkeypatch):
+    """直播台 ID 必须是雪花 ID（时间戳量级），不能退回自增小整数。"""
+    monkeypatch.setattr(store, 'get_live_max_loop_per_user', lambda: 5)
+    ok, ch = store.create_channel(1, 'alice', '雪花 ID', music_id=101)
+    assert ok is True, ch
+    assert isinstance(ch['id'], int)
+    assert ch['id'] > 10 ** 12
+
+
 def test_rec_channel_limit_independent_from_loop(temp_db):
     """实时录音固定每人 1 个，且不占用循环播放的数量额度。"""
     ok, loop_ch = store.create_channel(1, 'alice', '循环直播', music_id=101)

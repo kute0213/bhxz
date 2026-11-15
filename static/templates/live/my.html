@@ -68,7 +68,6 @@
             });
         });
     }
-    function channelUrl(tpl, id) { return tpl.replace('/0/', '/' + id + '/'); }
     function copyText(text) {
         if (navigator.clipboard && window.isSecureContext) {
             navigator.clipboard.writeText(text).then(function () { Toast.success('链接已复制'); })

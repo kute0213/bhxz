@@ -247,7 +247,7 @@
             .then(function (data) {
                 if (state.mode === 'rec' && data.channel) {
                     Toast.success('直播已创建，正在进入实时录音直播台…');
-                    window.location.href = URLS.recPageTpl.replace('/0/', '/' + data.channel.id + '/');
+                    window.location.href = channelUrl(URLS.recPageTpl, data.channel.id);
                     return;
                 }
                 Toast.success('直播已开始');
