@@ -4,6 +4,7 @@
 
 ### 修复
 
+* **一键更新可能退回旧版本**（`update.py`）：原先直接下载分支归档，第三方镜像 / CDN 若缓存了旧的 `main.zip`，更新会把新文件当成「已删除」清理掉，站点因此退回好几个版本。现在先读分支 Atom 提交源（失败回退 GitHub API）取最新 commit SHA，优先下载内容不可变的 `<sha>` 固定版本归档；SHA 取不到时才回退分支归档。README「一键更新机制」已同步说明。
 * **实时录音直播启动失败**（`services/live/ffmpeg/__init__.py`）：移除 `pipe:0` 输入前的 `-thread_queue_size`，避免部分 ffmpeg 构建报 `cannot be applied to input url pipe:0`；测试新增断言防回归。
 * **直播页面样式与可读性**（`static/css/base.css`、`static/css/tailwind.css`、`static/templates/live/*`、`base.html`）：
   * 重新编译 Tailwind，补全直播页面使用但产物缺失的工具类（`px-2.5`、`text-[11px]`、`border-red-400/40` 等），修复按钮文字贴边、圆角失效。

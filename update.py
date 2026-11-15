@@ -13,6 +13,8 @@
     整个测速环节最大 2 秒（用屏障同步起跑 + 统一截止时间收敛）。
   - **镜像路径正确拼接**：每个镜像声明自己的 URL 模板（前缀型代理 / 主机替换型 /
     官方直连），统一用 `{repo}` / `{branch}` 占位符拼接，杜绝路径拼错。
+  - **固定版本下载**：先查分支最新 commit SHA，再下载 `<sha>` 归档（内容不可变），
+    避免第三方镜像 / CDN 缓存旧 ZIP 导致「更新后反而退回旧版本」。
   - **无需确认**：启动即开始，不做任何交互式询问。
 
 用法:
@@ -21,7 +23,9 @@
 """
 
 import os
+import re
 import sys
+import json
 import time
 import shutil
 import zipfile
@@ -48,6 +52,8 @@ SPEEDTEST_BUDGET = 2.0
 PROBE_BYTES = 128 * 1024
 # 正式下载时的单次 socket 超时（大文件较宽松）
 DOWNLOAD_TIMEOUT = 120
+# 查询最新提交 SHA 的超时（Atom / API）
+ATOM_TIMEOUT = 8
 
 # 覆盖时保留的根级内容（运行期数据 / 本地配置，绝不覆盖）
 EXCLUDE_ROOT = {
@@ -89,6 +95,9 @@ PROTECTED_NAMES = {'__pycache__', '.pytest_cache', 'node_modules', '.DS_Store', 
 # 官方归档地址：github.com 会 302 到 codeload.github.com
 _GH_ARCHIVE = 'https://github.com/{repo}/archive/refs/heads/{branch}.zip'
 _GH_CODELOAD = 'https://codeload.github.com/{repo}/zip/refs/heads/{branch}'
+_GH_API_COMMIT = 'https://api.github.com/repos/{repo}/commits/{branch}'
+# 分支提交 Atom 源：无需鉴权、无 rate limit，用于取最新 commit SHA
+_GH_COMMITS_ATOM = 'https://github.com/{repo}/commits/{branch}.atom'
 
 # 前缀型代理：在其后拼接完整 GitHub 归档地址
 _PREFIX_PROXIES = [
@@ -145,6 +154,49 @@ def build_url(template, branch):
         repo=GITHUB_REPO,
         branch=urllib.parse.quote(branch, safe=''),
     )
+
+
+def fetch_latest_commit(branch):
+    """查询分支最新 commit SHA（失败返回 None）。
+
+    GitHub 的分支归档 URL 会被 CDN / 第三方镜像缓存，可能拿到旧版本 ZIP，
+    而 `<sha>` 归档内容固定不可变，可彻底避免「更新后反而退回旧版本」。
+    优先读免鉴权的 Atom 提交源，失败再退回 GitHub API。
+    """
+    quoted = urllib.parse.quote(branch, safe='')
+    atom_url = _GH_COMMITS_ATOM.format(repo=GITHUB_REPO, branch=quoted)
+    try:
+        req = urllib.request.Request(atom_url, headers={'User-Agent': USER_AGENT})
+        with urllib.request.urlopen(req, timeout=ATOM_TIMEOUT) as resp:
+            text = resp.read(65536).decode('utf-8', 'ignore')
+        m = re.search(r'Grit::Commit/([0-9a-f]{40})', text)
+        if m:
+            return m.group(1)
+    except Exception:
+        pass
+
+    api_url = _GH_API_COMMIT.format(repo=GITHUB_REPO, branch=quoted)
+    try:
+        req = urllib.request.Request(api_url, headers={
+            'User-Agent': USER_AGENT,
+            'Accept': 'application/vnd.github+json',
+        })
+        with urllib.request.urlopen(req, timeout=ATOM_TIMEOUT) as resp:
+            data = json.loads(resp.read().decode('utf-8'))
+        sha = str((data or {}).get('sha') or '')
+        return sha if len(sha) == 40 and all(c in '0123456789abcdef' for c in sha) else None
+    except Exception:
+        return None
+
+
+def sha_url_template(template, sha):
+    """把分支模板换成同一镜像的固定版本（commit SHA）模板；不支持返回 None。"""
+    if 'archive/refs/heads/{branch}.zip' in template:
+        return template.replace(
+            'archive/refs/heads/{branch}.zip', 'archive/' + sha + '.zip')
+    if 'zip/refs/heads/{branch}' in template:
+        return template.replace('zip/refs/heads/{branch}', 'zip/' + sha)
+    return None
 
 
 # ── 终端颜色（Windows 兼容） ──────────────────────────────────────────
@@ -494,10 +546,24 @@ def update_via_download(ranked, branches):
     tmp_dir = tempfile.mkdtemp(prefix='bhxz_update_')
     zip_path = os.path.join(tmp_dir, 'update.zip')
     try:
+        # 优先下载固定 commit 归档：内容不可变，镜像 / CDN 缓存不会回退旧版本
+        sha = fetch_latest_commit(branches[0])
+        if sha:
+            log(f'锁定最新提交: {sha[:8]}（下载固定版本，避免缓存旧代码）', GREEN)
+        else:
+            log('未能获取最新提交，改用分支归档（可能受镜像缓存影响）', YELLOW)
+
         for i, item in enumerate(ranked):
+            targets = []
+            if sha:
+                tpl = sha_url_template(item['template'], sha)
+                if tpl:
+                    targets.append((build_url(tpl, branches[0]), f'{item["name"]}（固定版本）'))
             for branch in branches:
-                url = build_url(item['template'], branch)
-                log(f'尝试下载 [{i + 1}/{len(ranked)}] {item["name"]}（分支 {branch}）', CYAN)
+                targets.append((build_url(item['template'], branch), f'{item["name"]}（分支 {branch}）'))
+
+            for url, label in targets:
+                log(f'尝试下载 [{i + 1}/{len(ranked)}] {label}', CYAN)
                 ok, err = download_zip(url, zip_path)
                 if not ok:
                     log(f'  失败: {err}', YELLOW)
