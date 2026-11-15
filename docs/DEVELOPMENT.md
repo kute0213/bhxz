@@ -149,16 +149,20 @@ def do_something(user_id, value, ip_address):
 
 | 文件 | 职责 |
 |------|------|
-| `constants/__init__.py` | 状态、音量 / 速度 / 标题规范化、HLS 参数、播放地址模板 |
-| `ffmpeg/__init__.py` | **纯函数**构造循环播放 ffmpeg 命令（HLS + MP3 双输出），便于测试，不得启动进程 |
-| `store/__init__.py` | 频道与封禁的 SQLite 读写；单用户单直播在 `transaction()` 内原子校验；不依赖 Flask |
-| `runtime/__init__.py` | `LiveManager` 单例 + `LiveChannel`：ffmpeg 进程、HLS 目录、MP3 听众分发、启动恢复 |
+| `constants/__init__.py` | 模式 / 状态、音量 / 速度 / 标题规范化、PCM 参数、HLS 参数、播放地址模板 |
+| `ffmpeg/__init__.py` | **纯函数**构造循环播放 / 实时录音 ffmpeg 命令（HLS + MP3 双输出），便于测试，不得启动进程 |
+| `store/__init__.py` | 频道与封禁的 SQLite 读写；循环上限（默认 5）与实时录音上限（固定 1）在 `transaction()` 内原子校验；不依赖 Flask |
+| `runtime/__init__.py` | `LiveManager` 单例 + `LiveChannel`：ffmpeg 进程、HLS 目录、MP3 听众分发、PCM stdin 写入、启动恢复 |
+| `webrtc/__init__.py` | aiortc 协商与音频帧接收（独立 asyncio 线程），延迟导入，未安装时给出明确错误 |
 
 #### 进程与输出
 
 * **一个频道一个 ffmpeg 进程**，同时输出两路：HLS（落盘 `uploads/live/<直播ID>/index.m3u8`）与 MP3（`pipe:1`）。
-* 只支持循环播放：`-re -stream_loop -1` 读取音频库中的 `index.mp3`，无限循环。
-* 音量 / 速度通过 `volume` + `atempo` 滤镜实现；`atempo` 限制在 0.5~2.0，调整设置时**重启 ffmpeg 但保留频道 ID 与听众连接**。
+* 两种输入模式：
+  * `loop`：`-re -stream_loop -1` 读取音频库中的 `index.mp3`，无限循环；
+  * `rec`：从 `stdin` 读取 WebRTC 解码后的 `s16le` PCM（48000Hz 双声道），不做音量 / 速度滤镜。
+* 音量 / 速度通过 `volume` + `atempo` 滤镜实现；`atempo` 限制在 0.5~2.0，调整设置时**重启 ffmpeg 但保留频道 ID 与听众连接**；实时录音模式不支持调参。
+* WebRTC 使用 aiortc 的独立 asyncio 事件循环线程，HTTP 路由只负责提交 SDP；`/live` 相关响应的 `Permissions-Policy` 必须放行 `microphone=(self)`，其他路径保持默认拒绝（见 `core/middleware.py`）。
 * MP3 由 Python 读取 ffmpeg stdout 后写入每个听众的 `queue.Queue`（有界队列，慢客户端丢弃最旧数据）；新听众先收到最近约 1 秒的环形缓冲快照。**禁止**为每个听众单独启动 ffmpeg。
 * HLS 使用 `delete_segments+omit_endlist` 保持直播语义；m3u8 路由必须把分片相对路径改写为 `/live/stream/<ID>/<文件>`，分片路由必须做路径穿越校验。
 * 面向超长直播设计：运行时**不记录、不展示直播时长**，所有缓冲 / 分片列表均为有界结构，长时间运行内存不增长。
@@ -167,21 +171,21 @@ def do_something(user_id, value, ip_address):
 
 * `LiveManager` 是模块级单例，所有注册表操作必须持锁；`LiveChannel` 内部另有锁保护进程 / 订阅者。
 * **前端关闭不停止直播**：只有显式停止、管理员强制停止、ffmpeg 异常退出才会结束频道并 `mark_stopped`。
-* 服务启动时 `restore()`：检查音源后自动恢复循环直播；音源缺失或历史遗留的非 `loop` 频道统一标记停止并写 `stop_reason`。
-* 服务关闭时 `shutdown()` 只结束 ffmpeg，**不修改数据库状态**，保证下次启动能恢复直播；停止直播时必须删除 `uploads/live/<ID>/`。
-* 每个用户最多 1 路直播，禁止在路由层用「先查后插」实现。
+* 服务启动时 `restore()`：检查音源后自动恢复循环直播；实时录音频道与音源缺失的频道标记停止并写 `stop_reason`（录音依赖浏览器推流，不重启恢复）。
+* 服务关闭时 `shutdown()` 只结束 ffmpeg，**不修改数据库状态**，保证循环直播下次启动能恢复；停止直播时必须删除 `uploads/live/<ID>/`。
+* 每人循环播放直播上限由 `LIVE_MAX_LOOP_PER_USER`（默认 5，可热改）控制，实时录音固定 1 路；禁止在路由层用「先查后插」实现，必须在 `store.create_channel` 的事务内校验。
 
 #### 前端与播放地址
 
-* 直播台主页保持「正在直播列表」为主体，`我的直播` / `开始直播` 通过弹窗完成，避免页面堆叠。
+* 直播台主页保持「正在直播列表」为主体，`我的直播` 使用弹窗；`开始直播` 必须跳转到独立页面 `/live/start`（循环播放 / 实时录音两种模式、音源搜索分页、已有直播管理）。
 * **媒体地址必须使用同源相对路径**（`/live/stream/<ID>.mp3`）。反向代理下用 `request.host_url` 生成的绝对地址可能协议 / 端口与实际页面不一致，会被 CSP `media-src 'self'` 拦截。
 * 播放页使用自定义控件（开始 / 关闭 / 音量），**不要**使用原生 `controls`、不要显示进度条或已直播时长。
 * 音源选择必须走 `GET /api/live/musics` 搜索 + 分页，支持自己的私有音频；禁止一次性下发全部音频。
 
 #### 权限与管理
 
-* 开播、停止、调参均校验登录；停止 / 调参校验本人（管理员可强制停止）。
-* `live_bans` 为**永久封禁**（`user_id` 主键），管理员可解封；封禁用户 `create_channel` 必须在事务内拒绝，管理员封禁时立即停止其当前直播。
+* 开播、停止、调参均校验登录；停止 / 调参校验本人（管理员可强制停止）；WebRTC offer 只允许直播本人提交。
+* `live_bans` 为**永久封禁**（`user_id` 主键），管理员可解封；封禁用户 `create_channel` 必须在事务内拒绝，管理员封禁时必须停止其**全部**直播。
 * 直播标题必须经过防火墙内容注入检测（与音频上传一致），长度上限 60。
 
 ## 核心层规范（core/）
@@ -235,7 +239,7 @@ def do_something(user_id, value, ip_address):
   | `access_log` | `services/access_log/capture.py` | 访问日志抓取开启 / 取消 / 写入失败 | 是 | 否 |
   | `waitress` | `core/system/logger.py`（`install_waitress_logging()`） | Waitress 内部日志（`Task queue depth is xx` 等） | 否 | 否 |
 
-  **总原则：除 core 基础设施（`core/`：应用初始化、数据库 schema / 连接、WSGI 服务器、任务注册表）与启动自检（`core/system/startup_checks.py`）保留全局 `log()` 外，业务侧日志一律走模块单独日志。**
+  **总原则：除 core 基础设施（`core/`：应用初始化、数据库 schema / 连接、WSGI 服务器、任务注册表）保留全局 `log()` 外，业务侧日志一律走模块单独日志。**
 
   默认值集中定义在 `core/system/logger.py` 的 `MODULE_LOG_DEFAULTS`（仅作设置缺失时的兜底）。新增模块单独日志时，只需在所属模块 import 处调用 `register_module_log('<名称>')`，日志一律通过 `log_module(name, level, event, detail, **kwargs)` 输出，**不得**调用全局 `log()`；如需自定义默认落盘行为，在 `MODULE_LOG_DEFAULTS` 中补一条即可（**不要**新增 `SETTINGS_REGISTRY` 设置项，模块日志配置统一在日志页面维护）。
 

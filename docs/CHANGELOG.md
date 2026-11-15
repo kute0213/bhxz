@@ -4,6 +4,15 @@
 
 ### 变更
 
+* **直播开播独立页 + 实时录音回归 + 数量上限可配置**（`services/live/*`、`routes/live/*`、`static/templates/live/{index,start,play}.html`、`core/middleware.py`、`core/system/{init.py}`、`config.py`、`routes/admin/firewall/__init__.py`、`static/templates/admin/{firewall,live}.html`、`requirements.txt`、`scripts/tests/test_live.py`）：
+  * 「开始直播」改为独立页面 `GET /live/start`：支持循环播放与实时录音两种模式、音源搜索分页、已有直播管理（调参 / 停止 / 复制链接 / 重新连接麦克风）；直播台主页保留「正在直播」列表与「我的直播」弹窗。
+  * **加回实时录音直播（WebRTC + aiortc）**：浏览器采集麦克风，`POST /api/live/<ID>/webrtc/offer` 完成 SDP 协商，服务端把 PCM 写入 ffmpeg stdin 实时编码为 HLS + MP3；关闭页面只断麦克风，直播继续。`requirements.txt` 新增 `aiortc>=1.10.0`，并支持 `LIVE_STUN_SERVERS` / `LIVE_TURN_URL` / `LIVE_TURN_USERNAME` / `LIVE_TURN_PASSWORD`。
+  * **修复麦克风被权限策略拦截**：`/live` 相关响应单独下发 `Permissions-Policy: microphone=(self)`，其他页面仍默认拒绝，解决控制台 `Permissions policy violation: microphone is not allowed in this document`。
+  * **开播数量上限可配置**：每人循环播放直播默认最多 5 路，可通过「系统设置 → 音频直播」、`config.py` 的 `LIVE_MAX_LOOP_PER_USER` 或「防火墙设置」页面修改（1~50）；实时录音固定每人 1 路。两类额度互不占用，均在数据库事务内原子校验。
+  * 服务重启只恢复循环直播；实时录音直播标记停止、不自动恢复。管理员封禁用户时停止其全部直播。
+  * **删除服务器自检功能**：移除 `core/system/startup_checks.py` 及其启动调用，`core/system/init.py` 仅保留数据库初始化与日志设置刷新。
+  * 更新直播测试（两种模式、循环上限可配置、录音固定 1 路、录音 ffmpeg 命令），`python -m pytest scripts/tests -q` 全部通过（294 passed）；同步更新 README / DEVELOPMENT。
+
 * **新增音频直播台**（`services/live/`、`routes/live/`、`routes/admin/live/`、`static/templates/live/{index,play}.html`、`static/templates/admin/live.html`、`static/templates/base.html`、`core/db/schema.py`、`config.py`）：
   * 社区导航新增「音频直播」（`/live`），主页为「正在直播」列表，顶部提供「我的直播」「开始直播」按钮；播放页为独立路由 `/live/play.html?channelId=<直播ID>`，支持 m3u8 与 MP3 两种收听方式。
   * 循环播放开播：从自己上传的音频中选择（支持**私有音频**、待审核与已公开音频，已驳回的除外），ffmpeg `-re -stream_loop -1` 无限循环，支持实时调整音量 0~200% 与速度 0.5x~2.0x。

@@ -14,6 +14,8 @@ from services.live.constants import (
     HLS_SEGMENT_SECONDS,
     MP3_AUDIO_BITRATE,
     OUTPUT_SAMPLE_RATE,
+    PCM_CHANNELS,
+    PCM_SAMPLE_RATE,
     SPEED_DEFAULT,
     VOLUME_DEFAULT,
 )
@@ -73,6 +75,21 @@ def build_loop_cmd(src_path, hls_dir, volume=VOLUME_DEFAULT, speed=SPEED_DEFAULT
         '-re', '-stream_loop', '-1',
         '-i', src_path,
         '-filter_complex', build_filter_chain(volume, speed),
+    ]
+    cmd.extend(build_output_args(hls_dir))
+    return cmd
+
+
+def build_rec_cmd(hls_dir):
+    """接收 WebRTC 解码后的 PCM：从 stdin 读 s16le 原始音频。"""
+    cmd = [
+        FFMPEG_BIN, '-hide_banner', '-loglevel', 'error', '-nostdin',
+        '-thread_queue_size', '512',
+        '-f', 's16le',
+        '-ar', str(PCM_SAMPLE_RATE),
+        '-ac', str(PCM_CHANNELS),
+        '-i', 'pipe:0',
+        '-filter_complex', build_filter_chain(1.0, 1.0),
     ]
     cmd.extend(build_output_args(hls_dir))
     return cmd

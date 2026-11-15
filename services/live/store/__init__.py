@@ -5,10 +5,13 @@
 
 from datetime import datetime
 
+from config import get_live_max_loop_per_user
 from core.db import get_db, transaction
 from core.shared.snowflake import next_id
 from services.live.constants import (
+    MAX_REC_PER_USER,
     MODE_LOOP,
+    MODE_REC,
     STATUS_LIVE,
     STATUS_STOPPED,
     VOLUME_DEFAULT,
@@ -68,17 +71,34 @@ def get_all_channels(limit=100):
         conn.close()
 
 
-def get_user_active_channel(user_id):
-    """用户当前直播中的频道（每个用户最多 1 个）。"""
+def get_user_active_channels(user_id):
+    """用户当前所有直播中的频道（循环 + 实时录音）。"""
     conn = get_db()
     try:
-        return _row(conn.execute(
+        rows = conn.execute(
             "SELECT * FROM live_channels WHERE user_id = ? AND status = ? "
-            "ORDER BY id DESC LIMIT 1",
+            "ORDER BY id DESC",
             (int(user_id), STATUS_LIVE),
-        ).fetchone())
+        ).fetchall()
+        return [dict(r) for r in rows]
     finally:
         conn.close()
+
+
+def get_user_active_channel(user_id):
+    """用户当前直播中的频道（兼容旧调用，返回最新一个）。"""
+    rows = get_user_active_channels(user_id)
+    return rows[0] if rows else None
+
+
+def count_user_active_by_mode(conn, user_id):
+    """统计用户各模式直播中的数量（调用方提供连接，便于事务内使用）。"""
+    rows = conn.execute(
+        "SELECT mode, COUNT(*) AS n FROM live_channels "
+        "WHERE user_id = ? AND status = ? GROUP BY mode",
+        (int(user_id), STATUS_LIVE),
+    ).fetchall()
+    return {row['mode']: int(row['n']) for row in rows}
 
 
 def get_user_channels(user_id, limit=20):
@@ -93,9 +113,12 @@ def get_user_channels(user_id, limit=20):
         conn.close()
 
 
-def create_channel(user_id, username, title, music_id=None,
+def create_channel(user_id, username, title, mode=MODE_LOOP, music_id=None,
                    volume=VOLUME_DEFAULT, speed=SPEED_DEFAULT):
-    """创建直播频道记录（单用户单直播在事务内原子校验）。
+    """创建直播频道记录（数量限制在事务内原子校验）。
+
+    - 循环播放：每人上限由系统设置 ``LIVE_MAX_LOOP_PER_USER`` 控制（默认 5）；
+    - 实时录音：每人固定上限 1 个。
 
     Returns:
         (success, channel_dict_or_error)
@@ -103,14 +126,19 @@ def create_channel(user_id, username, title, music_id=None,
     title = normalize_title(title)
     if not title:
         return False, '请填写直播标题'
+    if mode not in (MODE_LOOP, MODE_REC):
+        return False, '不支持的直播模式'
 
     volume = normalize_volume(volume)
     speed = normalize_speed(speed)
 
-    try:
-        music_id = int(music_id)
-    except (TypeError, ValueError):
-        return False, '请选择要循环播放的音频'
+    if mode == MODE_LOOP:
+        try:
+            music_id = int(music_id)
+        except (TypeError, ValueError):
+            return False, '请选择要循环播放的音频'
+    else:
+        music_id = None
 
     channel_id = next_id()
     now = _now()
@@ -121,21 +149,27 @@ def create_channel(user_id, username, title, music_id=None,
         ).fetchone():
             return False, '你已被管理员禁止开播'
 
-        if conn.execute(
-            "SELECT 1 FROM live_channels WHERE user_id = ? AND status = ?",
-            (int(user_id), STATUS_LIVE),
-        ).fetchone():
-            return False, '你已有一个正在进行的直播，请先停止后再开播'
+        counts = count_user_active_by_mode(conn, user_id)
+        if mode == MODE_LOOP:
+            limit = get_live_max_loop_per_user()
+            if counts.get(MODE_LOOP, 0) >= limit:
+                return False, (
+                    f'你最多同时开启 {limit} 个循环播放直播，请先停止部分直播'
+                )
+        else:
+            if counts.get(MODE_REC, 0) >= MAX_REC_PER_USER:
+                return False, '每个账号最多同时开启 1 个实时录音直播'
 
-        music = conn.execute(
-            "SELECT id, user_id, status FROM music WHERE id = ?", (music_id,)
-        ).fetchone()
-        if not music:
-            return False, '选择的音频不存在'
-        if music['user_id'] != int(user_id):
-            return False, '只能循环播放自己上传的音频'
-        if music['status'] == 3:
-            return False, '该音频已被驳回，无法用于直播'
+        if mode == MODE_LOOP:
+            music = conn.execute(
+                "SELECT id, user_id, status FROM music WHERE id = ?", (music_id,)
+            ).fetchone()
+            if not music:
+                return False, '选择的音频不存在'
+            if music['user_id'] != int(user_id):
+                return False, '只能循环播放自己上传的音频'
+            if music['status'] == 3:
+                return False, '该音频已被驳回，无法用于直播'
 
         conn.execute(
             "INSERT INTO live_channels "
@@ -143,7 +177,7 @@ def create_channel(user_id, username, title, music_id=None,
             " status, created_at, updated_at, stopped_at, stop_reason) "
             "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, '')",
             (
-                channel_id, int(user_id), username or '', title, MODE_LOOP,
+                channel_id, int(user_id), username or '', title, mode,
                 music_id, volume, speed, STATUS_LIVE, now, now,
             ),
         )
@@ -153,6 +187,7 @@ def create_channel(user_id, username, title, music_id=None,
         'user_id': int(user_id),
         'username': username or '',
         'title': title,
+        'mode': mode,
         'music_id': music_id,
         'volume': volume,
         'speed': speed,

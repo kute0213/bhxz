@@ -4,8 +4,16 @@ import pytest
 
 import core.db.connection as connection
 from services.live import store
-from services.live.constants import STATUS_LIVE, STATUS_STOPPED, normalize_speed, normalize_title, normalize_volume
-from services.live.ffmpeg import build_filter_chain, build_loop_cmd
+from services.live.constants import (
+    MODE_LOOP,
+    MODE_REC,
+    STATUS_LIVE,
+    STATUS_STOPPED,
+    normalize_speed,
+    normalize_title,
+    normalize_volume,
+)
+from services.live.ffmpeg import build_filter_chain, build_loop_cmd, build_rec_cmd
 from services.music.queries import get_user_musics_page
 
 
@@ -47,6 +55,21 @@ def test_filter_chain_volume_and_speed():
     assert 'volume=0.600' in chain
     assert 'atempo=1.250' in chain
     assert chain.endswith('asplit=2[hls][mp3]')
+
+
+def test_build_rec_cmd(tmp_path):
+    hls_dir = str(tmp_path / 'live' / '2')
+    cmd = build_rec_cmd(hls_dir)
+    joined = ' '.join(cmd)
+
+    assert '-f' in cmd and 's16le' in cmd
+    assert 'pipe:0' in cmd
+    assert '48000' in cmd
+    assert 'pipe:1' in cmd
+    assert 'libmp3lame' in cmd
+    assert str(tmp_path / 'live' / '2' / 'index.m3u8') in cmd
+    assert '-stream_loop' not in cmd
+    assert 'atempo=' not in joined
 
 
 def test_build_loop_cmd(tmp_path):
@@ -133,27 +156,62 @@ def temp_db(tmp_path, monkeypatch):
     yield db_path
 
 
-def test_create_channel_and_single_active_limit(temp_db):
+def test_create_channel_and_loop_limit(temp_db, monkeypatch):
+    monkeypatch.setattr(store, 'get_live_max_loop_per_user', lambda: 2)
+
     ok, ch = store.create_channel(
         1, 'alice', '我的直播', music_id=101, volume=0.8, speed=1.5)
     assert ok is True, ch
+    assert ch['mode'] == MODE_LOOP
     assert ch['volume'] == 0.8
     assert ch['speed'] == 1.5
     assert ch['status'] == STATUS_LIVE
 
-    # 同一用户不允许同时开第二个直播
-    ok2, err = store.create_channel(1, 'alice', '第二个直播', music_id=101)
-    assert ok2 is False
-    assert '已有一个' in err
+    ok2, ch2 = store.create_channel(1, 'alice', '第二个直播', music_id=101)
+    assert ok2 is True, ch2
 
-    # 停止后可以重新开播
+    # 达到上限后不允许继续开播
+    ok3, err = store.create_channel(1, 'alice', '第三个直播', music_id=101)
+    assert ok3 is False
+    assert '最多同时开启 2 个循环播放直播' in err
+
+    # 停止后可重新开播
     store.mark_stopped(ch['id'], '测试停止')
-    row = store.get_channel(ch['id'])
-    assert row['status'] == STATUS_STOPPED
+    assert store.get_channel(ch['id'])['status'] == STATUS_STOPPED
+    ok4, ch4 = store.create_channel(1, 'alice', '重新开播', music_id=102)
+    assert ok4 is True
+    assert ch4['music_id'] == 102
 
-    ok3, ch3 = store.create_channel(1, 'alice', '重新开播', music_id=102)
-    assert ok3 is True
-    assert ch3['music_id'] == 102
+
+def test_rec_channel_limit_independent_from_loop(temp_db):
+    """实时录音固定每人 1 个，且不占用循环播放的数量额度。"""
+    ok, loop_ch = store.create_channel(1, 'alice', '循环直播', music_id=101)
+    assert ok is True
+
+    ok, rec_ch = store.create_channel(1, 'alice', '录音直播', mode=MODE_REC)
+    assert ok is True, rec_ch
+    assert rec_ch['mode'] == MODE_REC
+    assert rec_ch['music_id'] is None
+
+    ok, err = store.create_channel(1, 'alice', '第二个录音', mode=MODE_REC)
+    assert ok is False
+    assert '1 个实时录音直播' in err
+
+    # 循环直播不受录音限制影响
+    ok, err = store.create_channel(1, 'alice', '第二个循环', music_id=101)
+    assert ok is True, err
+
+    active = store.get_user_active_channels(1)
+    assert {c['mode'] for c in active} == {MODE_LOOP, MODE_REC}
+
+
+def test_rec_channel_from_other_user_isolation(temp_db):
+    ok, _ = store.create_channel(1, 'alice', '录音直播', mode=MODE_REC)
+    assert ok is True
+    ok, _ = store.create_channel(2, 'bob', 'bob 录音', mode=MODE_REC)
+    assert ok is True
+    assert len(store.get_user_active_channels(1)) == 1
+    assert len(store.get_user_active_channels(2)) == 1
 
 
 def test_channel_music_ownership_and_status(temp_db):

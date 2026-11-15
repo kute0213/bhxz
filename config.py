@@ -58,6 +58,24 @@ else:
 # 多用户同时上传时天然并行，不会出现「文件正在使用」冲突。
 FFMPEG_THREADS = int(os.environ.get('FFMPEG_THREADS', '0'))
 
+# ---------------------------------------------------------------------------
+# 音频直播（WebRTC 实时录音）ICE 配置
+# ---------------------------------------------------------------------------
+# STUN 服务器列表（逗号分隔）。服务端在公网且 UDP 可用时可获取 srflx 候选；
+# 部署在 NAT 后无法直连时，请配置 TURN 中继（下方三项）。
+LIVE_STUN_SERVERS = [
+    s.strip()
+    for s in (os.environ.get('LIVE_STUN_SERVERS', 'stun:stun.qq.com:3478')).split(',')
+    if s.strip()
+]
+LIVE_TURN_URL = (os.environ.get('LIVE_TURN_URL') or '').strip()
+LIVE_TURN_USERNAME = (os.environ.get('LIVE_TURN_USERNAME') or '').strip()
+LIVE_TURN_PASSWORD = (os.environ.get('LIVE_TURN_PASSWORD') or '').strip()
+
+# 每个账号最多同时开启的「循环播放音频」直播数量（默认 5）
+# 实时录音直播固定每人最多 1 个，不随此项变化。
+LIVE_MAX_LOOP_PER_USER = 5
+
 # 用户图片（头像/背景）最大字节数
 USER_IMAGE_MAX_BYTES = 10 * 1024 * 1024
 
@@ -418,6 +436,9 @@ SETTINGS_REGISTRY = [
     ('SMTP_PASSWORD', '', 'str', 'SMTP 密码/授权码', '邮箱授权码（非登录密码）', '邮件配置'),
     ('SMTP_SENDER_NAME', '滨海小镇', 'str', '发件人显示名称', '收件人看到的发件人名称', '邮件配置'),
 
+    # 音频直播
+    ('LIVE_MAX_LOOP_PER_USER', 5, 'int', '每人循环直播数量上限', '每个账号最多同时开启的「循环播放音频」直播数量，默认 5；实时录音直播固定每人最多 1 个，不受此项影响', '音频直播'),
+
     # 列表分页（各列表每次加载条数，仅管理员可改；用户调用 API 传入的参数一律忽略）
     ('BUILDINGS_PER_PAGE', 5, 'int', '公共建筑每页数量', '公共建筑列表每次加载的条数，用户调用接口传入的参数一律被忽略', '列表分页'),
     ('BUILDING_COMMENTS_PER_PAGE', 10, 'int', '公共建筑评论每页数量', '公共建筑评论列表每次加载的条数，用户调用接口传入的参数一律被忽略', '列表分页'),
@@ -498,6 +519,20 @@ def get_guide_resource_limit() -> int:
         mb = default_mb
     mb = max(1, min(mb, 1024))
     return mb * 1024 * 1024
+
+
+def get_live_max_loop_per_user() -> int:
+    """读取每个账号可同时开启的循环直播数量（运行时可热改）。
+
+    默认值来自 ``LIVE_MAX_LOOP_PER_USER``；管理员可在「系统设置 → 音频直播」
+    或「防火墙设置」修改。结果限制在 1~50。
+    """
+    value = get_config_value('LIVE_MAX_LOOP_PER_USER', LIVE_MAX_LOOP_PER_USER)
+    try:
+        value = int(value)
+    except (TypeError, ValueError):
+        value = LIVE_MAX_LOOP_PER_USER
+    return max(1, min(value, 50))
 
 
 def get_page_size(key: str, default: int = 5) -> int:

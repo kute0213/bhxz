@@ -20,6 +20,8 @@ def _live_payload(channel, row=None):
             'user_id': int(row['user_id']),
             'username': row.get('username') or '',
             'title': row.get('title') or '',
+            'mode': row.get('mode') or 'loop',
+            'mode_label': '实时录音' if row.get('mode') == 'rec' else '循环播放',
             'volume': row.get('volume'),
             'speed': row.get('speed'),
             'created_at': row.get('created_at') or '',
@@ -91,8 +93,7 @@ def admin_live_ban():
 
     store.ban_user(target['id'], target['username'], reason, user['id'])
 
-    row = store.get_user_active_channel(target['id'])
-    if row:
+    for row in store.get_user_active_channels(target['id']):
         manager.stop(row['id'], user_id=user['id'], is_admin=True,
                      reason='管理员禁止开播')
 

@@ -241,6 +241,20 @@
         </div>
       </div>
 
+      <!-- 音频直播 -->
+      <div class="pixel-card rounded-xl p-6">
+        <h3 class="font-bold text-base mb-3 flex items-center gap-2">
+          <i data-lucide="radio" class="w-4 h-4 text-rose-400"></i>
+          音频直播
+        </h3>
+        <p class="text-xs text-cream/50 mb-3">每个账号最多同时开启的「循环播放音频」直播数量；修改后即时生效，与「系统设置 → 音频直播」为同一项配置</p>
+        <div>
+          <label class="block text-sm text-cream/80 mb-2">每人循环直播数量上限</label>
+          <input type="number" min="1" max="50" id="cfg-LIVE_MAX_LOOP_PER_USER" value="{{ live_max_loop_per_user }}" class="input-field w-full px-4 py-2 rounded-lg md:w-64">
+          <p class="text-xs text-cream/50 mt-1">默认 5，允许 1 ~ 50；实时录音直播固定每人最多 1 个，不受此项影响</p>
+        </div>
+      </div>
+
       <!-- 自动 IP 封禁 -->
       <div class="pixel-card rounded-xl p-6">
         <h3 class="font-bold text-base mb-3 flex items-center gap-2">

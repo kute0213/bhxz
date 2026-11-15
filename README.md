@@ -80,8 +80,8 @@ python scripts/build/package.py
 ├── core/         # 基础设施层（DB/认证/中间件/错误页/共享工具）——不含业务逻辑
 │   ├── db/                   #   数据库连接与 schema
 │   │   └── connection.py, schema.py
-│   ├── system/               #   系统层：日志、启动检查、应用初始化
-│   │   └── init.py, logger.py, startup_checks.py
+│   ├── system/               #   系统层：日志、应用初始化
+│   │   └── init.py, logger.py
 │   ├── shared/               #   共享工具（无业务逻辑，原 utils 收敛于此）
 │   │   ├── snowflake.py      #   全站统一雪花 ID 生成器（非用户表主键唯一入口）
 │   │   ├── ip.py, captcha.py, ratelimit.py, validation.py
@@ -102,7 +102,7 @@ python scripts/build/package.py
 │   ├── game_server_ban/ # 游戏服务器封禁申请（审批 → RCON ban → 到期自动 pardon）
 │   ├── system_metrics/ # CPU/内存/系统/性能追踪（后台线程采集）
 │   ├── music/          # 大喇叭音频（常量/查询/CRUD/上传/收藏）
-│   ├── live/           # 音频直播（常量/ffmpeg 双输出/存储/运行时）
+│   ├── live/           # 音频直播（常量/ffmpeg 双输出/存储/运行时/WebRTC 录音）
 │   ├── rcon/           # RCON 连接管理、玩家列表追踪、EasyAuth 指令
 │   ├── user/           # 用户（认证/资料/管理）
 │   ├── background_service/  #   背景图片业务（WebP 转换 + 按屏幕比例挑选）
@@ -125,7 +125,7 @@ python scripts/build/package.py
 │   ├── docs/           # 文档页面
 │   ├── game_accounts/  # 申请账号（页面+API，纯申请注册）
 │   ├── guides/         # 服务器指南（页面+API）
-│   ├── live/           # 音频直播（直播台/播放页/流媒体/API）
+│   ├── live/           # 音频直播（直播台/开播页/播放页/流媒体/API）
 │   ├── main/           # 主站（登录/注册/设置/音乐）
 │   ├── public/         # 公开文件服务
 │   └── sitemap/        # Sitemap & robots.txt（自动添加 Crawl-delay 防防火墙误判）
@@ -145,7 +145,7 @@ python scripts/build/package.py
 │       ├── guides/         #     服务器指南页面（index / detail / form）
 │       ├── buildings/      #     公共建筑（index / create / detail）
 │       ├── music/          #     大喇叭音频页面（index / my / favorites / upload）
-│       ├── live/           #     音频直播页面（index 直播台 / play 播放页）
+│       ├── live/           #     音频直播页面（index 直播台 / start 开播页 / play 播放页）
 │       ├── macros/         #     通用模板宏（模态框/编辑器/进度条/音乐/页面内搜索）
 │       └── ...             #     根级通用页面（base.html 布局、index.html 首页、error_simple.html 精简错误页）
 ├── docs/         # 项目文档
@@ -311,19 +311,22 @@ python scripts/build/package.py
 
 ### 音频直播台
 
-* **入口与页面**：社区导航「音频直播」（`/live`）进入直播台，主页为「正在直播」列表，顶部提供「我的直播」与「开始直播」按钮；播放页为独立路由 `GET /live/play.html?channelId=<直播ID>`，支持 HLS（m3u8）与 MP3 两种收听方式
-* **循环播放开播**：从自己上传的音频中选择一首（支持**私有音频**、待审核与已公开音频，已驳回的除外），服务端用 ffmpeg `-re -stream_loop -1` 无限循环推流；可实时调整音量（0~200%）与播放速度（0.5x~2.0x）
-* **音源选择**：开播弹窗支持关键词搜索（匹配名称 / 标签）与分页「加载更多」，按需调用音频 API，音频再多也不会拖慢页面
+* **入口与页面**：社区导航「音频直播」（`/live`）进入直播台，主页为「正在直播」列表，顶部提供「我的直播」与「开始直播」按钮；「开始直播」跳转到**独立页面** `GET /live/start`，播放页为独立路由 `GET /live/play.html?channelId=<直播ID>`，支持 HLS（m3u8）与 MP3 两种收听方式
+* **两种开播方式**：
+  * **循环播放音频**：从自己上传的音频中选择一首（支持**私有音频**、待审核与已公开音频，已驳回的除外），服务端用 ffmpeg `-re -stream_loop -1` 无限循环推流；可实时调整音量（0~200%）与播放速度（0.5x~2.0x）
+  * **实时录音直播**：浏览器通过 WebRTC（aiortc）采集麦克风并推送到服务端，ffmpeg 将 PCM 实时编码为 HLS + MP3；前端关闭页面只断麦克风，直播本身继续
+* **实时录音权限**：`/live` 相关响应的 `Permissions-Policy` 单独放行 `microphone=(self)`，其余页面仍默认拒绝；麦克风需要 HTTPS 安全上下文，公网 NAT 环境可通过 `LIVE_TURN_URL` / `LIVE_TURN_USERNAME` / `LIVE_TURN_PASSWORD` 配置 TURN 中继
+* **音源选择**：`/live/start` 支持关键词搜索（匹配名称 / 标签）与分页「加载更多」，按需调用音频 API，音频再多也不会拖慢页面
+* **开播数量限制**：循环播放默认每人最多 **5** 路，可在「系统设置 → 音频直播」、`config.py` 的 `LIVE_MAX_LOOP_PER_USER` 或「防火墙设置」页面修改（1~50）；实时录音固定每人最多 **1** 路，两者互不占用额度，均在数据库事务内原子校验
 * **超长直播设计**：不展示「已直播时长」，MP3 听众缓冲与 HLS 分片列表均为有界结构，ffmpeg 持续循环，可长期运行不受时长影响
-* **直播不随前端关闭**：ffmpeg 在服务端持续运行，关闭页面或播放器都不会停止直播；重新打开直播台可看到自己的直播并继续管理 / 收听
-* **每个用户最多 1 路直播**：在数据库事务内原子校验，避免并发开播绕过限制
-* **服务重启恢复**：循环播放直播在服务重启后自动恢复（音源文件缺失则该直播标记停止）
+* **直播不随前端关闭**：ffmpeg 在服务端持续运行，关闭页面或播放器都不会停止直播；重新打开直播台 / 开播页可看到自己的全部直播并继续管理、推流或收听
+* **服务重启恢复**：循环播放直播在服务重启后自动恢复（音源文件缺失则该直播标记停止）；实时录音直播依赖浏览器推流，重启后标记停止、不自动恢复
 * **流媒体地址**（开启后展示，可直接分享 / 播放器拉流）：
   * m3u8：`/live/stream/<直播ID>.m3u8`（播放列表自动改写分片地址）
   * mp3：`/live/stream/<直播ID>.mp3`（单 ffmpeg 进程 → Python 内存分发给所有听众，慢客户端自动丢弃旧数据保证低延迟）
   * HLS 分片：`/live/stream/<直播ID>/seg_*.ts`（带路径穿越校验）
 * **播放页自定义控件**：不展示进度条与时长，仅提供「开始」「关闭」与音量调节；播放地址使用同源相对路径，避免反向代理下协议 / 端口不一致被 CSP 拦截
-* **管理员管控**（`/admin/live`）：查看正在直播、强制停止任意直播、按用户名**永久禁止开播**（可手动解封）；封禁会立即停止该用户当前直播，被封禁用户无法再开播
+* **管理员管控**（`/admin/live`）：查看正在直播、强制停止任意直播、按用户名**永久禁止开播**（可手动解封）；封禁会立即停止该用户全部直播，被封禁用户无法再开播
 
 ### 统一定时任务调度
 
@@ -629,14 +632,16 @@ python scripts/build/package.py
 | 方法   | 路径                                        | 说明 |
 | ---- | ----------------------------------------- | ---- |
 | GET  | `/live`                                   | 音频直播台页面（正在直播列表 + 我的直播 / 开始直播） |
+| GET  | `/live/start`                             | 独立开播页（循环播放 / 实时录音；需登录） |
 | GET  | `/live/play.html?channelId=<ID>`          | 独立播放页（自定义开始 / 关闭 / 音量控件、状态轮询、链接复制） |
 | GET  | `/api/live/list`                          | 正在直播的公开列表（含 m3u8 / mp3 / 播放页绝对地址与听众数） |
 | GET  | `/api/live/<ID>`                          | 单个直播状态（播放页每 8 秒轮询，`alive` 表示服务端管线是否在运行） |
-| GET  | `/api/live/me`                            | 当前用户的封禁信息与正在进行的直播（需登录） |
+| GET  | `/api/live/me`                            | 当前用户封禁信息、全部进行中的直播与数量上限（需登录） |
 | GET  | `/api/live/musics?q=&page=`               | 当前用户可用的直播音源（含私有音频，搜索 + 分页，需登录） |
-| POST | `/api/live/start`                         | 开始直播（JSON：`title`、`music_id`、`volume`、`speed`；需登录，每人最多 1 路） |
+| POST | `/api/live/start`                         | 开始直播（JSON：`title`、`mode`=`loop`/`rec`；循环模式另传 `music_id`、`volume`、`speed`；需登录） |
+| POST | `/api/live/<ID>/webrtc/offer`             | 实时录音：提交 SDP offer，返回 SDP answer（需登录且为本人） |
 | POST | `/api/live/<ID>/stop`                     | 停止直播（本人或管理员；停止后清理 HLS 目录并通知所有听众） |
-| POST | `/api/live/<ID>/settings`                 | 调整直播音量（0~2）/ 速度（0.5~2），会重启 ffmpeg 管线（需本人） |
+| POST | `/api/live/<ID>/settings`                 | 调整循环直播音量（0~2）/ 速度（0.5~2），会重启 ffmpeg 管线（需本人） |
 | GET  | `/live/stream/<ID>.m3u8`                  | HLS 播放列表（分片路径自动改写为本站地址，`no-store`） |
 | GET  | `/live/stream/<ID>.mp3`                   | MP3 实时流（长连接，ffmpeg stdout 内存分发，支持多听众） |
 | GET  | `/live/stream/<ID>/<分片文件名>`             | HLS TS 分片（路径穿越校验，`max-age=30`） |
@@ -802,8 +807,8 @@ workspace/
 ├── update.py                 # 一键更新脚本
 ├── core/                     # 核心基础设施层（含共享工具，不含业务逻辑）
 │   ├── db/                   #   数据库连接（原生 sqlite3，每次调用新建连接）与 schema、雪花 ID 迁移
-│   ├── system/               #   系统层：日志、启动检查、应用初始化
-│   │   ├── init.py, logger.py, startup_checks.py
+│   ├── system/               #   系统层：日志、应用初始化
+│   │   ├── init.py, logger.py
 │   ├── shared/               #   共享工具（原 utils 收敛于此）
 │   │   ├── snowflake.py      #   全站统一雪花 ID 生成器（非用户表主键唯一入口）
 │   │   ├── ip.py, captcha.py, ratelimit.py, validation.py
@@ -824,7 +829,7 @@ workspace/
 │   ├── game_server_ban/      #   游戏服务器封禁申请（审批 → 自动解封）
 │   ├── system_metrics/       #   系统监控（CPU/内存/系统/性能追踪）
 │   ├── music/                #   大喇叭音频（常量/查询/CRUD/上传/收藏）
-│   ├── live/                 #   音频直播（ffmpeg 双输出 + MP3 分发）
+│   ├── live/                 #   音频直播（ffmpeg 双输出 + MP3 分发 + WebRTC 录音）
 │   ├── rcon/                 #   RCON 连接管理、玩家列表追踪、EasyAuth 指令
 │   ├── security/             #   安全扫描与内容过滤
 │   ├── user/                 #   用户（认证/资料/管理）
@@ -851,7 +856,7 @@ workspace/
 │   ├── docs/                 #   文档页面
 │   ├── game_accounts/        #   申请账号（页面+API，纯申请注册）
 │   ├── guides/               #   服务器指南（页面+API）
-│   ├── live/                 #   音频直播（直播台 / 播放页 / 流媒体 / API）
+│   ├── live/                 #   音频直播（直播台 / 开播页 / 播放页 / 流媒体 / API）
 │   ├── public/               #   公开文件服务
 │   └── sitemap/              #   站点地图 & robots.txt
 ├── static/                   # 唯一前端文件夹：静态资源 + Jinja2 模板（命名规范见 docs/DEVELOPMENT.md）
@@ -871,7 +876,7 @@ workspace/
 │       ├── guides/               #     服务器指南页面（index / detail / form）
 │       ├── buildings/            #     公共建筑（index / create / detail）
 │       ├── music/                #     大喇叭音频页面（index / my / favorites / upload）
-│       ├── live/                 #     音频直播页面（index 直播台 / play 播放页）
+│       ├── live/                 #     音频直播页面（index 直播台 / start 开播页 / play 播放页）
 │       ├── macros/               #     通用模板宏（模态框/编辑器/进度条/音乐/页面内搜索）
 │       └── ...                   #     根级：base.html / index.html / error_simple.html
 ├── docs/                     # 项目文档
@@ -947,8 +952,8 @@ workspace/
 | `broadcast_logs`          | 广播邮件日志   | —                                                                                                               |
 | `music`                   | 大喇叭音频    | `status` 状态机（0=私有/1=待审核/2=已公开，驳回后自动转为私有；旧库 `gain` 列仅保留不再使用），`tags` 逗号分隔标签列，删除记录时同步删除 `uploads/music/<ID>/` 文件目录 |
 | `music_favorites`         | 大喇叭音频收藏  | 联合主键 `(user_id, music_id)`（同一用户对同一音频仅一条收藏）                                                                      |
-| `live_channels`           | 音频直播频道   | `mode`（当前固定为 `loop`，字段保留兼容历史数据）、`status`（`live` / `stopped`）、`music_id` 音源、`volume` / `speed`；`(user_id, status)` 索引用于「单用户单直播」原子校验；`stop_reason` 记录停止原因（含服务重启 / 管理员强制停止） |
-| `live_bans`               | 音频直播封禁   | `user_id` 主键（永久封禁，一个用户一条），管理员可手动解封；封禁立即停止该用户当前直播 |
+| `live_channels`           | 音频直播频道   | `mode`（`loop` 循环播放 / `rec` 实时录音）、`status`（`live` / `stopped`）、`music_id` 音源（录音模式为空）、`volume` / `speed`；`(user_id, status)` 索引用于每人循环上限（默认 5）与实时录音固定 1 路的原子校验；`stop_reason` 记录停止原因（含服务重启 / 管理员强制停止） |
+| `live_bans`               | 音频直播封禁   | `user_id` 主键（永久封禁，一个用户一条），管理员可手动解封；封禁立即停止该用户全部直播 |
 | `backgrounds`             | 背景图片     | `status` 审核状态，WebP 格式，磁盘单主图（取图按屏幕比例挑选、原样返回，不缩放不裁剪），多张可同时启用，`rejected_at` 记录驳回时间（超 24h 自动删除）                                            |
 | `game_account_registrations` | 游戏账号注册申请 | 申请注册 MC 账号，管理员审批                                                                                               |
 | `game_account_bans`       | 游戏账号封禁   | 封禁 MC 账号申请资格                                                                                                    |

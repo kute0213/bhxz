@@ -2,11 +2,21 @@
 
 from flask import jsonify, request
 
+from config import get_live_max_loop_per_user
 from core.auth import get_current_user, login_required
 from core.shared.ip import get_client_ip, is_trusted_proxy
 from routes.live import live_bp
 from services.live import manager, store
-from services.live.constants import M3U8_PATH, MP3_PATH, PLAY_PAGE_PATH
+from services.live.constants import (
+    MAX_REC_PER_USER,
+    MODE_LABELS,
+    MODE_LOOP,
+    MODE_REC,
+    M3U8_PATH,
+    MP3_PATH,
+    PLAY_PAGE_PATH,
+    is_valid_mode,
+)
 from services.music import STATUS_LABELS, get_user_musics_page, tags_to_list
 
 
@@ -49,6 +59,8 @@ def _payload(channel, row=None):
             'user_id': int(row['user_id']),
             'username': row.get('username') or '',
             'title': row.get('title') or '',
+            'mode': row.get('mode') or MODE_LOOP,
+            'mode_label': MODE_LABELS.get(row.get('mode'), '循环播放'),
             'music_id': row.get('music_id'),
             'volume': row.get('volume'),
             'speed': row.get('speed'),
@@ -96,21 +108,31 @@ def api_live_status(channel_id):
 @live_bp.route('/api/live/me')
 @login_required
 def api_live_me():
-    """当前用户的开播状态：封禁信息与正在进行的直播。"""
+    """当前用户的开播状态：封禁信息、全部进行中的直播与数量上限。"""
     user = get_current_user()
     ban = store.get_ban(user['id'])
-    row = store.get_user_active_channel(user['id'])
-    channel = manager.get(row['id']) if row else None
-    payload = None
-    if row:
-        payload = _payload(channel, row) if channel and channel.is_live() \
-            else _payload(None, row)
+    rows = store.get_user_active_channels(user['id'])
+    channels = []
+    for row in rows:
+        channel = manager.get(row['id'])
+        channels.append(_payload(channel, row) if channel and channel.is_live()
+                        else _payload(None, row))
 
+    loop_used = sum(1 for c in channels if c.get('mode') == MODE_LOOP)
+    rec_used = sum(1 for c in channels if c.get('mode') == MODE_REC)
     return jsonify({
         'success': True,
         'banned': bool(ban),
         'ban': ban,
-        'channel': payload,
+        'channels': channels,
+        # 兼容旧前端字段：最新一个直播
+        'channel': channels[0] if channels else None,
+        'limits': {
+            'loop_max': get_live_max_loop_per_user(),
+            'loop_used': loop_used,
+            'rec_max': MAX_REC_PER_USER,
+            'rec_used': rec_used,
+        },
     })
 
 
@@ -140,13 +162,17 @@ def api_live_musics():
 @live_bp.route('/api/live/start', methods=['POST'])
 @login_required
 def api_live_start():
-    """开始循环播放直播。"""
+    """开始直播：循环播放音频或实时录音。"""
     user = get_current_user()
     data = _json_body()
 
     title = (data.get('title') or '').strip()
     if not title:
         return jsonify({'success': False, 'message': '请填写直播标题'}), 400
+
+    mode = str(data.get('mode') or MODE_LOOP).strip()
+    if not is_valid_mode(mode):
+        return jsonify({'success': False, 'message': '不支持的直播模式'}), 400
 
     # 标题内容注入检测（与音频上传保持一致）
     from services.firewall.protection.content_filter import check_content_injection
@@ -160,12 +186,15 @@ def api_live_start():
     if store.is_banned(user['id']):
         return jsonify({'success': False, 'message': '你已被管理员禁止开播'}), 403
 
-    ok, result = manager.start_loop(
-        user['id'], user['username'], title,
-        data.get('music_id'),
-        volume=data.get('volume'),
-        speed=data.get('speed'),
-    )
+    if mode == MODE_REC:
+        ok, result = manager.start_rec(user['id'], user['username'], title)
+    else:
+        ok, result = manager.start_loop(
+            user['id'], user['username'], title,
+            data.get('music_id'),
+            volume=data.get('volume'),
+            speed=data.get('speed'),
+        )
     if not ok:
         return jsonify({'success': False, 'message': result}), 400
     return jsonify({'success': True, 'channel': _payload(
@@ -199,3 +228,25 @@ def api_live_settings(channel_id):
     if not ok:
         return jsonify({'success': False, 'message': result}), 400
     return jsonify({'success': True, 'channel': _payload(manager.get(channel_id), result)})
+
+
+@live_bp.route('/api/live/<int:channel_id>/webrtc/offer', methods=['POST'])
+@login_required
+def api_live_webrtc_offer(channel_id):
+    """实时录音：提交浏览器 SDP offer，返回 SDP answer。"""
+    user = get_current_user()
+    channel = manager.get(channel_id)
+    if channel is None or not channel.is_live():
+        return jsonify({'success': False, 'message': '直播不存在或已结束'}), 404
+    if channel.user_id != int(user['id']) and not user.get('is_admin'):
+        return jsonify({'success': False, 'message': '无权向该直播推送音频'}), 403
+    if channel.mode != MODE_REC:
+        return jsonify({'success': False, 'message': '该直播不是实时录音模式'}), 400
+
+    data = _json_body()
+    from services.live import webrtc
+    ok, result = webrtc.submit_offer(
+        channel, data.get('sdp'), data.get('type'))
+    if not ok:
+        return jsonify({'success': False, 'message': result}), 400
+    return jsonify({'success': True, 'answer': result})

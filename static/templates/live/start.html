@@ -1,0 +1,731 @@
+{% extends "base.html" %}
+{% block title %}开始直播{% endblock %}
+{% block description %}滨海小镇音频直播：循环播放自己的音频，或使用麦克风实时录音开播。{% endblock %}
+
+{% block extra_style %}
+<style>
+    .live-range { width: 100%; accent-color: #f0c060; }
+    .music-item {
+        display: flex; align-items: center; gap: .6rem; padding: .6rem .75rem;
+        border: 1px solid rgba(255, 255, 255, .10); border-radius: .6rem;
+        cursor: pointer; transition: border-color .15s ease, background .15s ease;
+    }
+    .music-item:hover { border-color: rgba(240, 192, 96, .45); }
+    .music-item.selected { border-color: #f0c060; background: rgba(240, 192, 96, .10); }
+    .music-item input { accent-color: #f0c060; }
+    .mode-tab {
+        display: flex; align-items: center; justify-content: center; gap: .45rem;
+        padding: .65rem .75rem; border-radius: .55rem; cursor: pointer; font-size: .875rem;
+        border: 1px solid rgba(255, 255, 255, .12); color: rgba(255, 255, 255, .65);
+        transition: all .15s ease;
+    }
+    .mode-tab.is-active {
+        border-color: #f0c060; color: #f5d98a; background: rgba(240, 192, 96, .10);
+    }
+    .live-link-row { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+    .live-link-row code {
+        flex: 1 1 10rem; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+        white-space: nowrap; background: rgba(0, 0, 0, .28); padding: .35rem .55rem;
+        border-radius: .4rem; font-size: .72rem;
+    }
+    .mode-badge {
+        font-size: 11px; line-height: 1; padding: .3rem .5rem; border-radius: .35rem;
+        background: rgba(255, 255, 255, .08); color: rgba(255, 255, 255, .68);
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="page-container py-10">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex flex-wrap items-end justify-between gap-4 mb-6">
+            <div>
+                <a href="{{ url_for('live.live_page') }}"
+                   class="text-xs text-cream/50 hover:text-gold-300 inline-flex items-center gap-1 mb-2">
+                    <i data-lucide="arrow-left" class="w-3.5 h-3.5"></i>返回直播台
+                </a>
+                <h1 class="text-2xl sm:text-3xl font-bold">开始直播</h1>
+                <p class="text-cream/50 text-sm mt-1">循环播放音频或实时录音，开播后可分享 HLS / MP3 链接。</p>
+            </div>
+        </div>
+
+        {% if is_banned %}
+        <div class="mb-6 rounded-xl p-4 border border-red-400/30 bg-red-500/10 text-red-200 text-sm">
+            <i data-lucide="ban" class="w-4 h-4 inline mr-1"></i>
+            你已被管理员禁止开播，暂时无法创建新的直播。
+        </div>
+        {% endif %}
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+            <!-- 开播表单 -->
+            <div class="pixel-card rounded-xl p-6">
+                <h2 class="font-bold text-lg mb-4 flex items-center gap-2">
+                    <i data-lucide="radio" class="w-5 h-5 text-gold-400"></i>创建直播
+                </h2>
+                <form id="start-live-form" class="space-y-4">
+                    <div>
+                        <label class="block text-sm text-cream/60 mb-2" for="live-title">直播标题</label>
+                        <input id="live-title" type="text" maxlength="60" required
+                               placeholder="例如：深夜电台 · 一起听歌"
+                               class="input-field w-full px-4 py-3 rounded-lg"
+                               {% if is_banned %}disabled{% endif %}>
+                    </div>
+
+                    <div>
+                        <label class="block text-sm text-cream/60 mb-2">直播方式</label>
+                        <div class="grid grid-cols-2 gap-3">
+                            <div class="mode-tab is-active" data-mode-tab="loop" role="button" tabindex="0">
+                                <i data-lucide="repeat" class="w-4 h-4"></i>循环播放音频
+                            </div>
+                            <div class="mode-tab" data-mode-tab="rec" role="button" tabindex="0">
+                                <i data-lucide="mic" class="w-4 h-4"></i>实时录音直播
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 循环播放 -->
+                    <div id="loop-panel" class="space-y-4">
+                        <div>
+                            <label class="block text-sm text-cream/60 mb-2">选择循环音频</label>
+                            <input id="music-search" type="search" placeholder="搜索我的音频（名称或标签）"
+                                   class="input-field w-full px-4 py-2.5 rounded-lg mb-2">
+                            <div id="music-list" class="space-y-2 max-h-64 overflow-y-auto pr-1">
+                                <div class="text-xs text-cream/40 text-center py-4">加载中…</div>
+                            </div>
+                            <div class="flex items-center justify-between mt-2 min-h-[1.75rem]">
+                                <span id="music-hint" class="text-xs text-cream/40"></span>
+                                <button type="button" id="music-more"
+                                        class="btn-secondary px-3 py-1 rounded text-xs hidden">加载更多</button>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-sm text-cream/60 mb-2" for="live-volume">
+                                    直播音量：<span id="volume-label">100%</span>
+                                </label>
+                                <input id="live-volume" type="range" min="0" max="200" step="1" value="100" class="live-range">
+                            </div>
+                            <div>
+                                <label class="block text-sm text-cream/60 mb-2" for="live-speed">
+                                    播放速度：<span id="speed-label">1.00x</span>
+                                </label>
+                                <input id="live-speed" type="range" min="50" max="200" step="1" value="100" class="live-range">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 实时录音 -->
+                    <div id="rec-panel" class="space-y-3 hidden">
+                        <div class="rounded-lg border border-amber-400/25 bg-amber-400/5 p-4 text-sm text-cream/70 space-y-2">
+                            <p class="flex items-start gap-2">
+                                <i data-lucide="mic" class="w-4 h-4 mt-0.5 text-amber-300 shrink-0"></i>
+                                <span>点击「开始录音直播」后浏览器会请求麦克风权限，授权后即开始推流。</span>
+                            </p>
+                            <p class="text-xs text-cream/45">
+                                请保持本页面打开；关闭页面只会断开麦克风推流，直播不会自动结束。
+                                实时录音直播每个账号最多同时开启 1 个，服务重启后不恢复。
+                            </p>
+                            <p id="secure-warning" class="text-xs text-red-300 hidden">
+                                当前页面不是 HTTPS 安全上下文，浏览器会拒绝使用麦克风。请通过 https:// 访问本站。
+                            </p>
+                        </div>
+                        <div id="mic-status" class="text-xs text-cream/50">麦克风未连接</div>
+                    </div>
+
+                    <button type="submit" id="start-live-submit"
+                            class="btn-primary w-full px-4 py-3 rounded-lg text-sm inline-flex items-center justify-center gap-2"
+                            {% if is_banned %}disabled{% endif %}>
+                        <i data-lucide="play-circle" class="w-4 h-4"></i>
+                        <span id="start-submit-text">开始循环直播</span>
+                    </button>
+                </form>
+            </div>
+
+            <!-- 我的直播 -->
+            <div class="pixel-card rounded-xl p-6">
+                <div class="flex items-center justify-between gap-3 mb-4">
+                    <h2 class="font-bold text-lg flex items-center gap-2">
+                        <i data-lucide="list-music" class="w-5 h-5 text-gold-400"></i>我的直播
+                    </h2>
+                    <span id="live-limits" class="text-xs text-cream/40"></span>
+                </div>
+                <div id="my-channels" class="space-y-3">
+                    <div class="text-center text-cream/40 text-sm py-6">加载中…</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_script %}
+<script>
+(function () {
+    'use strict';
+
+    var LOGGED_IN = {{ 'true' if user else 'false' }};
+    var URLS = {
+        me: {{ url_for('live.api_live_me')|tojson }},
+        musics: {{ url_for('live.api_live_musics')|tojson }},
+        start: {{ url_for('live.api_live_start')|tojson }},
+        stopTpl: {{ url_for('live.api_live_stop', channel_id=0)|tojson }},
+        settingsTpl: {{ url_for('live.api_live_settings', channel_id=0)|tojson }},
+        offerTpl: {{ url_for('live.api_live_webrtc_offer', channel_id=0)|tojson }},
+        playPage: {{ url_for('live.live_play_page')|tojson }},
+        uploadPage: {{ url_for('main.upload_music_page')|tojson }}
+    };
+
+    var state = {
+        mode: 'loop',
+        channels: [],
+        limits: null,
+        music: { q: '', page: 0, hasMore: false, loading: false, selectedId: null },
+        pc: null,
+        micStream: null,
+        micChannelId: null,
+        micState: 'idle'
+    };
+
+    function qs(sel) { return document.querySelector(sel); }
+    function qsa(sel, root) { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); }
+    function esc(text) {
+        return String(text == null ? '' : text).replace(/[&<>"']/g, function (c) {
+            return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+        });
+    }
+    function apiFetch(url, options) {
+        options = options || {};
+        options.headers = Object.assign({ 'Accept': 'application/json' }, options.headers || {});
+        if (options.method && options.method !== 'GET') {
+            options.headers['Content-Type'] = 'application/json';
+        }
+        return fetch(url, options).then(function (res) {
+            return res.json().catch(function () { return {}; }).then(function (data) {
+                if (!res.ok || data.success === false) {
+                    throw new Error(data.message || ('请求失败（' + res.status + '）'));
+                }
+                return data;
+            });
+        });
+    }
+    function channelUrl(tpl, id) {
+        return tpl.replace('/0/', '/' + id + '/');
+    }
+    function copyText(text) {
+        if (navigator.clipboard && window.isSecureContext) {
+            navigator.clipboard.writeText(text).then(function () {
+                Toast.success('链接已复制');
+            }).catch(function () {
+                Toast.error('复制失败，请手动复制');
+            });
+            return;
+        }
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); Toast.success('链接已复制'); }
+        catch (e) { Toast.error('复制失败，请手动复制'); }
+        document.body.removeChild(ta);
+    }
+
+    // ------------------------------------------------------------------
+    // 直播方式切换
+    // ------------------------------------------------------------------
+    function setMode(mode) {
+        state.mode = mode;
+        qsa('[data-mode-tab]').forEach(function (tab) {
+            tab.classList.toggle('is-active', tab.getAttribute('data-mode-tab') === mode);
+        });
+        var loopPanel = qs('#loop-panel');
+        var recPanel = qs('#rec-panel');
+        if (loopPanel) loopPanel.classList.toggle('hidden', mode !== 'loop');
+        if (recPanel) recPanel.classList.toggle('hidden', mode !== 'rec');
+        var text = qs('#start-submit-text');
+        if (text) text.textContent = mode === 'rec' ? '开始录音直播' : '开始循环直播';
+    }
+
+    // ------------------------------------------------------------------
+    // 音源搜索（分页加载，含自己的私有音频）
+    // ------------------------------------------------------------------
+    function musicItemHtml(m) {
+        var selected = state.music.selectedId === m.id ? ' selected' : '';
+        var badgeClass = m.status === 2 ? 'bg-emerald-500/15 text-emerald-300'
+            : (m.status === 1 ? 'bg-yellow-400/15 text-yellow-200' : 'bg-cream/10 text-cream/50');
+        var tags = (m.tags_list || []).length
+            ? '<span class="text-[11px] text-cream/35 truncate">' + esc(m.tags_list.join(' · ')) + '</span>'
+            : '';
+        return '<label class="music-item' + selected + '" data-music-id="' + m.id + '">' +
+            '<input type="radio" name="music-id" value="' + m.id + '"' +
+                (state.music.selectedId === m.id ? ' checked' : '') + '>' +
+            '<span class="flex-1 min-w-0">' +
+                '<span class="block text-sm truncate">' + esc(m.title) + '</span>' +
+                tags +
+            '</span>' +
+            '<span class="text-[11px] px-2 py-0.5 rounded whitespace-nowrap ' + badgeClass + '">' + esc(m.status_label || '') + '</span>' +
+        '</label>';
+    }
+
+    function loadMusics(reset) {
+        if (state.music.loading) return Promise.resolve();
+        var list = qs('#music-list');
+        if (!list) return Promise.resolve();
+        var page = reset ? 1 : state.music.page + 1;
+        state.music.loading = true;
+        if (reset) {
+            state.music.selectedId = null;
+            list.innerHTML = '<div class="text-xs text-cream/40 text-center py-4">加载中…</div>';
+        }
+
+        var url = URLS.musics + '?q=' + encodeURIComponent(state.music.q) + '&page=' + page;
+        return apiFetch(url).then(function (data) {
+            var musics = data.musics || [];
+            if (reset) list.innerHTML = '';
+            if (!musics.length && reset) {
+                list.innerHTML = '<div class="text-xs text-cream/40 text-center py-5">' +
+                    '没有找到可用音频。请先到「大喇叭音频」上传一首。' +
+                    '<a href="' + URLS.uploadPage + '" class="text-gold-400 hover:text-gold-300">去上传</a>' +
+                    '</div>';
+            } else {
+                list.insertAdjacentHTML('beforeend', musics.map(musicItemHtml).join(''));
+            }
+            state.music.page = page;
+            state.music.hasMore = !!data.has_more;
+
+            if (!state.music.selectedId && reset && musics.length) {
+                state.music.selectedId = musics[0].id;
+                var first = list.querySelector('.music-item[data-music-id="' + musics[0].id + '"]');
+                if (first) {
+                    first.classList.add('selected');
+                    var input = first.querySelector('input');
+                    if (input) input.checked = true;
+                }
+            }
+
+            var moreBtn = qs('#music-more');
+            if (moreBtn) moreBtn.classList.toggle('hidden', !state.music.hasMore);
+            var hint = qs('#music-hint');
+            if (hint) hint.textContent = state.music.hasMore ? '还有更多音频' : '已加载全部';
+            if (window.lucide) lucide.createIcons();
+        }).catch(function (err) {
+            if (reset) {
+                list.innerHTML = '<div class="text-xs text-red-300 text-center py-5">' + esc(err.message) + '</div>';
+            }
+        }).finally(function () {
+            state.music.loading = false;
+        });
+    }
+
+    // ------------------------------------------------------------------
+    // 我的直播
+    // ------------------------------------------------------------------
+    function micStatusText() {
+        if (state.micState === 'connecting') return '正在连接麦克风…';
+        if (state.micState === 'connected') return '麦克风推流已连接';
+        if (state.micState === 'failed') return '麦克风推流连接失败，可点击「重新连接麦克风」重试';
+        if (state.micState === 'denied') return '麦克风权限被拒绝，请在浏览器地址栏允许本站使用麦克风';
+        return '麦克风未连接';
+    }
+
+    function updateMicStatus() {
+        qsa('[data-mic-status]').forEach(function (el) {
+            var id = parseInt(el.getAttribute('data-mic-status'), 10);
+            if (id !== state.micChannelId) {
+                el.textContent = '麦克风未连接';
+                el.className = 'text-xs text-cream/40 mt-2';
+                return;
+            }
+            el.textContent = micStatusText();
+            el.className = 'text-xs mt-2 ' + (
+                state.micState === 'connected' ? 'text-emerald-300'
+                : (state.micState === 'failed' || state.micState === 'denied') ? 'text-red-300'
+                : 'text-amber-200');
+        });
+    }
+
+    function renderChannels() {
+        var box = qs('#my-channels');
+        var limits = qs('#live-limits');
+        if (!box) return;
+        if (limits) {
+            limits.textContent = state.limits
+                ? '循环 ' + state.limits.loop_used + '/' + state.limits.loop_max +
+                  ' · 录音 ' + state.limits.rec_used + '/' + state.limits.rec_max
+                : '';
+        }
+        if (!state.channels.length) {
+            box.innerHTML = '<div class="text-center py-8">' +
+                '<i data-lucide="radio" class="w-10 h-10 mx-auto text-cream/20 mb-3"></i>' +
+                '<p class="text-cream/50 text-sm">你当前没有正在进行的直播</p></div>';
+            if (window.lucide) lucide.createIcons();
+            return;
+        }
+
+        box.innerHTML = state.channels.map(function (ch) {
+            var rec = ch.mode === 'rec';
+            var controls = '';
+            if (rec) {
+                controls =
+                    '<div class="mt-3 pt-3 border-t border-cream/10">' +
+                        '<div class="flex flex-wrap items-center gap-2">' +
+                            '<button type="button" class="btn-secondary px-3 py-1.5 rounded text-xs inline-flex items-center gap-1" data-connect-mic="' + ch.id + '">' +
+                                '<i data-lucide="mic" class="w-3.5 h-3.5"></i>连接麦克风</button>' +
+                            '<button type="button" class="btn-secondary px-3 py-1.5 rounded text-xs inline-flex items-center gap-1" data-disconnect-mic="' + ch.id + '">' +
+                                '<i data-lucide="mic-off" class="w-3.5 h-3.5"></i>断开麦克风</button>' +
+                        '</div>' +
+                        '<div data-mic-status="' + ch.id + '" class="text-xs text-cream/40 mt-2">麦克风未连接</div>' +
+                    '</div>';
+            } else {
+                var vol = Math.round((ch.volume || 1) * 100);
+                var spd = Math.round((ch.speed || 1) * 100);
+                controls =
+                    '<div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3 pt-3 border-t border-cream/10">' +
+                        '<div>' +
+                            '<label class="block text-xs text-cream/55 mb-1">音量：<span data-vol-label="' + ch.id + '">' + vol + '%</span></label>' +
+                            '<input type="range" min="0" max="200" step="1" value="' + vol + '" class="live-range" data-volume="' + ch.id + '">' +
+                        '</div>' +
+                        '<div>' +
+                            '<label class="block text-xs text-cream/55 mb-1">速度：<span data-speed-label="' + ch.id + '">' + (spd / 100).toFixed(2) + 'x</span></label>' +
+                            '<input type="range" min="50" max="200" step="1" value="' + spd + '" class="live-range" data-speed="' + ch.id + '">' +
+                        '</div>' +
+                    '</div>';
+            }
+            return '<div class="rounded-lg border border-cream/10 p-4" data-channel-card="' + ch.id + '">' +
+                '<div class="flex flex-wrap items-start justify-between gap-2">' +
+                    '<div class="min-w-0">' +
+                        '<div class="flex items-center gap-2 flex-wrap">' +
+                            '<span class="font-bold truncate">' + esc(ch.title) + '</span>' +
+                            '<span class="mode-badge">' + esc(ch.mode_label || '循环播放') + '</span>' +
+                            '<span class="text-xs ' + (ch.alive ? 'text-emerald-300' : 'text-red-300') + '">' +
+                                (ch.alive ? '直播中' : '连接中断') + '</span>' +
+                        '</div>' +
+                        '<div class="text-xs text-cream/50 mt-1">直播 ID：' + ch.id +
+                            ' · <span data-listeners="' + ch.id + '">' + ch.listeners + '</span> 人在听</div>' +
+                    '</div>' +
+                    '<button type="button" class="px-3 py-1.5 rounded text-xs border border-red-400/40 text-red-300 hover:bg-red-500/10 inline-flex items-center gap-1" data-stop="' + ch.id + '">' +
+                        '<i data-lucide="square" class="w-3.5 h-3.5"></i>停止</button>' +
+                '</div>' +
+                '<div class="live-link-row text-xs mt-3">' +
+                    '<span class="text-cream/40 w-10">播放页</span><code>' + esc(ch.links.page) + '</code>' +
+                    '<button type="button" class="btn-secondary px-2.5 py-1 rounded copy-btn" data-copy="' + esc(ch.links.page) + '">复制</button>' +
+                '</div>' +
+                '<div class="live-link-row text-xs mt-1.5">' +
+                    '<span class="text-cream/40 w-10">mp3</span><code>' + esc(ch.links.mp3) + '</code>' +
+                    '<button type="button" class="btn-secondary px-2.5 py-1 rounded copy-btn" data-copy="' + esc(ch.links.mp3) + '">复制</button>' +
+                '</div>' +
+                controls +
+            '</div>';
+        }).join('');
+        if (window.lucide) lucide.createIcons();
+        bindChannelControls();
+        updateMicStatus();
+    }
+
+    function bindChannelControls() {
+        qsa('[data-volume]').forEach(function (el) {
+            el.addEventListener('input', function () {
+                var id = el.getAttribute('data-volume');
+                var label = qs('[data-vol-label="' + id + '"]');
+                if (label) label.textContent = el.value + '%';
+            });
+            el.addEventListener('change', function () {
+                applySettings(parseInt(el.getAttribute('data-volume'), 10), el.value / 100, null);
+            });
+        });
+        qsa('[data-speed]').forEach(function (el) {
+            el.addEventListener('input', function () {
+                var id = el.getAttribute('data-speed');
+                var label = qs('[data-speed-label="' + id + '"]');
+                if (label) label.textContent = (el.value / 100).toFixed(2) + 'x';
+            });
+            el.addEventListener('change', function () {
+                applySettings(parseInt(el.getAttribute('data-speed'), 10), null, el.value / 100);
+            });
+        });
+    }
+
+    function loadMe() {
+        return apiFetch(URLS.me).then(function (data) {
+            state.channels = data.channels || [];
+            state.limits = data.limits || null;
+            renderChannels();
+        }).catch(function () {});
+    }
+
+    function applySettings(channelId, volume, speed) {
+        var payload = {};
+        if (volume != null) payload.volume = volume;
+        if (speed != null) payload.speed = speed;
+        apiFetch(channelUrl(URLS.settingsTpl, channelId), {
+            method: 'POST',
+            body: JSON.stringify(payload)
+        }).then(function (data) {
+            Toast.success('直播设置已更新');
+            var idx = state.channels.findIndex(function (c) { return c.id === channelId; });
+            if (idx >= 0) state.channels[idx] = data.channel;
+        }).catch(function (err) {
+            Toast.error(err.message);
+        });
+    }
+
+    function confirmStop(channelId) {
+        CustomModal.confirm('确定要停止这个直播吗？停止后所有听众将断开。', {
+            callback: function (ok) {
+                if (!ok) return;
+                if (state.micChannelId === channelId) disconnectMic(true);
+                apiFetch(channelUrl(URLS.stopTpl, channelId), {
+                    method: 'POST',
+                    body: JSON.stringify({})
+                }).then(function (data) {
+                    Toast.success(data.message || '直播已停止');
+                    loadMe();
+                }).catch(function (err) { Toast.error(err.message); });
+            }
+        });
+    }
+
+    // ------------------------------------------------------------------
+    // WebRTC 实时录音
+    // ------------------------------------------------------------------
+    function setMicState(channelId, value) {
+        state.micChannelId = channelId;
+        state.micState = value;
+        updateMicStatus();
+    }
+
+    function disconnectMic(silent) {
+        if (state.pc) {
+            try { state.pc.close(); } catch (e) {}
+            state.pc = null;
+        }
+        if (state.micStream) {
+            state.micStream.getTracks().forEach(function (t) { try { t.stop(); } catch (e) {} });
+            state.micStream = null;
+        }
+        if (state.micChannelId != null) {
+            var id = state.micChannelId;
+            state.micChannelId = null;
+            state.micState = 'idle';
+            updateMicStatus();
+            if (!silent) Toast.success('已断开麦克风推流（直播仍在继续）');
+            return id;
+        }
+        return null;
+    }
+
+    function waitIceGathering(pc, timeoutMs) {
+        return new Promise(function (resolve) {
+            if (pc.iceGatheringState === 'complete') { resolve(); return; }
+            var done = false;
+            function finish() {
+                if (done) return;
+                done = true;
+                pc.removeEventListener('icegatheringstatechange', onChange);
+                resolve();
+            }
+            function onChange() {
+                if (pc.iceGatheringState === 'complete') finish();
+            }
+            pc.addEventListener('icegatheringstatechange', onChange);
+            setTimeout(finish, timeoutMs || 3000);
+        });
+    }
+
+    function connectMic(channelId) {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            Toast.error('当前浏览器不支持麦克风采集');
+            return;
+        }
+        if (!window.isSecureContext) {
+            Toast.error('麦克风需要 HTTPS 安全上下文，请使用 https:// 访问本站');
+            setMicState(channelId, 'failed');
+            return;
+        }
+        if (state.pc) disconnectMic(true);
+
+        setMicState(channelId, 'connecting');
+        navigator.mediaDevices.getUserMedia({
+            audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+        }).then(function (stream) {
+            state.micStream = stream;
+            var pc = new RTCPeerConnection({
+                iceServers: [{ urls: 'stun:stun.qq.com:3478' }]
+            });
+            state.pc = pc;
+            pc.onconnectionstatechange = function () {
+                if (state.pc !== pc) return;
+                if (pc.connectionState === 'connected') {
+                    setMicState(channelId, 'connected');
+                    Toast.success('麦克风推流已连接');
+                } else if (pc.connectionState === 'failed') {
+                    setMicState(channelId, 'failed');
+                    Toast.error('麦克风推流连接失败，请重试');
+                } else if (pc.connectionState === 'disconnected') {
+                    setMicState(channelId, 'connecting');
+                }
+            };
+            stream.getAudioTracks().forEach(function (track) {
+                pc.addTrack(track, stream);
+            });
+            return pc.createOffer()
+                .then(function (offer) { return pc.setLocalDescription(offer); })
+                .then(function () { return waitIceGathering(pc, 3000); })
+                .then(function () {
+                    return apiFetch(channelUrl(URLS.offerTpl, channelId), {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            sdp: pc.localDescription.sdp,
+                            type: pc.localDescription.type
+                        })
+                    });
+                })
+                .then(function (data) {
+                    return pc.setRemoteDescription(new RTCSessionDescription(data.answer));
+                });
+        }).then(function () {
+            // 连接状态由 onconnectionstatechange 更新
+        }).catch(function (err) {
+            var denied = (err && (err.name === 'NotAllowedError' || err.name === 'SecurityError'));
+            setMicState(channelId, denied ? 'denied' : 'failed');
+            Toast.error(denied
+                ? '麦克风权限被拒绝，请在浏览器允许本站使用麦克风后重试'
+                : (err.message || '麦克风连接失败'));
+        });
+    }
+
+    // ------------------------------------------------------------------
+    // 开播
+    // ------------------------------------------------------------------
+    function startLive(event) {
+        event.preventDefault();
+        var titleInput = qs('#live-title');
+        var title = titleInput ? titleInput.value.trim() : '';
+        if (!title) { Toast.error('请填写直播标题'); return; }
+
+        var payload = { title: title, mode: state.mode };
+        if (state.mode === 'loop') {
+            if (!state.music.selectedId) { Toast.error('请选择要循环播放的音频'); return; }
+            payload.music_id = state.music.selectedId;
+            payload.volume = parseInt(qs('#live-volume').value, 10) / 100;
+            payload.speed = parseInt(qs('#live-speed').value, 10) / 100;
+        }
+
+        var btn = qs('#start-live-submit');
+        if (btn) btn.disabled = true;
+
+        apiFetch(URLS.start, { method: 'POST', body: JSON.stringify(payload) })
+            .then(function (data) {
+                Toast.success(state.mode === 'rec' ? '直播已创建，正在连接麦克风…' : '直播已开始');
+                if (titleInput) titleInput.value = '';
+                return loadMe().then(function () {
+                    if (state.mode === 'rec' && data.channel) {
+                        connectMic(data.channel.id);
+                    }
+                });
+            })
+            .catch(function (err) { Toast.error(err.message); })
+            .finally(function () {
+                if (btn) btn.disabled = false;
+            });
+    }
+
+    // ------------------------------------------------------------------
+    // 初始化
+    // ------------------------------------------------------------------
+    document.addEventListener('DOMContentLoaded', function () {
+        if (!LOGGED_IN) return;
+
+        var secureWarning = qs('#secure-warning');
+        if (secureWarning && !window.isSecureContext) secureWarning.classList.remove('hidden');
+
+        qsa('[data-mode-tab]').forEach(function (tab) {
+            tab.addEventListener('click', function () {
+                setMode(tab.getAttribute('data-mode-tab'));
+            });
+            tab.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    setMode(tab.getAttribute('data-mode-tab'));
+                }
+            });
+        });
+
+        var form = qs('#start-live-form');
+        if (form) form.addEventListener('submit', startLive);
+
+        var volume = qs('#live-volume');
+        var speed = qs('#live-speed');
+        if (volume) volume.addEventListener('input', function () {
+            qs('#volume-label').textContent = volume.value + '%';
+        });
+        if (speed) speed.addEventListener('input', function () {
+            qs('#speed-label').textContent = (speed.value / 100).toFixed(2) + 'x';
+        });
+
+        var search = qs('#music-search');
+        var searchTimer = null;
+        if (search) {
+            search.addEventListener('input', function () {
+                clearTimeout(searchTimer);
+                searchTimer = setTimeout(function () {
+                    state.music.q = search.value.trim();
+                    loadMusics(true);
+                }, 300);
+            });
+        }
+        var moreBtn = qs('#music-more');
+        if (moreBtn) moreBtn.addEventListener('click', function () { loadMusics(false); });
+
+        var musicList = qs('#music-list');
+        if (musicList) {
+            musicList.addEventListener('change', function (e) {
+                var input = e.target;
+                if (!input || input.name !== 'music-id') return;
+                state.music.selectedId = parseInt(input.value, 10);
+                qsa('.music-item', musicList).forEach(function (el) {
+                    el.classList.toggle('selected', el.getAttribute('data-music-id') === input.value);
+                });
+            });
+        }
+
+        // 我的直播操作（事件委托）
+        document.addEventListener('click', function (e) {
+            var target = e.target;
+            if (!target || !target.closest) return;
+
+            var copyBtn = target.closest('.copy-btn');
+            if (copyBtn) {
+                e.preventDefault();
+                copyText(copyBtn.getAttribute('data-copy'));
+                return;
+            }
+            var stopBtn = target.closest('[data-stop]');
+            if (stopBtn) {
+                e.preventDefault();
+                confirmStop(parseInt(stopBtn.getAttribute('data-stop'), 10));
+                return;
+            }
+            var connectBtn = target.closest('[data-connect-mic]');
+            if (connectBtn) {
+                e.preventDefault();
+                connectMic(parseInt(connectBtn.getAttribute('data-connect-mic'), 10));
+                return;
+            }
+            var disconnectBtn = target.closest('[data-disconnect-mic]');
+            if (disconnectBtn) {
+                e.preventDefault();
+                disconnectMic(false);
+                return;
+            }
+        });
+
+        // 关闭页面只断开麦克风，不停止服务端直播
+        window.addEventListener('pagehide', function () { disconnectMic(true); });
+
+        loadMusics(true);
+        loadMe();
+    });
+})();
+</script>
+{% endblock %}

@@ -101,7 +101,7 @@ MODULE_LOG_DEFAULTS = {
     # WSGI 服务器（Waitress）内部日志：任务队列深度等，默认只进独立缓冲，
     # 不落盘、不并入全局日志，避免刷屏（可在「日志页面 → 日志设置」开启）。
     'waitress': {'store': False, 'global': False},
-    # —— 业务模块单独日志（除 core 核心与启动自检外，业务日志一律走模块单独日志）——
+    # —— 业务模块单独日志（除 core 核心外，业务日志一律走模块单独日志）——
     # 默认均为「落盘到 logs/modules/<名称>.log、不并入全局日志」，
     # 可在「日志页面 → 日志设置」逐模块改（任意模块均支持）。
     'password': {'store': True, 'global': False},     # 找回密码

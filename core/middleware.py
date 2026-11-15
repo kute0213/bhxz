@@ -58,6 +58,20 @@ PERMISSIONS_POLICY = (
     "magnetometer=(), gyroscope=(), accelerometer=(), clipboard-write=(self)"
 )
 
+# 音频直播页面需要采集麦克风做实时录音直播，仅对这些路径放行 microphone=(self)。
+# 注意不要全站放行：其他页面没有录音需求，保持默认拒绝更安全。
+LIVE_MIC_PERMISSIONS_POLICY = (
+    "geolocation=(), camera=(), microphone=(self), payment=(), usb=(), "
+    "magnetometer=(), gyroscope=(), accelerometer=(), clipboard-write=(self)"
+)
+
+
+def _permissions_policy(path):
+    """按请求路径返回 Permissions-Policy（直播页放行麦克风）。"""
+    if path == '/live' or path.startswith('/live/'):
+        return LIVE_MIC_PERMISSIONS_POLICY
+    return PERMISSIONS_POLICY
+
 # ---------------------------------------------------------------------------
 # 网页地图内嵌放行（frame-src 动态扩展）
 # ---------------------------------------------------------------------------
@@ -119,8 +133,8 @@ def _set_security_headers(response):
     response.headers.setdefault('X-Frame-Options', 'SAMEORIGIN')
     response.headers.setdefault('Referrer-Policy', 'strict-origin-when-cross-origin')
 
-    # ---- 浏览器功能权限 ----
-    response.headers.setdefault('Permissions-Policy', PERMISSIONS_POLICY)
+    # ---- 浏览器功能权限（直播页放行麦克风，其余页面默认拒绝） ----
+    response.headers.setdefault('Permissions-Policy', _permissions_policy(request.path))
 
     # ---- 跨源隔离 ----
     response.headers.setdefault('Cross-Origin-Opener-Policy', 'same-origin')

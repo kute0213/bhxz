@@ -29,6 +29,7 @@ from config import (
     DDOS_GUARD_BAN_MINUTES, DDOS_GUARD_PERMANENT_AFTER,
     DDOS_GUARD_OFFENSE_WINDOW_HOURS,
     IPV6_BLOCK_ENABLED,
+    LIVE_MAX_LOOP_PER_USER,
     WAITRESS_THREADS,
     get_config_value,
 )
@@ -157,6 +158,9 @@ def admin_firewall_settings_page():
         max_pending_background=get_config_value('MAX_PENDING_BACKGROUND', 0),
         # 服务器工作线程数（与「系统设置」修改的是同一个配置，热加载）
         waitress_threads=get_config_value('WAITRESS_THREADS', WAITRESS_THREADS),
+        # 音频直播：每人循环直播数量上限（与「系统设置」同一配置，热加载）
+        live_max_loop_per_user=get_config_value(
+            'LIVE_MAX_LOOP_PER_USER', LIVE_MAX_LOOP_PER_USER),
     )
 
 
@@ -203,6 +207,8 @@ FIREWALL_CONFIG_KEYS = {
     'MAX_PENDING_MUSIC', 'MAX_PENDING_BACKGROUND',
     # 服务器工作线程数（与「系统设置」同一配置，热加载）
     'WAITRESS_THREADS',
+    # 音频直播：每人循环直播数量上限（与「系统设置」同一配置，热加载）
+    'LIVE_MAX_LOOP_PER_USER',
 }
 
 # ===========================================================================
@@ -270,7 +276,7 @@ def admin_firewall_settings_save():
         'DDOS_GUARD_OFFENSE_WINDOW_HOURS',
         'MAX_PENDING_CONTENT', 'MAX_PENDING_BUILDING', 'MAX_PENDING_GUIDE',
         'MAX_PENDING_MUSIC', 'MAX_PENDING_BACKGROUND',
-        'WAITRESS_THREADS',
+        'WAITRESS_THREADS', 'LIVE_MAX_LOOP_PER_USER',
     }
     for item in items:
         key = item.get('key')

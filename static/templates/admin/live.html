@@ -22,7 +22,7 @@
                 <tr class="border-b border-forest-700/30 last:border-0" data-live-row="{{ ch.id }}">
                     <td class="px-4 py-3">
                         <div class="font-medium text-cream truncate max-w-[16rem]">{{ ch.title }}</div>
-                        <div class="text-xs text-cream/40">ID {{ ch.id }}</div>
+                        <div class="text-xs text-cream/40">ID {{ ch.id }} · {{ ch.mode_label or '循环播放' }}</div>
                     </td>
                     <td class="px-4 py-3">
                         <div class="text-cream/80">{{ ch.username or '未知' }}</div>

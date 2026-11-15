@@ -5,7 +5,7 @@
 
 from flask import abort, request
 
-from core.auth import get_current_user
+from core.auth import get_current_user, login_required
 from core.helpers import render_page
 from routes.live import live_bp
 from services.live import manager, store
@@ -18,6 +18,18 @@ def live_page():
     is_banned = bool(user and store.is_banned(user['id']))
     return render_page(
         'live/index.html',
+        is_banned=is_banned,
+    )
+
+
+@live_bp.route('/live/start')
+@login_required
+def live_start_page():
+    """独立的「开始直播」页面：循环播放 / 实时录音。"""
+    user = get_current_user()
+    is_banned = bool(user and store.is_banned(user['id']))
+    return render_page(
+        'live/start.html',
         is_banned=is_banned,
     )
 
@@ -39,6 +51,8 @@ def live_play_page():
                 'user_id': row['user_id'],
                 'username': row['username'],
                 'title': row['title'],
+                'mode': row.get('mode') or 'loop',
+                'mode_label': '实时录音' if row.get('mode') == 'rec' else '循环播放',
                 'volume': row['volume'],
                 'speed': row['speed'],
                 'created_at': row['created_at'],
