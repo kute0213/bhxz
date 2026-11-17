@@ -8,8 +8,8 @@
   - 用户刷新页面（发起一次普通页面请求）会立即清空该 IP 的所有 API 计数与封禁，
     即「到达限制后封禁 API，但刷新后即可继续调用」
   - 阈值、窗口、总开关均可在管理后台 → 系统设置中热更新
-  - 实时录音 PCM 上传频率天然高于普通接口（约 5 次/秒），使用独立配额，
-    详见 PCM_UPLOAD_* 常量
+  - 实时录音 PCM / Opus 上传频率天然高于普通接口（约 20~25 次/秒），使用
+    独立配额，详见 PCM_UPLOAD_* / OPUS_UPLOAD_* 常量
 
 使用方式（由 core/middleware.py 的请求钩子统一调用）：
     from services.firewall.api_guard import guard_api_request
@@ -30,11 +30,23 @@ _lock = threading.Lock()
 # {(ip, bucket): {'count': int, 'window_start': float, 'blocked_until': float}}
 _counters = {}
 
-# 实时录音 PCM 上传专用配额（独立计数桶，不占用普通 API 额度）。
-# 浏览器每 200ms 上传一块，约 300 次/分钟，普通 60 次/分钟会误封正常直播。
+# 实时录音上传专用配额（独立计数桶，不占用普通 API 额度）。
+# - PCM 兜底通道：每 50ms 上传一块，约 20 次/秒（1200 次/分钟）；
+# - Opus 低延迟通道：每 40ms 上传一批，约 25 次/秒（1500 次/分钟）。
+# 普通 60 次/分钟会把正常直播误封，故分别使用独立桶（约 2 倍余量）。
 PCM_UPLOAD_PATH_RE = re.compile(r'^/api/live/\d+/pcm$')
-PCM_UPLOAD_LIMIT = 600      # 约 5 次/秒的 2 倍余量
+PCM_UPLOAD_LIMIT = 2400
 PCM_UPLOAD_WINDOW = 60
+
+OPUS_UPLOAD_PATH_RE = re.compile(r'^/api/live/\d+/opus$')
+OPUS_UPLOAD_LIMIT = 3000
+OPUS_UPLOAD_WINDOW = 60
+
+# (路径正则, 计数桶, 上限, 窗口)
+_UPLOAD_BUCKETS = (
+    (PCM_UPLOAD_PATH_RE, 'live_pcm', PCM_UPLOAD_LIMIT, PCM_UPLOAD_WINDOW),
+    (OPUS_UPLOAD_PATH_RE, 'live_opus', OPUS_UPLOAD_LIMIT, OPUS_UPLOAD_WINDOW),
+)
 
 # 上次全量清理时间（防止内存无限增长）
 _last_prune = 0.0
@@ -195,15 +207,17 @@ def is_api_request(request):
 def _request_bucket(request):
     """返回当前请求使用的限流桶 (bucket, limit, window)。
 
-    实时录音 PCM 上传约 5 次/秒，使用独立配额避免被普通 API 的 60 次/分钟误封。
-    只有已登录用户才能获得该配额：未登录请求仍走普通限流，不会放大攻击面；
-    该接口本身还会校验登录状态与频道归属。
+    实时录音上传（PCM / Opus）约 20~25 次/秒，使用独立配额避免被普通 API
+    的 60 次/分钟误封。只有已登录用户才能获得该配额：未登录请求仍走普通
+    限流，不会放大攻击面；该接口本身还会校验登录状态与频道归属。
     """
-    if (request.method == 'POST'
-            and PCM_UPLOAD_PATH_RE.match(request.path or '')):
+    if request.method == 'POST':
         from flask import session
         if session.get('user_id'):
-            return 'live_pcm', PCM_UPLOAD_LIMIT, PCM_UPLOAD_WINDOW
+            path = request.path or ''
+            for pattern, bucket, limit, window in _UPLOAD_BUCKETS:
+                if pattern.match(path):
+                    return bucket, limit, window
     return 'default', None, None
 
 

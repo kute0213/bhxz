@@ -58,6 +58,35 @@ def test_pcm_sustained_upload_not_blocked(monkeypatch):
         guard.PCM_UPLOAD_WINDOW)[0] is False
 
 
+def test_opus_bucket_is_independent(monkeypatch):
+    """Opus 上传与默认 / PCM 桶互不影响。"""
+    monkeypatch.setattr(guard, '_get_limit', lambda: (True, 3, 60))
+
+    for _ in range(3):
+        assert guard.check_api_rate_limit('2.3.4.5')[0] is True
+    assert guard.check_api_rate_limit('2.3.4.5')[0] is False
+
+    for _ in range(10):
+        assert guard.check_api_rate_limit(
+            '2.3.4.5', 'live_opus', guard.OPUS_UPLOAD_LIMIT,
+            guard.OPUS_UPLOAD_WINDOW)[0] is True
+
+    for _ in range(10):
+        assert guard.check_api_rate_limit(
+            '2.3.4.5', 'live_pcm', guard.PCM_UPLOAD_LIMIT,
+            guard.PCM_UPLOAD_WINDOW)[0] is True
+
+
+def test_opus_sustained_upload_not_blocked(monkeypatch):
+    """按 25 次/秒持续 1 分钟（1500 次）不应被 60 次/分钟的普通配额误封。"""
+    monkeypatch.setattr(guard, '_get_limit', lambda: (True, 60, 60))
+
+    for _ in range(1500):
+        assert guard.check_api_rate_limit(
+            '7.7.7.7', 'live_opus', guard.OPUS_UPLOAD_LIMIT,
+            guard.OPUS_UPLOAD_WINDOW)[0] is True
+
+
 def test_disabled_global_switch(monkeypatch):
     import config
     monkeypatch.setattr(
@@ -115,3 +144,10 @@ def test_pcm_bucket_only_matches_post_pcm():
     assert _bucket('/api/live/123/pcm', method='GET', user_id=1) == 'default'
     assert _bucket('/api/live/123/status', user_id=1) == 'default'
     assert _bucket('/api/live/abc/pcm', user_id=1) == 'default'
+
+
+def test_opus_bucket_requires_login_and_post():
+    assert _bucket('/api/live/123/opus', user_id=1) == 'live_opus'
+    assert _bucket('/api/live/123/opus') == 'default'
+    assert _bucket('/api/live/123/opus', method='GET', user_id=1) == 'default'
+    assert _bucket('/api/live/123/opusx', user_id=1) == 'default'

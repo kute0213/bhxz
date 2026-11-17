@@ -17,6 +17,7 @@ import shutil
 import subprocess
 import threading
 import time
+from collections import deque
 
 from config import UPLOAD_LIVE_DIR
 from core.shared.process_utils import decode_output, popen_kwargs
@@ -30,6 +31,8 @@ from services.live.constants import (
     MODE_REC,
     MP3_QUEUE_MAXSIZE,
     MP3_RING_MAX_BYTES,
+    OPUS_QUEUE_MAXSIZE,
+    OPUS_RING_MAX_PACKETS,
     SPEED_DEFAULT,
     VOLUME_DEFAULT,
 )
@@ -86,6 +89,12 @@ class LiveChannel:
         self._ring_lock = threading.Lock()
         self._ring = bytearray()
 
+        # Opus 低延迟旁路：包级环形快照 + 每听众有界队列。
+        # 与 MP3 完全独立，Opus 不可用时 MP3 仍照常工作。
+        self._opus_lock = threading.Lock()
+        self._opus_subscribers = set()
+        self._opus_ring = deque(maxlen=OPUS_RING_MAX_PACKETS)
+
         self.hls_dir = os.path.join(UPLOAD_LIVE_DIR, str(self.id))
         self.on_exit = None  # 由 LiveManager 注入
         self._reader_thread = None
@@ -102,7 +111,10 @@ class LiveChannel:
 
     def listener_count(self):
         with self._subs_lock:
-            return len(self._subscribers)
+            mp3 = len(self._subscribers)
+        with self._opus_lock:
+            opus = len(self._opus_subscribers)
+        return mp3 + opus
 
     def state(self):
         with self._lock:
@@ -155,9 +167,11 @@ class LiveChannel:
                     except OSError:
                         pass
 
-            # 清空为新管线预留的 MP3 缓冲，避免听众听到上一次直播的残留音频
+            # 清空为新管线预留的 MP3 / Opus 缓冲，避免听众听到上一次直播的残留音频
             with self._ring_lock:
                 self._ring.clear()
+            with self._opus_lock:
+                self._opus_ring.clear()
 
             try:
                 proc = subprocess.Popen(
@@ -363,11 +377,67 @@ class LiveChannel:
         with self._subs_lock:
             self._subscribers.discard(q)
 
+    # ------------------------------------------------------------------
+    # Opus 低延迟听众管理（只转发，不解码）
+    # ------------------------------------------------------------------
+
+    def publish_opus(self, packets):
+        """把一个 Opus 批次分发给所有听众，并写入环形快照。
+
+        队列满时丢弃最旧数据，保证听众延迟不会持续累积。
+        """
+        if not packets:
+            return
+        with self._opus_lock:
+            self._opus_ring.extend(packets)
+            subscribers = list(self._opus_subscribers)
+        for q in subscribers:
+            for packet in packets:
+                try:
+                    q.put_nowait(packet)
+                except queue.Full:
+                    try:
+                        q.get_nowait()
+                    except queue.Empty:
+                        pass
+                    try:
+                        q.put_nowait(packet)
+                    except queue.Full:
+                        break
+
+    def subscribe_opus(self):
+        """新听众订阅：返回 (队列, 最近若干 Opus 包快照)。"""
+        q = queue.Queue(maxsize=OPUS_QUEUE_MAXSIZE)
+        with self._opus_lock:
+            self._opus_subscribers.add(q)
+            snapshot = list(self._opus_ring)
+        return q, snapshot
+
+    def unsubscribe_opus(self, q):
+        with self._opus_lock:
+            self._opus_subscribers.discard(q)
+
     def _notify_stop(self):
         with self._subs_lock:
             subscribers = list(self._subscribers)
             self._subscribers.clear()
         for q in subscribers:
+            try:
+                while True:
+                    q.get_nowait()
+            except queue.Empty:
+                pass
+            try:
+                q.put_nowait(None)
+            except queue.Full:
+                pass
+
+        # Opus 听众同样需要收到结束信号（None），否则会一直等待心跳
+        with self._opus_lock:
+            opus_subscribers = list(self._opus_subscribers)
+            self._opus_subscribers.clear()
+            self._opus_ring.clear()
+        for q in opus_subscribers:
             try:
                 while True:
                     q.get_nowait()

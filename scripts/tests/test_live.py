@@ -1,5 +1,7 @@
 """音频直播服务测试：参数规范化、ffmpeg 命令、频道与封禁存储、音源分页。"""
 
+import struct
+
 import pytest
 
 import core.db.connection as connection
@@ -7,6 +9,9 @@ from services.live import store
 from services.live.constants import (
     MODE_LOOP,
     MODE_REC,
+    OPUS_MAX_BATCH_PACKETS,
+    OPUS_MAX_PACKET_BYTES,
+    OPUS_RING_MAX_PACKETS,
     STATUS_LIVE,
     STATUS_STOPPED,
     normalize_speed,
@@ -15,8 +20,9 @@ from services.live.constants import (
 )
 from services.live.ffmpeg import build_filter_chain, build_loop_cmd, build_rec_cmd
 from services.live.constants import MP3_RING_MAX_BYTES, PCM_MAX_CHUNK_BYTES
-from services.live.ingest import validate_pcm_chunk
+from services.live.ingest import validate_opus_batch, validate_pcm_chunk
 from services.live.mp3 import trim_to_frame
+from services.live.runtime import LiveChannel
 from services.music.queries import get_user_musics_page
 
 
@@ -113,6 +119,82 @@ def test_validate_pcm_chunk():
 
     ok, _, status = validate_pcm_chunk(b'\x00' * (PCM_MAX_CHUNK_BYTES + 4))
     assert ok is False and status == 413
+
+
+# ---------------------------------------------------------------------------
+# Opus 低延迟通道
+# ---------------------------------------------------------------------------
+
+def _opus_batch(*packets):
+    """按上传格式拼装 Opus 批次：[2 字节大端长度][包]。"""
+    return b''.join(struct.pack('>H', len(p)) + p for p in packets)
+
+
+def test_validate_opus_batch_ok():
+    batch = _opus_batch(b'a' * 40, b'b' * 60)
+    ok, packets, status = validate_opus_batch(batch)
+    assert ok is True and status is None
+    assert packets == [b'a' * 40, b'b' * 60]
+
+
+def test_validate_opus_batch_rejects_bad_input():
+    assert validate_opus_batch(b'')[0] is False
+    # 长度前缀不完整
+    assert validate_opus_batch(b'\x00')[0] is False
+    # 声明长度超过剩余数据
+    assert validate_opus_batch(b'\x00\x10abc')[0] is False
+    # 空包
+    assert validate_opus_batch(b'\x00\x00')[0] is False
+    # 单包超过 Opus 上限
+    too_big = struct.pack('>H', OPUS_MAX_PACKET_BYTES + 1) + b'x' * (OPUS_MAX_PACKET_BYTES + 1)
+    ok, _, status = validate_opus_batch(too_big)
+    assert ok is False and status == 400
+    # 单批帧数过多
+    many = _opus_batch(*([b'x' * 10] * (OPUS_MAX_BATCH_PACKETS + 1)))
+    ok, _, status = validate_opus_batch(many)
+    assert ok is False and status == 400
+
+
+def _make_channel():
+    return LiveChannel({
+        'id': 1, 'user_id': 1, 'username': 'alice',
+        'title': '测试', 'mode': MODE_REC,
+    })
+
+
+def test_publish_opus_fans_out_and_snapshots():
+    channel = _make_channel()
+    q, snapshot = channel.subscribe_opus()
+    assert snapshot == []
+
+    channel.publish_opus([b'p1', b'p2'])
+    assert q.get_nowait() == b'p1'
+    assert q.get_nowait() == b'p2'
+
+    # 新听众拿到最近若干包的快照
+    _, snapshot = channel.subscribe_opus()
+    assert snapshot == [b'p1', b'p2']
+
+
+def test_opus_ring_is_bounded():
+    channel = _make_channel()
+    channel.publish_opus([bytes([i]) for i in range(OPUS_RING_MAX_PACKETS + 4)])
+    _, snapshot = channel.subscribe_opus()
+    assert len(snapshot) == OPUS_RING_MAX_PACKETS
+    assert snapshot[-1] == bytes([OPUS_RING_MAX_PACKETS + 3])
+
+
+def test_opus_stop_notifies_listeners():
+    channel = _make_channel()
+    q, _ = channel.subscribe_opus()
+    channel.publish_opus([b'p1'])
+    assert q.get_nowait() == b'p1'
+
+    channel._notify_stop()
+    assert q.get_nowait() is None
+    # 停止后快照清空，重复订阅不会再收到旧音频
+    _, snapshot = channel.subscribe_opus()
+    assert snapshot == []
 
 
 def test_build_loop_cmd(tmp_path):

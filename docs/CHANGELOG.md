@@ -4,6 +4,13 @@
 
 ### 优化
 
+* **实时录音新增 Opus 低延迟通道，端到端可稳定在 0.5 秒以内**（`services/live/{constants,ingest,runtime}`、`routes/live/{api,stream}`、`services/firewall/api_guard.py`、`static/js/live/{opus-encoder,opus-player}.js`、`static/templates/live/{rec,play}.html`、`scripts/tests/{test_live,test_api_guard}.py`）：
+  * 发布端：浏览器 WebCodecs `AudioEncoder` 把 AudioWorklet 采集的同一份 48kHz 双声道 PCM 编码为 20ms/帧、32kbps 的 Opus，每 2 帧（约 40ms）`POST /api/live/<ID>/opus`；服务端只校验并转发，不解码、不落盘。
+  * 收听端：新增 `GET /live/stream/<ID>.opus` 分块流（`[2 字节大端长度][Opus 包]`，空闲每 2 秒心跳），播放页用 `AudioDecoder` 解码 + Web Audio 精确调度，80ms 抖动缓冲、积压超过 400ms 丢弃旧帧。端到端典型 **0.15~0.3 秒**，网络正常时稳定 **<0.5 秒**。
+  * 兼容与降级：`AudioEncoder` / `AudioDecoder` 不可用（如 Firefox）、连接失败或 1.5 秒内没有可播放音频时，自动回退现有 MP3 链路，直播与收听不中断。
+  * PCM 兜底通道的上传粒度由 200ms 降到 50ms，MP3 路径也随之下探到约 **0.5~1.2 秒**；新增 `live_opus` 独立限流桶（3000 次/60 秒），`live_pcm` 桶同步调整为 2400 次/60 秒，仍只对已登录用户开放，不占用普通 API 额度。
+  * 新增 8 个测试：Opus 批次解析与边界、运行时扇出 / 上限环形快照 / 停止通知、两个独立限流桶与登录门槛。
+
 * **实时录音直播延迟降到 1 秒量级**（`services/live/{ffmpeg,constants,runtime,mp3}.py`、`scripts/tests/test_live.py`）：
   * 关闭 ffmpeg 输入探测：`-probesize 32 -analyzeduration 0`。原先 ffmpeg 会先攒约 1 秒 PCM 做 `find_stream_info`，实测首帧 MP3 要 1.0 秒才出现，优化后 **0.12 秒**。
   * MP3 输出增加 `-flush_packets 1`，逐帧刷出，避免 muxer 攒满约 32KB（192kbps 下约 1.3 秒）才写 stdout。

@@ -17,7 +17,7 @@ from services.live.constants import (
     PLAY_PAGE_PATH,
     is_valid_mode,
 )
-from services.live.ingest import validate_pcm_chunk
+from services.live.ingest import validate_opus_batch, validate_pcm_chunk
 from services.music import STATUS_LABELS, get_user_musics_page, tags_to_list
 
 
@@ -216,7 +216,7 @@ def api_live_pcm(channel_id):
     """实时录音：接收浏览器上传的 s16le PCM 裸数据（48kHz 双声道）。
 
     使用 HTTPS 分片上传而不是 WebRTC：不需要 UDP / STUN / TURN，也不依赖
-    原生扩展，部署在反向代理后同样可用。前端约每 200ms 上传一次。
+    原生扩展，部署在反向代理后同样可用。前端约每 50ms 上传一次。
     """
     user = get_current_user()
     channel = manager.get(channel_id)
@@ -234,4 +234,30 @@ def api_live_pcm(channel_id):
 
     if not channel.write_pcm(data):
         return jsonify({'success': False, 'message': '直播音频管道已关闭'}), 409
+    return jsonify({'success': True})
+
+
+@live_bp.route('/api/live/<int:channel_id>/opus', methods=['POST'])
+@login_required
+def api_live_opus(channel_id):
+    """实时录音低延迟通道：接收浏览器编码好的 Opus 包批次。
+
+    服务端只做校验与转发，不解码、不落盘，因此端到端延迟只取决于采集、
+    编码、网络与服务端分发。格式与校验见 ``validate_opus_batch``。
+    """
+    user = get_current_user()
+    channel = manager.get(channel_id)
+    if channel is None or not channel.is_live():
+        return jsonify({'success': False, 'message': '直播不存在或已结束'}), 404
+    if channel.mode != MODE_REC:
+        return jsonify({'success': False, 'message': '该直播不是实时录音模式'}), 400
+    if channel.user_id != int(user['id']) and not user.get('is_admin'):
+        return jsonify({'success': False, 'message': '无权向该直播推送音频'}), 403
+
+    data = request.get_data(cache=False)
+    ok, packets, status = validate_opus_batch(data)
+    if not ok:
+        return jsonify({'success': False, 'message': packets}), status
+
+    channel.publish_opus(packets)
     return jsonify({'success': True})

@@ -152,8 +152,8 @@ def do_something(user_id, value, ip_address):
 | `constants/__init__.py` | 模式 / 状态、标题规范化、PCM 参数、HLS 参数、播放地址模板（`volume` / `speed` 仅保留固定默认值，不再对外调整） |
 | `ffmpeg/__init__.py` | **纯函数**构造循环播放 / 实时录音 ffmpeg 命令（HLS + MP3 双输出），便于测试，不得启动进程 |
 | `store/__init__.py` | 频道与封禁的 SQLite 读写；循环上限（默认 5）与实时录音上限（固定 1）在 `transaction()` 内原子校验；不依赖 Flask |
-| `runtime/__init__.py` | `LiveManager` 单例 + `LiveChannel`：ffmpeg 进程、HLS 目录、MP3 听众分发、PCM stdin 写入、启动恢复 |
-| `ingest.py` | PCM 上传校验（空数据 / 长度错位 / 超大分片），纯函数，返回 `(ok, message, http_status)` |
+| `runtime/__init__.py` | `LiveManager` 单例 + `LiveChannel`：ffmpeg 进程、HLS 目录、MP3 听众分发、Opus 包转发、PCM stdin 写入、启动恢复 |
+| `ingest.py` | 上传校验（纯函数）：PCM 空数据 / 长度错位 / 超大分片；Opus 批次长度前缀、单包大小、帧数上限 |
 | `mp3.py` | MP3 流辅助：开场快照前移到完整帧头，纯函数 |
 
 #### 进程与输出
@@ -164,11 +164,12 @@ def do_something(user_id, value, ip_address):
   * `rec`：从 `stdin` 读取浏览器上传的 `s16le` PCM（48000Hz 双声道）。
 * **实时录音输入禁止加 `-thread_queue_size`**：部分 ffmpeg 构建把它视为输出（muxer）选项，会报 `cannot be applied to input url pipe:0` 导致开播失败；`build_rec_cmd` 已移除该参数，测试会断言其不存在。
 * **不提供直播音量 / 速度调整**：不要重新加回 `volume` / `atempo` 滤镜、`/api/live/<ID>/settings` 路由或 `LiveManager.adjust()`，避免为调参重启 ffmpeg 打断听众。实时录音的输入音量 / 静音在**浏览器端**用 Web Audio `GainNode` 实时调整，服务端不参与。
-* **实时录音使用 HTTPS 分片上传，不使用 WebRTC**：浏览器 `AudioWorklet`（`static/js/live/pcm-worklet.js`）把麦克风音频转成 48kHz 双声道 s16le，主线程每约 200ms 合并成一块 `POST /api/live/<ID>/pcm`（原始二进制，约 38KB），服务端 `LiveChannel.write_pcm` 串行写入 ffmpeg stdin。不要重新引入 aiortc / STUN / TURN：那需要 UDP 可达与原生扩展，在反向代理后极易失败，且 Python 3.14 无可用 wheel。
-* **低延迟是硬指标，延迟必须保持在 1 秒量级**：`build_rec_cmd` 必须保留 `-probesize 32 -analyzeduration 0`（否则 ffmpeg 会先攒约 1 秒 PCM 做输入探测）；MP3 输出必须保留 `-flush_packets 1`（否则 muxer 攒约 32KB、192kbps 下约 1.3 秒才写 stdout）。这两项都有测试断言，**不要删除**。
-* **开场快照会变成听众的固定延迟**：`MP3_RING_MAX_BYTES` 保持约 0.3 秒（当前 8KB），不得超过约 16KB；快照必须经 `trim_to_frame()` 对齐到 MP3 帧头，避免接入瞬间先解码一帧噪声。
-* **PCM 上传使用独立限流配额**：`services/firewall/api_guard.py` 为该路径单独计数（`live_pcm` 桶，600 次/60 秒），不占用普通 API 的 60 次/分钟额度，避免正常直播被误封为 429。该配额只对**已登录**用户开放，未登录请求仍走普通限流；接口本身还会校验登录与频道归属。新增高频接口时按同样的「已登录 + 独立桶」方式处理，**禁止**直接调高全局 `API_RATE_LIMIT_PER_MINUTE`。
-* MP3 由 Python 读取 ffmpeg stdout 后写入每个听众的 `queue.Queue`（有界队列，慢客户端丢弃最旧数据）；新听众先收到最近约 0.34 秒的环形缓冲快照。**禁止**为每个听众单独启动 ffmpeg。
+* **实时录音使用 HTTPS 分片上传，不使用 WebRTC**：浏览器 `AudioWorklet`（`static/js/live/pcm-worklet.js`）把麦克风音频转成 48kHz 双声道 s16le，主线程每约 50ms 合并成一块 `POST /api/live/<ID>/pcm`（原始二进制，约 9.6KB），服务端 `LiveChannel.write_pcm` 串行写入 ffmpeg stdin。不要重新引入 aiortc / STUN / TURN：那需要 UDP 可达与原生扩展，在反向代理后极易失败，且 Python 3.14 无可用 wheel。
+* **Opus 是低延迟主路径，服务端只转发不解码**：支持 WebCodecs 的浏览器用 `static/js/live/opus-encoder.js`（`window.OpusUploader`）把同一份 PCM 编码为 20ms/帧、32kbps 的 Opus 包，每 2 帧（约 40ms）`POST /api/live/<ID>/opus`，请求体是 `[2 字节大端长度][Opus 包]` 重复。服务端 `validate_opus_batch` 校验后由 `LiveChannel.publish_opus` 原样分发给 `/live/stream/<ID>.opus` 的听众。**禁止**在服务端对 Opus 解码 / 转码 / 落盘，那会直接增加延迟并引入重采样抖动。Opus 不可用时必须静默回退到 PCM → MP3，不得影响直播。
+* **低延迟是硬指标**：Opus 通道端到端典型 0.15~0.3 秒，网络正常时应稳定在 **0.5 秒以内**（播放端 80ms 抖动缓冲，积压 >400ms 丢弃旧帧）；MP3 兜底路径保持在 1 秒量级。`build_rec_cmd` 必须保留 `-probesize 32 -analyzeduration 0`（否则 ffmpeg 会先攒约 1 秒 PCM 做输入探测）；MP3 输出必须保留 `-flush_packets 1`（否则 muxer 攒约 32KB、192kbps 下约 1.3 秒才写 stdout）。这两项都有测试断言，**不要删除**。
+* **开场快照会变成听众的固定延迟**：`MP3_RING_MAX_BYTES` 保持约 0.3 秒（当前 8KB），不得超过约 16KB；快照必须经 `trim_to_frame()` 对齐到 MP3 帧头，避免接入瞬间先解码一帧噪声。Opus 快照 `OPUS_RING_MAX_PACKETS` 只保留最近约 120ms，同样**不可调大**。
+* **实时录音上传使用独立限流配额**：`services/firewall/api_guard.py` 为两个路径单独计数（`live_pcm` 桶 2400 次/60 秒、`live_opus` 桶 3000 次/60 秒），不占用普通 API 的 60 次/分钟额度，避免正常直播被误封为 429。该配额只对**已登录**用户开放，未登录请求仍走普通限流；接口本身还会校验登录与频道归属。新增高频接口时按同样的「已登录 + 独立桶」方式处理，**禁止**直接调高全局 `API_RATE_LIMIT_PER_MINUTE`。
+* MP3 由 Python 读取 ffmpeg stdout 后写入每个听众的 `queue.Queue`（有界队列，慢客户端丢弃最旧数据）；新听众先收到最近约 0.34 秒的环形缓冲快照。**禁止**为每个听众单独启动 ffmpeg。Opus 使用独立的订阅者集合与包级环形缓冲（`deque(maxlen=OPUS_RING_MAX_PACKETS)`），停止直播时必须向两类订阅者都发送结束信号并清空快照。
 * HLS 使用 `delete_segments+omit_endlist` 保持直播语义；m3u8 路由必须把分片相对路径改写为 `/live/stream/<ID>/<文件>`，分片路由必须做路径穿越校验。
 * 面向超长直播设计：运行时**不记录、不展示直播时长**，所有缓冲 / 分片列表均为有界结构，长时间运行内存不增长。
 
@@ -187,6 +188,7 @@ def do_something(user_id, value, ip_address):
 * 实时录音开播成功后必须跳转独立直播台 `/live/rec/<ID>`，台内可实时调整麦克风设备、输入音量、静音、降噪 / 回声消除 / 自动增益；页面卸载只断开麦克风，不停止服务端直播。
 * **媒体地址必须使用同源相对路径**（`/live/stream/<ID>.mp3`）。反向代理下用 `request.host_url` 生成的绝对地址可能协议 / 端口与实际页面不一致，会被 CSP `media-src 'self'` 拦截。
 * 播放页使用自定义控件（开始 / 关闭 / 音量），**不要**使用原生 `controls`、不要显示进度条或已直播时长。
+* 低延迟音频的浏览器实现必须集中在 `static/js/live/opus-encoder.js`（`window.OpusUploader`）与 `static/js/live/opus-player.js`（`window.OpusPlayer`），页面模板只做能力检测、调用与回退，**禁止**在模板里重复实现编码 / 解码 / 调度逻辑。播放页必须保留 MP3 兜底：`AudioDecoder` 不可用、连接失败或 1.5 秒内没有可播放音频时自动切回 `<audio>` 播放 `/live/stream/<ID>.mp3`。
 * 音源选择必须走 `GET /api/live/musics` 搜索 + 分页，支持自己的私有音频；禁止一次性下发全部音频。
 * 直播页公共样式（`.live-pulse` / `.live-link-row` / `.mode-badge` / `.mode-tab` / `.music-pick-item` / `.live-range` / `.switch-row` / `.live-control-btn`）统一在 `static/css/base.css` 末尾的「音频直播页面公共样式」块维护，**禁止**再在页面 `extra_style` 里重复定义；颜色必须使用 `:root` 变量（全站为白色磨砂玻璃主题，写死白色系会导致未选中项不可见）。
 * 直播 ID 一律用全局 `channelUrl(tpl, id)`（`base.js`）替换模板里的 `0`，**禁止**手写 `replace('/0/', ...)`：`/live/rec/0` 末尾没有斜杠，会替换失败跳到 `/live/rec/0` 而 404。
@@ -194,7 +196,7 @@ def do_something(user_id, value, ip_address):
 
 #### 权限与管理
 
-* 开播、停止、PCM 上传均校验登录；停止校验本人（管理员可强制停止）；PCM 上传只允许直播本人（管理员打开他人直播台时只读，不连接麦克风）。`/live` 相关响应的 `Permissions-Policy` 必须放行 `microphone=(self)`，其他路径保持默认拒绝（见 `core/middleware.py`）。
+* 开播、停止、PCM / Opus 上传均校验登录；停止校验本人（管理员可强制停止）；音频上传只允许直播本人（管理员打开他人直播台时只读，不连接麦克风）。`/live` 相关响应的 `Permissions-Policy` 必须放行 `microphone=(self)`，其他路径保持默认拒绝（见 `core/middleware.py`）。
 * `live_bans` 为**永久封禁**（`user_id` 主键），管理员可解封；封禁用户 `create_channel` 必须在事务内拒绝，管理员封禁时必须停止其**全部**直播。
 * 直播标题必须经过防火墙内容注入检测（与音频上传一致），长度上限 60。
 

@@ -1,17 +1,20 @@
-"""音频直播流媒体路由：HLS 播放列表 / 分片 / MP3 实时流。
+"""音频直播流媒体路由：HLS 播放列表 / 分片 / MP3 / Opus 实时流。
 
 播放地址：
 - m3u8：/live/stream/<直播ID>.m3u8
 - mp3 ：/live/stream/<直播ID>.mp3
+- opus：/live/stream/<直播ID>.opus（低延迟，仅供站内播放页使用）
 """
 
 import os
 import queue
+import struct
 
 from flask import Response, abort, send_file, stream_with_context
 
 from routes.live import live_bp
 from services.live import manager
+from services.live.constants import MODE_REC
 
 
 def _live_channel(channel_id):
@@ -79,6 +82,45 @@ def live_mp3_stream(channel_id):
             channel.unsubscribe(client_queue)
 
     resp = Response(stream_with_context(generate()), mimetype='audio/mpeg')
+    resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
+    resp.headers['X-Accel-Buffering'] = 'no'
+    resp.headers['Accept-Ranges'] = 'none'
+    return resp
+
+
+@live_bp.route('/live/stream/<int:channel_id>.opus')
+def live_opus_stream(channel_id):
+    """Opus 低延迟流：把浏览器编码好的包原样转发给听众。
+
+    帧格式与上传一致：``[2 字节大端长度][Opus 包]``；空闲时每 2 秒发送一次
+    空帧（长度 0）作为心跳，避免反向代理因长时间无数据断开连接。
+    只支持实时录音频道；循环播放频道请使用 m3u8 / mp3。
+    """
+    channel = _live_channel(channel_id)
+    if channel.mode != MODE_REC:
+        abort(404)
+    client_queue, snapshot = channel.subscribe_opus()
+
+    def generate():
+        try:
+            for packet in snapshot:
+                yield struct.pack('>H', len(packet)) + packet
+            while True:
+                try:
+                    packet = client_queue.get(timeout=2)
+                except queue.Empty:
+                    if not channel.is_live():
+                        break
+                    yield b'\x00\x00'  # 心跳
+                    continue
+                if packet is None:
+                    break
+                yield struct.pack('>H', len(packet)) + packet
+        finally:
+            channel.unsubscribe_opus(client_queue)
+
+    resp = Response(stream_with_context(generate()),
+                    mimetype='application/octet-stream')
     resp.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate'
     resp.headers['X-Accel-Buffering'] = 'no'
     resp.headers['Accept-Ranges'] = 'none'

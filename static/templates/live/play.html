@@ -77,6 +77,10 @@
 </section>
 {% endblock %}
 
+{% block page_scripts %}
+<script src="{{ url_for('static', filename='js/live/opus-player.js', v='1') }}"></script>
+{% endblock %}
+
 {% block extra_script %}
 <script>
 (function () {
@@ -87,6 +91,7 @@
     var STATUS_URL = {{ url_for('live.api_live_status', channel_id=channel_id)|tojson }};
     // 使用同源相对路径，避免反向代理下绝对地址的协议 / 端口与当前页面不一致被 CSP 拦截
     var STREAM_PATH = '/live/stream/' + CHANNEL_ID + '.mp3';
+    var OPUS_PATH = '/live/stream/' + CHANNEL_ID + '.opus';
 
     var audio = document.getElementById('live-player');
     var startBtn = document.getElementById('start-btn');
@@ -94,6 +99,7 @@
     var statusEl = document.getElementById('player-status');
     var ended = false;
     var playing = false;
+    var opusPlayer = null;
 
     function setStatus(text, isError) {
         if (!statusEl) return;
@@ -106,14 +112,51 @@
         if (closeBtn) closeBtn.disabled = !playing;
     }
 
+    function currentVolume() {
+        var el = document.getElementById('player-volume');
+        return el ? el.value / 100 : 1;
+    }
+
     function startPlay() {
         if (ended) {
             setStatus('直播已结束', true);
             return;
         }
         if (playing) return;
+        playing = true;
+        setButtons();
+
+        // 优先 Opus 低延迟通道（WebCodecs）；不可用时自动回退 MP3
+        if (window.OpusPlayer && OpusPlayer.isSupported()) {
+            setStatus('正在连接低延迟音频…');
+            try {
+                opusPlayer = new OpusPlayer({
+                    streamUrl: OPUS_PATH,
+                    volume: currentVolume(),
+                    onStatus: function (text) { setStatus(text); },
+                    onFallback: function () {
+                        opusPlayer = null;
+                        startMp3();
+                    }
+                });
+                opusPlayer.start();
+                return;
+            } catch (e) {
+                opusPlayer = null;
+            }
+        }
+        startMp3();
+    }
+
+    function startMp3() {
+        if (ended) {
+            playing = false;
+            setButtons();
+            return;
+        }
+        setStatus('正在连接音频…');
         audio.src = STREAM_PATH;
-        audio.volume = (document.getElementById('player-volume') || { value: 100 }).value / 100;
+        audio.volume = currentVolume();
         var promise = audio.play();
         if (promise && promise.catch) {
             promise.then(function () {
@@ -134,6 +177,10 @@
 
     function stopPlay() {
         playing = false;
+        if (opusPlayer) {
+            opusPlayer.stop();
+            opusPlayer = null;
+        }
         try { audio.pause(); } catch (e) {}
         audio.removeAttribute('src');
         try { audio.load(); } catch (e) {}
@@ -198,6 +245,7 @@
         if (volume) {
             volume.addEventListener('input', function () {
                 audio.volume = volume.value / 100;
+                if (opusPlayer) opusPlayer.setVolume(volume.value / 100);
                 if (volumeText) volumeText.textContent = volume.value + '%';
             });
         }

@@ -123,6 +123,10 @@
 </section>
 {% endblock %}
 
+{% block page_scripts %}
+<script src="{{ url_for('static', filename='js/live/opus-encoder.js', v='1') }}"></script>
+{% endblock %}
+
 {% block extra_script %}
 <script>
 (function () {
@@ -136,12 +140,14 @@
         statusTpl: {{ url_for('live.api_live_status', channel_id=0)|tojson }},
         stopTpl: {{ url_for('live.api_live_stop', channel_id=0)|tojson }},
         pcmTpl: {{ url_for('live.api_live_pcm', channel_id=0)|tojson }},
+        opusTpl: {{ url_for('live.api_live_opus', channel_id=0)|tojson }},
         myPage: {{ url_for('live.live_my_page')|tojson }},
         adminPage: {{ url_for('admin.admin_live_page')|tojson }}
     };
 
-    // 上传节奏：攒够约 200ms 音频再上传一次；队列最多缓冲 5 批，网络慢时丢弃最旧数据
-    var PCM_CHUNK_BYTES = 38400;  // 48000Hz × 双声道 × 2 字节 × 0.2s
+    // PCM 兜底通道：攒够约 50ms 音频上传一次（MP3 / HLS 链路使用）；
+    // 同时把同一份 PCM 喂给 Opus 编码器走低延迟主路径。
+    var PCM_CHUNK_BYTES = 9600;   // 48000Hz × 双声道 × 2 字节 × 0.05s
     var UPLOAD_QUEUE_MAX_CHUNKS = 5;
     var UPLOAD_MAX_FAILURES = 5;
 
@@ -159,6 +165,8 @@
         pcmQueue: [],
         uploading: false,
         uploadFailures: 0,
+        opus: null,
+        opusToken: 0,
         micState: 'idle',
         micError: '',
         muted: false,
@@ -287,6 +295,12 @@
         state.pendingBytes = 0;
         state.uploading = false;
         state.uploadFailures = 0;
+        // 使尚未完成的 Opus 初始化失效，避免断开后又挂上一个编码器
+        state.opusToken += 1;
+        if (state.opus) {
+            state.opus.close();
+            state.opus = null;
+        }
         if (state.flushTimer) {
             clearInterval(state.flushTimer);
             state.flushTimer = null;
@@ -377,6 +391,32 @@
         });
     }
 
+    // ------------------------------------------------------------------
+    // Opus 低延迟通道（浏览器支持 WebCodecs 时启用，失败自动留在 PCM 链路）
+    // ------------------------------------------------------------------
+    function startOpusUploader() {
+        if (!window.OpusUploader || !OpusUploader.isSupported()) return;
+        var token = state.opusToken;
+        var uploader = new OpusUploader({
+            uploadUrl: channelUrl(URLS.opusTpl, CHANNEL_ID),
+            onError: function () {
+                // Opus 属于可选加速通道：失败时静默关闭，不影响 PCM → MP3 直播
+                if (state.opus === uploader) state.opus = null;
+            }
+        });
+        uploader.init().then(function (ok) {
+            if (!ok || token !== state.opusToken || !state.alive
+                    || state.micState === 'ended') {
+                uploader.close();
+                return;
+            }
+            if (state.opus) state.opus.close();
+            state.opus = uploader;
+        }).catch(function () {
+            uploader.close();
+        });
+    }
+
     function resumeAudioContext() {
         if (state.audioCtx && state.audioCtx.state === 'suspended') {
             state.audioCtx.resume().catch(function () {});
@@ -457,7 +497,10 @@
                         outputChannelCount: [2],
                         processorOptions: { targetRate: 48000 }
                     });
-                    node.port.onmessage = function (e) { enqueuePcm(e.data); };
+                    node.port.onmessage = function (e) {
+                        enqueuePcm(e.data);
+                        if (state.opus) state.opus.pushPcm(e.data);
+                    };
                     return node;
                 })
                 : Promise.reject(new Error('浏览器不支持 AudioWorklet，请升级浏览器'))
@@ -468,8 +511,9 @@
                 state.gainNode.connect(node);
                 node.connect(state.silentGain);
                 state.silentGain.connect(ctx.destination);
-                // 定时兜底冲刷，避免音频块不足 200ms 时数据滞留
-                state.flushTimer = setInterval(flushPending, 200);
+                startOpusUploader();
+                // 定时兜底冲刷，避免音频块不足 50ms 时数据滞留
+                state.flushTimer = setInterval(flushPending, 50);
 
                 resumeAudioContext();
                 if (ctx.state === 'suspended') {

@@ -53,9 +53,23 @@ PCM_FRAME_BYTES = PCM_CHANNELS * 2  # 每采样帧 4 字节
 # 单次上传的 PCM 上限（约 2.5 秒），用于拒绝异常请求
 PCM_MAX_CHUNK_BYTES = PCM_SAMPLE_RATE * PCM_FRAME_BYTES * 5 // 2
 
+# ---- Opus 低延迟旁路（与 MP3 并存，MP3 仍是兼容兜底） ----
+# 浏览器 WebCodecs AudioEncoder 每帧 20ms（48kHz 960 采样），前端每 2 帧
+# （约 40ms）上传一批。服务端只做转发，不解码、不落盘，避免额外转码延迟。
+OPUS_SAMPLE_RATE = 48000
+OPUS_CHANNELS = 2
+OPUS_FRAME_SAMPLES = OPUS_SAMPLE_RATE // 50          # 20ms = 960 采样
+OPUS_FRAME_MS = 20
+OPUS_MAX_PACKET_BYTES = 1275                         # RFC 6716 单个 Opus 包上限
+OPUS_MAX_BATCH_PACKETS = 10                          # 单次上传最多 10 帧（200ms）
+OPUS_MAX_BATCH_BYTES = OPUS_MAX_PACKET_BYTES * OPUS_MAX_BATCH_PACKETS + 2 * OPUS_MAX_BATCH_PACKETS
+OPUS_QUEUE_MAXSIZE = 64                              # 每听众最多积压 64 包（约 1.28 秒）
+OPUS_RING_MAX_PACKETS = 6                            # 新听众预置最近 6 包（约 120ms）
+
 # 播放地址格式（相对站点根路径）
 M3U8_PATH = '/live/stream/{channel_id}.m3u8'
 MP3_PATH = '/live/stream/{channel_id}.mp3'
+OPUS_PATH = '/live/stream/{channel_id}.opus'
 PLAY_PAGE_PATH = '/live/play.html?channelId={channel_id}'
 
 # MP3 客户端最多积压的分片数（慢客户端丢弃旧数据，保证低延迟）
