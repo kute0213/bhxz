@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### 文档
+
+* **新增 MCSManager 面板部署指南**（`docs/mcsm-deploy.md`）：说明如何把本项目作为 MCSM 通用应用实例运行，包含新建实例、上传发布包 / git clone、虚拟环境与依赖安装、启动与停止命令、首次启动与默认管理员、数据备份路径、升级流程、Nginx 反向代理（含直播流关闭缓冲）、Docker 方式与常见问题排查；并补充 **Windows 部署与编码** 专章（GBK 乱码 / `UnicodeEncodeError` 的成因与 `start.bat` 方案、`chcp 65001` / `PYTHONUTF8` / `PYTHONIOENCODING` / `PYTHONUNBUFFERED`、BOM、zip 文件名乱码、防火墙放行与日志编码），README 快速开始与文档索引已同步。
+
 ### 优化
 
 * **实时录音新增 Opus 低延迟通道，端到端可稳定在 0.5 秒以内**（`services/live/{constants,ingest,runtime}`、`routes/live/{api,stream}`、`services/firewall/api_guard.py`、`static/js/live/{opus-encoder,opus-player}.js`、`static/templates/live/{rec,play}.html`、`scripts/tests/{test_live,test_api_guard}.py`）：
@@ -18,6 +22,8 @@
   * 端到端延迟从 3 秒以上降到约 **0.5~1.2 秒**；HLS 仍是 2 秒分片（约 4~8 秒），仅作兼容拉流。新增 2 个测试并断言 ffmpeg 低延迟参数不被移除。
 
 ### 修复
+
+* **Windows 下一键更新因 GBK 编码中断**（`update.py`）：进度条使用了 GBK 无法编码的 `░`（U+2591），在中文 Windows 面板中报 `UnicodeEncodeError: 'gbk' codec can't encode character '\u2591'`，导致所有镜像都被误判为「下载中断」。现于启动时把标准输出 / 错误流的错误策略设为 `replace`（保留控制台原编码，中文正常显示），并按终端编码能力自动将进度条降级为 ASCII；同时新增终端日志总开关：`update.py` 顶部 `PRINT_LOGS`、命令行 `--quiet` / `-q`、环境变量 `BHXZ_UPDATE_QUIET=1` 三选一即可完全静默（静默时依赖安装输出也一并丢弃，仅保留退出码）。README 一键更新章节与 MCSM 部署文档已同步。
 
 * **直播时被 API 限流误封**（`services/firewall/api_guard.py`、`scripts/tests/test_api_guard.py`）：
   * 实时录音每 200ms 上传一块 PCM（约 300 次/分钟），却被全局 API 限流（60 次/60 秒）当成滥用，直播中不断弹出「API 调用过于频繁」。现为该接口建立**独立计数桶**（`live_pcm`，600 次/60 秒），既不占用普通 API 的额度，也不会因为普通接口超限而中断直播；PCM 超限同样只封禁 PCM 桶，不影响页面其它接口。

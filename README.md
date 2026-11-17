@@ -8,6 +8,7 @@
 | --------------------------------------------------- | ------------------------------------ |
 | 本文档                                                 | 项目总览、快速开始、功能特性、配置、API、架构               |
 | [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)          | 开发准则：分层规范、易错点、测试、路由检测、构建打包与发布、文档写入准则 |
+| [docs/mcsm-deploy.md](docs/mcsm-deploy.md)          | MCSManager 面板部署指南（步骤较多，为避免 README 臃肿而独立成文）：新建通用应用实例、上传代码、虚拟环境、启动命令、反向代理与常见问题 |
 | [docs/CHANGELOG.md](docs/CHANGELOG.md)              | 更新日志                                 |
 | [docs/SECURITY\_REPORT.md](docs/SECURITY_REPORT.md) | 安全风险自评估报告：OWASP 逐项评估、风险清单、改进建议       |
 
@@ -27,6 +28,18 @@ python app.py
 ```
 
 默认 HTTP 模式，端口 5000。
+
+**Windows 编码提示**：中文 Windows 控制台默认使用 GBK（cp936），直接 `python app.py` 可能出现中文日志乱码、`UnicodeEncodeError: 'gbk' codec can't encode character`，或被面板类工具读取为乱码。请先开启 UTF-8 模式：
+
+```bat
+chcp 65001
+set PYTHONUTF8=1
+set PYTHONIOENCODING=utf-8
+set PYTHONUNBUFFERED=1
+python app.py
+```
+
+长期部署（尤其是 MCSM 等面板）请把这四行写入启动脚本，并参考 [docs/mcsm-deploy.md 第 13 节](docs/mcsm-deploy.md#13-windows-服务器部署与编码)。
 
 ### 构建静态资源
 
@@ -221,7 +234,7 @@ python scripts/build/package.py
 
 * **邮件失败自动重试**：异步发送失败的邮件写入数据库 `email_retry_queue`，由全局定时任务**每 60 秒**扫描重发，**每封最多 10 次**；成功即删除记录，失败则记录错误并把下次重试推后 60 秒，达到上限标记 `failed` 保留以便排查；邮件功能关闭时任务自动跳过
 
-* 一键更新脚本（`update.py` — 纯 Python 跨平台，只走下载覆盖，多线程同时测速镜像源（2 秒超时，整个测速 ≤ 2 秒），无需确认启动即更新，保留运行期数据）
+* 一键更新脚本（`update.py` — 纯 Python 跨平台，只走下载覆盖，多线程同时测速镜像源（2 秒超时，整个测速 ≤ 2 秒），无需确认启动即更新，保留运行期数据；支持 `--quiet` 完全静默，兼容 Windows GBK 控制台）
 
 * 游戏账号管理（注册申请审批、封禁列表管理）
 
@@ -1001,7 +1014,7 @@ workspace/
 
 项目根目录下提供了一键更新脚本 [`update.py`](update.py)，纯 Python 全平台兼容，**只走下载覆盖**（不依赖 git），启动即更新、无需确认：
 
-1. 运行 `python update.py`（可选 `--branch dev` 指定分支，默认 `main`，失败自动回退 `master`）
+1. 运行 `python update.py`（可选 `--branch dev` 指定分支，默认 `main`，失败自动回退 `master`；可选 `--quiet` 不在终端输出任何日志）
 2. 脚本**多线程同时测速**全部镜像源（24 个：官方直连 / codeload / 前缀型代理 / 主机替换型镜像），单个镜像 2 秒超时，**整个测速环节最多 2 秒**；优先选取能返回合法 ZIP 且速度最快的镜像
 3. **锁定最新 commit 再下载**：先读分支的 Atom 提交源（无鉴权、无 rate limit，失败回退 GitHub API）取最新 SHA，优先下载 `<sha>` 固定版本归档——该地址内容不可变，**不会被镜像 / CDN 缓存成旧版本**，从而避免「更新后反而退回好几个版本」；SHA 不可用时才退回分支归档
 4. 自动下载最新源码 ZIP（含 PK 魔数与 CRC 完整性校验，可识别镜像返回的 HTML 错误页），逐个镜像 × 逐个分支回退重试
@@ -1014,6 +1027,8 @@ workspace/
    - 任意层级：`__pycache__`、`.pytest_cache`、`node_modules`、`.DS_Store`、`Thumbs.db`
 7. 自动安装/更新 Python 依赖
 8. **更新完成后提示手动重启服务器，不会自动启动**
+9. **终端输出可完全关闭**：设置 `update.py` 顶部的 `PRINT_LOGS = False`，或运行时加 `--quiet` / `-q`，或设置环境变量 `BHXZ_UPDATE_QUIET=1`。静默模式下进度条、日志、依赖安装输出全部丢弃，仅保留退出码（`0` 成功、非 `0` 失败），适合 MCSM 等面板托管
+10. **Windows GBK 控制台兼容**：脚本启动时把标准输出 / 错误流的编码错误策略设为 `replace`，并按终端编码能力自动把进度条字符降级为 ASCII，避免中文 Windows 下出现 `UnicodeEncodeError: 'gbk' codec can't encode character '\u2591'` 而中断更新
 
 > 字体等静态资源已随代码提交进仓库（`static/lib/fonts/`），因此一键更新即可同步字体，服务器无需联网构建、也无需额外步骤。
 > ⚠️ 清理以「最新 ZIP 里的文件清单」为准：**既未提交到仓库、又不在保护名单内**的本地文件会被当作「已删除」而移除。请勿把自建脚本/资源直接放在项目目录下，放到 `uploads/` 等受保护目录即可。

@@ -20,6 +20,7 @@
 用法:
     python update.py                 # 直接更新（无确认）
     python update.py --branch dev    # 指定分支（默认 main，失败自动回退 master）
+    python update.py --quiet         # 不在终端打印任何日志（也可设 BHXZ_UPDATE_QUIET=1）
 """
 
 import os
@@ -44,6 +45,11 @@ FALLBACK_BRANCHES = ['main', 'master']
 REQUIREMENTS_FILE = os.path.join(PROJECT_ROOT, 'requirements.txt')
 
 USER_AGENT = 'Mozilla/5.0 (compatible; BHXZ-Updater/2.0)'
+
+# 设置：是否在终端打印任何日志。改为 False 可让脚本完全静默（适合面板托管，
+# 避免 GBK 控制台编码问题），命令行 `--quiet` 或环境变量 `BHXZ_UPDATE_QUIET=1`
+# 可临时覆盖该设置。无论是否静默，退出码仍然有效：0 成功，非 0 失败。
+PRINT_LOGS = True
 
 # 测速：单个镜像探测超时 & 整个测速阶段总预算（秒）
 MIRROR_TIMEOUT = 2.0
@@ -218,14 +224,74 @@ RED = '\033[0;31m'
 NC = '\033[0m'
 
 
+# ── 终端输出（编码安全 + 全局静默开关） ────────────────────────────────
+_QUIET = False
+
+
+def _configure_output():
+    """初始化终端输出：处理 Windows GBK 编码，并读取静默开关。
+
+    中文 Windows 控制台默认是 GBK（cp936），无法编码 ``░`` / ``█`` 等字符，
+    直接输出会抛 ``UnicodeEncodeError`` 并中断更新。这里保留控制台原有编码
+    （保证中文可读），只把错误处理策略改为 ``replace``，让不支持的字符降级
+    为 ``?`` 而不是异常；进度条字符另按编码能力自动选择 ASCII 版本。
+    """
+    global _QUIET
+
+    env = os.environ.get('BHXZ_UPDATE_QUIET', '').strip().lower()
+    _QUIET = (not PRINT_LOGS) or env in ('1', 'true', 'yes', 'on') \
+        or '--quiet' in sys.argv or '-q' in sys.argv
+
+    for stream in (sys.stdout, sys.stderr):
+        try:
+            stream.reconfigure(errors='replace')
+        except Exception:
+            # 非文本流 / 旧版本 Python 不支持 reconfigure 时忽略
+            pass
+
+
+def _encodable(text):
+    """判断当前输出编码能否表示指定字符。"""
+    try:
+        encoding = getattr(sys.stdout, 'encoding', None) or 'utf-8'
+        text.encode(encoding)
+        return True
+    except Exception:
+        return False
+
+
+def _out(text='', end='\n'):
+    """统一的终端输出入口（静默模式下直接丢弃）。"""
+    if _QUIET:
+        return
+    try:
+        sys.stdout.write(text + end)
+        sys.stdout.flush()
+    except Exception:
+        pass
+
+
+_configure_output()
+
+# 进度条字符：GBK 控制台不支持 ░/█ 时退回 ASCII
+BAR_FILLED = '█' if _encodable('█') else '#'
+BAR_EMPTY = '░' if _encodable('░') else '-'
+
+
 def log(msg, color=NC):
-    """带时间戳的日志输出。"""
+    """带时间戳的日志输出（静默模式下不输出）。"""
+    if _QUIET:
+        return
     ts = datetime.now().strftime('%H:%M:%S')
     line = f'[{ts}] {msg}'
     if color and sys.stdout.isatty():
         line = f'{color}{line}{NC}'
-    print(line)
-    sys.stdout.flush()
+    try:
+        print(line)
+        sys.stdout.flush()
+    except Exception:
+        # 极端情况下（编码 / 管道已关闭）也不能让日志本身中断更新
+        pass
 
 
 # ── 多线程测速 ────────────────────────────────────────────────────────
@@ -306,14 +372,19 @@ def speedtest(branch):
 
 # ── 下载与解压 ────────────────────────────────────────────────────────
 def _print_progress(got, total, speed):
+    if _QUIET:
+        return
     done = int(got * 20 / total) if total > 0 else 0
-    bar = '█' * done + '░' * (20 - done)
+    bar = BAR_FILLED * done + BAR_EMPTY * (20 - done)
     if total > 0:
         text = f'  {bar} {got * 100 // total:3d}%  {got // 1024}KB/{total // 1024}KB  {speed / 1024:.0f}KB/s'
     else:
         text = f'  {bar}  {got // 1024}KB  {speed / 1024:.0f}KB/s'
-    sys.stdout.write('\r' + text)
-    sys.stdout.flush()
+    try:
+        sys.stdout.write('\r' + text)
+        sys.stdout.flush()
+    except Exception:
+        pass
 
 
 def download_zip(url, dest):
@@ -340,10 +411,9 @@ def download_zip(url, dest):
                 got += len(chunk)
                 elapsed = max(time.monotonic() - started, 1e-6)
                 _print_progress(got, total, got / elapsed)
-        sys.stdout.write('\n')
-        sys.stdout.flush()
+        _out()
     except Exception as e:
-        sys.stdout.write('\n')
+        _out()
         return False, f'下载中断: {e}'
     finally:
         resp.close()
@@ -502,10 +572,13 @@ def install_requirements():
     if not os.path.isfile(REQUIREMENTS_FILE):
         return
     log('正在检查 Python 依赖...', CYAN)
+    devnull = subprocess.DEVNULL if _QUIET else None
     try:
         code = subprocess.call(
             [sys.executable, '-m', 'pip', 'install', '-r', REQUIREMENTS_FILE, '--quiet'],
             cwd=PROJECT_ROOT,
+            stdout=devnull,
+            stderr=devnull,
         )
     except Exception:
         code = -1
@@ -594,13 +667,13 @@ def update_via_download(ranked, branches):
 
 
 def main():
-    print()
+    _out()
     log('╔══════════════════════════════════════════════╗', CYAN)
     log('║     滨海小镇 - 一键更新（纯下载覆盖）         ║', CYAN)
     log('╚══════════════════════════════════════════════╝', CYAN)
     log(f'项目目录: {PROJECT_ROOT}')
     log(f'仓库: {GITHUB_REPO}')
-    print()
+    _out()
 
     branches = parse_args(sys.argv[1:])
 
@@ -615,15 +688,15 @@ def main():
         return False
 
     # 3. 安装依赖
-    print()
+    _out()
     install_requirements()
 
-    print()
+    _out()
     log('╔══════════════════════════════════════════════╗', GREEN)
     log('║     更新完成！                               ║', GREEN)
     log('╚══════════════════════════════════════════════╝', GREEN)
     log('提示: 请手动重启服务器使新代码生效', YELLOW)
-    print()
+    _out()
     return True
 
 
@@ -631,11 +704,12 @@ if __name__ == '__main__':
     try:
         sys.exit(0 if main() else 1)
     except KeyboardInterrupt:
-        print()
+        _out()
         log('已取消更新', YELLOW)
         sys.exit(0)
     except Exception as exc:
         log(f'更新失败: {exc}', RED)
-        import traceback
-        traceback.print_exc()
+        if not _QUIET:
+            import traceback
+            traceback.print_exc()
         sys.exit(1)
