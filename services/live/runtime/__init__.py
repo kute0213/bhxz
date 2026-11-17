@@ -23,6 +23,7 @@ from core.shared.process_utils import decode_output, popen_kwargs
 from core.system.logger import log_module, register_module_log
 from services.live import ffmpeg as ffmpeg_builder
 from services.live import store
+from services.live.mp3 import trim_to_frame
 from services.live.constants import (
     MODE_LABELS,
     MODE_LOOP,
@@ -355,7 +356,7 @@ class LiveChannel:
         with self._subs_lock:
             self._subscribers.add(q)
         with self._ring_lock:
-            snapshot = bytes(self._ring)
+            snapshot = trim_to_frame(bytes(self._ring))
         return q, snapshot
 
     def unsubscribe(self, q):

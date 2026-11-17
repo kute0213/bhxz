@@ -64,6 +64,9 @@ def build_output_args(hls_dir):
         '-c:a', 'libmp3lame', '-b:a', MP3_AUDIO_BITRATE,
         '-ar', str(OUTPUT_SAMPLE_RATE), '-ac', '2',
         '-f', 'mp3',
+        # 每帧立即刷出：muxer 默认攒满约 32KB（192kbps 下约 1.3 秒）才写 stdout，
+        # 会直接叠加到听众延迟上；不要移除
+        '-flush_packets', '1',
         'pipe:1',
     ]
 
@@ -90,6 +93,9 @@ def build_rec_cmd(hls_dir):
     """
     cmd = [
         FFMPEG_BIN, '-hide_banner', '-loglevel', 'error', '-nostdin',
+        # 原始 PCM 参数已知，关闭输入探测：否则 ffmpeg 会先攒约 1 秒音频做
+        # find_stream_info，直接把延迟叠加到直播上；不要移除
+        '-probesize', '32', '-analyzeduration', '0',
         '-f', 's16le',
         '-ar', str(PCM_SAMPLE_RATE),
         '-ac', str(PCM_CHANNELS),

@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### 优化
+
+* **实时录音直播延迟降到 1 秒量级**（`services/live/{ffmpeg,constants,runtime,mp3}.py`、`scripts/tests/test_live.py`）：
+  * 关闭 ffmpeg 输入探测：`-probesize 32 -analyzeduration 0`。原先 ffmpeg 会先攒约 1 秒 PCM 做 `find_stream_info`，实测首帧 MP3 要 1.0 秒才出现，优化后 **0.12 秒**。
+  * MP3 输出增加 `-flush_packets 1`，逐帧刷出，避免 muxer 攒满约 32KB（192kbps 下约 1.3 秒）才写 stdout。
+  * 新听众开场快照从 192KB（192kbps 下约 8 秒，且会一直落后 8 秒）降到 8KB（约 0.34 秒），并新增 `trim_to_frame()` 对齐 MP3 帧头，接入瞬间不再先解码半帧噪声。
+  * 端到端延迟从 3 秒以上降到约 **0.5~1.2 秒**；HLS 仍是 2 秒分片（约 4~8 秒），仅作兼容拉流。新增 2 个测试并断言 ffmpeg 低延迟参数不被移除。
+
 ### 修复
 
 * **直播时被 API 限流误封**（`services/firewall/api_guard.py`、`scripts/tests/test_api_guard.py`）：

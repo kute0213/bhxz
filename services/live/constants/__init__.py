@@ -61,8 +61,9 @@ PLAY_PAGE_PATH = '/live/play.html?channelId={channel_id}'
 # MP3 客户端最多积压的分片数（慢客户端丢弃旧数据，保证低延迟）
 MP3_QUEUE_MAXSIZE = 64
 
-# 新听众接入时预置的最近音频字节数（约 1 秒，帮助快速出声）
-MP3_RING_MAX_BYTES = 192 * 1024
+# 新听众接入时预置的最近音频字节数（192kbps 下约 0.34 秒）。
+# 仅用于帮助浏览器快速出声，**不可调大**：这是听众听到的固定延迟。
+MP3_RING_MAX_BYTES = 8 * 1024
 
 
 def normalize_volume(value, default=VOLUME_DEFAULT):

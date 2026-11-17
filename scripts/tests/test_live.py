@@ -14,8 +14,9 @@ from services.live.constants import (
     normalize_volume,
 )
 from services.live.ffmpeg import build_filter_chain, build_loop_cmd, build_rec_cmd
-from services.live.constants import PCM_MAX_CHUNK_BYTES
+from services.live.constants import MP3_RING_MAX_BYTES, PCM_MAX_CHUNK_BYTES
 from services.live.ingest import validate_pcm_chunk
+from services.live.mp3 import trim_to_frame
 from services.music.queries import get_user_musics_page
 
 
@@ -74,6 +75,30 @@ def test_build_rec_cmd(tmp_path):
     assert 'atempo=' not in joined
     # 部分 ffmpeg 构建把 -thread_queue_size 当作输出选项，加在 pipe:0 前会启动失败
     assert '-thread_queue_size' not in cmd
+    # MP3 必须逐帧刷出，否则 muxer 会攒 32KB（约 1.3 秒）才写 stdout
+    assert '-flush_packets' in cmd
+    assert cmd[cmd.index('-flush_packets') + 1] == '1'
+    # 关闭输入探测，否则 ffmpeg 会先攒约 1 秒 PCM 才编码
+    assert cmd[cmd.index('-probesize') + 1] == '32'
+    assert cmd[cmd.index('-analyzeduration') + 1] == '0'
+
+
+def test_trim_to_frame():
+    """快照起点要前移到完整 MP3 帧头，避免听众接入时先听到一帧噪声。"""
+    frame = b'\xff\xfb\x90\x64' + b'x' * 100  # MPEG1 Layer III 192kbps 44.1kHz
+    data = b'\x00\x01\x02' + frame + b'y' * 50
+    assert trim_to_frame(data) == frame + b'y' * 50
+
+    # 没有合法帧头时原样返回
+    assert trim_to_frame(b'\x00\x01\x02') == b'\x00\x01\x02'
+
+    # 指向帧头起点时不做裁剪
+    assert trim_to_frame(frame) == frame
+
+
+def test_mp3_ring_snapshot_is_short():
+    """开场快照直接决定听众的固定延迟，必须保持在 0.5 秒量级。"""
+    assert MP3_RING_MAX_BYTES <= 16 * 1024
 
 
 def test_validate_pcm_chunk():
