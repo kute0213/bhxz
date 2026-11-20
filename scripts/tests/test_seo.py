@@ -67,6 +67,19 @@ def test_public_page_structured_data(client):
     assert 'image/svg+xml' in favicon.headers.get('Content-Type', '')
 
 
+def test_lucide_loads_before_base_script(client):
+    """图标库必须先于 base.js 执行，否则全站 <i data-lucide> 会显示为空白。"""
+    html = client.get('/').get_data(as_text=True)
+    lucide_pos = html.find('lib/lucide/lucide.min.js')
+    base_pos = html.find('js/core/base.js')
+    assert lucide_pos != -1 and base_pos != -1
+    assert lucide_pos < base_pos
+    tag_start = html.rfind('<script', 0, lucide_pos)
+    tag_end = html.find('>', lucide_pos)
+    assert tag_start != -1 and tag_end != -1
+    assert 'defer' not in html[tag_start:tag_end + 1]
+
+
 def test_breadcrumb_structured_data(client):
     html = client.get('/music').get_data(as_text=True)
     assert '"@type": "BreadcrumbList"' in html

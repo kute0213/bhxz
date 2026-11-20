@@ -30,8 +30,8 @@
     <link rel="icon" type="image/svg+xml" href="{{ url_for('main.favicon', v='2') }}">
     <!-- 本地字体定义（站酷庆科黄油体 + 站酷快乐体 + JetBrains Mono，零 CDN） -->
     <link rel="stylesheet" href="{{ url_for('static', filename='lib/fonts/fonts.css', v='3') }}">
-    <!-- 本地Lucide图标库 -->
-    <script src="{{ url_for('static', filename='lib/lucide/lucide.min.js', v='1') }}" defer></script>
+    <!-- 本地Lucide图标库：必须同步加载，base.js 在解析阶段就会调用 createIcons -->
+    <script src="{{ url_for('static', filename='lib/lucide/lucide.min.js', v='1') }}"></script>
     <!-- 关键CSS内联：防止白屏闪烁 -->
     <style>body{background:#f3f6fa;font-family:"ZCOOL QingKe HuangYou","Segoe UI","PingFang SC","Microsoft YaHei","Noto Sans CJK SC","WenQuanYi Micro Hei",Arial,sans-serif}</style>
     <script>

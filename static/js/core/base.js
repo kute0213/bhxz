@@ -2,9 +2,14 @@
 // 功能：图标初始化、密码强度、移动端菜单、页面过渡、附件上传、弹窗、Toast、验证码、代码复制等
 
 // 安全初始化 lucide 图标
-if (typeof lucide !== 'undefined' && lucide.createIcons) {
-    try { lucide.createIcons(); } catch (_) {}
+function initLucideIcons() {
+    if (typeof lucide !== 'undefined' && lucide.createIcons) {
+        try { lucide.createIcons(); } catch (_) {}
+    }
 }
+initLucideIcons();
+// 兜底：若图标库因网络/缓存原因晚于本脚本执行，DOM 就绪后再补一次
+document.addEventListener('DOMContentLoaded', initLucideIcons);
 
 // 直播 URL 模板替换：模板以 id=0 生成（如 /api/live/0/status、/live/rec/0），
 // 统一在这里替换，避免各页面各写一份 replace 逻辑（末尾无斜杠时替换失败会跳到 /0）。

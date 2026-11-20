@@ -11,6 +11,10 @@
   * 使用标准库 `urllib` 提交到 `https://api.indexnow.org/indexnow`（超时 10 秒、单域名单次最多 10000 个 URL），无新增依赖；最近一次结果写入 `INDEXNOW_LAST_RESULT` 并在页面展示。
   * 新增 10 个测试：公网域名过滤、Key 生成 / 配置校验与布尔归一化、URL 构建去重、提交载荷、未启用拦截、Key 文件路由（匹配 200 / 不匹配 404）。
 
+### 修复
+
+* **全站 Lucide 图标透明 / 空白**（`static/templates/base.html`、`static/js/core/base.js`）：此前将图标库改为 `defer` 后，`base.js` 在解析阶段立即执行时 `lucide` 尚未加载，导致所有 `<i data-lucide>` 保持空元素。现恢复图标库同步加载，并在 `DOMContentLoaded` 时兜底再次初始化，避免缓存或网络异常时图标缺失。
+
 ### 后台界面
 
 * **系统设置与模组介绍页统一使用后台页面骨架**（`static/templates/admin/_layout.html`、`settings.html`、`mod_intros.html`）：两个页面都通过 `{% extends "admin/_layout.html" %}` 复用统一页头、返回入口与内容宽度，删除模组介绍页重复的标题与自定义卡片 CSS；系统设置新增设置项搜索、分类快捷导航、分类图标与条目数量，工具栏与控件布局重新整理。
@@ -23,7 +27,7 @@
   * **Sitemap**：新增音频直播页；自动过滤私有路径、静态资源与非规范尾部斜杠 URL；输出 ETag 并支持 `If-None-Match` 304 增量抓取，降低 Bingbot 抓取成本。
   * **Robots**：允许抓取公开背景图与指南图片（其余 `/uploads/` 仍禁止），`Crawl-delay` 由 5 秒降为 1 秒，避免过度拖慢收录。
   * **URL 规范化**：带尾部斜杠的地址 301 到无斜杠地址；`www` 与非 `www` 域名按 `SITE_URL` 统一 301，减少重复 URL 与权重分散。
-  * **性能**：`lucide` 图标脚本改为 `defer`，避免阻塞首屏渲染。
+  * **性能**：图标库保持同步加载（必须先于 `base.js`），其余脚本维持原有加载方式，避免图标空白。
   * 新增 SEO 测试覆盖公开页结构化数据、BreadcrumbList、Bing 验证 meta、私有页 noindex、sitemap 收录范围与 ETag、robots 规则；新增后台统一模板回归测试；全部 350 项测试通过。
 
 ### SEO 优化：全站元数据修复（`static/templates/`、`core/middleware.py`）
