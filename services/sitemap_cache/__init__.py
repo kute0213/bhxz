@@ -14,6 +14,7 @@ import time
 
 from config import get_config_value, UPLOAD_SITEMAP_DIR
 from core.db import get_db
+from core.seo import is_private_path
 from core.system.logger import log_module, register_module_log
 from core.shared.scheduler import register_task, unregister_task
 
@@ -311,6 +312,7 @@ _STATIC_PAGES = [
     ('/server-status', 'weekly', '0.7'),
     ('/guides', 'weekly', '0.8'),
     ('/buildings', 'weekly', '0.8'),
+    ('/live', 'daily', '0.7'),
     ('/docs', 'monthly', '0.5'),
 ]
 
@@ -379,6 +381,8 @@ def _build_url_entries() -> list:
 
         # 1) 通用静态页面：无独立内容时间，统一使用全站最近内容更新时间
         for path, freq, priority in _STATIC_PAGES:
+            if is_private_path(path):
+                continue
             entries.append({
                 'path': path,
                 'lastmod': latest,
@@ -427,11 +431,12 @@ def _build_url_entries() -> list:
             "SELECT url_path, created_at FROM public_paths WHERE is_active = 1 ORDER BY id"
         ).fetchall()
         for row in rows:
-            url_path = (row['url_path'] or '').rstrip('/')
-            if not _is_page_like(url_path):
+            url_path = '/' + (row['url_path'] or '').strip().lstrip('/')
+            url_path = url_path.rstrip('/') or '/'
+            if not _is_page_like(url_path) or is_private_path(url_path):
                 continue
             entries.append({
-                'path': url_path or '/',
+                'path': url_path,
                 'lastmod': _format_date(row['created_at']),
                 'changefreq': 'weekly',
                 'priority': '0.5',

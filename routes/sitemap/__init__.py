@@ -7,6 +7,8 @@
 防止爬虫被 DDoS 防护误封。
 """
 
+import hashlib
+
 from flask import Blueprint, Response, request
 from config import get_config_value
 from services.sitemap_cache import sitemap_cache
@@ -17,12 +19,15 @@ sitemap_bp = Blueprint('sitemap', __name__)
 _DISALLOWED_PATHS = """
 Disallow: /admin/
 Disallow: /api/
+# 公开页展示的背景图与指南图片允许抓取，其余上传内容仍禁止
+Allow: /uploads/backgrounds/
+Allow: /uploads/guides/
 Disallow: /uploads/
 Disallow: /_debug/
 """
 
 # 爬虫请求间隔（秒），防止触发 DDoS 防护阈值（中等强度 150 次/10秒）
-_CRAWL_DELAY = "Crawl-delay: 5\n"
+_CRAWL_DELAY = "Crawl-delay: 1\n"
 
 
 def _robots_base_url() -> str:
@@ -128,10 +133,13 @@ def sitemap():
             headers={'Retry-After': '3600', 'Cache-Control': 'no-store'},
         )
 
-    return Response(
+    response = Response(
         xml_content,
         mimetype='application/xml; charset=utf-8',
         headers={
             'Cache-Control': 'public, max-age=3600',
         },
     )
+    # ETag 让 Bingbot 用 If-None-Match 做增量抓取；内容未变时返回 304
+    response.set_etag(hashlib.sha1(xml_content.encode('utf-8')).hexdigest())
+    return response.make_conditional(request)

@@ -166,6 +166,11 @@ def _set_security_headers(response):
     if request.is_secure:
         response.headers.setdefault('Strict-Transport-Security', HSTS_POLICY)
 
+    # ---- 私有页面禁止收录：与模板 meta robots 双重保障 ----
+    from core.seo import is_private_path
+    if is_private_path(request.path):
+        response.headers.setdefault('X-Robots-Tag', 'noindex, nofollow')
+
     return response
 
 
@@ -297,6 +302,27 @@ def register_hooks(app, try_serve_public):
         """全站 CSRF 防护（除 /api/* 外所有 POST/PUT/DELETE/PATCH 请求）。"""
         from core.csrf import csrf_protect
         csrf_protect()
+
+    @app.before_request
+    def www_canonical_redirect_hook():
+        """把 www 与非 www 的重复域名 301 到 SITE_URL 配置的规范域名。"""
+        if request.method not in ('GET', 'HEAD'):
+            return None
+        if request.path.startswith('/api'):
+            return None
+        from config import get_config_value
+        site_url = str(get_config_value('SITE_URL', '') or '').strip()
+        parsed = urlparse(site_url)
+        configured = parsed.netloc.lower()
+        host = request.host.lower()
+        if not configured or host == configured:
+            return None
+        if host != 'www.' + configured and 'www.' + host != configured:
+            return None
+        target = f'{parsed.scheme or request.scheme}://{configured}{request.path}'
+        if request.query_string:
+            target += '?' + request.query_string.decode('utf-8', 'ignore')
+        return redirect(target, code=301)
 
     @app.before_request
     def trailing_slash_redirect_hook():

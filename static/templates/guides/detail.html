@@ -2,6 +2,39 @@
 {% set gdesc = (guide.summary or '')|striptags|trim %}
 {% block title %}Minecraft 服务器指南：{{ guide.title }} - 玩法教程与经验分享{% endblock %}
 {% block description %}{% if gdesc|length >= 70 %}{{ gdesc[:140] }}{% else %}{{ (gdesc ~ '。' if gdesc|length >= 15 else '') }}滨海小镇 Minecraft 服务器社区玩家编写的服务器指南《{{ guide.title }}》，包含玩法教程、步骤说明与实用技巧，支持收藏与评论，帮助玩家快速上手。{% endif %}{% endblock %}
+{% block og_type %}article{% endblock %}
+{% block extra_head %}
+{{ super() }}
+{% set gurl = canonical_base_url ~ '/guides/' ~ guide.id %}
+{% set gdate = (guide.published_at or guide.created_at or '')[:10] %}
+{% set gjson = {
+    '@context': 'https://schema.org',
+    '@graph': [
+        {
+            '@type': 'BreadcrumbList',
+            'itemListElement': [
+                {'@type': 'ListItem', 'position': 1, 'name': '首页', 'item': canonical_base_url ~ '/'},
+                {'@type': 'ListItem', 'position': 2, 'name': '服务器指南', 'item': canonical_base_url ~ '/guides'},
+                {'@type': 'ListItem', 'position': 3, 'name': guide.title, 'item': gurl},
+            ],
+        },
+        {
+            '@type': 'Article',
+            'headline': guide.title,
+            'description': (gdesc[:160] if gdesc else '滨海小镇 Minecraft 服务器社区玩家编写的服务器指南，包含玩法教程、步骤说明与实用技巧。'),
+            'author': {'@type': 'Person', 'name': guide.author_name or '滨海小镇玩家'},
+            'datePublished': gdate,
+            'dateModified': (guide.updated_at or gdate or '')[:10],
+            'url': gurl,
+            'mainEntityOfPage': {'@type': 'WebPage', '@id': gurl},
+            'image': og_image,
+            'inLanguage': 'zh-CN',
+            'publisher': {'@type': 'Organization', 'name': '滨海小镇', 'url': canonical_base_url ~ '/'},
+        },
+    ],
+} %}
+<script type="application/ld+json">{{ gjson|tojson }}</script>
+{% endblock %}
 {% block extra_style %}
 <style>
 .prose-docs h1 { font-size: 1.75rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border-card); }

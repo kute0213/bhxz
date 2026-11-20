@@ -222,7 +222,7 @@ python scripts/build/package.py
 
 * 系统设置（在线编辑，热重载，含网站图标选择、日志等级、背景图片开关、RCON 配置、MC 游戏文件夹）
 
-* **全站 SEO / GEO**（`static/templates/base.html`、`core/template_context.py`、`core/middleware.py`、`routes/sitemap/__init__.py`）：所有页面统一输出 `meta description`、`canonical`、Open Graph / Twitter 卡片标签，子模板可按页面覆盖标题与描述；首页、登录、注册、找回密码、服务器状态、指南、公共建筑、大喇叭音频、背景图片、文档中心、网页地图、音频直播及上传/设置等页面均配置了 70 字以上的专属描述与描述性标题，指南/建筑详情页在用户摘要过短时自动兜底、过长时截断；带尾部斜杠的地址（如 `/music/`）统一 301 跳转到无斜杠规范地址，避免爬虫抓到 404，错误页输出 `noindex`；`/sitemap.xml` 按请求域名按需生成并向 Bing 等爬虫返回有效 XML，`scripts/tests/test_seo.py` 持续校验标题/描述长度与跳转行为
+* **全站 SEO / GEO**（`static/templates/base.html`、`core/seo.py`、`core/template_context.py`、`core/middleware.py`、`routes/sitemap/__init__.py`）：所有页面统一输出 `meta robots`、`meta description`、`canonical`、hreflang、Open Graph / Twitter 卡片标签，并内置 1200×630 默认分享图 `static/img/og-cover.png`；公开页输出 WebSite + Organization JSON-LD 与列表页 BreadcrumbList，指南 / 建筑详情页追加 Article / CreativeWork 与三级面包屑，帮助 Bing / Copilot 识别站点与内容实体（GEO）。登录、注册、找回密码、设置、上传、收藏、游戏账号申请、管理后台等私有页统一 `noindex, nofollow` 并附加 `X-Robots-Tag`，且不输出 canonical；系统设置新增「Bing 站点验证码」，填写后全站输出 `msvalidate.01`。`/sitemap.xml` 只收录可索引的规范 URL（新增音频直播页，自动排除私有路径与静态资源），支持 ETag / 304 增量抓取；`robots.txt` 允许抓取公开背景图与指南图片，`Crawl-delay` 降为 1 秒，兼顾抓取效率与防火墙保护。带尾部斜杠的地址（如 `/music/`）统一 301 跳转到无斜杠规范地址，错误页输出 `noindex`；`scripts/tests/test_seo.py` 持续校验标题 / 描述长度、结构化数据、私有页 noindex、sitemap 与 ETag 行为
 
 * **IndexNow 主动推送**（管理后台 → IndexNow 推送，`services/indexnow/`）：把站点地图中的公开页面主动提交给 IndexNow（Bing、Yandex 等共享），加快收录。使用独立配置页管理启用开关、每日推送开关与推送时间，Key 可一键重新生成；`/<key>.txt` 在站点根目录提供校验文件（IndexNow 规范要求根目录 Key 才能覆盖整站 URL）。URL 来源复用 sitemap 的公开页面列表，只提交公网域名（自动跳过 localhost / 内网地址），定时任务接入全站统一调度器（默认每天 03:30，晚于 Sitemap 刷新），不新建线程；提交结果（域名、状态码、URL 数量、时间）在页面展示
 
@@ -434,7 +434,7 @@ python scripts/build/package.py
 
 * **自动维护**：自动维护时间（数据备份 + 日志清理）、备份目录、保留份数、超时
 
-* **Sitemap**：刷新时间、站点域名、多域名列表、搜索引擎爬虫策略（robots.txt：允许所有 / 仅主页 / 禁止所有）。站点地图（`/sitemap.xml`）**只收录无需登录即可访问、且含可索引内容的页面**——首页、服务器状态、服务器指南（及已通过详情）、公共建筑（及已通过详情）、大喇叭、背景图片、文档，以及后台「公开文件」配置的页面（自动跳过 `js`/`css`/图片等资源映射）；已排除登录后 / 操作 / 上传页（`/settings`、`/music/my`、`/music/upload`、`/game-accounts/apply`、`/guides/my` 等）、仅内嵌外部地图的 `/map`、以及 `/admin`、`/api` 等内部路径，并按 path 去重。**Sitemap 按需生成**：缓存文件缺失（首次部署 / 新绑定域名 / 当日刷新未执行）时按请求域名实时生成并缓存 1 小时，绝不再返回空内容的 200（空响应会被 CDN 缓存并导致 Bing 判定无法获取）；确实无法生成时返回 503 + `Retry-After`，让爬虫稍后重试
+* **Sitemap**：刷新时间、站点域名、Bing 站点验证码、多域名列表、搜索引擎爬虫策略（robots.txt：允许所有 / 仅主页 / 禁止所有）。站点地图（`/sitemap.xml`）**只收录无需登录即可访问、且含可索引内容的页面**——首页、服务器状态、服务器指南（及已通过详情）、公共建筑（及已通过详情）、音频直播、大喇叭、背景图片、文档，以及后台「公开文件」配置的页面（自动跳过 `js`/`css`/图片等资源映射）；已排除登录后 / 操作 / 上传页（`/settings`、`/login`、`/music/my`、`/music/upload`、`/game-accounts/apply`、`/guides/my` 等）、仅内嵌外部地图的 `/map`、以及 `/admin`、`/api` 等内部路径，并按 path 去重。**Sitemap 按需生成**：缓存文件缺失（首次部署 / 新绑定域名 / 当日刷新未执行）时按请求域名实时生成并缓存 1 小时，绝不再返回空内容的 200（空响应会被 CDN 缓存并导致 Bing 判定无法获取）；确实无法生成时返回 503 + `Retry-After`，让爬虫稍后重试
 
 * **安全配置**：会话有效期、登录失败锁定次数及时间
 

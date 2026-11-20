@@ -7,6 +7,23 @@ from config import get_config_value
 from services import background_service
 from services.sitemap_cache import sitemap_cache
 from core.csrf import get_csrf_token
+from core.seo import (
+    SITE_DESCRIPTION,
+    build_breadcrumb_data,
+    build_site_structured_data,
+    is_private_path,
+)
+
+# 公开列表页的 BreadcrumbList 名称（详情页由模板自行补充末级）
+_BREADCRUMB_PAGES = {
+    '/guides': '服务器指南',
+    '/buildings': '玩家公共建筑',
+    '/music': '大喇叭音频',
+    '/backgrounds': '背景图片',
+    '/live': '音频直播',
+    '/docs': '文档中心',
+    '/server-status': '服务器状态',
+}
 
 
 def register_template_context(app):
@@ -27,6 +44,15 @@ def register_template_context(app):
 
         show_background = get_config_value('SHOW_BACKGROUND', True)
         bg_size = get_config_value('BACKGROUND_IMAGE_SIZE', 'cover')
+        path = (request.path or '/').split('?', 1)[0]
+        if path != '/':
+            path = path.rstrip('/') or '/'
+        page_noindex = is_private_path(path)
+
+        # 全站 Bing 站点验证码（Bing Webmaster Tools → 验证 → meta 标签）
+        bing_verification = str(
+            get_config_value('BING_SITE_VERIFICATION', '') or ''
+        ).strip()
 
         # canonical / Open Graph 使用的站点根地址：
         # 优先匹配站点配置域名（含正确协议，避免反向代理下误判为 http）；
@@ -39,6 +65,14 @@ def register_template_context(app):
             else:
                 canonical_base_url = request.url_root.rstrip('/')
 
+        # 公开列表页的 BreadcrumbList（详情页在模板 extra_head 中补充末级）
+        breadcrumb_items = []
+        if not page_noindex and path in _BREADCRUMB_PAGES:
+            breadcrumb_items = [
+                ('首页', f'{canonical_base_url}/'),
+                (_BREADCRUMB_PAGES[path], f'{canonical_base_url}{path}'),
+            ]
+
         return {
             # 登录欢迎语只展示一次，避免刷新页面后重复打扰用户。
             'login_welcome_username': session.pop('login_welcome_username', None),
@@ -47,6 +81,16 @@ def register_template_context(app):
             'csrf_field': csrf_field,
             'csrf_token': csrf_token_str,
             'canonical_base_url': canonical_base_url,
+            # SEO / GEO：私有页 noindex，公开页输出站点级结构化数据与分享图
+            'page_noindex': page_noindex,
+            'page_robots': 'noindex, nofollow' if page_noindex else 'index, follow',
+            'bing_verification': bing_verification,
+            'og_image': f'{canonical_base_url}/static/img/og-cover.png',
+            'site_description': SITE_DESCRIPTION,
+            'structured_data': build_site_structured_data(canonical_base_url),
+            'breadcrumb_jsonld': (
+                build_breadcrumb_data(breadcrumb_items) if breadcrumb_items else None
+            ),
             # 备案号（热重载）
             'show_beian': get_config_value('SHOW_BEIAN', False),
             'icp_beian': get_config_value('ICP_BEIAN', ''),

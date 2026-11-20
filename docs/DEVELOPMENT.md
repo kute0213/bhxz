@@ -387,24 +387,28 @@ render_page('admin/admin_users.html')          # ❌ 双重前缀
 
 > 真实事故：`static/templates/buildings/detail.html` 用 `{% include 'macros/modal.html' %}` 引入弹窗宏，访问 `/buildings/<id>` 时 `modal_shell is undefined` 直接 500。
 
-### 6. SEO 元信息（title / description / canonical）
+### 6. SEO / GEO 元信息（title / description / canonical / 结构化数据）
 
-`base.html` 已统一输出 `meta description`、`canonical`、Open Graph 与 Twitter 卡片标签，默认描述对所有页面生效。新增公开页面时必须：
+`base.html` 已统一输出 `meta robots`、`meta description`、`canonical`、hreflang、Open Graph 与 Twitter 卡片标签，以及全站 WebSite + Organization JSON-LD；默认描述对所有页面生效。新增公开页面时必须：
 
 * 写 `{% block title %}`，长度约 20–35 个中文字符（不含自动追加的「 - 滨海小镇」），不要只写「首页」「登录」这类过短标题（Bing 会报「标题太短」）；
 * 用 `{% block description %}` 覆盖页面专属描述，建议 **70–110 个中文字符**；低于 70 字会被 Bing 判定为「描述过短」，不要依赖默认描述；
-* 详情页（指南 / 建筑等）的标题与摘要来自用户内容，必须在模板中兜底：描述不足 70 字时追加页面用途说明，超过 140 字时截断，避免过短或过长；
-* 不要在子模板重复手写 `<title>` 或 `<meta name="description">`，避免重复标签；
-* canonical 由 `core/template_context.py` 的 `canonical_base_url` 计算（优先匹配 `SITE_URL` / `SITEMAP_DOMAINS`，公网域名默认 https），子模板无需覆盖；
+* 详情页（指南 / 建筑等）的标题与摘要来自用户内容，必须在模板中兜底：描述不足 70 字时追加页面用途说明，超过 140 字时截断，避免过短或过长；结构化数据在 `extra_head` 中按 `Article` / `CreativeWork` 输出，并带三级 BreadcrumbList；
+* 不要在子模板重复手写 `<title>`、`<meta name="description">` 或 WebSite / Organization JSON-LD，避免重复标签；
+* 私有页（登录、注册、设置、上传、收藏、申请、管理后台等）由 `core/seo.py` 的 `is_private_path()` 自动判定：模板输出 `noindex, nofollow`、不输出 canonical，响应头追加 `X-Robots-Tag`。新增私有路径时把前缀加入 `_PRIVATE_PREFIXES`；
+* canonical 由 `core/template_context.py` 的 `canonical_base_url` 计算（优先匹配 `SITE_URL` / `SITEMAP_DOMAINS`，公网域名默认 https），子模板无需覆盖；`www` 与非 `www` 域名由中间件按 `SITE_URL` 统一 301，避免重复 URL；
+* 列表页 BreadcrumbList 由 `_BREADCRUMB_PAGES` 统一生成；详情页的末级面包屑在模板 `extra_head` 中补充；
+* 默认分享图固定为 `static/img/og-cover.png`（1200×630）；需要页面专属图时覆盖 `{% block og_image %}`，必须输出绝对 URL；
+* 全站 Bing 验证码在「系统设置 → Sitemap → Bing 站点验证码」中配置，`base.html` 自动输出 `msvalidate.01`，不要在模板里硬编码；
 * URL 统一不带尾部斜杠：`core/middleware.py` 的 `trailing_slash_redirect_hook` 会把 `/music/` 这类地址 301 到 `/music`，新增路由不要单独设置 `strict_slashes`；
-* 错误页 `error_simple.html` 已输出 `robots: noindex, follow`；管理后台 / 登录后页面无需索引（robots.txt 已 `Disallow: /admin/`）；
-* 修改公开页标题或描述后运行 `python -m pytest scripts/tests/test_seo.py -q`，该测试会检查公开页标题 ≥28 字符、描述 ≥70 字符，并验证尾部斜杠 301 跳转。
+* 错误页 `error_simple.html` 已输出 `robots: noindex, follow`；不要添加 `nocache` / `noarchive` 等限制 Bing / Copilot 使用内容的指令；
+* 修改公开页标题、描述或结构化数据后运行 `python -m pytest scripts/tests/test_seo.py -q`，该测试会检查公开页标题 ≥28 字符、描述 ≥70 字符、私有页 noindex、结构化数据、sitemap 收录范围与 ETag、尾部斜杠 301 跳转。
 
 > 注意：**不要用 HTML 注释包裹 Jinja 标签**（如 `<!-- {% block description %}...{% endblock %} -->`）。Jinja 会解析注释里的标签，导致 `TemplateSyntaxError: Unexpected end of template`。
 
 ### 7. Sitemap 生成约定
 
-`/sitemap.xml` 统一走 `sitemap_cache.get_xml_for_request(host, scheme)`：优先读取 `uploads/sitemap/` 下的域名缓存文件；缓存缺失时按请求域名懒生成（内存缓存 1 小时），**禁止在路由里返回空字符串或内容为空的 200**（空响应会被 CDN 缓存，导致 Bing 判定无法获取 sitemap）。确实无法生成时返回 503 + `Retry-After`。新增可索引公开页时，在 `services/sitemap_cache/__init__.py` 的 `_STATIC_PAGES` 中登记 path / changefreq / priority。
+`/sitemap.xml` 统一走 `sitemap_cache.get_xml_for_request(host, scheme)`：优先读取 `uploads/sitemap/` 下的域名缓存文件；缓存缺失时按请求域名懒生成（内存缓存 1 小时），**禁止在路由里返回空字符串或内容为空的 200**（空响应会被 CDN 缓存，导致 Bing 判定无法获取 sitemap）。确实无法生成时返回 503 + `Retry-After`，并输出 ETag 支持 304 增量抓取。新增可索引公开页时，在 `services/sitemap_cache/__init__.py` 的 `_STATIC_PAGES` 中登记 path / changefreq / priority；`is_private_path()` 会自动过滤私有路径，公开文件映射的尾部斜杠也会规范化为无斜杠 URL。
 
 IndexNow 推送复用同一份公开页面列表（`_build_url_entries`）与域名配置（`_collect_domains`），因此**新增公开页只需改 sitemap 白名单，无需改动 IndexNow**。推送任务必须使用统一任务调度器注册（当前任务名 `indexnow-submit`），禁止自行创建线程 / Timer；提交前必须经过 `_is_public_base()` 过滤，不得向内网地址发起请求。
 

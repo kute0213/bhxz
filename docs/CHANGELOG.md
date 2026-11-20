@@ -11,6 +11,16 @@
   * 使用标准库 `urllib` 提交到 `https://api.indexnow.org/indexnow`（超时 10 秒、单域名单次最多 10000 个 URL），无新增依赖；最近一次结果写入 `INDEXNOW_LAST_RESULT` 并在页面展示。
   * 新增 10 个测试：公网域名过滤、Key 生成 / 配置校验与布尔归一化、URL 构建去重、提交载荷、未启用拦截、Key 文件路由（匹配 200 / 不匹配 404）。
 
+### SEO / GEO 增强：按 Bing Webmaster Guidelines 全面优化（`core/seo.py`、`static/templates/base.html`、`services/sitemap_cache/`、`routes/sitemap/`）
+  * **索引控制**：新增 `core/seo.py` 统一判定私有路径，登录、注册、找回密码、设置、上传、收藏、游戏账号申请、管理后台等页面自动输出 `noindex, nofollow`、不输出 canonical，并在响应头追加 `X-Robots-Tag`；公开页统一输出 `index, follow`。
+  * **结构化数据（GEO）**：全站输出 WebSite + Organization JSON-LD（名称、别名、描述、语言、Logo，配置 QQ 群链接时输出 `sameAs`）；列表页输出 BreadcrumbList；指南详情输出 Article、建筑详情输出 CreativeWork，并附带三级面包屑，帮助 Bing / Copilot 识别站点与内容实体。
+  * **分享与验证**：新增 1200×630 默认分享图 `static/img/og-cover.png`，Open Graph / Twitter 改为 `summary_large_image`；系统设置新增「Bing 站点验证码」，填写后全站输出 `msvalidate.01`，可直接完成 Bing Webmaster Tools 的 meta 验证。
+  * **Sitemap**：新增音频直播页；自动过滤私有路径、静态资源与非规范尾部斜杠 URL；输出 ETag 并支持 `If-None-Match` 304 增量抓取，降低 Bingbot 抓取成本。
+  * **Robots**：允许抓取公开背景图与指南图片（其余 `/uploads/` 仍禁止），`Crawl-delay` 由 5 秒降为 1 秒，避免过度拖慢收录。
+  * **URL 规范化**：带尾部斜杠的地址 301 到无斜杠地址；`www` 与非 `www` 域名按 `SITE_URL` 统一 301，减少重复 URL 与权重分散。
+  * **性能**：`lucide` 图标脚本改为 `defer`，避免阻塞首屏渲染。
+  * 新增 6 个测试：公开页结构化数据、BreadcrumbList、Bing 验证 meta、私有页 noindex、sitemap 收录范围与 ETag、robots 规则；全部 348 项测试通过。
+
 ### SEO 优化：全站元数据修复（`static/templates/`、`core/middleware.py`）
   * 首页、服务器状态、背景图片、大喇叭音频、登录、注册、找回密码、文档中心、网页地图、公共建筑、服务器指南、音频直播等页面的标题与 `meta description` 全部重写加长；公开页描述统一达到 70–110 个中文字符，标题不再过短。
   * 指南 / 公共建筑详情页的描述改为兜底策略：用户摘要不足 70 字时追加页面用途说明，超过 140 字时截断；上传、收藏、设置、游戏账号申请等登录后页面补齐专属标题与描述。

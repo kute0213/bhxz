@@ -4,6 +4,40 @@
 {% set bdesc = (building.description or '')|striptags|trim %}
 {% block title %}Minecraft 玩家公共建筑：{{ building.title }} - 作品截图与介绍{% endblock %}
 {% block description %}{% if bdesc|length >= 70 %}{{ bdesc[:140] }}{% else %}{{ (bdesc ~ '。' if bdesc|length >= 15 else '') }}滨海小镇 Minecraft 服务器玩家公共建筑作品《{{ building.title }}》，包含建筑介绍、实景截图、标签与玩家评论，欢迎浏览欣赏并交流建筑灵感。{% endif %}{% endblock %}
+{% block og_type %}article{% endblock %}
+{% block extra_head %}
+{{ super() }}
+{% set burl = canonical_base_url ~ '/buildings/' ~ building.id %}
+{% set bdate = (building.published_at or building.created_at or '')[:10] %}
+{% set bjson = {
+    '@context': 'https://schema.org',
+    '@graph': [
+        {
+            '@type': 'BreadcrumbList',
+            'itemListElement': [
+                {'@type': 'ListItem', 'position': 1, 'name': '首页', 'item': canonical_base_url ~ '/'},
+                {'@type': 'ListItem', 'position': 2, 'name': '玩家公共建筑', 'item': canonical_base_url ~ '/buildings'},
+                {'@type': 'ListItem', 'position': 3, 'name': building.title, 'item': burl},
+            ],
+        },
+        {
+            '@type': 'CreativeWork',
+            'name': building.title,
+            'headline': building.title,
+            'description': (bdesc[:160] if bdesc else '滨海小镇 Minecraft 服务器玩家公共建筑作品，包含建筑介绍、截图、标签与玩家评论。'),
+            'author': {'@type': 'Person', 'name': building.author_name or '滨海小镇玩家'},
+            'dateCreated': bdate,
+            'datePublished': bdate,
+            'dateModified': (building.updated_at or bdate or '')[:10],
+            'url': burl,
+            'mainEntityOfPage': {'@type': 'WebPage', '@id': burl},
+            'image': og_image,
+            'inLanguage': 'zh-CN',
+        },
+    ],
+} %}
+<script type="application/ld+json">{{ bjson|tojson }}</script>
+{% endblock %}
 {% block content %}
 <section class="page-container py-12">
     <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
