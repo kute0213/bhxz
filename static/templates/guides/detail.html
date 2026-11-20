@@ -1,6 +1,7 @@
 {% extends "base.html" %}
-{% block title %}{{ guide.title }} - Minecraft 服务器指南{% endblock %}
-{% block description %}{{ guide.summary or (guide.title ~ '，滨海小镇 Minecraft 服务器社区玩家编写的服务器指南与玩法教程。') }}{% endblock %}
+{% set gdesc = (guide.summary or '')|striptags|trim %}
+{% block title %}Minecraft 服务器指南：{{ guide.title }} - 玩法教程与经验分享{% endblock %}
+{% block description %}{% if gdesc|length >= 70 %}{{ gdesc[:140] }}{% else %}{{ (gdesc ~ '。' if gdesc|length >= 15 else '') }}滨海小镇 Minecraft 服务器社区玩家编写的服务器指南《{{ guide.title }}》，包含玩法教程、步骤说明与实用技巧，支持收藏与评论，帮助玩家快速上手。{% endif %}{% endblock %}
 {% block extra_style %}
 <style>
 .prose-docs h1 { font-size: 1.75rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid var(--border-card); }

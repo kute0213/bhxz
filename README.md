@@ -222,7 +222,7 @@ python scripts/build/package.py
 
 * 系统设置（在线编辑，热重载，含网站图标选择、日志等级、背景图片开关、RCON 配置、MC 游戏文件夹）
 
-* **全站 SEO / GEO**（`static/templates/base.html`、`core/template_context.py`、`routes/sitemap/__init__.py`）：所有页面统一输出 `meta description`、`canonical`、Open Graph / Twitter 卡片标签，子模板可按页面覆盖标题与描述；登录、注册、找回密码、服务器状态、指南、公共建筑、大喇叭音频、背景图片、文档中心、网页地图等公开页均配置了长度充足的标题与页面专属描述；`/sitemap.xml` 修复「缓存缺失时返回空 200」的问题，改为按请求域名按需生成并向 Bing 等爬虫返回有效 XML
+* **全站 SEO / GEO**（`static/templates/base.html`、`core/template_context.py`、`core/middleware.py`、`routes/sitemap/__init__.py`）：所有页面统一输出 `meta description`、`canonical`、Open Graph / Twitter 卡片标签，子模板可按页面覆盖标题与描述；首页、登录、注册、找回密码、服务器状态、指南、公共建筑、大喇叭音频、背景图片、文档中心、网页地图、音频直播及上传/设置等页面均配置了 70 字以上的专属描述与描述性标题，指南/建筑详情页在用户摘要过短时自动兜底、过长时截断；带尾部斜杠的地址（如 `/music/`）统一 301 跳转到无斜杠规范地址，避免爬虫抓到 404，错误页输出 `noindex`；`/sitemap.xml` 按请求域名按需生成并向 Bing 等爬虫返回有效 XML，`scripts/tests/test_seo.py` 持续校验标题/描述长度与跳转行为
 
 * **IndexNow 主动推送**（管理后台 → IndexNow 推送，`services/indexnow/`）：把站点地图中的公开页面主动提交给 IndexNow（Bing、Yandex 等共享），加快收录。使用独立配置页管理启用开关、每日推送开关与推送时间，Key 可一键重新生成；`/indexnow/<key>.txt` 提供校验文件。URL 来源复用 sitemap 的公开页面列表，只提交公网域名（自动跳过 localhost / 内网地址），定时任务接入全站统一调度器（默认每天 03:30，晚于 Sitemap 刷新），不新建线程；提交结果（域名、状态码、URL 数量、时间）在页面展示
 

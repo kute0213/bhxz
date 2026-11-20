@@ -7,7 +7,7 @@ import threading
 import time
 from urllib.parse import urlparse
 
-from flask import g, request, session
+from flask import g, redirect, request, session
 from werkzeug.exceptions import HTTPException
 
 from core.shared.ip import get_client_ip
@@ -297,6 +297,29 @@ def register_hooks(app, try_serve_public):
         """全站 CSRF 防护（除 /api/* 外所有 POST/PUT/DELETE/PATCH 请求）。"""
         from core.csrf import csrf_protect
         csrf_protect()
+
+    @app.before_request
+    def trailing_slash_redirect_hook():
+        """把带尾部斜杠的页面地址 301 跳转到无斜杠规范地址。
+
+        Flask 路由默认不带尾部斜杠，访问 ``/music/`` 会直接 404；搜索引擎
+        若抓取到这类地址会得到错误页，表现为「页面缺少 meta description」。
+        仅在去掉斜杠后确实存在路由时跳转，避免误伤静态目录与自定义路径。
+        """
+        path = request.path
+        if request.method not in ('GET', 'HEAD') or len(path) <= 1 or not path.endswith('/'):
+            return None
+        if path.startswith(('/static', '/uploads', '/media', '/api', '/admin')):
+            return None
+        trimmed = path.rstrip('/')
+        try:
+            app.url_map.bind(request.host).match(trimmed, method=request.method)
+        except Exception:
+            return None
+        target = trimmed
+        if request.query_string:
+            target += '?' + request.query_string.decode('utf-8', 'ignore')
+        return redirect(target, code=301)
 
     @app.before_request
     def serve_public_files_hook():

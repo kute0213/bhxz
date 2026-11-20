@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from 'macros/forms.html' import tags_field %}
-{% block title %}发布公共建筑{% endblock %}
+{% block title %}发布公共建筑 - 展示你的 Minecraft 作品{% endblock %}
+{% block description %}在滨海小镇发布你的 Minecraft 公共建筑作品，填写标题、领地名、建筑介绍、使用方式与注意事项并上传截图，提交审核通过后即可展示在服务器建筑列表中。{% endblock %}
 {# 按需加载：本页需要图形验证码弹窗，通过 base.html 的 captcha_modal 块引入 #}
 {% block captcha_modal %}{% from 'macros/modal.html' import modal_captcha %}{{ modal_captcha() }}{% endblock %}
 {% block content %}

@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% from 'macros/modal.html' import modal_shell %}
-{% block title %}注册社区账户，加入 Minecraft 玩家社区{% endblock %}
-{% block description %}注册滨海小镇社区账户，加入 Minecraft 服务器玩家社区，发布玩家建筑、收藏服务器指南、分享大喇叭音频。{% endblock %}
+{% block title %}注册社区账户 - 加入 Minecraft 服务器玩家社区{% endblock %}
+{% block description %}注册滨海小镇社区账户，加入 Minecraft 服务器玩家社区，发布玩家公共建筑、编写与收藏服务器指南、分享大喇叭音频和背景图片，与小镇玩家一起交流创造，注册即享社区全部功能。{% endblock %}
 {# 按需加载：本页需要图形验证码弹窗，通过 base.html 的 captcha_modal 块引入 #}
 {% block captcha_modal %}{% from 'macros/modal.html' import modal_captcha %}{{ modal_captcha() }}{% endblock %}
 {% block content %}

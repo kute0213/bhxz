@@ -11,6 +11,12 @@
   * 使用标准库 `urllib` 提交到 `https://api.indexnow.org/indexnow`（超时 10 秒、单域名单次最多 10000 个 URL），无新增依赖；最近一次结果写入 `INDEXNOW_LAST_RESULT` 并在页面展示。
   * 新增 10 个测试：公网域名过滤、Key 生成 / 配置校验与布尔归一化、URL 构建去重、提交载荷、未启用拦截、Key 文件路由（匹配 200 / 不匹配 404）。
 
+### SEO 优化：全站元数据修复（`static/templates/`、`core/middleware.py`）
+  * 首页、服务器状态、背景图片、大喇叭音频、登录、注册、找回密码、文档中心、网页地图、公共建筑、服务器指南、音频直播等页面的标题与 `meta description` 全部重写加长；公开页描述统一达到 70–110 个中文字符，标题不再过短。
+  * 指南 / 公共建筑详情页的描述改为兜底策略：用户摘要不足 70 字时追加页面用途说明，超过 140 字时截断；上传、收藏、设置、游戏账号申请等登录后页面补齐专属标题与描述。
+  * 新增尾部斜杠 301 规范化：`/music/`、`/buildings/`、`/server-status/` 等地址自动跳转到无斜杠规范地址（保留查询参数），解决 Bing 抓取 `/music/` 得到 404、进而报告「缺少 description」的问题；静态资源与 API 路径不参与跳转。
+  * 错误页 `error_simple.html` 输出 `robots: noindex, follow`；新增 `scripts/tests/test_seo.py`（14 个用例）校验公开页标题 ≥28 字符、描述 ≥70 字符，以及尾部斜杠 301 与静态资源不跳转。
+
 ### 文档
 
 * **新增 MCSManager 面板部署指南**（`docs/mcsm-deploy.md`）：说明如何把本项目作为 MCSM 通用应用实例运行，包含新建实例、上传发布包 / git clone、虚拟环境与依赖安装、启动与停止命令、首次启动与默认管理员、数据备份路径、升级流程、Nginx 反向代理（含直播流关闭缓冲）、Docker 方式与常见问题排查；并补充 **Windows 部署与编码** 专章（GBK 乱码 / `UnicodeEncodeError` 的成因与 `start.bat` 方案、`chcp 65001` / `PYTHONUTF8` / `PYTHONIOENCODING` / `PYTHONUNBUFFERED`、BOM、zip 文件名乱码、防火墙放行与日志编码），README 快速开始与文档索引已同步。

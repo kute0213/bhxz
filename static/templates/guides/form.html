@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% from "macros/markdown_editor.html" import markdown_editor %}
-{% block title %}{{ '编辑指南' if guide else '新建指南' }}{% endblock %}
+{% block title %}{{ '编辑服务器指南' if guide else '新建服务器指南' }} - 滨海小镇{% endblock %}
+{% block description %}使用 Markdown 编辑器编写或修改滨海小镇 Minecraft 服务器指南，支持标题、代码块、表格、图片与视频资源，保存草稿后可预览并提交审核，与社区玩家分享你的经验。{% endblock %}
 {# 按需加载：本页需要图形验证码弹窗（仅非草稿保存时使用） #}
 {% block captcha_modal %}{% from 'macros/modal.html' import modal_captcha %}{{ modal_captcha() }}{% endblock %}
 {% block content %}

@@ -392,10 +392,13 @@ render_page('admin/admin_users.html')          # ❌ 双重前缀
 `base.html` 已统一输出 `meta description`、`canonical`、Open Graph 与 Twitter 卡片标签，默认描述对所有页面生效。新增公开页面时必须：
 
 * 写 `{% block title %}`，长度约 20–35 个中文字符（不含自动追加的「 - 滨海小镇」），不要只写「首页」「登录」这类过短标题（Bing 会报「标题太短」）；
-* 用 `{% block description %}` 覆盖页面专属描述（50–100 字），不要依赖默认描述；
+* 用 `{% block description %}` 覆盖页面专属描述，建议 **70–110 个中文字符**；低于 70 字会被 Bing 判定为「描述过短」，不要依赖默认描述；
+* 详情页（指南 / 建筑等）的标题与摘要来自用户内容，必须在模板中兜底：描述不足 70 字时追加页面用途说明，超过 140 字时截断，避免过短或过长；
 * 不要在子模板重复手写 `<title>` 或 `<meta name="description">`，避免重复标签；
 * canonical 由 `core/template_context.py` 的 `canonical_base_url` 计算（优先匹配 `SITE_URL` / `SITEMAP_DOMAINS`，公网域名默认 https），子模板无需覆盖；
-* 管理后台 / 登录后页面无需索引，但仍输出默认描述，不影响爬虫（robots.txt 已 `Disallow: /admin/`）。
+* URL 统一不带尾部斜杠：`core/middleware.py` 的 `trailing_slash_redirect_hook` 会把 `/music/` 这类地址 301 到 `/music`，新增路由不要单独设置 `strict_slashes`；
+* 错误页 `error_simple.html` 已输出 `robots: noindex, follow`；管理后台 / 登录后页面无需索引（robots.txt 已 `Disallow: /admin/`）；
+* 修改公开页标题或描述后运行 `python -m pytest scripts/tests/test_seo.py -q`，该测试会检查公开页标题 ≥28 字符、描述 ≥70 字符，并验证尾部斜杠 301 跳转。
 
 > 注意：**不要用 HTML 注释包裹 Jinja 标签**（如 `<!-- {% block description %}...{% endblock %} -->`）。Jinja 会解析注释里的标签，导致 `TemplateSyntaxError: Unexpected end of template`。
 

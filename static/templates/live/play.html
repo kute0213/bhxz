@@ -1,6 +1,6 @@
 {% extends "base.html" %}
-{% block title %}{{ channel.title if channel else '直播已结束' }} - 音频直播{% endblock %}
-{% block description %}滨海小镇音频直播播放页，支持 HLS（m3u8）与 MP3 实时收听。{% endblock %}
+{% block title %}Minecraft 社区音频直播频道：{{ channel.title if channel else '直播已结束' }} - 在线实时收听{% endblock %}
+{% block description %}滨海小镇音频直播播放页，支持 HLS（m3u8）与 MP3 实时收听，可在浏览器直接播放当前频道的音乐、广播或语音内容{% if channel %}，正在直播：{{ channel.title }}{% endif %}，并查看主播与在线信息。{% endblock %}
 
 {% block content %}
 <section class="page-container py-12">

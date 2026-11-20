@@ -1,5 +1,6 @@
 {% extends "base.html" %}
-{% block title %}申请封禁玩家{% endblock %}
+{% block title %}申请封禁玩家 - 滨海小镇游戏账号管理{% endblock %}
+{% block description %}提交滨海小镇 Minecraft 服务器的玩家封禁申请，填写违规玩家 ID、违规类型、发生时间与证据说明，管理员核实后将按服务器规则处理。{% endblock %}
 {# 按需加载：本页需要图形验证码弹窗，通过 base.html 的 captcha_modal 块引入 #}
 {% block captcha_modal %}{% from 'macros/modal.html' import modal_captcha %}{{ modal_captcha() }}{% endblock %}
 {% block content %}

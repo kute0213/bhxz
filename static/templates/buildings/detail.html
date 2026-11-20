@@ -1,8 +1,9 @@
 {% extends "base.html" %}
 {% from 'macros/modal.html' import modal_shell, modal_close_script %}
 {% from 'macros/forms.html' import tags_field %}
-{% block title %}{{ building.title }} - Minecraft 玩家公共建筑{% endblock %}
-{% block description %}{{ building.description or (building.title ~ '，滨海小镇 Minecraft 服务器玩家发布的公共建筑作品。') }}{% endblock %}
+{% set bdesc = (building.description or '')|striptags|trim %}
+{% block title %}Minecraft 玩家公共建筑：{{ building.title }} - 作品截图与介绍{% endblock %}
+{% block description %}{% if bdesc|length >= 70 %}{{ bdesc[:140] }}{% else %}{{ (bdesc ~ '。' if bdesc|length >= 15 else '') }}滨海小镇 Minecraft 服务器玩家公共建筑作品《{{ building.title }}》，包含建筑介绍、实景截图、标签与玩家评论，欢迎浏览欣赏并交流建筑灵感。{% endif %}{% endblock %}
 {% block content %}
 <section class="page-container py-12">
     <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">

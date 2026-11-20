@@ -1,5 +1,6 @@
 {% extends "base.html" %}
-{% block title %}申请账号{% endblock %}
+{% block title %}申请 Minecraft 游戏账号 - 滨海小镇{% endblock %}
+{% block description %}填写申请表单，申请加入滨海小镇 Minecraft 服务器的游戏账号，提交游戏 ID、联系方式与申请理由，管理员审核通过后即可进入服务器与社区玩家一起游玩。{% endblock %}
 {# 按需加载：本页需要图形验证码弹窗，通过 base.html 的 captcha_modal 块引入 #}
 {% block captcha_modal %}{% from 'macros/modal.html' import modal_captcha %}{{ modal_captcha() }}{% endblock %}
 {% block content %}
