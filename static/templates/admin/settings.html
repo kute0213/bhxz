@@ -1,46 +1,75 @@
-{% extends "base.html" %}
-{% from 'macros/page_header.html' import page_header %}
+{% extends "admin/_layout.html" %}
+{% set admin_title = '系统设置' %}
+{% set admin_subtitle = '在线编辑系统配置，修改后立即生效（热重载）' %}
 {% block title %}系统设置{% endblock %}
-{% block content %}
-<section class="page-container py-12">
-    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-        {{ page_header(
-            title='系统设置',
-            subtitle='在线编辑系统配置，修改后立即生效（热重载）',
-            back_url=url_for('admin.admin_page'),
-            back_text='返回管理中心'
-        ) }}
-
-        <!-- 操作栏 -->
-        <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
-            <div class="flex items-center gap-3 min-w-0">
-                <span id="save-status" class="text-sm text-cream/60">所有更改将自动保存</span>
+{% block admin_content %}
+        <!-- 工具栏 -->
+        <div class="pixel-card rounded-2xl p-4 sm:p-5 mb-6">
+            <div class="flex flex-col lg:flex-row lg:items-center gap-3">
+                <div class="relative flex-1 min-w-0">
+                    <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-cream/40"></i>
+                    <input id="settings-search" type="search"
+                           class="input-field w-full pl-10 pr-4 py-2.5 rounded-lg"
+                           placeholder="搜索设置项，例如：站点域名、SMTP、IndexNow">
+                </div>
+                <div class="flex flex-wrap items-center justify-between lg:justify-end gap-2">
+                    <span id="save-status" class="text-sm text-cream/60">修改后 1.2 秒自动保存</span>
+                    <button id="btn-reset-all" class="btn-danger px-4 py-2 text-sm">
+                        <i data-lucide="rotate-ccw" class="w-4 h-4 inline mr-1"></i>重置所有
+                    </button>
+                    <button id="btn-save" class="btn-primary px-5 py-2 text-sm" disabled>
+                        <i data-lucide="save" class="w-4 h-4 inline mr-1"></i>保存更改
+                    </button>
+                </div>
             </div>
-            <div class="flex items-center gap-2">
-                <button id="btn-reset-all" class="btn-danger px-4 py-2 text-sm">
-                    <i data-lucide="rotate-ccw" class="w-4 h-4 inline mr-1"></i>重置所有
-                </button>
-                <button id="btn-save" class="btn-primary px-5 py-2 text-sm">
-                    <i data-lucide="save" class="w-4 h-4 inline mr-1"></i>保存更改
-                </button>
-            </div>
+            <!-- 分类快捷导航（JS 根据接口数据生成） -->
+            <div id="category-nav" class="flex flex-wrap gap-2 mt-4"></div>
         </div>
 
         <!-- 设置分类容器 -->
         <div id="settings-container" class="space-y-6">
             <!-- 设置项将通过 JS 动态渲染 -->
         </div>
-    </div>
-</section>
+        <div id="settings-empty" class="hidden text-center py-16 pixel-card rounded-2xl">
+            <i data-lucide="search-x" class="w-12 h-12 text-cream/30 mx-auto mb-3"></i>
+            <p class="text-cream/60">没有找到匹配的设置项</p>
+        </div>
 {% endblock %}
 
 {% block extra_script %}
 <script>
     (function () {
         const settingsContainer = document.getElementById('settings-container');
+        const categoryNav = document.getElementById('category-nav');
+        const searchInput = document.getElementById('settings-search');
+        const emptyState = document.getElementById('settings-empty');
         const btnResetAll = document.getElementById('btn-reset-all');
         const btnSave = document.getElementById('btn-save');
         const saveStatus = document.getElementById('save-status');
+
+        // 分类图标（Lucide），未匹配的分类回退到 settings
+        const CATEGORY_ICONS = {
+            '日志': 'file-text',
+            '自动维护': 'wrench',
+            'Sitemap': 'map',
+            '安全配置': 'shield',
+            'IP 封禁': 'ban',
+            '内容注入检测': 'shield-alert',
+            '可疑访问拦截': 'eye-off',
+            'DDoS 防护': 'activity',
+            'API 防火墙': 'gauge',
+            '邮件配置': 'mail',
+            '音频直播': 'radio',
+            '列表分页': 'list',
+            '指南资源': 'book-open',
+            '外部链接': 'link',
+            '背景图片': 'image',
+            '网站图标': 'image',
+            '服务器配置': 'server',
+            'RCON 配置': 'terminal',
+            '网站备案': 'file-badge',
+            '内容审核': 'check-circle'
+        };
 
         let originalValues = {};
         let dirty = false;
@@ -115,20 +144,40 @@
         // 渲染设置项
         function renderSettings(data) {
             settingsContainer.innerHTML = '';
+            categoryNav.innerHTML = '';
 
             const categories = data.categories || {};
+            let index = 0;
             for (const [category, items] of Object.entries(categories)) {
+                const cardId = 'settings-cat-' + index;
+
+                // 分类快捷导航
+                const navBtn = document.createElement('button');
+                navBtn.type = 'button';
+                navBtn.className = 'px-3 py-1.5 rounded-full text-xs font-medium bg-forest-800/50 text-cream/70 hover:text-gold-400 transition-colors';
+                navBtn.textContent = category;
+                navBtn.addEventListener('click', function () {
+                    const target = document.getElementById(cardId);
+                    if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                });
+                categoryNav.appendChild(navBtn);
+
                 const card = document.createElement('div');
-                card.className = 'pixel-card rounded-xl';
+                card.className = 'pixel-card rounded-2xl';
+                card.id = cardId;
+                card.style.scrollMarginTop = '1.5rem';
 
                 // 分类标题
                 const header = document.createElement('div');
                 header.className = 'px-4 sm:px-6 py-4 border-b border-cream/10 bg-forest-900/30 rounded-t-2xl';
                 header.innerHTML = `
-                    <h2 class="text-lg font-bold flex items-center gap-2">
-                        <i data-lucide="settings" class="w-5 h-5 text-gold-400"></i>
-                        ${category}
-                    </h2>
+                    <div class="flex items-center justify-between gap-3">
+                        <h2 class="text-lg font-bold flex items-center gap-2">
+                            <i data-lucide="${CATEGORY_ICONS[category] || 'settings'}" class="w-5 h-5 text-gold-400"></i>
+                            ${category}
+                        </h2>
+                        <span class="text-xs text-cream/40">${items.length} 项</span>
+                    </div>
                 `;
                 card.appendChild(header);
 
@@ -138,8 +187,9 @@
 
                 items.forEach(function (item) {
                     const row = document.createElement('div');
-                    row.className = 'px-4 sm:px-6 py-4';
+                    row.className = 'setting-row px-4 sm:px-6 py-4';
                     row.setAttribute('data-key', item.key);
+                    row.dataset.search = [item.key, item.label, item.description, category].join(' ').toLowerCase();
 
                     let inputHtml = '';
                     if (item.type === 'bool') {
@@ -263,6 +313,7 @@
 
                 card.appendChild(body);
                 settingsContainer.appendChild(card);
+                index += 1;
             }
 
             // 更新原始值记录
@@ -272,7 +323,26 @@
             });
 
             if (window.lucide) lucide.createIcons();
+            applyFilter(searchInput.value);
             updateSaveStatus();
+        }
+
+        // 按关键词过滤设置项，并隐藏没有匹配项的分类卡片
+        function applyFilter(keyword) {
+            const q = (keyword || '').trim().toLowerCase();
+            let total = 0;
+            settingsContainer.querySelectorAll('.pixel-card').forEach(function (card) {
+                let visible = 0;
+                card.querySelectorAll('.setting-row').forEach(function (row) {
+                    const match = !q || (row.dataset.search || '').indexOf(q) !== -1;
+                    row.classList.toggle('hidden', !match);
+                    if (match) visible += 1;
+                });
+                card.classList.toggle('hidden', visible === 0);
+                total += visible;
+            });
+            emptyState.classList.toggle('hidden', total !== 0);
+            if (window.lucide) lucide.createIcons();
         }
 
         function markDirty() {
@@ -287,7 +357,7 @@
                 btnSave.disabled = false;
                 btnSave.classList.remove('opacity-50', 'cursor-not-allowed');
             } else {
-                saveStatus.textContent = '所有更改将自动保存';
+                saveStatus.textContent = '修改后 1.2 秒自动保存';
                 saveStatus.className = 'text-sm text-cream/60';
                 btnSave.disabled = true;
                 btnSave.classList.add('opacity-50', 'cursor-not-allowed');
@@ -425,6 +495,9 @@
         }
         settingsContainer.addEventListener('input', scheduleAutoSave);
         settingsContainer.addEventListener('change', scheduleAutoSave);
+        searchInput.addEventListener('input', function () {
+            applyFilter(searchInput.value);
+        });
 
         // 初始化加载
         loadSettings();

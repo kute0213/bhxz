@@ -116,7 +116,8 @@ class TestScheduledTask:
 
     def test_clock_mark_done_skips_today(self):
         now = datetime.now()
-        target = now + timedelta(minutes=30)
+        # 取 18 小时后的时间点，避免临近午夜时“跳过当天”后只剩几十分钟
+        target = now + timedelta(hours=18)
         task = ScheduledTask('clock-m', lambda: True, run_at=target.strftime('%H:%M'),
                              run_immediately=False)
         task.schedule_first()

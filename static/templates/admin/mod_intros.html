@@ -1,79 +1,16 @@
-{% extends "base.html" %}
-{% block title %}管理模组介绍{% endblock %}
-{% block extra_style %}
-    <style>
-        .btn-danger-outline {
-            background: linear-gradient(135deg, rgba(239, 68, 68, 0.07) 0%, rgba(239, 68, 68, 0.03) 100%);
-            backdrop-filter: blur(12px) saturate(110%);
-            -webkit-backdrop-filter: blur(12px) saturate(110%);
-            border: 1px solid rgba(239, 68, 68, 0.15);
-            border-radius: 14px !important;
-            color: #fca5a5; font-weight: 500;
-            transition: transform 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
-            position: relative;
-            overflow: hidden;
-            box-shadow: 0 2px 8px rgba(239, 68, 68, 0.04), inset 0 0.5px 0 rgba(255,255,255,0.05);
-        }
-        .btn-danger-outline:hover {
-            border-color: rgba(239, 68, 68, 0.30);
-            background: linear-gradient(135deg, rgba(239, 68, 68, 0.12) 0%, rgba(239, 68, 68, 0.06) 100%);
-            color: #fecaca;
-            transform: translateY(-1px);
-            box-shadow: 0 4px 16px rgba(239, 68, 68, 0.08), inset 0 0.5px 0 rgba(255,255,255,0.07);
-        }
-        .intro-card {
-            background: linear-gradient(145deg, rgba(10, 24, 16, 0.15) 0%, rgba(15, 30, 20, 0.08) 50%, rgba(10, 24, 16, 0.15) 100%);
-            backdrop-filter: blur(40px) saturate(100%);
-            -webkit-backdrop-filter: blur(40px) saturate(100%);
-            border: 1px solid rgba(255, 255, 255, 0.03);
-            border-radius: 22px !important;
-            transition: transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
-            box-shadow:
-                0 8px 32px rgba(0, 0, 0, 0.18),
-                inset 0 0.5px 0 rgba(255, 255, 255, 0.06);
-            position: relative;
-            overflow: hidden;
-        }
-        .intro-card::after {
-            content: ''; position: absolute; top: 0; left: 0; right: 0; height: 50%; border-radius: 22px 22px 0 0; pointer-events: none;
-            background: linear-gradient(180deg, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0) 100%);
-        }
-        .intro-card:hover {
-            border-color: rgba(244, 208, 63, 0.15);
-            transform: translateY(-2px);
-            box-shadow:
-                0 12px 40px rgba(0, 0, 0, 0.22),
-                inset 0 0.5px 0 rgba(255, 255, 255, 0.08);
-        }
-        .intro-icon {
-            background: linear-gradient(135deg, rgba(244, 208, 63, 0.08) 0%, rgba(244, 208, 63, 0.04) 100%);
-            border: 1px solid rgba(244, 208, 63, 0.12);
-            border-radius: 14px !important;
-            backdrop-filter: blur(10px) saturate(110%);
-            -webkit-backdrop-filter: blur(10px) saturate(110%);
-            box-shadow: inset 0 0.5px 0 rgba(255, 255, 255, 0.05), 0 2px 8px rgba(0, 0, 0, 0.10);
-            position: relative;
-            overflow: hidden;
-        }
-    </style>
-{% endblock %}
-{% block content %}
-    <section class="page-container py-12">
-        <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-            <div class="flex items-center justify-between mb-8">
-                <div>
-                    <h1 class="text-2xl sm:text-3xl font-bold mb-2">模组介绍管理</h1>
-                    <p class="text-cream/60">管理首页展示的模组介绍卡片（共 {{ mod_intros|length }} 个）</p>
-                </div>
-            </div>
+{% extends "admin/_layout.html" %}
+{% set admin_title = '模组介绍管理' %}
+{% set admin_subtitle = '管理首页展示的模组介绍卡片（共 ' ~ (mod_intros|length) ~ ' 个）' %}
+{% block title %}模组介绍管理{% endblock %}
 
-            
-
-            <div class="pixel-card rounded-xl p-6 mb-8">
-                <h2 class="text-xl font-bold mb-4 flex items-center gap-2">
+{% block admin_content %}
+            <!-- 添加新模组介绍 -->
+            <div class="pixel-card rounded-2xl p-5 sm:p-6 mb-6">
+                <h2 class="text-lg font-bold mb-4 flex items-center gap-2">
                     <i data-lucide="plus-circle" class="w-5 h-5 text-gold-400"></i>添加新模组介绍
                 </h2>
-                <form id="mod-intro-add-form" data-action-url="{{ url_for('admin.add_mod_intro') }}" class="grid md:grid-cols-6 gap-4">
+                <form id="mod-intro-add-form" data-action-url="{{ url_for('admin.add_mod_intro') }}"
+                      class="grid grid-cols-1 md:grid-cols-6 gap-4">
                     <div class="md:col-span-1">
                         <label class="block text-sm font-medium mb-2 text-cream/80">图标名称</label>
                         <input type="text" name="icon" value="box" class="input-field w-full px-4 py-3 rounded-lg" placeholder="如: mountain">
@@ -90,10 +27,10 @@
                     <div class="md:col-span-1">
                         <label class="block text-sm font-medium mb-2 text-cream/80">模组链接</label>
                         <input type="url" name="link" class="input-field w-full px-4 py-3 rounded-lg" placeholder="https://...（可选）">
-                        <p class="text-xs text-cream/40 mt-1">点击卡片跳转，可留空</p>
+                        <p class="text-xs text-cream/40 mt-1">可留空</p>
                     </div>
-                    <div class="md:col-span-1">
-                        <button type="submit" class="btn-primary w-full py-3 rounded-lg font-bold flex items-center justify-center gap-2 mt-8">
+                    <div class="md:col-span-1 flex items-end">
+                        <button type="submit" class="btn-primary w-full py-3 rounded-lg font-bold flex items-center justify-center gap-2">
                             <i data-lucide="plus" class="w-4 h-4"></i>添加
                         </button>
                     </div>
@@ -109,16 +46,17 @@
                 </div>
             </div>
 
+            <!-- 现有模组介绍 -->
             <div class="space-y-4" id="mod-intro-list">
                 {% for intro in mod_intros %}
-                <div class="intro-card rounded-xl p-5" data-intro-card="{{ intro.id }}">
-                    <form class="mod-intro-edit-form grid md:grid-cols-6 gap-4 items-start"
+                <div class="pixel-card rounded-2xl p-5" data-intro-card="{{ intro.id }}">
+                    <form class="mod-intro-edit-form grid grid-cols-1 md:grid-cols-6 gap-4 items-end"
                           data-action-url="{{ url_for('admin.edit_mod_intro', intro_id=intro.id) }}">
                         <div class="md:col-span-1">
-                            <div class="intro-icon w-12 h-12 rounded-lg flex items-center justify-center mb-2">
+                            <div class="feature-icon mb-2">
                                 <i data-lucide="{{ intro.icon or 'box' }}" class="w-6 h-6 text-gold-400"></i>
                             </div>
-                            <input type="text" name="icon" value="{{ intro.icon }}" class="input-field w-full px-3 py-2 rounded-lg text-sm">
+                            <input type="text" name="icon" value="{{ intro.icon }}" class="input-field w-full px-3 py-2 rounded-lg text-sm" aria-label="图标名称">
                         </div>
                         <div class="md:col-span-1">
                             <label class="block text-xs text-cream/50 mb-1">标题</label>
@@ -132,19 +70,19 @@
                             <label class="block text-xs text-cream/50 mb-1">模组链接</label>
                             <input type="url" name="link" value="{{ intro.link or '' }}" class="input-field w-full px-3 py-2 rounded-lg text-sm" placeholder="https://...（可选）">
                         </div>
-                        <div class="md:col-span-1 flex flex-col gap-2">
-                            <button type="submit" class="btn-primary w-full py-3 rounded-lg text-sm font-bold flex items-center justify-center gap-1 mt-4">
-                                <i data-lucide="check" class="w-3 h-3"></i>保存
+                        <div class="md:col-span-1">
+                            <button type="submit" class="btn-primary w-full py-3 rounded-lg text-sm font-bold flex items-center justify-center gap-1">
+                                <i data-lucide="check" class="w-4 h-4"></i>保存
                             </button>
                         </div>
                     </form>
-                    <div class="mt-3 pt-3 border-t border-forest-700/50 flex justify-between items-center gap-3">
+                    <div class="mt-3 pt-3 border-t border-cream/10 flex justify-between items-center gap-3">
                         <span class="text-xs text-cream/40 min-w-0 flex-1 truncate">ID: {{ intro.id }} · 创建于 {{ intro.created_at }}</span>
                         <button type="button"
                                 class="admin-action btn-danger-outline px-3 py-1 rounded-lg text-xs flex items-center gap-1 flex-shrink-0"
                                 data-action-url="{{ url_for('admin.delete_mod_intro', intro_id=intro.id) }}"
                                 data-action-confirm="确定要删除「{{ intro.title }}」吗？"
-                                data-action-remove=".intro-card"
+                                data-action-remove=".pixel-card"
                                 data-action-success="模组介绍已删除">
                             <i data-lucide="trash-2" class="w-3 h-3"></i>删除
                         </button>
@@ -154,24 +92,17 @@
             </div>
 
             {% if not mod_intros %}
-            <div class="text-center py-16 pixel-card rounded-xl">
+            <div class="text-center py-16 pixel-card rounded-2xl">
                 <i data-lucide="package" class="w-16 h-16 text-cream/30 mx-auto mb-4"></i>
                 <p class="text-cream/60">还没有模组介绍</p>
                 <p class="text-cream/40 text-sm mt-2">使用上方的表单添加第一个模组介绍</p>
             </div>
             {% endif %}
-
-            <div class="mt-8 text-center">
-                <a href="{{ url_for('main.home') }}" class="btn-secondary px-6 py-3 rounded-xl inline-flex items-center gap-2">
-                    <i data-lucide="arrow-left" class="w-5 h-5"></i>返回首页
-                </a>
-            </div>
-        </div>
-    </section>
 {% endblock %}
+
 {% block extra_script %}
 <script>
-// 模组介绍增/改：JSON 提交，无需刷新页面
+// 模组介绍增/改：JSON 提交，成功后刷新页面保持列表与服务端一致
 (function () {
     function readFields(form) {
         return {
@@ -209,71 +140,32 @@
         });
     }
 
-    // 预览图标：输入图标名即时更新预览（保存后生效于前端展示）
+    // 编辑表单：提交 + 图标即时预览
     document.querySelectorAll('.mod-intro-edit-form').forEach(function (form) {
         form.addEventListener('submit', function (e) {
             e.preventDefault();
             postForm(form, form.querySelector('button[type="submit"]'));
         });
         var iconInput = form.querySelector('[name="icon"]');
-        var preview = form.querySelector('.intro-icon i');
+        var preview = form.querySelector('.feature-icon i');
         if (iconInput && preview) {
             iconInput.addEventListener('input', function () {
                 var name = (iconInput.value || 'box').trim() || 'box';
                 preview.setAttribute('data-lucide', name);
-                if (typeof lucide !== 'undefined' && lucide.createIcons) { try { lucide.createIcons({ root: form }); } catch (_) {} }
+                if (typeof lucide !== 'undefined' && lucide.createIcons) {
+                    try { lucide.createIcons({ root: form }); } catch (_) {}
+                }
             });
         }
     });
 
-    // 新增：成功后插入新卡片
+    // 新增：成功后刷新，保证新卡片使用与模板完全一致的结构
     var addForm = document.getElementById('mod-intro-add-form');
     if (addForm) {
         addForm.addEventListener('submit', function (e) {
             e.preventDefault();
             postForm(addForm, addForm.querySelector('button[type="submit"]')).then(function (data) {
-                if (!data || !data.intro) return;
-                var intro = data.intro;
-                var card = document.createElement('div');
-                card.className = 'intro-card rounded-xl p-5';
-                card.setAttribute('data-intro-card', intro.id);
-                card.innerHTML =
-                    '<form class="mod-intro-edit-form grid md:grid-cols-6 gap-4 items-start" data-action-url="/admin/mod-intros/' + intro.id + '/edit">' +
-                    '<div class="md:col-span-1"><div class="intro-icon w-12 h-12 rounded-lg flex items-center justify-center mb-2"><i data-lucide="box" class="w-6 h-6 text-gold-400"></i></div>' +
-                    '<input type="text" name="icon" class="input-field w-full px-3 py-2 rounded-lg text-sm"></div>' +
-                    '<div class="md:col-span-1"><label class="block text-xs text-cream/50 mb-1">标题</label><input type="text" name="title" required maxlength="50" class="input-field w-full px-3 py-2 rounded-lg text-sm"></div>' +
-                    '<div class="md:col-span-2"><label class="block text-xs text-cream/50 mb-1">内容</label><textarea name="content" required rows="2" maxlength="300" class="input-field w-full px-3 py-2 rounded-lg text-sm resize-none"></textarea></div>' +
-                    '<div class="md:col-span-1"><label class="block text-xs text-cream/50 mb-1">模组链接</label><input type="url" name="link" class="input-field w-full px-3 py-2 rounded-lg text-sm" placeholder="https://...（可选）"></div>' +
-                    '<div class="md:col-span-1 flex flex-col gap-2"><button type="submit" class="btn-primary w-full py-3 rounded-lg text-sm font-bold flex items-center justify-center gap-1 mt-4"><i data-lucide="check" class="w-3 h-3"></i>保存</button></div>' +
-                    '</form>' +
-                    '<div class="mt-3 pt-3 border-t border-forest-700/50 flex justify-between items-center gap-3">' +
-                    '<span class="text-xs text-cream/40 min-w-0 flex-1 truncate">ID: ' + intro.id + ' · 创建于 ' + intro.created_at + '</span>' +
-                    '<button type="button" class="admin-action btn-danger-outline px-3 py-1 rounded-lg text-xs flex items-center gap-1 flex-shrink-0" data-action-url="/admin/mod-intros/' + intro.id + '/delete" data-action-confirm="确定要删除该模组介绍吗？" data-action-remove=".intro-card" data-action-success="模组介绍已删除"><i data-lucide="trash-2" class="w-3 h-3"></i>删除</button></div>';
-
-                var f = card.querySelector('form');
-                f.querySelector('[name="icon"]').value = intro.icon || 'box';
-                f.querySelector('[name="icon"]').previousElementSibling.querySelector('i').setAttribute('data-lucide', intro.icon || 'box');
-                f.querySelector('[name="title"]').value = intro.title;
-                f.querySelector('[name="content"]').value = intro.content;
-                f.querySelector('[name="link"]').value = intro.link || '';
-
-                f.addEventListener('submit', function (ev) {
-                    ev.preventDefault();
-                    postForm(f, f.querySelector('button[type="submit"]'));
-                });
-                var iconInput = f.querySelector('[name="icon"]');
-                var preview = f.querySelector('.intro-icon i');
-                iconInput.addEventListener('input', function () {
-                    var name = (iconInput.value || 'box').trim() || 'box';
-                    preview.setAttribute('data-lucide', name);
-                    if (typeof lucide !== 'undefined' && lucide.createIcons) { try { lucide.createIcons({ root: f }); } catch (_) {} }
-                });
-
-                var list = document.getElementById('mod-intro-list');
-                list.appendChild(card);
-                if (typeof lucide !== 'undefined' && lucide.createIcons) { try { lucide.createIcons({ root: card }); } catch (_) {} }
-                addForm.reset();
-                addForm.querySelector('[name="icon"]').value = 'box';
+                if (data) window.location.reload();
             });
         });
     }

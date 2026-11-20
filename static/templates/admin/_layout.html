@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% from 'macros/page_header.html' import page_header %}
+
+{#
+  管理后台统一页面骨架。
+  子模板用法：
+    {% extends "admin/_layout.html" %}
+    {% set admin_title = '系统设置' %}
+    {% set admin_subtitle = '可选副标题' %}
+    {% block admin_content %}...{% endblock %}
+#}
+
+{% block title %}{{ admin_title }}{% endblock %}
+
+{% block content %}
+<section class="page-container py-10 sm:py-12">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+        {{ page_header(
+            title=admin_title,
+            subtitle=admin_subtitle|default(''),
+            back_url=url_for('admin.admin_page'),
+            back_text='返回管理中心'
+        ) }}
+        {% block admin_content %}{% endblock %}
+    </div>
+</section>
+{% endblock %}

@@ -85,7 +85,8 @@ def register_template_context(app):
             'page_noindex': page_noindex,
             'page_robots': 'noindex, nofollow' if page_noindex else 'index, follow',
             'bing_verification': bing_verification,
-            'og_image': f'{canonical_base_url}/static/img/og-cover.png',
+            # 分享图统一使用系统设置中的网站图标（/favicon 返回当前 FAVICON_ICON 对应的 SVG）
+            'og_image': f'{canonical_base_url}/favicon',
             'site_description': SITE_DESCRIPTION,
             'structured_data': build_site_structured_data(canonical_base_url),
             'breadcrumb_jsonld': (

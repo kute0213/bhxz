@@ -350,6 +350,8 @@ if not ok:
 
 目录名已表达功能，文件名**不得重复**功能名。管理后台位于 `static/templates/admin/`，其下文件名直接是 `users.html`、`settings.html`，**禁止**写成 `admin/admin_users.html` 这类双重前缀。
 
+管理后台页面统一继承 `admin/_layout.html`（它再继承 `base.html`），不要在页面里重复写 `page-container`、返回链接和页头；页面只需设置 `admin_title`、`admin_subtitle` 并填充 `admin_content` 块。自带下拉框的卡片必须使用 `.pixel-card`，展开时由 `base.css` 的 `.select-open` 解除裁剪；不要给卡片设置 `overflow: hidden` 或额外的 `contain: paint`。
+
 ### 4. 引用方式
 
 带渲染一律使用相对 `static/templates/`（Flask `template_folder`）的路径字符串：
@@ -398,7 +400,7 @@ render_page('admin/admin_users.html')          # ❌ 双重前缀
 * 私有页（登录、注册、设置、上传、收藏、申请、管理后台等）由 `core/seo.py` 的 `is_private_path()` 自动判定：模板输出 `noindex, nofollow`、不输出 canonical，响应头追加 `X-Robots-Tag`。新增私有路径时把前缀加入 `_PRIVATE_PREFIXES`；
 * canonical 由 `core/template_context.py` 的 `canonical_base_url` 计算（优先匹配 `SITE_URL` / `SITEMAP_DOMAINS`，公网域名默认 https），子模板无需覆盖；`www` 与非 `www` 域名由中间件按 `SITE_URL` 统一 301，避免重复 URL；
 * 列表页 BreadcrumbList 由 `_BREADCRUMB_PAGES` 统一生成；详情页的末级面包屑在模板 `extra_head` 中补充；
-* 默认分享图固定为 `static/img/og-cover.png`（1200×630）；需要页面专属图时覆盖 `{% block og_image %}`，必须输出绝对 URL；
+* 默认分享图直接使用系统设置中的网站图标（`/favicon`，SVG），不需要也不允许再生成独立分享图；需要页面专属图时覆盖 `{% block og_image %}`，必须输出绝对 URL；
 * 全站 Bing 验证码在「系统设置 → Sitemap → Bing 站点验证码」中配置，`base.html` 自动输出 `msvalidate.01`，不要在模板里硬编码；
 * URL 统一不带尾部斜杠：`core/middleware.py` 的 `trailing_slash_redirect_hook` 会把 `/music/` 这类地址 301 到 `/music`，新增路由不要单独设置 `strict_slashes`；
 * 错误页 `error_simple.html` 已输出 `robots: noindex, follow`；不要添加 `nocache` / `noarchive` 等限制 Bing / Copilot 使用内容的指令；

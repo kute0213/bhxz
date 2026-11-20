@@ -75,9 +75,9 @@ def build_site_structured_data(base_url: str) -> dict:
         'description': SITE_DESCRIPTION,
         'logo': {
             '@type': 'ImageObject',
-            'url': f'{base}/static/img/logo.png',
-            'width': 512,
-            'height': 512,
+            'url': f'{base}/favicon',
+            'width': 32,
+            'height': 32,
         },
     }
 

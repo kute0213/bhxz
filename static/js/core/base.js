@@ -1514,14 +1514,27 @@ document.addEventListener('keydown', function (e) {
         document.querySelectorAll('[data-custom-select].is-open').forEach(closeSelect);
     }
 });
-// 抬升下拉所在卡片：.pixel-card 的 contain: paint 会创建层叠上下文并裁剪溢出内容，
-// 若不抬升，展开的下拉会被相邻卡片压住 / 截断
+// 抬升下拉所在卡片：.pixel-card / .intro-card 的 contain 与 content-visibility
+// 会创建层叠上下文并裁剪溢出内容，若不抬升，展开的下拉会被相邻卡片压住 / 截断
 function toggleSelectCard(cs, open) {
-    var card = cs.closest('.pixel-card');
+    var card = cs.closest('.pixel-card, .intro-card');
     if (!card) return;
     card.classList.toggle('select-open', !!open);
 }
+function positionSelect(cs) {
+    cs.classList.remove('drop-up');
+    var trigger = cs.querySelector('[data-trigger]');
+    var dropdown = cs.querySelector('.custom-select-dropdown');
+    if (!trigger || !dropdown) return;
+    var rect = trigger.getBoundingClientRect();
+    var height = Math.min(dropdown.scrollHeight, 260);
+    // 下方空间不足且上方更宽裕时向上展开
+    if (rect.bottom + height + 12 > window.innerHeight && rect.top > height + 12) {
+        cs.classList.add('drop-up');
+    }
+}
 function openSelect(cs) {
+    positionSelect(cs);
     cs.classList.add('is-open');
     toggleSelectCard(cs, true);
     var trigger = cs.querySelector('[data-trigger]');

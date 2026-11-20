@@ -508,6 +508,13 @@ body::after {
     pointer-events: auto;
     transition-delay: 0s;
 }
+/* 靠近视口底部时向上展开，避免下拉框被页面底部遮挡 */
+.custom-select.drop-up .custom-select-dropdown {
+    top: auto;
+    bottom: calc(100% + 6px);
+    transform: translateY(4px);
+}
+.custom-select.is-open.drop-up .custom-select-dropdown { transform: translateY(0); }
 .custom-select-option {
     padding: 8px 12px;
     border-radius: 8px;
@@ -523,13 +530,16 @@ body::after {
     font-weight: 600;
     background: rgba(2,132,199,0.06);
 }
-/* 自绘下拉展开时抬升所在卡片：.pixel-card 的 contain: paint 会创建层叠上下文
-   并裁剪溢出内容，导致下拉被相邻卡片压住 / 截断；这里临时去掉 paint 包含
-   （保留 layout/style，不改变布局），并把卡片提到同层卡片之上、导航栏之下 */
-.pixel-card.select-open {
+/* 自绘下拉展开时抬升所在卡片：.pixel-card / .intro-card 的 contain: paint
+   与 content-visibility: auto 会创建层叠上下文并裁剪溢出内容，
+   导致下拉被相邻卡片压住 / 截断；展开时临时解除包含并抬升层级 */
+.pixel-card.select-open,
+.intro-card.select-open {
     position: relative;
     z-index: 30;
-    contain: layout style;
+    overflow: visible !important;
+    content-visibility: visible;
+    contain: layout style !important;
 }
 
 /* 输入框 - 白色磨砂玻璃控件（深色文字） */

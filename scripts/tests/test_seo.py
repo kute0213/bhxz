@@ -58,8 +58,13 @@ def test_public_page_structured_data(client):
     assert 'application/ld+json' in html
     assert '"@type": "WebSite"' in html
     assert '"@type": "Organization"' in html
-    assert 'static/img/og-cover.png' in html
-    assert 'summary_large_image' in html
+    assert '/favicon' in html
+    assert 'og:image:type" content="image/svg+xml"' in html
+    assert 'twitter:card" content="summary"' in html
+
+    favicon = client.get('/favicon')
+    assert favicon.status_code == 200
+    assert 'image/svg+xml' in favicon.headers.get('Content-Type', '')
 
 
 def test_breadcrumb_structured_data(client):
