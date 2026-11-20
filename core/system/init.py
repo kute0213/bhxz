@@ -29,6 +29,7 @@ def start_background_services():
     from services.backup import BackupScheduler
     from services.mail import email_service
     from services.sitemap_cache import sitemap_cache
+    from services import indexnow
     from services.rcon import player_tracker
     from services.cleanup_service import cleanup_scheduler
     from services.game_server_ban import game_ban_scheduler
@@ -41,6 +42,8 @@ def start_background_services():
     BackupScheduler().start()
     email_service.start()
     sitemap_cache.start()
+    # IndexNow 主动推送：注册每日任务（默认 03:30，可在后台单独页面配置）
+    indexnow.start()
     player_tracker.start()
     # 音频直播：恢复上次未结束的循环播放直播（音源缺失或历史模式会被标记停止）
     live_manager.restore()

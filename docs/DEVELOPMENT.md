@@ -244,6 +244,7 @@ def do_something(user_id, value, ip_address):
   | `backup` | `services/backup/{manager,scheduler}/__init__.py`、`routes/admin/maintenance/__init__.py` | 自动维护（数据备份 + 日志清理）、定时维护、备份下载 / 删除 | 是 | 否 |
   | `gameban` | `services/game_server_ban/__init__.py` | 游戏服务器封禁申请 / 批准 / 驳回 / 自动解封 | 是 | 否 |
   | `sitemap` | `services/sitemap_cache/__init__.py` | 站点地图刷新与生成 | 是 | 否 |
+  | `indexnow` | `services/indexnow/__init__.py` | IndexNow Key 生成、定时 / 手动推送与结果记录 | 是 | 否 |
   | `rcon` | `services/rcon/{client,player_tracker}/__init__.py` | RCON 命令执行、玩家列表追踪 | 是 | 否 |
   | `cleanup` | `services/cleanup_service/__init__.py` | 被驳回内容超时自动清理 | 是 | 否 |
   | `metrics` | `services/system_metrics/__init__.py` | 系统指标采集 | 是 | 否 |
@@ -402,6 +403,8 @@ render_page('admin/admin_users.html')          # ❌ 双重前缀
 
 `/sitemap.xml` 统一走 `sitemap_cache.get_xml_for_request(host, scheme)`：优先读取 `uploads/sitemap/` 下的域名缓存文件；缓存缺失时按请求域名懒生成（内存缓存 1 小时），**禁止在路由里返回空字符串或内容为空的 200**（空响应会被 CDN 缓存，导致 Bing 判定无法获取 sitemap）。确实无法生成时返回 503 + `Retry-After`。新增可索引公开页时，在 `services/sitemap_cache/__init__.py` 的 `_STATIC_PAGES` 中登记 path / changefreq / priority。
 
+IndexNow 推送复用同一份公开页面列表（`_build_url_entries`）与域名配置（`_collect_domains`），因此**新增公开页只需改 sitemap 白名单，无需改动 IndexNow**。推送任务必须使用统一任务调度器注册（当前任务名 `indexnow-submit`），禁止自行创建线程 / Timer；提交前必须经过 `_is_public_base()` 过滤，不得向内网地址发起请求。
+
 ## 测试规范
 
 测试文件位于 `scripts/tests/`，使用 pytest 运行：
@@ -410,7 +413,7 @@ render_page('admin/admin_users.html')          # ❌ 双重前缀
 python -m pytest scripts/tests -q
 ```
 
-测试套件为 `test_*.py` 中的单元与集成测试（当前覆盖图形验证码、IP 封禁、任务调度、安全扫描、输入校验、指南文件存储与 sitemap 等）。
+测试套件为 `test_*.py` 中的单元与集成测试（当前覆盖图形验证码、IP 封禁、任务调度、安全扫描、输入校验、指南文件存储、sitemap 与 IndexNow 推送等）。
 
 每个测试函数应：
 

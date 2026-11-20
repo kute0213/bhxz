@@ -19,6 +19,7 @@ import routes.admin.buildings        # noqa: E402,F401
 import routes.admin.guide_bans       # noqa: E402,F401
 import routes.admin.maintenance     # noqa: E402,F401
 import routes.admin.settings         # noqa: E402,F401
+import routes.admin.indexnow         # noqa: E402,F401
 import routes.admin.broadcast        # noqa: E402,F401
 import routes.admin.music            # noqa: E402,F401
 import routes.admin.backgrounds      # noqa: E402,F401

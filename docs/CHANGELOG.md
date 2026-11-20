@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### 新增
+
+* **IndexNow 主动推送**（`services/indexnow/`、`routes/indexnow/`、`routes/admin/indexnow/`、`static/templates/admin/indexnow.html`）：管理后台新增独立的「IndexNow 推送」页面（`/admin/indexnow`），可启用 / 关闭、设置每日推送开关与时间、查看 / 重新生成 Key、立即提交并查看每个域名的状态码与 URL 数量。
+  * URL 来源复用 `services/sitemap_cache` 的公开页面列表，与 `/sitemap.xml` 完全一致；只提交 `SITE_URL` / `SITEMAP_DOMAINS` 中的公网域名，自动跳过 localhost、回环、内网 IP 与非法协议。
+  * Key 首次访问自动生成 32 位十六进制；`GET /indexnow/<key>.txt` 提供校验文件，Key 不匹配或未配置返回 404，重新生成后旧地址立即失效。
+  * 每日任务 `indexnow-submit` 注册到全站统一任务调度器（`core/shared/scheduler`），默认 03:30 执行，时间与开关热更新，不新建线程 / Timer；自动任务与手动提交互斥。
+  * 使用标准库 `urllib` 提交到 `https://api.indexnow.org/indexnow`（超时 10 秒、单域名单次最多 10000 个 URL），无新增依赖；最近一次结果写入 `INDEXNOW_LAST_RESULT` 并在页面展示。
+  * 新增 10 个测试：公网域名过滤、Key 生成 / 配置校验与布尔归一化、URL 构建去重、提交载荷、未启用拦截、Key 文件路由（匹配 200 / 不匹配 404）。
+
 ### 文档
 
 * **新增 MCSManager 面板部署指南**（`docs/mcsm-deploy.md`）：说明如何把本项目作为 MCSM 通用应用实例运行，包含新建实例、上传发布包 / git clone、虚拟环境与依赖安装、启动与停止命令、首次启动与默认管理员、数据备份路径、升级流程、Nginx 反向代理（含直播流关闭缓冲）、Docker 方式与常见问题排查；并补充 **Windows 部署与编码** 专章（GBK 乱码 / `UnicodeEncodeError` 的成因与 `start.bat` 方案、`chcp 65001` / `PYTHONUTF8` / `PYTHONIOENCODING` / `PYTHONUNBUFFERED`、BOM、zip 文件名乱码、防火墙放行与日志编码），README 快速开始与文档索引已同步。

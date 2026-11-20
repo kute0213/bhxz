@@ -1,0 +1,330 @@
+{% extends "base.html" %}
+{% from 'macros/page_header.html' import page_header %}
+{% block title %}IndexNow 推送{% endblock %}
+{% block content %}
+<section class="page-container py-12">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+        {{ page_header(
+            title='IndexNow 推送',
+            subtitle='把站点公开页面主动提交给搜索引擎，加快收录',
+            back_url=url_for('admin.admin_page'),
+            back_text='返回管理中心'
+        ) }}
+
+        <!-- 状态概览 -->
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+            <div class="pixel-card rounded-xl p-5">
+                <div class="text-xs text-cream/50 mb-1">运行状态</div>
+                <div id="stat-enabled" class="text-lg font-bold {% if status.enabled %}text-green-400{% else %}text-cream/50{% endif %}">
+                    {{ '已启用' if status.enabled else '未启用' }}
+                </div>
+            </div>
+            <div class="pixel-card rounded-xl p-5">
+                <div class="text-xs text-cream/50 mb-1">自动推送</div>
+                <div id="stat-auto" class="text-lg font-bold {% if status.auto_submit %}text-green-400{% else %}text-cream/50{% endif %}">
+                    {{ '每日执行' if status.auto_submit else '已关闭' }}
+                </div>
+            </div>
+            <div class="pixel-card rounded-xl p-5">
+                <div class="text-xs text-cream/50 mb-1">推送时间</div>
+                <div id="stat-time" class="text-lg font-bold text-gold-400">{{ status.submit_time }}</div>
+            </div>
+        </div>
+
+        <!-- 配置 -->
+        <div class="pixel-card rounded-xl p-6 mb-6">
+            <h2 class="text-lg font-bold mb-4 flex items-center gap-2">
+                <i data-lucide="sliders" class="w-5 h-5 text-gold-400"></i>
+                推送配置
+            </h2>
+
+            <div class="space-y-5">
+                <div class="flex items-center justify-between gap-4">
+                    <div class="min-w-0">
+                        <div class="font-medium text-sm">启用 IndexNow</div>
+                        <div class="text-xs text-cream/50 mt-0.5">关闭后不会自动推送，也无法手动提交</div>
+                    </div>
+                    <div id="sw-enabled" class="switch{% if status.enabled %} is-on{% endif %}" data-switch
+                         tabindex="0" role="switch" aria-checked="{{ 'true' if status.enabled else 'false' }}">
+                        <input type="hidden" value="{{ '1' if status.enabled else '0' }}">
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-between gap-4">
+                    <div class="min-w-0">
+                        <div class="font-medium text-sm">每日自动推送</div>
+                        <div class="text-xs text-cream/50 mt-0.5">在下方时间自动提交站点地图中的全部公开页面</div>
+                    </div>
+                    <div id="sw-auto" class="switch{% if status.auto_submit %} is-on{% endif %}" data-switch
+                         tabindex="0" role="switch" aria-checked="{{ 'true' if status.auto_submit else 'false' }}">
+                        <input type="hidden" value="{{ '1' if status.auto_submit else '0' }}">
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-between gap-4">
+                    <div class="min-w-0">
+                        <div class="font-medium text-sm">自动推送时间</div>
+                        <div class="text-xs text-cream/50 mt-0.5">建议晚于 Sitemap 刷新时间，保证提交的是最新内容</div>
+                    </div>
+                    <input type="time" id="submit-time" value="{{ status.submit_time }}" class="input-field w-full sm:w-36">
+                </div>
+            </div>
+
+            <div class="flex justify-end mt-6">
+                <button id="btn-save" class="btn-primary px-5 py-2 text-sm">
+                    <i data-lucide="save" class="w-4 h-4 inline mr-1"></i>保存配置
+                </button>
+            </div>
+        </div>
+
+        <!-- Key 管理 -->
+        <div class="pixel-card rounded-xl p-6 mb-6">
+            <h2 class="text-lg font-bold mb-4 flex items-center gap-2">
+                <i data-lucide="key-round" class="w-5 h-5 text-gold-400"></i>
+                Key 校验文件
+            </h2>
+            <p class="text-cream/60 text-sm mb-4">
+                搜索引擎会访问下面的地址校验站点所有权，返回内容必须与 Key 完全一致。重新生成 Key 后旧地址立即失效。
+            </p>
+
+            <div class="mb-4">
+                <div class="text-xs text-cream/50 mb-1">当前 Key</div>
+                <div class="flex items-center gap-2">
+                    <code id="key-value" class="flex-1 min-w-0 truncate bg-forest-900/40 border border-cream/10 rounded-lg px-3 py-2 text-sm font-mono">{{ status.key or '尚未生成' }}</code>
+                    <button id="btn-regenerate" class="btn-danger px-4 py-2 text-sm whitespace-nowrap">
+                        <i data-lucide="refresh-cw" class="w-4 h-4 inline mr-1"></i>重新生成
+                    </button>
+                </div>
+            </div>
+
+            <div>
+                <div class="text-xs text-cream/50 mb-1">Key 文件地址</div>
+                <div id="key-locations" class="space-y-1">
+                    {% for loc in status.key_locations %}
+                    <code class="block bg-forest-900/40 border border-cream/10 rounded-lg px-3 py-2 text-xs font-mono break-all">{{ loc }}</code>
+                    {% else %}
+                    <div class="text-sm text-cream/40">未配置公网站点域名（请先在系统设置中填写站点域名）</div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+        <!-- 立即提交与结果 -->
+        <div class="pixel-card rounded-xl p-6">
+            <div class="flex items-center justify-between gap-3 mb-4 flex-wrap">
+                <h2 class="text-lg font-bold flex items-center gap-2">
+                    <i data-lucide="send" class="w-5 h-5 text-gold-400"></i>
+                    提交记录
+                </h2>
+                <button id="btn-submit" class="px-5 py-2 bg-gold-500 hover:bg-gold-400 text-forest-900 font-bold rounded-xl transition-all duration-200">
+                    <i data-lucide="upload" class="w-4 h-4 inline mr-1"></i>立即提交
+                </button>
+            </div>
+
+            <div id="last-result">
+                {% if status.last_result %}
+                {% set r = status.last_result %}
+                <div class="flex items-center gap-2 mb-3">
+                    <span class="px-2 py-0.5 rounded text-xs font-bold {{ 'bg-green-500/20 text-green-400' if r.success else 'bg-red-500/20 text-red-400' }}">
+                        {{ '成功' if r.success else '失败' }}
+                    </span>
+                    <span class="text-sm text-cream/70">{{ r.message }}</span>
+                    <span class="text-xs text-cream/40 ml-auto">{{ r.time }}</span>
+                </div>
+                <div class="space-y-1">
+                    {% for d in r.domains or [] %}
+                    <div class="flex items-center justify-between gap-3 text-xs bg-forest-900/40 border border-cream/5 rounded-lg px-3 py-2">
+                        <code class="font-mono break-all">{{ d.base }}</code>
+                        <span class="whitespace-nowrap {{ 'text-green-400' if d.status in (200, 202) else 'text-red-400' }}">
+                            {{ d.status }} · {{ d.count }} 个 URL
+                        </span>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% else %}
+                <div class="text-sm text-cream/40">暂无提交记录</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_script %}
+<script>
+    (function () {
+        const swEnabled = document.getElementById('sw-enabled');
+        const swAuto = document.getElementById('sw-auto');
+        const timeInput = document.getElementById('submit-time');
+        const btnSave = document.getElementById('btn-save');
+        const btnRegenerate = document.getElementById('btn-regenerate');
+        const btnSubmit = document.getElementById('btn-submit');
+        const lastResult = document.getElementById('last-result');
+        const keyValue = document.getElementById('key-value');
+        const keyLocations = document.getElementById('key-locations');
+
+        function switchValue(el) {
+            const hidden = el.querySelector('input[type="hidden"]');
+            return hidden && hidden.value === '1';
+        }
+
+        function setSwitch(el, on) {
+            el.classList.toggle('is-on', !!on);
+            el.setAttribute('aria-checked', on ? 'true' : 'false');
+            const hidden = el.querySelector('input[type="hidden"]');
+            if (hidden) hidden.value = on ? '1' : '0';
+        }
+
+        function post(url, body) {
+            return fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: body ? JSON.stringify(body) : undefined
+            }).then(function (r) {
+                return r.json().then(function (data) { return { ok: r.ok, data: data }; });
+            });
+        }
+
+        function setLoading(btn, text) {
+            btn.disabled = true;
+            btn.dataset.original = btn.innerHTML;
+            btn.innerHTML = '<i data-lucide="loader" class="w-4 h-4 inline mr-1 animate-spin"></i>' + text;
+            if (window.lucide) lucide.createIcons();
+        }
+
+        function clearLoading(btn) {
+            btn.disabled = false;
+            if (btn.dataset.original) btn.innerHTML = btn.dataset.original;
+            if (window.lucide) lucide.createIcons();
+        }
+
+        function renderStatus(data) {
+            setSwitch(swEnabled, data.enabled);
+            setSwitch(swAuto, data.auto_submit);
+            timeInput.value = data.submit_time || '03:30';
+            keyValue.textContent = data.key || '尚未生成';
+
+            keyLocations.innerHTML = '';
+            if (!data.key_locations || !data.key_locations.length) {
+                const empty = document.createElement('div');
+                empty.className = 'text-sm text-cream/40';
+                empty.textContent = '未配置公网站点域名（请先在系统设置中填写站点域名）';
+                keyLocations.appendChild(empty);
+            } else {
+                data.key_locations.forEach(function (loc) {
+                    const code = document.createElement('code');
+                    code.className = 'block bg-forest-900/40 border border-cream/10 rounded-lg px-3 py-2 text-xs font-mono break-all';
+                    code.textContent = loc;
+                    keyLocations.appendChild(code);
+                });
+            }
+
+            const enabledStat = document.getElementById('stat-enabled');
+            enabledStat.textContent = data.enabled ? '已启用' : '未启用';
+            enabledStat.className = 'text-lg font-bold ' + (data.enabled ? 'text-green-400' : 'text-cream/50');
+            const autoStat = document.getElementById('stat-auto');
+            autoStat.textContent = data.auto_submit ? '每日执行' : '已关闭';
+            autoStat.className = 'text-lg font-bold ' + (data.auto_submit ? 'text-green-400' : 'text-cream/50');
+            document.getElementById('stat-time').textContent = data.submit_time;
+
+            renderResult(data.last_result);
+        }
+
+        function renderResult(result) {
+            lastResult.innerHTML = '';
+            if (!result) {
+                lastResult.innerHTML = '<div class="text-sm text-cream/40">暂无提交记录</div>';
+                return;
+            }
+            const head = document.createElement('div');
+            head.className = 'flex items-center gap-2 mb-3 flex-wrap';
+            const badge = document.createElement('span');
+            badge.className = 'px-2 py-0.5 rounded text-xs font-bold ' +
+                (result.success ? 'bg-green-500/20 text-green-400' : 'bg-red-500/20 text-red-400');
+            badge.textContent = result.success ? '成功' : '失败';
+            const msg = document.createElement('span');
+            msg.className = 'text-sm text-cream/70';
+            msg.textContent = result.message || '';
+            const time = document.createElement('span');
+            time.className = 'text-xs text-cream/40 ml-auto';
+            time.textContent = result.time || '';
+            head.append(badge, msg, time);
+            lastResult.appendChild(head);
+
+            (result.domains || []).forEach(function (d) {
+                const row = document.createElement('div');
+                row.className = 'flex items-center justify-between gap-3 text-xs bg-forest-900/40 border border-cream/5 rounded-lg px-3 py-2 mb-1';
+                const base = document.createElement('code');
+                base.className = 'font-mono break-all';
+                base.textContent = d.base;
+                const status = document.createElement('span');
+                const ok = d.status === 200 || d.status === 202;
+                status.className = 'whitespace-nowrap ' + (ok ? 'text-green-400' : 'text-red-400');
+                status.textContent = d.status + ' · ' + d.count + ' 个 URL';
+                row.append(base, status);
+                lastResult.appendChild(row);
+            });
+        }
+
+        btnSave.addEventListener('click', function () {
+            setLoading(btnSave, '保存中...');
+            post('/admin/api/indexnow/save', {
+                enabled: switchValue(swEnabled),
+                auto_submit: switchValue(swAuto),
+                submit_time: timeInput.value
+            }).then(function (res) {
+                clearLoading(btnSave);
+                if (res.ok && res.data.success) {
+                    renderStatus(res.data);
+                    Toast.success(res.data.message || '配置已保存');
+                } else {
+                    Toast.error(res.data.message || '保存失败');
+                }
+            }).catch(function () {
+                clearLoading(btnSave);
+                Toast.error('网络错误，请重试');
+            });
+        });
+
+        btnRegenerate.addEventListener('click', function () {
+            CustomModal.confirm('重新生成 Key 后，搜索引擎需要重新校验新地址，旧 Key 文件会立即失效。确定继续吗？', {
+                title: '重新生成 Key',
+                type: 'warning',
+                confirmText: '重新生成',
+                callback: function (confirmed) {
+                    if (!confirmed) return;
+                    setLoading(btnRegenerate, '生成中...');
+                    post('/admin/api/indexnow/regenerate-key').then(function (res) {
+                        clearLoading(btnRegenerate);
+                        if (res.ok && res.data.success) {
+                            renderStatus(res.data);
+                            Toast.success('已重新生成 Key');
+                        } else {
+                            Toast.error(res.data.message || '操作失败');
+                        }
+                    }).catch(function () {
+                        clearLoading(btnRegenerate);
+                        Toast.error('网络错误，请重试');
+                    });
+                }
+            });
+        });
+
+        btnSubmit.addEventListener('click', function () {
+            setLoading(btnSubmit, '提交中...');
+            post('/admin/api/indexnow/submit').then(function (res) {
+                clearLoading(btnSubmit);
+                renderResult(res.data);
+                if (res.ok && res.data.success) {
+                    Toast.success(res.data.message || '提交成功');
+                } else {
+                    Toast.error(res.data.message || '提交失败');
+                }
+            }).catch(function () {
+                clearLoading(btnSubmit);
+                Toast.error('网络错误，请重试');
+            });
+        });
+    })();
+</script>
+{% endblock %}

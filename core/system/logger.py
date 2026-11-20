@@ -113,6 +113,7 @@ MODULE_LOG_DEFAULTS = {
     'backup': {'store': True, 'global': False},       # 数据备份
     'gameban': {'store': True, 'global': False},      # 游戏服务器封禁
     'sitemap': {'store': True, 'global': False},      # 站点地图缓存
+    'indexnow': {'store': True, 'global': False},     # IndexNow 主动推送
     'rcon': {'store': True, 'global': False},         # RCON 连接与玩家追踪
     'cleanup': {'store': True, 'global': False},      # 被驳回内容自动清理
     'metrics': {'store': True, 'global': False},      # 系统指标采集

@@ -112,6 +112,7 @@ def shutdown_application(signum=None):
     from services.backup import BackupScheduler
     from services.mail import email_service
     from services.sitemap_cache import sitemap_cache
+    from services import indexnow
 
     # 先停止接收新请求
     _stop_server()
@@ -133,6 +134,7 @@ def shutdown_application(signum=None):
     BackupScheduler().stop()
     email_service.stop()
     sitemap_cache.stop()
+    indexnow.stop()
     # 音频直播：结束 ffmpeg 子进程但不改数据库状态，下次启动自动恢复循环直播
     try:
         from services.live import manager as live_manager
