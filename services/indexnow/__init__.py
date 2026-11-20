@@ -9,10 +9,12 @@
 
 协议说明：
     POST https://api.indexnow.org/indexnow
-    {"host": "...", "key": "...", "keyLocation": "https://域名/indexnow/<key>.txt",
+    {"host": "...", "key": "...", "keyLocation": "https://域名/<key>.txt",
      "urlList": ["https://..."]}
 
 Key 文件由 routes/indexnow 提供，内容必须与 key 完全一致。
+注意：IndexNow 的 keyLocation 决定可提交的 URL 范围，Key 文件必须放在根目录，
+否则只能提交该子目录下的 URL（放在 /indexnow/ 会导致其它页面 422）。
 """
 
 import ipaddress
@@ -122,7 +124,7 @@ def get_status() -> dict:
         'auto_submit': bool(get_config_value('INDEXNOW_AUTO_SUBMIT', True)),
         'submit_time': str(get_config_value('INDEXNOW_SUBMIT_TIME', DEFAULT_SUBMIT_TIME)),
         'key': key,
-        'key_locations': [f'{base}/indexnow/{key}.txt' for base in domains] if key else [],
+        'key_locations': [f'{base}/{key}.txt' for base in domains] if key else [],
         'domains': domains,
         'last_result': get_last_result(),
     }
@@ -178,7 +180,7 @@ def submit_urls(base: str, key: str, urls: list) -> tuple:
     payload = {
         'host': urlparse(base).hostname,
         'key': key,
-        'keyLocation': f'{base.rstrip("/")}/indexnow/{key}.txt',
+        'keyLocation': f'{base.rstrip("/")}/{key}.txt',
         'urlList': urls[:MAX_URLS_PER_REQUEST],
     }
     req = urllib.request.Request(

@@ -89,7 +89,7 @@ class TestSubmit:
         assert captured['url'] == indexnow.ENDPOINT
         assert captured['body']['host'] == 'example.com'
         assert captured['body']['key'] == 'a' * 32
-        assert captured['body']['keyLocation'] == f'https://example.com/indexnow/{"a" * 32}.txt'
+        assert captured['body']['keyLocation'] == f'https://example.com/{"a" * 32}.txt'
 
     def test_submit_all_disabled(self, monkeypatch):
         monkeypatch.setattr(indexnow, 'is_enabled', lambda: False)
@@ -109,12 +109,12 @@ class TestKeyFileRoute:
 
     def test_returns_key(self, client, monkeypatch):
         monkeypatch.setattr(indexnow_route, 'get_key', lambda: 'b' * 32)
-        resp = client.get(f'/indexnow/{"b" * 32}.txt')
+        resp = client.get(f'/{"b" * 32}.txt')
         assert resp.status_code == 200
         assert resp.get_data(as_text=True) == 'b' * 32
 
     def test_wrong_key_returns_404(self, client, monkeypatch):
         monkeypatch.setattr(indexnow_route, 'get_key', lambda: 'b' * 32)
-        assert client.get('/indexnow/wrong-key.txt').status_code == 404
+        assert client.get('/wrong-key.txt').status_code == 404
         monkeypatch.setattr(indexnow_route, 'get_key', lambda: '')
-        assert client.get(f'/indexnow/{"b" * 32}.txt').status_code == 404
+        assert client.get(f'/{"b" * 32}.txt').status_code == 404

@@ -155,7 +155,7 @@ python scripts/build/package.py
 │   ├── live/           # 音频直播（直播台/开播页/播放页/流媒体/API）
 │   ├── main/           # 主站（登录/注册/设置/音乐）
 │   ├── public/         # 公开文件服务
-│   ├── indexnow/       # IndexNow Key 校验文件（/indexnow/<key>.txt）
+│   ├── indexnow/       # IndexNow Key 校验文件（/<key>.txt，根目录）
 │   └── sitemap/        # Sitemap & robots.txt（自动添加 Crawl-delay 防防火墙误判）
 ├── static/       # 唯一的前端文件夹：静态资源 + Jinja2 模板（命名规范见 docs/DEVELOPMENT.md）
 │   ├── css/            #   样式（base.css / tailwind.css 构建产物）
@@ -224,7 +224,7 @@ python scripts/build/package.py
 
 * **全站 SEO / GEO**（`static/templates/base.html`、`core/template_context.py`、`core/middleware.py`、`routes/sitemap/__init__.py`）：所有页面统一输出 `meta description`、`canonical`、Open Graph / Twitter 卡片标签，子模板可按页面覆盖标题与描述；首页、登录、注册、找回密码、服务器状态、指南、公共建筑、大喇叭音频、背景图片、文档中心、网页地图、音频直播及上传/设置等页面均配置了 70 字以上的专属描述与描述性标题，指南/建筑详情页在用户摘要过短时自动兜底、过长时截断；带尾部斜杠的地址（如 `/music/`）统一 301 跳转到无斜杠规范地址，避免爬虫抓到 404，错误页输出 `noindex`；`/sitemap.xml` 按请求域名按需生成并向 Bing 等爬虫返回有效 XML，`scripts/tests/test_seo.py` 持续校验标题/描述长度与跳转行为
 
-* **IndexNow 主动推送**（管理后台 → IndexNow 推送，`services/indexnow/`）：把站点地图中的公开页面主动提交给 IndexNow（Bing、Yandex 等共享），加快收录。使用独立配置页管理启用开关、每日推送开关与推送时间，Key 可一键重新生成；`/indexnow/<key>.txt` 提供校验文件。URL 来源复用 sitemap 的公开页面列表，只提交公网域名（自动跳过 localhost / 内网地址），定时任务接入全站统一调度器（默认每天 03:30，晚于 Sitemap 刷新），不新建线程；提交结果（域名、状态码、URL 数量、时间）在页面展示
+* **IndexNow 主动推送**（管理后台 → IndexNow 推送，`services/indexnow/`）：把站点地图中的公开页面主动提交给 IndexNow（Bing、Yandex 等共享），加快收录。使用独立配置页管理启用开关、每日推送开关与推送时间，Key 可一键重新生成；`/<key>.txt` 在站点根目录提供校验文件（IndexNow 规范要求根目录 Key 才能覆盖整站 URL）。URL 来源复用 sitemap 的公开页面列表，只提交公网域名（自动跳过 localhost / 内网地址），定时任务接入全站统一调度器（默认每天 03:30，晚于 Sitemap 刷新），不新建线程；提交结果（域名、状态码、URL 数量、时间）在页面展示
 
 * 系统日志（实时查看，**页面只请求一个接口 `GET /admin/api/logs`：直接返回 SSE 流，首帧 `history` 携带历史快照、后续实时推送新日志，全局 / 严重错误 / 各模块单独日志全部覆盖，不再有 3 秒轮询、也不再单独请求历史接口**，支持等级过滤、自动滚动；按时间顺序从上到下展示，与控制台一致；**可在页面顶部切换来源查看全局日志 / 严重错误日志 / 各模块单独日志**，页面内「日志设置」可为任意模块配置「是否落盘」「是否并入全局日志」，保存即时生效）。统一日志系统分为三类：**① 全局日志**（普通运行日志 → 控制台 + `logs/app.log` + 内存缓冲 + SSE）；**② 严重错误日志**（导致服务器退出的报错 → 单独写入 `logs/fatal.log`，**每次写入直接覆盖文件、只保留最后一次**，且始终打印到控制台，不受日志等级/控制台开关限制）；**③ 模块单独日志**（模块启动时向日志模块注册，→ 独立内存缓冲 + 可选 `logs/modules/<模块名>.log`；是否落盘、是否并入全局日志**均由设置在「日志页面 → 日志设置」决定，不在模块注册时写死**，支持任意模块；当前使用者为防火墙（`firewall`）、图形验证码（`captcha`）、邮箱验证码（`email_code`）、注册账号（`register`）、登录账号（`login`）、访问日志抓取（`access_log`）、站点地图（`sitemap`）、IndexNow 推送（`indexnow`），其中除 `firewall` 外默认落盘、全部默认不并入全局；两个开关都关闭时日志仅存在于模块独立缓冲，不打印、不落盘、不进全局）。**每次启动自动清理日志**（全局日志文件、严重错误日志文件、所有模块日志文件与内存缓冲统一清空）。**403 响应不写入防火墙模块日志**（防火墙成功拦截与授权拒绝类 403 均不记录；仅保留 IP 封禁 / 自动封禁等封禁动作日志）
 
@@ -482,7 +482,7 @@ python scripts/build/package.py
 
 * **URL 来源**：复用 `services/sitemap_cache` 的公开页面列表，提交内容与 `/sitemap.xml` 完全一致（首页、服务器状态、指南/建筑已通过详情、大喇叭、背景图片、文档、后台配置的公开页面）。
 * **域名限制**：只提交 `SITE_URL` 与 `SITEMAP_DOMAINS` 中的公网域名；自动跳过 `localhost`、回环地址、内网 IP 与非法协议，避免 SSRF 与无效提交。
-* **Key 校验**：`GET /indexnow/<key>.txt` 返回当前 Key；Key 不匹配或未配置时返回 404。重新生成 Key 后旧地址立即失效。
+* **Key 校验**：`GET /<key>.txt` 在站点根目录返回当前 Key；Key 不匹配或未配置时返回 404。按 IndexNow 规范，`keyLocation` 决定可提交的 URL 范围，只有根目录 Key 才能覆盖整站；放在 `/indexnow/` 等子目录只能提交该子目录下的 URL。
 * **统一计时器**：每日任务 `indexnow-submit` 注册在全站统一任务调度器（`core/shared/scheduler`），修改推送时间后下一轮自动生效，无需重启；不新建线程 / Timer。
 * **提交协议**：`POST https://api.indexnow.org/indexnow`，单域名单次最多 10000 个 URL；使用标准库 `urllib`（超时 10 秒），无新增依赖。200 / 202 视为受理成功。
 * **并发保护**：同一时刻只允许一次提交；自动任务与「立即提交」互斥，重复触发返回提示。
@@ -617,7 +617,7 @@ python scripts/build/package.py
 | POST | `/admin/api/indexnow/save` | 保存配置（`enabled` / `auto_submit` / `submit_time`，时间为 `HH:MM`） |
 | POST | `/admin/api/indexnow/regenerate-key` | 重新生成 Key（旧 Key 文件立即失效） |
 | POST | `/admin/api/indexnow/submit` | 立即提交全部公开 URL，返回各域名状态码与 URL 数量 |
-| GET | `/indexnow/<key>.txt` | 公开的 Key 校验文件（无需登录；Key 不匹配返回 404） |
+| GET | `/<key>.txt` | 公开的 Key 校验文件（站点根目录，无需登录；Key 不匹配返回 404） |
 
 ### 访问日志抓取 API（管理员）
 
