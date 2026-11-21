@@ -23,7 +23,8 @@
 
 ### 修复
 
-* **磨砂玻璃发灰**（`static/css/base.css`、`static/templates/index.html`、`guides/*`、`buildings/index.html`、`backgrounds/upload.html`、`site/map.html`、`error_simple.html`、`macros/markdown_editor.html`）：此前各页面大量硬编码 `rgba(255,255,255,0.4~0.72)` + `backdrop-filter`，白色占比过低，在深色背景图或复杂背景上会泛成灰色玻璃。现统一为 `--glass-bg`（约 0.84~0.95 白色渐变）与 `--glass-blur`（`blur + saturate + brightness`）两个变量，并新增 `.glass-panel` / `.glass-surface` 公共类；首页、指南、建筑、背景上传、网页地图、错误页、Markdown 编辑器与 `base.css` 内的按钮 / 输入框 / 播放器 / 搜索框全部改用同一配方，弹窗与卡片视觉一致，深色背景下不再发灰。
+* **磨砂玻璃发灰**（`static/css/base.css`、`static/templates/index.html`、`guides/*`、`buildings/index.html`、`backgrounds/upload.html`、`site/map.html`、`error_simple.html`、`macros/markdown_editor.html`）：此前各页面大量硬编码 `rgba(255,255,255,0.4~0.72)` + `backdrop-filter`，白色占比过低，在深色背景图或复杂背景上会泛成灰色玻璃。现统一为 `--glass-bg`（纯色 `rgba(255,255,255,0.9)`）与 `--glass-blur`（`blur + saturate + brightness`）两个变量，并新增 `.glass-panel` / `.glass-surface` 公共类；首页、指南、建筑、背景上传、网页地图、错误页、Markdown 编辑器与 `base.css` 内的按钮 / 输入框 / 播放器 / 搜索框全部改用同一配方，弹窗与卡片视觉一致，深色背景下不再发灰。
+  * 修复 hover 瞬间闪成透明磨砂玻璃：`--glass-bg` 由 `linear-gradient()` 改为纯色 `rgba(255,255,255,0.9)`。渐变与纯色之间无法平滑插值，`background` 过渡时会先露出透明底再重绘；改为纯色后按钮、悬浮卡片等的 hover 平滑过渡，始终保持白色。新增回归测试确保 `--glass-bg` 不再使用渐变。
 
 * **全站 Lucide 图标透明 / 空白**（`static/templates/base.html`、`static/js/core/base.js`）：此前将图标库改为 `defer` 后，`base.js` 在解析阶段立即执行时 `lucide` 尚未加载，导致所有 `<i data-lucide>` 保持空元素。现恢复图标库同步加载，并在 `DOMContentLoaded` 时兜底再次初始化，避免缓存或网络异常时图标缺失。
 

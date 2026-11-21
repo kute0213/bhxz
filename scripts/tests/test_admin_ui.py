@@ -1,8 +1,21 @@
 """管理后台模板回归测试：统一页面骨架与关键交互容器。"""
 
+import re
+from pathlib import Path
+
 from flask import render_template
 
 import app as app_module
+
+
+def test_glass_bg_is_solid_color():
+    """磨砂底色必须是纯色：渐变→纯色的 hover 过渡会闪成透明磨砂玻璃。"""
+    css = (Path(__file__).resolve().parents[2] / 'static/css/base.css').read_text(encoding='utf-8')
+    match = re.search(r'--glass-bg:\s*([^;]+);', css)
+    assert match, '未找到 --glass-bg 变量'
+    value = match.group(1)
+    assert 'gradient' not in value
+    assert 'rgba(255, 255, 255' in value
 
 
 def test_settings_page_uses_shared_layout():

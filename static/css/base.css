@@ -11,8 +11,10 @@
     --bg-card-hover: rgba(255, 255, 255, 0.96);
     --bg-glass: rgba(255, 255, 255, 0.84);
     --bg-glass-strong: rgba(255, 255, 255, 0.95);
-    /* 统一磨砂玻璃配方：白色占比够高 + 轻微提亮，深色/复杂背景上也不会泛灰 */
-    --glass-bg: linear-gradient(135deg, var(--bg-glass-strong) 0%, var(--bg-glass) 100%);
+    /* 统一磨砂玻璃配方：使用纯色而非渐变。
+       渐变与纯色之间无法平滑过渡，hover 切换背景时会先闪成透明再重绘，
+       看起来像“闪一下磨砂玻璃”；纯色可在 hover 时平滑插值，始终保持白色。 */
+    --glass-bg: rgba(255, 255, 255, 0.9);
     --glass-blur: blur(22px) saturate(165%) brightness(1.06);
 
     --text-primary: #1a2230;
