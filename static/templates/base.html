@@ -64,7 +64,7 @@
     <!-- 入场动画见 base.css：纯 CSS animation，不依赖 JS，避免白屏 -->
     <noscript><style>.page-content{opacity:1!important;transform:none!important}</style></noscript>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/tailwind.css', v='6') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css', v='58') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css', v='59') }}">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <script>
     // 全站 AJAX CSRF 防护：自动为所有 fetch/XHR 请求添加 X-CSRF-Token 请求头
@@ -250,6 +250,10 @@
                     <i data-lucide="map" class="w-5 h-5"></i>
                     <span>网页地图</span>
                 </a>
+                <a href="{{ url_for('bots.apply_page') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors{% if request.endpoint and request.endpoint.startswith('bots.') %} active{% endif %}">
+                    <i data-lucide="bot" class="w-5 h-5"></i>
+                    <span>申请假人</span>
+                </a>
 
                 <div class="text-xs text-cream/40 font-medium uppercase tracking-wider px-4 mb-2 mt-6">社区</div>
                 <a href="{{ url_for('main.music_page') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg text-cream/80 hover:text-gold-400 hover:bg-gold-400/5 transition-colors{% if request.endpoint and request.endpoint.startswith('main.music') %} active{% endif %}">
@@ -348,6 +352,9 @@
                             </a>
                             <a href="{{ url_for('main.map_page') }}" class="desktop-nav-dropdown-link{% if request.endpoint == 'main.map_page' %} active{% endif %}" role="menuitem">
                                 <i data-lucide="map"></i><span>网页地图</span>
+                            </a>
+                            <a href="{{ url_for('bots.apply_page') }}" class="desktop-nav-dropdown-link{% if request.endpoint and request.endpoint.startswith('bots.') %} active{% endif %}" role="menuitem">
+                                <i data-lucide="bot"></i><span>申请假人</span>
                             </a>
                         </div>
                     </div>

@@ -226,7 +226,7 @@ python scripts/build/package.py
 
 * **全站 SEO / GEO**（`static/templates/base.html`、`core/seo.py`、`core/template_context.py`、`core/middleware.py`、`routes/sitemap/__init__.py`）：所有页面统一输出 `meta robots`、`meta description`、`canonical`、hreflang、Open Graph / Twitter 卡片标签，分享图直接复用系统设置中的网站图标（`/favicon`，SVG，随 `FAVICON_ICON` 热切换），不再单独渲染图片；公开页输出 WebSite + Organization JSON-LD 与列表页 BreadcrumbList，指南 / 建筑详情页追加 Article / CreativeWork 与三级面包屑，帮助 Bing / Copilot 识别站点与内容实体（GEO）。登录、注册、找回密码、设置、上传、收藏、游戏账号申请、管理后台等私有页统一 `noindex, nofollow` 并附加 `X-Robots-Tag`，且不输出 canonical；系统设置新增「Bing 站点验证码」，填写后全站输出 `msvalidate.01`。`/sitemap.xml` 只收录可索引的规范 URL（新增音频直播页，自动排除私有路径与静态资源），支持 ETag / 304 增量抓取；`robots.txt` 允许抓取公开背景图与指南图片，`Crawl-delay` 降为 1 秒，兼顾抓取效率与防火墙保护；Lucide 图标库保持同步加载，并在 `DOMContentLoaded` 兜底初始化，避免出现全站图标空白。带尾部斜杠的地址（如 `/music/`）统一 301 跳转到无斜杠规范地址，错误页输出 `noindex`；`scripts/tests/test_seo.py` 持续校验标题 / 描述长度、结构化数据、私有页 noindex、sitemap 与 ETag 行为
 
-* **IndexNow 主动推送**（管理后台 → IndexNow 推送，`services/indexnow/`）：把站点地图中的公开页面主动提交给 IndexNow（Bing、Yandex 等共享），加快收录。使用独立配置页管理启用开关、每日推送开关与推送时间，Key 可一键重新生成；`/<key>.txt` 在站点根目录提供校验文件（IndexNow 规范要求根目录 Key 才能覆盖整站 URL）。URL 来源复用 sitemap 的公开页面列表，只提交公网域名（自动跳过 localhost / 内网地址），定时任务接入全站统一调度器（默认每天 03:30，晚于 Sitemap 刷新），不新建线程；提交结果（域名、状态码、URL 数量、时间）在页面展示
+* **IndexNow 主动推送**（管理后台 → IndexNow 推送，`services/indexnow/`）：把站点地图中的公开页面主动提交给 IndexNow（Bing、Yandex 等共享），加快收录。启用开关、每日推送开关、推送时间与 Key 均已登记到 `config.py` 的 `SETTINGS_REGISTRY`（分类「IndexNow」），可直接在**系统设置面板**像其它配置一样修改并热更新；独立配置页保留用于查看最近结果与一键重新生成 Key、立即提交。`/<key>.txt` 在站点根目录提供校验文件（IndexNow 规范要求根目录 Key 才能覆盖整站 URL）。URL 来源复用 sitemap 的公开页面列表，只提交公网域名（自动跳过 localhost / 内网地址），定时任务接入全站统一调度器（默认每天 03:30，晚于 Sitemap 刷新），不新建线程；提交结果（域名、状态码、URL 数量、时间）在页面展示
 
 * 系统日志（实时查看，**页面只请求一个接口 `GET /admin/api/logs`：直接返回 SSE 流，首帧 `history` 携带历史快照、后续实时推送新日志，全局 / 严重错误 / 各模块单独日志全部覆盖，不再有 3 秒轮询、也不再单独请求历史接口**，支持等级过滤、自动滚动；按时间顺序从上到下展示，与控制台一致；**可在页面顶部切换来源查看全局日志 / 严重错误日志 / 各模块单独日志**，页面内「日志设置」可为任意模块配置「是否落盘」「是否并入全局日志」，保存即时生效）。统一日志系统分为三类：**① 全局日志**（普通运行日志 → 控制台 + `logs/app.log` + 内存缓冲 + SSE）；**② 严重错误日志**（导致服务器退出的报错 → 单独写入 `logs/fatal.log`，**每次写入直接覆盖文件、只保留最后一次**，且始终打印到控制台，不受日志等级/控制台开关限制）；**③ 模块单独日志**（模块启动时向日志模块注册，→ 独立内存缓冲 + 可选 `logs/modules/<模块名>.log`；是否落盘、是否并入全局日志**均由设置在「日志页面 → 日志设置」决定，不在模块注册时写死**，支持任意模块；当前使用者为防火墙（`firewall`）、图形验证码（`captcha`）、邮箱验证码（`email_code`）、注册账号（`register`）、登录账号（`login`）、访问日志抓取（`access_log`）、站点地图（`sitemap`）、IndexNow 推送（`indexnow`），其中除 `firewall` 外默认落盘、全部默认不并入全局；两个开关都关闭时日志仅存在于模块独立缓冲，不打印、不落盘、不进全局）。**每次启动自动清理日志**（全局日志文件、严重错误日志文件、所有模块日志文件与内存缓冲统一清空）。**403 响应不写入防火墙模块日志**（防火墙成功拦截与授权拒绝类 403 均不记录；仅保留 IP 封禁 / 自动封禁等封禁动作日志）
 
@@ -245,6 +245,8 @@ python scripts/build/package.py
 * 游戏账号管理（注册申请审批、封禁列表管理）
 
 * **游戏账号封禁**（用户申请 → 管理员审批 → RCON 自动执行）：用户在「申请封禁玩家」页提交封禁玩家名、QQ名、理由；管理员在管理中心「游戏账号封禁」页同意（可设封禁时长，留空为永久）或驳回；同意后经 RCON 执行 `ban 玩家游戏名`（无引号），到期由后台定时任务（每 60 秒检查一次，走 `(status, expires_at)` 索引，单周期最多处理 50 条）执行 `pardon 玩家游戏名`（无引号）自动解封；支持手动提前解封。玩家名经安全清洗杜绝 RCON 命令注入，RCON 执行失败自动保留状态下个周期重试
+
+* **申请假人（BOT）**（`services/bot_applications/`、`routes/bots/`、`routes/admin/bots/`）：入口在导航「服务器 → 申请假人」。用户填写 BOT 名称、生成坐标与下线时间；坐标既可直接输入，也可点击「使用玩家位置」在弹窗中搜索 / 选择在线玩家，服务端执行 `/data get entity <玩家> Pos` 并解析 `[...]` 坐标回填。提交后进入待审核状态，**同时计入「待审核余额」总量，并受假人单独上限约束（默认 2，可在系统设置 → 假人调整）**；管理员在「管理中心 → 假人申请管理」审批，同意时经 RCON 执行生成指令（默认 Carpet：`/player {name} spawn at {x} {y} {z}`），驳回可填写原因。到达下线时间后由统一任务调度器（每 60 秒扫描，任务名 `bot-offline-scheduler`）执行杀死指令（默认 `/kill {name}`），也支持管理员手动提前下线；RCON 失败保留状态并记录错误，下个周期重试。主键复用雪花 ID，玩家名经 `sanitize_rcon_username` 清洗，生成 / 杀死指令模板可在系统设置 → 假人中修改以适配不同插件
 
 * 防火墙管理（IP 封禁/IP 白名单/IPv6 拦截/违规警告/防火墙日志：独立高性能 DuckDB 数据库，支持临时/永久封禁，全站拦截，后台一键解封；**IPv6 拦截**：开启后所有 IPv6 连接（除 ::1）在 WSGI 门禁层被直接断开；**防火墙日志**：作为「模块单独日志」写入独立内存缓冲（默认不落盘，可在「日志页面 → 日志设置」开启写入 `logs/modules/firewall.log`），不与系统日志混流，页面内「日志」Tab 从该缓冲读取，支持等级筛选、清空、自动滚动、**SSE 实时推送（无轮询）**；**防火墙成功拦截不记录日志**（IP 封禁兜底、可疑访问拦截均不写日志，避免被封 IP 反复请求时刷屏）；授权拒绝类 403（权限不足 / CSRF 校验失败等）同样不写入防火墙日志，仅保留 IP 封禁 / 自动封禁等封禁动作日志；自动识别可疑操作限流并自动封禁，各操作可独立开关、时长可配；**页面内直接编辑**自动封禁/可疑拦截/DDoS 防护/IPv6 拦截开关与时长、白名单，无需跳转系统设置）
 
@@ -468,9 +470,11 @@ python scripts/build/package.py
 
 * **网站备案**：工信部备案号、公安备案号、版权年份与站点名称
 
-### IndexNow 主动推送（独立配置页）
+* **假人（BOT）**：假人待审核上限（默认 2）、生成假人指令模板（默认 `/player {name} spawn at {x} {y} {z}`）、杀死假人指令模板（默认 `/kill {name}`）
 
-管理后台 → **IndexNow 推送**（`/admin/indexnow`）提供独立配置页，配置项存于 `settings` 表：
+### IndexNow 主动推送（系统设置 + 独立配置页）
+
+相关配置已登记到 `config.py` 的 `SETTINGS_REGISTRY`（分类「IndexNow」），可在**管理后台 → 系统设置 → IndexNow** 中像其它配置一样修改，保存后热更新。管理后台 → **IndexNow 推送**（`/admin/indexnow`）保留为独立状态页，用于查看最近提交结果、一键重新生成 Key 与立即提交。配置项存于 `settings` 表：
 
 | 配置键 | 说明 | 默认值 |
 | -- | -- | -- |
@@ -583,6 +587,25 @@ python scripts/build/package.py
 | POST | `/api/game-accounts/apply-register`  | 提交注册申请（需图形验证码）    |
 | GET  | `/game-accounts/ban-apply`           | 申请封禁页面             |
 | POST | `/api/game-accounts/ban-apply`       | 提交封禁申请（需图形验证码）    |
+
+### 申请假人 API（需登录）
+
+| 方法   | 路径                            | 说明                                             |
+| ---- | ----------------------------- | ---------------------------------------------- |
+| GET  | `/bots/apply`                 | 申请假人页面（表单 + 我的申请）                              |
+| GET  | `/api/bots/players`           | 在线玩家列表（支持 `q` 关键词过滤，读取 player_tracker 缓存）     |
+| POST | `/api/bots/player-position`   | 执行 `/data get entity <玩家> Pos` 并解析坐标（需玩家在线）      |
+| POST | `/api/bots/apply`             | 提交假人申请（计入待审核余额，受假人单独上限约束）                     |
+
+### 假人申请管理 API（管理员）
+
+| 方法   | 路径                                     | 说明               |
+| ---- | -------------------------------------- | ---------------- |
+| GET  | `/admin/bots`                          | 假人申请管理页面         |
+| GET  | `/admin/api/bots`                      | 待审批与全部假人申请       |
+| POST | `/admin/api/bots/<id>/approve`         | 同意申请（RCON 生成假人）  |
+| POST | `/admin/api/bots/<id>/reject`          | 驳回申请（可填驳回原因）     |
+| POST | `/admin/api/bots/<id>/kill`            | 手动下线（RCON 杀死假人）  |
 
 ### 申请账号管理 API（管理员）
 
@@ -859,9 +882,10 @@ app.py ──→ routes/ ──→ services/ ──→ core/
          buildings/   backup/（manager / scheduler）
          backgrounds/ background_service/（背景图片业务）
          sitemap/     cleanup_service/（被驳回内容自动清理）
-         community/   settings_manager/（系统设置管理）
+         bots/        settings_manager/（系统设置管理）
                       sitemap_cache/（Sitemap 缓存）
                       indexnow/（IndexNow 主动推送）
+                      bot_applications/（假人申请 / 审批 / 到期下线）
                       monitoring/（系统性能监控）
                       logging/（日志自动清理）
 ```
@@ -902,6 +926,7 @@ workspace/
 │   ├── mail/                 #   异步邮件发送
 │   ├── game_accounts/        #   游戏账号注册申请
 │   ├── game_server_ban/      #   游戏服务器封禁申请（审批 → 自动解封）
+│   ├── bot_applications/     #   假人（BOT）申请（审批 → RCON 生成 → 到期杀死）
 │   ├── system_metrics/       #   系统监控（CPU/内存/系统/性能追踪）
 │   ├── music/                #   大喇叭音频（常量/查询/CRUD/上传/收藏）
 │   ├── live/                 #   音频直播（ffmpeg 双输出 + MP3 分发 + PCM 实时录音）
@@ -931,6 +956,7 @@ workspace/
 │   ├── community/            #   社区辅助（AJAX / 表单统一响应）
 │   ├── docs/                 #   文档页面
 │   ├── game_accounts/        #   申请账号（页面+API，纯申请注册）
+│   ├── bots/                 #   申请假人（页面+API，玩家坐标获取）
 │   ├── guides/               #   服务器指南（页面+API）
 │   ├── live/                 #   音频直播（直播台 / 开播页 / 播放页 / 流媒体 / API）
 │   ├── public/               #   公开文件服务
@@ -950,6 +976,7 @@ workspace/
 │       ├── backgrounds/          #     背景图片页面（index / upload）
 │       ├── emails/               #     邮件模板（独立 loader）
 │       ├── game_accounts/        #     游戏账号页面（apply / ban_apply）
+│       ├── bots/                 #     申请假人页面（apply）
 │       ├── guides/               #     服务器指南页面（index / detail / form）
 │       ├── buildings/            #     公共建筑（index / create / detail）
 │       ├── music/                #     大喇叭音频页面（index / my / favorites / upload）

@@ -1,0 +1,321 @@
+{% extends "base.html" %}
+{% block title %}申请假人 - 滨海小镇服务器工具{% endblock %}
+{% block description %}在滨海小镇 Minecraft 服务器申请生成假人（BOT）：可设置坐标、BOT 名称与下线时间，支持从在线玩家位置一键获取坐标，提交后由管理员审核，到期自动下线。{% endblock %}
+
+{% block extra_style %}
+<style>
+    .player-item {
+        display: flex; align-items: center; justify-content: space-between;
+        width: 100%; padding: 10px 14px; border-radius: 10px;
+        background: var(--bg-glass); border: 1px solid var(--border-card);
+        color: var(--text-primary); font-size: 14px; text-align: left;
+        transition: border-color .18s ease, background .18s ease;
+    }
+    .player-item:hover { border-color: rgba(2,132,199,.4); background: var(--bg-card-hover); }
+    .player-item.is-selected { border-color: #0284c7; background: rgba(224,242,254,.92); color: #075985; font-weight: 600; }
+    .status-badge {
+        display: inline-block; padding: 2px 9px; border-radius: 999px;
+        font-size: 11px; font-weight: 600; white-space: nowrap;
+    }
+    .status-pending { background: rgba(250,204,21,.18); color: #a16207; }
+    .status-approved { background: rgba(34,197,94,.16); color: #15803d; }
+    .status-rejected { background: rgba(239,68,68,.14); color: #b91c1c; }
+    .status-killed { background: rgba(100,116,139,.16); color: #475569; }
+</style>
+{% endblock %}
+
+{% block content %}
+<section class="page-container py-8 sm:py-12">
+    <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8">
+
+        <div class="mb-6 sm:mb-8">
+            <a href="{{ url_for('main.home') }}" class="text-sky-600 hover:text-sky-500 text-sm inline-block mb-3">
+                <i data-lucide="arrow-left" class="w-4 h-4 inline mr-1"></i>返回首页
+            </a>
+            <h1 class="text-xl sm:text-2xl font-bold flex items-center gap-2">
+                <i data-lucide="bot" class="w-6 h-6 text-sky-600"></i>申请假人
+            </h1>
+            <p class="text-muted text-sm mt-1">提交后由管理员审核，通过后会在服务器内生成假人，到达下线时间自动执行杀死指令</p>
+        </div>
+
+        <div class="pixel-card rounded-xl p-4 sm:p-5 mb-6 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm">
+            <span class="text-muted">
+                待审核假人：<strong class="text-primary">{{ pending_used }}</strong>
+                {% if pending_limit > 0 %} / {{ pending_limit }}{% else %}（不限）{% endif %}
+            </span>
+            <span class="text-muted">假人与其它内容共同占用「待审核余额」，请勿重复提交</span>
+        </div>
+
+        <div class="pixel-card rounded-xl p-5 sm:p-6 mb-8">
+            <form id="bot-apply-form" class="space-y-5">
+                <div>
+                    <label class="text-sm text-muted block mb-1.5">BOT 名称</label>
+                    <input type="text" id="bot-name" placeholder="输入假人名称，例如 kute_bot" maxlength="16"
+                           class="input-field w-full px-3 sm:px-4 py-2.5 text-sm" autocomplete="off">
+                    <p class="text-xs text-muted mt-1.5">3-16 位，仅限字母、数字和下划线，且不能与已有待审核/生效中的假人重名</p>
+                </div>
+
+                <div>
+                    <div class="flex items-center justify-between gap-3 mb-1.5">
+                        <label class="text-sm text-muted">生成坐标</label>
+                        <button type="button" id="btn-use-player-pos"
+                                class="btn-secondary px-3 py-1.5 text-xs inline-flex items-center gap-1.5">
+                            <i data-lucide="crosshair" class="w-3.5 h-3.5"></i>使用玩家位置
+                        </button>
+                    </div>
+                    <div class="grid grid-cols-3 gap-3">
+                        <div>
+                            <span class="text-xs text-muted block mb-1">X</span>
+                            <input type="number" step="any" id="pos-x" class="input-field w-full px-3 py-2.5 text-sm" placeholder="0">
+                        </div>
+                        <div>
+                            <span class="text-xs text-muted block mb-1">Y</span>
+                            <input type="number" step="any" id="pos-y" class="input-field w-full px-3 py-2.5 text-sm" placeholder="64">
+                        </div>
+                        <div>
+                            <span class="text-xs text-muted block mb-1">Z</span>
+                            <input type="number" step="any" id="pos-z" class="input-field w-full px-3 py-2.5 text-sm" placeholder="0">
+                        </div>
+                    </div>
+                    <p class="text-xs text-muted mt-1.5">点击「使用玩家位置」可从在线玩家中搜索选择，并自动填入其当前坐标</p>
+                </div>
+
+                <div>
+                    <label class="text-sm text-muted block mb-1.5">下线时间</label>
+                    <input type="datetime-local" id="offline-at" class="input-field w-full px-3 sm:px-4 py-2.5 text-sm">
+                    <p class="text-xs text-muted mt-1.5">到达该时间后系统会自动执行杀死假人的指令</p>
+                </div>
+
+                <button type="submit" id="apply-btn" class="btn-primary px-6 py-2.5 text-sm inline-flex items-center gap-2">
+                    <i data-lucide="send" class="w-4 h-4"></i>提交申请
+                </button>
+            </form>
+        </div>
+
+        <div class="mb-8">
+            <h2 class="text-lg font-bold mb-3 flex items-center gap-2">
+                <i data-lucide="history" class="w-5 h-5 text-sky-600"></i>我的申请
+            </h2>
+            {% if my_applications %}
+            <div class="space-y-3">
+                {% set STATUS = {'pending': '待审核', 'approved': '已生成', 'rejected': '已驳回', 'killed': '已下线'} %}
+                {% for a in my_applications %}
+                <div class="pixel-card rounded-xl p-4">
+                    <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+                        <div class="flex items-center gap-2 min-w-0">
+                            <span class="font-semibold truncate">{{ a.bot_name }}</span>
+                            <span class="status-badge status-{{ a.status }}">{{ STATUS.get(a.status, a.status) }}</span>
+                        </div>
+                        <span class="text-xs text-muted">{{ a.created_at }}</span>
+                    </div>
+                    <div class="text-xs text-muted flex flex-wrap gap-x-5 gap-y-1">
+                        <span>坐标：{{ '%.3f'|format(a.pos_x) }}, {{ '%.3f'|format(a.pos_y) }}, {{ '%.3f'|format(a.pos_z) }}</span>
+                        <span>下线时间：{{ a.offline_at }}</span>
+                    </div>
+                    {% if a.status == 'rejected' and a.reject_reason %}
+                    <p class="text-xs text-red-600 mt-2">驳回原因：{{ a.reject_reason }}</p>
+                    {% endif %}
+                    {% if a.last_error %}
+                    <p class="text-xs text-amber-600 mt-2">最近错误：{{ a.last_error }}</p>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="pixel-card rounded-xl p-8 text-center text-muted text-sm">
+                还没有提交过假人申请
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</section>
+{% endblock %}
+
+{% block page_modals %}
+<!-- 在线玩家选择弹窗 -->
+<div id="player-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="player-modal-title">
+    <div class="modal-box modal-size-lg">
+        <div class="modal-header">
+            <div class="modal-icon">
+                <i data-lucide="users" class="w-5 h-5"></i>
+            </div>
+            <div class="min-w-0">
+                <h3 id="player-modal-title" class="modal-title">选择在线玩家</h3>
+                <p class="text-xs text-muted">获取该玩家当前坐标并填入输入框</p>
+            </div>
+            <button type="button" class="modal-close ml-auto" id="player-modal-close" aria-label="关闭">
+                <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+        </div>
+        <div class="modal-body">
+            <div class="relative mb-3">
+                <i data-lucide="search" class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted"></i>
+                <input type="search" id="player-search" placeholder="搜索在线玩家名称"
+                       class="input-field w-full pl-10 pr-4 py-2.5 text-sm" autocomplete="off">
+            </div>
+            <div id="player-list" class="space-y-2 overflow-y-auto" style="max-height: 46vh;"></div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn-secondary px-4 py-2 text-sm" id="player-modal-cancel">取消</button>
+            <button type="button" class="btn-primary px-4 py-2 text-sm" id="player-modal-confirm">确定</button>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_script %}
+<script>
+(function () {
+    var ALL_PLAYERS = {{ online_players|tojson }};
+    var selectedPlayer = '';
+
+    var modal = document.getElementById('player-modal');
+    var listEl = document.getElementById('player-list');
+    var searchEl = document.getElementById('player-search');
+    var confirmBtn = document.getElementById('player-modal-confirm');
+    var applyBtn = document.getElementById('apply-btn');
+
+    function filtered() {
+        var q = (searchEl.value || '').trim().toLowerCase();
+        return ALL_PLAYERS.filter(function (n) {
+            return !q || n.toLowerCase().indexOf(q) !== -1;
+        });
+    }
+
+    function renderPlayers(names) {
+        listEl.innerHTML = '';
+        if (!names.length) {
+            var empty = document.createElement('p');
+            empty.className = 'text-center text-muted text-sm py-6';
+            empty.textContent = '没有匹配的在线玩家';
+            listEl.appendChild(empty);
+            return;
+        }
+        names.forEach(function (name) {
+            var btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'player-item' + (name === selectedPlayer ? ' is-selected' : '');
+            btn.textContent = name;
+            btn.addEventListener('click', function () {
+                selectedPlayer = name;
+                Array.prototype.forEach.call(
+                    listEl.querySelectorAll('.player-item'),
+                    function (el) { el.classList.remove('is-selected'); }
+                );
+                btn.classList.add('is-selected');
+            });
+            listEl.appendChild(btn);
+        });
+    }
+
+    function openModal() {
+        selectedPlayer = '';
+        searchEl.value = '';
+        renderPlayers(ALL_PLAYERS);
+        modal.classList.add('open', 'active');
+        setTimeout(function () { searchEl.focus(); }, 80);
+        // 打开时刷新一次在线玩家（player_tracker 缓存，开销极低）
+        fetch('/api/bots/players')
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                if (d.success) {
+                    ALL_PLAYERS = d.players || [];
+                    renderPlayers(filtered());
+                }
+            })
+            .catch(function () {});
+    }
+
+    function closeModal() {
+        modal.classList.remove('open', 'active');
+    }
+
+    document.getElementById('btn-use-player-pos').addEventListener('click', openModal);
+    document.getElementById('player-modal-close').addEventListener('click', closeModal);
+    document.getElementById('player-modal-cancel').addEventListener('click', closeModal);
+    modal.addEventListener('click', function (e) { if (e.target === modal) closeModal(); });
+    searchEl.addEventListener('input', function () { renderPlayers(filtered()); });
+
+    confirmBtn.addEventListener('click', function () {
+        if (!selectedPlayer) { Toast.error('请先选择一位在线玩家'); return; }
+        confirmBtn.disabled = true;
+        var oldText = confirmBtn.textContent;
+        confirmBtn.textContent = '获取中...';
+
+        fetch('/api/bots/player-position', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ player_name: selectedPlayer }),
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                if (d.success) {
+                    document.getElementById('pos-x').value = Math.round(d.x * 1000) / 1000;
+                    document.getElementById('pos-y').value = Math.round(d.y * 1000) / 1000;
+                    document.getElementById('pos-z').value = Math.round(d.z * 1000) / 1000;
+                    closeModal();
+                    Toast.success('已填入 ' + d.player_name + ' 的坐标');
+                } else {
+                    Toast.error(d.message || '获取坐标失败');
+                }
+            })
+            .catch(function () { Toast.error('网络错误，请稍后重试'); })
+            .finally(function () {
+                confirmBtn.disabled = false;
+                confirmBtn.textContent = oldText;
+            });
+    });
+
+    document.getElementById('bot-apply-form').addEventListener('submit', function (e) {
+        e.preventDefault();
+        var name = document.getElementById('bot-name').value.trim();
+        var x = document.getElementById('pos-x').value.trim();
+        var y = document.getElementById('pos-y').value.trim();
+        var z = document.getElementById('pos-z').value.trim();
+        var offlineAt = document.getElementById('offline-at').value;
+
+        if (!/^[a-zA-Z0-9_]{3,16}$/.test(name)) {
+            Toast.error('BOT 名称需为 3-16 位字母、数字或下划线'); return;
+        }
+        if (name.indexOf('__') !== -1) { Toast.error('BOT 名称不能包含连续下划线'); return; }
+        if (x === '' || y === '' || z === '') { Toast.error('请填写完整坐标'); return; }
+        if (!offlineAt) { Toast.error('请设置下线时间'); return; }
+        if (new Date(offlineAt).getTime() <= Date.now()) {
+            Toast.error('下线时间必须晚于当前时间'); return;
+        }
+
+        applyBtn.disabled = true;
+        applyBtn.innerHTML = '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i>提交中...';
+        if (window.lucide) lucide.createIcons({ targets: [applyBtn] });
+
+        fetch('/api/bots/apply', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                bot_name: name,
+                x: x, y: y, z: z,
+                offline_at: offlineAt,
+            }),
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                if (d.success) {
+                    Toast.success(d.message);
+                    setTimeout(function () { location.reload(); }, 1200);
+                } else {
+                    Toast.error(d.message || '提交失败');
+                    applyBtn.disabled = false;
+                    applyBtn.innerHTML = '<i data-lucide="send" class="w-4 h-4"></i>提交申请';
+                    if (window.lucide) lucide.createIcons({ targets: [applyBtn] });
+                }
+            })
+            .catch(function () {
+                Toast.error('网络错误，请稍后重试');
+                applyBtn.disabled = false;
+                applyBtn.innerHTML = '<i data-lucide="send" class="w-4 h-4"></i>提交申请';
+                if (window.lucide) lucide.createIcons({ targets: [applyBtn] });
+            });
+    });
+})();
+</script>
+{% endblock %}

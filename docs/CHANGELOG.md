@@ -4,6 +4,16 @@
 
 ### 新增
 
+* **申请假人（BOT）**（`services/bot_applications/`、`routes/bots/`、`routes/admin/bots/`、`static/templates/bots/apply.html`、`static/templates/admin/bots.html`）：
+  * 入口在导航「服务器 → 申请假人」。用户填写 BOT 名称、生成坐标与下线时间；点击「使用玩家位置」可在弹窗中搜索 / 选择在线玩家，服务端执行 `/data get entity <玩家> Pos` 并用正则解析 `[x, y, z]`（兼容 `50000.39d` 这类 `d` 后缀）回填坐标。
+  * 申请进入 `bot_applications` 表（雪花 ID），状态 `pending / approved / rejected / killed`；待审核假人**计入「待审核余额」总量**，并受单独上限 `BOT_PENDING_LIMIT` 约束（默认 2，可在系统设置 → 假人调整），管理员豁免。
+  * 管理员在「管理中心 → 假人申请管理」审批：同意时经 RCON 执行生成指令（默认 Carpet：`/player {name} spawn at {x} {y} {z}`），驳回可填原因；生效中假人支持手动下线。
+  * 到达下线时间后由统一任务调度器 `bot-offline-scheduler`（每 60 秒扫描，单周期最多 50 条）执行杀死指令（默认 `/kill {name}`）；RCON 失败保留状态并记录 `last_error`，下个周期重试。
+  * 主键复用 `next_id()`，玩家名经 `sanitize_rcon_username()` 清洗、坐标先转 `float`，杜绝 RCON 命令注入；生成 / 杀死指令模板登记在系统设置「假人」分类（`BOT_SPAWN_COMMAND` / `BOT_KILL_COMMAND`），适配不同服务端插件。
+  * 新增 11 个测试：坐标解析、申请校验与重名拦截、驳回、审批 RCON 指令、到期自动下线、RCON 失败保留状态、假人单独待审核上限；全部测试通过。
+
+* **IndexNow 配置归位到系统设置**（`config.py`、`static/templates/admin/settings.html`）：`INDEXNOW_ENABLED`、`INDEXNOW_KEY`、`INDEXNOW_AUTO_SUBMIT`、`INDEXNOW_SUBMIT_TIME` 已登记到 `SETTINGS_REGISTRY`（分类「IndexNow」），在「管理后台 → 系统设置 → IndexNow」即可像其它配置一样修改并热更新；独立「IndexNow 推送」页保留用于查看最近结果、重新生成 Key 与立即提交。
+
 * **IndexNow 主动推送**（`services/indexnow/`、`routes/indexnow/`、`routes/admin/indexnow/`、`static/templates/admin/indexnow.html`）：管理后台新增独立的「IndexNow 推送」页面（`/admin/indexnow`），可启用 / 关闭、设置每日推送开关与时间、查看 / 重新生成 Key、立即提交并查看每个域名的状态码与 URL 数量。
   * URL 来源复用 `services/sitemap_cache` 的公开页面列表，与 `/sitemap.xml` 完全一致；只提交 `SITE_URL` / `SITEMAP_DOMAINS` 中的公网域名，自动跳过 localhost、回环、内网 IP 与非法协议。
   * Key 首次访问自动生成 32 位十六进制；`GET /<key>.txt` 在站点根目录提供校验文件，Key 不匹配或未配置返回 404，重新生成后旧地址立即失效。根目录是 IndexNow 规范的推荐位置：`keyLocation` 决定可提交的 URL 范围，只有根目录 Key 才能覆盖整站（子目录 Key 只能提交该目录下的 URL，会导致其它页面返回 422）。
@@ -12,6 +22,8 @@
   * 新增 10 个测试：公网域名过滤、Key 生成 / 配置校验与布尔归一化、URL 构建去重、提交载荷、未启用拦截、Key 文件路由（匹配 200 / 不匹配 404）。
 
 ### 修复
+
+* **磨砂玻璃发灰**（`static/css/base.css`、`static/templates/index.html`、`guides/*`、`buildings/index.html`、`backgrounds/upload.html`、`site/map.html`、`error_simple.html`、`macros/markdown_editor.html`）：此前各页面大量硬编码 `rgba(255,255,255,0.4~0.72)` + `backdrop-filter`，白色占比过低，在深色背景图或复杂背景上会泛成灰色玻璃。现统一为 `--glass-bg`（约 0.84~0.95 白色渐变）与 `--glass-blur`（`blur + saturate + brightness`）两个变量，并新增 `.glass-panel` / `.glass-surface` 公共类；首页、指南、建筑、背景上传、网页地图、错误页、Markdown 编辑器与 `base.css` 内的按钮 / 输入框 / 播放器 / 搜索框全部改用同一配方，弹窗与卡片视觉一致，深色背景下不再发灰。
 
 * **全站 Lucide 图标透明 / 空白**（`static/templates/base.html`、`static/js/core/base.js`）：此前将图标库改为 `defer` 后，`base.js` 在解析阶段立即执行时 `lucide` 尚未加载，导致所有 `<i data-lucide>` 保持空元素。现恢复图标库同步加载，并在 `DOMContentLoaded` 时兜底再次初始化，避免缓存或网络异常时图标缺失。
 

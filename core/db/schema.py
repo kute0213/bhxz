@@ -228,6 +228,27 @@ def init_db():
                 created_at TEXT NOT NULL             -- 申请时间
             )
         '''),
+        # 假人（BOT）申请表（用户申请 → 管理员审批 → RCON 生成 → 到期 RCON 杀死）
+        # status: pending=待审核 approved=已生成 rejected=已驳回 killed=已下线
+        ('bot_applications', '''
+            CREATE TABLE IF NOT EXISTS bot_applications (
+                id INTEGER PRIMARY KEY,
+                applicant_id INTEGER NOT NULL,       -- 申请人（网站用户 ID）
+                bot_name TEXT NOT NULL,              -- BOT 名称（MC 用户名）
+                pos_x REAL NOT NULL DEFAULT 0,       -- 生成坐标 X
+                pos_y REAL NOT NULL DEFAULT 0,       -- 生成坐标 Y
+                pos_z REAL NOT NULL DEFAULT 0,       -- 生成坐标 Z
+                offline_at TEXT NOT NULL,            -- 下线时间（到点执行杀死指令）
+                status TEXT NOT NULL DEFAULT 'pending',
+                reject_reason TEXT DEFAULT '',       -- 驳回原因
+                reviewed_by INTEGER DEFAULT NULL,    -- 审批人（网站用户 ID）
+                reviewed_at TEXT DEFAULT NULL,       -- 审批时间
+                executed_at TEXT DEFAULT NULL,       -- RCON 生成执行时间
+                killed_at TEXT DEFAULT NULL,         -- RCON 杀死执行时间
+                last_error TEXT DEFAULT '',          -- 最近一次 RCON 执行错误
+                created_at TEXT NOT NULL             -- 申请时间
+            )
+        '''),
         # 公共建筑表
         ('public_buildings', '''
             CREATE TABLE IF NOT EXISTS public_buildings (
@@ -421,6 +442,15 @@ def init_db():
         )
     except Exception as e:
         log('ERROR', 'DB', f'创建 game_server_ban_applications 索引失败: {e}')
+
+    # 假人申请：到期下线查询索引（status + offline_at，避免全表扫描）
+    try:
+        cursor.execute(
+            "CREATE INDEX IF NOT EXISTS idx_bot_offline "
+            "ON bot_applications (status, offline_at)"
+        )
+    except Exception as e:
+        log('ERROR', 'DB', f'创建 bot_applications 索引失败: {e}')
 
     # 公共建筑：收藏表索引（按建筑/用户统计收藏数）
     try:

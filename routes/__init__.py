@@ -22,6 +22,7 @@ def register_blueprints(app: Flask):
     from routes.sitemap import sitemap_bp
     from routes.indexnow import indexnow_bp
     from routes.game_accounts import account_apply_bp
+    from routes.bots import bots_bp
     from routes.live import live_bp
 
     blueprints = [
@@ -29,7 +30,7 @@ def register_blueprints(app: Flask):
         api_bp, captcha_bp, email_code_bp,
         docs_bp, guides_bp, buildings_bp,
         backgrounds_bp, sitemap_bp, indexnow_bp, account_apply_bp,
-        live_bp,
+        bots_bp, live_bp,
     ]
     for bp in blueprints:
         app.register_blueprint(bp)

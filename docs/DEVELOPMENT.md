@@ -243,6 +243,7 @@ def do_something(user_id, value, ip_address):
   | `email` | `services/mail/{delivery,service,retry}/__init__.py` | 邮件投递、异步发送队列、失败重发 | 是 | 否 |
   | `backup` | `services/backup/{manager,scheduler}/__init__.py`、`routes/admin/maintenance/__init__.py` | 自动维护（数据备份 + 日志清理）、定时维护、备份下载 / 删除 | 是 | 否 |
   | `gameban` | `services/game_server_ban/__init__.py` | 游戏服务器封禁申请 / 批准 / 驳回 / 自动解封 | 是 | 否 |
+  | `bot` | `services/bot_applications/__init__.py` | 假人申请 / 审批 / RCON 生成 / 到期自动下线 | 是 | 否 |
   | `sitemap` | `services/sitemap_cache/__init__.py` | 站点地图刷新与生成 | 是 | 否 |
   | `indexnow` | `services/indexnow/__init__.py` | IndexNow Key 生成、定时 / 手动推送与结果记录 | 是 | 否 |
   | `rcon` | `services/rcon/{client,player_tracker}/__init__.py` | RCON 命令执行、玩家列表追踪 | 是 | 否 |
@@ -352,6 +353,8 @@ if not ok:
 
 管理后台页面统一继承 `admin/_layout.html`（它再继承 `base.html`），不要在页面里重复写 `page-container`、返回链接和页头；页面只需设置 `admin_title`、`admin_subtitle` 并填充 `admin_content` 块。自带下拉框的卡片必须使用 `.pixel-card`，展开时由 `base.css` 的 `.select-open` 解除裁剪；不要给卡片设置 `overflow: hidden` 或额外的 `contain: paint`。
 
+**磨砂玻璃统一配方**：所有弹窗 / 卡片 / 浮层复用 `base.css` 的 CSS 变量与 `.glass-panel` / `.glass-surface`（`--glass-bg`、`--glass-blur`）。禁止在页面里手写低透明度白色（如 `rgba(255,255,255,0.5)`）搭配 `backdrop-filter: blur(...)` —— 白色占比过低会在深色或复杂背景上泛灰。若页面需要自定义玻璃层，必须使用 `background: var(--glass-bg)` 与 `backdrop-filter: var(--glass-blur)`（内含 `saturate` + `brightness`），保证与全站一致。
+
 ### 4. 引用方式
 
 带渲染一律使用相对 `static/templates/`（Flask `template_folder`）的路径字符串：
@@ -413,6 +416,18 @@ render_page('admin/admin_users.html')          # ❌ 双重前缀
 `/sitemap.xml` 统一走 `sitemap_cache.get_xml_for_request(host, scheme)`：优先读取 `uploads/sitemap/` 下的域名缓存文件；缓存缺失时按请求域名懒生成（内存缓存 1 小时），**禁止在路由里返回空字符串或内容为空的 200**（空响应会被 CDN 缓存，导致 Bing 判定无法获取 sitemap）。确实无法生成时返回 503 + `Retry-After`，并输出 ETag 支持 304 增量抓取。新增可索引公开页时，在 `services/sitemap_cache/__init__.py` 的 `_STATIC_PAGES` 中登记 path / changefreq / priority；`is_private_path()` 会自动过滤私有路径，公开文件映射的尾部斜杠也会规范化为无斜杠 URL。
 
 IndexNow 推送复用同一份公开页面列表（`_build_url_entries`）与域名配置（`_collect_domains`），因此**新增公开页只需改 sitemap 白名单，无需改动 IndexNow**。推送任务必须使用统一任务调度器注册（当前任务名 `indexnow-submit`），禁止自行创建线程 / Timer；提交前必须经过 `_is_public_base()` 过滤，不得向内网地址发起请求。
+
+IndexNow 的启用开关、Key、每日开关与推送时间统一登记在 `config.py` 的 `SETTINGS_REGISTRY`（分类 `IndexNow`），由系统设置页自动渲染；`services/indexnow` 只能通过 `get_config_value()` 读取这些键，禁止在模板或页面单独维护一套配置。新增相关配置时必须同时登记 registry，保证设置面板可见、可热更新。
+
+### 8. 申请类功能约定
+
+新增「用户提交 → 管理员审批 → RCON 执行」的功能（如 `services/bot_applications`）必须复用现有基础设施，不要重复造轮子：
+
+* 主键用 `core.shared.snowflake.next_id()`，表主键写 `INTEGER PRIMARY KEY`（不带 `AUTOINCREMENT`）；
+* 定时任务用 `core.shared.scheduler.register_task()`（假人到期下线任务名 `bot-offline-scheduler`，每 60 秒扫描，单周期最多 50 条，RCON 失败保留状态下周期重试），禁止新建线程 / Timer；
+* RCON 用 `services.rcon.client.execute_command()`，玩家名必须经 `sanitize_rcon_username()` 清洗，数值坐标先转 `float` 再拼指令，杜绝命令注入；生成 / 杀死指令模板放入 `SETTINGS_REGISTRY`（`BOT_SPAWN_COMMAND` / `BOT_KILL_COMMAND`）以适配不同插件；
+* 待审核数量统一走 `services.content_limits.check_pending_limit(user, 'bot')`：既计入「待审核余额」总量，又受单独上限 `BOT_PENDING_LIMIT` 约束（默认 2），管理员豁免；新类型需在 `_PENDING_TYPES` 登记表名 / 用户列 / 状态条件 / 上限键；
+* 入口同时加在桌面导航「服务器」下拉与移动端侧边栏；页面属于私有页，`/bots` 必须列入 `core/seo.py` 的 `_PRIVATE_PREFIXES`。
 
 ## 测试规范
 

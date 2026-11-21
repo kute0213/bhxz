@@ -16,8 +16,12 @@
         /* 颜色变量系统 */
         :root {
             --bg-primary: #f8fafc;
-            --bg-card: rgba(255, 255, 255, 0.78);
-            --bg-card-hover: rgba(255, 255, 255, 0.94);
+            --bg-card: rgba(255, 255, 255, 0.88);
+            --bg-card-hover: rgba(255, 255, 255, 0.96);
+            --bg-glass: rgba(255, 255, 255, 0.84);
+            --bg-glass-strong: rgba(255, 255, 255, 0.95);
+            --glass-bg: linear-gradient(135deg, var(--bg-glass-strong) 0%, var(--bg-glass) 100%);
+            --glass-blur: blur(22px) saturate(165%) brightness(1.06);
             --text-primary: #1a2230;
             --text-secondary: rgba(26, 34, 48, 0.8);
             --text-muted: rgba(26, 34, 48, 0.52);
@@ -62,9 +66,9 @@
 
         /* 磨砂玻璃卡片 */
         .pixel-card {
-            background: var(--bg-card);
-            backdrop-filter: blur(20px) saturate(110%);
-            -webkit-backdrop-filter: blur(20px) saturate(110%);
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
             border: 1px solid var(--border-card);
             border-radius: var(--radius-card);
             box-shadow: var(--shadow-card);
@@ -173,9 +177,9 @@
             align-items: center;
             gap: 8px;
             padding: 12px 24px;
-            background: linear-gradient(135deg, rgba(255,255,255,0.82), rgba(248,250,254,0.72));
-            backdrop-filter: blur(22px) saturate(120%);
-            -webkit-backdrop-filter: blur(22px) saturate(120%);
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
             border: 1px solid rgba(2,132,199,0.28);
             border-radius: 12px;
             color: #0f172a;

@@ -66,10 +66,11 @@
     justify-content: space-between;
     gap: 0.75rem;
     padding: 0.625rem 0.875rem;
-    background: rgba(255, 255, 255, 0.7);
+    background: var(--bg-glass);
     border: 1px solid var(--border-card);
     border-radius: 10px;
-    backdrop-filter: blur(8px);
+    backdrop-filter: var(--glass-blur);
+    -webkit-backdrop-filter: var(--glass-blur);
 }
 
 .file-item .file-main {

@@ -373,6 +373,12 @@ SETTINGS_REGISTRY = [
     ('SITEMAP_DOMAINS', '', 'str', 'Sitemap 多域名列表', '每行一个完整域名（含协议，如 https://bhxz.tw.kg）。刷新时自动为每个域名生成独立的 sitemap.xml。留空仅使用上方的站点域名。', 'Sitemap'),
     ('ROBOTS_POLICY', 'all', 'select', '搜索引擎爬虫策略', 'robots.txt 的爬虫访问策略，与 Sitemap 配合使用。可选：all（允许所有爬虫）, home（仅允许主页爬虫）, none（禁止所有爬虫）', 'Sitemap'),
 
+    # IndexNow 主动推送
+    ('INDEXNOW_ENABLED', False, 'bool', '启用 IndexNow', '开启后可将站点公开 URL 推送给搜索引擎（Bing / Yandex 等）加快收录；关闭后不会自动或手动提交', 'IndexNow'),
+    ('INDEXNOW_KEY', '', 'str', 'IndexNow Key', 'IndexNow 校验 Key（8~128 位字母、数字或短横线）。留空时系统会在启动后自动生成；也可在「IndexNow 推送」页面重新生成', 'IndexNow'),
+    ('INDEXNOW_AUTO_SUBMIT', True, 'bool', '每日自动推送', '开启后每天在下方设定时间自动提交全部公网域名的公开 URL（需先启用 IndexNow）', 'IndexNow'),
+    ('INDEXNOW_SUBMIT_TIME', '03:30', 'time', '自动推送时间', '每日自动推送的执行时间（HH:MM 格式），修改后热更新，无需重启', 'IndexNow'),
+
     # 安全
     ('SESSION_LIFETIME', 604800, 'int', '会话有效期（秒）', '登录会话过期时间，默认 7 天', '安全配置'),
     ('MAX_LOGIN_ATTEMPTS', 5, 'int', '登录失败锁定次数', '超过后临时锁定账户', '安全配置'),
@@ -478,6 +484,11 @@ SETTINGS_REGISTRY = [
     ('MAX_PENDING_GUIDE', 0, 'int', '待审核数量限制（服务器指南）', '服务器指南单独待审核数量上限，与总量上限同时生效（先达到的先生效）；0 = 不单独限制。', '内容审核'),
     ('MAX_PENDING_MUSIC', 0, 'int', '待审核数量限制（大喇叭音频）', '大喇叭音频单独待审核数量上限（含上传申请公开与私有转公开），与总量上限同时生效；0 = 不单独限制。', '内容审核'),
     ('MAX_PENDING_BACKGROUND', 0, 'int', '待审核数量限制（背景图片）', '背景图片单独待审核数量上限，与总量上限同时生效（先达到的先生效）；0 = 不单独限制。', '内容审核'),
+
+    # 假人（BOT）
+    ('BOT_PENDING_LIMIT', 2, 'int', '假人待审核上限', '每个普通用户同时处于待审核状态的假人申请数量上限，默认 2；与「待审核数量限制（总量）」同时生效，0 = 不单独限制。管理员不受限制。', '假人'),
+    ('BOT_SPAWN_COMMAND', '/player {name} spawn at {x} {y} {z}', 'str', '生成假人指令模板', '审批通过时通过 RCON 执行。可用占位符：{name}（假人名称）、{x} / {y} / {z}（坐标）。默认适配 Carpet 假人：/player {name} spawn at {x} {y} {z}', '假人'),
+    ('BOT_KILL_COMMAND', '/kill {name}', 'str', '杀死假人指令模板', '到达下线时间或管理员手动下线时通过 RCON 执行。可用占位符：{name}（假人名称）。默认：/kill {name}', '假人'),
 
     ]
 

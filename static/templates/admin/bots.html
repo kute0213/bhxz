@@ -1,0 +1,243 @@
+{% extends "admin/_layout.html" %}
+{% set admin_title = '假人申请管理' %}
+{% set admin_subtitle = '审批通过后执行 RCON 生成假人；到达下线时间自动执行杀死指令，也可手动提前下线' %}
+{% block admin_content %}
+        <!-- Tab -->
+        <div class="flex gap-1 mb-6 p-1 bg-forest-900/60 rounded-xl">
+            <button class="tab-btn flex-1 px-4 py-2 text-sm rounded-lg transition-colors bg-gold-400/20 text-gold-300 font-medium" data-tab="pending">
+                待审批 <span id="pending-count" class="ml-1 text-xs">(0)</span>
+            </button>
+            <button class="tab-btn flex-1 px-4 py-2 text-sm rounded-lg transition-colors text-cream/60 hover:text-cream" data-tab="active">
+                生效中 <span id="active-count" class="ml-1 text-xs">(0)</span>
+            </button>
+            <button class="tab-btn flex-1 px-4 py-2 text-sm rounded-lg transition-colors text-cream/60 hover:text-cream" data-tab="history">
+                历史记录
+            </button>
+        </div>
+
+        <div id="tab-pending" class="tab-content">
+            <div class="pixel-card rounded-xl p-6">
+                <div id="pending-list" class="space-y-3">
+                    <div class="text-cream/50 text-sm text-center py-6">加载中...</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="tab-active" class="tab-content hidden">
+            <div class="pixel-card rounded-xl p-6">
+                <div id="active-list" class="space-y-3">
+                    <div class="text-cream/50 text-sm text-center py-6">加载中...</div>
+                </div>
+            </div>
+        </div>
+
+        <div id="tab-history" class="tab-content hidden">
+            <div class="pixel-card rounded-xl p-6">
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="text-cream/50 border-b border-cream/10">
+                                <th class="text-left py-2 px-2">BOT 名称</th>
+                                <th class="text-left py-2 px-2">坐标</th>
+                                <th class="text-left py-2 px-2">申请人</th>
+                                <th class="text-left py-2 px-2">状态</th>
+                                <th class="text-left py-2 px-2">下线时间</th>
+                                <th class="text-left py-2 px-2">申请时间</th>
+                                <th class="text-left py-2 px-2">备注</th>
+                            </tr>
+                        </thead>
+                        <tbody id="history-list"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+{% endblock %}
+
+{% block extra_script %}
+<script>
+(function() {
+    var cache = { pending: [], all: [] };
+
+    document.querySelectorAll('.tab-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            document.querySelectorAll('.tab-btn').forEach(function(b) {
+                b.className = 'tab-btn flex-1 px-4 py-2 text-sm rounded-lg transition-colors text-cream/60 hover:text-cream';
+            });
+            this.className = 'tab-btn flex-1 px-4 py-2 text-sm rounded-lg transition-colors bg-gold-400/20 text-gold-300 font-medium';
+            document.querySelectorAll('.tab-content').forEach(function(t) { t.classList.add('hidden'); });
+            document.getElementById('tab-' + this.dataset.tab).classList.remove('hidden');
+            if (this.dataset.tab === 'active') renderActive();
+            if (this.dataset.tab === 'history') renderHistory();
+        });
+    });
+
+    function loadAll() {
+        fetch('/admin/api/bots')
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                if (!d.success) return;
+                cache.pending = d.pending || [];
+                cache.all = d.all || [];
+                renderPending();
+                renderActive();
+                renderHistory();
+            });
+    }
+
+    function fmtCoord(v) {
+        return (Math.round(Number(v) * 1000) / 1000);
+    }
+
+    function renderPending() {
+        var list = document.getElementById('pending-list');
+        var pending = cache.pending;
+        document.getElementById('pending-count').textContent = '(' + pending.length + ')';
+        if (pending.length === 0) {
+            list.innerHTML = '<div class="text-cream/50 text-sm text-center py-6">暂无待审批的假人申请</div>';
+            return;
+        }
+        var html = '';
+        for (var i = 0; i < pending.length; i++) {
+            var a = pending[i];
+            html += '<div class="px-4 py-3 bg-forest-900/40 rounded-lg">' +
+                '<div class="flex items-start justify-between gap-3 flex-wrap">' +
+                    '<div class="min-w-[200px]">' +
+                        '<div class="text-cream font-medium">' + escapeHtml(a.bot_name) + '</div>' +
+                        '<div class="text-xs text-cream/50 mt-0.5">申请人: ' + escapeHtml(a.applicant_name || '-') +
+                            ' | ' + a.created_at + '</div>' +
+                        '<div class="text-xs text-cream/70 mt-1">坐标: ' + fmtCoord(a.pos_x) + ', ' + fmtCoord(a.pos_y) + ', ' + fmtCoord(a.pos_z) +
+                            ' | 下线时间: ' + escapeHtml(a.offline_at) + '</div>' +
+                    '</div>' +
+                    '<div class="flex items-center gap-2">' +
+                        '<button class="btn-approve btn-primary bg-green-500 px-3 py-1.5 text-xs rounded-lg" data-id="' + a.id + '" data-name="' + escapeHtml(a.bot_name) + '">同意生成</button>' +
+                        '<button class="btn-reject btn-danger px-3 py-1.5 text-xs rounded-lg" data-id="' + a.id + '">驳回</button>' +
+                    '</div>' +
+                '</div>' +
+            '</div>';
+        }
+        list.innerHTML = html;
+
+        list.querySelectorAll('.btn-approve').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                CustomModal.confirm('确认生成假人 ' + btn.dataset.name + '？（将执行 RCON 生成指令）', {
+                    trigger: this,
+                    callback: function(confirmed) {
+                        if (!confirmed) return;
+                        fetch('/admin/api/bots/' + btn.dataset.id + '/approve', { method: 'POST' })
+                            .then(function(r) { return r.json(); })
+                            .then(function(d) {
+                                CustomModal.alert(d.message, { type: d.success ? 'success' : 'error' });
+                                if (d.success) loadAll();
+                            });
+                    }
+                });
+            });
+        });
+
+        list.querySelectorAll('.btn-reject').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                CustomModal.prompt('驳回原因（可选）：', {
+                    title: '驳假人申请',
+                    placeholder: '输入驳回原因（可选）',
+                    trigger: this,
+                    callback: function(reason) {
+                        if (reason === null) return;
+                        fetch('/admin/api/bots/' + btn.dataset.id + '/reject', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({ reason: reason }),
+                        })
+                        .then(function(r) { return r.json(); })
+                        .then(function(d) {
+                            CustomModal.alert(d.message, { type: d.success ? 'success' : 'error' });
+                            if (d.success) loadAll();
+                        });
+                    }
+                });
+            });
+        });
+    }
+
+    function renderActive() {
+        var list = document.getElementById('active-list');
+        var active = cache.all.filter(function(a) { return a.status === 'approved'; });
+        document.getElementById('active-count').textContent = '(' + active.length + ')';
+        if (active.length === 0) {
+            list.innerHTML = '<div class="text-cream/50 text-sm text-center py-6">当前没有生效中的假人</div>';
+            return;
+        }
+        var html = '';
+        for (var i = 0; i < active.length; i++) {
+            var a = active[i];
+            html += '<div class="flex items-center justify-between gap-3 flex-wrap px-4 py-3 bg-forest-900/40 rounded-lg">' +
+                '<div class="min-w-[220px]">' +
+                    '<div class="text-cream font-medium">' + escapeHtml(a.bot_name) + '</div>' +
+                    '<div class="text-xs text-cream/50 mt-0.5">坐标: ' + fmtCoord(a.pos_x) + ', ' + fmtCoord(a.pos_y) + ', ' + fmtCoord(a.pos_z) +
+                        ' | 申请人: ' + escapeHtml(a.applicant_name || '-') + '</div>' +
+                    '<div class="text-xs text-yellow-400 mt-1">下线时间: ' + escapeHtml(a.offline_at) + '</div>' +
+                    (a.last_error ? '<div class="text-xs text-red-400 mt-1">最近错误: ' + escapeHtml(a.last_error) + '</div>' : '') +
+                '</div>' +
+                '<button class="btn-kill btn-secondary px-3 py-1.5 text-xs rounded-lg" data-id="' + a.id + '" data-name="' + escapeHtml(a.bot_name) + '">手动下线</button>' +
+            '</div>';
+        }
+        list.innerHTML = html;
+
+        list.querySelectorAll('.btn-kill').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                CustomModal.confirm('确认下线假人 ' + btn.dataset.name + '？（将执行 RCON 杀死指令）', {
+                    trigger: this,
+                    callback: function(confirmed) {
+                        if (!confirmed) return;
+                        fetch('/admin/api/bots/' + btn.dataset.id + '/kill', { method: 'POST' })
+                            .then(function(r) { return r.json(); })
+                            .then(function(d) {
+                                CustomModal.alert(d.message, { type: d.success ? 'success' : 'error' });
+                                if (d.success) loadAll();
+                            });
+                    }
+                });
+            });
+        });
+    }
+
+    function renderHistory() {
+        var all = cache.all;
+        var tbody = document.getElementById('history-list');
+        if (all.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-cream/50 py-6">暂无记录</td></tr>';
+            return;
+        }
+        var STATUS = {
+            pending: ['待审批', 'text-yellow-400'],
+            approved: ['已生成', 'text-green-400'],
+            rejected: ['已驳回', 'text-red-400'],
+            killed: ['已下线', 'text-blue-400']
+        };
+        var html = '';
+        for (var i = 0; i < all.length; i++) {
+            var a = all[i];
+            var st = STATUS[a.status] || [a.status, 'text-cream/60'];
+            var note = a.reject_reason || a.last_error || '-';
+            html += '<tr class="border-b border-cream/10 hover:bg-forest-900/20">' +
+                '<td class="py-2 px-2 text-cream">' + escapeHtml(a.bot_name) + '</td>' +
+                '<td class="py-2 px-2 text-cream/70 text-xs">' + fmtCoord(a.pos_x) + ', ' + fmtCoord(a.pos_y) + ', ' + fmtCoord(a.pos_z) + '</td>' +
+                '<td class="py-2 px-2 text-cream/70">' + escapeHtml(a.applicant_name || '-') + '</td>' +
+                '<td class="py-2 px-2 ' + st[1] + '">' + st[0] + '</td>' +
+                '<td class="py-2 px-2 text-cream/50 text-xs">' + escapeHtml(a.offline_at) + '</td>' +
+                '<td class="py-2 px-2 text-cream/50 text-xs">' + a.created_at + '</td>' +
+                '<td class="py-2 px-2 text-cream/60 text-xs max-w-[180px] truncate" title="' + escapeHtml(note) + '">' + escapeHtml(note) + '</td>' +
+            '</tr>';
+        }
+        tbody.innerHTML = html;
+    }
+
+    function escapeHtml(str) {
+        var div = document.createElement('div');
+        div.appendChild(document.createTextNode(str == null ? '' : str));
+        return div.innerHTML;
+    }
+
+    loadAll();
+})();
+</script>
+{% endblock %}

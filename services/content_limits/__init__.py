@@ -16,6 +16,8 @@ _PENDING_TYPES = {
     'guide':      ('server_guides',    'author_id', "status != 'approved'", 'MAX_PENDING_GUIDE', '服务器指南'),
     'music':      ('music',            'user_id',   'status = 1',         'MAX_PENDING_MUSIC', '大喇叭音频'),
     'background': ('backgrounds',      'user_id',   'status = 0',         'MAX_PENDING_BACKGROUND', '背景图片'),
+    # 假人申请计入「待审核余额」总量，并有单独上限（默认 2）
+    'bot':        ('bot_applications', 'applicant_id', "status = 'pending'", 'BOT_PENDING_LIMIT', '假人'),
 }
 
 

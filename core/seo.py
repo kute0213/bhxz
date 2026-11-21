@@ -39,6 +39,7 @@ _PRIVATE_PREFIXES = (
     '/live/rec',
     '/live/my',
     '/game-accounts',
+    '/bots',
     # 仅内嵌外部地图 iframe，本身没有可索引内容
     '/map',
 )

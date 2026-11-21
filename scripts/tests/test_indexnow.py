@@ -7,6 +7,24 @@ from flask import Flask
 
 import services.indexnow as indexnow
 import routes.indexnow as indexnow_route
+from config import SETTINGS_REGISTRY
+
+
+def test_indexnow_settings_in_registry():
+    """IndexNow 配置必须出现在系统设置面板（由 SETTINGS_REGISTRY 自动渲染）。"""
+    keys = {item[0] for item in SETTINGS_REGISTRY}
+    for key in ('INDEXNOW_ENABLED', 'INDEXNOW_KEY', 'INDEXNOW_AUTO_SUBMIT',
+                'INDEXNOW_SUBMIT_TIME'):
+        assert key in keys
+    assert any(item[0] == 'INDEXNOW_ENABLED' and item[5] == 'IndexNow'
+               for item in SETTINGS_REGISTRY)
+
+
+def test_bot_settings_in_registry():
+    """假人上限与指令模板需可在系统设置面板中调整。"""
+    keys = {item[0] for item in SETTINGS_REGISTRY}
+    for key in ('BOT_PENDING_LIMIT', 'BOT_SPAWN_COMMAND', 'BOT_KILL_COMMAND'):
+        assert key in keys
 
 
 class TestPublicBase:
