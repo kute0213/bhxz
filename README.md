@@ -1,35 +1,39 @@
-# 滨海小镇 - Minecraft 服务器社区网站
+# 滨海小镇 · Minecraft 服务器社区网站
 
-基于 Flask 的 Minecraft 服务器社区门户，采用白色磨砂玻璃（White Frosted Glass）设计风格。提供用户系统、游戏账号注册申请、模组介绍、管理后台、服务器状态监控、全站背景图片、网站图标可配置等功能。
+基于 **Flask + Waitress** 的 Minecraft 服务器社区门户，采用白色磨砂玻璃（White Frosted Glass）设计风格。提供用户系统、游戏账号申请、公共建筑、服务器指南、大喇叭音频、音频直播、假人申请、管理后台、服务器状态监控、全站背景图片与搜索引擎优化等能力。
 
 ## 文档索引
 
-| 文档                                                  | 说明                                   |
-| --------------------------------------------------- | ------------------------------------ |
-| 本文档                                                 | 项目总览、快速开始、功能特性、配置、API、架构               |
-| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)          | 开发准则：分层规范、易错点、测试、路由检测、构建打包与发布、文档写入准则 |
-| [docs/mcsm-deploy.md](docs/mcsm-deploy.md)          | MCSManager 面板部署指南（步骤较多，为避免 README 臃肿而独立成文）：新建通用应用实例、上传代码、虚拟环境、启动命令、反向代理与常见问题 |
-| [docs/CHANGELOG.md](docs/CHANGELOG.md)              | 更新日志                                 |
-| [docs/SECURITY\_REPORT.md](docs/SECURITY_REPORT.md) | 安全风险自评估报告：OWASP 逐项评估、风险清单、改进建议       |
+| 文档 | 说明 |
+| --- | --- |
+| 本文档 | 项目总览、快速开始、目录结构、功能、配置、架构 |
+| [docs/API.md](docs/API.md) | **API 指南**：逐接口说明方法、鉴权、参数、响应、错误码、限流与实现文件 |
+| [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) | 开发准则：分层规范、代码规范、易错点、测试、构建发布、文档规范 |
+| [docs/mcsm-deploy.md](docs/mcsm-deploy.md) | MCSManager 面板部署指南（Windows / Linux） |
+| [docs/SECURITY_REPORT.md](docs/SECURITY_REPORT.md) | 安全风险自评估报告（OWASP 逐项） |
+| [docs/CHANGELOG.md](docs/CHANGELOG.md) | 更新日志（当前版本） |
+| [docs/CHANGELOG_ARCHIVE_2026-11-22.md](docs/CHANGELOG_ARCHIVE_2026-11-22.md) | 历史更新日志归档 |
 
 ## 快速开始
 
 ### 环境要求
 
-* Python 3.8+
-
-* pip
+- Python 3.8+
+- pip
 
 ### 安装与启动
 
 ```bash
 pip install -r requirements.txt
+python scripts/build/build_static.py   # 首次运行：下载图标库与字体到 static/lib
 python app.py
 ```
 
-默认 HTTP 模式，端口 5000。
+默认 HTTP 模式，监听 `0.0.0.0:5000`。启动后会在 `uploads/db/site.db` 初始化数据库，并自动创建默认管理员。
 
-**Windows 编码提示**：中文 Windows 控制台默认使用 GBK（cp936），直接 `python app.py` 可能出现中文日志乱码、`UnicodeEncodeError: 'gbk' codec can't encode character`，或被面板类工具读取为乱码。请先开启 UTF-8 模式：
+### Windows 编码提示
+
+中文 Windows 控制台默认 GBK，直接 `python app.py` 可能出现中文日志乱码或 `UnicodeEncodeError`。请先开启 UTF-8：
 
 ```bat
 chcp 65001
@@ -39,35 +43,29 @@ set PYTHONUNBUFFERED=1
 python app.py
 ```
 
-长期部署（尤其是 MCSM 等面板）请把这四行写入启动脚本，并参考 [docs/mcsm-deploy.md 第 13 节](docs/mcsm-deploy.md#13-windows-服务器部署与编码)。
+长期部署（尤其是 MCSM 等面板）请把上述变量写入启动脚本，详见 [docs/mcsm-deploy.md](docs/mcsm-deploy.md)。
 
-### 构建静态资源
+### 默认管理员
 
-首次运行或更新后，需要构建静态资源（将 CDN 库下载到本地）：
+| 用户名 | 密码 |
+| --- | --- |
+| `admin` | `admin1324` |
+
+> 首次登录后请立即在「账户设置」修改默认密码。
+
+## 静态资源与发布
+
+### 构建第三方静态资源
 
 ```bash
 python scripts/build/build_static.py
 ```
 
-这会下载以下资源到 `static/lib/`：
+下载并本地化：Lucide Icons、Marked.js、JetBrains Mono、站酷庆科黄油体、站酷快乐体。字体按 `unicode-range` 分片，零外部 CDN 依赖；构建产物已随仓库提交。
 
-* **Lucide Icons** — 图标库
+### 重新编译 Tailwind
 
-* **Marked.js** — Markdown 渲染
-
-* **JetBrains Mono** — 编程字体（代码编辑器 / 时间码）
-
-* **ZCOOL QingKe HuangYou（站酷庆科黄油体）** — 正文中文字体，本地子集化 woff2（按 `unicode-range` 分片）
-
-* **ZCOOL KuaiLe（站酷快乐体）** — 标题中文字体，同为本地子集化 woff2
-
-> 中文字体使用自带字体：正文 **站酷庆科黄油体**（圆润活泼、笔画简洁），标题 **站酷快乐体**（更俏皮有活力），
-> 均为本地分片子集，浏览器只按需下载用到的子集；字体文件随静态资源预构建提交，**零外部 CDN 依赖**。
-> 静态资源（含 Tailwind 构建产物 `static/css/tailwind.css`）已预构建并随代码提交，一键更新无需额外构建步骤。
-
-#### 重新编译 Tailwind CSS
-
-模板或 JS 中新增 / 修改 Tailwind 工具类后，必须重新生成 `static/css/tailwind.css`，否则新类不会出现在产物中（典型症状：按钮丢失内边距、圆角失效、文字贴着边框）：
+模板或 JS 中新增 / 修改 Tailwind 工具类后必须重新生成 `static/css/tailwind.css`：
 
 ```bash
 cd scripts/build
@@ -76,1066 +74,172 @@ npx tailwindcss -c tailwind.config.js -i tailwind-source.css \
     -o ../../static/css/tailwind.css --minify
 ```
 
-编译后同步 bump `static/templates/base.html` 中 `css/tailwind.css` 的 `v=` 版本号，避免浏览器缓存旧样式。
+编译后同步 bump `static/templates/base.html` 中 `css/tailwind.css` 的 `v=` 版本号，避免缓存旧样式。
 
 ### 打包发布 zip
-
-需要离线分发时，可打包为发布 zip（排除敏感文件、数据库、上传、备份、SSL、日志与第三方库大文件）：
 
 ```bash
 python scripts/build/package.py
 ```
 
-输出到 `release/bhxz-YYYYMMDD-HHMMSS.zip`。`release/` 与 `*.zip` 已加入 `.gitignore`，不会提交到仓库。
+输出 `release/bhxz-YYYYMMDD-HHMMSS.zip`（排除数据库、上传、备份、SSL、日志与第三方大文件）。`release/` 与 `*.zip` 已在 `.gitignore` 中。
 
-### 默认管理员
-
-首次启动自动创建：
-
-| 用户名     | 密码          |
-| ------- | ----------- |
-| `admin` | `admin1324` |
-
-> 登录后请立即修改默认密码。
-
-## 项目结构
+## 目录结构
 
 ```
 /workspace
 ├── app.py / config.py / requirements.txt   # 入口、配置、依赖
-├── core/         # 基础设施层（DB/认证/中间件/错误页/共享工具）——不含业务逻辑
-│   ├── db/                   #   数据库连接与 schema
-│   │   └── connection.py, schema.py
-│   ├── system/               #   系统层：日志、应用初始化
-│   │   └── init.py, logger.py
-│   ├── shared/               #   共享工具（无业务逻辑，原 utils 收敛于此）
-│   │   ├── snowflake.py      #   全站统一雪花 ID 生成器（非用户表主键唯一入口）
-│   │   ├── ip.py, captcha.py, ratelimit.py, validation.py
-│   │   ├── process_utils.py
-│   │   └── scheduler/        #   统一任务注册表（task / executors / registry）
-│   ├── auth.py               #   认证装饰器、密码哈希
-│   ├── csrf.py               #   CSRF 防护
-│   ├── middleware.py         #   请求中间件（安全标头、攻击扫描）
-│   ├── server.py             #   WSGI 服务器与优雅关闭
-│   ├── helpers.py            #   页面渲染辅助（render_page / admin_page）
-│   ├── template_context.py   #   全局模板上下文注入
-│   └── errors.py             #   统一精简错误页渲染（error_simple）
-├── services/     # 业务逻辑层（纯 Python，不依赖 Flask）
-│   ├── backup/               #   自动维护（/uploads/ 全量 zip 极限压缩 + 日志清理）
-│   ├── buildings/      # 公共建筑（列表/搜索/收藏/评论分页）
-│   ├── mail/           # 邮件服务（SMTP 投递 / 异步发送队列 / 失败自动重试）
-│   ├── game_accounts/  # 游戏账号注册申请（审批/驳回/封禁）
-│   ├── game_server_ban/ # 游戏服务器封禁申请（审批 → RCON ban → 到期自动 pardon）
-│   ├── system_metrics/ # CPU/内存/系统/性能追踪（后台线程采集）
-│   ├── music/          # 大喇叭音频（常量/查询/CRUD/上传/收藏）
-│   ├── live/           # 音频直播（常量/ffmpeg 双输出/存储/运行时/Opus 转发/PCM 上传校验）
-│   ├── rcon/           # RCON 连接管理、玩家列表追踪、EasyAuth 指令
-│   ├── user/           # 用户（认证/资料/管理）
-│   ├── background_service/  #   背景图片业务（WebP 转换 + 按屏幕比例挑选）
-│   ├── cleanup_service/     #   被驳回内容自动清理
-│   ├── content_limits/      #   待审核内容上限业务规则
-│   ├── firewall/            #   高性能防火墙（DuckDB 引擎 + WSGI 门禁 + DDoS 防护）
-│   │   ├── api_guard.py     #     接口频率限制
-│   │   ├── service/         #     业务层（core / database / monitor）
-│   │   ├── protection/      #     防护策略（content_filter / ddos / file_guard）
-│   │   └── transport/       #     连接层（wrappers：WSGI 门禁）
-│   ├── settings_manager/    #   系统设置管理
-│   ├── security/            #   安全扫描（SQL 注入 / XSS / 路径穿越 / 命令注入 / 敏感探测 / 恶意 UA）
-│   ├── sitemap_cache/       #   Sitemap 缓存服务
-│   └── indexnow/            #   IndexNow 主动推送（复用 sitemap 页面、统一调度器定时提交）
-├── routes/       # HTTP 路由层（Flask Blueprint）
-│   ├── admin/          # 管理后台（用户/自动维护/设置/日志/更新/游戏账号/指南/音乐/背景/建筑等）
-│   ├── api/            # 公开 API（性能/统计/验证码/邮箱）
-│   ├── backgrounds/    # 背景图片页面
-│   ├── buildings/      # 公共建筑（页面+API，搜索/标签/收藏/评论分页，发布需审核）
-│   ├── community/      # 社区辅助（AJAX / 表单统一响应）
-│   ├── docs/           # 文档页面
-│   ├── game_accounts/  # 申请账号（页面+API，纯申请注册）
-│   ├── guides/         # 服务器指南（页面+API）
-│   ├── live/           # 音频直播（直播台/开播页/播放页/流媒体/API）
-│   ├── main/           # 主站（登录/注册/设置/音乐）
-│   ├── public/         # 公开文件服务
-│   ├── indexnow/       # IndexNow Key 校验文件（/<key>.txt，根目录）
-│   └── sitemap/        # Sitemap & robots.txt（自动添加 Crawl-delay 防防火墙误判）
-├── static/       # 唯一的前端文件夹：静态资源 + Jinja2 模板（命名规范见 docs/DEVELOPMENT.md）
-│   ├── css/            #   样式（base.css / tailwind.css 构建产物）
-│   ├── js/             #   前端脚本（core/ 通用组件、pages/ 页面脚本）
-│   ├── favicons/       #   站点图标（可配置）
-│   ├── lib/            #   本地化第三方库与字体（构建生成，含 lib-version.json）
-│   └── templates/      #   Jinja2 模板（Flask template_folder）
-│       ├── admin/          #     管理后台页面（如 users.html、settings.html，无 admin_ 前缀）
-│       ├── auth/           #     登录 / 注册 / 找回密码
-│       ├── settings/       #     用户个人设置
-│       ├── site/           #     站点级信息页（站点文档、服务器状态、网页地图）
-│       ├── backgrounds/    #     背景图片页面（index / upload）
-│       ├── emails/         #     邮件模板（独立 Jinja2 loader）
-│       ├── game_accounts/  #     游戏账号页面（apply / ban_apply）
-│       ├── guides/         #     服务器指南页面（index / detail / form）
-│       ├── buildings/      #     公共建筑（index / create / detail）
-│       ├── music/          #     大喇叭音频页面（index / my / favorites / upload）
-│       ├── live/           #     音频直播页面（index 直播台 / start 开播页 / my 我的直播 / rec 实时录音台 / play 播放页）
-│       ├── macros/         #     通用模板宏（模态框/编辑器/进度条/音乐/页面内搜索）
-│       └── ...             #     根级通用页面（base.html 布局、index.html 首页、error_simple.html 精简错误页）
-├── docs/         # 项目文档
-├── scripts/      # 构建脚本（build/）与测试（tests/）
-├── uploads/      # 运行期上传数据
-│   ├── guides/         # 服务器指南（每个指南一个目录：guide.md + config.json + assets/ 视频等资源，资源上限可在系统设置中调整）
-│   ├── backgrounds/    # 全站背景图片
-│   ├── music/          # 大喇叭音频（每个音频一个 ID 目录，含 m3u8、ts 分片与唱片 MP3）
-│   ├── live/           # 音频直播（每个直播一个 ID 目录，含实时 HLS 播放列表与分片；停止后删除）
-│   └── db/             # 数据库文件（site.db + firewall.duckdb；access_logs.duckdb 仅抓取期间存在）
-├── backups/      # 自动维护备份目录（默认 ../bhxz_backups，支持自定义路径与运行时热改）
-│   └── uploads/        # /uploads/ 全量 zip 极限压缩备份（含 SQLite / DuckDB 一致快照）
-└── ssl/          # HTTPS 证书（可选）
+├── core/                 # 基础设施层（不含业务逻辑）
+│   ├── db/               #   数据库连接与 schema
+│   ├── system/           #   应用初始化、日志
+│   ├── shared/           #   雪花 ID、IP、验证码、限流、校验、调度器
+│   ├── auth.py           #   认证装饰器、密码哈希
+│   ├── csrf.py           #   CSRF 防护
+│   ├── middleware.py     #   安全标头、攻击扫描、公开文件服务
+│   ├── helpers.py        #   render_page / admin_page
+│   ├── seo.py            #   结构化数据与 SEO 辅助
+│   └── errors.py         #   精简错误页
+├── services/             # 业务逻辑层（纯 Python，不依赖 Flask）
+│   ├── backup/  buildings/  mail/  game_accounts/  game_server_ban/
+│   ├── system_metrics/  music/  live/  rcon/  user/  bot_applications/
+│   ├── background_service/  cleanup_service/  content_limits/
+│   ├── firewall/         #   防火墙（DuckDB 引擎 + WSGI 门禁 + DDoS + API 限流）
+│   ├── security/         #   攻击特征扫描
+│   ├── settings_manager/  sitemap_cache/  indexnow/
+├── routes/               # HTTP 路由层（Flask Blueprint）
+│   ├── main/             #   主站（认证/设置/头像/音频）
+│   ├── api/              #   公开 API（统计/验证码/邮箱）
+│   ├── admin/            #   管理后台（20+ 子模块）
+│   ├── buildings/ guides/ music/ live/ game_accounts/ bots/
+│   ├── backgrounds/ docs/ public/ sitemap/ indexnow/ community/
+├── static/               # 前端唯一目录：静态资源 + Jinja2 模板
+│   ├── css/ js/ favicons/ lib/
+│   └── templates/        #   base.html、页面模板、macros/ 通用宏
+├── docs/                 # 项目文档
+├── scripts/              # build/ 构建脚本、tests/ 测试
+├── uploads/              # 运行期上传（guides/ backgrounds/ music/ live/ db/）
+├── backups/              # 自动维护备份（默认 ../bhxz_backups，可配置）
+└── ssl/                  # HTTPS 证书（可选）
 ```
-
-> 完整目录树与各层职责见下文 [架构](#架构)。
 
 ## 功能特性
 
 ### 界面与交互
 
-* **自定义悬浮提示**：全站链接 / 按钮的 `title` 提示统一替换为与站点一致的磨砂玻璃气泡（`static/js/core/base.js` + `.site-tooltip`）。悬停 180ms 后出现，默认显示在元素上方居中，上方空间不足自动翻到下方，并自动避让视口左右边界；只过渡 `opacity` / `transform`，不触发布局抖动；支持 `[title]` 与 `[data-tooltip]`，滚动 / 点击 / 失焦立即隐藏，编辑器可编辑区域内保留原生行为以免标题被误删。
+- **白色磨砂玻璃主题**：统一 `--glass-bg` / `--glass-blur` 变量与 `.glass-panel` / `.glass-surface`，深色背景下不发灰。
+- **自定义悬浮提示**：`title` / `data-tooltip` 统一替换为磨砂气泡，自动翻转与避让视口。
+- **自研日历选择器**：`macros/calendar.html` 的 `calendar_field()`，按需引入 CSS/JS，不依赖原生 `date` / `datetime-local`。
+- **弹窗滚动锁**：`base.js` 的 `syncModalScrollLock()` 统一锁定背景滚动，阻止滚轮穿透。
+- **全站 SEO / GEO**：`meta robots`、description、canonical、OG / Twitter 卡片、JSON-LD、Bing 验证码、私有页 `noindex` 与 `X-Robots-Tag`。
+- **Sitemap 与 robots.txt**：只收录公开规范 URL，支持 ETag / 304；`Crawl-delay` 兼顾抓取与防火墙。
+- **IndexNow 主动推送**：管理后台一键提交公开 URL，定时任务接入统一调度器，根目录提供 `/<key>.txt` 校验。
 
-* **自研日历选择器**：日期 / 日期时间输入统一使用 `macros/calendar.html` 的 `calendar_field()`（隐藏域值分别为 `YYYY-MM-DD` / `YYYY-MM-DDTHH:MM`），不再依赖浏览器原生 `date` / `datetime-local` 控件。弹层挂载到 `body` 并使用 `position: fixed` 定位，避免被 `.pixel-card` 的裁剪与层叠上下文影响；样式与脚本仅在需要的页面通过 `calendar_styles()` / `calendar_script()` 按需引入，不增加全站负担。
+### 用户与账户
 
-* **弹窗滚动锁**：任何 `.modal-overlay`（页面自定义弹窗与 `CustomModal`）打开时，`base.js` 的 `syncModalScrollLock()` 会统一为 `html/body` 添加 `modal-open` 并锁定滚动；遮罩空白区域的滚轮事件直接拦截，弹窗内容区使用 `overscroll-behavior: contain` 阻止滚动链，鼠标滚轮不再穿透滚动背后页面。
+- 注册 / 登录 / 找回密码：群内验证码 + 邮箱验证码 + 图形验证码多重验证。
+- 账户设置：修改用户名、密码、邮箱、头像，注销账号；**所有用户均可自行修改密码**。
+- 邮箱唯一性约束；登录失败锁定与图形验证码升级。
 
-### 用户系统
+### 内容与社区
 
-* 注册/登录（群内验证码 + 邮箱验证码 + 图形验证码三重验证）
-
-* 找回密码（邮箱验证码 + 图形验证码双重验证）
-
-* 账户设置（修改用户名/密码/邮箱/注销）
-
-* 邮箱唯一性约束（一个邮箱仅可注册一个账号）
+- **公共建筑**：发布（审核）、搜索、标签、收藏、评论分页、举报。
+- **服务器指南**：Markdown 编写、图片 / 视频资源上传与转码、草稿 / 审核 / 替换草稿、收藏、编辑封禁。
+- **大喇叭音频**：上传、HLS 播放、标签、收藏、公开审核。
+- **音频直播**：循环播放与实时录音两种模式，HLS + MP3 + Opus 低延迟输出，支持麦克风设备 / 音量 / 降噪调整。
+- **游戏账号**：注册申请与封禁申请（RCON 执行与到期自动解封）。
+- **假人申请**：生成坐标 / 下线时间，审批后 RCON 生成，到期自动下线。
+- **背景图片**：上传审核、按屏幕比例自动挑选、全站背景开关。
 
 ### 管理后台
 
-* 用户管理、模组介绍管理（支持为每个模组设置跳转链接，前台点击卡片直达）
-
-* 服务器指南 CRUD + 审核工作流 + 编辑封禁
-
-* 大喇叭音频管理（公开申请审核、查看全部音频、一键下架）
-* 音频直播管理（查看正在直播、强制停止、按用户名永久封禁 / 解封）
-
-* **公共建筑管理**（审核通过/拒绝、管理删除、处理举报）：列表每行提供「预览」按钮，无需跳转详情页即可在弹窗内查看完整内容（标题、领地名、标签、作者、浏览数、建筑描述、使用说明、注意事项、拒绝原因），并提供「前往详情页」入口
-
-* 管理中心数据统计（含大喇叭音频总数与待审核数量、正在直播数量）
-
-* 系统设置（在线编辑，热重载，含网站图标选择、日志等级、背景图片开关、RCON 配置、MC 游戏文件夹；使用统一后台页面骨架 `admin/_layout.html`，支持设置项搜索与分类快捷导航）
-
-* 模组介绍管理页面同样使用统一后台骨架，表单与列表卡片样式一致；自定义下拉框展开时会自动抬升所在卡片、解除裁剪，并在靠近页面底部时向上展开
-
-* **全站 SEO / GEO**（`static/templates/base.html`、`core/seo.py`、`core/template_context.py`、`core/middleware.py`、`routes/sitemap/__init__.py`）：所有页面统一输出 `meta robots`、`meta description`、`canonical`、hreflang、Open Graph / Twitter 卡片标签，分享图直接复用系统设置中的网站图标（`/favicon`，SVG，随 `FAVICON_ICON` 热切换），不再单独渲染图片；公开页输出 WebSite + Organization JSON-LD 与列表页 BreadcrumbList，指南 / 建筑详情页追加 Article / CreativeWork 与三级面包屑，帮助 Bing / Copilot 识别站点与内容实体（GEO）。登录、注册、找回密码、设置、上传、收藏、游戏账号申请、管理后台等私有页统一 `noindex, nofollow` 并附加 `X-Robots-Tag`，且不输出 canonical；系统设置新增「Bing 站点验证码」，填写后全站输出 `msvalidate.01`。`/sitemap.xml` 只收录可索引的规范 URL（新增音频直播页，自动排除私有路径与静态资源），支持 ETag / 304 增量抓取；`robots.txt` 允许抓取公开背景图与指南图片，`Crawl-delay` 降为 1 秒，兼顾抓取效率与防火墙保护；Lucide 图标库保持同步加载，并在 `DOMContentLoaded` 兜底初始化，避免出现全站图标空白。带尾部斜杠的地址（如 `/music/`）统一 301 跳转到无斜杠规范地址，错误页输出 `noindex`；`scripts/tests/test_seo.py` 持续校验标题 / 描述长度、结构化数据、私有页 noindex、sitemap 与 ETag 行为
-
-* **IndexNow 主动推送**（管理后台 → IndexNow 推送，`services/indexnow/`）：把站点地图中的公开页面主动提交给 IndexNow（Bing、Yandex 等共享），加快收录。启用开关、每日推送开关、推送时间与 Key 均已登记到 `config.py` 的 `SETTINGS_REGISTRY`（分类「IndexNow」），可直接在**系统设置面板**像其它配置一样修改并热更新；独立配置页保留用于查看最近结果与一键重新生成 Key、立即提交。`/<key>.txt` 在站点根目录提供校验文件（IndexNow 规范要求根目录 Key 才能覆盖整站 URL）。URL 来源复用 sitemap 的公开页面列表，只提交公网域名（自动跳过 localhost / 内网地址），定时任务接入全站统一调度器（默认每天 03:30，晚于 Sitemap 刷新），不新建线程；提交结果（域名、状态码、URL 数量、时间）在页面展示
-
-* 系统日志（实时查看，**页面只请求一个接口 `GET /admin/api/logs`：直接返回 SSE 流，首帧 `history` 携带历史快照、后续实时推送新日志，全局 / 严重错误 / 各模块单独日志全部覆盖，不再有 3 秒轮询、也不再单独请求历史接口**，支持等级过滤、自动滚动；按时间顺序从上到下展示，与控制台一致；**可在页面顶部切换来源查看全局日志 / 严重错误日志 / 各模块单独日志**，页面内「日志设置」可为任意模块配置「是否落盘」「是否并入全局日志」，保存即时生效）。统一日志系统分为三类：**① 全局日志**（普通运行日志 → 控制台 + `logs/app.log` + 内存缓冲 + SSE）；**② 严重错误日志**（导致服务器退出的报错 → 单独写入 `logs/fatal.log`，**每次写入直接覆盖文件、只保留最后一次**，且始终打印到控制台，不受日志等级/控制台开关限制）；**③ 模块单独日志**（模块启动时向日志模块注册，→ 独立内存缓冲 + 可选 `logs/modules/<模块名>.log`；是否落盘、是否并入全局日志**均由设置在「日志页面 → 日志设置」决定，不在模块注册时写死**，支持任意模块；当前使用者为防火墙（`firewall`）、图形验证码（`captcha`）、邮箱验证码（`email_code`）、注册账号（`register`）、登录账号（`login`）、访问日志抓取（`access_log`）、站点地图（`sitemap`）、IndexNow 推送（`indexnow`），其中除 `firewall` 外默认落盘、全部默认不并入全局；两个开关都关闭时日志仅存在于模块独立缓冲，不打印、不落盘、不进全局）。**每次启动自动清理日志**（全局日志文件、严重错误日志文件、所有模块日志文件与内存缓冲统一清空）。**403 响应不写入防火墙模块日志**（防火墙成功拦截与授权拒绝类 403 均不记录；仅保留 IP 封禁 / 自动封禁等封禁动作日志）
-
-* **访问日志抓取**（管理后台 → 访问日志抓取）：管理员在页面开启后，服务端把每一次访问（方法、路径、查询串、状态码、耗时、来源 IP、用户、UA / Referer）写入独立的 DuckDB 数据库 `uploads/db/access_logs.duckdb`，并通过 `GET /admin/api/access-log/stream`（SSE）实时推送；**记录产生后立即广播，不等待 DuckDB 批处理落盘**，落库由后台线程异步完成，数据库写入延迟或失败不影响实时展示；**关闭页面 / 断开 SSE 不会停止抓取**，抓取状态保存在服务端，直到管理员在界面点击「取消抓取」才停止，并在停止后**自动删除访问日志数据库文件**；静态资源与抓取页自身的 SSE 长连接不计入日志；页面显示「SSE 状态」与「SSE 已接收」计数便于确认推送是否正常
-
-* 自动维护（手动/自动，数据备份 + 日志文件清理，极限压缩 zip，进度条；备份目录支持设置绝对/相对路径，默认 `../bhxz_backups`）
-
-* 公开文件管理（单文件 / 目录映射；目录支持子文件与 `index.html`，本地路径兼容 Windows 盘符 `C:\...` / `D:/...`）
-
-* 广播邮件（复用全站统一编辑器，富文本 / Markdown 双模式 + 白名单 HTML 清洗，安全防 XSS）
-
-* **邮件失败自动重试**：异步发送失败的邮件写入数据库 `email_retry_queue`，由全局定时任务**每 60 秒**扫描重发，**每封最多 10 次**；成功即删除记录，失败则记录错误并把下次重试推后 60 秒，达到上限标记 `failed` 保留以便排查；邮件功能关闭时任务自动跳过
-
-* 一键更新脚本（`update.py` — 纯 Python 跨平台，只走下载覆盖，多线程同时测速镜像源（2 秒超时，整个测速 ≤ 2 秒），无需确认启动即更新，保留运行期数据；支持 `--quiet` 完全静默，兼容 Windows GBK 控制台）
-
-* 游戏账号管理（注册申请审批、封禁列表管理）
-
-* **游戏账号封禁**（用户申请 → 管理员审批 → RCON 自动执行）：用户在「申请封禁玩家」页提交封禁玩家名、QQ名、理由；管理员在管理中心「游戏账号封禁」页同意（可设封禁时长，留空为永久）或驳回；同意后经 RCON 执行 `ban 玩家游戏名`（无引号），到期由后台定时任务（每 60 秒检查一次，走 `(status, expires_at)` 索引，单周期最多处理 50 条）执行 `pardon 玩家游戏名`（无引号）自动解封；支持手动提前解封。玩家名经安全清洗杜绝 RCON 命令注入，RCON 执行失败自动保留状态下个周期重试
-
-* **申请假人（BOT）**（`services/bot_applications/`、`routes/bots/`、`routes/admin/bots/`）：入口在导航「服务器 → 申请假人」。用户填写 BOT 名称、生成坐标与下线时间；坐标既可直接输入，也可点击「使用玩家位置」在弹窗中搜索 / 选择在线玩家，服务端执行 `/data get entity <玩家> Pos` 并解析 `[...]` 坐标回填。提交后进入待审核状态，**同时计入「待审核余额」总量，并受假人单独上限约束（默认 2，可在系统设置 → 假人调整）**；管理员在「管理中心 → 假人申请管理」审批，同意时经 RCON 执行生成指令（默认 Carpet：`/player {name} spawn at {x} {y} {z}`），驳回可填写原因。到达下线时间后由统一任务调度器（每 60 秒扫描，任务名 `bot-offline-scheduler`）执行杀死指令（默认 `/kill {name}`），也支持管理员手动提前下线；RCON 失败保留状态并记录错误，下个周期重试。主键复用雪花 ID，玩家名经 `sanitize_rcon_username` 清洗，生成 / 杀死指令模板可在系统设置 → 假人中修改以适配不同插件
-
-* 防火墙管理（IP 封禁/IP 白名单/IPv6 拦截/违规警告/防火墙日志：独立高性能 DuckDB 数据库，支持临时/永久封禁，全站拦截，后台一键解封；**IPv6 拦截**：开启后所有 IPv6 连接（除 ::1）在 WSGI 门禁层被直接断开；**防火墙日志**：作为「模块单独日志」写入独立内存缓冲（默认不落盘，可在「日志页面 → 日志设置」开启写入 `logs/modules/firewall.log`），不与系统日志混流，页面内「日志」Tab 从该缓冲读取，支持等级筛选、清空、自动滚动、**SSE 实时推送（无轮询）**；**防火墙成功拦截不记录日志**（IP 封禁兜底、可疑访问拦截均不写日志，避免被封 IP 反复请求时刷屏）；授权拒绝类 403（权限不足 / CSRF 校验失败等）同样不写入防火墙日志，仅保留 IP 封禁 / 自动封禁等封禁动作日志；自动识别可疑操作限流并自动封禁，各操作可独立开关、时长可配；**页面内直接编辑**自动封禁/可疑拦截/DDoS 防护/IPv6 拦截开关与时长、白名单，无需跳转系统设置）
-
-* 可疑访问拦截（识别 SQL 注入 / XSS / 路径穿越 / 命令注入 / 敏感文件与漏洞端点探测 / 恶意扫描 UA 等攻击特征，命中即拦截并自动封禁来源 IP，总开关与各攻击类型子开关独立配置、封禁时长可配，白名单 IP 不受影响）
-
-* DDoS 攻击防护（高性能防火墙模块 `services/firewall/`）：独立 DuckDB 数据库存储封禁/白名单/警告/攻击日志，WSGI 门禁在进入 Flask 前直接断开黑名单 IP 的连接（抛出 `waitress.channel.ClientDisconnected`，不写任何响应字节，客户端读到 0 字节后连接断开），不返回任何 HTTP 响应。按检测强度统计单位时间窗口内每个 IP 的请求数（低/中/高三档，检测窗口 10 秒），**防误判机制**：静态资源（`.css/.js/.ico`）、媒体文件（`.mp3/.ts/.m3u8/.webp`）、公共路径（`/static/`、`/music/<id>.mp3`、`/robots.txt`、`/sitemap.xml`）、**API 路径（`/api/`、`/admin/api/`）**不计入请求计数，音频下载与批量接口调用不会误判为 DDoS（批量 API 调用统一交由 API 防火墙限流处理，超限返回 429 而非断开连接）。超阈值自动封禁来源 IP（首次限时封禁；屡教不改升级永久封禁）。后台监控线程同步黑名单镜像、定时清理过期数据与 VACUUM。检测强度、封禁时长、永久封禁触发次数等可在线热更新，白名单 IP 不受影响。robots.txt 自动添加 Crawl‑delay 与敏感路径 Disallow 规则，防止合法爬虫被误封
-
-* **API 调用限流（`services/firewall/api_guard.py`）**：所有 API 请求（`/api/` 前缀、带 `X-Requested-With: XMLHttpRequest` 或 `Accept: application/json`）按来源 IP 限流，**默认每分钟 60 次**；超限返回 429 JSON（含 `Retry-After`），计数存于内存缓存，刷新后随滚动窗口恢复；白名单 IP 与本地回环不受限。搜索、列表「加载更多」等前端 API 调用均纳入计数。**实时录音 PCM 上传**（`POST /api/live/<ID>/pcm`，约 5 次/秒）使用独立计数桶（600 次/60 秒），不占用普通 API 额度；该配额只对已登录用户开放，接口本身仍校验登录与频道归属，未登录请求继续按普通限流计数
-
-* **上传文件防火墙（`services/firewall/protection/file_guard.py`）**：统一校验音频 / 图片上传——危险扩展名（html/svg/js/php/exe 等）直接拒绝；按上传场景限定扩展名白名单；校验文件头魔数，防止「改名伪装」（如 .html 改名 .png）；纯文本文件做内容嗅探拦截脚本标记。未知类型跳过魔数校验以尽可能不误判，被拦截的上传写入防火墙日志。已接入大喇叭音频、背景图片两条上传链路
-
-* **防火墙数据库单写入线程**：所有写操作经队列提交给唯一写入线程顺序执行，相邻写操作合并为事务批量提交，彻底避免多线程并发写入 DuckDB 导致的锁表；封禁 / 白名单 / 账号封禁等高频查询走内存缓存（定期同步），查询性能显著提升
-
-### 页面内搜索
-
-* **就地搜索框**：每个列表页使用自己的搜索框（`static/templates/macros/search.html` 的 `inline_search()` 宏），导航栏不放置搜索输入框
-* **点击展开、Esc 收起**：点击搜索框任意位置即可展开；输入框有内容或光标在内时保持展开，失焦且无内容时平滑收起，Esc 清空并收起
-* **结果就地渲染**：输入后防抖或回车，由搜索框派发 `site-search` 事件，各列表页监听后直接刷新当前列表，不弹出下拉面板或跳转独立搜索页
-* **覆盖范围**：公共建筑 / 服务器指南 / 大喇叭音频三个列表页；关键词通过各列表 API 的 `q` 参数匹配标题、摘要或标签
-
-### 服务器指南
-
-* 卡片式列表页，支持置顶与按标题自动排序
-
-* **指南搜索**：指南列表页顶部提供就地展开的搜索框（`inline_search` 宏）；列表 API `/api/guides/list` 与列表页均支持 `q` 关键词参数，按标题与摘要模糊匹配；列表接口**不返回正文 `content`**，仅返回标题、摘要等列表所需字段
-
-* Markdown 详情页（标题锚点、代码一键复制）
-
-* **指南文件化存储**：每条指南对应独立目录 `uploads/guides/<指南ID>/`，内含 `guide.md`（正文，唯一内容来源）、`config.json`（指南配置）与 `assets/`（图片、视频统一存放在该目录）；数据库 `server_guides.content` 只保留空串，正文以 `guide.md` 为唯一来源。每个指南的全部资源合计上限默认 **50MB**，可在管理后台「系统设置 → 指南资源」热改（`GUIDE_RESOURCE_MAX_MB`，1–1024），视频支持 mp4 / webm / ogv / ogg / mov / m4v 上传。正文中的资源链接统一写相对路径 `assets/<文件名>`，不包含指南 ID。
-  * **指南 config.json（版本化分节结构）**：`{"version": 1, "videos": {"<真实文件名>.mp4": {"title": "<页面显示名称>"}}}`。新建指南时自动生成；新增配置项时只追加分节 / 字段，不改动已有结构。视频的页面显示名称（伪文件名）保存在这里，删除视频时同步清理对应配置项。
-  * **视频伪文件名**：编辑器资源列表显示 `config.json` 中配置的名称，点击列表插入正文后详情页视频左上角显示该名称；每个视频条目在删除按钮左侧提供「修改名称」按钮（`POST /api/guides/<ID>/resources/<文件名>/rename`），留空则回退真实文件名。
-  * **视频统一转码（异步 + 进度）**：上传的文件先写入指南目录内的 `.upload_` 临时目录，再由后台线程调用 ffmpeg 统一转码为 **MP4（H.264 + AAC，`yuv420p`，`+faststart`）**；转码中间产物位于 `.transcode_` 临时目录，只有最终文件才会以 `<雪花ID>.mp4`（与全站 ID 生成器一致）落到 `assets/`。ffmpeg `-progress` 输出经 `ffprobe` 时长换算为百分比，前端轮询 `GET /api/guides/<ID>/videos/progress/<task_id>` 展示转码进度；转码失败、超时或不可用 ffmpeg 时会删除半成品并返回明确提示；配额只按最终 MP4 大小校验，原始上传文件与中间产物不计入。
-  * **新建即生成草稿**：点击「新建指南」直接创建一份标题为「未命名指南」的草稿（立即生成指南 ID 与目录、正文为空），随后回到「我的指南」页面；之后点击「修改」再填写标题、摘要、正文并上传视频，资源直接写入 `uploads/guides/<ID>/assets/`。新建后的指南状态为 **草稿（draft）**，草稿计入「未通过指南数量」，超过上限则禁止新建。
-  * **独立「我的指南」页面**：`/guides/my`（登录后访问），展示本人创建的全部指南及状态；草稿 / 已拒绝的指南提供「删除」按钮（`POST /api/guides/<id>/delete`，站内确认弹窗），删除后正文与全部资源文件一并移除；待审核与已通过指南不允许作者直接删除。
-  * **发布**：在「我的指南」或指南详情页点击「发布」（`POST /api/guides/<id>/publish`），草稿即变为待审核（pending）状态，正文非空即可发布；草稿保存无需验证码，正式提交仍需验证码。
-  * **修改已发布指南 = 自动复制替换稿**：点击已通过指南的「修改」时，不再原地改写线上内容，而是把整条指南（正文 + 全部资源）复制成 **新雪花 ID** 的草稿，并在数据库 `server_guides.replace_of` 记录「发布后替换」标记；同一用户重复进入修改会复用该草稿，不会重复复制。**草稿计入待审核数量**（超过上限则拒绝创建）。管理员审核通过时自动执行替换：原指南数据库行与整个文件夹全部删除，草稿接管原指南 **ID、作者、收藏、外链、创建时间、置顶** 等属性，正文资源使用相对路径，因此无需改写任何链接，最终不残留任何草稿痕迹；被驳回的替换稿仍保留原指南不变，并由自动维护任务按规则清理。
-  * **迁移脚本**：`python scripts/migrate_guides.py` 把数据库中已有指南正文自动写入 `guide.md` 并清空数据库正文；支持 `--dry-run` 演练与 `--overwrite` 覆盖，可重复执行（幂等）。`python scripts/migrate_guide_assets.py` 处理资源结构变更：把残留的 `assets/images/*` 并入 `assets/`，并把正文里的 `/guides/<ID>/assets/...` 绝对链接改写为 `assets/<文件名>`，同样支持 `--dry-run` 且可重复执行。
-  * **资源访问**：`/guides/<ID>/assets/<文件名>`；已审核通过的指南公开可访问，未通过的仅作者与管理员可访问。
-
-* **富文本 / Markdown 统一编辑器**（全站唯一宏 `static/templates/macros/markdown_editor.html` + 引擎 `static/js/pages/markdown-editor.js`）：
-  * 默认「富文本（所见即所得）」模式，底层数据与保存内容**始终是 Markdown**，可视化界面只是渲染层；可一键无缝切换到「Markdown 源码」模式（单栏，无实时预览），切换时内容与光标位置保留。
-  * **本地静默草稿**：编辑内容实时防抖写入浏览器 `localStorage`（按编辑器 id + 页面路径区分），**仅存本机、不上传云端**；刷新或误关闭后自动恢复，表单成功提交后自动清除，避免残留旧草稿。
-  * **高频交互不卡顿**：选区变化经签名去重后合并到同一帧刷新工具栏，表格检测按当前行预判，避免大文档下反复全量重排 / 重建 DOM。
-  * 工具栏按 **基础 / 段落 / 插入 / 资源 四个常驻标签页**分类：基础（加粗/斜体/删除线/行内代码/清除格式）、段落（H1–H4/引用/代码块/无序/有序/任务列表/分割线/缩进）、插入（链接/表格）、资源（图片与视频统一管理）。
-  * **上下文标签页**：另有「链接」「表格」两个标签页，仅在光标位于链接内 / 表格内（或刚点了「插入链接 / 表格」）时自动出现，离开对应上下文后自动隐藏并切回基础页。
-  * **资源标签页**：集中列出当前指南 `assets/` 中的**全部图片与视频**，可直接上传（图片同步上传、视频后台转码）、点击条目插入正文、删除、视频改显示名；在编辑区**粘贴或拖拽图片 / 视频后自动切到资源标签页**并显示上传 / 转码进度条。所有资源统一走 `GET /api/guides/<ID>/resources`，删除 / 压缩 / 改名分别使用 `POST /api/guides/<ID>/resources/<文件名>/{delete,compress,rename}`。插入正文时只写相对链接 `assets/<文件名>`，编辑器渲染时补全为当前指南的访问地址，序列化时再还原。
-  * **一键有损压缩**：每个资源文件名右侧提供压缩按钮，点击即把该资源有损压缩到约当前体积的 **90%**（每次约减少 10%）。图片（JPEG / WEBP / PNG / GIF）由 Pillow 搜索满足目标体积的最高质量或最多颜色数；MP4 由 ffmpeg 按 90% 码率重新编码（AAC 96k）。已接近最小体积时返回提示，不破坏原文件；临时文件写入隐藏文件后原子替换。
-  * **视频上传与转码**：资源标签页上传视频后由服务端统一转码为 H.264/MP4 并以雪花 ID 命名，详情见「指南文件化存储 → 视频统一转码」。进度条分两阶段：文件传输百分比 → 上传完成后**归零**并切换为转码进度（`GET /api/guides/<ID>/videos/progress/<task_id>`，无法获取时长时为不确定态光带），失败 / 413 / 网络中断均有明确提示。视频条目显示 `config.json` 中的伪文件名；配额以统一进度条组件展示，删除资源使用站内统一确认弹窗，而非浏览器原生提示。
-  * **视频语法**：视频以 Markdown 语法 `@[video](assets/<文件名>)` 保存（相对链接，源码模式与数据库存储均如此，不再写入原始 HTML `<video>`），详情页 / 管理后台预览 / 编辑器富文本会把该语法渲染为可播放视频（渲染前补全指南资源前缀）；详情页渲染时按 URL 文件名查 `config.json` 注入 `data-title`，播放器在视频下方显示伪文件名；兼容历史遗留的 `<video>` HTML。
-  * **视频编辑体验**：视频在富文本中作为原子块，插入位置在光标之后，并自动保证前后都有可放置光标的段落；可整体选中视频后剪切 / 删除，也可在光标紧邻视频时用 Backspace / Delete 删除。复制 / 剪切时会把选区（文字 + 视频）统一序列化为 Markdown 写入 `text/plain`，因此从编辑器复制的内容可再次粘贴回编辑器或源码模式；粘贴含 `@[video](url)` 的内容会自动还原成可播放视频块，彻底避免原生复制视频节点导致的「粘贴无效 / 剪切后编辑器错乱」。
-  * **链接标签页**：可直接填写链接地址、显示文字、悬停标题与「新窗口打开」；**未选中文字时点击链接按钮会自动插入默认文字**（无需先选中文字）；提供独立「取消链接」按钮（仅保留文字、移除链接）。
-  * **正文图片**：在编辑区（富文本与源码模式均可）**粘贴剪贴板图片**、直接把图片拖进编辑区，或从资源标签页上传 / 点击插入，都会自动上传并以标准 Markdown `![说明](assets/<文件名>)` 保存；上传接口 `POST /api/guides/<id>/images` 将图片以**雪花 ID** 命名存入 `uploads/guides/<id>/assets/`（与视频同目录，单张上限 10MB，计入指南资源总量），详情页与后台预览都会把相对链接补全后按 `img { max-width:100% }` 自适应展示。
-  * **表格标签页**：增删行列 / 删除表格 / 当前列左中右对齐；插入表格后自动切到表格标签页，光标离开表格后自动收起。
-  * **可切换样式**：再次点击已激活的样式按钮即**取消该样式**（加粗、斜体、删除线、行内代码、H1–H4、引用、任务列表等均支持「点一次加、再点一次取消」）；激活态高亮显示。
-  * **按钮条件启用**：需选中文字的按钮（加粗等）仅在选中文字时亮起，表格按钮仅在光标位于表格内时亮起，否则置灰不可点。
-  * **表格分隔行固定格式**：表格始终按标准 GFM 输出，分隔行每列固定 3 个破折号（仅通过 `:` 承载左/中/右对齐），列宽交给浏览器按内容自适应；不再提供列宽拖拽，避免把列宽编码进 Markdown 污染源文件。
-  * **表格空行自动修复**：服务端读取 / 写入 `guide.md` 时会把「表头 ↔ 分隔行 ↔ 数据行」之间被空行隔断的表格自动压回连续行（跳过代码块、不合并相邻表格），因此历史内容与 Markdown 源码模式下误留的空行都不会再导致发布后表格「消失」。
-  * 支持全部标准 Markdown 语法的可视化编辑：标题、强调、行内代码、代码块（含语言）、引用、有序/无序/任务列表、链接、分割线、表格；Markdown 不支持的常见内联语义（`<sub>`/`<sup>`/`<mark>`/`<u>`/`<kbd>` 等）以原始内联 HTML 保留。
-  * 与模板风格完全统一（白色磨砂玻璃、站点配色与字体），不引入任何第三方编辑器库或外部风格。
-  * **自带文本选择样式**：编辑器（富文本区与 Markdown 源码区）定义独立的 `::selection` 配色（更贴近站点主色的蓝色选区），不被全站默认选区样式覆盖；同时富文本区禁用移动端长按弹出的「复制 / 粘贴 / 全选」原生选择菜单（`-webkit-touch-callout: none`），选区交互完全由编辑器自身样式与工具栏承载。
-
-* 成员提交需审核，管理员直接发布
-
-* 封禁机制（用户名/IP，限时或永久）
-
-### 公共建筑
-
-* 公共建筑列表页面，用户可发布自己的建筑（标题、领地名、介绍、使用方式、注意事项），**发布后进入待审核状态，管理员审核通过才公开**
-* **列表整体走 API 获取**：`/buildings`（公共建筑）、`/buildings/my`（我的建筑）、`/buildings/favorites`（我的收藏）均为**独立页面**，首屏 / 搜索 / 标签筛选 / 「加载更多」/ 收藏全部由前端调用对应 API 无刷新完成，页面仅渲染骨架（与音频 / 指南列表一致）；不再使用 `?my=1` / `?fav=1` 查询参数切换页面
-* **搜索与标签**：列表页顶部提供就地展开的搜索框（`inline_search` 宏）；`GET /api/buildings/list`（公开列表）与 `GET /api/buildings/my`（我的建筑）支持按标题与标签模糊搜索，标签可多选管理，列表默认**按收藏数量排序**；列表接口**不返回描述/使用方式/注意事项等正文**，仅返回列表所需字段（标题、领地名、标签、作者、收藏数、浏览数等）
-* **审核邮件提醒**：用户发布建筑后自动向所有管理员发送待审核提醒；管理员通过 / 拒绝后自动向作者发送审核结果邮件（拒绝含原因）
-* **收藏**：登录用户可收藏/取消收藏建筑，收藏数参与排序；「我的收藏」独立页面 `/buildings/favorites` 按收藏时间倒序展示，取消收藏后卡片即时移除
-* 一键复制传送指令 `/res tp 领地名`
-* **浏览量统计**：访问建筑详情页时 `view_count` 自动 +1（作者本人访问不计入）；浏览数在列表卡片与详情页展示
-* 评论功能：登录用户可发表评论，作者/管理员可删除评论；评论列表经 `GET /api/buildings/<id>/comments` 分段加载（每页条数由系统设置 `BUILDING_COMMENTS_PER_PAGE` 控制），滚动到列表底部自动加载下一页
-* 举报功能：用户可举报违规建筑，管理员在后台可查看举报并删除建筑
-* 接入防火墙内容检测、防刷机制和图形验证码
-
-### 大喇叭音频
-
-* 上传音频自动转码为 HLS（m3u8），并生成唱片 MP3：播放链接 `http://<主机>/music/<编号>.m3u8`，唱片下载 `http://<主机>/music/<编号>.mp3`（游戏内烧录唱片用）
-* **「广播m3u8」按钮**：公开列表 / 我的音频 / 我的收藏 / 管理员审核队列 / 上传成功卡片统一为「广播m3u8」+ `radio` 图标，点击复制播放链接
-* 支持 mp3 / wav / ogg / m4a / flac，单文件不超过 100MB（依赖 ffmpeg：Windows 优先 `uploads/ffmpeg/ffmpeg.exe`，缺失时回退系统 PATH）
-* **公开需审核**：申请公开的音频进入「待审核」，管理员通过后才在游戏内大喇叭展示；驳回后自动转为私有，可重新申请或删除
-* **私有仅表示不出现在公开列表**：所有音频均可凭链接访问（播放 m3u8 / 下载 MP3 / 拉取分片均无需登录）
-* **邮件通知**：用户申请公开时提醒所有管理员；管理员通过/驳回后通知上传者（邮件未启用或无邮箱时自动跳过）
-* **列表整体走 API**：公开列表首屏 / 搜索 / 加载更多均调用 `GET /api/music/list`，关键词同时匹配标题与标签
-* **收藏**：可收藏他人上传的公开音频，在「我的收藏」（`/music/my/favorites`）统一查看与播放；删除音频时级联清理
-* **标签**：上传时可填（逗号分隔、自动去重、最多 10 个、每个 ≤12 字），「我的音频」与管理员后台可编辑，参与搜索匹配
-* **状态管理**：私有 / 待审核 / 已公开，用户在「我的音频」（`/music/my`）中申请公开、转为私有或删除，操作均为无刷新 API
-* **独立上传页**：`/music/upload` 异步上传，分「文件上传」与「ffmpeg 转码」两阶段展示进度条，成功后展示播放链接与唱片 MP3 链接，失败可重试
-* **转码后清理源文件**：目录内只保留 `index.m3u8`、`seg_*.ts` 与唱片 `index.mp3`
-* **复制时长（秒）**：各音频卡片的「时长 Ns」按钮可一键复制音频总秒数
-* 管理员可审核公开申请、查看全部音频并一键下架（删除记录与文件）
-* 音频存放在 `uploads/music/<音频ID>/`，删除记录时自动清理对应目录
-
-### 音频直播台
-
-* **入口与页面**：社区导航「音频直播」（`/live`）进入直播台，主页为「正在直播」列表，顶部提供「我的直播」与「开始直播」按钮；三者均为**独立页面**：
-  * `GET /live/start`：开播页（循环播放 / 实时录音）
-  * `GET /live/my`：我的直播（管理全部进行中的直播）
-  * `GET /live/rec/<ID>`：实时录音直播台（开播后自动跳转）
-  * `GET /live/play.html?channelId=<直播ID>`：独立播放页，支持 HLS（m3u8）与 MP3 收听
-* **直播台 ID**：使用**雪花算法**（`core.shared.snowflake.next_id`）生成，与站内其他业务 ID 一致；`/live/rec/0` 这类占位 / 非法 ID 会跳转「我的直播」而不是 404
-* **管理端**：`/admin/live`「音频直播管理」把**循环播放**与**实时录音**两种直播放在同一张「正在直播」表里，标注模式、查看 ID / 听众 / 推流状态，可「收听」、实时录音可直接进入**直播台**查看（管理员视图只读，不连接麦克风），并可**强制停止**或按用户封禁
-* **两种开播方式**：
-  * **循环播放音频**：点击「选择音频」打开**音频选择弹窗**，支持关键词搜索（名称 / 标签）、分页「加载更多」、弹窗内滚动；支持**私有音频**、待审核与已公开音频（已驳回的除外）。服务端用 ffmpeg `-re -stream_loop -1` 无限循环推流，不再提供音量 / 速度调整
-  * **实时录音直播**：创建后自动跳转到**实时录音直播台**，在直播台内连接麦克风并实时调整设备、输入音量、静音、降噪、回声消除、自动增益等配置；浏览器用 AudioWorklet 把麦克风音频转成 48kHz 双声道 PCM，**每 50ms 通过 HTTPS 上传一次**，服务端写入 ffmpeg 管道实时编码为 HLS + MP3。同时在支持 WebCodecs 的浏览器上，把同一份 PCM 编码为 **20ms/帧的 Opus 包、每 40ms 上传一批**，服务端只转发不解码，作为低延迟主路径。不依赖 WebRTC / UDP / TURN，纯 TCP 即可穿透反向代理；关闭页面只断麦克风，直播本身继续
-* **低延迟收听**：播放页优先使用 **Opus 通道**，端到端延迟典型 **0.15~0.3 秒**，网络正常时可稳定在 **0.5 秒以内**（采集 + 编码约 40ms、网络往返、服务端只转发、播放端 80ms 抖动缓冲；积压超过 400ms 自动丢弃旧帧，延迟不会累积）。浏览器不支持 WebCodecs（如 Firefox）或 1.5 秒内收不到音频时，**自动回退 MP3**，端到端约 **0.5~1.2 秒**；HLS 采用 2 秒分片，播放器通常落后 4~8 秒，仅作兼容拉流。为保证低延迟：实时录音输入关闭探测（`-probesize 32 -analyzeduration 0`，否则 ffmpeg 会先攒约 1 秒 PCM）；MP3 输出 `-flush_packets 1` 逐帧刷出（否则 muxer 攒约 1.3 秒）；新听众 MP3 开场快照只保留约 **0.34 秒**（`MP3_RING_MAX_BYTES`，会固定叠加为听众延迟，**不可调大**）且自动对齐 MP3 帧头；Opus 开场快照只保留最近 6 包（约 120ms）
-* **实时录音权限**：`/live` 相关响应**强制覆盖**为 `Permissions-Policy: microphone=(self)`（并附带旧版 `Feature-Policy`），确保不会被上游或其他中间件改回拒绝；其余页面仍默认拒绝。麦克风需要 HTTPS 安全上下文
-* **音源选择**：弹窗按需调用音频 API，音频再多也不会拖慢页面
-* **开播数量限制**：循环播放默认每人最多 **5** 路，可在「系统设置 → 音频直播」、`config.py` 的 `LIVE_MAX_LOOP_PER_USER` 或「防火墙设置」页面修改（1~50）；实时录音固定每人最多 **1** 路，两者互不占用额度，均在数据库事务内原子校验
-* **超长直播设计**：不展示「已直播时长」，MP3 听众缓冲与 HLS 分片列表均为有界结构，ffmpeg 持续循环，可长期运行不受时长影响
-* **开播失败排查**：实时录音输入固定使用 `-f s16le -i pipe:0`，**不要**给输入加 `-thread_queue_size`（部分 ffmpeg 构建视其为输出选项，会报 `cannot be applied to input url pipe:0`）；实时录音需 HTTPS 安全上下文，否则浏览器会拒绝麦克风
-* **直播不随前端关闭**：ffmpeg 在服务端持续运行，关闭页面或播放器都不会停止直播；重新打开直播台 / 开播页可看到自己的全部直播并继续管理、推流或收听
-* **服务重启恢复**：循环播放直播在服务重启后自动恢复（音源文件缺失则该直播标记停止）；实时录音直播依赖浏览器推流，重启后标记停止、不自动恢复
-* **流媒体地址**（开启后展示，可直接分享 / 播放器拉流）：
-  * m3u8：`/live/stream/<直播ID>.m3u8`（播放列表自动改写分片地址）
-  * mp3：`/live/stream/<直播ID>.mp3`（单 ffmpeg 进程 → Python 内存分发给所有听众，慢客户端自动丢弃旧数据保证低延迟）
-  * opus：`/live/stream/<直播ID>.opus`（低延迟主路径，实时录音专用；`[2 字节大端长度][Opus 包]` 帧格式，空闲每 2 秒发心跳，仅站内播放页使用，不是通用播放器可直接拉流的格式）
-  * HLS 分片：`/live/stream/<直播ID>/seg_*.ts`（带路径穿越校验）
-* **播放页自定义控件**：不展示进度条与时长，仅提供「开始」「关闭」与音量调节；播放地址使用同源相对路径，避免反向代理下协议 / 端口不一致被 CSP 拦截
-* **管理员管控**（`/admin/live`）：查看正在直播、强制停止任意直播、按用户名**永久禁止开播**（可手动解封）；封禁会立即停止该用户全部直播，被封禁用户无法再开播
-
-### 统一定时任务调度
-
-* **统一任务注册模块（`core/shared/scheduler/`）**：全站所有定时执行功能的唯一入口（**防火墙除外**，防火墙保持独立实现）。任务按下次执行时间排序，注册表单线程每秒检测队首（最早到期）任务，到期即派发并检查下一个；派发不阻塞——执行走共享守护线程池（`pool`，默认）或独立守护线程（`thread`），任务执行期间从注册表取出、完成才重新入列，天然防重叠执行
-* 两种调度模式：**固定间隔**（连续失败可按退避算法延长间隔）与**每日时间点**（`HH:MM`，支持配置热重载，当天至多执行一次，手动完成可跳过当天）
-* 已接入：验证码清理、邮箱验证码清理、RCON 连接池清理、玩家列表追踪（含失败退避）、被驳回内容自动清理、每日 /uploads/ 全量 zip 备份、站点地图刷新、游戏服务器封禁到期自动解封、系统指标采样（CPU / 内存 / 网络速率）
-
-### 服务器性能监控
-
-* CPU 使用率、内存占用、网络上下行速率、运行时间
-
-* 公开页面，无需登录即可查看
-
-* 后台任务每 5 秒自动采集数据并缓存（`services/system_metrics/`，接入统一任务注册表），网络上下行速率在**服务端**由两次采样差值换算后缓存，前端直接读取，打开即有效（无需等待刷新一两次）
-
-### Minecraft 在线玩家
-
-* 通过 RCON 连接 Minecraft 服务器，实时获取在线玩家列表
-
-* 后台线程每 5 秒执行 `/list` 命令，缓存结果
-
-* 支持系统设置中配置 RCON 地址、端口、密码
-
-### 申请服务器账号（导航分类）
-
-* 主导航栏「导航」分类提供「申请服务器账号」入口（`/game-accounts/apply`），登录用户可申请注册 MC 游戏账号（需图形验证码）
-
-* 提交后进入管理员审批队列，管理员在管理中心「账号注册申请管理」页批准/驳回申请、封禁恶意账号
-
-* 已彻底移除游戏账号绑定/改密/解绑功能（**保留 RCON 服务**，用于在线玩家监控与申请审批后的白名单处理）
-
-### 全站背景图片
-
-* 上传图片自动转为 WebP（LANCZOS 缩放，保持自然宽高比），磁盘上每张背景只保留一个主图文件
-* **按屏幕宽高比挑选**：前端携带屏幕宽高比请求图片，服务端只查询并返回宽高比最接近的已通过背景原图，裁剪与铺满由浏览器按 `background-size: cover` 完成；挑选使用对数距离，保证「屏幕越宽 → 选越宽的图」
-* **无启用/停用开关**：审核通过即进入全站背景图片池，不想要直接删除即可
-* **统一取图入口**：全站背景从 `/backgrounds/serve?ratio=` 获取（不带 ID），响应带 ETag 并强制重新校验；按 ID 的 `/backgrounds/serve/<id>` 仅用于后台缩略图、审核预览与用户查看自己的图片
-* **批量上传**：拖放/选择多个文件，逐文件校验格式与大小，聚合展示整体进度
-* 支持审核 / 驳回流程与审核结果邮件通知，管理员与上传者可预览未通过审核的图片
-* **列表整体走 API，分段加载**：`/backgrounds` 首屏由 `GET /api/backgrounds/list` 获取，已通过背景池**按页返回（每页 5 张）**，前端「加载更多」按 `page` 追加；「我的上传」不分页。删除为无刷新 AJAX
-* **被驳回内容 24 小时自动删除**：被驳回的指南、背景图片等自动清理记录与关联文件
-
-### 网页地图
-
-* 导航栏「服务器 → 网页地图」进入 `/map`，自动内嵌「系统设置 → 外部链接 → 卫星地图地址」（`MAP_URL`）配置的网页地图，改设置即时生效
-* 中间件按 `MAP_URL` 的源动态放行 CSP `frame-src` / `child-src`，保证外部地图可内嵌
-* 地图区自适应铺满可视高度，工具栏提供「刷新 / 全屏 / 新标签打开」；iframe 载入完成自动淡出加载遮罩，超时或 `MAP_URL` 为空时给出提示与出口
-
-### 文档系统
-
-* Markdown 文档渲染（marked.js）
-
-* 代码块一键复制按钮
-
-* 侧边栏导航
-
-## 配置说明
-
-### 管理后台在线编辑（推荐）
-
-所有运行时配置均可在 **管理后台 → 系统设置** 中在线编辑，修改后立即生效（热重载），无需重启服务器。
-
-支持编辑的配置分类：
-
-* **日志**：日志输出等级、是否打印日志到终端；各模块单独日志是否落盘 / 是否并入全局日志，在「日志页面 → 日志设置」中逐模块配置（支持任意已注册模块）
-
-* **自动维护**：自动维护时间（数据备份 + 日志清理）、备份目录、保留份数、超时
-
-* **Sitemap**：刷新时间、站点域名、Bing 站点验证码、多域名列表、搜索引擎爬虫策略（robots.txt：允许所有 / 仅主页 / 禁止所有）。站点地图（`/sitemap.xml`）**只收录无需登录即可访问、且含可索引内容的页面**——首页、服务器状态、服务器指南（及已通过详情）、公共建筑（及已通过详情）、音频直播、大喇叭、背景图片、文档，以及后台「公开文件」配置的页面（自动跳过 `js`/`css`/图片等资源映射）；已排除登录后 / 操作 / 上传页（`/settings`、`/login`、`/music/my`、`/music/upload`、`/game-accounts/apply`、`/guides/my` 等）、仅内嵌外部地图的 `/map`、以及 `/admin`、`/api` 等内部路径，并按 path 去重。**Sitemap 按需生成**：缓存文件缺失（首次部署 / 新绑定域名 / 当日刷新未执行）时按请求域名实时生成并缓存 1 小时，绝不再返回空内容的 200（空响应会被 CDN 缓存并导致 Bing 判定无法获取）；确实无法生成时返回 503 + `Retry-After`，让爬虫稍后重试
-
-* **安全配置**：会话有效期、登录失败锁定次数及时间
-
-* **防火墙**：自动封禁总开关、封禁时长（分钟，0 为永久）、白名单、登录/注册/找回密码/邮箱验证码异常各自独立开关
-
-* **可疑访问拦截**：总开关、封禁时长（分钟，0 为永久）、SQL 注入 / XSS / 路径穿越 / 命令注入 / 敏感文件与漏洞端点探测 / 恶意扫描 UA 各攻击类型独立开关
-
-* **DDoS 防护**：总开关、检测强度（low=宽松 300 次/10 秒 / medium=中等 150 次/10 秒 / high=严格 80 次/10 秒）、首次封禁时长（分钟，0 为直接永久封禁）、永久封禁触发次数（违规记录时间窗口内多次触发自动升级永久封禁）、违规记录时间窗口（小时）
-
-* **发布内容注入检测**：总开关、内容注入封禁时长（分钟，0 为永久封禁）
-
-* **待审核数量限制**：总量上限 + 公共建筑 / 服务器指南 / 大喇叭音频 / 背景图片 单类型上限（0 = 不限制，管理员不受限制）
-
-* **列表分页**：公共建筑 / 公共建筑评论 / 大喇叭音频 / 服务器指南 / 后台背景图片 / 后台账号申请 各列表每次加载条数（1–100，默认 5）。**分页大小仅可在此处或 `config.py` 修改，用户调用接口传入的参数一律被忽略**
-
-* **指南资源**：单个指南的全部资源（`assets/` 目录）合计上限（MB，1–1024，默认 50）。修改后对新的上传立即生效，已上传资源不受影响
-
-* **外部链接**：卫星地图地址、QQ 群链接
-
-* **邮件配置**：SMTP 服务器、端口、SSL、发件邮箱与授权码
-
-* **背景图片**：显示开关、显示方式（cover/contain/auto）
-
-* **网站图标**：favicon 图标选择（compass/mountain/star/heart），管理后台可在线切换
-
-* **服务器配置**：监听地址、端口、调试模式、服务器工作线程数（Waitress；`0` 表示不限制，按 CPU 核数与可用内存智能推算）
-
-* **RCON 配置**：服务器 RCON 地址/端口/密码、MC 游戏文件夹
-
-* **网站备案**：工信部备案号、公安备案号、版权年份与站点名称
-
-* **假人（BOT）**：假人待审核上限（默认 2）、生成假人指令模板（默认 `/player {name} spawn at {x} {y} {z}`）、杀死假人指令模板（默认 `/kill {name}`）
-
-### IndexNow 主动推送（系统设置 + 独立配置页）
-
-相关配置已登记到 `config.py` 的 `SETTINGS_REGISTRY`（分类「IndexNow」），可在**管理后台 → 系统设置 → IndexNow** 中像其它配置一样修改，保存后热更新。管理后台 → **IndexNow 推送**（`/admin/indexnow`）保留为独立状态页，用于查看最近提交结果、一键重新生成 Key 与立即提交。配置项存于 `settings` 表：
-
-| 配置键 | 说明 | 默认值 |
-| -- | -- | -- |
-| `INDEXNOW_ENABLED` | 总开关；关闭后不自动推送，也不能手动提交 | `False` |
-| `INDEXNOW_AUTO_SUBMIT` | 是否每日自动推送 | `True` |
-| `INDEXNOW_SUBMIT_TIME` | 每日推送时间（`HH:MM`），建议晚于 `SITEMAP_REFRESH_TIME` | `03:30` |
-| `INDEXNOW_KEY` | 校验 Key（首次自动生成 32 位十六进制，可一键重新生成） | 自动生成 |
-| `INDEXNOW_LAST_RESULT` | 最近一次提交结果（JSON，页面展示用） | 空 |
-
-行为说明：
-
-* **URL 来源**：复用 `services/sitemap_cache` 的公开页面列表，提交内容与 `/sitemap.xml` 完全一致（首页、服务器状态、指南/建筑已通过详情、大喇叭、背景图片、文档、后台配置的公开页面）。
-* **域名限制**：只提交 `SITE_URL` 与 `SITEMAP_DOMAINS` 中的公网域名；自动跳过 `localhost`、回环地址、内网 IP 与非法协议，避免 SSRF 与无效提交。
-* **Key 校验**：`GET /<key>.txt` 在站点根目录返回当前 Key；Key 不匹配或未配置时返回 404。按 IndexNow 规范，`keyLocation` 决定可提交的 URL 范围，只有根目录 Key 才能覆盖整站；放在 `/indexnow/` 等子目录只能提交该子目录下的 URL。
-* **统一计时器**：每日任务 `indexnow-submit` 注册在全站统一任务调度器（`core/shared/scheduler`），修改推送时间后下一轮自动生效，无需重启；不新建线程 / Timer。
-* **提交协议**：`POST https://api.indexnow.org/indexnow`，单域名单次最多 10000 个 URL；使用标准库 `urllib`（超时 10 秒），无新增依赖。200 / 202 视为受理成功。
-* **并发保护**：同一时刻只允许一次提交；自动任务与「立即提交」互斥，重复触发返回提示。
-
-### config.py
-
-| 配置项                           | 说明                                        | 默认值                                         |
-| ----------------------------- | ----------------------------------------- | ------------------------------------------- |
-| `DB_PATH`                     | 数据库文件路径                                   | `./uploads/db/site.db`                     |
-| `UPLOAD_DIR`                  | 上传文件目录                                    | `./uploads`                                 |
-| `UPLOAD_MUSIC_DIR`            | 大喇叭音频存放目录                                 | `./uploads/music`                           |
-| `MUSIC_ALLOWED_EXTENSIONS`    | 大喇叭音频允许上传的格式                              | `mp3/wav/ogg/m4a/flac`                      |
-| `FFMPEG_BIN`                  | 大喇叭音频转码与指南视频转码用的 ffmpeg                    | Windows 优先 `uploads/ffmpeg/ffmpeg.exe`，否则系统 PATH；Linux/macOS 用系统 `ffmpeg`  |
-| `FFPROBE_BIN`                 | 探测音频时长（转码进度百分比）用的 ffprobe                 | Windows 优先 `uploads/ffmpeg/ffprobe.exe`，否则系统 PATH；Linux/macOS 用系统 `ffprobe` |
-| `FFMPEG_THREADS`              | ffmpeg 音频转码线程数                            | `0`（自动按 CPU 核数）                             |
-| `GUIDE_RESOURCE_MAX_MB`       | 每个指南全部资源（`assets/`）合计上限，可在系统设置热改         | `50`（MB，1–1024）                            |
-| `GUIDE_VIDEO_TRANSCODE_TIMEOUT` | 指南视频 ffmpeg 转码最长等待秒数                     | `600`                                       |
-| `MAX_CONTENT_LENGTH`          | 最大上传大小                                    | 100 MB                                      |
-| `BACKUP_DIR`                  | 备份根目录（支持绝对/相对路径，运行时可在后台热改）            | `../bhxz_backups`（项目上一级）                   |
-| `SECRET_KEY`                  | Session 密钥                                | `mc_server_site_random_secret_key_2024`     |
-| `REGISTER_VERIFY_CODE`        | 注册验证码                                     | `binhai_xz`                                 |
-| `BACKUP_SCHEDULED_TIME`       | 每日自动维护时间（备份 + 日志清理）                        | `03:00`                                     |
-| `MAX_BACKUPS`                 | 最大保留备份份数                                  | `30`                                        |
-| `BUILDINGS_PER_PAGE`          | 公共建筑列表每页数量（1–100，接口传参无效）                 | `5`                                         |
-| `BUILDING_COMMENTS_PER_PAGE`  | 公共建筑评论列表每页数量（1–100，接口传参无效）               | `10`                                        |
-| `MUSIC_PER_PAGE`              | 大喇叭音频列表每页数量（1–100，接口传参无效）                | `5`                                         |
-| `GUIDES_PER_PAGE`             | 服务器指南列表每页数量（1–100，接口传参无效）                | `5`                                         |
-| `BACKGROUNDS_PER_PAGE`        | 后台背景图片列表每页数量（1–100，接口传参无效）               | `5`                                         |
-| `GAME_ACCOUNTS_PER_PAGE`      | 后台游戏账号申请列表每页数量（1–100，接口传参无效）             | `5`                                         |
-| `LOG_LEVEL`                   | 日志输出等级（DEBUG/INFO/WARNING/ERROR/CRITICAL） | `INFO`                                      |
-| `LOG_CONSOLE_ENABLED`         | 是否将全局日志打印到终端（模块单独日志默认不打印，仅在「全局」开关打开时随此开关打印） | `1`（开启）                                    |
-| `FAVICON_ICON`                | 网站图标（可选 compass/mountain/star/heart）      | `compass`                                   |
-| `MAP_URL`                     | 卫星地图地址（首页按钮跳转 + 网页地图页内嵌）              | `https://map.bhxz.tw.kg`                    |
-| `QQ_GROUP_URL`                | QQ 群链接                                    | 空                                           |
-| `FIREWALL_WHITELIST`          | 封禁白名单（逗号分隔），白名单 IP 不会被封禁                    | `112.82.136.172`                            |
-| `AUTO_BAN_ENABLED`            | 自动 IP 封禁总开关                                 | `1`（开启）                                    |
-| `AUTO_BAN_DURATION_MINUTES`   | 自动封禁时长（分钟，0 为永久封禁）                          | `30`                                        |
-| `SUSPICIOUS_BLOCK_ENABLED`    | 可疑访问拦截总开关（命中攻击特征自动封禁 IP）                    | `1`（开启）                                    |
-| `SUSPICIOUS_BLOCK_DURATION_MINUTES` | 可疑访问封禁时长（分钟，0 为永久封禁）                    | `60`                                        |
-| `SUSPICIOUS_BLOCK_SQLI_ENABLED` | SQL 注入拦截子开关                                       | `True`                                      |
-| `SUSPICIOUS_BLOCK_XSS_ENABLED` | XSS 跨站脚本拦截子开关                                    | `True`                                      |
-| `SUSPICIOUS_BLOCK_PATH_TRAVERSAL_ENABLED` | 路径穿越拦截子开关                           | `True`                                      |
-| `SUSPICIOUS_BLOCK_COMMAND_INJECTION_ENABLED` | 命令注入拦截子开关                      | `True`                                      |
-| `SUSPICIOUS_BLOCK_SENSITIVE_PROBE_ENABLED` | 敏感文件/漏洞端点探测拦截子开关               | `True`                                      |
-| `SUSPICIOUS_BLOCK_MALICIOUS_UA_ENABLED` | 恶意扫描 UA 拦截子开关                        | `True`                                      |
-| `DDOS_GUARD_ENABLED` | DDoS 防护总开关（超阈值自动封禁来源 IP） | `1`（开启） |
-| `DDOS_GUARD_INTENSITY` | DDoS 检测强度（low=宽松 300 次/10 秒 / medium=中等 150 次/10 秒 / high=严格 80 次/10 秒） | `medium` |
-| `DDOS_GUARD_BAN_MINUTES` | DDoS 首次封禁时长（分钟，0 为直接永久封禁） | `30` |
-| `DDOS_GUARD_PERMANENT_AFTER` | 违规记录时间窗口内多次触发达到该次数后永久封禁（屡教不改） | `3` |
-| `DDOS_GUARD_OFFENSE_WINDOW_HOURS` | 违规记录时间窗口（小时），超过后违规次数重新累计 | `24` |
-
-### 环境变量
-
-| 变量名          | 说明       | 默认值     |
-| ------------ | -------- | ------- |
-| `FIREWALL_WHITELIST` | 封禁白名单（逗号分隔） | `112.82.136.172` |
-| `AUTO_BAN_ENABLED` | 自动 IP 封禁总开关 | `1`（开启） |
-| `AUTO_BAN_DURATION_MINUTES` | 自动封禁时长（分钟，0 为永久） | `30` |
-| `SUSPICIOUS_BLOCK_ENABLED` | 可疑访问拦截总开关 | `1`（开启） |
-| `SUSPICIOUS_BLOCK_DURATION_MINUTES` | 可疑访问封禁时长（分钟，0 为永久） | `60` |
-| `DDOS_GUARD_ENABLED` | DDoS 防护总开关 | `1`（开启） |
-| `DDOS_GUARD_INTENSITY` | DDoS 检测强度（low/medium/high） | `medium` |
-| `DDOS_GUARD_BAN_MINUTES` | DDoS 首次封禁时长（分钟，0 为永久） | `30` |
-| `DDOS_GUARD_PERMANENT_AFTER` | 永久封禁触发次数 | `3` |
-| `DDOS_GUARD_OFFENSE_WINDOW_HOURS` | 违规记录时间窗口（小时） | `24` |
-
-### HTTPS / SSL
-
-应用层**不再内置 SSL**，证书与 HTTPS 统一由**内网穿透 / 反向代理层**终结，应用自身仅监听 HTTP（默认 `0.0.0.0:5000`）。此时需在穿透 / 代理层配置证书，并把 HTTPS 流量回源到本应用的 HTTP 端口。
-
-## API 接口
-
-所有 JSON 接口统一收敛到 `api` 路由段：公开接口为 `/api/...`，管理后台接口为 `/admin/api/...`，不在业务路径中间插入 `api`（如不使用 `/music/api/list` 这类写法），返回 JSON。
-
-### 公开接口
-
-| 端点                             | 说明                        |
-| ------------------------------ | ------------------------- |
-| `GET /api/stats`               | 网站统计数据                    |
-| `GET /api/server-status`       | 服务器实时状态（在线玩家/CPU/内存/网络）      |
-| `GET /api/captcha/generate`    | 生成图形验证码                   |
-| `POST /api/captcha/verify`     | 验证图形验证码                   |
-| `POST /api/email/send-code`    | 发送邮箱验证码                   |
-| `GET /api/email/check-enabled` | 检查邮件功能是否启用                |
-| `GET /api/username/check`      | 注册页实时检测用户名是否可用            |
-| `POST /api/verify-group-code`  | 校验注册用群内验证码                |
-| `GET /api/verify-group-code/check` | 查询群内验证码是否已通过             |
-| `GET /api/docs/list`           | 文档列表                      |
-| `GET /api/docs/content/<file>` | 文档正文                      |
-
-### 申请账号 API（需登录）
-
-| 方法   | 路径                                   | 说明                 |
-| ---- | ------------------------------------ | ------------------ |
-| GET  | `/game-accounts/apply`               | 申请注册页面             |
-| POST | `/api/game-accounts/apply-register`  | 提交注册申请（需图形验证码）    |
-| GET  | `/game-accounts/ban-apply`           | 申请封禁页面             |
-| POST | `/api/game-accounts/ban-apply`       | 提交封禁申请（需图形验证码）    |
-
-### 申请假人 API（需登录）
-
-| 方法   | 路径                            | 说明                                             |
-| ---- | ----------------------------- | ---------------------------------------------- |
-| GET  | `/bots/apply`                 | 申请假人页面（表单 + 我的申请）                              |
-| GET  | `/api/bots/players`           | 在线玩家列表（支持 `q` 关键词过滤，读取 player_tracker 缓存）     |
-| POST | `/api/bots/player-position`   | 执行 `/data get entity <玩家> Pos` 并解析坐标（需玩家在线）      |
-| POST | `/api/bots/apply`             | 提交假人申请（计入待审核余额，受假人单独上限约束）                     |
-
-### 假人申请管理 API（管理员）
-
-| 方法   | 路径                                     | 说明               |
-| ---- | -------------------------------------- | ---------------- |
-| GET  | `/admin/bots`                          | 假人申请管理页面         |
-| GET  | `/admin/api/bots`                      | 待审批与全部假人申请       |
-| POST | `/admin/api/bots/<id>/approve`         | 同意申请（RCON 生成假人）  |
-| POST | `/admin/api/bots/<id>/reject`          | 驳回申请（可填驳回原因）     |
-| POST | `/admin/api/bots/<id>/kill`            | 手动下线（RCON 杀死假人）  |
-
-### 申请账号管理 API（管理员）
-
-| 方法     | 路径                                                   | 说明               |
-| ------ | ---------------------------------------------------- | ---------------- |
-| GET    | `/admin/game-accounts`                               | 游戏账号管理页面         |
-| GET    | `/admin/api/game-accounts/applications`              | 获取注册申请列表         |
-| GET    | `/admin/api/game-accounts/applications/list`         | 分页获取注册申请（每页条数由 `GAME_ACCOUNTS_PER_PAGE` 控制，可选 `status` 筛选） |
-| POST   | `/admin/api/game-accounts/applications/<id>/approve` | 批准申请（自动 RCON 注册） |
-| POST   | `/admin/api/game-accounts/applications/<id>/reject`  | 驳回申请             |
-| GET    | `/admin/api/game-accounts/bans`                      | 获取封禁列表           |
-| POST   | `/admin/api/game-accounts/bans`                      | 封禁账号申请资格         |
-| DELETE | `/admin/api/game-accounts/bans/<username>`           | 解除封禁             |
-
-### 管理后台列表 API（管理员，分页）
-
-管理后台「用户 / 指南 / 音乐列表 / 背景图片 / 游戏账号申请」列表均为点击「加载更多」无刷新追加，页面路由仅渲染第 1 页；每页条数由系统设置「列表分页」分类下的对应配置项控制，接口不接受前端传入的数量参数。
-
-| 方法 | 路径                                          | 说明                          |
-| -- | ------------------------------------------- | --------------------------- |
-| GET | `/admin/api/users/list`                     | 用户分页列表（`page`）              |
-| GET | `/admin/api/guides/list`                    | 指南分页列表（`page`）              |
-| GET | `/admin/api/music/list`                     | 音频分页列表（`type=all\|pending`，`page`） |
-| GET | `/admin/api/firewall/bans`                  | 合并封禁列表（`page`）              |
-| GET | `/admin/api/backgrounds`                    | 背景图片分页列表（`page`，可选 `status` 筛选） |
-| GET | `/admin/api/game-accounts/applications/list` | 注册申请分页列表（`status=pending\|approved\|rejected\|all`，`page`） |
-
-### IndexNow API（管理员）
-
-| 方法 | 路径 | 说明 |
-| -- | -- | -- |
-| GET | `/admin/indexnow` | IndexNow 独立配置页面 |
-| GET | `/admin/api/indexnow` | 读取启用状态、自动推送、推送时间、Key、Key 文件地址、最近结果 |
-| POST | `/admin/api/indexnow/save` | 保存配置（`enabled` / `auto_submit` / `submit_time`，时间为 `HH:MM`） |
-| POST | `/admin/api/indexnow/regenerate-key` | 重新生成 Key（旧 Key 文件立即失效） |
-| POST | `/admin/api/indexnow/submit` | 立即提交全部公开 URL，返回各域名状态码与 URL 数量 |
-| GET | `/<key>.txt` | 公开的 Key 校验文件（站点根目录，无需登录；Key 不匹配返回 404） |
-
-### 访问日志抓取 API（管理员）
-
-抓取状态保存在服务端，页面关闭或 SSE 断开都不会停止抓取，只有在界面点击「取消抓取」（或调用 stop）才会停止并删除数据库。
-
-| 方法 | 路径 | 说明 |
-| -- | -- | -- |
-| POST | `/admin/api/access-log/start` | 开启抓取，创建独立 DuckDB 数据库 `uploads/db/access_logs.duckdb` |
-| POST | `/admin/api/access-log/stop` | 取消抓取，关闭并删除访问日志数据库文件 |
-| GET | `/admin/api/access-log/status` | 查询状态（是否运行中、开始时间、已抓取条数、数据库大小） |
-| GET | `/admin/api/access-log/stream` | SSE 实时推送：首帧 `history` 历史快照，后续 `data` 新记录，取消时下发 `stopped` |
-
-### 公共建筑 API（搜索 / 标签 / 收藏 / 评论）
-
-公共建筑列表经 `GET /api/buildings/list`（公开）、`GET /api/buildings/my`（我的建筑）、`GET /api/buildings/favorites`（我的收藏）无刷新搜索与分页加载（每页条数由 `BUILDINGS_PER_PAGE` 控制，接口不接受前端传入的数量参数），搜索关键词同时匹配标题与标签；公开列表默认按收藏数量排序，我的建筑按更新时间排序，我的收藏按收藏时间倒序。详情页评论经 `GET /api/buildings/<id>/comments` 分段加载（每页条数由 `BUILDING_COMMENTS_PER_PAGE` 控制，接口不接受前端传入的数量参数）。所有接口均纳入 API 防火墙计数。
-
-| 方法   | 路径                                  | 说明                              |
-| ---- | ----------------------------------- | ------------------------------- |
-| GET  | `/api/buildings/list`                    | 公开建筑搜索/分页列表（`q` 关键词、`tag` 标签、`page` 页码） |
-| GET  | `/api/buildings/my`                      | 我的建筑列表（需登录，含本人全部状态，`q` / `tag` / `page`） |
-| GET  | `/api/buildings/favorites`               | 我的收藏列表（需登录，按收藏时间倒序，`q` / `page`） |
-| GET  | `/api/buildings/<id>/comments`           | 评论分段列表（`page` 页码，返回 `has_more` / `total`） |
-| POST | `/buildings/<id>/favorite`          | 收藏 / 取消收藏（需登录）                  |
-| POST | `/buildings/<id>/tags`              | 编辑标签（作者本人或管理员）                  |
-| POST | `/buildings/<id>/comment`           | 发表评论（需登录）                       |
-| POST | `/buildings/comment/<id>/delete`    | 删除评论（作者/建筑作者/管理员）               |
-| POST | `/buildings/<id>/report`            | 举报建筑                            |
-
-### 背景图片 API
-
-| 方法  | 路径                        | 说明                                                       |
-| --- | ------------------------- | -------------------------------------------------------- |
-| GET | `/api/backgrounds/list`   | 背景图片列表（`page` 指定已通过背景分页页号，每页 5 张；返回 `approved`/`my`/`logged_in`/`page`/`total`/`has_more`），供 `/backgrounds` 页面首屏与「加载更多」使用 |
-| GET | `/backgrounds/serve`      | 全站背景图片访问（**不带 ID**；`ratio`=屏幕宽/高，服务端只按比例挑选并原样返回，不缩放不裁剪）  |
-| GET | `/backgrounds/serve/<id>` | 按 ID 取图（后台缩略图 / 审核预览 / 查看自己上传；原样返回主图）              |
-| POST | `/backgrounds/<id>/delete` | 删除背景图片（上传者本人或管理员，AJAX）                                   |
-
-### 页面内搜索 API
-
-各列表页的搜索框不调用独立聚合接口，而是由页面脚本监听 `site-search` 事件后就地调用对应列表 API（均通过 `q` 参数传关键词）：
-
-| 方法  | 路径                   | 说明                                                    |
-| --- | -------------------- | ----------------------------------------------------- |
-| GET | `/api/buildings/list`     | 公共建筑列表（`q` 匹配标题与标签）                                   |
-| GET | `/api/guides/list`   | 服务器指南列表（`q` 匹配标题与摘要）                                  |
-| GET | `/api/music/list`    | 大喇叭音频列表（`q` 匹配名称与标签）                                  |
-
-### 服务器指南 API
-
-| 方法  | 路径                   | 说明                                                    |
-| --- | -------------------- | ----------------------------------------------------- |
-| GET | `/api/guides/list`   | 公开指南列表（仅返回已通过，`page` 页码、`q` 关键词匹配标题与摘要；每页条数由 `GUIDES_PER_PAGE` 控制） |
-| GET | `/api/guides/my`     | 我的指南列表（需登录，结构同公开列表，含草稿 / 待审核 / 已拒绝，支持 `page`、`q`） |
-| POST | `/api/guides/<id>/delete` | 删除自己的草稿 / 已拒绝指南并移除整个指南目录（待审核与已通过不可删除） |
-| POST | `/api/guides/<id>/publish` | 发布草稿指南（草稿 → 待审核，正文不能为空，需登录且仅作者 / 管理员） |
-| GET | `/api/guides/<id>/resources` | 当前指南资源列表（图片 + 视频，含 `type` / `title` / `link`（`assets/<文件名>`）/ `url` / `delete_url` / `compress_url`，视频另有 `rename_url` 与配额用量；需登录且仅作者或管理员） |
-| POST | `/api/guides/<id>/images` | 上传正文图片（表单字段 `image`，以雪花 ID 命名存入 `assets/`，返回 `url` / `markdown` / `item` 与配额） |
-| POST | `/api/guides/<id>/videos` | 上传指南视频（表单字段 `video`，返回 `task_id` 与 `progress_url`，后台异步转码；需登录且仅作者或管理员） |
-| GET | `/api/guides/<id>/videos/progress/<task_id>` | 查询视频转码进度（`status` / `percent` / `message`，完成后附带资源条目与配额） |
-| POST | `/api/guides/<id>/resources/<文件名>/compress` | 对单个资源做一次有损压缩（图片 / MP4，体积约减少 10%，返回更新后的资源条目与配额） |
-| POST | `/api/guides/<id>/resources/<文件名>/rename` | 修改视频的页面显示名称（JSON 字段 `title`，写入 `config.json`） |
-| POST | `/api/guides/<id>/resources/<文件名>/delete` | 删除指南资源（图片 / 视频）并清理 `config.json` 配置（需登录且仅作者或管理员） |
-| POST | `/api/guides/<id>/draft` | 保存草稿（AJAX，不刷新页面；仅草稿状态可用，需登录且仅作者或管理员） |
-
-### 大喇叭音频 AJAX 端点
-
-| 方法   | 路径                                 | 说明                              |
-| ---- | ---------------------------------- | ------------------------------- |
-| GET  | `/api/music/list`                  | 公开音频列表（`q` 关键词匹配名称与标签、`page` 页码；每页条数由 `MUSIC_PER_PAGE` 控制，接口不接受前端传入的数量参数）；公开列表页首屏 / 搜索 / 加载更多均调用此接口 |
-| POST | `/music/upload`                    | 开始异步上传（返回 `{task_id}`，转码在后台执行）  |
-| GET  | `/music/upload/progress/<task_id>` | 查询上传/转码进度（JSON）                 |
-| GET  | `/music/<id>.mp3`                  | 下载唱片 MP3（游戏内烧录唱片；权限同 m3u8 播放链接） |
-| POST | `/api/music/<id>/toggle`           | 申请公开 / 转为私有（无刷新，返回最新 `status`）    |
-| POST | `/api/music/<id>/delete`           | 删除音频（本人或管理员，无刷新）               |
-| POST | `/music/<id>/toggle`               | 旧表单入口（兼容保留，整页跳转）                |
-| POST | `/music/<id>/delete`               | 旧表单入口（兼容保留，整页跳转）                |
-| POST | `/music/<id>/favorite`             | 收藏 / 取消收藏（仅已公开音频，需登录）           |
-| POST | `/music/<id>/tags`                 | 编辑音频标签（本人或管理员，需登录）              |
-| GET  | `/music/my/favorites`              | 我的收藏页（需登录）                      |
-
-### 音频直播 API / 流媒体端点
-
-| 方法   | 路径                                        | 说明 |
-| ---- | ----------------------------------------- | ---- |
-| GET  | `/live`                                   | 音频直播台页面（正在直播列表 + 我的直播 / 开始直播） |
-| GET  | `/live/start`                             | 独立开播页（循环播放 / 实时录音；音频弹窗选择；需登录） |
-| GET  | `/live/my`                                | 独立「我的直播」页（管理全部进行中的直播；需登录） |
-| GET  | `/live/rec/<ID>`                          | 实时录音直播台（麦克风连接与实时配置；需本人） |
-| GET  | `/live/play.html?channelId=<ID>`          | 独立播放页（自定义开始 / 关闭 / 音量控件、状态轮询、链接复制） |
-| GET  | `/api/live/list`                          | 正在直播的公开列表（含 m3u8 / mp3 / 播放页绝对地址与听众数） |
-| GET  | `/api/live/<ID>`                          | 单个直播状态（播放页每 8 秒轮询，`alive` 表示服务端管线是否在运行） |
-| GET  | `/api/live/me`                            | 当前用户封禁信息、全部进行中的直播与数量上限（需登录） |
-| GET  | `/api/live/musics?q=&page=`               | 当前用户可用的直播音源（含私有音频，搜索 + 分页，需登录） |
-| POST | `/api/live/start`                         | 开始直播（JSON：`title`、`mode`=`loop`/`rec`；循环模式另传 `music_id`；需登录） |
-| POST | `/api/live/<ID>/pcm`                       | 实时录音：上传 s16le PCM 裸数据（48kHz 双声道，需登录且为本人） |
-| POST | `/api/live/<ID>/stop`                     | 停止直播（本人或管理员；停止后清理 HLS 目录并通知所有听众） |
-| GET  | `/live/stream/<ID>.m3u8`                  | HLS 播放列表（分片路径自动改写为本站地址，`no-store`） |
-| GET  | `/live/stream/<ID>.mp3`                   | MP3 实时流（长连接，ffmpeg stdout 内存分发，支持多听众） |
-| GET  | `/live/stream/<ID>/<分片文件名>`             | HLS TS 分片（路径穿越校验，`max-age=30`） |
-| GET  | `/admin/live`                             | 管理端音频直播页（正在直播 / 封禁名单 / 最近记录） |
-| GET  | `/admin/api/live/list`                    | 管理端直播列表 JSON |
-| POST | `/admin/api/live/<ID>/stop`               | 管理员强制停止直播 |
-| POST | `/admin/api/live/ban`                     | 按用户名永久禁止开播（并立即停止其当前直播） |
-| POST | `/admin/api/live/unban`                   | 解除直播封禁 |
-
-### 账户设置 API（需登录，无刷新）
-
-| 方法   | 路径                              | 说明                          |
-| ---- | ------------------------------- | --------------------------- |
-| POST | `/api/settings/username`        | 修改用户名（返回新用户名）               |
-| POST | `/api/settings/password`        | 修改密码                        |
-| POST | `/api/settings/email`           | 修改邮箱（需邮箱验证码 + 当前密码）         |
-| POST | `/api/settings/delete`          | 注销账号（成功后前端跳转首页）             |
-| POST | `/api/settings/avatar`          | 上传头像（multipart，返回 `avatar_url`） |
-| POST | `/api/settings/avatar/delete`   | 恢复默认头像                      |
-
-## 前端特性
-
-### 白色磨砂玻璃效果（White Frosted Glass）
-
-* **白色页面 + 黑色控件**：`#f3f6fa` 浅色底色搭配 `#1a2230` 深色正文、`#0284c7`（蓝）/`#7c3aed`（紫）强调色，按钮、输入框、导航栏均为深色控件，白色磨砂玻璃卡片承载内容
-
-* **真实酸蚀刻玻璃质感**：统一使用 `--glass-bg` 纯色高白度半透明白（`rgba(255,255,255,0.9)`）搭配 `--glass-blur`，并配合伪元素模拟光线透过玻璃的漫射效果。**底色必须是纯色而不是渐变**：渐变与纯色之间无法平滑插值，hover 切换背景时会先闪成透明再重绘（表现为“闪一下磨砂玻璃”）；纯色可让 hover 平滑过渡且始终保持白色
-
-* `backdrop-filter: blur(22px) saturate(165%) brightness(1.06)` — 玻璃卡片高通透，同时轻微提亮，避免深浅背景上泛灰
-
-* 高白度 `rgba(255,255,255,0.9)` 背景 + 光线散射伪元素（`radial-gradient` 模拟漫射光）
-
-* 边缘光晕伪元素（`mask-composite` 渐变边框，模拟玻璃切割面折射）
-
-* 全局细微噪点纹理（SVG `feTurbulence`），模拟蚀刻玻璃表面微观散射
-
-* **桌面端悬停下拉导航栏**：大屏端（≥1024px）主导航为「主页 / 服务器 / 社区 / 我的」，其中「服务器 / 社区 / 我的」为悬停下拉菜单；小屏端保持右侧滑出菜单。分组内容：服务器（服务器状态 / 服务器指南 / 网页地图 / 申请假人）、社区（大喇叭音频 / 公共建筑 / 官网背景图片）、我的（账户设置 / 申请封禁玩家 / 申请服务器账号 / 管理中心 / 退出登录）
-
-* **邮件模板同款磨砂玻璃**：`static/templates/emails/base.html` 统一白色磨砂玻璃卡片，验证码 / 指南审核 / 音频审核 / 背景图片审核 / 公共建筑审核 / 通用待审核提醒 / 广播邮件共用同一外层与样式；`services/mail/notify_admins()` 为统一的「通知所有管理员」入口
-
-* **自定义音频播放器（磨砂玻璃风格）**：大喇叭音频列表、我的音频、管理员审核页均使用自研播放器替代默认控件，含进度条拖动、倍速（0.5x~2x）、音量（滑块弹层，记忆在 localStorage）与播放/暂停；同一时间只允许一个播放器出声。样式见 `static/css/base.css` 的 `.music-player`，逻辑见 `static/js/pages/music_player.js`
-
-* **自定义视频播放器（全站统一，现代化极简）**：指南详情页、Markdown 编辑器、管理后台预览中的视频统一使用站内控件，移除浏览器原生 `controls`；提供中央播放按钮、播放/暂停、可拖动进度条、当前/总时长、音量上拉框（滑块直接调节 + 静音开关）、倍速上拉框（0.5x / 1x / 1.25x / 1.5x / 2x）与全屏，移动端自适应。**按钮与中央播放图标为淡蓝色磨砂玻璃材质**：半透明浅蓝渐变底 + `backdrop-filter` 模糊/增饱和 + 白色描边与内高光 + 柔和投影，图标为白色并带细投影（浅色画面上仍清晰），悬停时玻璃更亮并轻微放大；控制栏容器保持透明。上拉框为浅蓝磨砂玻璃面板，向上展开、上方空间不足时自动改为向下，点击外部自动收起。暂停时**不给视频蒙任何遮罩**，只显示中央的淡蓝磨砂玻璃播放按钮。视频伪文件名显示在**视频下方**，不遮挡画面。样式见 `static/css/base.css` 的 `.svp`，逻辑见 `static/js/core/video-player.js`（`SiteVideoPlayer.decorate / decorateAll / setTitle`）；该脚本**不再由 `base.html` 全站加载**，只在需要播放器的页面按需引入（指南详情页、Markdown 编辑器所在页面、管理后台预览）
-
-* **全站响应式适配**：窄屏下音频卡片操作按钮组自动占满整行并换行，管理员数据表格统一横向滚动，导航在小屏切换为右侧滑出菜单
-
-* **模板宏复用**：音频状态徽章、复制链接按钮、复制时长按钮、播放器等提取到 `macros/music_macros.html` 公共宏，列表页与管理员页统一调用
-
-* **统一弹窗模板系统**：`macros/modal.html` 提供弹窗骨架与页面级容器，配合 `base.js` 的 `CustomModal`（alert/confirm/prompt）统一全站弹窗，取代原生 `alert`/`confirm`/`prompt`
-
-* **统一标签列表输入框**：`macros/forms.html` 的 `tags_field()` 宏 + `base.js` 的 `TagInput` 模块，输入后回车或点「添加」新增标签，可点叉号删除、支持粘贴自动拆分；底层为逗号分隔字符串，与后端解析兼容
-
-* **统一进度条模板**：全站进度条由 `macros/progress.html` 的 `progress_track()` 宏渲染，样式集中在 `static/css/base.css` 的 `.progress-track` / `.progress-fill`；音频上传、背景图上传、自动维护、指南视频上传 / 转码 / 配额，以及 JS 动态创建（`UploadProgress`）一律复用同一套类名，禁止另起样式；百分比未知时在填充元素上加 `is-indeterminate` 切换为滑动光带
-
-### 交互效果
-
-| 效果       | 实现方式                                                                                     |
-| -------- | ---------------------------------------------------------------------------------------- |
-| 鼠标光晕跟随   | `requestAnimationFrame` 平滑插值                                                            |
-| 按钮水波纹    | CSS `ripple` 动画                                                                          |
-| 滚动淡入     | `IntersectionObserver`                                                                   |
-| 页面过渡     | `requestAnimationFrame` 控制 `.page-ready` 类切换                                           |
-| 统一弹窗系统  | 磨砂玻璃风格，CSS 过渡动画 + 全局 `openModal`/`closeModal` 控制；CustomModal 提供 alert/confirm/prompt |
-| Toast 提示 | 全站统一模板（图标 + 文案），CSS 关键帧驱动入场 / 退场动画，所有轻提示共用同一套                          |
-
-* **视觉与动效示例页**：`scripts/style-showcase.html` 为**完全自包含**的单文件示例——站点字体（按页面字符裁剪的 woff2 子集）、Tailwind、`base.css` 与 Lucide 全部内联，无任何外部 CSS / JS / 字体请求，可单独打开或分发；集中演示全部配色、组件与动效（按钮、卡片、表单、进度条、Toast、弹窗、播放器、滚动入场、页面过渡等），修改视觉规范后可对照此页回归检查。
-
-### 性能优化
-
-* **零外部依赖**：所有 CDN 资源（Lucide、Marked.js）下载到本地，无外部网络请求
-
-* **前端资源按需加载**：页面级资源通过 `base.html` 的独立块按需引入，图形验证码弹窗仅需要验证码的页面加载，`uploader.js` / `search.js` 仅在实际上传页 / 搜索页加载
-
-* **本地自定义字体**：正文与标题使用本地子集化 woff2（按 `unicode-range` 分片 + `font-display: swap`），无外部 CDN 请求
-
-* **分段列表滚动自动加载**：带 `data-autoload-more` 属性的「加载更多」按钮由 `IntersectionObserver` 监听，进入视口即自动加载下一页
-
-* `overflow-x: clip` 替代 `hidden`（消除滚动回弹）
-
-* 尊重 `prefers-reduced-motion`（无障碍用户自动禁用动画）
-
-* 触控设备降级光晕效果
-
-* `IntersectionObserver` 触发后立即 `unobserve`
-
-### 静态资源与引用规则
-
-#### 静态资源更新
-
-当升级第三方库版本时：
-
-1. 修改 `scripts/build/build_static.py` 中的版本号
-2. 运行 `python scripts/build/build_static.py` 重新下载
-3. 提交 `static/lib/` 目录到 Git（`static/lib/monaco/` 除外）
-
-#### 添加新的外部资源
-
-1. 在 `scripts/build/build_static.py` 中添加下载函数
-2. 在模板中使用 `url_for('static', filename='lib/...')` 引用
-3. 确保更新前已运行构建脚本
-
-#### 引用规则
-
-所有静态资源必须通过 `url_for('static', filename='...')` 引用，禁止硬编码路径或外部 CDN URL。
-
-## 部署
-
-部署方式、构建静态资源、打包发布详见 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)。
-
-* 内置 Waitress WSGI 服务器，`python app.py` 即可独立运行（生产级多线程）
-
-* HTTPS 由内网穿透 / 反向代理层终结，应用自身仅监听 HTTP
-
-* 生产环境推荐前置 Nginx 反向代理，且必须关闭缓冲以支持 SSE 长连接
-
-* 构建、打包与发布流程见 [DEVELOPMENT.md 构建与发布](docs/DEVELOPMENT.md)
-
-* 一键更新机制原理见下文 [一键更新机制](#一键更新机制)
+- 用户、权限、游戏账号、封禁、假人、建筑、指南、音频、直播、背景、指南封禁。
+- **系统设置**：在线编辑、热更新，覆盖日志、自动维护、Sitemap、IndexNow、安全、防火墙、邮件、直播、分页、RCON、备案等分类。
+- **防火墙**：IP / 账号封禁、白名单、可疑访问拦截、DDoS 防护、API 限流。
+- **日志中心**：全局日志、严重错误日志、模块日志，SSE 实时推送与按来源过滤。
+- **访问日志抓取**、**广播邮件**、**公开路径映射**、**模组介绍**、**自动维护备份**。
+
+## 配置
+
+所有可热更新配置集中在 `config.py` 的 `SETTINGS_REGISTRY`，登录后台「系统设置」即可修改，无需重启。主要分类：
+
+| 分类 | 关键配置 |
+| --- | --- |
+| 日志 | `LOG_LEVEL`、`LOG_CONSOLE_ENABLED` |
+| 自动维护 | `BACKUP_DIR`、`BACKUP_SCHEDULED_TIME`、`MAX_BACKUPS` |
+| Sitemap | `SITE_URL`、`SITEMAP_DOMAINS`、`ROBOTS_POLICY`、`BING_SITE_VERIFICATION` |
+| IndexNow | `INDEXNOW_ENABLED`、`INDEXNOW_KEY`、`INDEXNOW_AUTO_SUBMIT`、`INDEXNOW_SUBMIT_TIME` |
+| 安全配置 | `SESSION_LIFETIME`、`MAX_LOGIN_ATTEMPTS`、`LOGIN_LOCKOUT_TIME` |
+| IP 封禁 | `FIREWALL_WHITELIST`、`AUTO_BAN_*` |
+| 内容注入 / 可疑访问 / DDoS / API 防火墙 | `CONTENT_INJECTION_*`、`SUSPICIOUS_BLOCK_*`、`DDOS_GUARD_*`、`API_RATE_LIMIT_*` |
+| 邮件配置 | `EMAIL_ENABLED`、`SMTP_*`、`SMTP_SENDER_NAME` |
+| 音频直播 | `LIVE_MAX_LOOP_PER_USER` |
+| 列表分页 | `BUILDINGS_PER_PAGE`、`MUSIC_PER_PAGE`、`GUIDES_PER_PAGE` 等 |
+| 指南资源 | `GUIDE_RESOURCE_MAX_MB` |
+| 外部链接 | `MAP_URL`、`QQ_GROUP_URL` |
+| 背景图片 / 网站图标 | `SHOW_BACKGROUND`、`BACKGROUND_IMAGE_SIZE`、`FAVICON_ICON` |
+| 服务器配置 | `SERVER_HOST`、`SERVER_PORT`、`DEBUG_MODE`、`WAITRESS_THREADS` |
+| RCON 配置 | `RCON_HOST`、`RCON_PORT`、`RCON_PASSWORD`、`MC_GAME_FOLDER` |
+| 网站备案 | `SHOW_BEIAN`、`ICP_BEIAN`、`POLICE_BEIAN`、版权信息 |
+| 内容审核 / 假人 | `MAX_PENDING_*`、`BOT_PENDING_LIMIT`、`BOT_SPAWN_COMMAND`、`BOT_KILL_COMMAND` |
+
+部分启动期参数仍可由环境变量覆盖（如 `SECRET_KEY`、`FFMPEG_THREADS`、`BACKUP_DIR`、防火墙默认值）。
+
+## API 概览
+
+完整接口文档见 [docs/API.md](docs/API.md)。核心约定：
+
+- **认证**：Flask Session Cookie；`@login_required` / `@admin_required` 对 AJAX 返回 401/403 JSON。
+- **CSRF**：`/api/*` 豁免；其余写请求需 `csrf_token` 或 `X-CSRF-Token`。
+- **限流**：`/api/*` 与 AJAX 默认每 IP 60 次/分钟；PCM / Opus 上传使用独立配额。
+- **响应**：统一 `{"success": bool, "message": ...}`，HTTP 状态码区分错误类型。
+
+主要接口前缀：
+
+| 前缀 | 说明 |
+| --- | --- |
+| `/api/stats`、`/api/server-status` | 站点统计与服务器状态 |
+| `/api/captcha/*`、`/api/email/*` | 图形验证码、邮箱验证码 |
+| `/api/settings/*` | 用户名、密码、邮箱、头像、注销 |
+| `/api/music/*` | 大喇叭音频 |
+| `/api/guides/*` | 服务器指南与资源 |
+| `/api/buildings/*` | 公共建筑 |
+| `/api/backgrounds/list` | 背景图片 |
+| `/api/game-accounts/*` | 游戏账号申请与封禁 |
+| `/api/bots/*` | 假人申请 |
+| `/api/live/*` | 音频直播 |
+| `/api/docs/*` | 站内文档 |
+| `/admin/api/*` | 管理后台全部接口 |
 
 ## 架构
 
-> 本文档描述项目的**架构分层、目录结构与技术栈**。代码编写与部署发布规范见 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)。
-
-### 架构分层
-
-项目严格遵循 **MVC 式分层架构**，各层职责互不重叠：
+调用方向固定：
 
 ```
-app.py ──→ routes/ ──→ services/ ──→ core/
-  │            │            │            │
-  │         HTTP 层     业务逻辑层    基础设施层
-  │            │            │            │
-  Flask    蓝图/路由   纯 Python 函数    DB/认证/防火墙
-             │            │
-         main/        user/（auth / profile）
-         docs/        game_accounts/（registration_service）
-         public/      music/（constants / queries / crud / upload / favorites）
-         admin/       rcon/（client / pool / easy_auth）
-         api/         mail/（service / verification / templates / sanitize）
-         guides/      updater/（config / core）
-         buildings/   backup/（manager / scheduler）
-         backgrounds/ background_service/（背景图片业务）
-         sitemap/     cleanup_service/（被驳回内容自动清理）
-         bots/        settings_manager/（系统设置管理）
-                      sitemap_cache/（Sitemap 缓存）
-                      indexnow/（IndexNow 主动推送）
-                      bot_applications/（假人申请 / 审批 / 到期下线）
-                      monitoring/（系统性能监控）
-                      logging/（日志自动清理）
+app.py ──→ routes/（HTTP 薄层）──→ services/（纯业务逻辑）──→ core/（基础设施）
 ```
 
-| 层级     | 目录          | 职责                                              | 禁止                                |
-| ------ | ----------- | ----------------------------------------------- | --------------------------------- |
-| **入口** | `app.py`    | Flask 实例、蓝图注册、WSGI 服务器                          | 不得包含业务逻辑                          |
-| **路由** | `routes/`   | HTTP 请求解析、参数校验、Session 管理、响应构造                  | 不得包含 SQL、事务、业务逻辑                  |
-| **核心** | `core/`     | 数据库连接、认证装饰器、中间件、CSRF、服务器入口、共享工具（验证码/IP/限流/调度器/错误页/模板上下文/页面渲染） | 不得包含业务逻辑，不导入 services |
+| 层级 | 职责 | 禁止 |
+| --- | --- | --- |
+| `app.py` | Flask 实例、蓝图注册、WSGI 服务器 | 业务逻辑 |
+| `routes/` | 请求解析、参数校验、Session、响应构造 | SQL、事务、业务逻辑 |
+| `services/` | 纯业务逻辑，返回 `(success, data_or_error)` | 导入 Flask、操作 request/session |
+| `core/` | 数据库连接、认证、中间件、日志、共享工具 | 业务逻辑、导入 services |
 
-### 目录结构
+详细分层规范、模板规范、测试命令与易错点见 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)。
 
-```
-workspace/
-├── app.py                    # Flask 入口 + WSGI 服务器
-├── config.py                 # 全局配置
-├── requirements.txt          # Python 依赖
-├── update.py                 # 一键更新脚本
-├── core/                     # 核心基础设施层（含共享工具，不含业务逻辑）
-│   ├── db/                   #   数据库连接（原生 sqlite3，每次调用新建连接）与 schema、雪花 ID 迁移
-│   ├── system/               #   系统层：日志、应用初始化
-│   │   ├── init.py, logger.py
-│   ├── shared/               #   共享工具（原 utils 收敛于此）
-│   │   ├── snowflake.py      #   全站统一雪花 ID 生成器（非用户表主键唯一入口）
-│   │   ├── ip.py, captcha.py, ratelimit.py, validation.py
-│   │   ├── process_utils.py
-│   │   └── scheduler/        #   统一任务注册表（task / executors / registry）
-│   ├── auth.py               #   认证装饰器、密码哈希
-│   ├── csrf.py               #   CSRF 防护
-│   ├── middleware.py          #   请求中间件（安全标头、攻击扫描）
-│   ├── server.py             #   WSGI 服务器与优雅关闭
-│   ├── helpers.py            #   页面渲染辅助（render_page / admin_page）
-│   ├── template_context.py   #   全局模板上下文注入
-│   └── errors.py             #   统一错误页渲染（error_simple）
-├── services/                 # 业务逻辑层（纯 Python，不依赖 Flask）
-│   ├── backup/               #   自动维护（/uploads/ 全量 zip 极限压缩 + 日志清理）
-│   ├── buildings/            #   公共建筑（列表/搜索/收藏/评论分页）
-│   ├── mail/                 #   异步邮件发送
-│   ├── game_accounts/        #   游戏账号注册申请
-│   ├── game_server_ban/      #   游戏服务器封禁申请（审批 → 自动解封）
-│   ├── bot_applications/     #   假人（BOT）申请（审批 → RCON 生成 → 到期杀死）
-│   ├── system_metrics/       #   系统监控（CPU/内存/系统/性能追踪）
-│   ├── music/                #   大喇叭音频（常量/查询/CRUD/上传/收藏）
-│   ├── live/                 #   音频直播（ffmpeg 双输出 + MP3 分发 + PCM 实时录音）
-│   ├── rcon/                 #   RCON 连接管理、玩家列表追踪、EasyAuth 指令
-│   ├── security/             #   安全扫描与内容过滤
-│   ├── user/                 #   用户（认证/资料/管理）
-│   ├── background_service/   #   背景图片业务（WebP 转换 + 按屏幕比例挑选）
-│   ├── cleanup_service/      #   被驳回内容自动清理（统一定时调度）
-│   ├── access_log/           #   访问日志抓取（独立 DuckDB + 异步写入 + SSE 广播）
-│   │   ├── store.py          #     DuckDB 存储（uploads/db/access_logs.duckdb）
-│   │   └── capture.py        #     抓取状态、写入队列、SSE 订阅生命周期
-│   ├── firewall/             #   高性能防火墙（DuckDB 引擎 + WSGI 门禁 + DDoS 防护）
-│   │   ├── __init__.py       #     公共 API re-export（ban_ip / firewall 单例等）
-│   │   ├── api_guard.py      #     接口频率限制（每 IP 每分钟）
-│   │   ├── service/          #     业务层：core（封禁/白名单/警告）/ database（DuckDB）/ monitor（后台监控）
-│   │   ├── protection/       #     防护策略：content_filter（内容注入）/ ddos / file_guard
-│   │   └── transport/        #     连接层：wrappers（WSGI 门禁，直接断开连接）
-│   ├── settings_manager/     #   系统设置管理
-│   ├── sitemap_cache/        #   Sitemap 缓存服务
-│   ├── indexnow/             #   IndexNow 主动推送（Key 管理 / 提交 / 统一调度）
-│   ├── content_limits/       #   待审核内容上限业务规则（从 core/helpers.py 下沉）
-├── routes/                   # HTTP 路由层
-│   ├── main/                 #   首页、登录、注册、设置、音乐
-│   ├── admin/                #   管理后台（用户/自动维护/设置/日志/更新/游戏账号/指南/音乐/广播/背景/公共建筑等）
-│   ├── api/                  #   JSON API（性能/统计/验证码/邮箱）
-│   ├── backgrounds/          #   背景图片页面
-│   ├── community/            #   社区辅助（AJAX / 表单统一响应）
-│   ├── docs/                 #   文档页面
-│   ├── game_accounts/        #   申请账号（页面+API，纯申请注册）
-│   ├── bots/                 #   申请假人（页面+API，玩家坐标获取）
-│   ├── guides/               #   服务器指南（页面+API）
-│   ├── live/                 #   音频直播（直播台 / 开播页 / 播放页 / 流媒体 / API）
-│   ├── public/               #   公开文件服务
-│   ├── indexnow/             #   IndexNow Key 校验文件
-│   └── sitemap/              #   站点地图 & robots.txt
-├── static/                   # 唯一前端文件夹：静态资源 + Jinja2 模板（命名规范见 docs/DEVELOPMENT.md）
-│   ├── css/                  #   样式（base.css 手写样式 + tailwind.css 构建产物）
-│   ├── js/                   #   前端脚本（core/ 通用组件、pages/ 页面脚本）
-│   ├── favicons/             #   站点图标（可配置）
-│   ├── lib/                  #   本地化第三方库与字体（构建生成）
-│   ├── favicon.svg           #   站点默认图标
-│   └── templates/            #   Jinja2 模板
-│       ├── admin/                #     管理后台页面（无 admin_ 前缀）
-│       ├── auth/                 #     登录 / 注册 / 找回密码
-│       ├── settings/             #     用户个人设置
-│       ├── site/                 #     站点级信息页（站点文档、服务器状态、网页地图）
-│       ├── backgrounds/          #     背景图片页面（index / upload）
-│       ├── emails/               #     邮件模板（独立 loader）
-│       ├── game_accounts/        #     游戏账号页面（apply / ban_apply）
-│       ├── bots/                 #     申请假人页面（apply）
-│       ├── guides/               #     服务器指南页面（index / detail / form）
-│       ├── buildings/            #     公共建筑（index / create / detail）
-│       ├── music/                #     大喇叭音频页面（index / my / favorites / upload）
-│       ├── live/                 #     音频直播页面（index 直播台 / start 开播页 / my 我的直播 / rec 实时录音台 / play 播放页）
-│       ├── macros/               #     通用模板宏（模态框/编辑器/进度条/音乐/页面内搜索）
-│       └── ...                   #     根级：base.html / index.html / error_simple.html
-├── docs/                     # 项目文档
-└── scripts/
-    ├── build/                #   构建脚本
-    └── ...                   #   工具脚本
+## 安全与运维
+
+- **防火墙**：DuckDB 高性能引擎，WSGI 入口先于业务逻辑拦截；支持 DDoS、SQL 注入、XSS、路径穿越、命令注入、敏感文件探测、恶意 UA 检测与自动封禁。
+- **API 限流**：按 IP 计数，超限返回 429；刷新页面自动重置。
+- **自动维护**：每日定时备份 `/uploads/`（含 SQLite / DuckDB 一致快照），按保留数量清理旧备份与日志。
+- **日志**：全局日志、严重错误日志（只保留最后一次）、模块独立日志；启动时自动清空。
+- **部署**：Windows / Linux 面板部署见 [docs/mcsm-deploy.md](docs/mcsm-deploy.md)；安全评估见 [docs/SECURITY_REPORT.md](docs/SECURITY_REPORT.md)。
+
+## 开发与测试
+
+```bash
+python -m compileall -q core services routes config.py
+python -m pytest scripts/tests -q
 ```
 
-### 技术栈
-
-| 类别       | 选型                            |
-| -------- | ----------------------------- |
-| 后端框架     | Flask 3.x                     |
-| WSGI 服务器 | Waitress（内置，生产级多线程）           |
-| 数据库      | SQLite（WAL 模式，嵌入式单文件）         |
-| 模板引擎     | Jinja2                        |
-| CSS      | Tailwind CSS + 自定义样式（白色磨砂玻璃） |
-| 图标       | Lucide（本地化）                   |
-| Markdown | marked.js / Python Markdown   |
-| 实时音频     | ffmpeg（HLS + MP3 双输出、循环播放） |
-
-### 异步架构
-
-| 组件      | 异步方式                               |
-| ------- | ---------------------------------- |
-| 日志写入    | 统一入口 `_emit()`：追加写文件 + 内存环形缓冲（全局 / 严重错误 / 模块三类） |
-| 统一任务注册表 | 单 tick 线程每秒检测 + 共享线程池派发（`core/shared/scheduler/`，全站定时任务共用，防火墙除外） |
-| IP 地理信息 | 后台线程异步更新缓存                         |
-| CPU 监控  | 后台线程定期采样（2 秒）                      |
-
-### 数据库
-
-使用 **SQLite**（嵌入式单文件数据库），启用 **WAL 模式**（`PRAGMA journal_mode=WAL`）+ `synchronous=NORMAL` + `busy_timeout=30000`，读写并发性能优秀且崩溃可恢复。连接不做复用——每次 `get_db()` 新建一条独立连接、用完即关，事务边界天然隔离，不存在「跨线程共享连接导致事务边界错乱」的问题。首次启动自动建表，共 19 张表：
-
-> ⚠️ **切勿删除 `uploads/db/site.db-wal` 与 `site.db-shm`。**
-> WAL 模式下，「已经 `commit` 成功、但尚未 checkpoint 合并进主库」的数据全部保存在 `-wal` 文件里。删除它 = 丢掉最近写入的数据（曾导致「公共建筑审核通过后重启服务器又变回待审核」）。
-> SQLite 打开数据库时会自动重放 WAL 完成恢复，最后一个连接关闭时也会自动 checkpoint 并清理，无需任何人工干预。
-
-#### 读写与并发模型
-
-**SQLite（主站）—— 由数据库自身的「单写者」机制保证写入串行：**
-
-* SQLite 任意时刻只允许一个写事务，由文件锁统一排队；本层进一步把写事务改为 **`BEGIN IMMEDIATE`**（而非默认的 `BEGIN`）：事务一开始就独占写锁，而不是「先拿读锁、写时再升级」。
-* 这样多线程并发写时 **不会出现两个事务同时持读锁、再抢写锁的升级冲突**（那正是「多线程写入时序问题」的根源）；配合 `busy_timeout=30000` 自动排队等待，做到写入天然串行、互不打断、不会锁升级死锁。
-* 读取走独立连接并发进行；大批量改写（如 ID 迁移）或优雅退出前调用 `checkpoint()` 把 WAL 合并落盘。
-
-**DuckDB（防火墙）—— 单写入线程 + FIFO 队列：**
-
-* 所有写操作统一提交给唯一的写入线程顺序执行，相邻写操作合并为事务批量提交，彻底避免多线程并发写 DuckDB 的锁表问题；读走内存缓存与共享连接。
-* **WAL 重放自愈**：历史版本用过 `CREATE SEQUENCE seq_firewall_bans` 作自增主键，迁移为雪花 ID 后序列被删；若进程在 CHECKPOINT 前异常退出，WAL 里会残留建/删序列记录，下次打开时 DuckDB 重放 WAL 报 `Sequence with name "seq_firewall_bans" already exists!` 导致整个库打不开（表现为备份里该库快照写入失败）。现在：
-  1. **无条件清理遗留序列**（每次打开都幂等 `DROP SEQUENCE IF EXISTS`），从源头避免相关 DDL 再进入 WAL；
-  2. 打开库后**强制 `CHECKPOINT`**、关闭前再 `CHECKPOINT`，把「已提交但仍在 WAL」的数据合并进主库并清空 WAL，避免 DDL 长期滞留；
-  3. 打开失败时**自动自愈**：先把损坏的 `*.wal` 重命名隔离（`*.corrupt-wal-<时间戳>`）后重试，仍失败再隔离整个库文件并重建空库，保证防火墙功能不会因单文件损坏而整站不可用。
-
-#### 雪花 ID
-
-全站非用户表主键统一由 [`core/shared/snowflake.py`](core/shared/snowflake.py) 的 `next_id()` 生成（**唯一入口，禁止在别处自行拼接 ID**），结构为 **41 位毫秒时间戳 + 12 位序列号 = 53 位**（恒 ≤ 2^53-1，永不超过 JS 的 `Number.MAX_SAFE_INTEGER`，前端不会精度丢失）。
-
-* **唯一生成者**：由一个独立「待命线程」独占计数器预生成 ID，计数器只被这一个线程读写，天然无竞态。
-* **有界 FIFO 池**：生成的 ID 按顺序进入固定容量队列（默认 1024 个，约 32KB，**池满即阻塞，绝不无限预生成**）；单个 FIFO 保证每个 ID 只被发放一次。
-* **取号零竞争**：`next_id()` 只是从池中取一个，O(1)、无锁竞争、无忙等——超高并发同时取号也不会「抢号」或重复；序列号用尽时的「等下一毫秒」由待命线程承担，调用方无感知。
-* **时钟回拨保护**：系统对时导致时间戳回退时复用上一次时间戳、靠序列号继续推进，ID 仍单调递增。
-
-| 表名                        | 说明       | 关键约束                                                                                                            |
-| ------------------------- | -------- | --------------------------------------------------------------------------------------------------------------- |
-| `users`                   | 用户       | `username` 唯一, `email` 唯一                                                                                       |
-| `mod_intros`              | 模组介绍     | `link` 模组跳转链接（可空），首页卡片带链接时可点击新窗口跳转                                                                                  |
-| `db_backups`              | 备份记录     | 状态/大小/耗时                                                                                                        |
-| `settings`                | 系统设置     | key 唯一，支持热重载                                                                                                    |
-| `public_paths`            | 公开文件路径   | 路径唯一                                                                                                          |
-| `server_guides`           | 服务器指南    | 支持 Markdown，审核工作流                                                                                               |
-| `guide_edit_bans`         | 编辑封禁     | 用户名/IP，限时/永久                                                                                                    |
-| `broadcast_logs`          | 广播邮件日志   | —                                                                                                               |
-| `music`                   | 大喇叭音频    | `status` 状态机（0=私有/1=待审核/2=已公开，驳回后自动转为私有；旧库 `gain` 列仅保留不再使用），`tags` 逗号分隔标签列，删除记录时同步删除 `uploads/music/<ID>/` 文件目录 |
-| `music_favorites`         | 大喇叭音频收藏  | 联合主键 `(user_id, music_id)`（同一用户对同一音频仅一条收藏）                                                                      |
-| `live_channels`           | 音频直播频道   | `mode`（`loop` 循环播放 / `rec` 实时录音）、`status`（`live` / `stopped`）、`music_id` 音源（录音模式为空）、`volume` / `speed`（固定默认 1.0，已不提供调整功能）；`(user_id, status)` 索引用于每人循环上限（默认 5）与实时录音固定 1 路的原子校验；`stop_reason` 记录停止原因（含服务重启 / 管理员强制停止） |
-| `live_bans`               | 音频直播封禁   | `user_id` 主键（永久封禁，一个用户一条），管理员可手动解封；封禁立即停止该用户全部直播 |
-| `backgrounds`             | 背景图片     | `status` 审核状态，WebP 格式，磁盘单主图（取图按屏幕比例挑选、原样返回，不缩放不裁剪），多张可同时启用，`rejected_at` 记录驳回时间（超 24h 自动删除）                                            |
-| `game_account_registrations` | 游戏账号注册申请 | 申请注册 MC 账号，管理员审批                                                                                               |
-| `game_account_bans`       | 游戏账号封禁   | 封禁 MC 账号申请资格                                                                                                    |
-| `game_server_ban_applications` | 游戏服务器封禁申请 | 用户申请 → 管理员审批 → RCON ban，到期自动 pardon                                                                             |
-| `public_buildings`        | 公共建筑     | 标题/领地名/介绍/使用方式/注意事项，审核工作流（pending→approved/rejected）                                                        |
-| `building_comments`       | 建筑评论     | 外键 `building_id`，支持作者/管理员删除                                                                                       |
-| `building_reports`        | 建筑举报     | 外键 `building_id`，待处理→驳回流程                                                                                         |
-| `building_favorites`      | 建筑收藏     | 联合主键 `(user_id, building_id)`                                                                                   |
-| `guide_favorites`         | 指南收藏     | 联合主键 `(user_id, guide_id)`                                                                                      |
-
-#### 自动维护
-
-每日凌晨 3:00（可配置）自动执行「自动维护」：
-
-1. 扫描 `/uploads/` 目录下所有文件 → 极限压缩打包为 zip（ZIP_DEFLATED, level 9）→ 校验 zip 完整性 → 清理旧备份
-2. **数据库以「一致快照」写入 zip**（`uploads/db/`）：主站 SQLite（`site.db`）用在线备份 API 导出，WAL 中「已提交但未 checkpoint」的数据会一并合并进快照；防火墙 DuckDB（`firewall.duckdb`）用引擎级导出（`ATTACH` + `COPY FROM DATABASE`）。运行期的 `-wal` / `-shm` / 原始 `.duckdb` 文件不直接复制（正被独占锁定且状态不一致），其数据已全部包含在快照里，恢复时单文件即可独立使用
-3. **自动清理日志文件**：截断 `logs/app.log`，删除 `logs/fatal.log` 与 `logs/modules/*.log`（后台日志页面仍可查看本次运行期间的日志）
-
-管理后台「自动维护」页可手动触发，显示实时进度条；备份目录（`BACKUP_DIR`）可在「系统设置」或「自动维护」页设置**绝对路径或相对路径**（相对路径基于网站根目录解析，默认 `../bhxz_backups`），保存后即时生效。已取消一键解压恢复功能，历史备份仅作留存与下载。
-
-### 一键更新脚本
-
-项目根目录下提供了一键更新脚本 [`update.py`](update.py)，纯 Python 全平台兼容，**只走下载覆盖**（不依赖 git），启动即更新、无需确认：
-
-1. 运行 `python update.py`（可选 `--branch dev` 指定分支，默认 `main`，失败自动回退 `master`；可选 `--quiet` 不在终端输出任何日志）
-2. 脚本**多线程同时测速**全部镜像源（24 个：官方直连 / codeload / 前缀型代理 / 主机替换型镜像），单个镜像 2 秒超时，**整个测速环节最多 2 秒**；优先选取能返回合法 ZIP 且速度最快的镜像
-3. **锁定最新 commit 再下载**：先读分支的 Atom 提交源（无鉴权、无 rate limit，失败回退 GitHub API）取最新 SHA，优先下载 `<sha>` 固定版本归档——该地址内容不可变，**不会被镜像 / CDN 缓存成旧版本**，从而避免「更新后反而退回好几个版本」；SHA 不可用时才退回分支归档
-4. 自动下载最新源码 ZIP（含 PK 魔数与 CRC 完整性校验，可识别镜像返回的 HTML 错误页），逐个镜像 × 逐个分支回退重试
-5. 解压后**合并覆盖**项目代码（`_merge_copy`：同名覆盖、目标多余文件保留），随后进入第 6 步统一清理
-6. **清理「GitHub 上已被删除」的文件与目录**：合并覆盖只会新增/覆盖，反映不了「新版删除」，故覆盖完成后按最新 ZIP 的文件清单递归清理——被移除的文件会删除、被移除的目录会整棵删除（例如更换字体后，旧字体的 woff2 子集一并清掉，不再残留）。`PROTECTED_PATHS` 中的路径**强制跳过、绝不删除**，包括：
-   - 用户数据：`uploads/`（音频、背景图、sitemap，数据库也在 `uploads/db/`）
-   - 运行期数据 / 本地配置：`db`、`backups`、`logs`、`ssl`、`release`、`.env`、`.env.local`、`.git`、`.venv`、`node_modules`
-   - 本地生成物：`static/lib/monaco`、`uploads/ffmpeg`（Windows 下放置 ffmpeg.exe / ffprobe.exe，`uploads/` 已被 `.gitignore` 整目录排除）
-   - 本地启动脚本：`start.bat`（未提交到仓库，本地自建）
-   - 任意层级：`__pycache__`、`.pytest_cache`、`node_modules`、`.DS_Store`、`Thumbs.db`
-7. 自动安装/更新 Python 依赖
-8. **更新完成后提示手动重启服务器，不会自动启动**
-9. **终端输出可完全关闭**：设置 `update.py` 顶部的 `PRINT_LOGS = False`，或运行时加 `--quiet` / `-q`，或设置环境变量 `BHXZ_UPDATE_QUIET=1`。静默模式下进度条、日志、依赖安装输出全部丢弃，仅保留退出码（`0` 成功、非 `0` 失败），适合 MCSM 等面板托管
-10. **Windows GBK 控制台兼容**：脚本启动时把标准输出 / 错误流的编码错误策略设为 `replace`，并按终端编码能力自动把进度条字符降级为 ASCII，避免中文 Windows 下出现 `UnicodeEncodeError: 'gbk' codec can't encode character '\u2591'` 而中断更新
-
-> 字体等静态资源已随代码提交进仓库（`static/lib/fonts/`），因此一键更新即可同步字体，服务器无需联网构建、也无需额外步骤。
-> ⚠️ 清理以「最新 ZIP 里的文件清单」为准：**既未提交到仓库、又不在保护名单内**的本地文件会被当作「已删除」而移除。请勿把自建脚本/资源直接放在项目目录下，放到 `uploads/` 等受保护目录即可。
-> 镜像路径按各源格式正确拼接：前缀型代理为 `<代理前缀>https://github.com/<repo>/archive/refs/heads/<branch>.zip`，主机替换型为 `https://<镜像域名>/<repo>/archive/refs/heads/<branch>.zip`。
-> 如果遇到依赖变化，更新后执行 `pip install -r requirements.txt`。
-
-### 安全要点
-
-1. 修改 `config.py` 中的 `SECRET_KEY` 为随机强密钥
-2. 修改默认管理员密码
-3. 生产环境启用 HTTPS
-4. 图形验证码服务端内存存储，一次性删除防重放
-5. Session Cookie 启用 `HttpOnly` + `SameSite=Lax`（HTTPS 下自动加 `Secure`）
-6. 邮箱唯一性检查（一个邮箱仅可注册一个账号）
-7. IP 频率限制（注册/登录）
-8. **全站安全响应标头**（`core/middleware.py` 集中下发，覆盖 HTML/API/SSE/静态资源）：
-
-   * `Content-Security-Policy`：仅允许本站脚本/样式/资源，禁用 `object`，限制 `form-action`/`frame-ancestors` 等（已放行内联脚本/样式与 HLS blob worker，避免误伤自身功能）；`frame-src`/`child-src` 会按配置的「卫星地图地址」动态追加其源，供「网页地图」页内嵌外部地图
-
-   * `X-Content-Type-Options: nosniff`、`X-Frame-Options: SAMEORIGIN`（防点击劫持）
-
-   * `Referrer-Policy: strict-origin-when-cross-origin`（防 Referer 泄露）
-
-   * `Permissions-Policy`：默认禁用摄像头/麦克风/定位/传感器等，仅放行本域剪贴板写入
-
-   * `Cross-Origin-Opener-Policy: same-origin`（跨源隔离，防 Spectre 类窗口攻击）
-
-   * `Strict-Transport-Security`（HSTS）：**仅 HTTPS 请求下发**，避免 HTTP 部署被强制升级而无法访问
-
-9. **极高性能多线程防火墙**（`services/firewall/`，运行于 WSGI 入口、先于一切 Flask 逻辑）：黑名单 IP 的请求不参与任何业务处理，**直接断开连接且不返回任何数据**（`FirewallWSGIWrapper` 抛出 `waitress.channel.ClientDisconnected`，waitress 捕获后关闭连接、不写任何响应字节，客户端读到 0 字节后连接断开）；后台监控线程周期性从数据库同步黑名单镜像；配套 DDoS 攻击检测按强度自动封禁（详见上文功能特性）。
-
-## 开发注意事项
-
-编写新代码前必查的**分层规范、易错点清单与测试要求**，详见 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)。
-
-## 更新日志
-
-详见 [docs/CHANGELOG.md](docs/CHANGELOG.md)。
+提交前请按 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) 的分层规范 → 易错点 → 测试与构建流程自检，并同步更新相关文档。

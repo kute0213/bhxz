@@ -1,108 +1,66 @@
 # 开发准则
 
-> 本文档为**开发与部署规范**：分层规范、代码规范、易错点清单、测试与路由检测，构建打包与发布流程，以及文档写入准则。
-> 架构分层与目录结构见 [README.md 架构](../README.md#架构)。
+> 本文档规定本项目的**分层、编码、模板、测试、构建发布与文档**规范。架构总览与快速开始见 [README](../README.md)，接口细节见 [API 指南](API.md)。
 
-## 文档写入准则
+## 目录
 
-本项目采用**精简文档体系**：除开发准则（`docs/DEVELOPMENT.md`）与更新日志（`docs/CHANGELOG.md`）外，其余内容统一并入 `README.md`。任何功能、代码或配置变更，都必须同步更新对应文档。
+- [1. 分层规范](#1-分层规范)
+- [2. 编码规范](#2-编码规范)
+- [3. 模板与前端规范](#3-模板与前端规范)
+- [4. 数据库与 ID](#4-数据库与-id)
+- [5. 日志规范](#5-日志规范)
+- [6. 测试规范](#6-测试规范)
+- [7. 构建、打包与发布](#7-构建打包与发布)
+- [8. 核心易错点](#8-核心易错点)
+- [9. 需求落地检查清单](#9-需求落地检查清单)
+- [10. 文档写入准则](#10-文档写入准则)
 
-### 1. 文档结构规范
+---
 
-* **README.md**：项目总览、快速开始、功能特性、配置说明、API 接口、架构
+## 1. 分层规范
 
-* **docs/DEVELOPMENT.md**（开发准则）：分层规范、代码规范、易错点、测试、路由检测、构建打包与发布、文档写入准则
-
-* **docs/CHANGELOG.md**（更新日志）：版本更新日志，按时间倒序排列
-
-> 不要新增独立文档。确有必要时，需先在 README 的「文档索引」登记并说明理由，否则视为乱塞。
-
-### 2. 命名规范
-
-* 文件名使用小写字母，单词间用连字符（-）分隔，如 `cmd-guide.md`
-
-* 章节标题使用 Markdown 标题语法，层级分明（`#` 到 `#####`）
-
-* API 接口文档按「方法 路径 - 说明」格式描述
-
-### 3. 内容组织
-
-* 每个文档开头添加目录，方便快速导航
-
-* 技术文档应包含：背景、实现方式、使用示例、注意事项
-
-* 代码示例使用 \`\`\` 代码块，并指定语言类型
-
-* 关键步骤使用有序列表，并列项使用无序列表
-
-### 4. 更新流程
-
-* 每次功能/代码变更后，更新 `README.md` 对应章节与 `docs/CHANGELOG.md`
-
-* 删除或重命名文档时，同步修正所有指向它的链接（含 README 文档索引、DEVELOPMENT 引用）
-
-* 变更完成后按开发准则流程（分层规范 → 易错点清单 → 测试与构建）过一遍再提交
-
-## 分层总览
-
-项目遵循 **MVC 式分层架构**，调用方向固定为：
+调用方向固定：
 
 ```
 app.py ──→ routes/（HTTP 薄层）──→ services/（纯业务逻辑）──→ core/（基础设施）
 ```
 
-各层职责规约：
+| 层级 | 目录 | 职责 | 禁止 |
+| --- | --- | --- | --- |
+| 入口 | `app.py` `config.py` | Flask 实例、蓝图注册、WSGI 服务器、配置注册表 | 业务逻辑 |
+| 路由 | `routes/` | 请求解析、参数校验、Session、响应构造 | SQL、事务、文件系统业务操作、业务规则 |
+| 服务 | `services/` | 纯业务逻辑，返回 `(success, data_or_error)` | 导入 Flask / request / session |
+| 核心 | `core/` | DB 连接、认证、中间件、日志、共享工具 | 业务逻辑、导入 services |
 
-| 层级     | 目录          | 职责                                              | 禁止                                |
-| ------ | ----------- | ----------------------------------------------- | --------------------------------- |
-| **入口** | `app.py`    | Flask 实例、蓝图注册、WSGI 服务器                          | 不得包含业务逻辑                          |
-| **路由** | `routes/`   | HTTP 请求解析、参数校验、Session 管理、响应构造                  | 不得包含 SQL、事务、业务逻辑                  |
-| **服务** | `services/` | 纯业务逻辑，Flask 无关，返回 `(success, data_or_error)` 元组 | 不得导入 Flask、不得直接操作 request/session |
-| **核心** | `core/`     | 数据库连接、认证装饰器、中间件                                 | 不得包含业务逻辑，不得导入 services            |
+### 1.1 路由层
 
-## 路由层规范（routes/）
-
-路由层是**薄层**，每个视图函数只做 3 件事：
+每个视图只做三件事：取参数 → 调 service → 构造响应。
 
 ```python
 @main_bp.route('/example', methods=['POST'])
 @login_required
 def example():
-    # 1. 从请求中提取参数
     user = get_current_user()
     value = request.form.get('value', '').strip()
-
-    # 2. 调用 service 执行业务
-    success, result = some_service.do_something(user_id=user['id'], value=value)
-
-    # 3. 构造 HTTP 响应
-    if success:
-        flash(result, 'success')
-    else:
-        flash(result, 'error')
+    success, result = some_service.do_something(user['id'], value)
+    flash(result, 'success' if success else 'error')
     return redirect(url_for('main.settings'))
 ```
 
-**禁止：**
+禁止在路由中写 SQL、`commit/rollback`、复制业务逻辑。AJAX 与普通表单需要同时兼容时，统一提供 `_is_ajax()` / `_respond()` 辅助。
 
-* 在路由中编写 SQL 语句（`conn.execute(...)`）
+### 1.2 服务层
 
-* 在路由中处理事务（`conn.commit() / conn.rollback()`）
-
-* 在路由中处理文件系统操作
-
-* 在不同路由间复制粘贴业务逻辑（应抽取到 service）
-
-## 服务层规范（services/）
-
-服务层是**纯业务逻辑层**，不依赖 Flask：
+- 所有函数返回 `(success, data_or_error)`。
+- 仅通过 `get_db()` 获取连接，`finally` 中 `close()`；异常时 `rollback()`。
+- 日志使用 `from core.system.logger import log`。
+- 不导入任何 Flask 符号。
 
 ```python
 def do_something(user_id, value, ip_address):
-    """业务描述。返回 (success, data_or_error)。"""
     conn = get_db()
     try:
-        # ... 业务逻辑 ...
+        # ... 业务 ...
         conn.commit()
         log('INFO', 'Module', '操作成功', user_id=user_id, ip=ip_address)
         return True, '操作成功'
@@ -113,769 +71,204 @@ def do_something(user_id, value, ip_address):
         conn.close()
 ```
 
-**规则：**
+### 1.3 核心层
 
-* 所有函数返回 `(success, data_or_error)` 元组
+只提供通用能力：`core/db`、`core/auth`、`core/csrf`、`core/middleware`、`core/system`、`core/shared`、`core/seo`、`core/errors`。不得包含业务判断。
 
-* `success` 为 `bool` 类型
+---
 
-* 日志记录在核心层统一完成（`from core.system.logger import log`）
+## 2. 编码规范
 
-* 禁止导入 `flask`、`request`、`session`、`render_template`、`redirect`、`flash`
+- Python 4 空格缩进，函数 / 类使用 docstring 说明业务语义。
+- 新增模块按职责拆分（参考 `services/mail/`：`delivery` / `service` / `retry`），避免单文件膨胀。
+- 统一使用 `next_id()` 生成业务主键（雪花 ID），禁止退回自增 ID。
+- 文件路径拼接必须做路径穿越校验（`core/shared` 或既有安全函数），Windows 盘符路径单独处理。
+- 对外跳转使用 `url_for()`；外部链接由服务端补全协议。
+- 新增高频接口必须使用独立限流桶，禁止直接调高全局 `API_RATE_LIMIT_PER_MINUTE`。
+- 定时任务统一注册到 `core/shared/scheduler`，禁止自建 `threading.Timer`。
 
-* 数据库连接仅通过 `get_db()` 获取，用完必须 `close()`
+---
 
-### 邮件发送与失败重试（`services/mail/`）
+## 3. 模板与前端规范
 
-`services/mail/` 按职责拆分为三个子模块，**不要再把所有逻辑塞进 service**：
+### 3.1 目录
 
-| 子模块 | 职责 |
-|--------|------|
-| `delivery` | 纯 SMTP 投递（构建 MIME + 登录 + sendmail），失败直接抛异常；`is_email_enabled()` / `get_smtp_config()` 也在此 |
-| `service` | 异步发送队列（后台线程 `email-sender`），队列满丢弃并记日志；投递失败调用 `retry.record_failure()` |
-| `retry` | 失败邮件重试队列：写库、每 60 秒扫描重发、最多 10 次 |
+- **唯一前端目录**：`static/`。模板在 `static/templates/`（Flask `template_folder`），样式在 `static/css/`，脚本在 `static/js/`。
+- 模板按业务分目录：`admin/`、`auth/`、`settings/`、`site/`、`buildings/`、`guides/`、`music/`、`live/`、`bots/`、`backgrounds/`、`emails/`、`macros/`。
+- 管理后台页面使用统一骨架 `admin/_layout.html`（无 `admin_` 文件前缀）。
 
-* 失败邮件落库到 `email_retry_queue`（`id / recipient / subject / body / html / attempts / last_error / status / created_at / next_retry_at`），首次重试在失败 60 秒后。
-* 重试由**统一任务注册表**调度：`register_task(name='email-retry', action=retry_failed_emails, interval=60)`，随 `services.mail` 导入自动注册，无需另起线程。
-* 重发成功即删除记录；失败则 `attempts + 1` 并把 `next_retry_at` 推后 60 秒；累计 10 次仍失败把 `status` 置为 `failed` 并保留记录便于排查（不再扫描）。
-* 邮件功能关闭（`EMAIL_ENABLED=false`）时重试任务直接跳过，不做无意义的重发。
-* 新增邮件出口一律调用 `email_service.send(...)`，**不要**在业务代码里直接 `smtplib`，否则失败邮件不会进入重试队列。
-
-### 音频直播运行时（`services/live/`）
-
-音频直播是本项目唯一持有**长生命周期子进程**的业务模块，改动时必须遵守以下约定：
-
-#### 分层与职责
-
-| 文件 | 职责 |
-|------|------|
-| `constants/__init__.py` | 模式 / 状态、标题规范化、PCM 参数、HLS 参数、播放地址模板（`volume` / `speed` 仅保留固定默认值，不再对外调整） |
-| `ffmpeg/__init__.py` | **纯函数**构造循环播放 / 实时录音 ffmpeg 命令（HLS + MP3 双输出），便于测试，不得启动进程 |
-| `store/__init__.py` | 频道与封禁的 SQLite 读写；循环上限（默认 5）与实时录音上限（固定 1）在 `transaction()` 内原子校验；不依赖 Flask |
-| `runtime/__init__.py` | `LiveManager` 单例 + `LiveChannel`：ffmpeg 进程、HLS 目录、MP3 听众分发、Opus 包转发、PCM stdin 写入、启动恢复 |
-| `ingest.py` | 上传校验（纯函数）：PCM 空数据 / 长度错位 / 超大分片；Opus 批次长度前缀、单包大小、帧数上限 |
-| `mp3.py` | MP3 流辅助：开场快照前移到完整帧头，纯函数 |
-
-#### 进程与输出
-
-* **一个频道一个 ffmpeg 进程**，同时输出两路：HLS（落盘 `uploads/live/<直播ID>/index.m3u8`）与 MP3（`pipe:1`）。
-* 两种输入模式：
-  * `loop`：`-re -stream_loop -1` 读取音频库中的 `index.mp3`，无限循环；
-  * `rec`：从 `stdin` 读取浏览器上传的 `s16le` PCM（48000Hz 双声道）。
-* **实时录音输入禁止加 `-thread_queue_size`**：部分 ffmpeg 构建把它视为输出（muxer）选项，会报 `cannot be applied to input url pipe:0` 导致开播失败；`build_rec_cmd` 已移除该参数，测试会断言其不存在。
-* **不提供直播音量 / 速度调整**：不要重新加回 `volume` / `atempo` 滤镜、`/api/live/<ID>/settings` 路由或 `LiveManager.adjust()`，避免为调参重启 ffmpeg 打断听众。实时录音的输入音量 / 静音在**浏览器端**用 Web Audio `GainNode` 实时调整，服务端不参与。
-* **实时录音使用 HTTPS 分片上传，不使用 WebRTC**：浏览器 `AudioWorklet`（`static/js/live/pcm-worklet.js`）把麦克风音频转成 48kHz 双声道 s16le，主线程每约 50ms 合并成一块 `POST /api/live/<ID>/pcm`（原始二进制，约 9.6KB），服务端 `LiveChannel.write_pcm` 串行写入 ffmpeg stdin。不要重新引入 aiortc / STUN / TURN：那需要 UDP 可达与原生扩展，在反向代理后极易失败，且 Python 3.14 无可用 wheel。
-* **Opus 是低延迟主路径，服务端只转发不解码**：支持 WebCodecs 的浏览器用 `static/js/live/opus-encoder.js`（`window.OpusUploader`）把同一份 PCM 编码为 20ms/帧、32kbps 的 Opus 包，每 2 帧（约 40ms）`POST /api/live/<ID>/opus`，请求体是 `[2 字节大端长度][Opus 包]` 重复。服务端 `validate_opus_batch` 校验后由 `LiveChannel.publish_opus` 原样分发给 `/live/stream/<ID>.opus` 的听众。**禁止**在服务端对 Opus 解码 / 转码 / 落盘，那会直接增加延迟并引入重采样抖动。Opus 不可用时必须静默回退到 PCM → MP3，不得影响直播。
-* **低延迟是硬指标**：Opus 通道端到端典型 0.15~0.3 秒，网络正常时应稳定在 **0.5 秒以内**（播放端 80ms 抖动缓冲，积压 >400ms 丢弃旧帧）；MP3 兜底路径保持在 1 秒量级。`build_rec_cmd` 必须保留 `-probesize 32 -analyzeduration 0`（否则 ffmpeg 会先攒约 1 秒 PCM 做输入探测）；MP3 输出必须保留 `-flush_packets 1`（否则 muxer 攒约 32KB、192kbps 下约 1.3 秒才写 stdout）。这两项都有测试断言，**不要删除**。
-* **开场快照会变成听众的固定延迟**：`MP3_RING_MAX_BYTES` 保持约 0.3 秒（当前 8KB），不得超过约 16KB；快照必须经 `trim_to_frame()` 对齐到 MP3 帧头，避免接入瞬间先解码一帧噪声。Opus 快照 `OPUS_RING_MAX_PACKETS` 只保留最近约 120ms，同样**不可调大**。
-* **实时录音上传使用独立限流配额**：`services/firewall/api_guard.py` 为两个路径单独计数（`live_pcm` 桶 2400 次/60 秒、`live_opus` 桶 3000 次/60 秒），不占用普通 API 的 60 次/分钟额度，避免正常直播被误封为 429。该配额只对**已登录**用户开放，未登录请求仍走普通限流；接口本身还会校验登录与频道归属。新增高频接口时按同样的「已登录 + 独立桶」方式处理，**禁止**直接调高全局 `API_RATE_LIMIT_PER_MINUTE`。
-* MP3 由 Python 读取 ffmpeg stdout 后写入每个听众的 `queue.Queue`（有界队列，慢客户端丢弃最旧数据）；新听众先收到最近约 0.34 秒的环形缓冲快照。**禁止**为每个听众单独启动 ffmpeg。Opus 使用独立的订阅者集合与包级环形缓冲（`deque(maxlen=OPUS_RING_MAX_PACKETS)`），停止直播时必须向两类订阅者都发送结束信号并清空快照。
-* HLS 使用 `delete_segments+omit_endlist` 保持直播语义；m3u8 路由必须把分片相对路径改写为 `/live/stream/<ID>/<文件>`，分片路由必须做路径穿越校验。
-* 面向超长直播设计：运行时**不记录、不展示直播时长**，所有缓冲 / 分片列表均为有界结构，长时间运行内存不增长。
-
-#### 生命周期
-
-* `LiveManager` 是模块级单例，所有注册表操作必须持锁；`LiveChannel` 内部另有锁保护进程 / 订阅者。
-* **前端关闭不停止直播**：只有显式停止、管理员强制停止、ffmpeg 异常退出才会结束频道并 `mark_stopped`。
-* 服务启动时 `restore()`：检查音源后自动恢复循环直播；实时录音频道与音源缺失的频道标记停止并写 `stop_reason`（录音依赖浏览器推流，不重启恢复）。
-* 服务关闭时 `shutdown()` 只结束 ffmpeg，**不修改数据库状态**，保证循环直播下次启动能恢复；停止直播时必须删除 `uploads/live/<ID>/`。
-* 每人循环播放直播上限由 `LIVE_MAX_LOOP_PER_USER`（默认 5，可热改）控制，实时录音固定 1 路；禁止在路由层用「先查后插」实现，必须在 `store.create_channel` 的事务内校验。
-
-#### 前端与播放地址
-
-* 直播台主页 `/live` 只保留「正在直播列表」；`我的直播`（`/live/my`）与`开始直播`（`/live/start`）**都必须是独立页面，禁止再使用弹窗**。
-* 开播页 `/live/start` 的音源选择必须使用**弹窗**：关键词搜索 + `page/has_more` 分段加载 + 弹窗内 `max-height` + `overflow-y-auto` 滚动，选中后回填卡片并关闭弹窗。
-* 实时录音开播成功后必须跳转独立直播台 `/live/rec/<ID>`，台内可实时调整麦克风设备、输入音量、静音、降噪 / 回声消除 / 自动增益；页面卸载只断开麦克风，不停止服务端直播。
-* **媒体地址必须使用同源相对路径**（`/live/stream/<ID>.mp3`）。反向代理下用 `request.host_url` 生成的绝对地址可能协议 / 端口与实际页面不一致，会被 CSP `media-src 'self'` 拦截。
-* 播放页使用自定义控件（开始 / 关闭 / 音量），**不要**使用原生 `controls`、不要显示进度条或已直播时长。
-* 低延迟音频的浏览器实现必须集中在 `static/js/live/opus-encoder.js`（`window.OpusUploader`）与 `static/js/live/opus-player.js`（`window.OpusPlayer`），页面模板只做能力检测、调用与回退，**禁止**在模板里重复实现编码 / 解码 / 调度逻辑。播放页必须保留 MP3 兜底：`AudioDecoder` 不可用、连接失败或 1.5 秒内没有可播放音频时自动切回 `<audio>` 播放 `/live/stream/<ID>.mp3`。
-* 音源选择必须走 `GET /api/live/musics` 搜索 + 分页，支持自己的私有音频；禁止一次性下发全部音频。
-* 直播页公共样式（`.live-pulse` / `.live-link-row` / `.mode-badge` / `.mode-tab` / `.music-pick-item` / `.live-range` / `.switch-row` / `.live-control-btn`）统一在 `static/css/base.css` 末尾的「音频直播页面公共样式」块维护，**禁止**再在页面 `extra_style` 里重复定义；颜色必须使用 `:root` 变量（全站为白色磨砂玻璃主题，写死白色系会导致未选中项不可见）。
-* 直播 ID 一律用全局 `channelUrl(tpl, id)`（`base.js`）替换模板里的 `0`，**禁止**手写 `replace('/0/', ...)`：`/live/rec/0` 末尾没有斜杠，会替换失败跳到 `/live/rec/0` 而 404。
-* 直播 ID 由 `next_id()`（雪花算法）生成，表主键虽然是 INTEGER，但写入值必须保持雪花量级，测试 `test_channel_id_is_snowflake` 会拦截退回自增 ID 的改动。
+### 3.2 模板规范
 
-#### 权限与管理
+- 页面继承 `base.html`；局部通过 `extra_head` / `extra_style` / `extra_script` 注入。
+- 通用 UI 抽到 `static/templates/macros/`：模态框、Markdown 编辑器、进度条、音乐播放器、页面内搜索、日历选择器。
+- **按需引入资源**：只在使用日历的页面调用 `calendar_styles()` / `calendar_script()`；不要在 `base.html` 全站加载。
+- 静态资源 URL 带 `v=` 版本号（Tailwind、业务 CSS / JS），修改后 bump，避免浏览器缓存旧文件。
+- 颜色使用 `:root` 变量（`--glass-bg` / `--glass-blur` 等），禁止硬编码白色系。
+- 公共样式统一放在 `static/css/base.css` 的对应分区，禁止在页面 `extra_style` 重复定义。
 
-* 开播、停止、PCM / Opus 上传均校验登录；停止校验本人（管理员可强制停止）；音频上传只允许直播本人（管理员打开他人直播台时只读，不连接麦克风）。`/live` 相关响应的 `Permissions-Policy` 必须放行 `microphone=(self)`，其他路径保持默认拒绝（见 `core/middleware.py`）。
-* `live_bans` 为**永久封禁**（`user_id` 主键），管理员可解封；封禁用户 `create_channel` 必须在事务内拒绝，管理员封禁时必须停止其**全部**直播。
-* 直播标题必须经过防火墙内容注入检测（与音频上传一致），长度上限 60。
+### 3.3 前端交互约定
 
-## 核心层规范（core/）
+- **日期 / 时间输入**：统一使用 `calendar_field()`（`macros/calendar.html`），禁止原生 `date` / `datetime-local`。
+- **弹窗**：使用 `macros/modal.html` 或 `.modal-overlay` + `open` class；滚动锁由 `base.js` 的 `syncModalScrollLock()` 自动处理，不要单独改 `body.style.overflow`。
+- **悬浮提示**：使用 `title` 或 `data-tooltip`，由 `base.js` 统一渲染。
+- **直播地址**：必须使用同源相对路径（`/live/stream/<ID>.mp3`），禁止用 `request.host_url` 拼接。
+- **直播 ID 拼接**：使用 `channelUrl(tpl, id)`，禁止手写 `replace('/0/', ...)`。
 
-核心层提供基础设施，不包含任何业务逻辑：
+### 3.4 Tailwind
 
-* `core/db/` — 数据库连接封装
+模板或 JS 新增 Tailwind 工具类后必须重新编译 `static/css/tailwind.css`，并 bump `base.html` 中的版本号。否则会出现按钮丢失内边距、圆角失效等问题。
 
-* `core/auth/` — 认证装饰器、密码哈希
+---
 
-* `core/middleware.py` — 请求中间件
+## 4. 数据库与 ID
 
-### 日志规范（`core/system/logger.py`）
+- 连接统一 `get_db()`，用完 `close()`；写操作显式 `commit()`，异常 `rollback()`。
+- 业务主键统一 `next_id()`（雪花算法）。表主键即使是 INTEGER，写入值也保持雪花量级。
+- 需要原子性的「先查后插」必须放进同一事务（参考 `services/live/store.transaction()`）。
+- 数据库文件：`uploads/db/site.db`；防火墙 DuckDB；访问日志抓取期间临时生成 `access_logs.duckdb`。
 
-所有日志都经由统一入口 `_emit()` 写出，对外分三类，**不要绕过 logger 直接 `print` 或写文件**：
+---
 
-| 类别 | 入口 | 存储 | 是否打印到控制台 |
-|------|------|------|------------------|
-| 全局日志 | `log(level, event, detail, **kwargs)` | `logs/app.log` + 内存环形缓冲 + SSE（订阅 `global`） | 受 `LOG_CONSOLE_ENABLED` 控制 |
-| 严重错误日志 | `log_fatal(level, event, detail, **kwargs)` | `logs/fatal.log`（**每次写入覆盖，只保留最后一次**）+ SSE（订阅 `fatal`） | 始终打印 |
-| 模块单独日志 | `register_module_log(name)` + `log_module(name, level, event, ...)` | 模块独立内存缓冲 + 可选 `logs/modules/<name>.log`（`LOG_MODULE_<NAME>_STORE`）+ SSE（订阅 `module:<name>`） | 默认不打印；开启「全局」后随 `LOG_CONSOLE_ENABLED` 打印 |
+## 5. 日志规范
 
-* 等级：`DEBUG < INFO < WARNING < ERROR < CRITICAL`，由 `LOG_LEVEL` 控制；严重错误日志不受等级过滤。
-* **每次启动自动清理**：`core/system/init.py` 在初始化最开始调用 `purge_logs_on_startup()`，清空全局日志文件与缓冲、严重错误日志文件、所有 `logs/modules/*.log` 与各模块缓冲。
-* 模块单独日志默认**不进入**全局日志文件与全局 SSE；未注册时自动按默认（不落盘、不并入全局）注册。
-* **SSE 按来源分流**：日志页**只请求一个接口** `GET /admin/api/logs?source=global|fatal|module:<名称>&tail=N&level=ERROR`，直接返回 SSE 流：首帧 `history` 事件携带历史快照（最近 `tail` 条），之后持续推送 `data` 事件；空闲时发送心跳注释保活。所有来源均为实时推送，**禁止再引入轮询，也不要再拆出独立的 history 接口**。服务端推送入口见 `register_monitor_client(queue, source)`；三类日志写入时都会推送到各自来源，模块日志是否并入全局只影响 `global` 订阅，不影响 `module:<名称>` 订阅。历史快照与实时推送可能重叠，条目带进程内单调递增的 `seq`，客户端按 `seq` 去重。
-* **模块的行为不在注册时写死**：`register_module_log('名称')` 只声明模块存在，是否落盘、是否并入全局日志一律由设置决定（`LOG_MODULE_<名称>_STORE` / `LOG_MODULE_<名称>_GLOBAL`），可在**日志页面 → 日志设置**为任意模块配置（`GET/POST /admin/api/logs/modules`），保存即时生效。两项都关闭时，日志仅存在于模块独立缓冲（后台仍可按来源单独查看）。
-* 模块单独日志**在模块启动时自行注册**，现有使用者：
+所有日志经 `core/system/logger.py`：
 
-  | 模块名 | 注册位置 | 覆盖内容 | 默认落盘 | 默认并入全局 |
-  |--------|----------|----------|----------|--------------|
-  | `firewall` | `services/firewall/__init__.py` | 防火墙拦截、403 授权拒绝、自动封禁 | 否 | 否 |
-  | `captcha` | `core/shared/captcha.py` | 图形验证码生成 / 校验、过期验证码清理 | 是 | 否 |
-  | `email_code` | `routes/api/email_code/__init__.py` | 邮箱验证码发送 / 校验 | 是 | 否 |
-  | `register` | `services/user/auth/__init__.py`、`routes/main/auth/__init__.py` | 注册账号全流程（含群内验证码） | 是 | 否 |
-  | `login` | `services/user/auth/__init__.py`、`routes/main/auth/__init__.py` | 登录 / 登出全流程 | 是 | 否 |
-  | `password` | `services/user/auth/__init__.py` | 找回密码全流程 | 是 | 否 |
-  | `user` | `services/user/{admin,profiles}/__init__.py`、`routes/main/media/__init__.py` | 用户资料修改、账号（软）删除、管理员权限、用户媒体 | 是 | 否 |
-  | `background` | `services/background_service/__init__.py` | 背景图片上传 / 审核 / 删除 / 启用切换 | 是 | 否 |
-  | `buildings` | `routes/admin/buildings/__init__.py`、`routes/buildings/pages/__init__.py` | 公共建筑审核、浏览次数更新 | 是 | 否 |
-  | `music` | `services/music/{crud,upload}/__init__.py`、`routes/main/music/__init__.py` | 大喇叭音频上传 / 编辑 / 审核 / 删除、HLS 分片 | 是 | 否 |
-  | `live` | `services/live/runtime/__init__.py`、`routes/live/*`、`routes/admin/live/__init__.py` | 音频直播开播 / 停止 / 实时录音推流、ffmpeg 管线异常、管理员强制停止 / 封禁 | 是 | 否 |
-  | `email` | `services/mail/{delivery,service,retry}/__init__.py` | 邮件投递、异步发送队列、失败重发 | 是 | 否 |
-  | `backup` | `services/backup/{manager,scheduler}/__init__.py`、`routes/admin/maintenance/__init__.py` | 自动维护（数据备份 + 日志清理）、定时维护、备份下载 / 删除 | 是 | 否 |
-  | `gameban` | `services/game_server_ban/__init__.py` | 游戏服务器封禁申请 / 批准 / 驳回 / 自动解封 | 是 | 否 |
-  | `bot` | `services/bot_applications/__init__.py` | 假人申请 / 审批 / RCON 生成 / 到期自动下线 | 是 | 否 |
-  | `sitemap` | `services/sitemap_cache/__init__.py` | 站点地图刷新与生成 | 是 | 否 |
-  | `indexnow` | `services/indexnow/__init__.py` | IndexNow Key 生成、定时 / 手动推送与结果记录 | 是 | 否 |
-  | `rcon` | `services/rcon/{client,player_tracker}/__init__.py` | RCON 命令执行、玩家列表追踪 | 是 | 否 |
-  | `cleanup` | `services/cleanup_service/__init__.py` | 被驳回内容超时自动清理 | 是 | 否 |
-  | `metrics` | `services/system_metrics/__init__.py` | 系统指标采集 | 是 | 否 |
-  | `settings` | `services/settings_manager/__init__.py` | 系统设置读取 / 保存 / 删除 | 是 | 否 |
-  | `access_log` | `services/access_log/capture.py` | 访问日志抓取开启 / 取消 / 写入失败 | 是 | 否 |
-  | `waitress` | `core/system/logger.py`（`install_waitress_logging()`） | Waitress 内部日志（`Task queue depth is xx` 等） | 否 | 否 |
+| 类别 | 入口 | 存储 | 控制台 |
+| --- | --- | --- | --- |
+| 全局 | `log(level, event, detail, **kwargs)` | `logs/app.log` + 环形缓冲 + SSE `global` | 受 `LOG_CONSOLE_ENABLED` 控制 |
+| 严重错误 | `log_fatal(...)` | `logs/fatal.log`（每次覆盖） | 始终打印 |
+| 模块 | `register_module_log(name)` + `log_module(...)` | 模块缓冲 + 可选 `logs/modules/<name>.log` | 默认不打印 |
 
-  **总原则：除 core 基础设施（`core/`：应用初始化、数据库 schema / 连接、WSGI 服务器、任务注册表）保留全局 `log()` 外，业务侧日志一律走模块单独日志。**
+- 等级：`DEBUG < INFO < WARNING < ERROR < CRITICAL`。
+- 启动时 `purge_logs_on_startup()` 清空全部日志文件与缓冲。
+- 禁止绕过 logger 直接 `print` 或写日志文件。
 
-  默认值集中定义在 `core/system/logger.py` 的 `MODULE_LOG_DEFAULTS`（仅作设置缺失时的兜底）。新增模块单独日志时，只需在所属模块 import 处调用 `register_module_log('<名称>')`，日志一律通过 `log_module(name, level, event, detail, **kwargs)` 输出，**不得**调用全局 `log()`；如需自定义默认落盘行为，在 `MODULE_LOG_DEFAULTS` 中补一条即可（**不要**新增 `SETTINGS_REGISTRY` 设置项，模块日志配置统一在日志页面维护）。
+---
 
-## 新增功能的流程
-
-1. 在 `services/` 中创建或扩展对应的服务函数
-2. 在 `routes/` 中创建薄层路由，调用服务函数
-3. 在 `scripts/tests/` 中编写测试覆盖
-
-## 核心工具函数规范（core/ 内置）
-
-项目根目录**不新增独立 `utils/` 文件夹**。通用工具函数一律收敛到 `core/` 下（属基础设施层），不含任何业务逻辑：
-
-| 文件 | 职责 |
-|------|------|
-| `helpers.py` | 模板辅助函数（分页、站点信息、当前用户注入） |
-| `ip.py` | IP 获取、信任代理判断 |
-| `ratelimit.py` | 请求速率限制（注册/登录/验证码） |
-| `validation.py` | 密码强度、邮箱格式校验 |
-| `captcha.py` | 图形验证码生成与校验 |
-| `security_scanner.py` | 攻击特征扫描（SQL注入/XSS/路径穿越等） |
-| `process_utils.py` | 子进程环境统一（UTF-8） |
-| `template_context.py` | 模板全局上下文注入 |
-
-## 代码复用原则
-
-发现重复代码时，正确做法是**抽取到 services**，而非复制粘贴：
-
-* 用户操作始终使用 `services/user/` 子模块
-
-* 公共建筑与建筑评论始终使用 `services/buildings/` 子模块
-
-## 上传与列表交互规范
-
-### 1. 文件上传必须过防火墙文件守卫
-
-所有用户上传（音频 / 图片 / 附件）必须调用 `services/firewall/protection/file_guard.py` 的 `check_upload()` 做安全校验，不要在各处自行实现扩展名 / 魔数判断：
-
-```python
-from services.firewall.protection.file_guard import check_upload, KIND_ATTACHMENT
-ok, message = check_upload(upload, KIND_ATTACHMENT, max_bytes=ATTACHMENT_MAX_BYTES, source='attachment')
-if not ok:
-    return False, message
-```
-
-`KIND_IMAGE` / `KIND_AUDIO` / `KIND_ATTACHMENT` 三档默认白名单见 `ALLOWED_BY_KIND`；危险扩展名一律拒绝，未知类型跳过魔数校验以降低误判。
-
-### 2. 列表一律「分页 + 加载更多」，走 JSON API 无刷新追加
-
-新增任何列表页时：
-
-* 服务端只渲染**首屏一页**（每页条数由 `config.get_page_size(KEY)` 决定，**禁止硬编码**，也不接受前端传参覆盖），并把 `total` / `has_more` 传给模板；
-* 每页条数在 `config.py` 的「列表分页配置」中定义常量，并同步登记到 `SETTINGS_REGISTRY`（分类「列表分页」），以便在管理后台「系统设置」热改；
-* 另建分页 API（返回 `{success, items, page, page_size, total, has_more}`），前端「加载更多」按钮 `fetch` 后 `insertAdjacentHTML('beforeend', ...)` 追加，不整页跳转；
-* 追加的行必须复用首屏相同的结构与属性（如管理端的 `.admin-action` 及其 `data-*`），以便已存在的事件委托自动生效；HTML 一律用 `esc()` 转义，追加后调用 `lucide.createIcons()`；
-* API 请求带 `X-Requested-With: XMLHttpRequest`，自动纳入 API 防火墙限流。
-
-### 3. 管理中心操作一律 JSON API + 无刷新
-
-审核 / 删除 / 权限切换等管理操作统一返回 JSON，前端用 `.admin-action` 组件（`document` 级事件委托）触发，操作后局部更新页面，不整页 `location.reload()`。
-
-## Jinja2 模板命名规范
-
-模板统一存放于 `static/templates/`（**唯一前端根目录 `static/`**：静态资源直接位于 `static/` 下、页面模板在 `static/templates/`，邮件模板在 `static/templates/emails/`），遵循「**功能目录 + 语义化页面名**」规则。命名务必清晰、简洁、符合 Flask/Jinja2 通用约定，避免模板找不到导致的 500。
-
-### 1. 目录划分
-
-按功能域（蓝图）划分子目录，目录名**小写**，多词用连字符（-）：
-
-| 目录 | 存放内容 |
-|------|----------|
-| `static/templates/` 根 | 全站通用：`base.html`（布局）、`index.html`（首页）、`error_simple.html`（精简错误页） |
-| `static/templates/auth/` | 登录、注册、找回密码 |
-| `static/templates/settings/` | 用户个人设置 |
-| `static/templates/admin/` | 管理后台所有页面 |
-| `static/templates/buildings/`、`guides/`、`music/`、`live/`、`backgrounds/`、`game_accounts/` | 对应功能模块页面 |
-| `static/templates/site/` | 站点级信息页（站点文档、服务器状态） |
-| `static/templates/macros/` | 可复用 Jinja2 宏（`data_table`、`modal` 等） |
-| `static/templates/emails/` | 邮件 HTML 模板（独立 Jinja2 loader，`static/templates/emails/base.html` 为其专用布局） |
-| `static/` | 静态资源（CSS / JS / 本地化第三方库），与模板同处一个前端根目录 |
-
-### 2. 页面类型后缀
-
-每个模板文件名以**语义化小写单词**表达页面类型：
-
-* `index.html` — 功能域入口 / 列表页（如 `guides/index.html`、`admin/index.html`）
-* `detail.html` — 详情页（如 `guides/detail.html`）
-* `create.html` — 新建表单页（如 `buildings/create.html`）
-* `form.html` — 新增/编辑共用表单页（如 `guides/form.html`）
-* `apply.html` — 申请页（如 `game_accounts/apply.html`）
-* `upload.html` — 上传页（如 `backgrounds/upload.html`）
-* 其余按语义命名：`dashboard.html`、`login.html`、`register.html`、`favorites.html`、`my.html`
-
-### 3. 禁止冗余前缀
-
-目录名已表达功能，文件名**不得重复**功能名。管理后台位于 `static/templates/admin/`，其下文件名直接是 `users.html`、`settings.html`，**禁止**写成 `admin/admin_users.html` 这类双重前缀。
-
-管理后台页面统一继承 `admin/_layout.html`（它再继承 `base.html`），不要在页面里重复写 `page-container`、返回链接和页头；页面只需设置 `admin_title`、`admin_subtitle` 并填充 `admin_content` 块。自带下拉框的卡片必须使用 `.pixel-card`，展开时由 `base.css` 的 `.select-open` 解除裁剪；不要给卡片设置 `overflow: hidden` 或额外的 `contain: paint`。
-
-**磨砂玻璃统一配方**：所有弹窗 / 卡片 / 浮层复用 `base.css` 的 CSS 变量与 `.glass-panel` / `.glass-surface`（`--glass-bg`、`--glass-blur`）。禁止在页面里手写低透明度白色（如 `rgba(255,255,255,0.5)`）搭配 `backdrop-filter: blur(...)` —— 白色占比过低会在深色或复杂背景上泛灰。若页面需要自定义玻璃层，必须使用 `background: var(--glass-bg)` 与 `backdrop-filter: var(--glass-blur)`（内含 `saturate` + `brightness`），保证与全站一致。
-
-### 4. 引用方式
-
-带渲染一律使用相对 `static/templates/`（Flask `template_folder`）的路径字符串：
-
-```python
-render_page('admin/users.html', users=users)   # ✅
-render_page('buildings/index.html')            # ✅
-admin_page('admin/settings.html')              # ✅
-render_page('admin/admin_users.html')          # ❌ 双重前缀
-```
-
-链路 `routes → services → core` 之外，错误页由 `core/errors.py` 统一渲染 `error_simple.html`；邮件模板由 `services/mail/templates/` 独立渲染，均不受此规范影响。
-
-### 5. 宏导入方式（`import` 而非 `include`）
-
-使用 `static/templates/macros/` 下的宏时，**必须**用 `{% from ... import ... %}` 显式导入，**禁止**用 `{% include %}`。`include` 只渲染模板文件，不会把宏注入当前命名空间，调用时会抛 `UndefinedError: 'xxx' is undefined` 导致 500。
-
-导入语句统一放在 `{% extends %}` 之后、第一个 `{% block %}` 之前：
-
-```jinja
-{# ✅ 正确 #}
-{% extends "base.html" %}
-{% from 'macros/modal.html' import modal_shell, modal_close_script %}
-{% block content %}
-  {% call modal_shell('report-modal', size='sm', title='举报') %}...{% endcall %}
-{% endblock %}
-
-{# ❌ 错误：include 不会导入宏，modal_shell 未定义 → 500 #}
-{% extends "base.html" %}
-{% include 'macros/modal.html' %}
-{% block content %}
-  {% call modal_shell('report-modal', size='sm', title='举报') %}...{% endcall %}
-{% endblock %}
-```
-
-> 真实事故：`static/templates/buildings/detail.html` 用 `{% include 'macros/modal.html' %}` 引入弹窗宏，访问 `/buildings/<id>` 时 `modal_shell is undefined` 直接 500。
-
-**按需组件（日历）**：日期 / 日期时间输入统一使用 `macros/calendar.html` 的 `calendar_field()`，禁止使用原生 `date` / `datetime-local`；在页面 `{% block extra_head %}` 中调用 `calendar_styles()`、在 `{% block extra_script %}` 顶部调用 `calendar_script()`，只在需要日历的页面引入，不要全站加载。隐藏域值格式固定为 `YYYY-MM-DD`（`mode='date'`）或 `YYYY-MM-DDTHH:MM`（`mode='datetime'`），页面 JS 用原有 id 读取即可。
-
-### 6. SEO / GEO 元信息（title / description / canonical / 结构化数据）
-
-`base.html` 已统一输出 `meta robots`、`meta description`、`canonical`、hreflang、Open Graph 与 Twitter 卡片标签，以及全站 WebSite + Organization JSON-LD；默认描述对所有页面生效。新增公开页面时必须：
-
-* 写 `{% block title %}`，长度约 20–35 个中文字符（不含自动追加的「 - 滨海小镇」），不要只写「首页」「登录」这类过短标题（Bing 会报「标题太短」）；
-* 用 `{% block description %}` 覆盖页面专属描述，建议 **70–110 个中文字符**；低于 70 字会被 Bing 判定为「描述过短」，不要依赖默认描述；
-* 详情页（指南 / 建筑等）的标题与摘要来自用户内容，必须在模板中兜底：描述不足 70 字时追加页面用途说明，超过 140 字时截断，避免过短或过长；结构化数据在 `extra_head` 中按 `Article` / `CreativeWork` 输出，并带三级 BreadcrumbList；
-* 不要在子模板重复手写 `<title>`、`<meta name="description">` 或 WebSite / Organization JSON-LD，避免重复标签；
-* 私有页（登录、注册、设置、上传、收藏、申请、管理后台等）由 `core/seo.py` 的 `is_private_path()` 自动判定：模板输出 `noindex, nofollow`、不输出 canonical，响应头追加 `X-Robots-Tag`。新增私有路径时把前缀加入 `_PRIVATE_PREFIXES`；
-* canonical 由 `core/template_context.py` 的 `canonical_base_url` 计算（优先匹配 `SITE_URL` / `SITEMAP_DOMAINS`，公网域名默认 https），子模板无需覆盖；`www` 与非 `www` 域名由中间件按 `SITE_URL` 统一 301，避免重复 URL；
-* 列表页 BreadcrumbList 由 `_BREADCRUMB_PAGES` 统一生成；详情页的末级面包屑在模板 `extra_head` 中补充；
-* 默认分享图直接使用系统设置中的网站图标（`/favicon`，SVG），不需要也不允许再生成独立分享图；需要页面专属图时覆盖 `{% block og_image %}`，必须输出绝对 URL；
-* 全站 Bing 验证码在「系统设置 → Sitemap → Bing 站点验证码」中配置，`base.html` 自动输出 `msvalidate.01`，不要在模板里硬编码；
-* URL 统一不带尾部斜杠：`core/middleware.py` 的 `trailing_slash_redirect_hook` 会把 `/music/` 这类地址 301 到 `/music`，新增路由不要单独设置 `strict_slashes`；
-* 错误页 `error_simple.html` 已输出 `robots: noindex, follow`；不要添加 `nocache` / `noarchive` 等限制 Bing / Copilot 使用内容的指令；
-* 修改公开页标题、描述或结构化数据后运行 `python -m pytest scripts/tests/test_seo.py -q`，该测试会检查公开页标题 ≥28 字符、描述 ≥70 字符、私有页 noindex、结构化数据、sitemap 收录范围与 ETag、尾部斜杠 301 跳转。
-
-> 注意：**不要用 HTML 注释包裹 Jinja 标签**（如 `<!-- {% block description %}...{% endblock %} -->`）。Jinja 会解析注释里的标签，导致 `TemplateSyntaxError: Unexpected end of template`。
-
-### 7. Sitemap 生成约定
-
-`/sitemap.xml` 统一走 `sitemap_cache.get_xml_for_request(host, scheme)`：优先读取 `uploads/sitemap/` 下的域名缓存文件；缓存缺失时按请求域名懒生成（内存缓存 1 小时），**禁止在路由里返回空字符串或内容为空的 200**（空响应会被 CDN 缓存，导致 Bing 判定无法获取 sitemap）。确实无法生成时返回 503 + `Retry-After`，并输出 ETag 支持 304 增量抓取。新增可索引公开页时，在 `services/sitemap_cache/__init__.py` 的 `_STATIC_PAGES` 中登记 path / changefreq / priority；`is_private_path()` 会自动过滤私有路径，公开文件映射的尾部斜杠也会规范化为无斜杠 URL。
-
-IndexNow 推送复用同一份公开页面列表（`_build_url_entries`）与域名配置（`_collect_domains`），因此**新增公开页只需改 sitemap 白名单，无需改动 IndexNow**。推送任务必须使用统一任务调度器注册（当前任务名 `indexnow-submit`），禁止自行创建线程 / Timer；提交前必须经过 `_is_public_base()` 过滤，不得向内网地址发起请求。
-
-IndexNow 的启用开关、Key、每日开关与推送时间统一登记在 `config.py` 的 `SETTINGS_REGISTRY`（分类 `IndexNow`），由系统设置页自动渲染；`services/indexnow` 只能通过 `get_config_value()` 读取这些键，禁止在模板或页面单独维护一套配置。新增相关配置时必须同时登记 registry，保证设置面板可见、可热更新。
-
-### 8. 申请类功能约定
-
-新增「用户提交 → 管理员审批 → RCON 执行」的功能（如 `services/bot_applications`）必须复用现有基础设施，不要重复造轮子：
-
-* 主键用 `core.shared.snowflake.next_id()`，表主键写 `INTEGER PRIMARY KEY`（不带 `AUTOINCREMENT`）；
-* 定时任务用 `core.shared.scheduler.register_task()`（假人到期下线任务名 `bot-offline-scheduler`，每 60 秒扫描，单周期最多 50 条，RCON 失败保留状态下周期重试），禁止新建线程 / Timer；
-* RCON 用 `services.rcon.client.execute_command()`，玩家名必须经 `sanitize_rcon_username()` 清洗，数值坐标先转 `float` 再拼指令，杜绝命令注入；生成 / 杀死指令模板放入 `SETTINGS_REGISTRY`（`BOT_SPAWN_COMMAND` / `BOT_KILL_COMMAND`）以适配不同插件；
-* 待审核数量统一走 `services.content_limits.check_pending_limit(user, 'bot')`：既计入「待审核余额」总量，又受单独上限 `BOT_PENDING_LIMIT` 约束（默认 2），管理员豁免；新类型需在 `_PENDING_TYPES` 登记表名 / 用户列 / 状态条件 / 上限键；
-* 入口同时加在桌面导航「服务器」下拉与移动端侧边栏；页面属于私有页，`/bots` 必须列入 `core/seo.py` 的 `_PRIVATE_PREFIXES`；
-* 下线时间等日期时间输入使用自研日历组件（`macros/calendar.html` 的 `calendar_field()`），不要使用原生 `datetime-local`。
-
-## 测试规范
-
-测试文件位于 `scripts/tests/`，使用 pytest 运行：
+## 6. 测试规范
 
 ```bash
+python -m compileall -q core services routes config.py
 python -m pytest scripts/tests -q
 ```
 
-测试套件为 `test_*.py` 中的单元与集成测试（当前覆盖图形验证码、IP 封禁、任务调度、安全扫描、输入校验、指南文件存储、sitemap 与 IndexNow 推送等）。
+- 测试位于 `scripts/tests/`，按功能命名（`test_seo.py`、`test_public_files.py`、`test_live_*.py` 等）。
+- 新增业务优先补纯函数测试（命令构造、校验、解析、分页）。
+- 涉及权限、路径穿越、限流、状态机的改动必须补回归测试。
+- 提交前必须保证全量测试通过。
 
-每个测试函数应：
+---
 
-* 测试成功路径
+## 7. 构建、打包与发布
 
-* 测试失败路径（边界条件、权限不足、参数错误）
+| 操作 | 命令 |
+| --- | --- |
+| 下载第三方静态资源 | `python scripts/build/build_static.py` |
+| 编译 Tailwind | `cd scripts/build && npx tailwindcss -c tailwind.config.js -i tailwind-source.css -o ../../static/css/tailwind.css --minify` |
+| 打包发布 zip | `python scripts/build/package.py` |
 
-* 使用 `app.test_client()` 模拟 HTTP 请求
+发布 zip 排除数据库、上传、备份、SSL、日志与第三方大文件，输出到 `release/`（不提交）。
 
-* 使用 `db` 事务隔离避免测试间相互影响
+### Git 提交约定
 
-## 易错点清单（新增代码前必查）
+- 提交作者必须仅为 `kute0213 <3846415473@qq.com>`，不得出现 `trae-solo-agent` 等协作作者。
+- 提交说明使用中文，概括本次变更。
+- 不提交 `.screenshots/`、运行期数据库、上传文件、备份与日志。
+- 推送前先确认 `git status` 与测试结果。
 
-以下规则来自实际线上事故，**每次新增/修改路由和模板时必须逐条检查**：
+---
 
-### 1. 路由函数名 ≡ 模板 `url_for` 端点名（最常见 Bug）
+## 8. 核心易错点
 
-Flask 默认以**函数名**作为端点名（`蓝图名.函数名`），模板中 `url_for('蓝图名.函数名')` 必须与之完全一致。
+### 8.1 认证、CSRF 与限流
 
-**检查清单：**
+- `/api/*` 豁免 CSRF；`/admin/api/*` **不豁免**，AJAX 写操作要带 `X-CSRF-Token`。
+- `@login_required` / `@admin_required` 只有在请求被判定为 JSON/AJAX 时才返回 JSON；前端 `fetch` 请带 `X-Requested-With: XMLHttpRequest`。
+- 未登录访问 `/api/live/*` 不应占用普通限流桶的异常路径；PCM / Opus 使用独立桶。
+- 修改 `ROUTE_PREFIXES` 或中间件跳过逻辑时，注意 `'/'` 会让所有路径命中，曾导致公开文件映射全部 404。
 
-* [ ] 每个 `@蓝图.route()` 的函数名都对应模板中的 `url_for('蓝图名.函数名')`
+### 8.2 音频直播
 
-* [ ] 不要加 `_view`、`_handler`、`_action` 等后缀（除非模板也用了这个后缀）
+- 一个频道一个 ffmpeg 进程，同时输出 HLS 与 MP3；禁止为每个听众单独启动 ffmpeg。
+- 实时录音输入**禁止**加 `-thread_queue_size`；必须保留 `-probesize 32 -analyzeduration 0` 与 MP3 的 `-flush_packets 1`。
+- Opus 服务端只转发，不解码、不转码、不落盘；不可用时静默回退 MP3。
+- 不提供直播音量 / 速度调整接口，避免重启 ffmpeg 打断听众。
+- MP3 开场快照约 0.3 秒（8KB），Opus 快照约 120ms，不可调大。
+- 停止直播必须删除 `uploads/live/<ID>/`，并向 MP3 / Opus 两类订阅者发送结束信号。
+- 每人循环直播上限由 `LIVE_MAX_LOOP_PER_USER` 控制，实时录音固定 1 路；必须在事务内校验。
 
-* [ ] 当路由函数名与 service 导入的函数名冲突时，用 `import ... as svc_xxx` 解决
+### 8.3 内容与资源
 
-* [ ] 已用 `app.test_client()` 逐页请求关键页面，确认返回 200（可捕获此类 500），并已运行 `python -m pytest scripts/tests -q`
+- 指南资源受 `GUIDE_RESOURCE_MAX_MB` 限制（1~1024MB），上传前后都要校验。
+- 指南替换草稿：已发布指南首次编辑会复制为 `replace_of` 草稿，审核通过后接管原 ID。
+- 所有用户 Markdown / HTML 内容必须经过 `services/firewall/protection/content_filter` 注入检测。
+- 文件服务与资源路由必须做路径穿越校验，禁止直接拼接用户输入。
 
-### 2. 模板渲染必须端到端验证
+### 8.4 静态资源与缓存
 
-修改模板或路由后，必须用 `curl` 或浏览器访问一次，确认不报 500：
+- 修改 `static/css/*`、`static/js/*`、Tailwind 后必须 bump 引用版本号。
+- 新增 Tailwind 类必须重新编译产物，否则线上无样式。
+- 图标库保持同步加载，并在 `DOMContentLoaded` 兜底 `lucide.createIcons()`。
 
-```bash
-# 匿名访问
-curl -s -o /dev/null -w "%{http_code}" http://localhost:5000/buildings
-# 应返回 200
-```
+### 8.5 备份、邮件与调度
 
-**检查清单：**
+- 邮件统一走 `email_service.send(...)`；失败邮件进入 `email_retry_queue`，由统一调度器每 60 秒重试，最多 10 次。
+- 备份默认目录 `../bhxz_backups`，可在系统设置热改；备份包含 SQLite / DuckDB 一致快照。
+- 定时任务统一使用 `core/shared/scheduler` 注册，禁止新建线程 / Timer。
 
-* [ ] 匿名用户访问（无 cookie）
+### 8.6 Windows 与部署
 
-* [ ] 普通用户访问（有 session cookie）
+- Windows 路径可能是 `C:\...` 或 `D:/...`，路径解析需同时兼容。
+- 中文 Windows 控制台需 UTF-8 环境变量，部署脚本必须包含 `chcp 65001` 与 `PYTHONUTF8=1`。
+- 反向代理场景下媒体地址使用同源相对路径，避免 CSP `media-src 'self'` 拦截。
 
-* [ ] 管理员访问
+---
 
-* [ ] 有数据时访问 vs 无数据时访问
+## 9. 需求落地检查清单
 
-### 3. 数据库表结构变更
+新增页面 / 功能时逐项确认：
 
-本项目**不再内置运行时迁移**（历史一次性迁移代码已全部移除），修改表结构时直接改 `core/db/schema.py` 的建表语句：
+1. 路由是否放在正确蓝图，是否使用 `@login_required` / `@admin_required`。
+2. 业务逻辑是否下沉到 `services/`，路由是否保持薄层。
+3. 写操作是否处理 CSRF（非 `/api/*`）。
+4. 列表是否分页，分页大小是否走系统设置。
+5. 用户输入是否做长度、类型、注入与路径校验。
+6. 是否按需引入 CSS / JS，静态资源版本号是否更新。
+7. 是否复用现有宏与公共样式，是否有重复实现。
+8. 是否补充测试；`compileall` 与 `pytest` 是否通过。
+9. 是否更新 `README.md`（功能 / 配置变化）与 `docs/CHANGELOG.md`。
+10. 公开网站功能是否保留管理员控制台；账户功能是否支持用户自行修改密码。
 
-```python
-# 直接把新列写进 CREATE TABLE IF NOT EXISTS：
-('表名', '''
-    CREATE TABLE IF NOT EXISTS 表名 (
-        id INTEGER PRIMARY KEY,        -- 非用户表主键一律雪花 ID（写入时显式传 next_id()），禁止 AUTOINCREMENT
-        ...
-        新列名 类型 DEFAULT 默认值
-    )
-'''),
-```
+---
 
-* **主键 ID 约定**：除 `users` 表保留自增 ID 外，所有表主键一律为**雪花算法 ID**——建表写 `id INTEGER PRIMARY KEY`（不带 `AUTOINCREMENT`），写入时通过 `from core.shared.snowflake import next_id` 显式传入 `next_id()`，不要依赖 `lastrowid`。
-* **新装库**：建表语句自带新列，无需额外处理。
-* **已有库**：`CREATE TABLE IF NOT EXISTS` 对已存在的表不生效，需部署方自行执行
-  `ALTER TABLE 表名 ADD COLUMN 列名 类型 DEFAULT 默认值;` 后再部署（或重建库）。
-* **索引**：仍使用 `CREATE INDEX IF NOT EXISTS`（幂等，属于常规 schema 初始化）。
+## 10. 文档写入准则
 
-### 4. 页面入场动画不得依赖 JS 显示（避免白屏）
+### 10.1 文档结构
 
-**背景**：曾用 `opacity:0` 常驻隐藏内容、再由外部脚本在 `DOMContentLoaded` 时添加类显示。
-问题：`base.js` 是 body 末尾的**同步脚本**，它不加载完就不会触发 `DOMContentLoaded`；
-一旦脚本加载慢/失败，页面会长时间保持 `opacity:0`（黑底），表现为"打开首页白屏一下"。
+| 文档 | 职责 |
+| --- | --- |
+| `README.md` | 项目总览、快速开始、目录结构、功能、配置、API 概览、架构 |
+| `docs/API.md` | 逐接口详细说明（方法、鉴权、参数、响应、错误、限流、实现文件） |
+| `docs/DEVELOPMENT.md` | 开发准则（本文件） |
+| `docs/CHANGELOG.md` | 当前版本更新日志，按时间倒序 |
+| `docs/CHANGELOG_*.md` | 历史更新日志归档 |
+| `docs/mcsm-deploy.md` | 面板部署指南 |
+| `docs/SECURITY_REPORT.md` | 安全评估报告 |
 
-**正确做法**：用**纯 CSS animation 自动入场**，不依赖 JS 添加类：
+> 不新增独立文档。确有必要时，先在 README 的「文档索引」登记并说明理由。
 
-```css
-.js .page-content {
-    animation: page-in 0.45s cubic-bezier(0.4, 0, 0.2, 1) both;
-}
-@keyframes page-in {
-    from { opacity: 0; transform: translateY(12px); }
-    to   { opacity: 1; transform: translateY(0); }
-}
-body.page-leaving .page-content {
-    animation: none;   /* 离开动画时取消入场动画 */
-    opacity: 0;
-    transform: translateY(-8px);
-    transition: opacity 0.3s ease, transform 0.3s ease;
-}
-```
+### 10.2 写作规范
 
-**检查清单：**
+- 文件名小写 + 连字符；章节层级清晰（`#` ~ `#####`）。
+- 每个文档开头放目录。
+- 接口按「方法 + 路径 — 说明」描述，字段用表格，示例用带语言标注的代码块。
+- 代码示例必须可直接运行或可直接对照实现。
+- 删除 / 重命名文档时同步修正所有链接。
 
-* [ ] 内容显示不依赖外部 JS 添加类（`opacity:0` 隐藏 + 类切换显示的方式慎用）
+### 10.3 更新流程
 
-* [ ] 入场动画用 CSS `animation` 自动播放，元素首次渲染即生效
-
-* [ ] 若 JS 禁用（`html` 无 `.js` 类），内容应默认可见，无动画
-
-* [ ] `body.page-leaving` 时用 `animation: none` 取消入场动画，避免与离场过渡冲突
-
-* [ ] 修改 `base.css` 后必须同步 bump `static/templates/base.html` 中的版本号（`v='15'`）
-
-### 5. 弹窗与模态框的放置位置
-
-全屏弹窗/模态框应放置在 `{% block page_modals %}` 中（在 `</main>` 之后渲染），**而非** `{% block content %}` 内，避免 `page-content` 的 `transform` 影响 `position: fixed` 定位。
-
-**检查清单：**
-
-* [ ] 模态框位于 `page_modals` block，不在 `content` block 内
-* [ ] 弹窗显示 / 隐藏只切换 `.modal-overlay` 的 `open` / `active` class，不要另写 `body.style.overflow`；`base.js` 的 `syncModalScrollLock()` 会自动锁定 `html/body` 滚动并拦截遮罩滚轮，避免滚动穿透
-
-### 5.1 公共文件映射（`/admin/public-files`）
-
-`core/middleware.py` 的 `serve_public_files_hook` 在进入 Flask 路由前尝试匹配 `public_paths`。`ROUTE_PREFIXES` 只放真正的路由前缀，**绝不能包含 `'/'`**——`str.startswith('/')` 对所有路径恒为真，会导致所有公开映射（尤其目录内文件）永远不命中而返回 404。根路径 `/` 由 `_should_skip_public_serve()` 单独判断。新增内部路由前缀时同步加入该元组；目录映射的本地路径支持 Windows 盘符（`C:\...` / `D:/...`），子路径拼接与路径遍历检查统一走 `_join_under_base()`。
-
-### 6. 图形验证码必须走统一模块
-
-全局验证码弹窗 HTML 位于 `base.html`，JS 逻辑位于 `base.js` 的 `CaptchaModal` 对象。页面通过 `CaptchaModal.show(hint, callback)` 或 `window.__showCaptchaModal(hint, callback)` 调用。
-
-**指南提交示例**：`guides/form.html` 不在模板内联渲染验证码，而是点击「提交审核」后再弹 `CaptchaModal`，验证通过才提交表单；验证码出错时弹窗内刷新验证码、不刷新页面，避免重置已填内容（表单保留隐藏的 `captcha`/`captcha_id` 字段）。
-
-**检查清单：**
-
-* [ ] 使用了全局 `CaptchaModal`，而非自行内联渲染验证码图片/输入框
-
-* [ ] 注入 `CaptchaModal.show` 时，若脚本位于页面中间（`base.js` 加载前），需用 `DOMContentLoaded` 包裹，确保 `CaptchaModal` 已定义
-
-* [ ] 验证码出错不应刷新整个页面（避免丢表单内容）
-
-## 路由检测与可达性验证
-
-### 1. 新增路由后必须验证可达性
-
-新增或修改路由后，必须用 `app.test_client()` 实际请求一次，确认公开页返回 200、受保护页在未登录时返回 302/401/403、POST 路由不返回 500：
-
-```python
-with app.test_client() as client:
-    resp = client.get('/buildings')          # 公开页 → 200
-    assert resp.status_code == 200
-    resp = client.get('/settings')           # 需登录 → 302 跳转
-    assert resp.status_code in (302, 401)
-```
-
-### 2. 检查清单
-
-* [ ] 新路由已实际请求验证（公开页 200）
-
-* [ ] 受保护路由在未登录时返回 302/401/403
-
-* [ ] POST 路由空表单请求不返回 500（返回 400/302 等合理状态码）
-
-* [ ] 静态文件请求返回 200 或 304
-
-* [ ] 模板中所有 `url_for` 端点名与路由函数名一致（见易错点 1）
-
-> 历史说明：曾用 `scripts/tests/test_routes.py` 的 `ROUTES` 清单集中检测路由，该脚本已随死代码清理移除；当前改为按上述方式在测试中逐个请求关键页面。
-
-### 6. Markdown 渲染与代码复制
-
-所有 Markdown 渲染页面必须遵循以下规则：
-
-**渲染流程：**
-
-1. 使用 `marked.js` 解析 Markdown 为 HTML
-2. 渲染完成后调用 `CodeBlocks.enhance(element)` 注入代码块一键复制按钮
-
-> 说明：已移除 highlight.js 语法高亮以减小静态资源体积、提升性能。代码块使用原生 `<pre><code>`
-> 渲染，仅保留一键复制功能。
-
-**已集成的 Markdown 渲染页面：**
-
-| 页面                       | 渲染方式                | 复制触发                                      |
-| ------------------------ | ------------------- | ----------------------------------------- |
-| `guides/detail.html`     | 直接 `marked.parse()` | `CodeBlocks.enhance()`                    |
-| `buildings/detail.html`  | 初始内容 + 评论分段加载       | `CodeBlocks.enhance()` + MutationObserver |
-| `docs.html`              | 动态加载                | `CodeBlocks.enhance()`                    |
-
-**新增 Markdown 渲染页面的步骤：**
-
-1. 在页面中加载 `marked.js`
-2. 使用 `marked.parse()` 渲染 Markdown 内容
-3. 渲染后立即调用 `CodeBlocks.enhance(containerElement)` 注入复制按钮
-
-**代码复制按钮说明：**
-
-* 复制按钮在 `base.js` 的 `CodeBlocks` 模块中实现
-
-* 鼠标悬停代码块时显示复制按钮，点击复制按钮复制代码内容
-
-* 复制成功后按钮显示"已复制"和绿色反馈，2秒后恢复
-
-* 支持 `navigator.clipboard` 和 `document.execCommand('copy')` 双保险
-
-* 动态加载的内容通过 MutationObserver 自动检测并增强
-
-**检查清单：**
-
-* [ ] 页面加载了 `marked.js`
-
-* [ ] Markdown 渲染后调用了 `CodeBlocks.enhance()`
-
-* [ ] 动态加载的内容会被 MutationObserver 自动捕获
-
-### 7. 路由层使用 Flask 对象必须导入（NameError 事故）
-
-路由层使用 `request`、`flash`、`redirect`、`url_for`、`abort`、`render_template`、
-`jsonify`、`session` 等 Flask 对象时，**必须**在文件顶部 `from flask import ...` 中显式导入。
-漏导入会在运行时抛 `NameError`，导致整个请求 500。
-
-```python
-# ❌ 错误：用了 request 但没导入
-from flask import render_template, redirect, url_for, flash, abort
-
-@admin_bp.route('/admin/users/<int:user_id>/delete', methods=['POST'])
-def admin_delete_user(user_id):
-    _svc_delete_user(user, user_id, request.remote_addr)  # NameError → 500
-
-# ✅ 正确
-from flask import render_template, redirect, url_for, flash, abort, request
-```
-
-> 真实事故：`routes/admin/users.py` 漏导入 `request`，导致「删除用户」接口对任何用户都返回 500。
-> 这类错误与具体数据无关，漏一行 import 就会全接口失效。
-
-**预防措施：** 提交前运行测试套件并逐页请求关键页面：
-`python -m pytest scripts/tests -q`。
-
-**检查清单：**
-
-* [ ] 路由层用到的每个 Flask 对象都已在 `from flask import ...` 中导入
-
-* [ ] 已运行 `python -m pytest scripts/tests -q` 确认通过
-
-### 8. Markdown 编辑器序列化（反斜杠 / 空标记污染）
-
-编辑器的富文本 → Markdown 序列化（`static/js/pages/markdown-editor.js` 的 `serializeInline / serializeBlock`）直接决定源文件内容，必须遵守：
-
-* **空内联标记不输出**：`<strong>` / `<em>` / `<del>` 内部为空时返回空串，禁止输出 `****` / `**` / `~~~~`（`****` 会被 marked 解析成 `<hr>`，保存后表现为凭空多出 `---`）
-* **换行只用硬换行**：富文本中的 `<br>` 序列化为两个空格 + `\n`（`'  \n'`），不要用反斜杠 `\\\n`；否则空段落 `trim()` 后会残留孤立的反斜杠
-* **空段落必须为空**：`<p><br></p>` 这类占位段落序列化为空串，并在块级 `flush()` 时去掉尾部空白，避免把换行标记带入 Markdown
-* 修改序列化逻辑后，必须用 `node --check` 校验，并手动走一遍：加粗后删除 → 保存 → 重开，确认没有多出 `\`、`****`、`---`
-* **表格格式固定**：表格分隔行每列固定 3 个破折号（`| --- |`），对齐仅通过 `:` 表达（`:---` / `:---:` / `---:`）。**禁止**再把列宽编码进破折号数量，也**禁止**重新引入列宽拖拽手柄 / `colgroup` / `data-cols`——列宽一律交给浏览器自适应
-* **表格行之间不得有空行**：GFM 要求表头紧邻分隔行、数据行连续，否则 marked 不会解析为表格（表现为发布后表格「消失」）。服务端 `services/guides/__init__.py` 的 `normalize_markdown_tables()` 在 `read_guide_content()` / `write_guide_content()` 双侧兜底；任何新增的读写 `guide.md` 入口都必须走这两个函数，不得绕过
-
-## 构建与发布
-
-### 1. 安装与启动
-
-```bash
-pip install -r requirements.txt
-python app.py          # 默认监听 0.0.0.0:5000
-```
-
-生产环境监听端口、登录保护等在 `config.py` 中配置；HTTPS 由内网穿透 / 反向代理层终结，应用本身不处理 SSL。
-
-### 2. 直接部署（Waitress 内置）
-
-默认使用内置 Waitress WSGI 服务器（生产级多线程），无需反向代理即可独立运行：
-
-```bash
-python app.py                    # 默认监听 0.0.0.0:5000
-```
-
-#### Nginx 反向代理（可选）
-
-生产环境推荐前置 Nginx，代理到内置服务器：
-
-```nginx
-server {
-    listen 80;
-    server_name your-domain.com;
-    client_max_body_size 50m;   # 允许大文件上传
-
-    location / {
-        proxy_pass http://127.0.0.1:5000;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        # 关键：SSE 长连接，保证实时日志/进度不中断
-        proxy_buffering off;
-        proxy_cache off;
-        proxy_read_timeout 3600s;
-        proxy_send_timeout 3600s;
-        proxy_chunked_transfer_encoding off;
-    }
-}
-```
-
-> **SSE 依赖**：实时进度条、日志实时刷新均依赖 SSE 长连接，Nginx 必须
-> 关闭缓冲（`proxy_buffering off`）并调大读超时，否则连接会中断。
-
-#### 开启 HTTPS
-
-应用层**不再内置 SSL**，证书与 HTTPS 统一由**内网穿透客户端**或**反向代理（如 Nginx）**终结：在穿透 / 代理层配置证书并把 HTTPS 流量回源到本应用的 HTTP 端口（默认 `127.0.0.1:5000`）即可，应用无需任何改动。
-
-### 3. 构建静态资源
-
-前端使用本地化的第三方库（Lucide、marked、Monaco Editor 等），需要通过构建脚本下载：
-
-```bash
-python scripts/build/build_static.py
-```
-
-* 下载 Lucide、marked、字体及 Monaco Editor（约 12MB）到 `static/lib/`
-
-* 结果写入 `static/lib/lib-version.json`
-
-* `static/lib/monaco/`（~12MB）被 `.gitignore` 排除，**不提交到 Git**
-
-* 用户通过一键更新或从 GitHub 下载 ZIP 后，都需要运行此命令以补齐 Monaco
-
-### 4. 打包 ZIP 发布
-
-每次代码变更后，打包为 ZIP 压缩包供用户通过一键更新下载：
-
-```bash
-# 1. 构建静态资源（下载所有 CDN 资源到本地，包括 Monaco）
-python scripts/build/build_static.py
-
-# 2. 打包发布 zip（自动排除敏感文件与大型目录）
-python scripts/build/package.py
-
-# 3. 确认所有文件已提交并推送（触发一键更新）
-git status
-git push
-```
-
-打包脚本自动排除：数据库、上传文件、备份、日志、SSL 证书、`.env`、Monaco、`node_modules`、`.git` 等。
-
-### 5. 完整发布流程（示例命令）
-
-```bash
-cd /workspace
-python -m pytest scripts/tests -q        # 1. 测试套件通过
-python scripts/build/build_static.py   # 2. 构建静态资源
-python scripts/build/package.py        # 3. 打包 zip
-git add -A                             # 4. 暂存（确认 .gitignore 生效）
-git commit -m "..."                    # 5. 提交
-git push origin main                   # 6. 推送，触发一键更新（见 README.md 一键更新机制）
-```
-
-## 更新规则
-
-* 每次代码变更后必须运行 `python scripts/build/build_static.py` 验证构建通过
-
-* 提交前检查 `.gitignore` 确保敏感文件不被提交
-
-* 推送到 GitHub 后，一键更新即可生效
-
-* 修改 `base.css`/`base.js` 后必须同步 bump 模板中的版本号，避免浏览器缓存
-
-* 模板 / JS 中新增或修改 Tailwind 工具类后，必须重新编译 `static/css/tailwind.css`（命令见 README「重新编译 Tailwind CSS」），并 bump 其版本号；否则新类不会生效（按钮丢 padding / 圆角）
-
-* 一键更新的**机制原理**见 [README.md 一键更新机制](../README.md#一键更新机制)
-
-### 更新脚本机制
-
-每次一键更新完成（文件同步完成后、服务器重启前），会自动尝试运行 `scripts/uploads.py`：
-
-* 如果 `scripts/uploads.py` 存在，则执行它，用于清理旧数据、迁移文件等
-
-* 如果 `scripts/uploads.py` 不存在，则静默跳过，不影响更新流程
-
-* 执行超时 120 秒，超时后自动跳过并继续重启
-
-**`scripts/uploads.py`** **职责：**
-
-1. **清理旧数据**：删除已废弃功能的数据（如投票、征集等）及其关联的附件文件
-2. **迁移文件**：将 `uploads/` 根目录中散乱的文件按功能分类迁移到子目录
-3. 在更新完成后自动运行，无需手动调用
-
-**`scripts/migrate_uploads.py`** **职责：**
-
-1. 委托 `scripts/uploads.py` 执行清理与迁移
-2. 可选构建静态资源（`--build` 参数触发 `scripts/build/build_static.py`）
-3. 用于需要手动迁移的场景，或作为一键更新的补充
-
-**`scripts/migrate_guides.py`** **职责：**
-
-1. 把数据库 `server_guides.content` 中的指南正文写入 `uploads/guides/<指南ID>/guide.md`，并清空数据库正文（正文改由文件维护，见 `services/guides/`）
-2. 支持 `--dry-run`（只统计不写入）与 `--overwrite`（文件已存在时用数据库正文覆盖）
-3. 幂等：可重复执行，已迁移的指南会保留文件并清理残留数据库正文
-
-```bash
-python scripts/migrate_guides.py --dry-run   # 先演练确认数量
-python scripts/migrate_guides.py             # 正式迁移
-```
-
-**指南文件存储约定：**
-
-* 每个指南一个目录 `uploads/guides/<ID>/`，内含 `guide.md`（唯一正文来源）、`config.json`（指南配置）与 `assets/`（图片、视频统一存放，不建子目录）。正文里的资源统一写相对链接 `assets/<文件名>`，**不得包含指南 ID**；读取时以 `guide.md` 为唯一来源，缺失即视为空正文，不再回退数据库旧内容。历史数据由 `scripts/migrate_guide_assets.py` 迁移，运行时代码不保留迁移分支
-* **修改已发布指南必须走「替换稿」流程**：`guide_edit` 遇到 `status = 'approved'` 时不原地改写，而是由 `_start_replacement()` 调用 `guide_store.copy_guide_dir()` 复制整条指南到新雪花 ID，`server_guides.replace_of` 记录原指南 ID；同一用户同一原指南已有未通过（draft / pending / rejected）的替换稿时直接复用，禁止重复复制
-* **替换在审核通过时原子完成**：`routes/admin/guides/_apply_replacement()` 删除原指南数据行与原收藏副本，再把草稿行 `id` 改为原指南 ID（`replace_of` 置空、状态 approved，`author_id / is_pinned / sort_order / created_at / published_at` 还原），最后 `guide_store.replace_guide_dir()` 用草稿目录整体替换原目录（原目录先移备份位再删除）。正文资源使用相对链接，**无需改写链接**。**不得采用「重新插入新行」或「逐文件复制」的写法**，否则收藏 / 外链会失效或残留草稿文件
-* 替换稿被驳回时原指南保持不变，替换稿本身按「被驳回内容 24 小时自动删除」规则清理；`guide_favorites` 中指向草稿 ID 的记录在替换时一并删除
-* 正文图片：上传接口 `POST /api/guides/<id>/images`（`KIND_IMAGE` 校验、单张 ≤ `USER_IMAGE_MAX_BYTES`、计入指南资源总量），存储统一走 `guide_store.save_guide_image()`（写入 `assets/` 根目录，文件名固定为 `<雪花ID>.<扩展名>`，**不做内容哈希去重**）；编辑器资源标签页上传 / 拖拽 / 剪贴板粘贴均走此接口，插入标准 Markdown `![alt](assets/<文件名>)`。资源配额统计使用 `directory_total()`
-* **`config.json` 规范**：固定为「版本号 + 分节」结构 `{"version": 1, "videos": {"<真实文件名>.mp4": {"title": "<页面显示名称>"}}}`；新增配置项时只追加分节 / 字段，不改已有结构。读写统一走 `services/guides/` 的 `read_guide_config()` / `write_guide_config()`（原子写入），不要在其他层直接读写该文件；删除资源时同步清理对应配置项
-* 新建指南时即生成指南 ID 与目录（正文为空），状态为 `draft`；点击「新建指南」直接创建标题为「未命名指南」的草稿，标题 / 摘要 / 正文再在编辑页修改。之后直接写入正文与 `assets/`
-* **草稿删除权限**：作者只能删除 `draft` / `rejected` 指南（`POST /api/guides/<id>/delete`），删除时同步移除整个指南目录；`pending` / `approved` 不允许作者直接删除，必须先走审核 / 拒绝流程
-* 「我的指南」为独立页面 `/guides/my`（需登录）
-* 草稿保存保持 `draft` 且无需验证码；「发布」（`POST /api/guides/<id>/publish`）将草稿改为 `pending`，要求正文非空
-* 草稿计入「未通过指南数量」（统计条件 `status != 'approved'`），超过上限时禁止新建
-* 每个指南 `assets/` 合计上限由系统设置「指南资源」的 `GUIDE_RESOURCE_MAX_MB` 控制（默认 50MB，1–1024），读取统一用 `config.get_guide_resource_limit()`，**禁止硬编码**；视频扩展名见 `GUIDE_VIDEO_EXTENSIONS`
-* **视频上传必须统一转码（异步）**：路由调用 `guide_store.start_guide_video_upload()`，原始文件先写入指南目录内的 `.upload_` 临时目录，再由后台线程调用 `_process_video()`；转码在 `.transcode_` 临时目录中进行（`FFMPEG_BIN` 转 MP4 / H.264：`libx264 -preset veryfast -crf 23`、`yuv420p`、`-movflags +faststart`，音频 `aac 128k`），只有最终 MP4 通过 `os.replace` 进入 `assets/`。最终文件名固定为 `<雪花ID>.mp4`（`core.shared.snowflake.next_id()`），**不得沿用原始文件名**；超时由 `GUIDE_VIDEO_TRANSCODE_TIMEOUT` 控制，失败 / 超时 / ffmpeg 缺失时必须删除半成品，`finally` 删除临时目录；**配额只按最终 MP4 大小校验**，原始上传文件与中间产物不得计入
-* **转码进度**：`ffprobe` 读取时长，解析 ffmpeg `-progress` 的 `out_time_us`（微秒）换算百分比（封顶 99，结束置 100）；任务状态保存在内存 `_VIDEO_TASKS`（`status / percent / message / item / error`，TTL 清理），前端通过 `GET /api/guides/<id>/videos/progress/<task_id>` 轮询。上传阶段进度由 XHR `upload.onprogress` 驱动，上传完成后进度条归零再切换为转码进度
-* 视频在 Markdown 中统一存为 `@[video](assets/<文件名>)`（marked 块级扩展，相对链接），编辑器 / 详情页 / 管理后台预览负责补全资源前缀并渲染为 `<video>`；同时兼容历史 `<video>` HTML
-* 编辑器视频上传使用 XHR（`upload.onprogress`）驱动上传进度，完成后进度条归零并轮询转码进度；进度条统一复用 `macros/progress.html` 的 `progress_track()`（JS 侧用 `.progress-track / .progress-fill`），禁止另起样式；上传配额、改名与删除确认均使用站内控件 / `CustomModal`，不使用原生 file 控件、`window.confirm` 或 `window.prompt`
-* **资源标签页是图片 / 视频的唯一入口**：「插入」标签页只保留链接与表格按钮，**不得再加图片 / 视频按钮**。资源列表统一走 `GET /api/guides/<id>/resources`（`routes/guides/api/_resource_payload()` 生成 `type / title / link / url / delete_url / compress_url`，视频额外 `rename_url`；`link` 为正文相对链接），删除 / 压缩 / 改名分别为 `POST /api/guides/<id>/resources/<文件名>/{delete,compress,rename}`；粘贴 / 拖拽图片或视频后必须通过 `openResourceTab()` 切到资源页并用 `setResourceProgress()` 展示进度条。正文只存 `link`，编辑器用根节点 `data-mre-asset-base` 补全后渲染，序列化时还原
-* **一键有损压缩**：`guide_store.compress_guide_asset()` 中的 `_compress_image_file()`（Pillow：JPEG / WEBP 搜质量，PNG / GIF 搜颜色数）与 `_compress_video_file()`（ffmpeg 按 90% 码率，AAC 96k）都必须先写隐藏临时文件再用 `os.replace()` 原子替换原文件；压缩目标为当前体积的 90%（`COMPRESS_RATIO`），体积无法继续下降时返回提示且**不得破坏原文件**；临时文件在 `finally` 中清理。
-* 视频伪文件名统一走 `set_video_title()` / `video_title()`（写入 / 读取 `config.json`），页面渲染时由 URL 文件名查表注入 `<video data-title="...">`，播放器把它显示在**视频下方**（不遮挡画面）；改名 / 删除等写操作必须校验作者或管理员权限
-* 富文本中的视频为 `contenteditable="false"` 原子块：插入于光标之后，前后保证有空段落，支持整体选中复制 / 剪切 / 删除
-* **播放器视觉约定**：`.svp` 只负责外层（`overflow: visible`，供上拉框溢出），视频 / 中央播放按钮 / 控制栏都放在 `.svp-stage` 内相对定位；伪文件名 `.svp-caption` 是 stage 之后的普通流元素，**禁止再叠加在视频上**。控制按钮统一为**淡蓝色磨砂玻璃材质**：半透明浅蓝渐变底 + `backdrop-filter: blur() saturate()` + 白色描边 + 内高光 + 柔和投影，图标为白色并带细投影（投影加在 `svg` 上，不要加在按钮本身，避免 `filter` 与 `backdrop-filter` 互相干扰）；控制栏容器保持透明，暂停态只显示中央的磨砂玻璃播放按钮，**不得给画面加任何蓝色 / 半透明遮罩**。上拉框内部按钮需把玻璃底 / 边框 / `backdrop-filter` 重置为透明（`.svp-pop .svp-btn`），避免在浅色面板上叠加出厚重色块
-* **播放器覆盖层不得拦截编辑操作**：`.svp-overlay` 只允许中央播放图标响应指针（`pointer-events: none` + `svg { pointer-events: auto }`），暂停时也不加任何全屏遮罩；否则鼠标无法落进视频、编辑器收不到点击，复制 / 剪切 / 删除 / 选中全部失效
-* **音量 / 倍速一律用上拉框**：音量按钮点击后展开 `.svp-pop-volume`（滑块直接调节 + 静音开关），倍速按钮展开 `.svp-pop-speed`（选项列表高亮当前速度）；上拉框默认向上，上方空间不足时自动加 `is-below`，点击播放器外部 / 其它控件自动收起。播放器实例统一登记在模块级 `players`，只用一条 document 监听收起上拉框，禁止每个视频各注册一条
-* **编辑器视频点击约定**：点击视频主体（含播放器容器）由编辑器的捕获阶段 `click` 处理，`stopPropagation()` 阻止播放器播放，并用 `selectVideoBlock()` 以 `Range.selectNode(.svp)` 选中整个视频块；点击播放器控制栏 / 上拉框则不选中，保证控件仍可用。`videoAnchorFromRange()` 在选区覆盖视频时也能正确识别当前视频，用于「更换视频」
-* **编辑器视频剪贴板约定**：选区包含视频时，`copy` / `cut` 必须 `preventDefault()` 并调用 `selectionMarkdown(range)`（文字 + `@[video](url)`）写入 `text/plain`；剪切用 `range.deleteContents()` + `normalize()` 后重设选区，内容为空时补 `<p><br></p>`。`paste` 监听识别到 `@[video](url)` 时经 `mdToHtml` 还原，优先 `execCommand('insertHTML')`，失败必须回退到 `Range.deleteContents()` + `insertNode(fragment)` 手动插入（部分浏览器会静默失败，没有兜底会表现为「粘贴无反应」），随后设置原子块属性与前后空段落
-* **背景图片列表分段加载**：`GET /api/backgrounds/list` 仅分页返回已通过背景（`page` + `BACKGROUNDS_PER_PAGE`），返回 `page / page_size / total / has_more`；前端首屏取第 1 页，`/backgrounds` 的「加载更多」按 `page+1` 追加，「我的上传」保持全量
-* 删除指南（作者删除草稿、管理员删除、被驳回超时清理）时必须调用 `guide_store.delete_guide_dir(id)`，避免残留目录
-
-**页面路由与前端资源约定：**
-
-* **子页面必须使用独立路由**：`我的建筑` / `我的收藏` 等页面一律使用 `/buildings/my`、`/buildings/favorites` 这类独立路径，并配套独立 API（`/api/buildings/my`、`/api/buildings/favorites`），**禁止再用 `?my=1` / `?fav=1` 等查询参数切换页面类型**（与 `/guides/my`、`/music/my` 保持一致）；查询参数只允许用于搜索（`q`）、标签（`tag`）、分页（`page`）等筛选
-* **前端 JS 按需加载**：`js/core/video-player.js` 不再由 `base.html` 全站引入，只在实际使用视频的页面（指南详情、Markdown 编辑器所在页、管理后台预览）通过 `page_scripts` / `extra_script` 引入；新增公共组件时同样优先按需加载，避免拖慢全站首屏
-* **悬浮提示统一走 `.site-tooltip`**：`static/js/core/base.js` 的 `initSiteTooltip()` 通过事件委托接管全站 `[title]` / `[data-tooltip]`，悬停时把 `title` 暂存并移除（避免原生气泡），移出 / 滚动 / 点击 / 失焦时还原；定位只写入 `left` / `top`，动画只用 `opacity` / `transform`。**可编辑区域（`[contenteditable]` / `textarea`）内跳过接管**，否则编辑器序列化时会丢链接标题。新组件如需提示，直接写 `title` 或 `data-tooltip` 即可，不要另造气泡
-
-**开发准则：**
-
-* 新增需要更新后自动清理的数据时，在 `scripts/uploads.py` 的 `_clean_polls_data()` 类似函数中添加对应逻辑
-
-* 新增文件分类目录时，在 `scripts/uploads.py` 的文件迁移部分添加对应规则
-
-* 确保 `scripts/uploads.py` 可独立运行且幂等（多次运行不影响结果）
-
-* 不需要自动运行脚本时，删除 `scripts/uploads.py` 即可（更新器自动跳过）
-
+1. 功能或配置变更后更新 `README.md` 对应章节。
+2. 接口新增 / 修改 / 删除时同步更新 `docs/API.md`。
+3. 在 `docs/CHANGELOG.md` 的 `## [Unreleased]` 下记录变更。
+4. 运行 `compileall` 与 `pytest`。
+5. 按「核心易错点」自检后提交，提交说明使用中文。
