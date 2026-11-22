@@ -64,7 +64,7 @@
     <!-- 入场动画见 base.css：纯 CSS animation，不依赖 JS，避免白屏 -->
     <noscript><style>.page-content{opacity:1!important;transform:none!important}</style></noscript>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/tailwind.css', v='6') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css', v='60') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css', v='61') }}">
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <script>
     // 全站 AJAX CSRF 防护：自动为所有 fetch/XHR 请求添加 X-CSRF-Token 请求头
@@ -488,7 +488,7 @@
         </div>
     {% endcall %}
 
-    <script src="{{ url_for('static', filename='js/core/base.js', v='31') }}"></script>
+    <script src="{{ url_for('static', filename='js/core/base.js', v='32') }}"></script>
     {# 页面按需加载的公共组件（如 uploader.js / search.js / video-player.js），避免全站加载 #}
     {% block page_scripts %}{% endblock %}
 

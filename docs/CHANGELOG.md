@@ -4,6 +4,12 @@
 
 ### 新增
 
+* **自研日历选择器**（`static/templates/macros/calendar.html`、`static/css/calendar.css`、`static/js/components/calendar-picker.js`、`static/templates/bots/apply.html`）：
+  * 不再使用浏览器原生 `date` / `datetime-local` 控件，统一通过 `calendar_field()` 宏渲染触发器、隐藏域与日历弹层；支持 `mode='date'`（`YYYY-MM-DD`）与 `mode='datetime'`（`YYYY-MM-DDTHH:MM`）。
+  * 弹层挂载到 `document.body` 并使用 `position: fixed` 定位，避免被 `.pixel-card` 的 `content-visibility` / `contain` / `backdrop-filter` 裁剪；空间不足时自动向上展开，滚动 / 窗口缩放时重新定位。
+  * 支持周一为首列、上一月 / 下一月、今天、清除、确定、外部点击与 `Escape` 关闭；日期时间模式可编辑时 / 分，按回车直接确定。
+  * 样式与脚本按需引入：页面在 `extra_head` 调用 `calendar_styles()`、在 `extra_script` 调用 `calendar_script()`，未使用日历的页面不加载任何相关资源。申请假人页的下线时间已切换为该组件。
+
 * **申请假人（BOT）**（`services/bot_applications/`、`routes/bots/`、`routes/admin/bots/`、`static/templates/bots/apply.html`、`static/templates/admin/bots.html`）：
   * 入口在导航「服务器 → 申请假人」。用户填写 BOT 名称、生成坐标与下线时间；点击「使用玩家位置」可在弹窗中搜索 / 选择在线玩家，服务端执行 `/data get entity <玩家> Pos` 并用正则解析 `[x, y, z]`（兼容 `50000.39d` 这类 `d` 后缀）回填坐标。
   * 申请进入 `bot_applications` 表（雪花 ID），状态 `pending / approved / rejected / killed`；待审核假人**计入「待审核余额」总量**，并受单独上限 `BOT_PENDING_LIMIT` 约束（默认 2，可在系统设置 → 假人调整），管理员豁免。
@@ -22,6 +28,15 @@
   * 新增 10 个测试：公网域名过滤、Key 生成 / 配置校验与布尔归一化、URL 构建去重、提交载荷、未启用拦截、Key 文件路由（匹配 200 / 不匹配 404）。
 
 ### 修复
+
+* **弹窗打开时滚轮滚动穿透背景页面**（`static/css/base.css`、`static/js/core/base.js`）：
+  * 新增统一的 `syncModalScrollLock()`：通过 `MutationObserver` 监听 `.modal-overlay` 的 `open` / `active` class（以及内联 `style` 切换），自动为 `html` / `body` 添加 `modal-open`；CSS 以 `overflow: hidden !important` 锁定页面滚动。
+  * `CustomModal` 打开 / 关闭改为调用同一函数，不再单独写 `document.body.style.overflow`；遮罩空白区域的 `wheel` 事件直接 `preventDefault`，弹窗内容区与 `.modal-body` 增加 `overscroll-behavior: contain`，阻断滚动链。
+
+* **映射文件夹后访问目录内文件 404**（`core/middleware.py`）：
+  * 根因是 `ROUTE_PREFIXES` 包含 `'/'`，而 `path.startswith(ROUTE_PREFIXES)` 对所有路径恒为真，导致 `serve_public_files_hook` 永远直接返回、`try_serve_public()` 从未执行。
+  * 现在从元组移除 `'/'`，新增 `_should_skip_public_serve()`：根路径 `/` 单独判断，其余按前缀跳过；目录映射的子文件与 `index.html` 均可正常访问，单文件映射同步恢复。Windows 盘符路径（`C:\...` / `D:/...`）的解析与子路径拼接沿用既有安全函数。
+  * 新增 `scripts/tests/test_public_files.py`（8 个用例）：路由前缀回归、目录子文件、目录索引、单文件、停用映射、路径遍历拦截与 Windows 盘符识别；全量测试 373 passed。
 
 * **磨砂玻璃发灰**（`static/css/base.css`、`static/templates/index.html`、`guides/*`、`buildings/index.html`、`backgrounds/upload.html`、`site/map.html`、`error_simple.html`、`macros/markdown_editor.html`）：此前各页面大量硬编码 `rgba(255,255,255,0.4~0.72)` + `backdrop-filter`，白色占比过低，在深色背景图或复杂背景上会泛成灰色玻璃。现统一为 `--glass-bg`（纯色 `rgba(255,255,255,0.9)`）与 `--glass-blur`（`blur + saturate + brightness`）两个变量，并新增 `.glass-panel` / `.glass-surface` 公共类；首页、指南、建筑、背景上传、网页地图、错误页、Markdown 编辑器与 `base.css` 内的按钮 / 输入框 / 播放器 / 搜索框全部改用同一配方，弹窗与卡片视觉一致，深色背景下不再发灰。
   * 修复 hover 瞬间闪成透明磨砂玻璃：`--glass-bg` 由 `linear-gradient()` 改为纯色 `rgba(255,255,255,0.9)`。渐变与纯色之间无法平滑插值，`background` 过渡时会先露出透明底再重绘；改为纯色后按钮、悬浮卡片等的 hover 平滑过渡，始终保持白色。新增回归测试确保 `--glass-bg` 不再使用渐变。

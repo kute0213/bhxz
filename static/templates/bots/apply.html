@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from 'macros/calendar.html' import calendar_field, calendar_styles, calendar_script %}
 {% block title %}申请假人 - 滨海小镇服务器工具{% endblock %}
 {% block description %}在滨海小镇 Minecraft 服务器申请生成假人（BOT）：可设置坐标、BOT 名称与下线时间，支持从在线玩家位置一键获取坐标，提交后由管理员审核，到期自动下线。{% endblock %}
 
@@ -23,6 +24,8 @@
     .status-killed { background: rgba(100,116,139,.16); color: #475569; }
 </style>
 {% endblock %}
+
+{% block extra_head %}{{ calendar_styles() }}{% endblock %}
 
 {% block content %}
 <section class="page-container py-8 sm:py-12">
@@ -80,11 +83,9 @@
                     <p class="text-xs text-muted mt-1.5">点击「使用玩家位置」可从在线玩家中搜索选择，并自动填入其当前坐标</p>
                 </div>
 
-                <div>
-                    <label class="text-sm text-muted block mb-1.5">下线时间</label>
-                    <input type="datetime-local" id="offline-at" class="input-field w-full px-3 sm:px-4 py-2.5 text-sm">
-                    <p class="text-xs text-muted mt-1.5">到达该时间后系统会自动执行杀死假人的指令</p>
-                </div>
+                {{ calendar_field('offline_at', id='offline-at', label='下线时间', mode='datetime',
+                                  required=True,
+                                  help_text='到达该时间后系统会自动执行杀死假人的指令') }}
 
                 <button type="submit" id="apply-btn" class="btn-primary px-6 py-2.5 text-sm inline-flex items-center gap-2">
                     <i data-lucide="send" class="w-4 h-4"></i>提交申请
@@ -164,6 +165,7 @@
 {% endblock %}
 
 {% block extra_script %}
+{{ calendar_script() }}
 <script>
 (function () {
     var ALL_PLAYERS = {{ online_players|tojson }};

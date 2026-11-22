@@ -197,6 +197,10 @@ python scripts/build/package.py
 
 * **自定义悬浮提示**：全站链接 / 按钮的 `title` 提示统一替换为与站点一致的磨砂玻璃气泡（`static/js/core/base.js` + `.site-tooltip`）。悬停 180ms 后出现，默认显示在元素上方居中，上方空间不足自动翻到下方，并自动避让视口左右边界；只过渡 `opacity` / `transform`，不触发布局抖动；支持 `[title]` 与 `[data-tooltip]`，滚动 / 点击 / 失焦立即隐藏，编辑器可编辑区域内保留原生行为以免标题被误删。
 
+* **自研日历选择器**：日期 / 日期时间输入统一使用 `macros/calendar.html` 的 `calendar_field()`（隐藏域值分别为 `YYYY-MM-DD` / `YYYY-MM-DDTHH:MM`），不再依赖浏览器原生 `date` / `datetime-local` 控件。弹层挂载到 `body` 并使用 `position: fixed` 定位，避免被 `.pixel-card` 的裁剪与层叠上下文影响；样式与脚本仅在需要的页面通过 `calendar_styles()` / `calendar_script()` 按需引入，不增加全站负担。
+
+* **弹窗滚动锁**：任何 `.modal-overlay`（页面自定义弹窗与 `CustomModal`）打开时，`base.js` 的 `syncModalScrollLock()` 会统一为 `html/body` 添加 `modal-open` 并锁定滚动；遮罩空白区域的滚轮事件直接拦截，弹窗内容区使用 `overscroll-behavior: contain` 阻止滚动链，鼠标滚轮不再穿透滚动背后页面。
+
 ### 用户系统
 
 * 注册/登录（群内验证码 + 邮箱验证码 + 图形验证码三重验证）
@@ -234,7 +238,7 @@ python scripts/build/package.py
 
 * 自动维护（手动/自动，数据备份 + 日志文件清理，极限压缩 zip，进度条；备份目录支持设置绝对/相对路径，默认 `../bhxz_backups`）
 
-* 公开文件管理
+* 公开文件管理（单文件 / 目录映射；目录支持子文件与 `index.html`，本地路径兼容 Windows 盘符 `C:\...` / `D:/...`）
 
 * 广播邮件（复用全站统一编辑器，富文本 / Markdown 双模式 + 白名单 HTML 清洗，安全防 XSS）
 

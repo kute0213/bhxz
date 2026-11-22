@@ -392,6 +392,8 @@ render_page('admin/admin_users.html')          # ❌ 双重前缀
 
 > 真实事故：`static/templates/buildings/detail.html` 用 `{% include 'macros/modal.html' %}` 引入弹窗宏，访问 `/buildings/<id>` 时 `modal_shell is undefined` 直接 500。
 
+**按需组件（日历）**：日期 / 日期时间输入统一使用 `macros/calendar.html` 的 `calendar_field()`，禁止使用原生 `date` / `datetime-local`；在页面 `{% block extra_head %}` 中调用 `calendar_styles()`、在 `{% block extra_script %}` 顶部调用 `calendar_script()`，只在需要日历的页面引入，不要全站加载。隐藏域值格式固定为 `YYYY-MM-DD`（`mode='date'`）或 `YYYY-MM-DDTHH:MM`（`mode='datetime'`），页面 JS 用原有 id 读取即可。
+
 ### 6. SEO / GEO 元信息（title / description / canonical / 结构化数据）
 
 `base.html` 已统一输出 `meta robots`、`meta description`、`canonical`、hreflang、Open Graph 与 Twitter 卡片标签，以及全站 WebSite + Organization JSON-LD；默认描述对所有页面生效。新增公开页面时必须：
@@ -427,7 +429,8 @@ IndexNow 的启用开关、Key、每日开关与推送时间统一登记在 `con
 * 定时任务用 `core.shared.scheduler.register_task()`（假人到期下线任务名 `bot-offline-scheduler`，每 60 秒扫描，单周期最多 50 条，RCON 失败保留状态下周期重试），禁止新建线程 / Timer；
 * RCON 用 `services.rcon.client.execute_command()`，玩家名必须经 `sanitize_rcon_username()` 清洗，数值坐标先转 `float` 再拼指令，杜绝命令注入；生成 / 杀死指令模板放入 `SETTINGS_REGISTRY`（`BOT_SPAWN_COMMAND` / `BOT_KILL_COMMAND`）以适配不同插件；
 * 待审核数量统一走 `services.content_limits.check_pending_limit(user, 'bot')`：既计入「待审核余额」总量，又受单独上限 `BOT_PENDING_LIMIT` 约束（默认 2），管理员豁免；新类型需在 `_PENDING_TYPES` 登记表名 / 用户列 / 状态条件 / 上限键；
-* 入口同时加在桌面导航「服务器」下拉与移动端侧边栏；页面属于私有页，`/bots` 必须列入 `core/seo.py` 的 `_PRIVATE_PREFIXES`。
+* 入口同时加在桌面导航「服务器」下拉与移动端侧边栏；页面属于私有页，`/bots` 必须列入 `core/seo.py` 的 `_PRIVATE_PREFIXES`；
+* 下线时间等日期时间输入使用自研日历组件（`macros/calendar.html` 的 `calendar_field()`），不要使用原生 `datetime-local`。
 
 ## 测试规范
 
@@ -551,6 +554,11 @@ body.page-leaving .page-content {
 **检查清单：**
 
 * [ ] 模态框位于 `page_modals` block，不在 `content` block 内
+* [ ] 弹窗显示 / 隐藏只切换 `.modal-overlay` 的 `open` / `active` class，不要另写 `body.style.overflow`；`base.js` 的 `syncModalScrollLock()` 会自动锁定 `html/body` 滚动并拦截遮罩滚轮，避免滚动穿透
+
+### 5.1 公共文件映射（`/admin/public-files`）
+
+`core/middleware.py` 的 `serve_public_files_hook` 在进入 Flask 路由前尝试匹配 `public_paths`。`ROUTE_PREFIXES` 只放真正的路由前缀，**绝不能包含 `'/'`**——`str.startswith('/')` 对所有路径恒为真，会导致所有公开映射（尤其目录内文件）永远不命中而返回 404。根路径 `/` 由 `_should_skip_public_serve()` 单独判断。新增内部路由前缀时同步加入该元组；目录映射的本地路径支持 Windows 盘符（`C:\...` / `D:/...`），子路径拼接与路径遍历检查统一走 `_join_under_base()`。
 
 ### 6. 图形验证码必须走统一模块
 

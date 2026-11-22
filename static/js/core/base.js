@@ -378,6 +378,53 @@ document.addEventListener('keydown', function (e) {
     }, true);
 })();
 
+// 统一弹窗滚动锁
+// 任何 .modal-overlay.open / .modal-overlay.active（CustomModal 与页面级弹窗）
+// 出现时锁定 html/body 滚动，避免鼠标滚轮穿透滚动背后的页面。
+// 页面级弹窗可能通过 class 或内联 style 切换显示，故同时监听 class 与 style。
+var syncModalScrollLock = (function () {
+    var scheduled = false;
+
+    function sync() {
+        var hasOpen = !!document.querySelector('.modal-overlay.open, .modal-overlay.active');
+        document.documentElement.classList.toggle('modal-open', hasOpen);
+        document.body.classList.toggle('modal-open', hasOpen);
+    }
+
+    function schedule() {
+        if (scheduled) return;
+        scheduled = true;
+        requestAnimationFrame(function () {
+            scheduled = false;
+            sync();
+        });
+    }
+
+    if (document.body) {
+        new MutationObserver(schedule).observe(document.body, {
+            subtree: true,
+            childList: true,
+            attributes: true,
+            attributeFilter: ['class', 'style'],
+        });
+    }
+
+    // 滚轮兜底：弹窗打开时，遮罩空白区域的滚轮事件直接拦截；
+    // 弹窗内容区自身可滚动时允许滚动，overscroll-behavior: contain 负责阻止滚动链。
+    document.addEventListener('wheel', function (e) {
+        if (!document.body.classList.contains('modal-open')) return;
+        var target = e.target;
+        if (target && target.closest && target.closest('.modal-box')) return;
+        e.preventDefault();
+    }, { passive: false });
+
+    document.addEventListener('DOMContentLoaded', sync);
+    if (document.readyState !== 'loading') sync();
+
+    window.syncModalScrollLock = sync;
+    return sync;
+})();
+
 // 自定义弹窗系统（alert / confirm / prompt 模式）
 var CustomModal = (function () {
     var modal = document.getElementById('custom-modal');
@@ -488,7 +535,7 @@ var CustomModal = (function () {
             // 显示弹窗
             modal.offsetHeight;
             modal.classList.add('active');
-            document.body.style.overflow = 'hidden';
+            syncModalScrollLock();
 
             // 下一帧启用过渡，动画到中心
             requestAnimationFrame(function () {
@@ -504,7 +551,7 @@ var CustomModal = (function () {
 
             modal.offsetHeight;
             modal.classList.add('active');
-            document.body.style.overflow = 'hidden';
+            syncModalScrollLock();
 
             requestAnimationFrame(function () {
                 modalBox.style.transition = '';
@@ -551,7 +598,7 @@ var CustomModal = (function () {
 
         setTimeout(function () {
             modal.classList.remove('active');
-            document.body.style.overflow = '';
+            syncModalScrollLock();
 
             // prompt 模式：确认返回输入值，取消/关闭返回 null
             var value = result;

@@ -1,0 +1,213 @@
+/* ==========================================================================
+   自研日历选择器（Calendar Picker）
+   仅在引入 macros/calendar.html 的页面按需加载，避免全站负担。
+   与全站磨砂玻璃风格保持一致：白色底、深色文字、蓝色强调。
+   ========================================================================== */
+
+.calendar-field {
+    position: relative;
+}
+
+.calendar-trigger {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    width: 100%;
+    text-align: left;
+    cursor: pointer;
+}
+
+.calendar-trigger .calendar-value-text {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.calendar-trigger .calendar-value-text.is-placeholder {
+    color: var(--text-muted);
+}
+
+.calendar-trigger .calendar-chevron {
+    flex: none;
+    transition: transform 0.18s ease;
+}
+
+.calendar-field.is-open .calendar-chevron {
+    transform: rotate(180deg);
+}
+
+.calendar-popover {
+    position: fixed;
+    z-index: 2000;
+    width: 288px;
+    padding: 12px;
+    border-radius: 14px;
+    background: var(--bg-glass-strong, rgba(255, 255, 255, 0.96));
+    -webkit-backdrop-filter: var(--glass-blur, blur(22px));
+    backdrop-filter: var(--glass-blur, blur(22px));
+    border: 1px solid var(--border-card);
+    box-shadow: 0 18px 44px rgba(15, 23, 42, 0.16);
+    color: var(--text-primary);
+}
+
+.calendar-popover[hidden] {
+    display: none !important;
+}
+
+.calendar-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.calendar-title {
+    flex: 1 1 auto;
+    text-align: center;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.calendar-nav {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 30px;
+    height: 30px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+}
+
+.calendar-nav:hover {
+    background: rgba(2, 132, 199, 0.08);
+    border-color: rgba(2, 132, 199, 0.25);
+    color: #0284c7;
+}
+
+.calendar-weekdays {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+    margin: 8px 0 4px;
+    font-size: 11px;
+    color: var(--text-muted);
+    text-align: center;
+}
+
+.calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px;
+}
+
+.calendar-day {
+    height: 32px;
+    padding: 0;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text-primary);
+    font-size: 13px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.calendar-day:hover {
+    background: rgba(2, 132, 199, 0.08);
+}
+
+.calendar-day.is-other {
+    color: var(--text-muted);
+    opacity: 0.45;
+}
+
+.calendar-day.is-today {
+    border-color: rgba(2, 132, 199, 0.45);
+}
+
+.calendar-day.is-selected {
+    background: #0284c7;
+    border-color: #0284c7;
+    color: #ffffff;
+    font-weight: 600;
+}
+
+.calendar-day:disabled {
+    opacity: 0.28;
+    cursor: not-allowed;
+}
+
+.calendar-time {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border-card);
+    font-size: 12px;
+    color: var(--text-secondary);
+}
+
+.calendar-time[hidden] {
+    display: none !important;
+}
+
+.calendar-time input {
+    width: 52px;
+    padding: 4px 6px;
+    border: 1px solid var(--border-card);
+    border-radius: 6px;
+    background: var(--bg-card, #ffffff);
+    color: var(--text-primary);
+    font-size: 12px;
+    text-align: center;
+}
+
+.calendar-time input:focus {
+    outline: none;
+    border-color: #0284c7;
+    box-shadow: 0 0 0 2px rgba(2, 132, 199, 0.15);
+}
+
+.calendar-foot {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 10px;
+}
+
+.calendar-link {
+    padding: 4px 8px;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: #0284c7;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.calendar-link:hover {
+    background: rgba(2, 132, 199, 0.08);
+}
+
+.calendar-apply {
+    margin-left: auto;
+    padding: 6px 14px;
+    border: none;
+    border-radius: 8px;
+    background: #0284c7;
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.calendar-apply:hover {
+    background: #0369a1;
+}

@@ -1,0 +1,105 @@
+{# ============================================================================
+   自研日历选择器模板宏
+
+   提供以下宏：
+     1. calendar_field()   — 日历输入字段（触发器 + 隐藏域 + 弹层骨架）
+     2. calendar_styles()  — 按需引入日历样式
+     3. calendar_script()  — 按需引入日历交互脚本
+
+   只在真正需要日历的页面引入 CSS / JS，避免全站加载用不到的组件。
+
+   用法示例：
+     {% from 'macros/calendar.html' import calendar_field, calendar_styles, calendar_script %}
+     {% block extra_head %}{{ calendar_styles() }}{% endblock %}
+     ...
+     {{ calendar_field('offline_at', id='offline-at', label='下线时间', mode='datetime') }}
+     ...
+     {% block extra_script %}
+     {{ calendar_script() }}
+     <script> ... </script>
+     {% endblock %}
+
+   值格式：
+     mode='date'     → 隐藏域值 YYYY-MM-DD
+     mode='datetime' → 隐藏域值 YYYY-MM-DDTHH:MM
+   ============================================================================ #}
+
+
+{# 日历样式（仅在需要日历的页面通过 extra_head 引入） #}
+{% macro calendar_styles() -%}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/calendar.css', v='1') }}">
+{%- endmacro %}
+
+
+{# 日历交互脚本（仅在需要日历的页面通过 extra_script 引入） #}
+{% macro calendar_script() -%}
+<script src="{{ url_for('static', filename='js/components/calendar-picker.js', v='1') }}"></script>
+{%- endmacro %}
+
+
+{## 日历输入字段
+ #
+ # 参数：
+ #   name        — 隐藏域 name（表单字段名，必填）
+ #   id          — 隐藏域 id（默认由 name 推导；页面 JS 按 id 取值时请显式传入）
+ #   value       — 初始值（YYYY-MM-DD 或 YYYY-MM-DDTHH:MM）
+ #   label       — 标签文字（默认 None）
+ #   mode        — 'date' 或 'datetime'（默认 'date'）
+ #   required    — 是否必填（仅用于显示星号，校验仍由页面 JS 完成）
+ #   help_text   — 帮助提示文字
+ #   placeholder — 未选择时的占位文字
+ #   class       — 附加 CSS 类
+ ##}
+{% macro calendar_field(name, id=None, value='', label=None, mode='date',
+                        required=False, help_text=None, placeholder=None, class='') -%}
+{% set field_id = id or (name | replace('.', '_') | replace('[', '_') | replace(']', '')) %}
+{% set is_datetime = (mode == 'datetime') %}
+<div class="calendar-field {{ class }}" data-calendar data-mode="{{ 'datetime' if is_datetime else 'date' }}">
+    {% if label %}
+    <label for="{{ field_id }}-trigger" class="block text-sm text-muted mb-1.5">
+        {{ label }}{% if required %}<span class="text-red-500 ml-0.5">*</span>{% endif %}
+    </label>
+    {% endif %}
+    <button type="button" id="{{ field_id }}-trigger"
+            class="calendar-trigger input-field w-full px-3 sm:px-4 py-2.5 text-sm"
+            aria-haspopup="dialog" aria-expanded="false">
+        <i data-lucide="calendar-clock" class="calendar-icon w-4 h-4 text-muted"></i>
+        <span class="calendar-value-text is-placeholder">{{ placeholder or ('选择日期时间' if is_datetime else '选择日期') }}</span>
+        <i data-lucide="chevron-down" class="calendar-chevron w-4 h-4 text-muted"></i>
+    </button>
+    <input type="hidden" id="{{ field_id }}" name="{{ name }}" value="{{ value }}">
+
+    {# 弹层骨架：JS 初始化时会整体移动到 body，避免被卡片/弹窗裁剪 #}
+    <div class="calendar-popover" role="dialog" aria-label="{{ label or '选择日期' }}" hidden>
+        <div class="calendar-head">
+            <button type="button" class="calendar-nav" data-cal-prev aria-label="上个月">
+                <i data-lucide="chevron-left" class="w-4 h-4"></i>
+            </button>
+            <div class="calendar-title" data-cal-title></div>
+            <button type="button" class="calendar-nav" data-cal-next aria-label="下个月">
+                <i data-lucide="chevron-right" class="w-4 h-4"></i>
+            </button>
+        </div>
+        <div class="calendar-weekdays" aria-hidden="true">
+            <span>一</span><span>二</span><span>三</span><span>四</span>
+            <span>五</span><span>六</span><span>日</span>
+        </div>
+        <div class="calendar-grid" data-cal-grid></div>
+        <div class="calendar-time" data-cal-time hidden>
+            <span>时间</span>
+            <input type="number" min="0" max="23" step="1" value="00" data-cal-hour aria-label="小时">
+            <span>:</span>
+            <input type="number" min="0" max="59" step="1" value="00" data-cal-minute aria-label="分钟">
+        </div>
+        <div class="calendar-foot">
+            <button type="button" class="calendar-link" data-cal-today>今天</button>
+            <button type="button" class="calendar-link" data-cal-clear>清除</button>
+            <button type="button" class="calendar-apply" data-cal-apply>确定</button>
+        </div>
+    </div>
+
+    {% if help_text %}
+    <p class="text-xs text-muted mt-1.5">{{ help_text }}</p>
+    {% endif %}
+</div>
+{%- endmacro %}

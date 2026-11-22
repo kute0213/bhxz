@@ -145,7 +145,7 @@ window.openModal = function(id) {
     // 强制 reflow 后添加 .open class 触发 CSS 过渡
     el.offsetHeight;
     el.classList.add('open');
-    document.body.style.overflow = 'hidden';
+    if (typeof syncModalScrollLock === 'function') syncModalScrollLock();
     if (typeof lucide !== 'undefined') try { lucide.createIcons(); } catch(e) {}
 };
 window.closeModal = function(id) {
@@ -157,16 +157,18 @@ window.closeModal = function(id) {
     setTimeout(function() {
         if (el.classList.contains('open')) return; // 期间又被重新打开则不清
         el.style.display = 'none';
+        if (typeof syncModalScrollLock === 'function') syncModalScrollLock();
     }, 350);
-    document.body.style.overflow = '';
 };
 // 点击 Escape 关闭所有打开的 modal-overlay
 document.addEventListener('keydown', function(e) {
     if (e.key === 'Escape') {
         document.querySelectorAll('.modal-overlay.open').forEach(function(m) {
             m.classList.remove('open');
-            setTimeout(function() { m.style.display = 'none'; }, 300);
-            document.body.style.overflow = '';
+            setTimeout(function() {
+                m.style.display = 'none';
+                if (typeof syncModalScrollLock === 'function') syncModalScrollLock();
+            }, 300);
         });
     }
 });

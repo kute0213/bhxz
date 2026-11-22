@@ -13,12 +13,23 @@ from werkzeug.exceptions import HTTPException
 from core.shared.ip import get_client_ip
 
 # 跳过公共文件服务的路径前缀（这些路径由 Flask 蓝图处理）
+# 注意：不要在这里放 '/'——startswith('/') 对所有路径都为真，
+# 会导致公共路径映射（尤其是目录内文件）永远无法命中而返回 404。
+# 根路径 '/' 由 _should_skip_public_serve() 单独判断。
 ROUTE_PREFIXES = (
     '/static/', '/admin', '/api/',
     '/docs',
-    '/login', '/register', '/', '/settings',
+    '/login', '/register', '/settings',
     '/music', '/sitemap.xml',
 )
+
+
+def _should_skip_public_serve(path):
+    """判断请求路径是否跳过公共文件服务（交给 Flask 路由处理）。
+
+    根路径 '/' 必须跳过（否则可能覆盖首页）；其余按前缀判断。
+    """
+    return path == '/' or path.startswith(ROUTE_PREFIXES)
 
 
 # ---------------------------------------------------------------------------
@@ -351,7 +362,7 @@ def register_hooks(app, try_serve_public):
     def serve_public_files_hook():
         """优先检查公共静态文件，避免与蓝图路由冲突。"""
         path = request.path
-        if path.startswith(ROUTE_PREFIXES):
+        if _should_skip_public_serve(path):
             return None
         try:
             resp = try_serve_public(path.lstrip('/'))

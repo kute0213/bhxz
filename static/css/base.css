@@ -888,6 +888,15 @@ body.page-leaving .page-transition-overlay { opacity: 1; pointer-events: all; }
    支持 CustomModal（active class）和页面级弹窗（display 切换）两种模式
    =========================================================================== */
 
+/* 弹窗滚动锁：任何弹窗打开时都禁止背景页面滚动。
+   CustomModal 与页面级 .modal-overlay（.open/.active）共用此机制，
+   由 base.js 的 syncModalScrollLock() 统一维护 class。 */
+html.modal-open,
+body.modal-open {
+    overflow: hidden !important;
+    overscroll-behavior: none;
+}
+
 /* 遮罩层基底 —— display:flex 默认打开，通过 visibility 控制 CustomModal 动画，
    页面级弹窗用 style="display:none"（更高优先级）覆写。 */
 .modal-overlay {
@@ -896,6 +905,7 @@ body.page-leaving .page-transition-overlay { opacity: 1; pointer-events: all; }
     -webkit-backdrop-filter: blur(0px);
     display: flex; align-items: center; justify-content: center;
     opacity: 0; visibility: hidden;
+    overscroll-behavior: contain;
     transition: opacity 0.3s ease, visibility 0.3s ease, background 0.3s ease;
 }
 .modal-overlay.active,
@@ -916,6 +926,7 @@ body.page-leaving .page-transition-overlay { opacity: 1; pointer-events: all; }
     opacity: 0;
     transition: transform var(--transition-bounce), opacity 0.32s ease;
     overflow: hidden;
+    overscroll-behavior: contain;
     max-height: 90vh;
     display: flex; flex-direction: column;
 }
@@ -971,6 +982,7 @@ body.page-leaving .page-transition-overlay { opacity: 1; pointer-events: all; }
 .modal-body {
     padding: 24px 28px; color: var(--text-secondary);
     font-size: 15px; line-height: 1.7; overflow-y: auto; flex: 1; min-height: 0;
+    overscroll-behavior: contain;
 }
 
 /* 输入框区域（prompt 模式） */
