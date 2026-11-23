@@ -287,7 +287,7 @@
                     return;
                 }
                 if (typeof Toast !== 'undefined') Toast.success(data.message || '指南已发布');
-                setTimeout(function () { location.reload(); }, 300);
+                fetchList(1, false);
             })
             .catch(function () {
                 pub.disabled = false;

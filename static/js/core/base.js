@@ -17,6 +17,57 @@ window.channelUrl = function (tpl, id) {
     return String(tpl).replace(/\/0(\/|$)/, '/' + id + '$1');
 };
 
+// 页面数据统一刷新入口：
+// 业务页面通过 window.registerPageRefresh(fn) 注册「重新拉取接口并刷新 DOM」的函数；
+// 通用 admin-action 处理器在操作成功后会自动调用，页面无需手动刷新。
+window.registerPageRefresh = function (fn) {
+    if (typeof fn === 'function') window.__pageRefresh = fn;
+};
+window.refreshPageData = function (detail) {
+    if (typeof window.__pageRefresh !== 'function') return false;
+    try {
+        window.__pageRefresh(detail || {});
+        return true;
+    } catch (err) {
+        console.error('[refreshPageData]', err);
+        return false;
+    }
+};
+
+// 同步全站头部的用户名 / 头像（修改用户名、上传或删除头像后调用）
+window.updateHeaderUser = function (data) {
+    data = data || {};
+    if (data.username) {
+        document.querySelectorAll('[data-header-username]').forEach(function (el) {
+            el.textContent = data.username;
+        });
+        document.querySelectorAll('[data-header-avatar]').forEach(function (el) {
+            if (el.tagName !== 'IMG') el.textContent = data.username.slice(0, 1);
+        });
+    }
+    if (!Object.prototype.hasOwnProperty.call(data, 'avatar_url')) return;
+    var url = data.avatar_url || '';
+    document.querySelectorAll('[data-header-avatar]').forEach(function (slot) {
+        var base = slot.getAttribute('data-avatar-base') || '';
+        var text = slot.getAttribute('data-avatar-text') || '';
+        var el;
+        if (url) {
+            el = document.createElement('img');
+            el.src = url + (url.indexOf('?') >= 0 ? '&' : '?') + 't=' + Date.now();
+            el.alt = (data.username || '用户') + '的头像';
+            el.className = base + ' object-cover border border-gold-400/30';
+        } else {
+            el = document.createElement('div');
+            el.textContent = (data.username || '?').slice(0, 1);
+            el.className = base + (text ? ' ' + text : '') + ' bg-gold-400/20 flex items-center justify-center font-bold text-gold-400';
+        }
+        el.setAttribute('data-header-avatar', '');
+        el.setAttribute('data-avatar-base', base);
+        if (text) el.setAttribute('data-avatar-text', text);
+        slot.replaceWith(el);
+    });
+};
+
 // 密码策略：与 core/shared/validation.validate_password_strength 规则保持一致
 // 规则：长度 8-30 位；必须同时包含大写字母、小写字母、数字、特殊字符；拒绝常见弱密码
 var PasswordPolicy = (function() {
@@ -1189,7 +1240,18 @@ document.addEventListener('click', function (e) {
                     card.style.opacity = '0';
                     setTimeout(function () {
                         card.remove();
-                        if (!document.querySelector('.music-card')) location.reload();
+                        var list = document.getElementById('fav-list');
+                        var empty = document.getElementById('fav-empty');
+                        var hasAny = !!document.querySelector('.music-card');
+                        if (list) list.classList.toggle('hidden', !hasAny);
+                        if (empty) {
+                            empty.classList.toggle('hidden', hasAny);
+                            if (typeof lucide !== 'undefined' && lucide.createIcons) {
+                                try { lucide.createIcons(); } catch (_) {}
+                            }
+                        } else if (!hasAny) {
+                            location.reload();
+                        }
                     }, 300);
                 }
             }
@@ -1268,6 +1330,10 @@ document.addEventListener('click', function (e) {
                 document.dispatchEvent(new CustomEvent('admin:action', {
                     detail: { el: el, data: data, url: url, method: method }
                 }));
+                // 页面注册的统一刷新入口：操作成功后自动通过接口重新拉取数据并刷新页面元素
+                if (!reload && typeof window.refreshPageData === 'function' && !el.hasAttribute('data-action-no-refresh')) {
+                    window.refreshPageData({ el: el, data: data, url: url, method: method });
+                }
                 if (reload) setTimeout(function () { location.reload(); }, 400);
             })
             .catch(function () {

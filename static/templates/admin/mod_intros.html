@@ -144,7 +144,9 @@
     document.querySelectorAll('.mod-intro-edit-form').forEach(function (form) {
         form.addEventListener('submit', function (e) {
             e.preventDefault();
-            postForm(form, form.querySelector('button[type="submit"]'));
+            postForm(form, form.querySelector('button[type="submit"]')).then(function (data) {
+                if (data && window.refreshPageData) window.refreshPageData();
+            });
         });
         var iconInput = form.querySelector('[name="icon"]');
         var preview = form.querySelector('.feature-icon i');
@@ -165,10 +167,13 @@
         addForm.addEventListener('submit', function (e) {
             e.preventDefault();
             postForm(addForm, addForm.querySelector('button[type="submit"]')).then(function (data) {
-                if (data) window.location.reload();
+                if (data && window.refreshPageData) window.refreshPageData();
             });
         });
     }
+
+    // 本页无列表查询接口，统一整页刷新兜底
+    window.registerPageRefresh(function () { location.reload(); });
 })();
 </script>
 {% endblock %}

@@ -233,8 +233,8 @@
                     }
 
                     const valueLabel = item.is_custom
-                        ? `<span class="text-xs text-gold-400">● 已自定义</span>`
-                        : `<span class="text-xs text-cream/40">默认值</span>`;
+                        ? `<span class="text-xs text-gold-400" data-custom-badge>● 已自定义</span>`
+                        : `<span class="text-xs text-cream/40" data-custom-badge>默认值</span>`;
 
                     row.innerHTML = `
                         <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
@@ -418,6 +418,13 @@
                     // 更新原始值
                     items.forEach(function (item) {
                         originalValues[item.key] = item.value;
+                        // 局部更新“已自定义”徽章，避免自动保存时重建控件
+                        var row = settingsContainer.querySelector('.setting-row[data-key="' + item.key + '"]');
+                        var badge = row ? row.querySelector('[data-custom-badge]') : null;
+                        if (badge && !badge.textContent.includes('已自定义')) {
+                            badge.className = 'text-xs text-gold-400';
+                            badge.textContent = '● 已自定义';
+                        }
                     });
                     dirty = false;
                     updateSaveStatus();
@@ -434,6 +441,7 @@
                     if (data.errors && data.errors.length > 0) {
                         Toast.error('部分设置保存失败');
                     }
+                    if (window.refreshPageData) window.refreshPageData();
                 } else {
                     Toast.error(data.message || '保存失败');
                     btnSave.disabled = false;
@@ -462,6 +470,13 @@
                 });
             });
         }
+
+        // 页面级刷新：重新拉取设置并同步“已自定义”标记与各分组内容
+        // 正在编辑控件时不重建，避免打断输入；点击保存按钮后会自动执行
+        window.registerPageRefresh(function () {
+            if (document.activeElement && settingsContainer.contains(document.activeElement)) return;
+            loadSettings();
+        });
 
         // 保存按钮
         btnSave.addEventListener('click', saveSettings);

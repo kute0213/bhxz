@@ -86,10 +86,19 @@
         });
     });
 
+    var bansPromise = null;
+    // 同一轮刷新里多个渲染函数共用一次请求，避免并发重复拉取
+    function fetchBans() {
+        if (bansPromise) return bansPromise;
+        bansPromise = fetch('/admin/api/game-bans')
+            .then(function(r) { return r.json(); })
+            .finally(function() { bansPromise = null; });
+        return bansPromise;
+    }
+
     function loadPending() {
         var list = document.getElementById('pending-list');
-        fetch('/admin/api/game-bans')
-            .then(function(r) { return r.json(); })
+        fetchBans()
             .then(function(d) {
                 if (!d.success) { list.innerHTML = '<div class="text-red-400 text-sm text-center py-6">加载失败</div>'; return; }
                 var pending = d.pending;
@@ -148,7 +157,7 @@
                         .then(function(r) { return r.json(); })
                         .then(function(d) {
                             CustomModal.alert(d.message, { type: d.success ? 'success' : 'error' });
-                            if (d.success) loadPending();
+                            if (d.success) window.refreshPageData();
                         });
                     }
                 });
@@ -171,7 +180,7 @@
                         .then(function(r) { return r.json(); })
                         .then(function(d) {
                             CustomModal.alert(d.message, { type: d.success ? 'success' : 'error' });
-                            if (d.success) loadPending();
+                            if (d.success) window.refreshPageData();
                         });
                     }
                 });
@@ -181,8 +190,7 @@
 
     function loadActive() {
         var list = document.getElementById('active-list');
-        fetch('/admin/api/game-bans')
-            .then(function(r) { return r.json(); })
+        fetchBans()
             .then(function(d) {
                 if (!d.success) return;
                 var active = d.active;
@@ -216,7 +224,7 @@
                                     .then(function(r) { return r.json(); })
                                     .then(function(d) {
                                         CustomModal.alert(d.message, { type: d.success ? 'success' : 'error' });
-                                        if (d.success) { loadActive(); loadHistory(); }
+                                        if (d.success) window.refreshPageData();
                                     });
                             }
                         });
@@ -226,8 +234,7 @@
     }
 
     function loadHistory() {
-        fetch('/admin/api/game-bans')
-            .then(function(r) { return r.json(); })
+        fetchBans()
             .then(function(d) {
                 if (!d.success) return;
                 var all = d.all;
@@ -264,6 +271,13 @@
         div.appendChild(document.createTextNode(str == null ? '' : str));
         return div.innerHTML;
     }
+
+    // 页面级刷新：审批/解封后重新拉取并同步待审批、生效封禁、历史与计数
+    window.registerPageRefresh(function() {
+        loadPending();
+        loadActive();
+        loadHistory();
+    });
 
     // 初始加载
     loadPending();

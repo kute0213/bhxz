@@ -388,8 +388,8 @@
     }
     .contact-panel h2 { margin: 0 0 14px; color: #1a2230; font-size: clamp(30px, 4vw, 50px); font-weight: 800; letter-spacing: -.04em; }
     .contact-panel p { max-width: 580px; margin: 0; color: rgba(26, 34, 48, 0.62); font-size: 15px; line-height: 1.75; }
-    .contact-actions { display: grid; gap: 10px; min-width: 215px; }
-    .contact-actions a { min-height: 48px; display: flex; align-items: center; justify-content: center; gap: 9px; padding: 0 20px; }
+    .contact-actions { display: flex; flex-wrap: wrap; gap: 14px; min-width: 0; }
+    .contact-actions a { flex: 1 1 190px; min-height: 58px; display: flex; align-items: center; justify-content: center; gap: 9px; padding: 0 30px; font-size: 16px; font-weight: 600; }
     .home-footer {
         padding: 30px 20px;
         border-top: 1px solid rgba(2, 132, 199, 0.1);
@@ -425,7 +425,7 @@
         .philosophy-panel { grid-template-columns: 1fr; }
         .goal-list { border-left: 0; border-top: 1px solid rgba(2, 132, 199, 0.1); }
         .contact-panel { grid-template-columns: 1fr; }
-        .contact-actions { grid-template-columns: 1fr 1fr; min-width: 0; }
+        .contact-actions { flex-wrap: wrap; }
     }
     @media (max-width: 680px) {
         .home-hero { min-height: 100vh; align-items: end; }
@@ -448,7 +448,7 @@
         .feature-grid .ocean-card:nth-child(n) { grid-column: auto; }
         .mod-grid { grid-template-columns: 1fr; }
         .ocean-card { min-height: 205px; padding: 23px; }
-        .contact-actions { grid-template-columns: 1fr; }
+        .contact-actions { flex-direction: column; }
         .home-footer-inner { flex-direction: column; text-align: center; }
         .home-footer-links { flex-wrap: wrap; justify-content: center; }
     }

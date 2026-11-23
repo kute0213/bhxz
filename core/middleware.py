@@ -42,7 +42,7 @@ def _should_skip_public_serve(path):
 #   1) CSP script-src 保留 'unsafe-inline'：全站 14+ 个模板使用内联事件属性
 #      （onclick/onsubmit/onchange 等）与内联初始化 <script>（登录/注册/上传/
 #      文档/首页等），在迁移为外置脚本 + 哈希前不可移除；
-#   2) CSP img-src 放行 https:：指南/帖子封面等允许填写外部图片 URL；
+#   2) CSP img-src 放行 https:：允许引用外部图片资源；
 #   3) CSP 不启用 upgrade-insecure-requests / COEP：避免 HTTP 部署模式
 #      下静态资源与 HLS(blob worker) 被强制升级/限制而无法加载；
 #   4) HSTS 仅对 HTTPS 请求下发：HTTP 部署下若强制 HSTS，浏览器会拒绝访问。

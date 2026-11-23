@@ -142,6 +142,8 @@
                     var card = btn.closest('[id^="bg-"]');
                     if (card) card.remove();
                     adjustCount(btn);
+                    // 写操作成功后统一刷新，保证计数/空状态/分页状态一致
+                    if (typeof window.refreshPageData === 'function') window.refreshPageData();
                 } else {
                     Toast.error(data.message || '操作失败');
                     btn.disabled = false;
@@ -213,6 +215,37 @@
             .catch(function() { Toast.error('加载失败，请重试'); })
             .finally(function() { btn.disabled = false; btn.textContent = origText; });
         });
+    });
+
+    // 操作成功后统一刷新：三组均重新拉取第 1 页，重建卡片与计数/空状态
+    function applyGroup(status, data) {
+        var items = data.backgrounds || [];
+        var grid = document.querySelector('[data-bg-grid="' + status + '"]');
+        if (grid) grid.innerHTML = items.map(function(bg) { return cardHtml(bg, status); }).join('');
+
+        var countEl = document.querySelector('[data-bg-count="' + status + '"]');
+        if (countEl) countEl.textContent = data.total || 0;
+
+        var emptyEl = document.querySelector('[data-bg-empty="' + status + '"]');
+        if (emptyEl) emptyEl.classList.toggle('hidden', items.length > 0);
+
+        var moreBtn = document.querySelector('[data-bg-more="' + status + '"]');
+        if (moreBtn) moreBtn.classList.toggle('hidden', !data.has_more);
+
+        state[status] = 1;
+    }
+
+    window.registerPageRefresh(function() {
+        Promise.all([0, 1, 2].map(function(status) {
+            return fetch(API_URL + '?status=' + status + '&page=1', {
+                headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+            }).then(function(r) { return r.json(); });
+        }))
+        .then(function(results) {
+            results.forEach(function(data, i) { if (data && data.success) applyGroup(i, data); });
+            refreshIcons();
+        })
+        .catch(function() {});
     });
 })();
 </script>

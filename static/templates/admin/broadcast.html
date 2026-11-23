@@ -133,10 +133,13 @@
     }
 
     // --- 加载用户数量 ---
-    fetch('/api/stats', { headers: { 'Accept': 'application/json' } })
-        .then(function(r) { return r.json(); })
-        .then(function(data) { userCount.textContent = data.total_users || 0; })
-        .catch(function() { userCount.textContent = '未知'; });
+    function loadUserCount() {
+        fetch('/api/stats', { headers: { 'Accept': 'application/json' } })
+            .then(function(r) { return r.json(); })
+            .then(function(data) { userCount.textContent = data.total_users || 0; })
+            .catch(function() { userCount.textContent = '未知'; });
+    }
+    loadUserCount();
 
     // --- 插入示例 ---
     $('btn-sample').addEventListener('click', function() {
@@ -257,7 +260,7 @@
                 setMarkdown('');
                 var mre = getMre();
                 if (mre) mre.clearDraft();
-                loadHistory();
+                window.refreshPageData();
             } else {
                 Toast.show(data.message || '发送失败', 'error');
             }
@@ -268,6 +271,12 @@
             closeConfirm();
             Toast.show('请求失败：' + err.message, 'error');
         });
+    });
+
+    // 页面级刷新：发送广播后同步接收人数与广播历史
+    window.registerPageRefresh(function() {
+        loadUserCount();
+        loadHistory();
     });
 
     // ESC 由全局 modal_close_script 处理器统一管理

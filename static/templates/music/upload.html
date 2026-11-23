@@ -30,9 +30,9 @@
                 </div>
                 <div>
                     <label class="block text-sm font-medium mb-2 text-cream/80">音频文件</label>
-                    <input type="file" id="file-input" name="audio_file" accept=".mp3,.wav,.ogg,.m4a,.flac,audio/*" required
+                    <input type="file" id="file-input" name="audio_file" accept=".mp3,.wav,.ogg,.m4a,.flac,.mp4,audio/*,video/mp4" required
                            class="input-field w-full px-4 py-3 rounded-lg">
-                    <p class="text-cream/50 text-xs mt-1">支持 mp3 / wav / ogg / m4a / flac，单文件不超过 100MB；转码后生成 m3u8 在线播放流与唱片 MP3（游戏内电脑可下载烧录唱片），原始文件自动删除</p>
+                    <p class="text-cream/50 text-xs mt-1">支持 mp3 / wav / ogg / m4a / flac / mp4（自动提取音轨转码），单文件不超过 100MB；转码后生成 m3u8 在线播放流与唱片 MP3（游戏内电脑可下载烧录唱片），原始文件自动删除</p>
                 </div>
                 <label class="flex items-center gap-3 cursor-pointer select-none">
                     <input type="checkbox" id="is-public-input" name="is_public" value="1"

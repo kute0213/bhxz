@@ -130,6 +130,7 @@ python scripts/build/package.py
 - **自定义悬浮提示**：`title` / `data-tooltip` 统一替换为磨砂气泡，自动翻转与避让视口。
 - **自研日历选择器**：`macros/calendar.html` 的 `calendar_field()`，按需引入 CSS/JS，不依赖原生 `date` / `datetime-local`。
 - **弹窗滚动锁**：`base.js` 的 `syncModalScrollLock()` 统一锁定背景滚动，阻止滚轮穿透。
+- **操作后自动刷新**：统一 `admin-action` 事件 + `window.refreshPageData()`，管理后台与用户操作完成后自动通过 API 重新拉取数据，同步列表、计数、徽章与统计卡片，无需手动刷新页面。
 - **全站 SEO / GEO**：`meta robots`、description、canonical、OG / Twitter 卡片、JSON-LD、Bing 验证码、私有页 `noindex` 与 `X-Robots-Tag`。
 - **Sitemap 与 robots.txt**：只收录公开规范 URL，支持 ETag / 304；`Crawl-delay` 兼顾抓取与防火墙。
 - **IndexNow 主动推送**：管理后台一键提交公开 URL，定时任务接入统一调度器，根目录提供 `/<key>.txt` 校验。
@@ -143,8 +144,8 @@ python scripts/build/package.py
 ### 内容与社区
 
 - **公共建筑**：发布（审核）、搜索、标签、收藏、评论分页、举报。
-- **服务器指南**：Markdown 编写、图片 / 视频资源上传与转码、草稿 / 审核 / 替换草稿、收藏、编辑封禁。
-- **大喇叭音频**：上传、HLS 播放、标签、收藏、公开审核。
+- **服务器指南**：Markdown 编写、图片 / 视频资源上传与转码、草稿 / 审核 / 替换草稿、收藏、编辑封禁（不再提供封面字段）。
+- **大喇叭音频**：上传（支持 `mp3 / wav / ogg / m4a / flac / mp4`，mp4 自动提取音轨转码）、HLS 播放、标签、收藏、公开审核。
 - **音频直播**：循环播放与实时录音两种模式，HLS + MP3 + Opus 低延迟输出，支持麦克风设备 / 音量 / 降噪调整。
 - **游戏账号**：注册申请与封禁申请（RCON 执行与到期自动解封）。
 - **假人申请**：生成坐标 / 下线时间，审批后 RCON 生成，到期自动下线。

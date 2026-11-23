@@ -217,12 +217,12 @@
             <div class="pixel-card rounded-xl p-4 mb-6 flex-shrink-0">
                 <div class="flex items-center gap-3">
                     {% if user.avatar_key %}
-                    <img src="{{ url_for('main.user_avatar', user_id=user.id) }}" alt="{{ user.username }}的头像" class="w-12 h-12 rounded-full object-cover border border-gold-400/30">
+                    <img data-header-avatar data-avatar-base="w-12 h-12 rounded-full" data-avatar-text="text-lg" src="{{ url_for('main.user_avatar', user_id=user.id) }}" alt="{{ user.username }}的头像" class="w-12 h-12 rounded-full object-cover border border-gold-400/30">
                     {% else %}
-                    <div class="w-12 h-12 bg-gold-400/20 rounded-full flex items-center justify-center text-lg font-bold text-gold-400">{{ user.username[0] }}</div>
+                    <div data-header-avatar data-avatar-base="w-12 h-12 rounded-full" data-avatar-text="text-lg" class="w-12 h-12 bg-gold-400/20 rounded-full flex items-center justify-center text-lg font-bold text-gold-400">{{ user.username[0] }}</div>
                     {% endif %}
                     <div>
-                        <div class="font-bold text-gold-400">{{ user.username }}</div>
+                        <div data-header-username class="font-bold text-gold-400">{{ user.username }}</div>
                         {% if user.is_admin %}<span class="text-xs bg-red-500/20 text-red-300 px-2 py-0.5 rounded">服主</span>{% endif %}
                     </div>
                 </div>
@@ -432,12 +432,12 @@
                         {% if user %}
                         <a href="{{ url_for('main.settings') }}" class="flex items-center gap-2 hover:no-underline group">
                             {% if user.avatar_key %}
-                            <img src="{{ url_for('main.user_avatar', user_id=user.id) }}" alt="{{ user.username }}的头像" class="w-8 h-8 rounded-full object-cover border border-gold-400/30 group-hover:border-gold-400/60 transition-colors">
+                            <img data-header-avatar data-avatar-base="w-8 h-8 rounded-full" data-avatar-text="text-sm" src="{{ url_for('main.user_avatar', user_id=user.id) }}" alt="{{ user.username }}的头像" class="w-8 h-8 rounded-full object-cover border border-gold-400/30 group-hover:border-gold-400/60 transition-colors">
                             {% else %}
-                            <div class="w-8 h-8 bg-gold-400/20 rounded-full flex items-center justify-center text-sm font-bold text-gold-400 group-hover:bg-gold-400/30 transition-colors">{{ user.username[0] }}</div>
+                            <div data-header-avatar data-avatar-base="w-8 h-8 rounded-full" data-avatar-text="text-sm" class="w-8 h-8 bg-gold-400/20 rounded-full flex items-center justify-center text-sm font-bold text-gold-400 group-hover:bg-gold-400/30 transition-colors">{{ user.username[0] }}</div>
                             {% endif %}
                             <span class="text-cream/80 text-sm hidden md:inline">
-                                <span class="text-gold-400 font-medium">{{ user.username }}</span>
+                                <span data-header-username class="text-gold-400 font-medium">{{ user.username }}</span>
                                 {% if user.is_admin %}<span class="text-xs bg-red-500/20 text-red-300 px-2 py-0.5 rounded ml-1">服主</span>{% endif %}
                             </span>
                         </a>
@@ -488,7 +488,7 @@
         </div>
     {% endcall %}
 
-    <script src="{{ url_for('static', filename='js/core/base.js', v='32') }}"></script>
+    <script src="{{ url_for('static', filename='js/core/base.js', v='33') }}"></script>
     {# 页面按需加载的公共组件（如 uploader.js / search.js / video-player.js），避免全站加载 #}
     {% block page_scripts %}{% endblock %}
 

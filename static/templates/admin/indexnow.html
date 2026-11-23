@@ -277,6 +277,7 @@
                 if (res.ok && res.data.success) {
                     renderStatus(res.data);
                     Toast.success(res.data.message || '配置已保存');
+                    if (window.refreshPageData) window.refreshPageData();
                 } else {
                     Toast.error(res.data.message || '保存失败');
                 }
@@ -299,6 +300,7 @@
                         if (res.ok && res.data.success) {
                             renderStatus(res.data);
                             Toast.success('已重新生成 Key');
+                            if (window.refreshPageData) window.refreshPageData();
                         } else {
                             Toast.error(res.data.message || '操作失败');
                         }
@@ -317,6 +319,7 @@
                 renderResult(res.data);
                 if (res.ok && res.data.success) {
                     Toast.success(res.data.message || '提交成功');
+                    if (window.refreshPageData) window.refreshPageData();
                 } else {
                     Toast.error(res.data.message || '提交失败');
                 }
@@ -325,6 +328,18 @@
                 Toast.error('网络错误，请重试');
             });
         });
+        // 页面级刷新：重新拉取状态并更新统计卡片、开关、Key 与提交记录
+        function refreshStatus() {
+            return fetch('/admin/api/indexnow', { headers: { 'Accept': 'application/json' } })
+                .then(function (r) { return r.json(); })
+                .then(function (data) {
+                    if (!data.success) return;
+                    renderStatus(data);
+                    if (window.lucide) lucide.createIcons();
+                })
+                .catch(function () {});
+        }
+        window.registerPageRefresh(refreshStatus);
     })();
 </script>
 {% endblock %}

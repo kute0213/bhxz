@@ -5,6 +5,7 @@
 {% block content %}
 <section class="page-container py-12">
     <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div id="live-header">
         {{ page_header(
             title='音频直播管理',
             subtitle='共 ' ~ active_channels|length ~ ' 场直播进行中，' ~ bans|length ~ ' 人被禁止开播',
@@ -12,10 +13,12 @@
             back_text='返回管理中心',
             actions=[(url_for('live.live_page'), 'radio', '前往直播台', 'btn-secondary')]
         ) }}
+        </div>
 
         <!-- 正在直播 -->
         <div class="mb-10">
             {{ section_title(title='正在直播', icon='signal') }}
+            <div id="live-active-body">
             {% if active_channels %}
             {% call data_table([('直播', 'left'), ('主播', 'left'), ('听众', 'center'), ('开播时间', 'left'), ('操作', 'right')]) %}
                 {% for ch in active_channels %}
@@ -68,6 +71,7 @@
             {% else %}
             {{ empty_state('当前没有正在进行的直播', 'radio') }}
             {% endif %}
+            </div>
         </div>
 
         <!-- 封禁 -->
@@ -94,6 +98,7 @@
                 <p class="text-xs text-cream/40 mt-3">封禁为永久封禁，会立即停止该用户正在进行的直播；可在下方手动解封。</p>
             </form>
 
+            <div id="live-bans-body">
             {% if bans %}
             {% call data_table([('用户', 'left'), ('用户 ID', 'left'), ('理由', 'left'), ('封禁时间', 'left'), ('操作', 'right')]) %}
                 {% for ban in bans %}
@@ -119,11 +124,13 @@
             {% else %}
             {{ empty_state('暂无被封禁的用户', 'shield-check') }}
             {% endif %}
+            </div>
         </div>
 
         <!-- 最近记录 -->
         <div>
             {{ section_title(title='最近直播记录', icon='history') }}
+            <div id="live-recent-body">
             {% if recent_channels %}
             {% call data_table([('直播', 'left'), ('主播', 'left'), ('状态', 'left'), ('开播时间', 'left'), ('停止时间', 'left')]) %}
                 {% for ch in recent_channels %}
@@ -151,6 +158,7 @@
             {% else %}
             {{ empty_state('暂无直播记录', 'history') }}
             {% endif %}
+            </div>
         </div>
     </div>
 </section>
@@ -160,6 +168,144 @@
 <script>
 (function () {
     'use strict';
+    var URLS = {
+        rec: {{ url_for('live.live_rec_page', channel_id=0)|tojson }},
+        play: {{ url_for('live.live_play_page')|tojson }},
+        stop: {{ url_for('admin.admin_live_stop', channel_id=0)|tojson }},
+        unban: {{ url_for('admin.admin_live_unban')|tojson }},
+        ban: {{ url_for('admin.admin_live_ban')|tojson }}
+    };
+    var listPromise = null;
+
+    function esc(str) {
+        return String(str == null ? '' : str)
+            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    }
+
+    function tableHtml(headers, rows) {
+        var th = headers.map(function (h) {
+            return '<th class="text-' + h[1] + ' px-4 py-3 text-cream/60 font-medium">' + h[0] + '</th>';
+        }).join('');
+        return '<div class="pixel-card rounded-xl overflow-hidden"><div class="overflow-x-auto">' +
+            '<table class="w-full text-sm"><thead><tr class="border-b border-forest-700/50">' + th + '</tr></thead>' +
+            '<tbody>' + rows.join('') + '</tbody></table></div></div>';
+    }
+
+    function emptyHtml(message, icon) {
+        return '<div class="pixel-card rounded-xl p-12 text-center">' +
+            '<i data-lucide="' + icon + '" class="w-12 h-12 mx-auto text-cream/20 mb-4"></i>' +
+            '<p class="text-cream/50">' + message + '</p></div>';
+    }
+
+    function renderActive(list) {
+        var body = document.getElementById('live-active-body');
+        if (!body) return;
+        if (!list.length) { body.innerHTML = emptyHtml('当前没有正在进行的直播', 'radio'); return; }
+        var rows = list.map(function (ch) {
+            var id = ch.id;
+            var modeCls = ch.mode === 'rec'
+                ? 'border-gold-400/40 bg-gold-400/10 text-gold-500'
+                : 'border-cream/20 bg-cream/5 text-cream/60';
+            var recLink = ch.mode === 'rec'
+                ? '<a href="' + window.channelUrl(URLS.rec, id) + '" target="_blank" rel="noopener" class="px-3 py-1.5 rounded-lg text-xs border border-gold-400/40 text-gold-500 hover:bg-gold-400/10">直播台</a>'
+                : '';
+            return '<tr class="border-b border-forest-700/30 last:border-0" data-live-row="' + id + '">' +
+                '<td class="px-4 py-3">' +
+                    '<div class="font-medium text-cream truncate max-w-[16rem]">' + esc(ch.title) + '</div>' +
+                    '<div class="text-xs text-cream/40 mt-1 flex items-center gap-1.5"><span>ID ' + id + '</span>' +
+                    '<span class="px-1.5 py-0.5 rounded border ' + modeCls + '">' + esc(ch.mode_label || '循环播放') + '</span></div>' +
+                '</td>' +
+                '<td class="px-4 py-3"><div class="text-cream/80">' + esc(ch.username || '未知') + '</div>' +
+                    '<div class="text-xs text-cream/40">UID ' + esc(ch.user_id) + '</div></td>' +
+                '<td class="px-4 py-3 text-center">' + (ch.listeners || 0) +
+                    (ch.alive ? '' : '<div class="text-xs text-cream/40 mt-0.5">未连接</div>') + '</td>' +
+                '<td class="px-4 py-3 text-cream/60 text-xs">' + esc(ch.created_at) + '</td>' +
+                '<td class="px-4 py-3 text-right"><div class="flex items-center justify-end gap-2">' +
+                    recLink +
+                    '<a href="' + URLS.play + '?channelId=' + id + '" target="_blank" rel="noopener" class="px-3 py-1.5 rounded-lg text-xs border border-cream/20 text-cream/70 hover:bg-cream/5">收听</a>' +
+                    '<button type="button" class="admin-action px-3 py-1.5 rounded-lg text-xs border border-red-500/30 text-red-300 hover:bg-red-500/10"' +
+                        ' data-action-url="' + window.channelUrl(URLS.stop, id) + '"' +
+                        ' data-action-confirm="确定强制停止「' + esc(ch.title) + '」吗？"' +
+                        ' data-action-remove="[data-live-row=\'' + id + '\']"' +
+                        ' data-action-success="直播已强制停止">强制停止</button>' +
+                '</div></td></tr>';
+        });
+        body.innerHTML = tableHtml([['直播', 'left'], ['主播', 'left'], ['听众', 'center'], ['开播时间', 'left'], ['操作', 'right']], rows);
+    }
+
+    function renderBans(list) {
+        var body = document.getElementById('live-bans-body');
+        if (!body) return;
+        if (!list.length) { body.innerHTML = emptyHtml('暂无被封禁的用户', 'shield-check'); return; }
+        var rows = list.map(function (ban) {
+            var uid = ban.user_id;
+            return '<tr class="border-b border-forest-700/30 last:border-0" data-ban-row="' + esc(uid) + '">' +
+                '<td class="px-4 py-3 text-cream/80">' + esc(ban.username || '未知') + '</td>' +
+                '<td class="px-4 py-3 text-cream/50 text-xs">' + esc(uid) + '</td>' +
+                '<td class="px-4 py-3 text-cream/60 text-xs">' + esc(ban.reason || '—') + '</td>' +
+                '<td class="px-4 py-3 text-cream/50 text-xs">' + esc(ban.created_at) + '</td>' +
+                '<td class="px-4 py-3 text-right">' +
+                    '<button type="button" class="admin-action px-3 py-1.5 rounded-lg text-xs border border-green-500/30 text-green-300 hover:bg-green-500/10"' +
+                        ' data-action-url="' + URLS.unban + '"' +
+                        ' data-action-payload=\'{"user_id": ' + Number(uid) + '}\'' +
+                        ' data-action-confirm="确定解除该用户的直播封禁吗？"' +
+                        ' data-action-remove="[data-ban-row=\'' + esc(uid) + '\']"' +
+                        ' data-action-success="已解除封禁">解封</button>' +
+                '</td></tr>';
+        });
+        body.innerHTML = tableHtml([['用户', 'left'], ['用户 ID', 'left'], ['理由', 'left'], ['封禁时间', 'left'], ['操作', 'right']], rows);
+    }
+
+    function renderRecent(list) {
+        var body = document.getElementById('live-recent-body');
+        if (!body) return;
+        if (!list.length) { body.innerHTML = emptyHtml('暂无直播记录', 'history'); return; }
+        var rows = list.map(function (ch) {
+            var statusHtml = ch.status === 'live'
+                ? '<span class="text-xs px-2 py-0.5 rounded bg-red-500/15 text-red-300">直播中</span>'
+                : '<span class="text-xs px-2 py-0.5 rounded bg-cream/10 text-cream/50">已停止</span>';
+            if (ch.stop_reason) {
+                statusHtml += '<div class="text-xs text-cream/40 mt-0.5">' + esc(String(ch.stop_reason).slice(0, 40)) + '</div>';
+            }
+            return '<tr class="border-b border-forest-700/30 last:border-0">' +
+                '<td class="px-4 py-3"><div class="text-cream/80 truncate max-w-[14rem]">' + esc(ch.title) + '</div>' +
+                    '<div class="text-xs text-cream/40">ID ' + esc(ch.id) + '</div></td>' +
+                '<td class="px-4 py-3 text-cream/60 text-xs">' + esc(ch.username || '未知') + '</td>' +
+                '<td class="px-4 py-3">' + statusHtml + '</td>' +
+                '<td class="px-4 py-3 text-cream/50 text-xs">' + esc(ch.created_at) + '</td>' +
+                '<td class="px-4 py-3 text-cream/50 text-xs">' + esc(ch.stopped_at || '—') + '</td></tr>';
+        });
+        body.innerHTML = tableHtml([['直播', 'left'], ['主播', 'left'], ['状态', 'left'], ['开播时间', 'left'], ['停止时间', 'left']], rows);
+    }
+
+    function updateHeader(activeCount, banCount) {
+        var p = document.querySelector('#live-header p');
+        if (p) p.textContent = '共 ' + activeCount + ' 场直播进行中，' + banCount + ' 人被禁止开播';
+    }
+
+    // 重新拉取直播列表并重建三块区域与统计文案
+    function loadLive() {
+        if (listPromise) return listPromise;
+        listPromise = fetch('/admin/api/live/list', { headers: { 'Accept': 'application/json' } })
+            .then(function (r) { return r.json(); })
+            .then(function (d) {
+                if (!d.success) return;
+                var active = d.active || [];
+                var bans = d.bans || [];
+                renderActive(active);
+                renderBans(bans);
+                renderRecent(d.recent || []);
+                updateHeader(active.length, bans.length);
+                if (window.lucide && lucide.createIcons) { try { lucide.createIcons(); } catch (_) {} }
+            })
+            .catch(function () {})
+            .finally(function () { listPromise = null; });
+        return listPromise;
+    }
+
+    window.registerPageRefresh(function () { loadLive(); });
+
     var form = document.getElementById('live-ban-form');
     if (!form) return;
 
@@ -172,7 +318,7 @@
 
         var btn = document.getElementById('ban-submit');
         btn.disabled = true;
-        fetch({{ url_for('admin.admin_live_ban')|tojson }}, {
+        fetch(URLS.ban, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
             body: JSON.stringify({ username: username, reason: reasonInput.value.trim() })
@@ -183,7 +329,9 @@
             });
         }).then(function (data) {
             Toast.success(data.message || '已禁止该用户开播');
-            setTimeout(function () { location.reload(); }, 500);
+            usernameInput.value = '';
+            reasonInput.value = '';
+            window.refreshPageData();
         }).catch(function (err) {
             Toast.error(err.message || '操作失败');
         }).finally(function () {

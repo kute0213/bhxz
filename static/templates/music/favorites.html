@@ -23,8 +23,7 @@
             </a>
         </div>
 
-        {% if favorites %}
-        <div class="space-y-3">
+        <div class="space-y-3{% if not favorites %} hidden{% endif %}" id="fav-list">
             {% for m in favorites %}
             <div class="pixel-card music-card rounded-xl p-4">
                 <div class="flex flex-wrap items-center gap-3">
@@ -54,15 +53,13 @@
             </div>
             {% endfor %}
         </div>
-        {% else %}
-        <div class="pixel-card rounded-xl p-12 text-center">
+        <div class="pixel-card rounded-xl p-12 text-center{% if favorites %} hidden{% endif %}" id="fav-empty">
             <i data-lucide="heart" class="w-12 h-12 mx-auto text-cream/20 mb-4"></i>
             <p class="text-cream/50">你还没有收藏任何音频</p>
             <a href="{{ url_for('main.music_page') }}" class="btn-primary inline-flex px-5 py-2.5 mt-5 rounded-lg text-sm font-bold items-center gap-2">
                 <i data-lucide="music" class="w-4 h-4"></i>去公开音频逛逛
             </a>
         </div>
-        {% endif %}
     </div>
 </section>
 {% endblock %}

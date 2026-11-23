@@ -113,6 +113,7 @@ def do_something(user_id, value, ip_address):
 - **悬浮提示**：使用 `title` 或 `data-tooltip`，由 `base.js` 统一渲染。
 - **直播地址**：必须使用同源相对路径（`/live/stream/<ID>.mp3`），禁止用 `request.host_url` 拼接。
 - **直播 ID 拼接**：使用 `channelUrl(tpl, id)`，禁止手写 `replace('/0/', ...)`。
+- **操作后刷新**：写操作成功后必须自动刷新受影响元素。优先在页面注册 `window.registerPageRefresh(fn)`，由通用 `admin-action` 处理器在成功后调用；自定义 `fetch` 写操作直接调用 `window.refreshPageData()`。刷新函数应通过现有 API 重新拉取数据并更新列表、计数、徽章与空状态，禁止让用户手动刷新；只有完全没有列表 API 的页面才允许整页刷新兜底。
 
 ### 3.4 Tailwind
 

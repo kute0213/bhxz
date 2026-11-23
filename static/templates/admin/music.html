@@ -259,6 +259,57 @@
     bindLoadMore(document.querySelector('[data-pending-more]'), 'pending');
     bindLoadMore(document.querySelector('[data-music-more]'), 'all');
 
+    // 操作成功后统一刷新：重新拉取两类列表第 1 页，重建列表与所有计数/空状态
+    function applyMusicLists(pendingData, allData) {
+        var pendingItems = pendingData.musics || [];
+        var allItems = allData.musics || [];
+
+        var pendingList = document.querySelector('[data-pending-list]');
+        if (pendingList) {
+            pendingList.innerHTML = pendingItems.map(pendingCardHtml).join('');
+            pendingList.classList.toggle('hidden', pendingItems.length === 0);
+        }
+        var pendingEmpty = document.querySelector('[data-pending-empty]');
+        if (pendingEmpty) pendingEmpty.classList.toggle('hidden', pendingItems.length > 0);
+
+        var tableBody = document.querySelector('[data-music-table] tbody');
+        if (tableBody) tableBody.innerHTML = allItems.map(rowHtml).join('');
+        var tableWrap = document.querySelector('[data-music-table]');
+        if (tableWrap) tableWrap.classList.toggle('hidden', allItems.length === 0);
+        var musicEmpty = document.querySelector('[data-music-empty]');
+        if (musicEmpty) musicEmpty.classList.toggle('hidden', allItems.length > 0);
+
+        var pendingMore = document.querySelector('[data-pending-more]');
+        if (pendingMore) pendingMore.classList.toggle('hidden', !pendingData.has_more);
+        var musicMore = document.querySelector('[data-music-more]');
+        if (musicMore) musicMore.classList.toggle('hidden', !allData.has_more);
+
+        state.pending = 1;
+        state.all = 1;
+
+        var countEl = document.querySelector('[data-pending-count]');
+        if (countEl) countEl.textContent = pendingData.total || 0;
+
+        var h1 = document.querySelector('h1');
+        var subtitle = h1 && h1.parentElement ? h1.parentElement.querySelector('p') : null;
+        if (subtitle) {
+            subtitle.textContent = '共 ' + (allData.total || 0) + ' 个音频，' + (pendingData.total || 0) + ' 个待审核';
+        }
+
+        refreshIcons();
+        initPlayers();
+    }
+
+    window.registerPageRefresh(function () {
+        Promise.all([fetchPage('pending', 1), fetchPage('all', 1)])
+            .then(function (res) {
+                var pendingData = res[0], allData = res[1];
+                if (!pendingData || !pendingData.success || !allData || !allData.success) return;
+                applyMusicLists(pendingData, allData);
+            })
+            .catch(function () {});
+    });
+
     // 复制播放 / 唱片链接（事件委托，兼容动态加载的按钮）
     document.addEventListener('click', function (e) {
         var btn = e.target && e.target.closest ? e.target.closest('.copy-link-btn') : null;

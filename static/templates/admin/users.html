@@ -60,16 +60,17 @@
             {% endfor %}
         {% endcall %}
         </div>
-        <div class="mt-6 text-center">
+        <div class="mt-6 text-center" data-users-more>
             <button type="button" id="users-load-more" data-autoload-more
                     class="btn-secondary px-6 py-2.5 rounded-lg text-sm inline-flex items-center gap-2{% if not has_more %} hidden{% endif %}">
                 <i data-lucide="chevron-down" class="w-4 h-4"></i>加载更多
             </button>
             <p id="users-load-end" class="text-xs text-cream/40 mt-2{% if has_more %} hidden{% endif %}">没有更多了</p>
         </div>
-        {% else %}
-        {{ empty_state('暂无用户', 'users') }}
         {% endif %}
+        <div data-users-empty{% if total %} class="hidden"{% endif %}>
+            {{ empty_state('暂无用户', 'users') }}
+        </div>
     </div>
 </section>
 {% endblock %}
@@ -99,7 +100,6 @@ document.addEventListener('admin:action', function (e) {
 (function () {
     var btn = document.getElementById('users-load-more');
     var loadEnd = document.getElementById('users-load-end');
-    if (!btn) return;
 
     var API_URL = "{{ url_for('admin.admin_users_api') }}";
     var CURRENT_USER_ID = {{ user.id }};
@@ -146,13 +146,14 @@ document.addEventListener('admin:action', function (e) {
 
     function setLoading(v) {
         state.loading = v;
+        if (!btn) return;
         btn.innerHTML = v
             ? '<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i>加载中…'
             : '<i data-lucide="chevron-down" class="w-4 h-4"></i>加载更多';
         refreshIcons();
     }
 
-    btn.addEventListener('click', function () {
+    if (btn) btn.addEventListener('click', function () {
         if (state.loading) return;
         setLoading(true);
 
@@ -172,6 +173,42 @@ document.addEventListener('admin:action', function (e) {
         })
         .catch(function () { if (typeof Toast !== 'undefined') Toast.error('加载失败，请重试'); })
         .finally(function () { setLoading(false); });
+    });
+
+    // 操作成功后统一刷新：重新拉取第 1 页，重建列表并同步所有计数/空状态
+    function applyUsersData(data) {
+        var items = data.users || [];
+        var total = parseInt(data.total, 10) || 0;
+        var body = tbody();
+        if (body) body.innerHTML = items.map(rowHtml).join('');
+
+        state.page = data.page || 1;
+        setLoading(false);
+
+        if (btn) btn.classList.toggle('hidden', !data.has_more);
+        if (loadEnd) loadEnd.classList.toggle('hidden', !!data.has_more || total === 0);
+
+        var table = document.querySelector('[data-users-table]');
+        if (table) table.classList.toggle('hidden', total === 0);
+        var moreWrap = document.querySelector('[data-users-more]');
+        if (moreWrap) moreWrap.classList.toggle('hidden', total === 0);
+        var empty = document.querySelector('[data-users-empty]');
+        if (empty) empty.classList.toggle('hidden', total > 0);
+
+        var h1 = document.querySelector('h1');
+        var subtitle = h1 && h1.parentElement ? h1.parentElement.querySelector('p') : null;
+        if (subtitle) subtitle.textContent = '共 ' + total + ' 位用户';
+
+        refreshIcons();
+    }
+
+    window.registerPageRefresh(function () {
+        fetch(API_URL + '?page=1', {
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+        })
+        .then(function (r) { return r.json(); })
+        .then(function (data) { if (data && data.success) applyUsersData(data); })
+        .catch(function () {});
     });
 })();
 </script>

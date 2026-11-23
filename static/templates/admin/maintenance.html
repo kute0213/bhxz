@@ -289,7 +289,7 @@
                                 row.style.transform = 'translateX(10px)';
                                 setTimeout(() => {
                                     row.remove();
-                                    refreshList();
+                                    if (window.refreshPageData) window.refreshPageData();
                                 }, 200);
                             }
                         } else {
@@ -414,6 +414,12 @@
                         });
                 });
             }
+
+            // 页面级刷新：重新拉取备份列表、计数与维护进度
+            window.registerPageRefresh(function () {
+                refreshList();
+                pollProgress();
+            });
 
             btnRefreshList.addEventListener('click', refreshList);
         })();

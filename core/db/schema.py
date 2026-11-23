@@ -107,7 +107,6 @@ def init_db():
                 slug TEXT UNIQUE NOT NULL,
                 summary TEXT DEFAULT '',
                 content TEXT NOT NULL DEFAULT '',
-                cover_image TEXT DEFAULT '',
                 author_id INTEGER NOT NULL,
                 status TEXT NOT NULL DEFAULT 'pending',
                 is_pinned INTEGER DEFAULT 0,

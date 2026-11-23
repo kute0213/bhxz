@@ -71,16 +71,15 @@ def _start_replacement(guide, user):
         conn.execute(
             """
             INSERT INTO server_guides
-                (id, title, slug, summary, content, cover_image, author_id,
+                (id, title, slug, summary, content, author_id,
                  status, is_pinned, sort_order, created_at, updated_at, replace_of)
-            VALUES (?, ?, ?, ?, '', ?, ?, 'draft', 0, 0, ?, ?, ?)
+            VALUES (?, ?, ?, ?, '', ?, 'draft', 0, 0, ?, ?, ?)
             """,
             (
                 draft_id,
                 guide['title'],
                 _ensure_unique_slug(conn, _slugify(guide['title'])),
                 guide.get('summary') or '',
-                guide.get('cover_image') or '',
                 user['id'],
                 now,
                 now,
@@ -130,7 +129,7 @@ def _render_guide_page(my_mode, keyword):
         ).fetchone()['c']
         rows = conn.execute(
             f"""
-            SELECT g.id, g.title, g.summary, g.status, g.is_pinned, g.cover_image,
+            SELECT g.id, g.title, g.summary, g.status, g.is_pinned,
                    g.created_at, g.updated_at, g.published_at, g.rejected_reason,
                    g.replace_of,
                    u.username as author_name,
@@ -255,7 +254,7 @@ def guide_favorites():
     try:
         rows = conn.execute(
             """
-            SELECT g.id, g.title, g.summary, g.status, g.is_pinned, g.cover_image,
+            SELECT g.id, g.title, g.summary, g.status, g.is_pinned,
                    g.created_at, g.updated_at, g.published_at, g.rejected_reason,
                    g.replace_of,
                    u.username AS author_name,

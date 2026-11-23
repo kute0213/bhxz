@@ -791,6 +791,7 @@ function saveFirewallSettings() {
     var status = document.getElementById('settings-status');
     status.textContent = data.message;
     status.className = 'ms-2 text-sm ' + (data.success ? 'text-green-400' : 'text-red-400');
+    if (data.success && window.refreshPageData) window.refreshPageData();
   })
   .catch(function(err) {
     document.getElementById('settings-status').textContent = '保存失败';
@@ -977,6 +978,64 @@ function loadMoreBans() {
     });
 }
 
+/* ---- 封禁列表：整页刷新（第一页 + 计数） ---- */
+var firewallBansPromise = null;
+function firewallBanRowHtml(item) {
+  var typeClass = item.ban_type === 'ip' ? 'bg-rose-500/10 text-rose-400' : 'bg-violet-500/10 text-violet-400';
+  var typeLabel = item.ban_type === 'ip' ? 'IP' : '账号';
+  var expiresHtml = item.is_permanent
+    ? '<span class="text-xs px-2 py-0.5 rounded-full bg-red-500/10 text-red-400">永久</span>'
+    : '<span class="text-xs px-2 py-0.5 rounded-full bg-yellow-500/10 text-yellow-400">' + escapeHtml(item.expires_date || '') + '</span>';
+  var actionsHtml = '<button onclick="showBanDetail(' + item.id + ', \'' + item.ban_type + '\')" class="text-blue-400 hover:text-blue-300 text-xs px-2 py-1 rounded bg-blue-500/10 border border-blue-500/20">详情</button>';
+  var unbanUrl = item.ban_type === 'ip'
+    ? '/admin/firewall/' + item.id + '/delete'
+    : '/admin/firewall/unban-account/' + item.id;
+  var unbanTarget = item.ban_type === 'ip' ? item.identifier : (item.username || item.identifier);
+  actionsHtml += '<button type="button" class="admin-action text-green-400 hover:text-green-300 text-xs px-2 py-1 rounded bg-green-500/10 border border-green-500/20"' +
+    ' data-action-url="' + unbanUrl + '"' +
+    ' data-action-confirm="解封 ' + escapeHtml(unbanTarget) + '？"' +
+    ' data-action-remove="tr" data-action-success="已解封">解封</button>';
+  return '<tr class="ban-row border-b border-forest-700/30 hover:bg-blue-500/5 transition-colors">' +
+    '<td class="px-4 py-3"><span class="text-xs px-2 py-0.5 rounded-full ' + typeClass + '">' + typeLabel + '</span></td>' +
+    '<td class="px-4 py-3 text-cream/80 text-xs font-mono">' + escapeHtml(item.identifier_label) + '</td>' +
+    '<td class="px-4 py-3 text-cream/60 text-xs">' + escapeHtml(item.reason || '-') + '</td>' +
+    '<td class="px-4 py-3 text-cream/40 text-xs">' + escapeHtml((item.created_at || '').slice(0, 16)) + '</td>' +
+    '<td class="px-4 py-3">' + expiresHtml + '</td>' +
+    '<td class="px-4 py-3 text-right space-x-1">' + actionsHtml + '</td></tr>';
+}
+
+function refreshFirewallBans() {
+  var tbody = document.getElementById('ban-list-body');
+  if (!tbody) return null;
+  if (firewallBansPromise) return firewallBansPromise;
+  firewallBansPromise = fetch('{{ url_for("admin.admin_firewall_bans_api") }}?page=1')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+      if (!data.success) return;
+      var items = data.items || [];
+      if (!items.length) {
+        tbody.innerHTML = '<tr id="ban-empty-row"><td colspan="6" class="px-4 py-8 text-center text-cream/40">暂无封禁记录</td></tr>';
+      } else {
+        tbody.innerHTML = items.map(firewallBanRowHtml).join('');
+      }
+      var banCount = document.getElementById('ban-count');
+      if (banCount) banCount.textContent = items.length;
+      var banTotal = document.getElementById('ban-total');
+      if (banTotal) banTotal.textContent = data.total;
+      var moreBtn = document.getElementById('ban-load-more-btn');
+      if (moreBtn) moreBtn.dataset.page = '1';
+      var moreWrap = document.getElementById('ban-load-more-wrap');
+      if (moreWrap) {
+        moreWrap.classList.toggle('hidden', !data.has_more);
+        if (moreWrap.style) moreWrap.style.display = data.has_more ? '' : 'none';
+      }
+      if (typeof lucide !== 'undefined') lucide.createIcons();
+    })
+    .catch(function() {})
+    .finally(function() { firewallBansPromise = null; });
+  return firewallBansPromise;
+}
+
 function row(label, value) {
   return '<div><span class="text-cream/50 text-xs block mb-0.5">' + label + '</span><span class="text-cream/80 text-sm">' + value + '</span></div>';
 }
@@ -1008,6 +1067,7 @@ function trunc(str, max) {
         return null;
       }
       if (typeof Toast !== 'undefined') Toast.success(res.data.message || '操作成功');
+      if (window.refreshPageData) window.refreshPageData();
       return res.data;
     })
     .catch(function () {
@@ -1099,5 +1159,12 @@ function trunc(str, max) {
     });
   }
 })();
+/* ---- 页面级刷新：列表页走接口，其余页面无列表接口时整页刷新兜底 ---- */
+window.registerPageRefresh(function () {
+  if (document.getElementById('ban-list-body')) { refreshFirewallBans(); return; }
+  // 日志页由 SSE 实时推送，无需整页刷新
+  if (document.getElementById('fw-log-container')) return;
+  location.reload();
+});
 </script>
 {% endblock %}

@@ -176,12 +176,16 @@
                 tbody.insertBefore(tr, tbody.firstChild);
             }
             form.reset();
+            // 该页无列表查询接口，统一走整页刷新兜底
+            if (window.refreshPageData) window.refreshPageData();
         })
         .catch(function () {
             btn.disabled = false;
             if (typeof Toast !== 'undefined') Toast.error('网络异常，创建失败');
         });
     });
+
+    window.registerPageRefresh(function () { location.reload(); });
 })();
 </script>
 {% endblock %}

@@ -198,6 +198,7 @@
                     if (body) body.appendChild(renderRow(data.path));
                     if (typeof lucide !== 'undefined' && lucide.createIcons) { try { lucide.createIcons(); } catch (_) {} }
                     refreshCount();
+                    if (window.refreshPageData) window.refreshPageData();
                 }
                 addForm.reset();
             })
@@ -230,6 +231,8 @@
             setTimeout(refreshCount, 300);
         }
     });
+    // 本页无列表查询接口，统一整页刷新兜底
+    window.registerPageRefresh(function () { location.reload(); });
 })();
 </script>
 {% endblock %}

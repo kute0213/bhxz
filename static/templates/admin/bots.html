@@ -127,7 +127,7 @@
                             .then(function(r) { return r.json(); })
                             .then(function(d) {
                                 CustomModal.alert(d.message, { type: d.success ? 'success' : 'error' });
-                                if (d.success) loadAll();
+                                if (d.success) window.refreshPageData();
                             });
                     }
                 });
@@ -150,7 +150,7 @@
                         .then(function(r) { return r.json(); })
                         .then(function(d) {
                             CustomModal.alert(d.message, { type: d.success ? 'success' : 'error' });
-                            if (d.success) loadAll();
+                            if (d.success) window.refreshPageData();
                         });
                     }
                 });
@@ -192,7 +192,7 @@
                             .then(function(r) { return r.json(); })
                             .then(function(d) {
                                 CustomModal.alert(d.message, { type: d.success ? 'success' : 'error' });
-                                if (d.success) loadAll();
+                                if (d.success) window.refreshPageData();
                             });
                     }
                 });
@@ -236,6 +236,11 @@
         div.appendChild(document.createTextNode(str == null ? '' : str));
         return div.innerHTML;
     }
+
+    // 页面级刷新：审批/下线后重新拉取并同步三个 Tab 的列表与计数
+    window.registerPageRefresh(function() {
+        loadAll();
+    });
 
     loadAll();
 })();

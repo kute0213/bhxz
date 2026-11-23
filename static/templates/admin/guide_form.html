@@ -16,15 +16,9 @@
 
         <form id="guide-form" class="space-y-6"
               data-action-url="{{ url_for('admin.admin_guide_edit', guide_id=guide.id) if guide else url_for('admin.admin_guide_create') }}">
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                    <label class="block text-sm text-cream/70 mb-1">标题</label>
-                    <input type="text" name="title" value="{{ guide.title if guide else '' }}" class="w-full px-4 py-2 rounded-lg bg-forest-900/60 border border-forest-700/50 text-cream focus:border-gold-400/50 focus:outline-none" required maxlength="200">
-                </div>
-                <div>
-                    <label class="block text-sm text-cream/70 mb-1">封面图片 URL（可选）</label>
-                    <input type="text" name="cover_image" value="{{ guide.cover_image if guide else '' }}" class="w-full px-4 py-2 rounded-lg bg-forest-900/60 border border-forest-700/50 text-cream focus:border-gold-400/50 focus:outline-none" placeholder="https://...">
-                </div>
+            <div>
+                <label class="block text-sm text-cream/70 mb-1">标题</label>
+                <input type="text" name="title" value="{{ guide.title if guide else '' }}" class="w-full px-4 py-2 rounded-lg bg-forest-900/60 border border-forest-700/50 text-cream focus:border-gold-400/50 focus:outline-none" required maxlength="200">
             </div>
 
             <div>
@@ -89,7 +83,6 @@
             title: form.querySelector('[name="title"]').value.trim(),
             summary: form.querySelector('[name="summary"]').value.trim(),
             content: form.querySelector('[name="content"]').value.trim(),
-            cover_image: form.querySelector('[name="cover_image"]').value.trim(),
             status: form.querySelector('[name="status"]').value,
             is_pinned: form.querySelector('[name="is_pinned"]').value
         };

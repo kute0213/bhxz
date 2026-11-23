@@ -254,7 +254,7 @@
                 return;
             }
             if (typeof Toast !== 'undefined') Toast.success(d.message || '指南已发布');
-            setTimeout(function () { location.reload(); }, 300);
+            setTimeout(function () { location.href = d.redirect || '/guides/my'; }, 300);
         })
         .catch(function () {
             btn.disabled = false;

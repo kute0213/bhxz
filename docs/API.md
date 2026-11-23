@@ -476,7 +476,7 @@
 | `title` | string | 是 | 音频标题，参与内容注入检测 |
 | `tags` | string | 否 | 逗号分隔标签 |
 | `is_public` | string | 否 | `1/on/true` 表示申请公开，进入待审核 |
-| `audio_file` | file | 是 | 音频文件 |
+| `audio_file` | file | 是 | 音频文件，支持 `mp3 / wav / ogg / m4a / flac / mp4`；mp4 会自动提取音轨转码 |
 
 - **响应**：
   - 成功：`{"task_id": "..."}`（异步任务）
@@ -1329,7 +1329,6 @@
   "title": "标题",
   "summary": "摘要",
   "content": "Markdown 正文",
-  "cover_image": "封面 URL",
   "is_pinned": "1",
   "status": "approved"
 }

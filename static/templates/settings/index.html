@@ -390,6 +390,10 @@
                     e.preventDefault();
                     submitSettingsForm(avatarForm, {{ url_for('main.api_upload_avatar')|tojson }}, function (data) {
                         applyAvatar(data.avatar_url);
+                        if (window.updateHeaderUser) {
+                            var uname = (document.getElementById('settings-current-username') || {}).value || '';
+                            window.updateHeaderUser({ avatar_url: data.avatar_url, username: uname });
+                        }
                         var fileInput = avatarForm.querySelector('input[type="file"]');
                         if (fileInput) fileInput.value = '';
                     });
@@ -400,8 +404,12 @@
             if (avatarDelForm) {
                 avatarDelForm.addEventListener('submit', function (e) {
                     e.preventDefault();
-                    submitSettingsForm(avatarDelForm, {{ url_for('main.api_delete_avatar')|tojson }}, function () {
+                    submitSettingsForm(avatarDelForm, {{ url_for('main.api_delete_avatar')|tojson }}, function (data) {
                         applyAvatar(null);
+                        if (window.updateHeaderUser) {
+                            var uname = (document.getElementById('settings-current-username') || {}).value || '';
+                            window.updateHeaderUser({ avatar_url: null, username: uname });
+                        }
                     });
                 });
             }
@@ -416,6 +424,7 @@
                             if (current) current.value = data.username;
                             var header = document.getElementById('settings-header-username');
                             if (header) header.textContent = data.username;
+                            if (window.updateHeaderUser) window.updateHeaderUser({ username: data.username });
                         }
                         usernameForm.querySelector('input[name="new_username"]').value = '';
                         usernameForm.querySelector('input[name="current_password"]').value = '';

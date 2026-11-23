@@ -210,7 +210,6 @@ def admin_guide_create():
         title = (data.get('title') or '').strip()
         summary = (data.get('summary') or '').strip()
         content = (data.get('content') or '').strip()
-        cover_image = (data.get('cover_image') or '').strip()
         is_pinned = 1 if str(data.get('is_pinned') or '') in ('1', 'true', 'on', 'True') else 0
         status = (data.get('status') or 'approved').strip()
 
@@ -231,11 +230,11 @@ def admin_guide_create():
             conn.execute(
                 """
                 INSERT INTO server_guides
-                (id, title, slug, summary, content, cover_image, author_id, status,
+                (id, title, slug, summary, content, author_id, status,
                  is_pinned, created_at, updated_at, published_at)
-                VALUES (?, ?, ?, ?, '', ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, '', ?, ?, ?, ?, ?, ?)
                 """,
-                (guide_id, title, slug, summary, cover_image, user['id'],
+                (guide_id, title, slug, summary, user['id'],
                  status, is_pinned, now, now, published_at),
             )
             conn.commit()
@@ -277,7 +276,6 @@ def admin_guide_edit(guide_id):
         title = (data.get('title') or '').strip()
         summary = (data.get('summary') or '').strip()
         content = (data.get('content') or '').strip()
-        cover_image = (data.get('cover_image') or '').strip()
         is_pinned = 1 if str(data.get('is_pinned') or '') in ('1', 'true', 'on', 'True') else 0
         status = (data.get('status') or guide['status']).strip()
 
@@ -301,11 +299,11 @@ def admin_guide_edit(guide_id):
                 """
                 UPDATE server_guides
                 SET title = ?, slug = ?, summary = ?, content = '',
-                    cover_image = ?, status = ?, is_pinned = ?,
+                    status = ?, is_pinned = ?,
                     updated_at = ?, published_at = ?
                 WHERE id = ?
                 """,
-                (title, slug, summary, cover_image, status,
+                (title, slug, summary, status,
                  is_pinned, now, published_at, guide_id),
             )
             final_id = guide_id

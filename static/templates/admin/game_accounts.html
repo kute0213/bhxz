@@ -237,7 +237,7 @@
                         .then(function(r) { return r.json(); })
                         .then(function(d) {
                             CustomModal.alert(d.message, { type: d.success ? 'success' : 'error' });
-                            if (d.success) removePendingCard(id);
+                            if (d.success) { removePendingCard(id); window.refreshPageData(); }
                         });
                 }
             });
@@ -261,7 +261,7 @@
                     .then(function(r) { return r.json(); })
                     .then(function(d) {
                         CustomModal.alert(d.message, { type: d.success ? 'success' : 'error' });
-                        if (d.success) removePendingCard(id);
+                        if (d.success) { removePendingCard(id); window.refreshPageData(); }
                     });
                 }
             });
@@ -278,7 +278,7 @@
                         .then(function(r) { return r.json(); })
                         .then(function(d) {
                             CustomModal.alert(d.message, { type: d.success ? 'success' : 'error' });
-                            if (d.success) loadBans();
+                            if (d.success) window.refreshPageData();
                         });
                 }
             });
@@ -311,6 +311,57 @@
             });
     }
 
+    // 重新拉取待审批（第一页）并重建列表、计数与空状态
+    function refreshPendingList() {
+        return fetch(API_LIST + '?status=pending&page=1', { headers: { 'Accept': 'application/json' } })
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                if (!d.success) return;
+                var apps = d.applications || [];
+                var list = document.getElementById('pending-list');
+                var empty = document.getElementById('pending-empty');
+                list.innerHTML = apps.map(pendingCardHtml).join('');
+                list.classList.toggle('hidden', apps.length === 0);
+                if (empty) empty.classList.toggle('hidden', apps.length > 0);
+                var countEl = document.getElementById('pending-count');
+                if (countEl) countEl.textContent = '(' + (typeof d.total === 'number' ? d.total : apps.length) + ')';
+                state.pending = 1;
+                var more = document.getElementById('pending-more');
+                if (more) more.classList.toggle('hidden', !d.has_more);
+                refreshIcons();
+            })
+            .catch(function() {});
+    }
+
+    // 重新拉取审批历史（第一页）并重建表格
+    function refreshHistoryList() {
+        return fetch(API_LIST + '?status=all&page=1', { headers: { 'Accept': 'application/json' } })
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                if (!d.success) return;
+                var apps = d.applications || [];
+                var tbody = document.getElementById('history-list');
+                if (apps.length) {
+                    tbody.innerHTML = apps.map(historyRowHtml).join('');
+                } else {
+                    tbody.innerHTML = '<tr id="history-empty"><td colspan="6" class="text-center text-cream/50 py-6">暂无记录</td></tr>';
+                }
+                state.history = 1;
+                var more = document.getElementById('history-more');
+                if (more) more.classList.toggle('hidden', !d.has_more);
+                refreshIcons();
+            })
+            .catch(function() {});
+    }
+
+    // 页面级刷新：审批通过/驳回、封禁/解封后自动同步所有列表与计数
+    window.registerPageRefresh(function() {
+        refreshPendingList();
+        refreshHistoryList();
+        loadBans();
+        refreshIcons();
+    });
+
     // 封禁提交
     document.getElementById('ban-form').addEventListener('submit', function(e) {
         e.preventDefault();
@@ -328,7 +379,7 @@
             if (d.success) {
                 document.getElementById('ban-username').value = '';
                 document.getElementById('ban-reason').value = '';
-                loadBans();
+                window.refreshPageData();
             }
         });
     });
